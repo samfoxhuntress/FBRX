@@ -456,6 +456,8 @@ export interface CoreMethods {
   'runtime.start': () => RuntimeStatus;
   'runtime.stop': () => RuntimeStatus;
   'runtime.catalog': () => CatalogModel[];
+  /** Downloads the llama.cpp runtime for this OS/CPU; progress arrives as `runtime.download` with modelId "llama-runtime". */
+  'runtime.installRuntime': () => { started: boolean };
   'runtime.installed': () => InstalledModel[];
   'runtime.download': (p: { modelId: string }) => { started: boolean };
   'runtime.cancelDownload': (p: { modelId: string }) => { cancelled: boolean };

@@ -25,6 +25,8 @@ export const SettingsSchema = z.object({
     launchAtLogin: z.boolean(),
     minimizeToTray: z.boolean(),
     telemetry: z.boolean(),
+    /** First-run setup finished (travels with backups so a restored machine skips onboarding). */
+    onboardingComplete: z.boolean(),
   }),
   ai: z.object({
     defaultProvider: z.string(),
@@ -105,6 +107,7 @@ export const DEFAULT_SETTINGS: Settings = {
     launchAtLogin: false,
     minimizeToTray: true,
     telemetry: true,
+    onboardingComplete: false,
   },
   ai: {
     defaultProvider: 'local',

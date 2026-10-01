@@ -1,0 +1,60 @@
+# FBRX OS desktop packaging (macOS + Windows, Linux for labs).
+# Signing: set CSC_LINK/CSC_KEY_PASSWORD (mac + win) and APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID for notarization.
+appId: com.fbrx.os
+productName: FBRX OS
+copyright: Copyright © 2026 FBRX
+directories:
+  output: release/${version}
+  buildResources: build
+files:
+  - dist/**
+  - package.json
+  - "!**/*.map"
+asarUnpack:
+  # Forked as a separate (sandboxed) Node process; must live on the real filesystem.
+  - dist/main/plugin-worker.mjs
+extraResources:
+  # Bundled local AI runtime (llama.cpp). Populated by scripts/fetch-llama-runtime.mjs in CI.
+  - from: resources/runtime/${platform}-${arch}
+    to: runtime/${platform}-${arch}
+    filter: ["**/*"]
+  - from: resources/provisioning
+    to: provisioning
+    filter: ["*.json"]
+protocols: []
+publish:
+  # Updates are served per device by the FBRX control plane (generic provider). The feed URL is set
+  # at runtime once the device enrolls, so builds stay environment-neutral.
+  - provider: generic
+    url: https://updates.invalid/fbrx
+mac:
+  category: public.app-category.productivity
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+dmg:
+  sign: false
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+  publisherName: FBRX
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: FBRX OS
+  artifactName: FBRX-OS-Setup-${version}-${arch}.${ext}
+linux:
+  target: [AppImage]
+  category: Utility

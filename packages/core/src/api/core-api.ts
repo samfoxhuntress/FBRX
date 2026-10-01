@@ -132,12 +132,19 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'runtime.start': () => k.runtime.start(),
     'runtime.stop': () => k.runtime.stop(),
     'runtime.catalog': () => k.models.catalog(),
+    'runtime.installRuntime': () => {
+      k.runtime.install();
+      return { started: true };
+    },
     'runtime.installed': () => k.models.installed(),
     'runtime.download': (p) => {
       k.models.download(z.object({ modelId: z.string() }).parse(p).modelId);
       return { started: true };
     },
-    'runtime.cancelDownload': (p) => ({ cancelled: k.models.cancel(z.object({ modelId: z.string() }).parse(p).modelId) }),
+    'runtime.cancelDownload': (p) => {
+      const { modelId } = z.object({ modelId: z.string() }).parse(p);
+      return { cancelled: modelId === 'llama-runtime' ? k.runtime.cancelInstall() : k.models.cancel(modelId) };
+    },
     'runtime.importModel': (p) => {
       const q = z.object({ path: z.string(), name: z.string().optional() }).parse(p);
       return k.models.import(q.path, q.name);

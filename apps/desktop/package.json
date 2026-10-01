@@ -1,0 +1,35 @@
+{
+  "name": "@fbrx/desktop",
+  "productName": "FBRX OS",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FBRX OS — the Fabrics Operating System desktop super-tool with a governed, local-first AI agent",
+  "author": "FBRX",
+  "license": "UNLICENSED",
+  "homepage": "https://fbrx.example",
+  "type": "module",
+  "main": "dist/main/index.mjs",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "node scripts/build.mjs",
+    "start": "electron .",
+    "package": "npm run build && electron-builder --config electron-builder.yml",
+    "package:mac": "npm run build && electron-builder --config electron-builder.yml --mac",
+    "package:win": "npm run build && electron-builder --config electron-builder.yml --win",
+    "package:linux": "npm run build && electron-builder --config electron-builder.yml --linux"
+  },
+  "dependencies": {
+    "electron-updater": "^6.8.9"
+  },
+  "devDependencies": {
+    "@fbrx/core": "1.0.0",
+    "@fbrx/shared": "1.0.0",
+    "@fbrx/ui": "1.0.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "electron": "^44.5.1",
+    "electron-builder": "^26.15.3",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "vite": "^8.3.1"
+  }
+}

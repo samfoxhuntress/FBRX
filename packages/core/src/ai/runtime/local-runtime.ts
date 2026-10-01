@@ -9,6 +9,7 @@ import type { Logger } from '../../logger';
 import type { SettingsService } from '../../settings/settings-service';
 import type { ModelManager } from './model-manager';
 import { sleep } from '../../util/misc';
+import { installLlamaRuntime } from './runtime-installer';
 
 const EXE = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server';
 
@@ -217,6 +218,39 @@ export class LocalRuntime {
     } catch (err) {
       return { ok: false, message: (err as Error).message };
     }
+  }
+
+  private installing: AbortController | null = null;
+
+  /** Downloads the official llama.cpp runtime into the data folder (for builds that did not bundle it). */
+  install(): void {
+    if (this.installing) throw new CoreError('CONFLICT', 'The runtime is already being installed');
+    const controller = new AbortController();
+    this.installing = controller;
+    const emit = (p: { receivedBytes: number; totalBytes: number; state: 'downloading' | 'verifying' | 'completed' | 'failed' | 'cancelled'; error?: string }) =>
+      this.d.events?.emit('runtime.download', { modelId: 'llama-runtime', ...p });
+    emit({ receivedBytes: 0, totalBytes: 0, state: 'downloading' });
+    void installLlamaRuntime({
+      destDir: this.d.runtimeDir,
+      githubToken: process.env.GITHUB_TOKEN,
+      signal: controller.signal,
+      onProgress: (received, total, phase) => emit({ receivedBytes: received, totalBytes: total, state: phase === 'extracting' ? 'verifying' : 'downloading' }),
+    })
+      .then((r) => {
+        this.d.log.info('Local runtime installed', r);
+        emit({ receivedBytes: 1, totalBytes: 1, state: 'completed' });
+        this.setState('stopped');
+      })
+      .catch((err: Error) => {
+        this.d.log.error('Runtime install failed', { error: err.message });
+        emit({ receivedBytes: 0, totalBytes: 0, state: controller.signal.aborted ? 'cancelled' : 'failed', error: err.message });
+      })
+      .finally(() => (this.installing = null));
+  }
+
+  cancelInstall(): boolean {
+    this.installing?.abort();
+    return !!this.installing;
   }
 
   get isRunning() {
