@@ -56,7 +56,7 @@ export function PackagesPage() {
             { key: 'n', header: 'Plugin', render: (p) => (<div><div className="fx-cell-title">{p.name} <span className="mono fx-muted">{p.version}</span></div><div className="fx-cell-sub">{p.description || p.pluginId}</div></div>) },
             { key: 'p', header: 'Permissions', render: (p) => (p.permissions.length ? p.permissions.map((x) => <span key={x} className="fx-badge" style={{ marginRight: 4 }}>{x}</span>) : <span className="fx-muted">none</span>) },
             { key: 's', header: 'Size', className: 'num', render: (p) => formatBytes(p.size) },
-            { key: 'sc', header: 'Scope', render: (p) => (p.tenantId ? 'Organisation' : <span className="fx-badge accent">Global</span>) },
+            { key: 'sc', header: 'Scope', render: (p) => (p.tenantId ? 'Organization' : <span className="fx-badge accent">Global</span>) },
             { key: 'd', header: 'Uploaded', render: (p) => formatDate(p.createdAt) },
             {
               key: 'x',

@@ -309,7 +309,7 @@ export const ARTICLES: Article[] = [
       'When in doubt, go to the website by typing it yourself.',
     ],
     go: 'security',
-    ask: 'Teach me how to recognise phishing e-mails with a few realistic examples.',
+    ask: 'Teach me how to recognize phishing e-mails with a few realistic examples.',
   },
   {
     id: 'scan',
@@ -536,7 +536,7 @@ export const ARTICLES: Article[] = [
     id: 'wallpaper',
     cat: 'display',
     t: 'Personalize your desktop',
-    s: 'Wallpaper, accent colour and taskbar.',
+    s: 'Wallpaper, accent color and taskbar.',
     steps: ['Settings → Personalization → Background.', 'Colors → Accent color. Taskbar → alignment and items.'],
     open: 'ms-settings:personalization',
   },

@@ -39,7 +39,7 @@ function PolicyTab() {
   const parse = (v: string) => v.split('\n').map((x) => x.trim()).filter(Boolean);
   return (
     <>
-      {managed && <Callout tone="info" title="Managed by your organisation">This policy comes from your control plane and can only be changed by an administrator.</Callout>}
+      {managed && <Callout tone="info" title="Managed by your organization">This policy comes from your control plane and can only be changed by an administrator.</Callout>}
       <Grid cols={2}>
         <Card title="Defaults by risk" subtitle="What happens when no specific rule matches">
           <div className="fx-form">

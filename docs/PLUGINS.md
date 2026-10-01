@@ -111,7 +111,7 @@ Each plugin runs in its own Node process:
   against the manifest's `network:` permissions and the workstation's network policy.
 * **Secrets, storage, notifications** — brokered by the host and checked against the manifest.
 
-Crashes are contained (the host restarts the worker with backoff) and every call is audited. This is defence in
+Crashes are contained (the host restarts the worker with backoff) and every call is audited. This is defense in
 depth, not a guarantee against a determined attacker with code execution, so treat plugins like any other software
 you install: prefer packages published through your control plane, and review a plugin's permissions before
 installing it.
@@ -165,7 +165,7 @@ TOKEN=...   # from Settings → Local API, or `fbrx-headless token`
 
 # Run the agent to completion
 curl -s localhost:47821/v1/agent/run -H "authorization: Bearer $TOKEN" \
-  -H 'content-type: application/json' -d '{"prompt":"Summarise the PDFs in ~/Reports into reports.md"}'
+  -H 'content-type: application/json' -d '{"prompt":"Summarize the PDFs in ~/Reports into reports.md"}'
 
 # Invoke a tool directly (still governed)
 curl -s localhost:47821/v1/tools/fs.list_dir -H "authorization: Bearer $TOKEN" \

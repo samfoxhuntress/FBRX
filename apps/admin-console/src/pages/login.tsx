@@ -96,7 +96,7 @@ export function SetupPage({ onDone }: { onDone: () => void }) {
           <Field label="Setup token">
             <Input value={f.setupToken} onChange={set('setupToken')} required autoFocus />
           </Field>
-          <Field label="Organisation name">
+          <Field label="Organization name">
             <Input value={f.organization} onChange={set('organization')} required placeholder="Fabrics Inc." />
           </Field>
           <Field label="Your name">

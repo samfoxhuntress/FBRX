@@ -13,7 +13,7 @@ support every FBRX OS workstation in real time. Development: `npm run dev:consol
 | | **Alerts & events** | Service failures, circuit breaks, policy denials and other device events; acknowledge them |
 | Configuration | **Profiles & groups** | Profiles hold managed settings, governance policy and *locks* (paths users cannot change). Groups attach a profile, an update channel and a pinned version to a set of devices; the tenant default profile applies to everyone |
 | | **Deploy & enroll** | Download the latest installers; create enrollment tokens (group, usage limit, expiry, template snapshot) and the matching `fbrx-provision.json` |
-| | **Credentials** | Organisation secrets scoped to the tenant, a group or a single device; pushed into device vaults as read-only managed secrets; rotate or delete centrally |
+| | **Credentials** | Organization secrets scoped to the tenant, a group or a single device; pushed into device vaults as read-only managed secrets; rotate or delete centrally |
 | | **Plugins** | Upload plugin packages (manifest and permissions shown), deploy to devices or groups |
 | | **Backups** | Snapshots uploaded by devices; download, mark as an enrollment template, delete |
 | Platform | **Releases** | Upload installers (or let CI do it), publish to `stable`/`beta`/`dev`, staged rollout percentage |

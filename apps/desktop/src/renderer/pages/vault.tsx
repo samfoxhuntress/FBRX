@@ -55,7 +55,7 @@ export function VaultPage() {
               ['State', s ? <Status tone={s.state === 'unlocked' ? 'good' : 'warning'}>{s.state}</Status> : '…'],
               ['OS keychain', s?.keychain === 'available' ? 'In use' : 'Unavailable (key file)'],
               ['Credentials', s?.secretCount ?? '…'],
-              ['From organisation', s?.managedCount ?? 0],
+              ['From organization', s?.managedCount ?? 0],
               ['Recovery passphrase', s?.hasRecovery ? 'Set' : 'Not set'],
             ]}
           />
@@ -85,7 +85,7 @@ export function VaultPage() {
           columns={[
             { key: 'n', header: 'Name', render: (x) => (<div><div className="fx-cell-title mono">{x.name}</div><div className="fx-cell-sub">{x.description || x.kind}</div></div>) },
             { key: 'k', header: 'Kind', render: (x) => <span className="fx-badge">{x.kind}</span> },
-            { key: 'm', header: 'Source', render: (x) => (x.managed ? <span className="fx-badge accent">Organisation</span> : 'You') },
+            { key: 'm', header: 'Source', render: (x) => (x.managed ? <span className="fx-badge accent">Organization</span> : 'You') },
             { key: 'a', header: 'Last used', render: (x) => timeAgo(x.lastAccessedAt) },
             {
               key: 'x',

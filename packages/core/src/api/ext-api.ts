@@ -192,7 +192,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'security.startup': () => sec.startupAudit(),
     'security.fileReport': (p, ctx) => sec.fileReport(guardPath(Path.parse(p).path, ctx), vt()),
     'security.linkCheck': (p) => {
-      if (!k.internetAllowed()) throw new CoreError('POLICY_DENIED', 'Your organisation blocks internet access from FBRX OS');
+      if (!k.internetAllowed()) throw new CoreError('POLICY_DENIED', 'Your organization blocks internet access from FBRX OS');
       return checkLink(z.object({ url: z.string().min(1).max(4096) }).parse(p).url, { virustotalKey: vt() });
     },
     'security.sandbox': async (p) => {
@@ -207,6 +207,10 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     // ---------------------------------------------------------------------------------- troubleshoot
     'bugs.scan': (p) => fixes.bugScan(z.object({ days: z.number().int().min(1).max(30).optional() }).parse(p ?? {}).days),
     'bugs.fixes': () => fixes.fixes(),
+    'bugs.events': (p) => {
+      const q = z.object({ log: z.enum(['System', 'Application', 'Setup']), days: z.number().int().min(1).max(30).optional(), minLevel: z.enum(['error', 'warning', 'information']).optional(), limit: z.number().int().min(1).max(2000).optional() }).parse(p);
+      return fixes.eventLog(q.log, q.days, q.minLevel, q.limit);
+    },
     'bugs.fix': (p) => {
       const q = z.object({ id: z.string().max(40), target: z.string().max(512).optional() }).parse(p);
       return fixes.runFix(q.id, q.target);
@@ -364,6 +368,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'aicoord.bridge': () => k.aicoord.bridge(),
     'aicoord.install': (p) => k.aicoord.install(z.object({ appId: z.string() }).parse(p).appId),
     'aicoord.remove': (p) => k.aicoord.remove(z.object({ appId: z.string() }).parse(p).appId),
+    'aicoord.launch': (p) => k.aicoord.launch(z.object({ appId: z.string() }).parse(p).appId),
     'aicoord.consult': async (p) => {
       const q = z.object({ providerId: z.string(), prompt: z.string().min(1).max(50_000), model: z.string().optional() }).parse(p);
       return k.consult(q.providerId, q.prompt, q.model);

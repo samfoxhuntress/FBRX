@@ -113,7 +113,7 @@ function PluginsTab() {
   const unlicensed = license.data && !license.data.features.includes('plugins');
   return (
     <>
-      {unlicensed && <Callout tone="warning" title="Plugins are not included in your license">Upgrade to Pro or Enterprise, or enroll with your organisation, to install plugins.</Callout>}
+      {unlicensed && <Callout tone="warning" title="Plugins are not included in your license">Upgrade to Pro or Enterprise, or enroll with your organization, to install plugins.</Callout>}
       <div className="fx-actions">
         <Button icon="file" loading={busy === 'i'} disabled={!!unlicensed} onClick={() => void install('file')}>
           Install package (.tgz)
@@ -126,7 +126,7 @@ function PluginsTab() {
         <Table
           rows={data ?? []}
           rowKey={(p) => p.id}
-          empty={<Empty title="No plugins installed">Build your own with @fbrx/plugin-sdk — see docs/PLUGINS.md — or get them from your organisation.</Empty>}
+          empty={<Empty title="No plugins installed">Build your own with @fbrx/plugin-sdk — see docs/PLUGINS.md — or get them from your organization.</Empty>}
           columns={[
             { key: 'n', header: 'Plugin', render: (p) => (<div><div className="fx-cell-title">{p.name} <span className="mono fx-muted">{p.version}</span></div><div className="fx-cell-sub">{p.description || p.id}</div></div>) },
             { key: 's', header: 'State', render: (p) => (p.state === 'running' ? <Status tone="good">Running</Status> : p.state === 'failed' ? <Status tone="critical">{p.error ?? 'Failed'}</Status> : p.state === 'incompatible' ? <Status tone="warning">{p.error}</Status> : <Status tone="neutral">Stopped</Status>) },

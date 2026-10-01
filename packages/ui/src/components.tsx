@@ -12,6 +12,26 @@ export interface NavItem {
   icon: IconName;
   count?: number;
   section?: string;
+  /** Small tag after the label, e.g. "New". */
+  tag?: string;
+}
+
+/** Marks a feature that only shows in Advanced mode. */
+export function AdvancedTag({ label = 'Advanced', title = 'Shown in Advanced mode' }: { label?: string; title?: string }) {
+  return (
+    <span className="fx-adv-tag" title={title}>
+      {label}
+    </span>
+  );
+}
+
+/** A tab label with the Advanced tag. */
+export function advancedLabel(label: ReactNode): ReactNode {
+  return (
+    <>
+      {label} <AdvancedTag />
+    </>
+  );
 }
 
 export function Shell(props: {
@@ -45,6 +65,7 @@ export function Shell(props: {
                 <button className={cx('fx-nav-item', props.active === item.id && 'active')} onClick={() => props.onNavigate(item.id)} aria-current={props.active === item.id ? 'page' : undefined}>
                   <Ico />
                   <span>{item.label}</span>
+                  {item.tag && <span className="fx-adv-tag">{item.tag}</span>}
                   {!!item.count && <span className="fx-nav-count">{item.count}</span>}
                 </button>
               </div>

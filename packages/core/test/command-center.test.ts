@@ -262,7 +262,7 @@ describe('Windows helpers (pure)', () => {
     ]);
   });
 
-  it('builds VM scripts with sanitised names and clamped resources', () => {
+  it('builds VM scripts with sanitized names and clamped resources', () => {
     const s = vmCreateScript({ name: "evil'; Remove-Item C:\\ -Recurse #", os: 'linux', cpus: 99, memoryGB: 500, diskGB: 1, network: 'isolated', hardened: true });
     expect(s).toContain("$name='evil Remove-Item C -Recurse'");
     expect(s).toContain('-Count 32');

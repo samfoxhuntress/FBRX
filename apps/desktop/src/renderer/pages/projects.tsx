@@ -67,10 +67,10 @@ function ProjectEditor({ project, onClose }: { project: Partial<Project>; onClos
             <Input type="date" value={p.due?.slice(0, 10) ?? ''} onChange={(e) => setP({ ...p, due: e.target.value || null })} />
           </Field>
         </div>
-        <Field label="Colour">
+        <Field label="Color">
           <div style={{ display: 'flex', gap: 8 }}>
             {COLORS.map((c) => (
-              <button key={c} aria-label={`Colour ${c}`} onClick={() => setP({ ...p, color: c })} style={{ width: 24, height: 24, borderRadius: 999, border: p.color === c ? '2px solid var(--text-primary)' : '1px solid var(--border)', background: c, cursor: 'pointer' }} />
+              <button key={c} aria-label={`Color ${c}`} onClick={() => setP({ ...p, color: c })} style={{ width: 24, height: 24, borderRadius: 999, border: p.color === c ? '2px solid var(--text-primary)' : '1px solid var(--border)', background: c, cursor: 'pointer' }} />
             ))}
           </div>
         </Field>

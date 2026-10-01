@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button, Card, Input, Page, Status, useAction } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
+import { AskButton } from '../widgets';
 
 interface Block {
   id: string;
@@ -84,7 +85,10 @@ export function TerminalPage() {
                 {b.code === undefined ? (
                   <Button size="sm" variant="ghost" icon="stop" aria-label="Stop" onClick={() => void call('terminal.kill', { sessionId: b.id })} />
                 ) : (
-                  <span className={b.code === 0 ? 'term-ok' : 'term-err'}>{b.code === null ? 'stopped' : `exit ${b.code}`}</span>
+                  <>
+                    <span className={b.code === 0 ? 'term-ok' : 'term-err'}>{b.code === null ? 'stopped' : `exit ${b.code}`}</span>
+                    <AskButton iconOnly label="Explain this output" prompt={`I ran this command in the FBRX OS terminal${b.code ? ` and it failed (exit code ${b.code})` : ''}. Explain the output in plain language${b.code ? ', what went wrong and how to fix it' : ' and anything I should act on'}.\n\nCommand: ${b.command}`} context={b.out.map((o) => o.text).join('').slice(-8000)} />
+                  </>
                 )}
               </div>
               <pre className="term-out">

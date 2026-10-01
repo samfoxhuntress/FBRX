@@ -4,6 +4,7 @@ import { Button, Callout, Card, Empty, Grid, KeyValue, LineChart, Meter, Page, S
 import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
 import { navigate } from '../app';
+import { AskButton } from '../widgets';
 
 function serviceTone(state: string) {
   return state === 'running' ? 'good' : state === 'failed' ? 'critical' : state === 'degraded' ? 'warning' : 'neutral';
@@ -51,6 +52,11 @@ export function DashboardPage({ status, agentName }: { status: SystemStatus; age
       description={`${status.deviceName} · ${status.product} ${status.version} · up ${formatDuration(cur?.uptime ?? status.uptimeSeconds)}`}
       actions={
         <>
+          <AskButton
+            label="Health check"
+            prompt="Give me a quick health check of this computer: performance right now, storage, security status and any recent errors. Tell me what (if anything) needs attention."
+            context={cur ? { cpu: `${cur.cpu.toFixed(0)}%`, memory: `${formatBytes(cur.memUsed)} of ${formatBytes(cur.memTotal)}`, disks: disks.map((d) => ({ drive: d.mount, free: formatBytes(d.size - d.used), size: formatBytes(d.size) })), uptime: formatDuration(cur.uptime), battery: cur.battery, temperature: cur.tempC } : undefined}
+          />
           <Button icon="tasks" onClick={() => navigate('tasks')}>
             Tasks
           </Button>
@@ -77,7 +83,7 @@ export function DashboardPage({ status, agentName }: { status: SystemStatus; age
       )}
       {updates.data?.state === 'downloaded' && (
         <Callout tone="good" title={`FBRX OS ${updates.data.availableVersion} is ready`} actions={<Button size="sm" onClick={() => void run('u', () => call('updates.install'))}>Restart to update</Button>}>
-          The update was downloaded from your organisation's control plane.
+          The update was downloaded from your organization's control plane.
         </Callout>
       )}
 
@@ -108,7 +114,19 @@ export function DashboardPage({ status, agentName }: { status: SystemStatus; age
             <Empty title="Collecting samples…" />
           )}
         </Card>
-        <Card title="Today" subtitle={`${open.length} open task(s)`} actions={<Button size="sm" variant="ghost" onClick={() => navigate('tasks')}>All tasks</Button>} flush>
+        <Card
+          title="Today"
+          subtitle={`${open.length} open task(s)`}
+          actions={
+            <>
+              {open.length > 0 && <AskButton label="Plan my day" prompt="Look at my open tasks and create a prioritized plan for today. Add any missing steps as tasks if I agree." context={open.map((t) => ({ title: t.title, priority: t.priority, due: t.due, status: t.status }))} />}
+              <Button size="sm" variant="ghost" onClick={() => navigate('tasks')}>
+                All tasks
+              </Button>
+            </>
+          }
+          flush
+        >
           {open.length ? (
             <div className="fx-list">
               {open.slice(0, 7).map((tk) => (
@@ -180,7 +198,7 @@ export function DashboardPage({ status, agentName }: { status: SystemStatus; age
               ['Memory', info.data ? formatBytes(info.data.memoryTotal) : '…'],
               ['Graphics', info.data?.gpus.map((g) => g.model).join(', ') || '—'],
               ['License', `${status.license.edition} (${status.license.state})`],
-              ['Organisation', status.fleet.state === 'unenrolled' ? 'Standalone' : `${status.fleet.tenantName} · ${status.fleet.state}`],
+              ['Organization', status.fleet.state === 'unenrolled' ? 'Standalone' : `${status.fleet.tenantName} · ${status.fleet.state}`],
             ]}
           />
         </Card>

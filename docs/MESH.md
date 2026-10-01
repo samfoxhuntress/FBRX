@@ -63,7 +63,7 @@ the phone's browser storage for the FBRX Mobile page.
 * **Windows Firewall** asks once whether FBRX OS may accept connections; allow it on *private* networks only.
 * Clocks must be within two minutes of each other.
 
-## Organisations
+## Organizations
 
 The mesh is per person. Administrators can switch it off for a tenant or group by locking `mesh.enabled` to `false`
 in managed settings; device pairing, requests and permission changes are written to the audit log

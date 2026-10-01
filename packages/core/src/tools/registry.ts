@@ -5,7 +5,7 @@ import type { ToolSpec } from './types';
 
 const NAME_RE = /^[a-z][a-z0-9_]*(\.[a-z0-9_-]+)+$/;
 
-/** Catalogue of every tool the agent can use: built-ins, plugin tools and connector tools. */
+/** Catalog of every tool the agent can use: built-ins, plugin tools and connector tools. */
 export class ToolRegistry {
   private readonly tools = new Map<string, ToolSpec>();
   private listeners = new Set<() => void>();

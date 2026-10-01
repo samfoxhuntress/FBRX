@@ -1,20 +1,21 @@
 import { useState, type ReactNode } from 'react';
-import { Button, Card, Field, Input, Page, TextArea, Toggle, useToast } from '@fbrx/ui';
+import { AdvancedTag, Button, Card, Field, Input, Page, TextArea, Toggle, useToast } from '@fbrx/ui';
 
-type Tool = { id: string; name: string; hint: string };
+/** `advanced`: developer and network tools, shown in Advanced mode only. */
+type Tool = { id: string; name: string; hint: string; advanced?: boolean };
 const TOOLS: Tool[] = [
-  { id: 'json', name: 'JSON formatter', hint: 'Format, minify and validate JSON' },
-  { id: 'base64', name: 'Base64', hint: 'Encode and decode text' },
-  { id: 'url', name: 'URL tools', hint: 'Encode, decode and take apart links' },
-  { id: 'hash', name: 'Hashes', hint: 'SHA-1, SHA-256, SHA-384, SHA-512' },
-  { id: 'uuid', name: 'UUIDs', hint: 'Random unique identifiers' },
   { id: 'password', name: 'Passwords', hint: 'Strong random passwords' },
-  { id: 'time', name: 'Timestamps', hint: 'Unix time ↔ dates' },
-  { id: 'regex', name: 'Regex tester', hint: 'Try a pattern against text' },
   { id: 'text', name: 'Text tools', hint: 'Counts, case, sort, de-duplicate' },
-  { id: 'color', name: 'Colours', hint: 'HEX ↔ RGB ↔ HSL' },
-  { id: 'jwt', name: 'JWT decoder', hint: 'Read a token (no verification)' },
-  { id: 'subnet', name: 'Subnet calculator', hint: 'Network, mask, host range' },
+  { id: 'color', name: 'Colors', hint: 'HEX ↔ RGB ↔ HSL' },
+  { id: 'time', name: 'Timestamps', hint: 'Unix time ↔ dates', advanced: true },
+  { id: 'json', name: 'JSON formatter', hint: 'Format, minify and validate JSON', advanced: true },
+  { id: 'base64', name: 'Base64', hint: 'Encode and decode text', advanced: true },
+  { id: 'url', name: 'URL tools', hint: 'Encode, decode and take apart links', advanced: true },
+  { id: 'hash', name: 'Hashes', hint: 'SHA-1, SHA-256, SHA-384, SHA-512', advanced: true },
+  { id: 'uuid', name: 'UUIDs', hint: 'Random unique identifiers', advanced: true },
+  { id: 'regex', name: 'Regex tester', hint: 'Try a pattern against text', advanced: true },
+  { id: 'jwt', name: 'JWT decoder', hint: 'Read a token (no verification)', advanced: true },
+  { id: 'subnet', name: 'Subnet calculator', hint: 'Network, mask, host range', advanced: true },
 ];
 
 const b64enc = (s: string) => btoa(String.fromCharCode(...new TextEncoder().encode(s)));
@@ -186,7 +187,7 @@ function Pane({ id }: { id: string }) {
               () => {
                 const t = input.trim();
                 const d = !t ? new Date() : /^\d+$/.test(t) ? new Date(t.length > 11 ? Number(t) : Number(t) * 1000) : new Date(t);
-                if (Number.isNaN(d.getTime())) throw new Error('Unrecognised date');
+                if (Number.isNaN(d.getTime())) throw new Error('Unrecognized date');
                 return [`Local      ${d.toString()}`, `ISO (UTC)  ${d.toISOString()}`, `Unix (s)   ${Math.floor(d.getTime() / 1000)}`, `Unix (ms)  ${d.getTime()}`].join('\n');
               },
               true,
@@ -242,7 +243,7 @@ function Pane({ id }: { id: string }) {
         <>
           <div style={{ display: 'flex', gap: 8 }}>
             <Input className="fx-input mono" placeholder="#f0a530, rgb(240,165,48) or hsl(36,86%,56%)" value={input} onChange={(e) => setInput(e.target.value)} />
-            <input type="color" aria-label="Pick a colour" value={/^#[0-9a-f]{6}$/i.test(input) ? input : '#f0a530'} onChange={(e) => setInput(e.target.value)} style={{ width: 44, height: 34, border: 0, background: 'none' }} />
+            <input type="color" aria-label="Pick a color" value={/^#[0-9a-f]{6}$/i.test(input) ? input : '#f0a530'} onChange={(e) => setInput(e.target.value)} style={{ width: 44, height: 34, border: 0, background: 'none' }} />
           </div>
           {buttons([
             [
@@ -335,16 +336,21 @@ function Pane({ id }: { id: string }) {
 }
 
 /** Offline developer and everyday utilities. Nothing typed here leaves this computer. */
-export function ToolboxPage() {
-  const [active, setActive] = useState('json');
-  const tool = TOOLS.find((t) => t.id === active)!;
+export function ToolboxPage({ advanced }: { advanced: boolean }) {
+  const tools = TOOLS.filter((t) => advanced || !t.advanced);
+  const [picked, setActive] = useState('password');
+  const active = tools.some((t) => t.id === picked) ? picked : tools[0].id;
+  const tool = tools.find((t) => t.id === active)!;
   return (
-    <Page title="Toolbox" description="Handy utilities that run entirely on this computer.">
+    <Page title="Toolbox" description={advanced ? 'Handy utilities that run entirely on this computer.' : 'Handy utilities that run entirely on this computer. Advanced mode adds developer and network tools.'}>
       <div className="toolbox">
         <Card className="toolbox-list" flush>
-          {TOOLS.map((t) => (
+          {tools.map((t) => (
             <button key={t.id} className={`agent-conv${active === t.id ? ' active' : ''}`} onClick={() => setActive(t.id)}>
-              <div className="agent-conv-title">{t.name}</div>
+              <div className="agent-conv-title">
+                {t.name}
+                {t.advanced && <AdvancedTag />}
+              </div>
               <div className="agent-conv-sub">{t.hint}</div>
             </button>
           ))}

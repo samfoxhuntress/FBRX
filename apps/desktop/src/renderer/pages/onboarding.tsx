@@ -141,7 +141,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
           )}
           {step === 'org' && (
             <div className="fx-form">
-              <h1>Connect to your organisation</h1>
+              <h1>Connect to your organization</h1>
               <p className="fx-secondary">Optional. If your IT team runs an FBRX control plane, connect so they can manage updates, policies, backups and licensing for this machine.</p>
               <Field label="Control plane URL">
                 <Input value={org.serverUrl} onChange={(e) => setOrg({ ...org, serverUrl: e.target.value })} placeholder="https://fbrx.yourcompany.com" />
@@ -162,7 +162,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
           {step === 'done' && (
             <div className="fx-form">
               <h1>You're set</h1>
-              <Callout tone="good">FBRX OS is running. Try asking the agent to summarise this workstation's health, or connect your first app under Connections.</Callout>
+              <Callout tone="good">FBRX OS is running. Try asking the agent to summarize this workstation's health, or connect your first app under Connections.</Callout>
               <p className="fx-secondary">Tip: create a snapshot under Backup & restore before you change computers — it brings everything with you.</p>
               <div className="fx-actions" style={{ justifyContent: 'flex-end' }}>
                 <Button

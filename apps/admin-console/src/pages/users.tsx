@@ -26,7 +26,7 @@ interface Key {
 
 const ROLE_HELP: Record<string, string> = {
   superadmin: 'Platform operator: all tenants, releases and licensing',
-  owner: 'Full control of this organisation',
+  owner: 'Full control of this organization',
   admin: 'Configuration, credentials, users and privileged commands',
   operator: 'Manage devices and send routine commands',
   viewer: 'Read-only',

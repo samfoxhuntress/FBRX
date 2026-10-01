@@ -138,7 +138,7 @@ describe('governance gate', () => {
     }
   });
 
-  it('rejects local policy edits when the organisation manages policy', async () => {
+  it('rejects local policy edits when the organization manages policy', async () => {
     const { kernel, cleanup } = await makeKernel();
     try {
       kernel.policy.applyManaged(DEFAULT_POLICY);

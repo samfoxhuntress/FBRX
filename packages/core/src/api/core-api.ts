@@ -39,7 +39,7 @@ const USER_ONLY = new Set<string>([
 const READ_ONLY = /\.(status|list|get|types|catalog|installed|policy|query|stats|verify|models|providers|inspect|info)$|^logs\.tail$|^ai\.conversations\.(list|get)$/;
 /** Command-center reads (dashboards poll these). */
 const EXT_READ_ONLY =
-  /^(sysinfo\.\w+|files\.(home|read|search)|spotlight\.(query|files)|alerts\.(rules|inbox|counts)|storage\.(drives|disks|cleanupInfo|analyze)|security\.(defender|defenderPrefs|threats|firewall|ports|processAudit|startup|fileReport|linkCheck)|bugs\.(scan|fixes)|winupdates\.(apps|windows|drivers|hotfixes)|lab\.vms|net\.(context|publicIp|ping|traceroute|scans|scanGet|compare|speedHistory|wifi|bluetooth|printers|dns|port|adapters)|mesh\.(messages|peerInfo)|aicoord\.(detect|bridge))$/;
+  /^(sysinfo\.\w+|files\.(home|read|search)|spotlight\.(query|files)|alerts\.(rules|inbox|counts)|storage\.(drives|disks|cleanupInfo|analyze)|security\.(defender|defenderPrefs|threats|firewall|ports|processAudit|startup|fileReport|linkCheck)|bugs\.(scan|fixes|events)|winupdates\.(apps|windows|drivers|hotfixes)|lab\.vms|net\.(context|publicIp|ping|traceroute|scans|scanGet|compare|speedHistory|wifi|bluetooth|printers|dns|port|adapters)|mesh\.(messages|peerInfo)|aicoord\.(detect|bridge))$/;
 
 const SENSITIVE_KEYS = new Set(['value', 'passphrase', 'recoveryPassphrase', 'current', 'next', 'key', 'token', 'password']);
 

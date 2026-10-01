@@ -1,9 +1,10 @@
+import { spawn } from 'node:child_process';
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { AiAppInfo, McpBridgeInfo } from '@fbrx/shared';
 import { CoreError } from '../errors';
-import { exec, IS_WIN } from '../windows/ps';
+import { exec, IS_WIN, psObject } from '../windows/ps';
 
 const HOME = homedir();
 const APPDATA = process.env.APPDATA ?? join(HOME, 'AppData', 'Roaming');
@@ -20,7 +21,15 @@ interface CatalogEntry {
   /** MCP configuration file and the key holding servers. */
   config?: { file: string; key: 'mcpServers' | 'servers'; vscode?: boolean };
   vscodeExt?: RegExp;
+  /** Windows: matches the app's Start menu entry or installed-program name. */
+  match?: RegExp;
+  /** Windows: matches its process name while it runs. */
+  process?: RegExp;
+  note?: string;
+  api?: AiAppInfo['api'];
 }
+
+const NO_MCP = (app: string) => `${app} cannot load tools from other apps (MCP) on Windows yet. You can still ask Fabric from FBRX, and get second opinions from its model below.`;
 
 const CATALOG: CatalogEntry[] = [
   {
@@ -28,28 +37,78 @@ const CATALOG: CatalogEntry[] = [
     name: 'Claude Desktop',
     kind: 'desktop-app',
     paths: [join(LOCAL, 'AnthropicClaude'), join(APPDATA, 'Claude'), join(MAC_SUPPORT, 'Claude')],
+    match: /^Claude$/i,
     config: { file: IS_WIN ? join(APPDATA, 'Claude', 'claude_desktop_config.json') : join(MAC_SUPPORT, 'Claude', 'claude_desktop_config.json'), key: 'mcpServers' },
   },
   { id: 'claude-code', name: 'Claude Code', kind: 'cli', paths: [join(HOME, '.claude')], cmd: 'claude', config: { file: join(HOME, '.claude.json'), key: 'mcpServers' } },
-  { id: 'cursor', name: 'Cursor', kind: 'ide', paths: [join(LOCAL, 'Programs', 'cursor'), join(HOME, '.cursor')], cmd: 'cursor', config: { file: join(HOME, '.cursor', 'mcp.json'), key: 'mcpServers' } },
-  { id: 'windsurf', name: 'Windsurf', kind: 'ide', paths: [join(LOCAL, 'Programs', 'Windsurf'), join(HOME, '.codeium', 'windsurf')], config: { file: join(HOME, '.codeium', 'windsurf', 'mcp_config.json'), key: 'mcpServers' } },
+  { id: 'cursor', name: 'Cursor', kind: 'ide', paths: [join(LOCAL, 'Programs', 'cursor'), join(HOME, '.cursor')], cmd: 'cursor', match: /^Cursor$/i, config: { file: join(HOME, '.cursor', 'mcp.json'), key: 'mcpServers' } },
+  { id: 'windsurf', name: 'Windsurf', kind: 'ide', paths: [join(LOCAL, 'Programs', 'Windsurf'), join(HOME, '.codeium', 'windsurf')], match: /^Windsurf$/i, config: { file: join(HOME, '.codeium', 'windsurf', 'mcp_config.json'), key: 'mcpServers' } },
   {
     id: 'vscode',
     name: 'VS Code (GitHub Copilot)',
     kind: 'ide',
     paths: [join(LOCAL, 'Programs', 'Microsoft VS Code')],
     cmd: 'code',
+    match: /^Visual Studio Code$/i,
     vscodeExt: /^github\.copilot(-chat)?-/i,
     config: { file: IS_WIN ? join(APPDATA, 'Code', 'User', 'mcp.json') : process.platform === 'darwin' ? join(MAC_SUPPORT, 'Code', 'User', 'mcp.json') : join(HOME, '.config', 'Code', 'User', 'mcp.json'), key: 'servers', vscode: true },
   },
-  { id: 'chatgpt', name: 'ChatGPT desktop', kind: 'desktop-app', paths: [join(LOCAL, 'Programs', 'ChatGPT'), '/Applications/ChatGPT.app'] },
+  { id: 'gemini', name: 'Gemini CLI', kind: 'cli', paths: [join(HOME, '.gemini')], cmd: 'gemini', config: { file: join(HOME, '.gemini', 'settings.json'), key: 'mcpServers' } },
+  { id: 'lmstudio', name: 'LM Studio', kind: 'local-server', paths: [join(LOCAL, 'Programs', 'LM Studio'), join(HOME, '.lmstudio'), join(HOME, '.cache', 'lm-studio')], port: 1234, match: /^LM Studio$/i, process: /^LM Studio$/i, config: { file: join(HOME, '.lmstudio', 'mcp.json'), key: 'mcpServers' } },
+  {
+    id: 'perplexity',
+    name: 'Perplexity',
+    kind: 'desktop-app',
+    paths: [join(LOCAL, 'Programs', 'Perplexity'), '/Applications/Perplexity.app'],
+    match: /^Perplexity$/i,
+    process: /^Perplexity$/i,
+    note: NO_MCP('Perplexity'),
+    api: { name: 'Perplexity (Sonar)', baseUrl: 'https://api.perplexity.ai', model: 'sonar-pro', keyUrl: 'https://www.perplexity.ai/settings/api' },
+  },
+  { id: 'comet', name: 'Comet (Perplexity browser)', kind: 'desktop-app', paths: [join(LOCAL, 'Perplexity', 'Comet')], match: /^Comet$/i, process: /^comet$/i, note: 'Comet is a web browser; it cannot load tools from other apps (MCP).' },
+  {
+    id: 'grok',
+    name: 'Grok',
+    kind: 'desktop-app',
+    paths: [join(LOCAL, 'Programs', 'Grok'), '/Applications/Grok.app'],
+    match: /^Grok$/i,
+    process: /^Grok$/i,
+    note: NO_MCP('Grok'),
+    api: { name: 'xAI Grok', baseUrl: 'https://api.x.ai/v1', model: 'grok-4', keyUrl: 'https://console.x.ai' },
+  },
+  {
+    id: 'chatgpt',
+    name: 'ChatGPT',
+    kind: 'desktop-app',
+    paths: [join(LOCAL, 'Programs', 'ChatGPT'), '/Applications/ChatGPT.app'],
+    match: /^ChatGPT$/i,
+    process: /^ChatGPT$/i,
+    note: NO_MCP('ChatGPT'),
+    api: { name: 'OpenAI', baseUrl: 'https://api.openai.com/v1', model: 'gpt-5', keyUrl: 'https://platform.openai.com/api-keys' },
+  },
+  { id: 'copilot', name: 'Microsoft Copilot', kind: 'desktop-app', paths: [], match: /^(Microsoft )?Copilot$/i, note: 'Copilot cannot load tools from other apps (MCP).' },
+  { id: 'msty', name: 'Msty', kind: 'desktop-app', paths: [join(LOCAL, 'Programs', 'Msty')], match: /^Msty/i, process: /^Msty$/i, note: 'Msty can use local models; point it at Ollama to share the same models as FBRX OS.' },
+  { id: 'anythingllm', name: 'AnythingLLM', kind: 'desktop-app', paths: [join(LOCAL, 'Programs', 'AnythingLLM'), join(APPDATA, 'anythingllm-desktop')], match: /^AnythingLLM/i, note: 'AnythingLLM can use local models; point it at Ollama to share the same models as FBRX OS.' },
   { id: 'codex', name: 'OpenAI Codex CLI', kind: 'cli', paths: [join(HOME, '.codex')], cmd: 'codex' },
-  { id: 'gemini', name: 'Gemini CLI', kind: 'cli', paths: [join(HOME, '.gemini')], cmd: 'gemini' },
-  { id: 'ollama', name: 'Ollama', kind: 'local-server', paths: [join(LOCAL, 'Programs', 'Ollama'), join(HOME, '.ollama')], cmd: 'ollama', port: 11434 },
-  { id: 'lmstudio', name: 'LM Studio', kind: 'local-server', paths: [join(LOCAL, 'Programs', 'LM Studio'), join(HOME, '.lmstudio'), join(HOME, '.cache', 'lm-studio')], port: 1234 },
-  { id: 'jan', name: 'Jan', kind: 'local-server', paths: [join(LOCAL, 'Programs', 'jan'), join(APPDATA, 'Jan')], port: 1337 },
-  { id: 'gpt4all', name: 'GPT4All', kind: 'local-server', paths: [join(LOCAL, 'nomic.ai'), join(HOME, 'gpt4all')], port: 4891 },
+  { id: 'ollama', name: 'Ollama', kind: 'local-server', paths: [join(LOCAL, 'Programs', 'Ollama'), join(HOME, '.ollama')], cmd: 'ollama', port: 11434, match: /^Ollama$/i, process: /^ollama( app)?$/i },
+  { id: 'jan', name: 'Jan', kind: 'local-server', paths: [join(LOCAL, 'Programs', 'jan'), join(APPDATA, 'Jan')], port: 1337, match: /^Jan$/i },
+  { id: 'gpt4all', name: 'GPT4All', kind: 'local-server', paths: [join(LOCAL, 'nomic.ai'), join(HOME, 'gpt4all')], port: 4891, match: /^GPT4All/i },
 ];
+
+/** What Windows knows about installed and running apps: Start menu entries, installed programs and processes. */
+interface Inventory {
+  start: Array<{ n: string; id: string }>;
+  installed: Array<{ n: string; p?: string; v?: string }>;
+  running: string[];
+}
+
+const INVENTORY_SCRIPT = `
+$o = [ordered]@{ start = @(); installed = @(); running = @() }
+try { $o.start = @(Get-StartApps | ForEach-Object { @{ n = $_.Name; id = $_.AppID } }) } catch {}
+$keys = 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*','HKLM:\\Software\\WOW6432Node\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\*'
+$o.installed = @(Get-ItemProperty $keys -ErrorAction SilentlyContinue | Where-Object { $_.DisplayName } | ForEach-Object { @{ n = [string]$_.DisplayName; p = [string]$_.InstallLocation; v = [string]$_.DisplayVersion } })
+$o.running = @(Get-Process -ErrorAction SilentlyContinue | Select-Object -ExpandProperty ProcessName -Unique)
+$o | ConvertTo-Json -Depth 4 -Compress`;
 
 async function which(cmd: string): Promise<string | null> {
   const r = IS_WIN ? await exec('where.exe', [cmd], { timeoutMs: 6000 }) : await exec('/bin/sh', ['-c', `command -v ${cmd}`], { timeoutMs: 6000 });
@@ -117,6 +176,24 @@ export class AiCoordination {
     }
   }
 
+  private inventoryCache: { at: number; value: Inventory } | null = null;
+
+  /** Start menu, installed programs and running processes (Windows; cached for a few seconds). */
+  private async inventory(fresh = false): Promise<Inventory> {
+    const empty: Inventory = { start: [], installed: [], running: [] };
+    if (!IS_WIN) return empty;
+    if (!fresh && this.inventoryCache && Date.now() - this.inventoryCache.at < 15_000) return this.inventoryCache.value;
+    try {
+      const v = await psObject<Partial<Inventory>>(INVENTORY_SCRIPT, 45_000);
+      const arr = <T>(x: T | T[] | undefined): T[] => (Array.isArray(x) ? x : x ? [x] : []);
+      const value = { start: arr(v.start), installed: arr(v.installed), running: arr(v.running) };
+      this.inventoryCache = { at: Date.now(), value };
+      return value;
+    } catch {
+      return empty;
+    }
+  }
+
   async detect(): Promise<AiAppInfo[]> {
     let vsExt: string[] = [];
     for (const dir of [join(HOME, '.vscode', 'extensions'), join(HOME, '.vscode-insiders', 'extensions')]) {
@@ -126,23 +203,61 @@ export class AiCoordination {
         /* not installed */
       }
     }
+    const inv = await this.inventory(true);
     return Promise.all(
       CATALOG.map(async (c) => {
-        let evidence: string | null = null;
+        const evidence: string[] = [];
         const folder = c.paths.find((p) => existsSync(p));
-        if (folder) evidence = `Found ${folder.replace(HOME, '~')}`;
-        if (!evidence && c.cmd) {
+        if (folder) evidence.push(`Found ${folder.replace(HOME, '~')}`);
+        const start = c.match ? inv.start.find((a) => c.match!.test(a.n)) : undefined;
+        const prog = c.match ? inv.installed.find((a) => c.match!.test(a.n)) : undefined;
+        if (prog) evidence.push(`Installed${prog.v ? ` (version ${prog.v})` : ''}`);
+        else if (start) evidence.push('In the Start menu');
+        if (!evidence.length && c.cmd) {
           const w = await which(c.cmd);
-          if (w) evidence = `Command ${w.replace(HOME, '~')}`;
+          if (w) evidence.push(`Command ${w.replace(HOME, '~')}`);
         }
         if (c.vscodeExt) {
           const e = vsExt.find((x) => c.vscodeExt!.test(x));
-          if (e) evidence = `Extension ${e}`;
+          if (e) evidence.push(`Extension ${e}`);
         }
-        if (c.port && (await serverUp(c.port))) evidence = `${evidence ? `${evidence}; ` : ''}API server on port ${c.port}`;
-        return { id: c.id, name: c.name, kind: c.kind, found: !!evidence, evidence, mcp: !!c.config, bridged: this.isBridged(c) };
+        if (c.process && inv.running.some((n) => c.process!.test(n))) evidence.push('running now');
+        if (c.port && (await serverUp(c.port))) evidence.push(`API server on port ${c.port}`);
+        return {
+          id: c.id,
+          name: c.name,
+          kind: c.kind,
+          found: evidence.length > 0,
+          evidence: evidence.length ? evidence.join('; ') : null,
+          mcp: !!c.config,
+          bridged: this.isBridged(c),
+          launchable: IS_WIN && (!!start || (c.id === 'ollama' && evidence.length > 0)),
+          note: c.note ?? null,
+          ...(c.api ? { api: c.api } : {}),
+        };
       }),
     );
+  }
+
+  /** Opens an app from its Start menu entry; for Ollama, starts its server. */
+  async launch(appId: string): Promise<{ ok: boolean; message: string }> {
+    const c = CATALOG.find((x) => x.id === appId);
+    if (!c) throw new CoreError('NOT_FOUND', 'Unknown app');
+    if (!IS_WIN) throw new CoreError('UNAVAILABLE', 'Opening apps from FBRX is available on Windows');
+    const inv = await this.inventory();
+    const start = c.match ? inv.start.find((a) => c.match!.test(a.n)) : undefined;
+    if (start) {
+      await exec('explorer.exe', [`shell:AppsFolder\\${start.id}`], { timeoutMs: 10_000 });
+      return { ok: true, message: `Opening ${c.name}…` };
+    }
+    if (c.id === 'ollama') {
+      const cmd = (await which('ollama')) ?? [join(LOCAL, 'Programs', 'Ollama', 'ollama.exe')].find((p) => existsSync(p));
+      if (cmd) {
+        spawn(cmd, ['serve'], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+        return { ok: true, message: 'Starting Ollama…' };
+      }
+    }
+    throw new CoreError('NOT_FOUND', `${c.name} was not found in the Start menu`);
   }
 
   /** Adds FBRX OS as an MCP server in the app's configuration (keeping a backup of the old file). */

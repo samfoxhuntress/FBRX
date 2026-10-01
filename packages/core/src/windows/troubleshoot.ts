@@ -1,6 +1,6 @@
-import type { BugReport, ElevatedResult, FixInfo } from '@fbrx/shared';
+import type { BugReport, ElevatedResult, EventLogEntry, FixInfo } from '@fbrx/shared';
 import { CoreError } from '../errors';
-import { arr, elevated, IS_WIN, ps, psq, requireWindows } from './ps';
+import { arr, elevated, IS_WIN, ps, psJson, psq, requireWindows } from './ps';
 
 /** Reads the Windows event log, crash reports and device/service state for the last `days` days. */
 export async function bugScan(days = 3): Promise<BugReport> {
@@ -93,4 +93,17 @@ export async function runFix(id: string, target?: string): Promise<ElevatedResul
   if (f.admin) return elevated(f.script);
   const r = await ps(f.script, 600_000);
   return { ok: r.code === 0, output: (r.out + r.err).trim() };
+}
+
+const LEVELS = { 1: 'critical', 2: 'error', 3: 'warning', 4: 'information', 0: 'information' } as const;
+
+/** Recent entries of a Windows event log, newest first (for the bug catcher's log view). */
+export async function eventLog(log: 'System' | 'Application' | 'Setup', days = 3, minLevel: 'error' | 'warning' | 'information' = 'warning', limit = 300): Promise<EventLogEntry[]> {
+  requireWindows('The event log');
+  const levels = minLevel === 'error' ? '1,2' : minLevel === 'warning' ? '1,2,3' : '0,1,2,3,4';
+  const rows = await psJson<{ t: string; l: number; s: string; i: number; m: string }>(
+    `Get-WinEvent -FilterHashtable @{LogName=${psq(log)}; Level=${levels}; StartTime=(Get-Date).AddDays(-${Math.max(1, Math.min(30, Math.floor(days)))})} -MaxEvents ${Math.max(1, Math.min(2000, Math.floor(limit)))} -ErrorAction SilentlyContinue | ForEach-Object { [pscustomobject]@{ t=$_.TimeCreated.ToUniversalTime().ToString('o'); l=[int]$_.Level; s=[string]$_.ProviderName; i=[int]$_.Id; m=([string]$_.Message).Substring(0, [Math]::Min(1500, ([string]$_.Message).Length)) } }`,
+    90_000,
+  );
+  return rows.map((r) => ({ time: r.t, log, level: LEVELS[r.l as keyof typeof LEVELS] ?? 'information', source: r.s, eventId: r.i, message: (r.m ?? '').trim() }));
 }

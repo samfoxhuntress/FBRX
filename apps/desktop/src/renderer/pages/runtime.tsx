@@ -3,7 +3,8 @@ import type { DownloadProgress, ProviderConfig, ProviderStatus } from '@fbrx/sha
 import { Button, Callout, Card, Empty, Field, Grid, Input, KeyValue, Modal, Page, Select, Status, Table, Toggle, formatBytes, useAction, useConfirm } from '@fbrx/ui';
 import { call, onEvent, pickFile } from '../client';
 import { isLocked, useCore } from '../hooks';
-import { navigate } from '../app';
+import { navigate, routeArg } from '../app';
+import { ModelPicker, useModels } from '../widgets';
 
 export function RuntimePage() {
   const rt = useCore('runtime.status', undefined, ['runtime.changed', 'settings.changed']);
@@ -20,6 +21,25 @@ export function RuntimePage() {
   const locked = settings.data?.locked ?? [];
   const ai = settings.data?.settings.ai;
   const installedIds = new Set((installed.data ?? []).map((m) => m.id));
+  // From AI coordination: "Add as a model" for an app's cloud API (#/runtime/add:<name>|<baseUrl>|<model>).
+  useEffect(() => {
+    const arg = routeArg();
+    if (!arg?.startsWith('add:') || !settings.data) return;
+    const [name, baseUrl, model] = decodeURIComponent(arg.slice(4)).split('|');
+    const id = `custom-${name.toLowerCase().replace(/[^a-z0-9]+/g, '-')}`;
+    const existing = settings.data.settings.ai.providers.find((x) => x.id === id);
+    setEditProvider(existing ?? { id, type: 'openai-compatible', name, enabled: true, baseUrl, defaultModel: model, cloud: true, apiKeySecret: `${id}-api-key` });
+    navigate('runtime');
+  }, [settings.data]);
+  const useModel = (providerId: string, model: string, label: string) =>
+    run(
+      'use',
+      async () => {
+        const s = settings.data!.settings.ai;
+        await call('settings.update', { patch: { ai: { defaultProvider: providerId, defaultModel: model, providers: s.providers.map((x) => (x.id === providerId ? { ...x, defaultModel: model || undefined } : x)) } } });
+      },
+      `${label} is now the default model`,
+    );
   return (
     <Page title="AI models" description="Run the agent fully on this computer with the built-in llama.cpp runtime, use Ollama, or connect cloud models such as Claude. Your governance policy decides which providers are allowed.">
       <Grid cols={2}>
@@ -84,7 +104,31 @@ export function RuntimePage() {
             columns={[
               { key: 'n', header: 'Model', render: (m) => (<div><div className="fx-cell-title">{m.name}</div><div className="fx-cell-sub">{m.source}</div></div>) },
               { key: 's', header: 'Size', className: 'num', render: (m) => formatBytes(m.sizeBytes) },
-              { key: 'a', header: '', render: (m) => (m.active ? <span className="fx-badge accent">Active</span> : <Button size="sm" disabled={isLocked(locked, 'runtime.modelId')} onClick={() => void run('sel', () => call('runtime.selectModel', { modelId: m.id }), `${m.name} selected`)}>Use</Button>) },
+              {
+                key: 'a',
+                header: '',
+                render: (m) =>
+                  m.active && ai?.defaultProvider === 'local' ? (
+                    <span className="fx-badge accent">In use</span>
+                  ) : (
+                    <Button
+                      size="sm"
+                      disabled={isLocked(locked, 'runtime.modelId') || isLocked(locked, 'ai.defaultProvider')}
+                      onClick={() =>
+                        void run(
+                          'sel',
+                          async () => {
+                            await call('runtime.selectModel', { modelId: m.id });
+                            await call('settings.update', { patch: { ai: { defaultProvider: 'local', defaultModel: '' } } });
+                          },
+                          r?.state === 'not-installed' ? `${m.name} selected — install the runtime above to run it` : `${m.name} is now the default model`,
+                        )
+                      }
+                    >
+                      Use
+                    </Button>
+                  ),
+              },
               {
                 key: 'd',
                 header: '',
@@ -97,6 +141,7 @@ export function RuntimePage() {
           />
         </Card>
       </Grid>
+      {ai?.providers.some((p) => p.id === 'ollama' && p.enabled) && <OllamaModels defaultProvider={ai.defaultProvider} defaultModel={ai.defaultModel || (ai.providers.find((p) => p.id === 'ollama')?.defaultModel ?? '')} onUse={(m) => void useModel('ollama', m, m)} locked={isLocked(locked, 'ai.defaultProvider')} busy={busy === 'use'} />}
       <Card title="Model catalog" subtitle="Open-weight models tested with FBRX OS tool calling. Downloads resume if interrupted and are checksummed.">
         <div className="choice-grid">
           {(catalog.data ?? []).map((m) => {
@@ -226,8 +271,12 @@ function ProviderEditor({ provider, all, onClose }: { provider: ProviderConfig; 
           </Field>
         )}
         {p.type !== 'local-runtime' && (
-          <Field label="Default model" help={p.type === 'anthropic' ? 'Recommended: claude-opus-5-5' : p.type === 'ollama' ? 'e.g. qwen3:8b (ollama pull first)' : undefined}>
-            <Input value={p.defaultModel ?? ''} onChange={(e) => setP({ ...p, defaultModel: e.target.value || undefined })} />
+          <Field label="Default model" help={p.type === 'anthropic' ? 'Recommended: claude-opus-5-5' : p.type === 'ollama' ? 'The models Ollama has downloaded on this computer. Automatic picks the best one for tools.' : undefined}>
+            {isNew || p.baseUrl !== provider.baseUrl ? (
+              <Input value={p.defaultModel ?? ''} placeholder="Model name" onChange={(e) => setP({ ...p, defaultModel: e.target.value || undefined })} />
+            ) : (
+              <ModelPicker providerId={p.id} value={p.defaultModel ?? ''} onChange={(v) => setP({ ...p, defaultModel: v || undefined })} defaultLabel={p.type === 'ollama' ? 'Automatic (best installed model)' : 'None'} />
+            )}
           </Field>
         )}
         {p.type === 'openai-compatible' && <Toggle checked={p.cloud} onChange={(v) => setP({ ...p, cloud: v })} label="This endpoint is a cloud service (subject to the cloud AI policy)" />}
@@ -243,8 +292,63 @@ function ProviderEditor({ provider, all, onClose }: { provider: ProviderConfig; 
             )}
           </>
         )}
-        {p.cloud && <Callout tone="info">Requests to cloud providers leave this machine. Your organisation can disable cloud AI in the governance policy. <a href="#/governance" onClick={() => navigate('governance')}>Policy</a></Callout>}
+        {p.cloud && <Callout tone="info">Requests to cloud providers leave this machine. Your organization can disable cloud AI in the governance policy. <a href="#/governance" onClick={() => navigate('governance')}>Policy</a></Callout>}
       </div>
     </Modal>
+  );
+}
+
+/** Models Ollama has already downloaded on this computer, each one a click away from being the default. */
+function OllamaModels({ defaultProvider, defaultModel, onUse, locked, busy }: { defaultProvider: string; defaultModel: string; onUse: (model: string) => void; locked: boolean; busy: boolean }) {
+  const { models, error, reload } = useModels('ollama');
+  const { run, busy: starting } = useAction();
+  const notRunning = !!models?.some((m) => m.unavailable) || !!error;
+  const effective = defaultModel || models?.find((m) => !m.unavailable)?.id;
+  return (
+    <Card
+      title="Ollama models"
+      subtitle="Models already downloaded with Ollama on this computer"
+      actions={
+        <>
+          {notRunning && (
+            <Button size="sm" variant="primary" icon="play" loading={starting === 'start'} onClick={() => void run('start', () => call('aicoord.launch', { appId: 'ollama' }), 'Starting Ollama…').then(() => setTimeout(reload, 2500))}>
+              Start Ollama
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" icon="refresh" aria-label="Look for Ollama models again" onClick={reload} />
+        </>
+      }
+      flush
+    >
+      <Table
+        rows={models ?? []}
+        rowKey={(m) => m.id}
+        empty={
+          error ? (
+            <Empty title="Ollama is not running">Start it with the button above, or install it from ollama.com. ({error})</Empty>
+          ) : models ? (
+            <Empty title="No Ollama models yet">Download one in a terminal, for example: ollama pull qwen2.5:7b</Empty>
+          ) : (
+            <Empty title="Looking for Ollama models…" />
+          )
+        }
+        columns={[
+          { key: 'n', header: 'Model', render: (m) => (<div><div className="fx-cell-title mono">{m.id}</div><div className="fx-cell-sub">{m.details ?? (m.unavailable ? 'Found in the Ollama model folder' : '')}</div></div>) },
+          { key: 's', header: 'Size', className: 'num', render: (m) => (m.sizeBytes ? formatBytes(m.sizeBytes) : '—') },
+          {
+            key: 'a',
+            header: '',
+            render: (m) =>
+              defaultProvider === 'ollama' && effective === m.id ? (
+                <span className="fx-badge accent">In use</span>
+              ) : (
+                <Button size="sm" disabled={locked} loading={busy} title={m.unavailable ? 'Start Ollama to chat with this model' : undefined} onClick={() => onUse(m.id)}>
+                  Use
+                </Button>
+              ),
+          },
+        ]}
+      />
+    </Card>
   );
 }

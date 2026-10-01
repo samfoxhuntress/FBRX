@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import type { Settings, ThemePreset } from '@fbrx/shared';
 
-/** Swatch colours for the preset picker: [page, sidebar, accent] for light and dark. */
+/** Swatch colors for the preset picker: [page, sidebar, accent] for light and dark. */
 export const PRESETS: Array<{ id: ThemePreset; name: string; light: [string, string, string]; dark: [string, string, string] }> = [
   { id: 'fabrics', name: 'Fabrics', light: ['#f6f2ea', '#fbf7f0', '#a35f08'], dark: ['#100e0b', '#1a1714', '#f0a530'] },
   { id: 'ember', name: 'Ember', light: ['#f7f1ee', '#fcf7f4', '#c2410c'], dark: ['#110c0a', '#1b1412', '#ff6b3d'] },

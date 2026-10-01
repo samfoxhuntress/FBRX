@@ -38,6 +38,22 @@ export function selectRuntimeAsset(assets: Array<{ name: string; browser_downloa
   return null;
 }
 
+interface Release {
+  tag_name: string;
+  draft?: boolean;
+  assets: Array<{ name: string; browser_download_url: string; size: number }>;
+}
+
+/** The newest release (in the order GitHub lists them) that has a build for this OS/CPU. */
+export function pickRelease(releases: Release[], platform: string, arch: string, variant: 'cpu' | 'vulkan' = 'cpu') {
+  for (const release of releases) {
+    if (release.draft) continue;
+    const asset = selectRuntimeAsset(release.assets ?? [], platform, arch, variant);
+    if (asset) return { release, asset };
+  }
+  return null;
+}
+
 function findBinary(dir: string, exe: string, depth = 4): string | null {
   if (!existsSync(dir)) return null;
   for (const e of readdirSync(dir, { withFileTypes: true })) {
@@ -57,12 +73,15 @@ export async function installLlamaRuntime(o: RuntimeInstallOptions): Promise<{ b
   const arch = o.arch ?? process.arch;
   const headers: Record<string, string> = { accept: 'application/vnd.github+json', 'user-agent': 'fbrx-os-runtime-installer' };
   if (o.githubToken) headers.authorization = `Bearer ${o.githubToken}`;
-  const releaseUrl = `https://api.github.com/repos/ggml-org/llama.cpp/releases/${o.tag ? `tags/${o.tag}` : 'latest'}`;
+  // llama.cpp publishes its builds as frequent "b<number>" releases; GitHub's "latest" release is an old tag without
+  // binaries, so take the newest recent release that has a build for this computer.
+  const releaseUrl = `https://api.github.com/repos/ggml-org/llama.cpp/releases${o.tag ? `/tags/${o.tag}` : '?per_page=15'}`;
   const rel = await fetch(releaseUrl, { headers, signal: o.signal ?? AbortSignal.timeout(30_000) });
   if (!rel.ok) throw new Error(`Could not query llama.cpp releases (HTTP ${rel.status})${rel.status === 403 ? ' — GitHub rate limit; try again later or set GITHUB_TOKEN' : ''}`);
-  const release = (await rel.json()) as { tag_name: string; assets: Array<{ name: string; browser_download_url: string; size: number }> };
-  const asset = selectRuntimeAsset(release.assets, platform, arch, o.variant);
-  if (!asset) throw new Error(`No llama.cpp build for ${platform}-${arch} in release ${release.tag_name}`);
+  const body = (await rel.json()) as Release | Release[];
+  const picked = pickRelease(Array.isArray(body) ? body : [body], platform, arch, o.variant);
+  if (!picked) throw new Error(`No llama.cpp build for ${platform}-${arch} in the recent llama.cpp releases`);
+  const { release, asset } = picked;
 
   const target = join(o.destDir, `${platform}-${arch}`);
   const tmp = join(o.destDir, `.download-${Date.now()}-${asset.name}`);

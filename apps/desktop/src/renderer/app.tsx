@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
 import type { SystemStatus } from '@fbrx/shared';
-import { Button, FBRX_MARK, Shell, Spinner, Status, useToast, type NavItem } from '@fbrx/ui';
-import { bridge, onEvent } from './client';
-import { useCore } from './hooks';
+import { AdvancedTag, Button, Callout, FBRX_MARK, Icons, Shell, Spinner, Status, useToast, type NavItem } from '@fbrx/ui';
+import { bridge, call, onEvent } from './client';
+import { isLocked, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
+import { AgentNameContext } from './widgets';
 import { DashboardPage } from './pages/dashboard';
 import { AgentPage } from './pages/agent';
 import { ApprovalsPage } from './pages/approvals';
@@ -177,9 +178,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const agentName = s.ai.agentName;
 
   const nav: NavItem[] = [
-    { id: 'home', label: 'Dashboard', icon: 'dashboard' },
-    { id: 'agent', label: agentName, icon: 'sparkles' },
-    { id: 'alerts', label: 'Alerts', icon: 'bell', count: alertCounts?.unread },
+    { id: 'home', label: 'Dashboard', icon: 'dashboard', section: 'Command' },
+    { id: 'agent', label: agentName, icon: 'sparkles', section: 'Command' },
+    { id: 'alerts', label: 'Alerts', icon: 'bell', count: alertCounts?.unread, section: 'Command' },
     { id: 'tasks', label: 'Tasks', icon: 'tasks', section: 'Workspace' },
     { id: 'notes', label: 'Notes', icon: 'note', section: 'Workspace' },
     { id: 'projects', label: 'Projects', icon: 'layers', section: 'Workspace' },
@@ -188,25 +189,32 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'security', label: 'Security', icon: 'shield', section: 'PC care' },
     { id: 'updates', label: 'Updates', icon: 'download', section: 'PC care' },
     { id: 'bugs', label: 'Bug catcher', icon: 'bug', section: 'PC care' },
-    ...(advanced ? [{ id: 'lab', label: 'Virtual lab', icon: 'box' as const, section: 'PC care' }] : []),
     { id: 'network', label: 'Network Center', icon: 'network', section: 'PC care' },
     { id: 'files', label: 'Files', icon: 'folder', section: 'Utilities' },
     { id: 'processes', label: 'Processes', icon: 'activity', section: 'Utilities' },
-    { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Utilities' },
     { id: 'toolbox', label: 'Toolbox', icon: 'toolbox', section: 'Utilities' },
     { id: 'library', label: 'Library', icon: 'book', section: 'Utilities' },
     { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect' },
+    { id: 'runtime', label: 'AI models', icon: 'cpu', section: 'Connect' },
     { id: 'aicoord', label: 'AI coordination', icon: 'zap', section: 'Connect' },
     { id: 'connections', label: 'Connections', icon: 'link', section: 'Connect' },
     { id: 'tools', label: 'Tools & plugins', icon: 'wrench', section: 'Connect' },
-    { id: 'runtime', label: 'AI models', icon: 'cpu', section: 'Connect' },
     { id: 'approvals', label: 'Approvals', icon: 'check', count: status.pendingApprovals, section: 'Protect' },
     { id: 'vault', label: 'Credentials', icon: 'key', section: 'Protect' },
     { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect' },
     { id: 'backup', label: 'Backup & restore', icon: 'archive', section: 'Protect' },
-    { id: 'fleet', label: 'Organisation', icon: 'globe', section: 'System' },
+    // Technical tools: only in Advanced mode (Settings → General, or the Advanced switch in the top bar).
+    ...(advanced
+      ? [
+          { id: 'terminal', label: 'Terminal', icon: 'terminal' as const, section: 'Advanced' },
+          { id: 'lab', label: 'Virtual lab', icon: 'box' as const, section: 'Advanced' },
+        ]
+      : []),
+    { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System' },
     { id: 'settings', label: 'Settings', icon: 'settings', section: 'System' },
   ];
+  const setAdvanced = (on: boolean) => void call('settings.update', { patch: { appearance: { advancedMode: on } } }).then(() => toast.info(on ? 'Advanced mode on' : 'Basic mode', on ? 'Expert tools are now in the sidebar under Advanced, marked with an Advanced tag.' : 'Expert tools are hidden.'));
+  const advancedLocked = isLocked(settings.locked, 'appearance.advancedMode');
 
   const page = (() => {
     switch (route) {
@@ -229,9 +237,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'updates':
         return <UpdatesPage />;
       case 'bugs':
-        return <BugsPage agentName={agentName} />;
+        return <BugsPage agentName={agentName} advanced={advanced} />;
       case 'lab':
-        return <LabPage />;
+        return advanced ? <LabPage /> : <AdvancedOnly title="Virtual lab" onEnable={() => setAdvanced(true)} locked={advancedLocked} />;
       case 'network':
         return <NetworkPage advanced={advanced} />;
       case 'files':
@@ -239,9 +247,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'processes':
         return <ProcessesPage />;
       case 'terminal':
-        return <TerminalPage />;
+        return advanced ? <TerminalPage /> : <AdvancedOnly title="Terminal" onEnable={() => setAdvanced(true)} locked={advancedLocked} />;
       case 'toolbox':
-        return <ToolboxPage />;
+        return <ToolboxPage advanced={advanced} />;
       case 'library':
         return <LibraryPage agentName={agentName} />;
       case 'mesh':
@@ -272,14 +280,14 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   })();
 
   return (
-    <>
+    <AgentNameContext.Provider value={agentName}>
       {showSplash && <Splash />}
       <Shell
         brandSub={status.deviceName}
         nav={nav}
         active={route}
         onNavigate={(id) => navigate(id)}
-        topbar={<TopBar status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} />}
+        topbar={<TopBar status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} advanced={advanced} advancedLocked={advancedLocked} onAdvanced={setAdvanced} defaultProvider={s.ai.defaultProvider} defaultModel={s.ai.defaultModel} />}
         footer={
           <span>
             v{status.version} · {status.license.edition}
@@ -290,15 +298,43 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       >
         {page}
       </Shell>
-    </>
+    </AgentNameContext.Provider>
   );
 }
 
-function TopBar({ status, agentName, critical, spotlightKey }: { status: SystemStatus; agentName: string; critical: number; spotlightKey: string | null }) {
+function TopBar({
+  status,
+  agentName,
+  critical,
+  spotlightKey,
+  advanced,
+  advancedLocked,
+  onAdvanced,
+  defaultProvider,
+  defaultModel,
+}: {
+  status: SystemStatus;
+  agentName: string;
+  critical: number;
+  spotlightKey: string | null;
+  advanced: boolean;
+  advancedLocked: boolean;
+  onAdvanced: (on: boolean) => void;
+  defaultProvider: string;
+  defaultModel: string;
+}) {
   const failing = status.services.filter((s) => s.state === 'failed');
+  const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed'], 60_000);
+  const p = providers.data?.find((x) => x.id === defaultProvider);
+  const model = defaultModel || p?.defaultModel || null;
   return (
     <>
       {bridge.platform === 'darwin' && <span style={{ width: 60 }} />}
+      <button className="topbar-search" onClick={() => bridge.showSpotlight?.()} title="Spotlight: search apps, files, settings and more from anywhere">
+        <Icons.search size={15} />
+        <span>Search apps, files, settings, or ask {agentName}…</span>
+        {spotlightKey && <kbd className="kbd">{spotlightKey.replace('CommandOrControl', 'Ctrl')}</kbd>}
+      </button>
       {status.vault.state === 'locked' ? (
         <Status tone="warning">Vault locked</Status>
       ) : failing.length ? (
@@ -311,9 +347,11 @@ function TopBar({ status, agentName, critical, spotlightKey }: { status: SystemS
           {critical} critical alert{critical > 1 ? 's' : ''}
         </Button>
       )}
-      <span className="fx-muted" style={{ fontSize: 12 }}>
-        {status.fleet.state === 'unenrolled' ? 'Standalone' : `${status.fleet.tenantName ?? 'Organisation'} · ${status.fleet.state}`}
-      </span>
+      {status.fleet.state !== 'unenrolled' && (
+        <span className="fx-muted" style={{ fontSize: 12 }}>
+          {status.fleet.tenantName ?? 'Organization'} · {status.fleet.state}
+        </span>
+      )}
       <span className="fx-spacer" />
       {status.activeRuns > 0 && <Status tone="busy">{agentName} working</Status>}
       {status.pendingApprovals > 0 && (
@@ -321,14 +359,43 @@ function TopBar({ status, agentName, critical, spotlightKey }: { status: SystemS
           {status.pendingApprovals} approval{status.pendingApprovals > 1 ? 's' : ''} waiting
         </Button>
       )}
-      {spotlightKey && (
-        <span className="fx-muted" style={{ fontSize: 12 }} title="Spotlight: search apps, files, settings and more from anywhere">
-          <kbd className="kbd">{spotlightKey.replace('CommandOrControl', 'Ctrl')}</kbd> Spotlight
-        </span>
-      )}
-      <Button size="sm" variant="ghost" icon="sparkles" onClick={() => navigate('agent')}>
+      <button
+        className={`mode-pill${advanced ? ' on' : ''}`}
+        role="switch"
+        aria-checked={advanced}
+        disabled={advancedLocked}
+        onClick={() => onAdvanced(!advanced)}
+        title={advancedLocked ? 'Set by your organization' : advanced ? 'Advanced mode: expert tools are shown. Click for Basic mode.' : 'Basic mode. Click to show expert tools (Advanced mode).'}
+      >
+        <span className="mode-pill-knob" aria-hidden />
+        Advanced
+      </button>
+      <button className="model-pill" onClick={() => navigate('runtime')} title={p ? `${p.name}: ${p.available ? 'ready' : (p.message ?? 'not available')}. Click to choose a model.` : 'Choose a model'}>
+        <span className={`dot ${p?.available ? 'ok' : 'bad'}`} aria-hidden />
+        {model ? <span className="mono">{model}</span> : <span>{p?.name ?? 'Choose a model'}</span>}
+      </button>
+      <Button size="sm" variant="primary" icon="sparkles" onClick={() => navigate('agent')}>
         Ask {agentName}
       </Button>
     </>
+  );
+}
+
+/** Shown for an Advanced-mode page while in Basic mode. */
+function AdvancedOnly({ title, onEnable, locked }: { title: string; onEnable: () => void; locked: boolean }) {
+  return (
+    <div className="fx-page">
+      <div className="fx-page-header">
+        <div>
+          <h1>
+            {title} <AdvancedTag />
+          </h1>
+          <p>This is an expert tool, shown in Advanced mode.</p>
+        </div>
+      </div>
+      <Callout tone="info" title="Turn on Advanced mode to use it" actions={<Button size="sm" variant="primary" disabled={locked} onClick={onEnable}>Turn on Advanced mode</Button>}>
+        Advanced mode adds technical tools such as the Terminal, the virtual lab, disk partitions, Defender settings, network adapters and the developer tools in the Toolbox. Each is marked with an Advanced tag.
+      </Callout>
+    </div>
   );
 }

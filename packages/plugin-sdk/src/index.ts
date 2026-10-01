@@ -56,7 +56,7 @@ export interface PluginLogger {
 export interface PluginContext {
   plugin: { id: string; version: string; dataDir: string };
   log: PluginLogger;
-  /** Requires the `storage` permission. Values are JSON-serialisable and persisted by the host. */
+  /** Requires the `storage` permission. Values are JSON-serializable and persisted by the host. */
   storage: {
     get<T = unknown>(key: string): Promise<T | undefined>;
     set(key: string, value: unknown): Promise<void>;

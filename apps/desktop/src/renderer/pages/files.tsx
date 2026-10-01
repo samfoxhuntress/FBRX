@@ -3,6 +3,7 @@ import type { FileEntry, FilePreview } from '@fbrx/shared';
 import { Button, Card, Empty, Icons, Input, Spinner, Status, TextArea, Toggle, formatBytes, formatDate, useAction, useToast } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { useCore } from '../hooks';
+import { AskButton } from '../widgets';
 
 /** File explorer with preview and a plain-text editor. */
 export function FilesPage() {
@@ -136,6 +137,10 @@ export function FilesPage() {
                 <strong style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', flex: 1 }}>{preview.path.split(/[\\/]/).pop()}</strong>
                 <Button size="sm" variant="ghost" icon="external" aria-label="Open with default app" onClick={() => void run('open', () => call('files.open', { path: preview.path }))} />
                 {bridge.reveal && <Button size="sm" variant="ghost" icon="folder" aria-label="Show in folder" onClick={() => void bridge.reveal!(preview.path)} />}
+                {preview.kind === 'text' && edit === null && (
+                  <AskButton label="Summarize" prompt={`Read this file from my PC (${preview.path}) and tell me what it is, summarize what is in it, and point out anything important or unusual.`} context={preview.content.slice(0, 10_000)} />
+                )}
+                {preview.kind !== 'text' && <AskButton iconOnly label="What is this file" prompt="What is this file on my PC, what opens it, and is it safe to keep or delete? Use your tools to look closer if needed." context={{ path: preview.path, size: formatBytes(preview.size), kind: preview.kind }} />}
                 {preview.kind === 'text' && !preview.truncated && edit === null && <Button size="sm" icon="edit" onClick={() => setEdit(preview.content)}>Edit</Button>}
                 <Button size="sm" variant="ghost" icon="x" aria-label="Close preview" onClick={() => setPreview(null)} />
               </div>

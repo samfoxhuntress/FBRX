@@ -26,8 +26,8 @@ export function SecretsPage() {
     s.scope === 'tenant' ? 'All devices' : s.scope === 'group' ? `Group: ${groups.find((g) => g.id === s.scopeId)?.name ?? s.scopeId}` : `Device: ${devices.find((d) => d.id === s.scopeId)?.name ?? s.scopeId}`;
   return (
     <Page
-      title="Organisation credentials"
-      description="API keys, tokens and passwords pushed into device vaults. Encrypted at rest on the control plane and delivered over the device's authenticated channel; users can use but not edit them. Device-scoped values override group values, which override organisation-wide ones."
+      title="Organization credentials"
+      description="API keys, tokens and passwords pushed into device vaults. Encrypted at rest on the control plane and delivered over the device's authenticated channel; users can use but not edit them. Device-scoped values override group values, which override organization-wide ones."
       actions={
         <Button variant="primary" icon="plus" onClick={() => setEdit({ scope: 'tenant' })}>
           Add credential
@@ -85,7 +85,7 @@ function SecretEditor({ secret, groups, devices, onClose, onSaved }: { secret: P
   const rotating = !!secret.id;
   return (
     <Modal
-      title={rotating ? `Rotate ${secret.name}` : 'Add organisation credential'}
+      title={rotating ? `Rotate ${secret.name}` : 'Add organization credential'}
       onClose={onClose}
       footer={
         <>

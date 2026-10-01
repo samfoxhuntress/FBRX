@@ -503,7 +503,8 @@ export class NetDiag {
     progress('Reading the ARP table and listening for mDNS / UPnP', swept, range.hosts.length);
     const [arpMap, [mdns, ssdp]] = await Promise.all([this.arpTable(), discovery]);
     for (const ip of [...arpMap.keys(), ...mdns.keys(), ...ssdp.keys()]) if (inRange.has(ip)) alive.add(ip);
-    if (ctx.ip && inRange.has(ctx.ip)) alive.add(ctx.ip);
+    const own = new Set(Object.values(networkInterfaces()).flatMap((l) => (l ?? []).filter((a) => a.family === 'IPv4').map((a) => a.address)));
+    for (const ip of own) if (inRange.has(ip)) alive.add(ip);
     const ips = [...alive].sort((a, b) => ipNum(a) - ipNum(b));
     const devices: LanDevice[] = [];
     const queue = [...ips];
@@ -538,7 +539,7 @@ export class NetDiag {
           services: base.services,
           latencyMs: ports.length ? Date.now() - t : null,
           isGateway: ip === ctx.gateway,
-          isSelf: ip === ctx.ip,
+          isSelf: own.has(ip),
         });
         fp++;
         progress(`Identifying devices (${fp}/${ips.length})`, fp, ips.length);

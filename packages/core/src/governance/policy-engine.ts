@@ -74,7 +74,7 @@ export class PolicyEngine {
 
   updateLocal(policy: Policy): EffectivePolicy {
     if (this.effective().source === 'managed') {
-      throw new CoreError('MANAGED', 'Governance policy is managed by your organisation');
+      throw new CoreError('MANAGED', 'Governance policy is managed by your organization');
     }
     const parsed = PolicySchema.parse(policy);
     validateRegexes(parsed);

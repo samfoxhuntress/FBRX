@@ -34,7 +34,7 @@ export type ModelReviewer = (tool: ToolSpec, input: unknown) => Promise<Guardian
 
 /**
  * The guardian is an independent reviewer for tool calls. Deterministic detectors always run; an optional
- * model-assisted review adds judgement for ambiguous calls. Critical findings block a call outright, warnings
+ * model-assisted review adds judgment for ambiguous calls. Critical findings block a call outright, warnings
  * force a human approval even when policy would allow it.
  */
 export class Guardian {

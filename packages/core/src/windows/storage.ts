@@ -53,7 +53,7 @@ const GPT: Record<string, string> = {
   '{de94bba4-06d1-4d40-a16a-bfd50179d6ac}': 'Recovery',
   '{ebd0a0a2-b9e5-4433-87c0-68b6b72699c7}': 'Basic data',
 };
-const BUS: Record<number, string> = { 17: 'NVMe', 11: 'SATA', 7: 'USB', 8: 'RAID', 10: 'SAS', 3: 'ATA', 12: 'SD', 6: 'Fibre', 15: 'Virtual' };
+const BUS: Record<number, string> = { 17: 'NVMe', 11: 'SATA', 7: 'USB', 8: 'RAID', 10: 'SAS', 3: 'ATA', 12: 'SD', 6: 'Fiber', 15: 'Virtual' };
 
 /** Physical disks with health, wear and temperature, and their partitions. */
 export async function physicalDisks(): Promise<PhysicalDiskInfo[]> {

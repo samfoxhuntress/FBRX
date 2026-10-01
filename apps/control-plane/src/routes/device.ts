@@ -47,7 +47,7 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
       throw unauthorized('Enrollment token is invalid, expired or used up');
     }
     const tenant = ctx.db.get<any>('SELECT * FROM tenants WHERE id = ?', t.tenant_id);
-    if (!tenant || tenant.status !== 'active') throw forbidden('Organisation is not active');
+    if (!tenant || tenant.status !== 'active') throw forbidden('Organization is not active');
     const lic = ctx.db.get<{ seats: number; edition: Edition; features: string }>(
       'SELECT seats, edition, features FROM licenses WHERE tenant_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?) ORDER BY issued_at DESC LIMIT 1',
       t.tenant_id,
@@ -57,7 +57,7 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
     // needs fleet management in its edition or as an extra feature.
     if (lic && !featuresFor({ edition: lic.edition, features: parseJson<string[]>(lic.features, []) }).includes('fleet')) {
       ctx.audit.record({ type: 'system', id: null, label: `enroll:${body.device.hostname}`, tenantId: t.tenant_id, ip: req.ip }, 'device.enroll.rejected', {}, { reason: 'license lacks fleet' });
-      throw forbidden(`The ${lic.edition} license for this organisation does not include fleet management`);
+      throw forbidden(`The ${lic.edition} license for this organization does not include fleet management`);
     }
     if (lic && Number(lic.seats) > 0) {
       const active = Number(ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM devices WHERE tenant_id = ? AND status = 'active'", t.tenant_id)?.n ?? 0);

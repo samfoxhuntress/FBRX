@@ -205,6 +205,10 @@ export interface ModelInfo {
   providerId: string;
   sizeBytes?: number;
   contextLength?: number;
+  /** Short description such as "7.6B · Q4_K_M · qwen2". */
+  details?: string;
+  /** Why the model cannot be used right now (for example Ollama is not running), or absent when it can. */
+  unavailable?: string;
 }
 
 export interface RuntimeStatus {

@@ -305,6 +305,14 @@ export interface BugReport {
   problemDevices: Array<{ name: string; id: string; status: string; error: string }>;
   stoppedServices: Array<{ name: string; display: string }>;
 }
+export interface EventLogEntry {
+  time: string;
+  log: string;
+  level: 'critical' | 'error' | 'warning' | 'information';
+  source: string;
+  eventId: number;
+  message: string;
+}
 export interface FixInfo {
   id: string;
   label: string;
@@ -567,6 +575,12 @@ export interface AiAppInfo {
   evidence: string | null;
   mcp: boolean;
   bridged: boolean;
+  /** FBRX can open (start) the app. */
+  launchable: boolean;
+  /** What the app can and cannot do with FBRX, for apps without MCP. */
+  note: string | null;
+  /** A cloud API the app's maker offers, which can be added as a model for second opinions. */
+  api?: { name: string; baseUrl: string; model: string; keyUrl: string };
 }
 export interface McpBridgeInfo {
   ready: boolean;
@@ -648,6 +662,7 @@ export interface ExtMethods {
 
   'bugs.scan': (p?: { days?: number }) => BugReport;
   'bugs.fixes': () => FixInfo[];
+  'bugs.events': (p: { log: 'System' | 'Application' | 'Setup'; days?: number; minLevel?: 'error' | 'warning' | 'information'; limit?: number }) => EventLogEntry[];
   'bugs.fix': (p: { id: string; target?: string }) => ElevatedResult;
 
   'winupdates.apps': () => WingetUpgrade[];
@@ -704,6 +719,7 @@ export interface ExtMethods {
   'aicoord.bridge': () => McpBridgeInfo;
   'aicoord.install': (p: { appId: string }) => { ok: boolean; path: string | null; message: string };
   'aicoord.remove': (p: { appId: string }) => { ok: boolean; message: string };
+  'aicoord.launch': (p: { appId: string }) => { ok: boolean; message: string };
   'aicoord.consult': (p: { providerId: string; prompt: string; model?: string }) => { answer: string; providerId: string; model: string };
 }
 
@@ -759,4 +775,5 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'mesh.action',
   'aicoord.install',
   'aicoord.remove',
+  'aicoord.launch',
 ];

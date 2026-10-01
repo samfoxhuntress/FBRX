@@ -53,7 +53,7 @@ describe('vault', () => {
     }
   });
 
-  it('applies organisation-managed secrets as read-only', async () => {
+  it('applies organization-managed secrets as read-only', async () => {
     const { kernel, cleanup } = await makeKernel();
     try {
       kernel.vault.applyManaged([{ name: 'ORG_KEY', value: 'org-value-123', version: 1, description: 'from admin' }]);

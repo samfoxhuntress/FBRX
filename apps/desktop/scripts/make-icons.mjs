@@ -1,5 +1,5 @@
 // Renders the FBRX OS icon set from the vector mark (packages/ui/src/fbrx-mark.json) with no image dependencies: a
-// small anti-aliased scanline rasteriser writes the PNGs and the Windows installer's sidebar bitmaps.
+// small anti-aliased scanline rasterizer writes the PNGs and the Windows installer's sidebar bitmaps.
 import { deflateSync } from 'node:zlib';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -101,7 +101,7 @@ const inner = roundedRect(inset + stroke / 2, inset + stroke / 2, S - 2 * inset 
 const TILE = [outer];
 const INK = [outer, inner, ...pathPolygons(mark.letters)]; // even-odd: the frame ring plus the letters
 
-// ------------------------------------------------------------------------------------------- rasteriser
+// ------------------------------------------------------------------------------------------- rasterizer
 
 /** Even-odd coverage (0..1) of polygons drawn into a w x h grid, the mark's box placed at (ox, oy) with side `box`. */
 function coverage(polys, w, h, ox, oy, box) {

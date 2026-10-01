@@ -5,6 +5,7 @@ import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
 import { Markdown } from '../markdown';
 import { navigate, routeArg } from '../app';
+import { ModelPicker } from '../widgets';
 
 const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'activity', title: 'Check my PC', prompt: 'Give me a quick health check of this computer: performance right now, storage, security status and any recent errors. Tell me what (if anything) needs attention.' },
@@ -345,12 +346,25 @@ export function AgentPage({ agentName }: { agentName: string }) {
                 <Icons.globe size={14} /> Online
               </button>
             </div>
-            <div style={{ width: 200 }}>
-              <Select aria-label="AI provider" value={providerId} onChange={(e) => setProviderId(e.target.value)} options={usable.map((p) => ({ value: p.id, label: `${p.name}${p.available ? '' : ' (unavailable)'}` }))} />
+            <div style={{ width: 190 }}>
+              <Select
+                aria-label="AI provider"
+                value={providerId}
+                onChange={(e) => {
+                  setProviderId(e.target.value);
+                  setModel('');
+                }}
+                options={usable.map((p) => ({ value: p.id, label: `${p.name}${p.available ? '' : ' (unavailable)'}` }))}
+              />
             </div>
             {currentProvider && currentProvider.type !== 'local-runtime' && (
-              <div style={{ width: 200 }}>
-                <input className="fx-input" aria-label="Model" placeholder={currentProvider.defaultModel ?? (settings.data?.settings.ai.defaultModel || 'model')} value={model} onChange={(e) => setModel(e.target.value)} />
+              <div style={{ width: 260 }}>
+                <ModelPicker
+                  providerId={currentProvider.id}
+                  value={model}
+                  onChange={setModel}
+                  defaultLabel={`Default: ${(currentProvider.id === settings.data?.settings.ai.defaultProvider && settings.data.settings.ai.defaultModel) || currentProvider.defaultModel || 'automatic'}`}
+                />
               </div>
             )}
             {currentProvider && !currentProvider.available && <span className="fx-muted" style={{ fontSize: 12 }}>{currentProvider.message}</span>}

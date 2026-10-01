@@ -121,7 +121,7 @@ export function LabPage() {
         <>
           <Grid cols={4}>
             <StatTile label="Edition" value={s.edition.replace('Microsoft ', '')} foot={s.admin ? 'Running as administrator' : 'Standard user'} />
-            <StatTile label="Virtualisation in firmware" value={s.virtualizationFirmware == null ? 'Unknown' : s.virtualizationFirmware ? 'On' : 'Off'} foot={s.virtualizationFirmware === false ? 'Turn on VT-x / AMD-V in the BIOS' : ''} />
+            <StatTile label="Virtualization in firmware" value={s.virtualizationFirmware == null ? 'Unknown' : s.virtualizationFirmware ? 'On' : 'Off'} foot={s.virtualizationFirmware === false ? 'Turn on VT-x / AMD-V in the BIOS' : ''} />
           </Grid>
           <Card title="Windows features" flush>
             <div className="fx-list">

@@ -9,6 +9,7 @@ import type { Logger } from '../../logger';
 import type { SettingsService } from '../../settings/settings-service';
 import type { ModelManager } from './model-manager';
 import { sleep } from '../../util/misc';
+import si from 'systeminformation';
 import { installLlamaRuntime } from './runtime-installer';
 
 const EXE = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server';
@@ -45,6 +46,21 @@ function findIn(dir: string, depth = 3): string | null {
  * The built-in local AI runtime: supervises a llama.cpp `llama-server` process bound to 127.0.0.1 with a
  * per-launch random API key, so only FBRX OS can talk to it. Nothing leaves the machine.
  */
+/**
+ * The GPU build (Vulkan) when the computer has a graphics card that can run models, otherwise the portable CPU build.
+ * The Vulkan build still runs on the CPU when no Vulkan driver is present.
+ */
+async function gpuVariant(): Promise<'cpu' | 'vulkan'> {
+  if (process.platform === 'darwin') return 'cpu'; // macOS builds always use Metal
+  try {
+    const { controllers } = await si.graphics();
+    const capable = controllers.some((c) => /nvidia|geforce|quadro|rtx|radeon|amd|advanced micro|intel.*arc/i.test(`${c.vendor} ${c.model}`) && (c.vram ?? 0) >= 2048);
+    return capable ? 'vulkan' : 'cpu';
+  } catch {
+    return 'cpu';
+  }
+}
+
 export class LocalRuntime {
   private child: ChildProcess | null = null;
   private state: RuntimeStatus['state'] = 'stopped';
@@ -230,12 +246,17 @@ export class LocalRuntime {
     const emit = (p: { receivedBytes: number; totalBytes: number; state: 'downloading' | 'verifying' | 'completed' | 'failed' | 'cancelled'; error?: string }) =>
       this.d.events?.emit('runtime.download', { modelId: 'llama-runtime', ...p });
     emit({ receivedBytes: 0, totalBytes: 0, state: 'downloading' });
-    void installLlamaRuntime({
-      destDir: this.d.runtimeDir,
-      githubToken: process.env.GITHUB_TOKEN,
+    void gpuVariant()
+      .then((variant) => {
+        this.d.log.info('Installing the local runtime', { variant });
+        return installLlamaRuntime({
+          destDir: this.d.runtimeDir,
+          githubToken: process.env.GITHUB_TOKEN,
+          variant,
       signal: controller.signal,
-      onProgress: (received, total, phase) => emit({ receivedBytes: received, totalBytes: total, state: phase === 'extracting' ? 'verifying' : 'downloading' }),
-    })
+          onProgress: (received, total, phase) => emit({ receivedBytes: received, totalBytes: total, state: phase === 'extracting' ? 'verifying' : 'downloading' }),
+        });
+      })
       .then((r) => {
         this.d.log.info('Local runtime installed', r);
         emit({ receivedBytes: 1, totalBytes: 1, state: 'completed' });

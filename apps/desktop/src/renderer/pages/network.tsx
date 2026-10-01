@@ -1,9 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { LanDevice, LanScan, LanScanCompare, NetAdapter, PingResult, SpeedTestResult, TraceHop } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Grid, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table } from '@fbrx/ui';
+import { Button, Callout, Card, Empty, Field, Grid, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
 import { call, onEvent, pickFile } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
 import { IS_WINDOWS, navigate } from '../app';
+import { AskButton } from '../widgets';
 
 type Tab = 'overview' | 'trace' | 'devices' | 'speed' | 'wifi' | 'bluetooth' | 'printers' | 'tools' | 'adapters';
 
@@ -108,7 +109,11 @@ function Trace() {
         </Grid>
       )}
       {(hops.length > 0 || tracing) && (
-        <Card title="Route" subtitle="Every router between this PC and the destination">
+        <Card
+          title="Route"
+          subtitle="Every router between this PC and the destination"
+          actions={!tracing && hops.length > 0 && <AskButton label="Explain this route" prompt="Explain this traceroute from my PC in plain language: where the connection goes, where any slowdown or loss starts, and whether it is my network, my provider or further away." context={[...hops].sort((a, b) => a.hop - b.hop)} />}
+        >
           <div className="hops">
             {[...hops].sort((a, b) => a.hop - b.hop).map((h) => (
               <div key={h.hop} className={`hop hop-${h.role}`}>
@@ -138,11 +143,37 @@ function Trace() {
   );
 }
 
-function Devices() {
+const ipNum = (ip: string) => ip.split('.').reduce((n, p) => (n << 8) + Number(p), 0) >>> 0;
+const ipStr = (n: number) => [24, 16, 8, 0].map((b) => (n >>> b) & 255).join('.');
+const isV4 = (ip: string) => /^\d+\.\d+\.\d+\.\d+$/.test(ip);
+
+/** The network an adapter is on, limited to /22–/30 (at most 1022 addresses) so a scan takes about a minute. */
+export function scanSubnet(ip: string, netmask: string): string {
+  const bits = isV4(netmask) ? (ipNum(netmask).toString(2).match(/1/g) ?? []).length : 24;
+  const prefix = Math.max(22, Math.min(30, bits || 24));
+  const mask = (0xffffffff << (32 - prefix)) >>> 0;
+  return `${ipStr((ipNum(ip) & mask) >>> 0)}/${prefix}`;
+}
+
+function Devices({ advanced }: { advanced: boolean }) {
   const scans = useCore('net.scans');
+  const ctx = useCore('net.context');
   const [scan, setScan] = useState<LanScan | null>(null);
   const [progress, setProgress] = useState<{ phase: string; pct: number } | null>(null);
+  const [adapter, setAdapter] = useState('');
   const [subnet, setSubnet] = useState('');
+  const adapters = (ctx.data?.interfaces ?? []).filter((i) => isV4(i.ip) && i.up);
+  const chosen = adapters.find((i) => i.name === adapter) ?? adapters.find((i) => i.ip === ctx.data?.ip) ?? adapters[0];
+  const autoSubnet = chosen ? scanSubnet(chosen.ip, chosen.netmask) : '';
+  useEffect(() => {
+    if (chosen && !adapter) setAdapter(chosen.name);
+    setSubnet(autoSubnet);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoSubnet]);
+  const hosts = (() => {
+    const m = /\/(\d+)$/.exec(subnet);
+    return m ? 2 ** (32 - Number(m[1])) - 2 : null;
+  })();
   const [label, setLabel] = useState('');
   const [cmp, setCmp] = useState<{ a: string; b: string; result: LanScanCompare | null } | null>(null);
   const [detail, setDetail] = useState<LanDevice | null>(null);
@@ -158,7 +189,7 @@ function Devices() {
     const off = onEvent('net.event', (e) => {
       if (e.reqId === reqId && e.type === 'progress') setProgress({ phase: e.phase ?? '', pct: e.total ? Math.round(((e.done ?? 0) / e.total) * 100) : 0 });
     });
-    const r = await run('scan', () => call('net.scan', { reqId, subnet: subnet || undefined, label: label || undefined }));
+    const r = await run('scan', () => call('net.scan', { reqId, subnet: subnet || undefined, label: label || chosen?.name || undefined }));
     off();
     setProgress(null);
     if (r) {
@@ -173,13 +204,28 @@ function Devices() {
     { key: 'name', header: 'Name', render: (d) => d.name ?? <span className="fx-muted">—</span> },
     { key: 'vendor', header: 'Maker', render: (d) => d.vendor ?? <span className="fx-muted">Unknown</span> },
     { key: 'ports', header: 'Open ports', render: (d) => <span className="mono fx-muted">{d.ports.join(', ') || '—'}</span> },
+    { key: 'x', header: '', render: (d) => <AskButton iconOnly label="What is this device" prompt="What is this device on my home or office network, and is anything about it (open ports, unknown maker) a concern?" context={d} />, width: 50 },
   ];
   return (
     <>
       <Card title="Find devices on my network" subtitle="Ping sweep, ARP, mDNS / Bonjour, UPnP and port fingerprinting. Takes about a minute.">
         <div className="fx-actions">
-          <div style={{ width: 200 }}>
-            <Input placeholder="Subnet (auto)" value={subnet} onChange={(e) => setSubnet(e.target.value)} aria-label="Subnet" />
+          <div style={{ width: 280 }}>
+            <Select
+              aria-label="Network adapter to scan from"
+              value={chosen?.name ?? ''}
+              onChange={(e) => setAdapter(e.target.value)}
+              options={adapters.length ? adapters.map((i) => ({ value: i.name, label: `${i.name} — ${i.ip}${i.ip === ctx.data?.ip ? ' (main)' : ''}` })) : [{ value: '', label: ctx.data ? 'No connected network adapter' : 'Reading adapters…' }]}
+            />
+          </div>
+          <div style={{ width: 190 }}>
+            {advanced ? (
+              <Input value={subnet} placeholder="192.168.1.0/24" onChange={(e) => setSubnet(e.target.value)} aria-label="Subnet to scan" title="Advanced: any /22 to /30 network" />
+            ) : (
+              <div className="fx-input" style={{ display: 'flex', alignItems: 'center' }} title="Turn on Advanced mode to scan a different subnet">
+                <span className="mono">{subnet || '—'}</span>
+              </div>
+            )}
           </div>
           <div style={{ width: 200 }}>
             <Input placeholder="Label (e.g. Home)" value={label} onChange={(e) => setLabel(e.target.value)} aria-label="Scan label" />
@@ -193,6 +239,10 @@ function Devices() {
               Compare scans
             </Button>
           )}
+        </div>
+        <div className="fx-muted" style={{ fontSize: 12.5, marginTop: 8 }}>
+          {subnet ? `Scans ${subnet}${hosts ? ` (${hosts} addresses)` : ''}${advanced && subnet !== autoSubnet ? ` · adapter network is ${autoSubnet}` : ''}.` : 'Connect to a network to scan it.'}
+          {!advanced && ' Advanced mode lets you scan a different subnet.'}
         </div>
         {progress && (
           <div style={{ marginTop: 12 }}>
@@ -209,6 +259,7 @@ function Devices() {
           subtitle={`${scan.subnet} · ${formatDate(scan.scannedAt)} · ${(scan.durationMs / 1000).toFixed(0)} s`}
           actions={
             <>
+              <AskButton label="Analyze my network" prompt="Here are the devices FBRX OS found on my network. Identify what they probably are, flag anything unknown or risky (open ports, unusual makers), and suggest what to check." context={{ subnet: scan.subnet, devices: scan.devices.map((d) => ({ ip: d.ip, type: d.typeLabel, name: d.name, maker: d.vendor, ports: d.ports, services: d.services, gateway: d.isGateway, thisPC: d.isSelf })) }} />
               <Select
                 aria-label="Saved scans"
                 value={scan.id}
@@ -340,7 +391,18 @@ function Speed() {
   const shown = last ?? hist.data?.[0];
   return (
     <>
-      <Card title="Internet speed" subtitle="Measured against Cloudflare's nearest server. Uses about 100 MB of data." actions={<Button variant="primary" icon="play" loading={busy === 'speed'} onClick={() => void start()}>Run test</Button>}>
+      <Card
+        title="Internet speed"
+        subtitle="Measured against Cloudflare's nearest server. Uses about 100 MB of data."
+        actions={
+          <>
+            {shown && !live && <AskButton label="Is this good?" prompt="Here are my internet speed test results (newest first). Is this good for what most people do (video calls, streaming, gaming, large downloads)? If something looks wrong, how do I fix it?" context={(hist.data ?? []).slice(0, 8)} />}
+            <Button variant="primary" icon="play" loading={busy === 'speed'} onClick={() => void start()}>
+              Run test
+            </Button>
+          </>
+        }
+      >
         {live && (
           <div className="speed-live">
             <div className="speed-num">{live.mbps.toFixed(1)}</div>
@@ -630,7 +692,7 @@ function Adapters() {
 
 export function NetworkPage({ advanced }: { advanced: boolean }) {
   const [tab, setTab] = useState<Tab>('overview');
-  const tabs: Array<{ id: Tab; label: string }> = [
+  const tabs: Array<{ id: Tab; label: ReactNode }> = [
     { id: 'overview', label: 'Overview' },
     { id: 'trace', label: 'Ping & trace' },
     { id: 'devices', label: 'Devices' },
@@ -639,14 +701,14 @@ export function NetworkPage({ advanced }: { advanced: boolean }) {
     { id: 'bluetooth', label: 'Bluetooth' },
     { id: 'printers', label: 'Printers' },
     { id: 'tools', label: 'Tools' },
-    ...(advanced && IS_WINDOWS ? [{ id: 'adapters' as const, label: 'Adapters' }] : []),
+    ...(advanced && IS_WINDOWS ? [{ id: 'adapters' as const, label: advancedLabel('Adapters') }] : []),
   ];
   return (
     <Page title="Network Center" description="See how this PC connects, what else is on your network, and what is slowing things down.">
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
       {tab === 'overview' && <Overview />}
       {tab === 'trace' && <Trace />}
-      {tab === 'devices' && <Devices />}
+      {tab === 'devices' && <Devices advanced={advanced} />}
       {tab === 'speed' && <Speed />}
       {tab === 'wifi' && <Wifi />}
       {tab === 'bluetooth' && <Bluetooth />}

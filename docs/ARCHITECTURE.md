@@ -174,7 +174,7 @@ falls under the rollout percentage.
   notifications, tray, `electron-updater` pointed at the control plane feed, relaunch for restores/updates).
 * The renderer is sandboxed with context isolation and a strict CSP; its only capability is the `window.fbrx`
   bridge (`call`, `on`, file dialogs, reveal in Finder/Explorer, open `http(s)` links in the browser).
-* Single-instance lock, start hidden on login, minimise to tray.
+* Single-instance lock, start hidden on login, minimize to tray.
 * Spotlight is a second small frameless window on the same renderer bundle (`#/spotlight`), opened by a global
   shortcut (`spotlight.hotkey`) or Ctrl+K, positioned on the screen with the mouse and hidden when it loses focus.
 * The build also bundles the MCP bridge (`dist/main/fbrx-mcp.mjs`) and FBRX Mobile (`dist/main/mobile/`), both

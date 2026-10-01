@@ -290,7 +290,7 @@ export class ConnectorHub {
 
   async update(id: string, patch: Partial<ConnectorInput>, actor: string): Promise<ConnectorInfo> {
     const cur = this.record(id);
-    if (cur.managed && actor !== 'control-plane') throw new CoreError('MANAGED', 'This connection is managed by your organisation');
+    if (cur.managed && actor !== 'control-plane') throw new CoreError('MANAGED', 'This connection is managed by your organization');
     const next: ConnectorInput = {
       name: patch.name ?? cur.name,
       type: cur.type,
@@ -317,7 +317,7 @@ export class ConnectorHub {
 
   async delete(id: string, actor: string): Promise<boolean> {
     const cur = this.record(id);
-    if (cur.managed && actor !== 'control-plane') throw new CoreError('MANAGED', 'This connection is managed by your organisation');
+    if (cur.managed && actor !== 'control-plane') throw new CoreError('MANAGED', 'This connection is managed by your organization');
     await this.deactivate(id);
     this.d.db.run('DELETE FROM connectors WHERE id = ?', id);
     this.d.audit.append({ category: 'connector', action: 'deleted', actor, target: id, outcome: 'success' });

@@ -42,6 +42,6 @@ export function toCoreError(err: unknown): CoreError {
     const msg = issues.map((i) => `${i.path.map(String).join('.') || 'value'}: ${i.message}`).join('; ');
     return new CoreError('INVALID_ARGUMENT', msg, issues);
   }
-  if (err instanceof Error && err.name === 'AbortError') return new CoreError('CANCELLED', 'Operation cancelled');
+  if (err instanceof Error && err.name === 'AbortError') return new CoreError('CANCELLED', 'Operation canceled');
   return new CoreError('INTERNAL', errorMessage(err));
 }

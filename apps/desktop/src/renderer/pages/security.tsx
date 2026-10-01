@@ -1,9 +1,10 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import type { AuditItem, FileReport, LinkReport } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Grid, Input, KeyValue, Page, Select, Spinner, StatTile, Status, Tabs, Toggle, formatBytes, formatDate, timeAgo, useAction, useConfirm, useToast, type Column, Table } from '@fbrx/ui';
+import { Button, Callout, Card, Empty, Grid, Input, KeyValue, Page, Select, Spinner, StatTile, Status, Tabs, Toggle, formatBytes, formatDate, timeAgo, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
 import { call, pickFile } from '../client';
 import { useAgentName, useCore } from '../hooks';
 import { IS_WINDOWS, navigate } from '../app';
+import { AskButton, askAgent } from '../widgets';
 
 type Tab = 'overview' | 'threats' | 'firewall' | 'audit' | 'check' | 'protection';
 
@@ -101,6 +102,7 @@ function Threats() {
           { key: 'st', header: 'Status', render: (t) => <Status tone={t.active ? 'critical' : 'good'}>{t.active ? 'Active' : t.status}</Status> },
           { key: 'r', header: 'Where', render: (t) => <span className="fx-muted" style={{ fontSize: 12 }}>{t.resources.join(', ')}</span> },
           { key: 't', header: 'When', render: (t) => (t.time ? formatDate(t.time) : '—') },
+          { key: 'x', header: '', render: (t) => <AskButton iconOnly prompt="Microsoft Defender detected this threat on my PC. Explain what it is, how serious it is, how it likely got there, and what I should do now." context={t} />, width: 50 },
         ]}
         rows={threats.data ?? []}
         rowKey={(t) => `${t.id}${t.time}`}
@@ -152,6 +154,7 @@ function Firewall({ advanced }: { advanced: boolean }) {
             { key: 'a', header: 'Address', render: (x) => <span className="mono fx-muted">{x.address}</span> },
             { key: 'pr', header: 'Program', render: (x) => `${x.process || '—'} (${x.pid})` },
             { key: 'e', header: '', render: (x) => (x.exposed ? <Status tone="warning">exposed</Status> : <Status tone="neutral">this PC only</Status>) },
+            { key: 'x', header: '', render: (x) => <AskButton iconOnly prompt="A program on my PC is listening on this network port. What is it, does it need to be reachable from other computers, and is it a risk?" context={x} />, width: 50 },
           ]}
           rows={(ports.data ?? []).filter((x) => advanced || x.exposed)}
           rowKey={(x) => `${x.protocol}${x.address}${x.port}`}
@@ -175,6 +178,7 @@ function Audit() {
     { key: 'd', header: 'Details', render: (x) => <span className="fx-muted" style={{ fontSize: 12 }}>{x.detail}</span> },
     { key: 'p', header: 'Path / command', render: (x) => <span className="mono" style={{ fontSize: 11.5, wordBreak: 'break-all' }}>{x.path}</span> },
     { key: 'f', header: '', render: (x) => (x.flags.length ? x.flags.map((f) => <Status key={f} tone="warning">{f}</Status>) : <Status tone="good">ok</Status>) },
+    { key: 'x', header: '', render: (x) => <AskButton iconOnly prompt={kind === 'startup' ? 'This starts automatically with Windows on my PC. What is it, is it trustworthy, and is it safe to disable?' : 'This program is running from a user folder on my PC. What is it and does it look suspicious?'} context={x} />, width: 50 },
   ];
   return (
     <Card
@@ -183,7 +187,7 @@ function Audit() {
       actions={
         <>
           <Tabs tabs={[{ id: 'startup', label: 'Startup' }, { id: 'processes', label: 'Running' }]} active={kind} onChange={setKind} />
-          <Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent(kind === 'startup' ? 'Review what starts with Windows on this PC and flag anything suspicious or unnecessary.' : 'Review the programs running from user folders on this PC and tell me if any look suspicious.')}`)}>
+          <Button size="sm" className="ask-btn" icon="sparkles" onClick={() => askAgent(kind === 'startup' ? 'Review what starts with Windows on this PC and flag anything suspicious or unnecessary.' : 'Review the programs running from user folders on this PC and tell me if any look suspicious.', data.data?.slice(0, 40))}>
             Review with {agent}
           </Button>
         </>
@@ -226,6 +230,9 @@ function Check() {
               <span className="fx-muted">Risk score {link.score}/100 · {link.domain}</span>
             </div>
             <div className="mono" style={{ fontSize: 12.5, wordBreak: 'break-all' }}>Lands on {link.finalUrl}</div>
+            <div>
+              <AskButton label="Explain this result" prompt="I checked this link with FBRX OS. Explain the findings in plain language and tell me whether I should open it." context={link} />
+            </div>
             <div className="fx-list">
               {link.findings.map((f, i) => (
                 <div key={i} className="fx-list-item" style={{ fontSize: 13 }}>
@@ -264,6 +271,9 @@ function Check() {
           )}
           {file && (
             <div style={{ marginTop: 12 }}>
+              <div style={{ marginBottom: 8 }}>
+                <AskButton label="Explain this result" prompt="I checked this file with FBRX OS. Explain the signature, reputation and other findings in plain language and tell me whether it is safe to open." context={file} />
+              </div>
               <KeyValue
                 items={[
                   ['File', <span className="mono" style={{ fontSize: 12 }}>{file.path}</span>],
@@ -313,7 +323,7 @@ function Check() {
 
 const PREFS: Array<{ name: string; label: string; invert?: boolean; kind: 'bool' | 'select'; options?: Array<{ value: string; label: string }> }> = [
   { name: 'DisableRealtimeMonitoring', label: 'Real-time protection', invert: true, kind: 'bool' },
-  { name: 'DisableBehaviorMonitoring', label: 'Behaviour monitoring', invert: true, kind: 'bool' },
+  { name: 'DisableBehaviorMonitoring', label: 'Behavior monitoring', invert: true, kind: 'bool' },
   { name: 'DisableIOAVProtection', label: 'Scan downloads and attachments', invert: true, kind: 'bool' },
   { name: 'DisableScriptScanning', label: 'Scan scripts', invert: true, kind: 'bool' },
   { name: 'DisableRemovableDriveScanning', label: 'Scan USB drives during full scans', invert: true, kind: 'bool' },
@@ -386,13 +396,13 @@ function Protection() {
 
 export function SecurityPage({ advanced }: { advanced: boolean }) {
   const [tab, setTab] = useState<Tab>('overview');
-  const tabs: Array<{ id: Tab; label: string }> = [
+  const tabs: Array<{ id: Tab; label: ReactNode }> = [
     { id: 'overview', label: 'Overview' },
     { id: 'threats', label: 'Threats' },
     { id: 'firewall', label: 'Firewall & ports' },
     { id: 'audit', label: 'Startup & processes' },
     { id: 'check', label: 'Check a link or file' },
-    ...(advanced ? [{ id: 'protection' as const, label: 'Defender settings' }] : []),
+    ...(advanced ? [{ id: 'protection' as const, label: advancedLabel('Defender settings') }] : []),
   ];
   return (
     <Page title="Security" description="Antivirus, firewall, what runs on this PC, and safe checks for suspicious links and files.">

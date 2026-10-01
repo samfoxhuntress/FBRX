@@ -40,7 +40,7 @@ export function ApprovalsPage() {
               <KeyValue
                 items={[
                   ['Why approval', a.reason],
-                  ['Requested by', a.origin === 'remote' ? 'Your organisation (remote task)' : a.origin === 'api' ? 'Local API automation' : 'AI agent'],
+                  ['Requested by', a.origin === 'remote' ? 'Your organization (remote task)' : a.origin === 'api' ? 'Local API automation' : 'AI agent'],
                   ['Time left', <Countdown until={a.expiresAt} />],
                 ]}
               />

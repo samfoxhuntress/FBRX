@@ -16,7 +16,7 @@ type Layer = 'local' | 'managed';
 
 /**
  * Layered configuration: built-in defaults ← local (user) ← managed (control plane).
- * Managed values win and any path the organisation locks is read-only on the workstation.
+ * Managed values win and any path the organization locks is read-only on the workstation.
  */
 export class SettingsService {
   private cache: EffectiveSettings | null = null;
@@ -66,7 +66,7 @@ export class SettingsService {
     const touched = leafPaths(patch);
     const blocked = touched.filter((p) => isPathLocked(p, locked));
     if (blocked.length) {
-      throw new CoreError('MANAGED', `These settings are managed by your organisation: ${blocked.join(', ')}`);
+      throw new CoreError('MANAGED', `These settings are managed by your organization: ${blocked.join(', ')}`);
     }
     const local = this.layer('local');
     const nextLocal = deepMerge(local.data, patch);

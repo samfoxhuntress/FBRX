@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import type { FolderUsage, PhysicalDiskInfo } from '@fbrx/shared';
-import { BarList, Button, Callout, Card, Empty, Grid, Input, KeyValue, Meter, Modal, Page, Spinner, Status, Tabs, formatBytes, useAction, useConfirm, useToast } from '@fbrx/ui';
+import { BarList, Button, Callout, Card, Empty, Grid, Input, KeyValue, Meter, Modal, Page, Spinner, Status, Tabs, formatBytes, useAction, useConfirm, useToast, advancedLabel } from '@fbrx/ui';
 import { call, pickFile } from '../client';
 import { useCore } from '../hooks';
 import { IS_WINDOWS, navigate } from '../app';
+import { AskButton } from '../widgets';
 
 function Analyzer() {
   const home = useCore('files.home');
@@ -19,9 +20,9 @@ function Analyzer() {
     <Card title="What is using space?" subtitle="Sizes of the folders inside a folder, and its largest files">
       <div className="fx-actions" style={{ marginBottom: 12 }}>
         <div style={{ flex: 1, minWidth: 240 }}>
-          <Input className="fx-input mono" placeholder="Folder to analyse" value={path} onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void analyze(path)} />
+          <Input className="fx-input mono" placeholder="Folder to analyze" value={path} onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void analyze(path)} />
         </div>
-        <Button icon="folder" onClick={async () => { const p = await pickFile({ kind: 'folder', title: 'Folder to analyse' }); if (p) void analyze(p); }}>
+        <Button icon="folder" onClick={async () => { const p = await pickFile({ kind: 'folder', title: 'Folder to analyze' }); if (p) void analyze(p); }}>
           Choose…
         </Button>
         {(home.data?.places ?? []).slice(0, 4).map((p) => (
@@ -30,15 +31,22 @@ function Analyzer() {
           </Button>
         ))}
         <Button variant="primary" loading={busy === 'analyze'} disabled={!path} onClick={() => void analyze(path)}>
-          Analyse
+          Analyze
         </Button>
       </div>
       {busy === 'analyze' && <Spinner />}
       {usage && busy !== 'analyze' && (
         <Grid cols={2}>
           <div>
-            <div className="fx-label">
-              {formatBytes(usage.total)} in {usage.files.toLocaleString()} files{usage.partial ? ' (stopped early: very large folder)' : ''}
+            <div className="fx-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+              <span style={{ flex: 1 }}>
+                {formatBytes(usage.total)} in {usage.files.toLocaleString()} files{usage.partial ? ' (stopped early: very large folder)' : ''}
+              </span>
+              <AskButton
+                label="What can I delete?"
+                prompt={`This is what is using space in ${usage.path} on my PC. Explain what the big folders and files are, which are safe to delete or move, and which I should keep. Do not delete anything without asking.`}
+                context={{ total: formatBytes(usage.total), folders: usage.children.slice(0, 20).map((c) => ({ name: c.name, size: formatBytes(c.size), folder: c.dir })), largest: usage.largest.slice(0, 15).map((f) => ({ path: f.path, size: formatBytes(f.size) })) }}
+              />
             </div>
             <BarList items={usage.children.slice(0, 15).map((c) => ({ key: c.path, label: `${c.dir ? '📁 ' : ''}${c.name}`, value: c.size }))} format={formatBytes} />
             <div className="fx-actions" style={{ marginTop: 8 }}>
@@ -80,8 +88,8 @@ function Disks() {
   const [label, setLabel] = useState<{ letter: string; value: string } | null>(null);
   const action = async (action: 'analyze' | 'optimize' | 'chkdsk' | 'extend', letter: string) => {
     const text: Record<string, string> = {
-      analyze: 'Check whether the drive needs optimising.',
-      optimize: 'Optimise the drive (TRIM for SSDs, defragment for hard disks). Safe to run while you work.',
+      analyze: 'Check whether the drive needs optimizing.',
+      optimize: 'Optimize the drive (TRIM for SSDs, defragment for hard disks). Safe to run while you work.',
       chkdsk: 'Scan the drive for file system errors (read-only scan, no restart needed).',
       extend: 'Grow this partition into the free space right after it.',
     };
@@ -139,7 +147,7 @@ function Disks() {
                   <td>
                     {p.letter && (
                       <div className="fx-actions">
-                        <Button size="sm" loading={busy === `optimize${p.letter}`} onClick={() => void action('optimize', p.letter)}>Optimise</Button>
+                        <Button size="sm" loading={busy === `optimize${p.letter}`} onClick={() => void action('optimize', p.letter)}>Optimize</Button>
                         <Button size="sm" loading={busy === `chkdsk${p.letter}`} onClick={() => void action('chkdsk', p.letter)}>Check</Button>
                         <Button size="sm" variant="ghost" onClick={() => setLabel({ letter: p.letter, value: p.label })}>Rename</Button>
                         <Button size="sm" variant="ghost" loading={busy === `extend${p.letter}`} onClick={() => void action('extend', p.letter)}>Extend</Button>
@@ -152,6 +160,13 @@ function Disks() {
           </table>
         </Card>
       ))}
+      <div className="ask-strip">
+        <span>
+          <strong>Partition questions?</strong> Have the agent explain this layout (EFI, recovery, reserved partitions) or plan a change before you touch anything.
+        </span>
+        <AskButton label="Explain my disks" prompt="Explain the disks and partitions on my PC in plain language: what each partition is for, whether anything looks wrong, and what is safe to change." context={disks.data} />
+        <AskButton label="Plan a partition change" prompt="Help me plan a partition change on this PC (for example a data partition or more space for C:). Ask me what I want first, then give a safe step-by-step plan with backups. Do not change anything yourself." context={disks.data} />
+      </div>
       {label && (
         <Modal
           title={`Rename ${label.letter}`}
@@ -194,7 +209,7 @@ export function StoragePage({ advanced }: { advanced: boolean }) {
         <Tabs
           tabs={[
             { id: 'overview', label: 'Overview' },
-            { id: 'disks', label: 'Disks & partitions' },
+            { id: 'disks', label: advancedLabel('Disks & partitions') },
           ]}
           active={tab}
           onChange={setTab}
@@ -204,6 +219,14 @@ export function StoragePage({ advanced }: { advanced: boolean }) {
         <Disks />
       ) : (
         <>
+          {!!drives.data?.length && (
+            <div className="ask-strip">
+              <span>
+                <strong>Running low on space?</strong> Get a plan for these drives: what to clean, move or archive.
+              </span>
+              <AskButton label="Analyze my drives" prompt="Here are the drives on my PC. Tell me how healthy they are, which are running low on space, and a safe plan to free up space. Use your tools to look at the biggest folders before suggesting anything." context={drives.data.map((d) => ({ drive: d.letter, label: d.label, free: formatBytes(d.free), size: formatBytes(d.size), type: d.type, fs: d.fs, health: d.health, bitlocker: d.bitlocker }))} />
+            </div>
+          )}
           <Grid cols={3}>
             {(drives.data ?? []).map((d) => (
               <Card key={d.letter} title={`${d.label} (${d.letter})`} subtitle={`${d.fs} · ${d.type}`} actions={<Status tone={d.health === 'Healthy' ? 'good' : 'warning'}>{d.health}</Status>}>
@@ -286,7 +309,7 @@ export function StoragePage({ advanced }: { advanced: boolean }) {
             )}
           </Card>
           <Analyzer />
-          {!IS_WINDOWS && <Callout tone="info">Drive maintenance (optimise, check, partitions, BitLocker) is available on Windows.</Callout>}
+          {!IS_WINDOWS && <Callout tone="info">Drive maintenance (optimize, check, partitions, BitLocker) is available on Windows.</Callout>}
           {IS_WINDOWS && !advanced && (
             <Callout tone="info" actions={<Button size="sm" onClick={() => navigate('settings/appearance')}>Settings</Button>}>
               Turn on Advanced mode to see physical disks, partitions, health and drive maintenance.

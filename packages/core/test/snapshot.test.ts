@@ -80,7 +80,7 @@ describe('backup and restore', () => {
     }
   });
 
-  it('clone mode keeps data but drops the fleet identity and organisation-managed state', async () => {
+  it('clone mode keeps data but drops the fleet identity and organization-managed state', async () => {
     const a = await makeKernel();
     const k = a.kernel;
     k.vault.set({ name: 'SHARED', value: 'shared-value-1' });

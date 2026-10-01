@@ -11,10 +11,10 @@ export function FleetPage() {
   if (!f) return null;
   const enrolled = f.state !== 'unenrolled';
   return (
-    <Page title="Organisation" description="Connect this workstation to your FBRX control plane so administrators can see its health, push configuration, credentials and policies, send commands, back it up and update it remotely.">
+    <Page title="Organization" description="Connect this workstation to your FBRX control plane so administrators can see its health, push configuration, credentials and policies, send commands, back it up and update it remotely.">
       {!enrolled ? (
         <Grid cols={2}>
-          <Card title="Connect to your organisation">
+          <Card title="Connect to your organization">
             <div className="fx-form">
               <Field label="Control plane URL" help="Provided by your administrator, e.g. https://fbrx.yourcompany.com">
                 <Input value={form.serverUrl} onChange={(e) => setForm({ ...form, serverUrl: e.target.value })} placeholder="https://" />
@@ -26,13 +26,13 @@ export function FleetPage() {
                 <Input value={form.deviceName} onChange={(e) => setForm({ ...form, deviceName: e.target.value })} />
               </Field>
               <div>
-                <Button variant="primary" icon="globe" loading={busy === 'e'} disabled={!form.serverUrl || !form.token} onClick={() => void run('e', () => call('fleet.enroll', { serverUrl: form.serverUrl, token: form.token, deviceName: form.deviceName || undefined }), 'Connected to your organisation')}>
+                <Button variant="primary" icon="globe" loading={busy === 'e'} disabled={!form.serverUrl || !form.token} onClick={() => void run('e', () => call('fleet.enroll', { serverUrl: form.serverUrl, token: form.token, deviceName: form.deviceName || undefined }), 'Connected to your organization')}>
                   Connect
                 </Button>
               </div>
             </div>
           </Card>
-          <Card title="What your organisation can do">
+          <Card title="What your organization can do">
             <ul style={{ margin: 0, paddingLeft: 18, lineHeight: 1.8 }}>
               <li>See this device's health, version and agent activity (not your conversations or files)</li>
               <li>Apply settings, lock some of them, and set the governance policy</li>
@@ -48,7 +48,7 @@ export function FleetPage() {
           {f.state === 'error' && <Callout tone="critical" title="Connection problem">{f.message}</Callout>}
           <Grid cols={2}>
             <Card
-              title={f.tenantName ?? 'Organisation'}
+              title={f.tenantName ?? 'Organization'}
               subtitle={f.serverUrl ?? undefined}
               actions={
                 <Button size="sm" icon="refresh" loading={busy === 's'} onClick={() => void run('s', () => call('fleet.sync'), 'Configuration synced')}>
@@ -67,7 +67,7 @@ export function FleetPage() {
                 ]}
               />
             </Card>
-            <Card title="Managed by your organisation">
+            <Card title="Managed by your organization">
               <KeyValue
                 items={[
                   ['Governance policy', f.policyManaged ? 'Managed' : 'Local'],
@@ -80,12 +80,12 @@ export function FleetPage() {
           <Card title="Disconnect">
             <div className="fx-row" style={{ alignItems: 'center' }}>
               <span className="fx-secondary" style={{ flex: 1 }}>
-                Removes organisation-managed settings, policy, license and credentials from this device. Your own data stays.
+                Removes organization-managed settings, policy, license and credentials from this device. Your own data stays.
               </span>
               <Button
                 variant="danger"
                 onClick={async () => {
-                  if (await confirm({ title: 'Disconnect from your organisation?', body: 'Your administrator will see the device as retired. You can enroll again with a new token.', danger: true, confirmLabel: 'Disconnect' })) await run('u', () => call('fleet.unenroll'), 'Disconnected');
+                  if (await confirm({ title: 'Disconnect from your organization?', body: 'Your administrator will see the device as retired. You can enroll again with a new token.', danger: true, confirmLabel: 'Disconnect' })) await run('u', () => call('fleet.unenroll'), 'Disconnected');
                 }}
               >
                 Disconnect

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 /** Categorical slots in validated order. Color follows the entity: pass a stable slot per series. */
 export const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)', 'var(--series-7)', 'var(--series-8)'];
@@ -32,24 +32,44 @@ export function StatTile({ label, value, foot, trend, hero }: { label: ReactNode
       <div className={hero ? 'fx-hero' : 'fx-stat-value'}>{value}</div>
       <div className="fx-stat-foot">
         {foot}
-        {trend && trend.length > 1 && (
-          <span style={{ marginLeft: 'auto' }}>
-            <Sparkline values={trend} />
-          </span>
-        )}
       </div>
+      {trend && trend.length > 1 && (
+        <div className="fx-stat-trend">
+          <Sparkline values={trend} fill />
+        </div>
+      )}
     </div>
   );
 }
 
-/** 12-point sparkline: de-emphasis ink with the current point in the accent. */
-export function Sparkline({ values, width = 72, height = 20 }: { values: number[]; width?: number; height?: number }) {
-  const v = values.slice(-12);
+/**
+ * Sparkline of the last points. Compact: de-emphasis ink with the current point in the accent. `fill`: stretches to
+ * its container with an accent line and a fading accent area, as on the dashboard tiles.
+ */
+export function Sparkline({ values, width = 72, height = 20, fill = false }: { values: number[]; width?: number; height?: number; fill?: boolean }) {
+  const id = useId().replace(/:/g, '');
+  const v = values.slice(fill ? -40 : -12);
   const max = Math.max(...v, 1);
   const min = Math.min(...v, 0);
-  const x = (i: number) => (i / Math.max(1, v.length - 1)) * (width - 4) + 2;
-  const y = (n: number) => height - 2 - ((n - min) / (max - min || 1)) * (height - 4);
+  const w = fill ? 200 : width;
+  const h = fill ? 44 : height;
+  const x = (i: number) => (i / Math.max(1, v.length - 1)) * (w - 4) + 2;
+  const y = (n: number) => h - 2 - ((n - min) / (max - min || 1)) * (h - 6);
   const d = v.map((n, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(n).toFixed(1)}`).join('');
+  if (fill) {
+    return (
+      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none" aria-hidden="true">
+        <defs>
+          <linearGradient id={`spark${id}`} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor="var(--accent)" stopOpacity={0.32} />
+            <stop offset="100%" stopColor="var(--accent)" stopOpacity={0} />
+          </linearGradient>
+        </defs>
+        <path d={`${d}L${x(v.length - 1)},${h}L${x(0)},${h}Z`} fill={`url(#spark${id})`} />
+        <path d={d} fill="none" stroke="var(--accent)" strokeWidth={1.75} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
+      </svg>
+    );
+  }
   return (
     <svg width={width} height={height} aria-hidden="true">
       <path d={d} fill="none" stroke="var(--text-muted)" strokeWidth={1.5} strokeLinejoin="round" strokeLinecap="round" />
@@ -148,6 +168,7 @@ export function LineChart({
   area?: boolean;
 }) {
   const [ref, width] = useWidth<HTMLDivElement>();
+  const gid = useId().replace(/:/g, '');
   const [hoverT, setHoverT] = useState<number | null>(null);
   const [showTable, setShowTable] = useState(false);
   const times = useMemo(() => [...new Set(series.flatMap((s) => s.points.map((p) => p.t)))].sort((a, b) => a - b), [series]);
@@ -258,7 +279,17 @@ export function LineChart({
               const last = pts[pts.length - 1];
               return (
                 <g key={s.key}>
-                  {area && series.length === 1 && <path d={`${d}L${x(last.t)},${y(0)}L${x(pts[0].t)},${y(0)}Z`} fill={color} opacity={0.1} />}
+                  {(area || series.length <= 3) && (
+                    <>
+                      <defs>
+                        <linearGradient id={`area${gid}${s.slot}`} x1="0" y1="0" x2="0" y2="1">
+                          <stop offset="0%" stopColor={color} stopOpacity={series.length === 1 ? 0.28 : 0.16} />
+                          <stop offset="100%" stopColor={color} stopOpacity={0} />
+                        </linearGradient>
+                      </defs>
+                      <path d={`${d}L${x(last.t)},${y(0)}L${x(pts[0].t)},${y(0)}Z`} fill={`url(#area${gid}${s.slot})`} />
+                    </>
+                  )}
                   <path d={d} fill="none" stroke={color} strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" />
                   <circle cx={x(last.t)} cy={y(last.v!)} r={4} fill={color} stroke="var(--surface-1)" strokeWidth={2} />
                   {endLabels && (

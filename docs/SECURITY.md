@@ -1,7 +1,7 @@
 # Security model
 
 FBRX OS gives an AI agent real abilities on a workstation — files, shell, network, other applications — so the
-design assumes the model can be wrong or manipulated and puts every action behind controls the organisation owns.
+design assumes the model can be wrong or manipulated and puts every action behind controls the organization owns.
 
 ## Trust boundaries
 
@@ -46,7 +46,7 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   DPAPI) and optionally a recovery passphrase (scrypt). See [ARCHITECTURE.md](ARCHITECTURE.md#vault-credentials).
 * The model never sees secret values. Connectors and plugins reference secrets by name; the redactor removes any
   secret value from tool output, logs and the conversation.
-* Organisation credentials are created in the console, encrypted at rest with the control plane's master key,
+* Organization credentials are created in the console, encrypted at rest with the control plane's master key,
   delivered over the authenticated device channel and stored as read-only managed secrets.
 * Snapshots contain the vault key encrypted under the snapshot passphrase — protect snapshot files and passphrases
   like the credentials they contain.
@@ -65,7 +65,7 @@ builds. A customer running their own control plane cannot mint licenses your bui
 
 ## Supply chain and updates
 
-* Desktop builds are code-signed (and notarised on macOS) in CI; Windows updates are only applied when signed by the
+* Desktop builds are code-signed (and notarized on macOS) in CI; Windows updates are only applied when signed by the
   publisher named in `electron-builder.yml`.
 * Update feeds are served per device by your control plane over authenticated HTTPS; files carry SHA-512 checksums
   verified by electron-updater.
@@ -79,7 +79,7 @@ builds. A customer running their own control plane cannot mint licenses your bui
 2. Keep `FBRX_CP_MASTER_KEY`, `FBRX_CP_JWT_SECRET` and `FBRX_LICENSE_PRIVATE_KEY` in a secrets manager and back up
    the control plane data directory.
 3. Push `FBRX_BACKUP_PASSPHRASE` as a tenant credential and enable scheduled backups.
-4. Set a recovery passphrase on every workstation (or rely on organisation snapshots).
+4. Set a recovery passphrase on every workstation (or rely on organization snapshots).
 5. Start new policies in `audit` mode, review **Alerts & events**, then switch to `enforce`.
 6. Restrict cloud AI providers by policy where data residency requires it; the local runtime keeps everything on
    the device.

@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import { deflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { unzip } from '../src/util/unzip';
-import { selectRuntimeAsset } from '../src/ai/runtime/runtime-installer';
+import { pickRelease, selectRuntimeAsset } from '../src/ai/runtime/runtime-installer';
 
 function crc32(buf: Buffer) {
   let c = -1;
@@ -82,5 +82,16 @@ describe('runtime installer', () => {
     expect(selectRuntimeAsset(assets, 'win32', 'x64', 'vulkan')?.name).toBe('llama-b6600-bin-win-vulkan-x64.zip');
     expect(selectRuntimeAsset(assets, 'linux', 'x64')?.name).toBe('llama-b6600-bin-ubuntu-x64.tar.gz');
     expect(selectRuntimeAsset(assets, 'linux', 'arm64')).toBeNull();
+  });
+
+  it('skips releases without binaries, such as the old tag GitHub calls "latest"', () => {
+    const a = (name: string) => ({ name, browser_download_url: `https://x/${name}`, size: 1 });
+    const releases = [
+      { tag_name: 'b11147', draft: true, assets: [a('llama-b11147-bin-win-cpu-x64.zip')] },
+      { tag_name: 'b11146', assets: [a('llama-b11146-bin-win-cpu-x64.zip'), a('llama-b11146-bin-win-vulkan-x64.zip'), a('cudart-llama-bin-win-cuda-12.4-x64.zip')] },
+      { tag_name: 'v0.5.0', assets: [] },
+    ];
+    expect(pickRelease(releases, 'win32', 'x64', 'vulkan')?.asset.name).toBe('llama-b11146-bin-win-vulkan-x64.zip');
+    expect(pickRelease([releases[2]], 'win32', 'x64')).toBeNull();
   });
 });

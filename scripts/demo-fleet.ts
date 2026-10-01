@@ -60,7 +60,7 @@ if (!existing.length) {
   });
   await api('PATCH', `/v1/admin/tenants/${tenantId}`, { defaultProfileId: profile.id });
   await api('POST', '/v1/admin/groups', { name: 'Finance', description: 'Finance team laptops' });
-  await api('POST', '/v1/admin/secrets', { scope: 'tenant', name: 'FBRX_BACKUP_PASSPHRASE', value: randomBytes(18).toString('base64url'), description: 'Organisation backup key' });
+  await api('POST', '/v1/admin/secrets', { scope: 'tenant', name: 'FBRX_BACKUP_PASSPHRASE', value: randomBytes(18).toString('base64url'), description: 'Organization backup key' });
   await api('POST', '/v1/admin/licenses', { edition: 'enterprise', seats: 25 });
   token = (await api('POST', '/v1/admin/enrollment-tokens', { label: 'Demo devices', maxUses: 50, expiresInDays: 30 })).token;
 }

@@ -8,7 +8,7 @@ const side = mark.size - 2 * inset;
 export const FBRX_MARK = { size: mark.size, frame: { x: inset, y: inset, side, radius, stroke }, letters: mark.letters } as const;
 
 /**
- * The FBRX logo: a rounded frame around the stacked letters FB / RX, in the current text colour. `tile` puts it on
+ * The FBRX logo: a rounded frame around the stacked letters FB / RX, in the current text color. `tile` puts it on
  * its black square as in the app icon.
  */
 export function FbrxMark({ size = 30, tile = false, className, style, title = 'FBRX' }: { size?: number; tile?: boolean; className?: string; style?: CSSProperties; title?: string }) {

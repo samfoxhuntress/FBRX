@@ -59,7 +59,7 @@ class UnauthorizedError extends Error {}
 /**
  * The device side of fleet management. Enrolls with a control plane, keeps a WebSocket open for real-time
  * commands (falling back to HTTP polling), reports heartbeats/telemetry, and applies managed configuration:
- * settings + locks, governance policy, license, organisation secrets and the update channel.
+ * settings + locks, governance policy, license, organization secrets and the update channel.
  */
 export class FleetAgent {
   private ws: WebSocket | null = null;

@@ -25,7 +25,7 @@ export function OverviewPage() {
   return (
     <Page
       title="Fleet overview"
-      description={app.tenantId ? `Real-time health of ${app.me.tenants.find((t) => t.id === app.tenantId)?.name ?? 'this organisation'}'s workstations.` : `Platform view across ${data.tenants ?? 0} tenants.`}
+      description={app.tenantId ? `Real-time health of ${app.me.tenants.find((t) => t.id === app.tenantId)?.name ?? 'this organization'}'s workstations.` : `Platform view across ${data.tenants ?? 0} tenants.`}
       actions={
         app.can('enrollment.manage') && app.tenantId ? (
           <Button variant="primary" icon="plus" onClick={() => go('enrollment')}>

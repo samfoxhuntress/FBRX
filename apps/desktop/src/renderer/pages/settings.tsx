@@ -1,11 +1,12 @@
 import { useState } from 'react';
 import type { DeepPartial, Settings } from '@fbrx/shared';
 import { UPDATE_CHANNELS } from '@fbrx/shared';
-import { Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, Tabs, TextArea, Toggle, formatDate, useAction, useConfirm } from '@fbrx/ui';
+import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { routeArg } from '../app';
 import { PRESETS, playStartupSound, resolvedMode } from '../theme';
+import { AskButton } from '../widgets';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -15,34 +16,84 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
+type SectionId = 'general' | 'appearance' | 'agent' | 'spotlight' | 'updates' | 'license' | 'api' | 'logs';
+const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; advanced?: boolean }> = [
+  { id: 'general', label: 'General', icon: 'settings', group: 'You' },
+  { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
+  { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
+  { id: 'spotlight', label: 'Spotlight', icon: 'search', group: 'You' },
+  { id: 'updates', label: 'Updates', icon: 'download', group: 'This computer' },
+  { id: 'license', label: 'License', icon: 'key', group: 'This computer' },
+  { id: 'api', label: 'Local API', icon: 'link', group: 'For experts', advanced: true },
+  { id: 'logs', label: 'Logs & about', icon: 'book', group: 'For experts' },
+];
+
 export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
-  type T = 'general' | 'appearance' | 'agent' | 'spotlight' | 'updates' | 'license' | 'api' | 'logs';
-  const [tab, setTab] = useState<T>(() => ((['appearance', 'agent', 'spotlight', 'updates', 'license', 'api', 'logs'] as string[]).includes(routeArg() ?? '') ? (routeArg() as T) : 'general'));
+  const [tab, setTab] = useState<SectionId>(() => (SECTIONS.some((x) => x.id === routeArg()) ? (routeArg() as SectionId) : 'general'));
+  let group = '';
   return (
-    <Page title="Settings">
-      <Tabs
-        active={tab}
-        onChange={setTab}
-        tabs={[
-          { id: 'general', label: 'General' },
-          { id: 'appearance', label: 'Appearance' },
-          { id: 'agent', label: 'Agent' },
-          { id: 'spotlight', label: 'Spotlight' },
-          { id: 'updates', label: 'Updates' },
-          { id: 'license', label: 'License' },
-          { id: 'api', label: 'Local API' },
-          { id: 'logs', label: 'Logs & about' },
-        ]}
-      />
-      {tab === 'general' && <General onRerunSetup={onRerunSetup} />}
-      {tab === 'appearance' && <Appearance />}
-      {tab === 'agent' && <AgentSettings />}
-      {tab === 'spotlight' && <SpotlightSettings />}
-      {tab === 'updates' && <Updates />}
-      {tab === 'license' && <License />}
-      {tab === 'api' && <LocalApi />}
-      {tab === 'logs' && <Logs />}
+    <Page title="Settings" description="How FBRX OS looks and behaves on this computer. Settings your organization manages show a lock.">
+      <ModeCard />
+      <div className="settings-layout">
+        <nav className="settings-nav" aria-label="Settings sections">
+          {SECTIONS.map((x) => {
+            const Ico = Icons[x.icon];
+            const header = x.group !== group ? (group = x.group) : null;
+            return (
+              <div key={x.id}>
+                {header && <div className="settings-nav-group">{header}</div>}
+                <button className={`settings-nav-item${tab === x.id ? ' active' : ''}`} aria-current={tab === x.id ? 'page' : undefined} onClick={() => setTab(x.id)}>
+                  <Ico size={15} />
+                  <span>{x.label}</span>
+                  {x.advanced && <AdvancedTag />}
+                </button>
+              </div>
+            );
+          })}
+        </nav>
+        <div className="settings-body">
+          {tab === 'general' && <General onRerunSetup={onRerunSetup} />}
+          {tab === 'appearance' && <Appearance />}
+          {tab === 'agent' && <AgentSettings />}
+          {tab === 'spotlight' && <SpotlightSettings />}
+          {tab === 'updates' && <Updates />}
+          {tab === 'license' && <License />}
+          {tab === 'api' && <LocalApi />}
+          {tab === 'logs' && <Logs />}
+        </div>
+      </div>
     </Page>
+  );
+}
+
+/** Basic or Advanced mode, at the top of Settings so it is easy to find. */
+function ModeCard() {
+  const { s, locked, patch } = useSettings();
+  if (!s) return null;
+  const on = s.appearance.advancedMode;
+  const lockedMode = isLocked(locked, 'appearance.advancedMode');
+  const choice = (advanced: boolean, title: string, body: string) => (
+    <button className={`mode-choice${on === advanced ? ' active' : ''}`} disabled={lockedMode} aria-pressed={on === advanced} onClick={() => on !== advanced && void patch({ appearance: { advancedMode: advanced } })}>
+      <div className="mode-choice-title">
+        {title}
+        {advanced && <AdvancedTag label="Expert tools" />}
+      </div>
+      <div className="mode-choice-body">{body}</div>
+    </button>
+  );
+  return (
+    <div className="mode-card">
+      <div>
+        <div className="mode-card-title">
+          Experience <Locked show={lockedMode} />
+        </div>
+        <div className="fx-muted" style={{ fontSize: 12.5 }}>Also in the top bar. Advanced features are marked with an Advanced tag wherever they appear.</div>
+      </div>
+      <div className="mode-choices">
+        {choice(false, 'Basic', 'Everyday tools: dashboard, workspace, PC care, network, your phone and the agent.')}
+        {choice(true, 'Advanced', 'Adds the Terminal, virtual lab, disks and partitions, Defender settings, network adapters, custom scan ranges, logs and developer tools.')}
+      </div>
+    </div>
   );
 }
 
@@ -75,10 +126,10 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
           </Field>
           <Toggle checked={s.general.launchAtLogin} disabled={L('general.launchAtLogin')} onChange={(v) => void patch({ general: { launchAtLogin: v } })} label="Start FBRX OS when I sign in" />
           <Toggle checked={s.general.minimizeToTray} disabled={L('general.minimizeToTray')} onChange={(v) => void patch({ general: { minimizeToTray: v } })} label="Keep running in the tray when the window is closed" />
-          <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organisation's control plane" />
+          <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organization's control plane" />
         </div>
       </Card>
-      <Card title={`${s.ai.agentName}'s behaviour`}>
+      <Card title={`${s.ai.agentName}'s behavior`}>
         <div className="fx-form">
           <Field label={<>Creativity (temperature): {s.ai.temperature} <Locked show={L('ai.temperature')} /></>} help="Lower is more precise. Ignored by models that manage this themselves.">
             <input type="range" min={0} max={1} step={0.05} disabled={L('ai.temperature')} value={s.ai.temperature} onChange={(e) => void patch({ ai: { temperature: Number(e.target.value) } })} />
@@ -137,9 +188,9 @@ function Appearance() {
               );
             })}
           </div>
-          <Field label="Accent colour" help="Leave on Theme to use the theme's own accent">
+          <Field label="Accent color" help="Leave on Theme to use the theme's own accent">
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input type="color" aria-label="Accent colour" value={a.accent || '#f0a530'} onChange={(e) => void patch({ appearance: { accent: e.target.value } })} style={{ width: 44, height: 32, border: 0, background: 'none' }} />
+              <input type="color" aria-label="Accent color" value={a.accent || '#f0a530'} onChange={(e) => void patch({ appearance: { accent: e.target.value } })} style={{ width: 44, height: 32, border: 0, background: 'none' }} />
               <span className="mono">{a.accent || 'Theme accent'}</span>
               {a.accent && <Button size="sm" variant="ghost" onClick={() => void patch({ appearance: { accent: '' } })}>Use theme accent</Button>}
             </div>
@@ -157,9 +208,8 @@ function Appearance() {
             </Field>
           </div>
         </Card>
-        <Card title="Behaviour">
+        <Card title="Behavior">
           <div className="fx-form">
-            <Toggle checked={a.advancedMode} disabled={L('appearance.advancedMode')} onChange={(v) => void patch({ appearance: { advancedMode: v } })} label="Advanced mode: show expert tools (disks and partitions, virtual lab, network adapters, Defender settings)" />
             <Toggle checked={a.reduceMotion} onChange={(v) => void patch({ appearance: { reduceMotion: v } })} label="Reduce motion" />
             <Toggle checked={a.splash} onChange={(v) => void patch({ appearance: { splash: v } })} label="Show the start-up animation" />
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -271,7 +321,7 @@ function Updates() {
           </div>
         </div>
       </Card>
-      <Card title="Preferences" subtitle="Your organisation decides which version this device runs">
+      <Card title="Preferences" subtitle="Your organization decides which version this device runs">
         <div className="fx-form">
           <Field label="Channel">
             <Select value={s.updates.channel} disabled={isLocked(locked, 'updates.channel')} onChange={(e) => void patch({ updates: { channel: e.target.value as Settings['updates']['channel'] } })} options={[...UPDATE_CHANNELS]} />
@@ -299,7 +349,7 @@ function License() {
             ['Licensed to', l.customer ?? '—'],
             ['Seats', l.seats === 0 ? 'Unlimited' : l.seats ?? '—'],
             ['Expires', l.expiresAt ? formatDate(l.expiresAt) : l.state === 'valid' ? 'Never' : '—'],
-            ['Source', { managed: 'Your organisation', local: 'License key on this device', development: 'Development build', none: '—' }[l.source]],
+            ['Source', { managed: 'Your organization', local: 'License key on this device', development: 'Development build', none: '—' }[l.source]],
             ['Features', l.features.join(', ')],
           ]}
         />
@@ -395,7 +445,17 @@ function Logs() {
           ]}
         />
       </Card>
-      <Card title="Logs" actions={<div style={{ width: 140 }}><Select value={level} onChange={(e) => setLevel(e.target.value as typeof level)} options={['debug', 'info', 'warn', 'error']} /></div>}>
+      <Card
+        title="Logs"
+        actions={
+          <>
+            <AskButton label="Analyze these logs" prompt="These are the recent FBRX OS log lines from my PC. Tell me whether anything is wrong, what the warnings and errors mean, and what to do about them." context={(logs.data ?? []).slice(-150).map((l) => `${l.ts} ${l.level} [${l.scope}] ${l.message}${l.data ? ` ${JSON.stringify(l.data)}` : ''}`).join('\n')} />
+            <div style={{ width: 140 }}>
+              <Select value={level} onChange={(e) => setLevel(e.target.value as typeof level)} options={['debug', 'info', 'warn', 'error']} />
+            </div>
+          </>
+        }
+      >
         <pre className="fx-code" style={{ maxHeight: 460 }}>
           {(logs.data ?? []).map((l) => `${l.ts.slice(11, 19)} ${l.level.toUpperCase().padEnd(5)} [${l.scope}] ${l.message}${l.data ? ` ${JSON.stringify(l.data)}` : ''}`).join('\n') || 'No log lines'}
         </pre>

@@ -64,7 +64,7 @@ Run it under systemd, launchd, NSSM or a PaaS.
 | `FBRX_CP_PUBLIC_URL` | `http://localhost:<port>` | External URL written into provisioning files and update feeds |
 | `FBRX_CP_DATA_DIR` | `.fbrx-cp-data` | Database, keys, files |
 | `FBRX_CP_PORT` / `FBRX_CP_HOST` | `8787` / `0.0.0.0` | Listener |
-| `FBRX_CP_TRUST_PROXY` | off | Honour `X-Forwarded-*` from a reverse proxy |
+| `FBRX_CP_TRUST_PROXY` | off | Honor `X-Forwarded-*` from a reverse proxy |
 | `FBRX_CP_ADMIN_EMAIL` / `_PASSWORD` / `_NAME`, `FBRX_CP_ORGANIZATION` | — | Bootstrap the first superadmin and tenant on an empty database |
 | `FBRX_CP_SETUP_TOKEN` | random, printed | Without bootstrap variables, the console's first-run screen asks for this token |
 | `FBRX_CP_JWT_SECRET`, `FBRX_CP_MASTER_KEY`, `FBRX_LICENSE_PRIVATE_KEY` | generated into `keys/` | Supply from a secrets manager to keep key material out of the volume |
@@ -90,7 +90,7 @@ npm run package:win
 
 macOS packages must be built on a Mac and Windows packages are most reliably built on Windows (the Release
 workflow does both). Without a Developer ID certificate, Mac builds are ad-hoc signed: they run on the Mac that built
-them, but other Macs will refuse them until you sign and notarise. Artifacts:
+them, but other Macs will refuse them until you sign and notarize. Artifacts:
 
 * macOS: `FBRX-OS-<v>-arm64.dmg`, `FBRX-OS-<v>-x64.dmg` (installers) and matching `.zip` files (auto-update).
 * Windows: `FBRX-OS-Setup-<v>.exe` — one NSIS installer containing x64 and arm64; per-user by default, per-machine
@@ -100,7 +100,7 @@ If the runtime is not bundled, users can install it from **Local AI → Install 
 
 ### Windows installer: upgrade, repair and uninstall
 
-`FBRX-OS-Setup-<v>.exe` knows when FBRX OS is already installed (customisations in
+`FBRX-OS-Setup-<v>.exe` knows when FBRX OS is already installed (customizations in
 `apps/desktop/build/installer.nsh`). Instead of asking where to install, it opens on a maintenance page:
 
 | Installed version vs. this Setup | Choices (default first) |
@@ -116,7 +116,7 @@ and mode (just me / all users).
 **Closing a running app.** Setup and the uninstaller find every process started from the install folder: the app,
 its helpers, the local AI runtime and bridges that other AI apps start (`apps/desktop/build/fbrx-close.ps1`). The app
 is asked to quit properly first (`"FBRX OS.exe" --fbrx-quit` reaches the running copy, which stops the AI runtime and
-closes its database even when it is minimised to the tray); anything still running after 20 seconds is ended. If
+closes its database even when it is minimized to the tray); anything still running after 20 seconds is ended. If
 something cannot be ended (for example it runs as administrator), Setup asks the user to quit it and retry. Without
 PowerShell, it falls back to `taskkill`.
 
@@ -143,7 +143,7 @@ certificate (see Signing) removes the warning.
 
 | Platform | What you need | Environment / secrets |
 | --- | --- | --- |
-| macOS | Apple Developer ID Application certificate (.p12), App Store Connect app-specific password | `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`; notarisation is enabled with `-c.mac.notarize=true` |
+| macOS | Apple Developer ID Application certificate (.p12), App Store Connect app-specific password | `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`; notarization is enabled with `-c.mac.notarize=true` |
 | Windows | OV/EV code-signing certificate (.pfx), or Azure Trusted Signing | `CSC_LINK`, `CSC_KEY_PASSWORD`; set `win.signtoolOptions.publisherName` in `electron-builder.yml` to the certificate subject — electron-updater refuses updates signed by a different publisher |
 
 Unsigned builds work for testing, but macOS Gatekeeper and Windows SmartScreen will warn users.
@@ -155,7 +155,7 @@ channel) or manually:
 
 1. Sets the app version from the tag.
 2. Downloads llama.cpp for each target architecture.
-3. Builds, signs and notarises macOS (arm64 + x64) and Windows (x64 + arm64) packages.
+3. Builds, signs and notarizes macOS (arm64 + x64) and Windows (x64 + arm64) packages.
 4. Builds and pushes the control-plane image to GHCR.
 5. Attaches the installers to a GitHub release.
 6. If `FBRX_CP_URL` and `FBRX_CP_API_KEY` (a **superadmin** API key) are set, uploads them to your control plane

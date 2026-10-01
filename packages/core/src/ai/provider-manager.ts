@@ -6,7 +6,7 @@ import type { PolicyEngine } from '../governance/policy-engine';
 import type { LicenseService } from '../license/license-service';
 import type { LocalRuntime } from './runtime/local-runtime';
 import { AnthropicProvider } from './providers/anthropic';
-import { OllamaProvider } from './providers/ollama';
+import { OllamaProvider, ollamaModelsOnDisk } from './providers/ollama';
 import { OpenAICompatibleProvider } from './providers/openai-compatible';
 import type { ChatProvider } from './providers/types';
 
@@ -92,8 +92,13 @@ export class ProviderManager {
     if (cfg.type === 'local-runtime' && !this.d.runtime.isRunning) {
       throw new CoreError('UNAVAILABLE', 'The local AI runtime is not running. Start it from the AI Runtime page or pick another provider.');
     }
-    const chosen = model || (id === ai.defaultProvider ? ai.defaultModel : '') || cfg.defaultModel || (cfg.type === 'local-runtime' ? this.d.runtime.status().modelId ?? 'local' : '');
-    if (!chosen && cfg.type !== 'local-runtime') throw new CoreError('INVALID_ARGUMENT', `Choose a model for ${cfg.name}`);
+    // Ollama picks its best installed model when none is chosen (see OllamaProvider.pickModel).
+    const chosen =
+      model ||
+      (id === ai.defaultProvider ? ai.defaultModel : '') ||
+      cfg.defaultModel ||
+      (cfg.type === 'local-runtime' ? (this.d.runtime.status().modelId ?? 'local') : cfg.type === 'ollama' ? (this.known.get(cfg.id)?.[0] ?? '') : '');
+    if (!chosen && cfg.type !== 'local-runtime' && cfg.type !== 'ollama') throw new CoreError('INVALID_ARGUMENT', `Choose a model for ${cfg.name}`);
     return { provider: this.build(cfg), config: cfg, model: chosen };
   }
 
@@ -113,6 +118,7 @@ export class ProviderManager {
               const h = await this.build(cfg).health(AbortSignal.timeout(4000));
               available = h.ok;
               message = h.message;
+              if (h.ok && cfg.type === 'ollama') await this.models(cfg.id).catch(() => undefined);
             } catch (err) {
               message = (err as Error).message;
             }
@@ -127,11 +133,14 @@ export class ProviderManager {
           available,
           blockedByPolicy: !!blocked && cfg.enabled,
           message,
-          defaultModel: cfg.defaultModel ?? null,
+          defaultModel: cfg.defaultModel ?? (cfg.type === 'ollama' ? (this.known.get(cfg.id)?.[0] ?? null) : null),
         };
       }),
     );
   }
+
+  /** Models last listed per provider, best first; lets a chat start without choosing one. */
+  private readonly known = new Map<string, string[]>();
 
   async models(providerId: string): Promise<ModelInfo[]> {
     const cfg = this.config(providerId);
@@ -139,6 +148,17 @@ export class ProviderManager {
       const id = this.d.runtime.status().modelId;
       return id ? [{ id, name: id, providerId }] : [];
     }
-    return this.build(cfg).listModels(AbortSignal.timeout(10_000));
+    try {
+      const list = await this.build(cfg).listModels(AbortSignal.timeout(10_000));
+      this.known.set(providerId, list.map((m) => m.id));
+      return list;
+    } catch (err) {
+      // Ollama not running: still show what it has downloaded, so the user can pick one and start Ollama.
+      if (cfg.type === 'ollama') {
+        const onDisk = ollamaModelsOnDisk();
+        if (onDisk.length) return onDisk.map((id) => ({ id, name: id, providerId, unavailable: 'Ollama is not running' }));
+      }
+      throw err;
+    }
   }
 }

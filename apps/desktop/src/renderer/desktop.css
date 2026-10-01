@@ -872,3 +872,262 @@ body.spotlight-body {
     display: none;
   }
 }
+
+/* ------------------------------------------------------------------------------------------- top bar */
+.topbar-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: min(440px, 36vw);
+  height: 32px;
+  padding: 0 8px 0 10px;
+  border-radius: 9px;
+  border: 1px solid var(--border);
+  background: color-mix(in srgb, var(--surface-1) 70%, transparent);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.topbar-search span {
+  flex: 1;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.topbar-search:hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  color: var(--text-secondary);
+}
+.mode-pill,
+.model-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 28px;
+  padding: 0 11px 0 7px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  -webkit-app-region: no-drag;
+}
+.mode-pill:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+.mode-pill-knob {
+  width: 22px;
+  height: 13px;
+  border-radius: 999px;
+  background: var(--surface-3, var(--border));
+  position: relative;
+  transition: background 0.15s ease;
+}
+.mode-pill-knob::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  transition: transform 0.15s ease, background 0.15s ease;
+}
+.mode-pill.on {
+  border-color: color-mix(in srgb, var(--accent) 65%, transparent);
+  background: color-mix(in srgb, var(--accent) 14%, var(--surface-1));
+  color: var(--accent);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+.mode-pill.on .mode-pill-knob {
+  background: var(--accent);
+}
+.mode-pill.on .mode-pill-knob::after {
+  transform: translateX(9px);
+  background: var(--accent-ink, #fff);
+}
+.model-pill {
+  max-width: 220px;
+  padding-left: 10px;
+}
+.model-pill .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.model-pill .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+  background: var(--critical);
+}
+.model-pill .dot.ok {
+  background: var(--good);
+  box-shadow: 0 0 6px color-mix(in srgb, var(--good) 70%, transparent);
+}
+.model-pill:hover,
+.mode-pill:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+/* ------------------------------------------------------------------------------------------- settings */
+.mode-card {
+  display: grid;
+  grid-template-columns: minmax(200px, 1fr) 2fr;
+  gap: 16px;
+  align-items: center;
+  padding: 16px 18px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: linear-gradient(120deg, color-mix(in srgb, var(--accent) 10%, var(--surface-1)), var(--surface-1) 60%);
+}
+.mode-card-title {
+  font-weight: 650;
+  font-size: 15px;
+  margin-bottom: 2px;
+}
+.mode-choices {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.mode-choice {
+  text-align: left;
+  padding: 10px 12px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+}
+.mode-choice:disabled {
+  cursor: not-allowed;
+}
+.mode-choice.active {
+  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, var(--surface-1));
+  color: var(--text-primary);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.mode-choice-title {
+  font-weight: 650;
+  color: var(--text-primary);
+  margin-bottom: 3px;
+}
+.mode-choice-body {
+  font-size: 12.5px;
+  line-height: 1.45;
+}
+.settings-layout {
+  display: grid;
+  grid-template-columns: 210px minmax(0, 1fr);
+  gap: 18px;
+  align-items: start;
+}
+.settings-nav {
+  position: sticky;
+  top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.settings-nav-group {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+  padding: 12px 10px 4px;
+}
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 7px 10px;
+  border-radius: var(--radius-sm);
+  border: 0;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.settings-nav-item:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.settings-nav-item.active {
+  background: var(--accent-wash);
+  color: var(--text-primary);
+  font-weight: 600;
+}
+.settings-nav-item .fx-adv-tag {
+  margin-left: auto;
+}
+.settings-body {
+  display: grid;
+  gap: 16px;
+  min-width: 0;
+}
+@media (max-width: 1000px) {
+  .mode-card,
+  .settings-layout {
+    grid-template-columns: 1fr;
+  }
+  .settings-nav {
+    position: static;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  .settings-nav-group {
+    display: none;
+  }
+  .settings-nav-item {
+    width: auto;
+  }
+}
+
+/* ------------------------------------------------------------------------------------- ask the agent */
+.fx-btn.ask-btn {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--border));
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+}
+.fx-btn.ask-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.fx-btn.ask-btn svg {
+  color: var(--accent);
+}
+.ask-strip {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px dashed color-mix(in srgb, var(--accent) 50%, var(--border));
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-1));
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.ask-strip > span {
+  flex: 1;
+  min-width: 240px;
+}
+.ask-strip strong {
+  color: var(--text-primary);
+}

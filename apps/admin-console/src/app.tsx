@@ -107,7 +107,7 @@ function Console() {
   const needsTenant = !app.tenantId && !['overview', 'tenants', 'releases', 'account', 'audit', 'licenses', 'devices', 'events'].includes(route.page);
 
   const page = (() => {
-    if (needsTenant) return <div className="fx-page"><h1>Select a tenant</h1><p className="fx-secondary">Choose an organisation in the top bar to manage its configuration.</p></div>;
+    if (needsTenant) return <div className="fx-page"><h1>Select a tenant</h1><p className="fx-secondary">Choose an organization in the top bar to manage its configuration.</p></div>;
     switch (route.page) {
       case 'devices':
         return <DevicesPage />;

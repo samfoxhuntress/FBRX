@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { DEFAULT_LOCAL_API_PORT, DEFAULT_RUNTIME_PORT, UPDATE_CHANNELS } from './constants';
 import { ALERT_CHANNELS } from './ext';
 
-/** Built-in colour themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
+/** Built-in color themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
 export const THEME_PRESETS = ['fabrics', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
 export type ThemePreset = (typeof THEME_PRESETS)[number];
 export const DEFAULT_MESH_PORT = 47800;
@@ -47,7 +47,7 @@ export const SettingsSchema = z.object({
   }),
   appearance: z.object({
     preset: z.enum(THEME_PRESETS),
-    /** Custom accent colour (#rrggbb), or empty to use the preset's. */
+    /** Custom accent color (#rrggbb), or empty to use the preset's. */
     accent: z.string().regex(/^(#[0-9a-fA-F]{6})?$/),
     density: z.enum(['compact', 'comfortable', 'spacious']),
     fontScale: z.number().min(0.85).max(1.3),

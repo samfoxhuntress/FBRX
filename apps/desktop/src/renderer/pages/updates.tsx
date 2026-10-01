@@ -3,6 +3,7 @@ import { Button, Callout, Card, Empty, Grid, Page, Spinner, StatTile, Status, Ta
 import { call, onEvent } from '../client';
 import { newReqId, useCore } from '../hooks';
 import { IS_WINDOWS } from '../app';
+import { AskButton } from '../widgets';
 
 type Tab = 'apps' | 'windows' | 'drivers' | 'history';
 
@@ -30,6 +31,7 @@ function Apps() {
         subtitle="Updates available through winget (Windows Package Manager)"
         actions={
           <>
+            {!!apps.data?.length && <AskButton label="Should I update these?" prompt="These app updates are available on my PC. Tell me which ones matter (security fixes, big improvements), anything to watch out for, and a sensible order to install them." context={apps.data} />}
             <Button size="sm" icon="refresh" onClick={() => apps.reload()}>
               Check again
             </Button>
@@ -83,6 +85,7 @@ function WindowsUpdate() {
       subtitle="Updates Windows has found but not installed yet"
       actions={
         <>
+          {!!wu.data?.length && <AskButton label="Explain these" prompt="Windows Update has found these updates on my PC. Explain what each one is in plain language and whether I should install it now." context={wu.data} />}
           <Button size="sm" onClick={() => void run('o', () => call('winupdates.open', { page: 'check' }))}>Open Windows Update</Button>
           <Button size="sm" variant="ghost" onClick={() => void run('o', () => call('winupdates.open', { page: 'optional' }))}>Optional updates</Button>
         </>
@@ -119,7 +122,7 @@ function Drivers() {
   return (
     <>
       {old.length > 0 && <Callout tone="info">{old.length} driver(s) are more than three years old. Check the device maker's website or Windows optional updates for newer versions.</Callout>}
-      <Card title="Drivers from other vendors" subtitle="Oldest first" flush>
+      <Card title="Drivers from other vendors" subtitle="Oldest first" actions={!!drivers.data?.length && <AskButton label="Review my drivers" prompt="Here are the drivers from other vendors on my PC, oldest first. Which ones are outdated or risky, and where should I get updates for them?" context={drivers.data.slice(0, 60)} />} flush>
         <Table
           columns={[
             { key: 'd', header: 'Device', render: (d) => d.device },
@@ -162,7 +165,7 @@ export function UpdatesPage() {
   if (!IS_WINDOWS) {
     return (
       <Page title="Updates" description="Keep your apps, drivers and Windows itself up to date.">
-        <Callout tone="info">App, driver and Windows updates are managed here on Windows. FBRX OS itself updates from your organisation's control plane.</Callout>
+        <Callout tone="info">App, driver and Windows updates are managed here on Windows. FBRX OS itself updates from your organization's control plane.</Callout>
       </Page>
     );
   }

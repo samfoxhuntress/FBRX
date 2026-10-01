@@ -84,10 +84,10 @@ export function BackupPage() {
         </Card>
         <Card title="Moving to a new computer">
           <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
-            <li>Create a snapshot here (or let your organisation back up this device).</li>
+            <li>Create a snapshot here (or let your organization back up this device).</li>
             <li>Install FBRX OS on the new Mac or Windows machine.</li>
             <li>Choose <strong>Restore from file</strong>, enter the snapshot passphrase and pick <strong>Migrate</strong>.</li>
-            <li>FBRX restarts and everything — credentials included — is back. Your organisation sees the device move to new hardware.</li>
+            <li>FBRX restarts and everything — credentials included — is back. Your organization sees the device move to new hardware.</li>
           </ol>
           <p className="fx-secondary" style={{ marginBottom: 0 }}>Use <strong>Clone</strong> instead to set up an additional machine from this one (it enrolls as a new device).</p>
         </Card>
@@ -223,11 +223,11 @@ export function RestoreModal({ file, header, onClose }: { file: string; header: 
           <div className="choice-grid">
             <button className={`choice${mode === 'migrate' ? ' selected' : ''}`} onClick={() => setMode('migrate')}>
               <strong>Migrate</strong>
-              <span className="fx-secondary" style={{ fontSize: 13 }}>This computer becomes that workstation — same device in your organisation. Use when replacing hardware.</span>
+              <span className="fx-secondary" style={{ fontSize: 13 }}>This computer becomes that workstation — same device in your organization. Use when replacing hardware.</span>
             </button>
             <button className={`choice${mode === 'clone' ? ' selected' : ''}`} onClick={() => setMode('clone')}>
               <strong>Clone</strong>
-              <span className="fx-secondary" style={{ fontSize: 13 }}>Copy everything but leave the organisation enrollment behind; enroll this computer as a new device.</span>
+              <span className="fx-secondary" style={{ fontSize: 13 }}>Copy everything but leave the organization enrollment behind; enroll this computer as a new device.</span>
             </button>
           </div>
           <Callout tone="warning">Current data on this computer is kept in a safety copy inside the data folder (<code>.pre-restore</code>) and then replaced.</Callout>

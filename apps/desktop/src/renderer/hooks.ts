@@ -55,7 +55,7 @@ export function useInterval(fn: () => void, ms: number) {
   }, [ms]);
 }
 
-/** Whether a settings path is locked by the organisation. */
+/** Whether a settings path is locked by the organization. */
 export function isLocked(locked: string[] | undefined, path: string) {
   return !!locked?.some((l) => path === l || path.startsWith(`${l}.`) || l.startsWith(`${path}.`));
 }

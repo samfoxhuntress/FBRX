@@ -4,6 +4,7 @@ import { Button, Card, Grid, Input, Page, StatTile, Tabs, formatBytes, useAction
 import { call } from '../client';
 import { useCore } from '../hooks';
 import { useLive } from './dashboard';
+import { AskButton, askAgent } from '../widgets';
 
 export function ProcessesPage() {
   const [sort, setSort] = useState<'cpu' | 'memory'>('cpu');
@@ -27,7 +28,17 @@ export function ProcessesPage() {
     { key: 'cpu', header: 'CPU', render: (p) => `${p.cpu.toFixed(1)}%`, width: 80 },
     { key: 'mem', header: 'Memory', render: (p) => formatBytes(p.memBytes), width: 100 },
     { key: 'user', header: 'User', render: (p) => <span className="fx-muted">{p.user}</span>, width: 140 },
-    { key: 'act', header: '', render: (p) => <Button size="sm" variant="ghost" icon="x" aria-label={`End ${p.name}`} onClick={() => void kill(p)} />, width: 50 },
+    {
+      key: 'act',
+      header: '',
+      render: (p) => (
+        <div className="fx-actions" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
+          <AskButton iconOnly label="What is this" prompt="What is this process on my PC? Tell me what it belongs to, whether it is safe, and whether its CPU and memory use is normal." context={{ name: p.name, path: p.path, cpu: `${p.cpu}%`, memory: formatBytes(p.memBytes), user: p.user, started: p.started }} />
+          <Button size="sm" variant="ghost" icon="x" aria-label={`End ${p.name}`} onClick={() => void kill(p)} />
+        </div>
+      ),
+      width: 90,
+    },
   ];
 
   return (
@@ -42,6 +53,15 @@ export function ProcessesPage() {
         title="Running processes"
         actions={
           <>
+            <Button
+              size="sm"
+              className="ask-btn"
+              icon="sparkles"
+              disabled={!procs.data}
+              onClick={() => askAgent('Here are the busiest processes on my PC right now. Tell me what is using the most resources, whether anything looks unusual or suspicious, and what I can safely close.', procs.data!.list.slice(0, 25).map((p) => ({ name: p.name, cpu: `${p.cpu}%`, memory: formatBytes(p.memBytes), path: p.path })))}
+            >
+              Analyze
+            </Button>
             <Tabs tabs={[{ id: 'cpu', label: 'By CPU' }, { id: 'memory', label: 'By memory' }]} active={sort} onChange={setSort} />
             <div style={{ width: 220 }}>
               <Input placeholder="Filter by name or PID" value={filter} onChange={(e) => setFilter(e.target.value)} aria-label="Filter processes" />

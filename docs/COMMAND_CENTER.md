@@ -12,17 +12,32 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 
 | Option | Choices |
 | --- | --- |
-| Theme | Fabrics (amber, the default), Ember, Midnight, Graphite, Ocean, Forest, Orchid, Paper, High contrast. Each has a light and a dark version; *Mode* follows Windows or is fixed |
-| Accent colour | Any colour; text on buttons switches between dark and light ink automatically |
+| Theme | Fabrics (amber, the default), Ember, Midnight, Graphite, Ocean, Forest, Orchid, Paper, High contrast. Each has a light and a dark version; *Mode* follows Windows or is fixed. Every theme except High contrast tints the sidebar, top bar and page with its own gradient glow, and charts use gradient area fills |
+| Accent color | Any color; text on buttons switches between dark and light ink automatically |
 | Density | Compact, comfortable, spacious |
 | Corners | Sharp, rounded, soft |
 | Background texture | None, weave, grain, grid (behind the content, never behind text) |
 | Text and interface size | 85–130 % |
-| Advanced mode | Shows expert screens: disks and partitions, the virtual lab, network adapter configuration, Defender settings |
 | Motion and start-up | Reduce motion; start-up animation (the FBRX logo stitched in) and start-up sound (from the FBRX intro, on by default, with a Listen button) |
 
-Chart series and status colours stay on the validated design-system palette in every theme, so charts remain
-readable for colour-blind users. Organisations can lock any appearance setting from the admin console.
+Chart series and status colors stay on the validated design-system palette in every theme, so charts remain
+readable for color-blind users. Organizations can lock any appearance setting from the admin console.
+
+### Basic and Advanced mode
+
+**Basic** shows everyday tools. **Advanced** adds the expert ones, each marked with an **Advanced** tag wherever it
+appears: the Terminal and the virtual lab (in an *Advanced* section of the sidebar), disks and partitions, Defender
+settings, network adapter configuration, scanning a custom subnet, the bug catcher's event log view, and the
+developer tools in the Toolbox (JSON, Base64, URL, hashes, UUIDs, timestamps, regex, JWT, subnet calculator). Switch
+with the **Advanced** switch in the top bar or the *Experience* card at the top of **Settings**.
+
+### Ask the agent about anything
+
+Pages carry **Analyze** buttons (the sparkle icon) that hand what you are looking at to the agent in a new chat:
+an alert or all of them, a process or the busiest ones, the drives and what is using space, partitions, a Defender
+threat, a listening port, a startup item, a link or file check, a network device or the whole scan, a trace route,
+speed results, app / Windows / driver updates, a file's contents, terminal output, the event log and FBRX's own logs,
+the dashboard health check and your tasks for the day. Long content is trimmed to keep requests fast on local models.
 
 ## Everyday
 
@@ -37,7 +52,7 @@ readable for colour-blind users. Organisations can lock any appearance setting f
 | **Files** | Places and drives, folder search, previews (text and images), a plain-text editor |
 | **Processes** | Live list by CPU or memory with end-process (core Windows processes are protected) |
 | **Terminal** | Runs PowerShell commands with streaming output; every command is in the audit log |
-| **Toolbox** | JSON, Base64, URL, hashes, UUIDs, passwords, timestamps, regex, text, colours, JWT, subnet calculator — all offline |
+| **Toolbox** | JSON, Base64, URL, hashes, UUIDs, passwords, timestamps, regex, text, colors, JWT, subnet calculator — all offline |
 | **Library** | 61 short how-tos (Windows basics, files, Wi-Fi, security, speed, devices, troubleshooting) with buttons that open the right Windows setting or ask Fabric |
 
 ### Spotlight
@@ -65,7 +80,7 @@ and its threshold changed (**Alerts → Rules**).
 | Inbox | Always |
 | Desktop | Windows notifications |
 | Phone | Paired phones running FBRX Mobile |
-| Organisation | The control plane's **Alerts & events** page (enrolled devices) |
+| Organization | The control plane's **Alerts & events** page (enrolled devices) |
 | Webhook | Slack, Microsoft Teams, Discord, ntfy or plain JSON |
 | E-mail | Your SMTP server; the password lives in Credentials (`FBRX_SMTP_PASSWORD`) |
 
@@ -75,7 +90,7 @@ Quiet hours hold back desktop and e-mail alerts that are not critical; a cooldow
 
 | Page | What it does |
 | --- | --- |
-| **Storage** | Drives with health and BitLocker state; clean temporary files; empty the Recycle Bin; "what is using space?" analyser. Advanced: physical disks with wear and temperature, partitions, optimise / check / rename / extend |
+| **Storage** | Drives with health and BitLocker state; clean temporary files; empty the Recycle Bin; "what is using space?" analyzer. Advanced: physical disks with wear and temperature, partitions, optimize / check / rename / extend |
 | **Security** | Microsoft Defender status, quick/full/folder scans, definitions update, threat history and removal; firewall profiles; listening ports (exposed vs local); what starts with Windows and unsigned programs running from user folders; file check (SHA-256, signature, VirusTotal with your key); **link check** (look-alike domains, redirects without running page code, domain age, certificate, VirusTotal); Windows Sandbox for unknown links and files. Advanced: Defender settings and exclusions |
 | **Updates** | App updates through winget (one or all, with live output), pending Windows updates, third-party drivers oldest first, installed updates |
 | **Bug catcher** | Errors from the event log grouped by source, app crashes, blue screens, unexpected shutdowns, problem devices and stopped services — with one-click repairs (SFC, DISM, network reset, Windows Update reset, Explorer restart, icon cache, print queue, Store cache, clock resync, battery and energy reports) and "explain with Fabric" |
@@ -95,6 +110,9 @@ saved scans with comparison and CSV export, speed test with history, Wi-Fi (sign
 channel), Bluetooth devices with battery, printers (test page, queue, default, clear, restart spooler), DNS
 comparison, port checks and SSH. Advanced: adapter configuration (DHCP, static, secondary addresses).
 
+Device scans start from a chosen **network adapter**, and the subnet is filled in from it (limited to /22–/30, at most
+1022 addresses, so a scan takes about a minute). Advanced mode lets you type a different subnet.
+
 A new device found by a scan raises the *Unknown device joined my network* alert when that rule is on.
 
 ## Mesh and FBRX Mobile
@@ -104,9 +122,13 @@ security model.
 
 ## AI coordination
 
-**AI coordination** finds other AI apps on the computer (Claude Desktop, Claude Code, Cursor, Windsurf, VS Code
-with GitHub Copilot, ChatGPT, Codex CLI, Gemini CLI, Ollama, LM Studio, Jan, GPT4All) and connects the ones that
-support MCP with one click. They then see FBRX tools plus `ask_fabric`.
+**AI coordination** finds other AI apps on the computer from the Start menu, the installed-programs list, running
+processes and their folders: Claude Desktop, Claude Code, Cursor, Windsurf, VS Code with GitHub Copilot, Gemini CLI,
+LM Studio, Perplexity, Comet, Grok, ChatGPT, Microsoft Copilot, Msty, AnythingLLM, Codex CLI, Ollama, Jan and GPT4All.
+Apps that support MCP (Claude Desktop and Code, Cursor, Windsurf, VS Code, Gemini CLI, LM Studio) connect with one
+click and then see FBRX tools plus `ask_fabric`. Apps without MCP on Windows (Perplexity, Grok, ChatGPT) can be
+opened from FBRX, and their makers' APIs can be added as models for second opinions (*Add as a model*; you need an
+API key from them). **Look again** re-scans and reports what it found.
 
 The bridge (`fbrx-mcp.mjs`, started by the AI app with the FBRX executable in Node mode) talks to the Local API
 with the **agent-scoped** token, read at start-up from `localapi-agent.json` in the data folder (never written into
@@ -125,3 +147,20 @@ approvals in FBRX, and the audit log. The Local API must be on.
 | `pc.clean_temp` | write |
 | `pc.run_fix` (Windows) | execute — asks by default |
 | `net.ping`, `net.traceroute`, `net.dns_lookup`, `net.port_check`, `net.scan_lan`, `net.check_link`, `net.speed_test` | network — offline chats ask to go online first |
+
+## AI models
+
+**AI models** lists every way to run the agent:
+
+* **Built-in local runtime** (llama.cpp). *Install runtime* downloads the newest official llama.cpp build for this
+  computer: the Vulkan build when there is a graphics card with at least 2 GB of memory, otherwise the CPU build.
+  *Use* on a downloaded model makes it the default.
+* **Ollama models**: the models Ollama has already downloaded on this computer, read from Ollama, or from its model
+  folder (`OLLAMA_MODELS` or `~/.ollama/models`) while Ollama is not running, with *Start Ollama*. *Use* makes one the
+  default. With no model chosen, Fabric picks the installed model best suited to tool calling.
+* **Providers**: Ollama, Claude and other OpenAI-compatible endpoints. The *Default model* is a list of the
+  provider's models (or *Other model…* to type a name).
+
+The chat's model list shows the same installed models. If a chat asks Ollama for a model it does not have, the error
+names the installed ones.
+

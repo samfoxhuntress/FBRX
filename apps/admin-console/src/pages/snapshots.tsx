@@ -24,7 +24,7 @@ export function SnapshotsPage() {
       description="Encrypted workstation snapshots uploaded by devices. Restore one onto a replacement machine (FBRX OS → Backup & Restore → Restore, “migrate”), or mark it as a golden image and attach it to an enrollment token to clone a configured workstation onto new machines."
     >
       <Callout tone="info" title="Zero-knowledge">
-        Snapshots are encrypted on the device with the organisation backup passphrase (credential <code>FBRX_BACKUP_PASSPHRASE</code>). The control plane stores them but cannot decrypt them.
+        Snapshots are encrypted on the device with the organization backup passphrase (credential <code>FBRX_BACKUP_PASSPHRASE</code>). The control plane stores them but cannot decrypt them.
       </Callout>
       <Card flush>
         <Table

@@ -55,7 +55,7 @@ export function ConfigPage() {
       description="Profiles bundle settings, locked settings and a governance policy. They apply tenant-wide (default profile) and per group; devices can add overrides. Changes reach online devices within seconds."
     >
       {tenant && (
-        <Card title="Organisation defaults">
+        <Card title="Organization defaults">
           <div className="fx-row">
             <Field label="Default profile" help="Applies to every device before group and device layers">
               <Select
@@ -76,7 +76,7 @@ export function ConfigPage() {
             rows={profiles.data ?? []}
             rowKey={(p) => p.id}
             onRowClick={(p) => setEditProfile(p)}
-            empty={<Empty title="No profiles">Create one to standardise settings and governance across devices.</Empty>}
+            empty={<Empty title="No profiles">Create one to standardize settings and governance across devices.</Empty>}
             columns={[
               { key: 'n', header: 'Profile', render: (p) => (<div><div className="fx-cell-title">{p.name}</div><div className="fx-cell-sub">{p.description || `${Object.keys(p.settings).length} setting groups`}</div></div>) },
               { key: 'l', header: 'Locked', className: 'num', render: (p) => p.locked.length },
@@ -101,7 +101,7 @@ export function ConfigPage() {
         </Card>
       </Grid>
       {editProfile && <ProfileEditor profile={editProfile} onClose={() => setEditProfile(null)} onSaved={() => (setEditProfile(null), profiles.reload())} onDelete={async () => {
-        if (editProfile.id && (await confirm({ title: `Delete profile "${editProfile.name}"?`, body: 'Groups using it fall back to the organisation default. Devices re-sync immediately.', danger: true, confirmLabel: 'Delete' }))) {
+        if (editProfile.id && (await confirm({ title: `Delete profile "${editProfile.name}"?`, body: 'Groups using it fall back to the organization default. Devices re-sync immediately.', danger: true, confirmLabel: 'Delete' }))) {
           await run('del', () => api('DELETE', `/v1/admin/profiles/${editProfile.id}`), 'Profile deleted');
           setEditProfile(null);
           profiles.reload();
@@ -115,7 +115,7 @@ export function ConfigPage() {
           onClose={() => setEditGroup(null)}
           onSaved={() => (setEditGroup(null), groups.reload())}
           onDelete={async () => {
-            if (editGroup.id && (await confirm({ title: `Delete group "${editGroup.name}"?`, body: 'Its devices stay enrolled and fall back to organisation defaults.', danger: true, confirmLabel: 'Delete' }))) {
+            if (editGroup.id && (await confirm({ title: `Delete group "${editGroup.name}"?`, body: 'Its devices stay enrolled and fall back to organization defaults.', danger: true, confirmLabel: 'Delete' }))) {
               await run('delg', () => api('DELETE', `/v1/admin/groups/${editGroup.id}`), 'Group deleted');
               setEditGroup(null);
               groups.reload();
@@ -241,7 +241,7 @@ function GroupEditor({ group, profiles, versions, onClose, onSaved, onDelete }: 
           <Input value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} />
         </Field>
         <Field label="Profile">
-          <Select value={f.profileId} onChange={(e) => setF({ ...f, profileId: e.target.value })} options={[{ value: '', label: 'Organisation default only' }, ...profiles.map((p) => ({ value: p.id, label: p.name }))]} />
+          <Select value={f.profileId} onChange={(e) => setF({ ...f, profileId: e.target.value })} options={[{ value: '', label: 'Organization default only' }, ...profiles.map((p) => ({ value: p.id, label: p.name }))]} />
         </Field>
         <div className="fx-row">
           <Field label="Update channel">

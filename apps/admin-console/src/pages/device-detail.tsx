@@ -202,7 +202,7 @@ export function DeviceDetailPage({ id }: { id: string }) {
       {tab === 'backups' && (
         <Card
           flush
-          subtitle="Snapshots are encrypted on the device with the organisation backup passphrase; the control plane cannot read them."
+          subtitle="Snapshots are encrypted on the device with the organization backup passphrase; the control plane cannot read them."
           title="Backups"
           actions={
             app.can('commands.privileged') && d.status === 'active' ? (
@@ -278,7 +278,7 @@ function CommandsTab({ d }: { d: Detail }) {
             header: '',
             render: (c) =>
               ['queued', 'sent'].includes(c.status) ? (
-                <Button size="sm" variant="ghost" onClick={(e) => (e.stopPropagation(), void run('cancel', () => api('POST', `/v1/admin/commands/${c.id}/cancel`), 'Command cancelled'))}>
+                <Button size="sm" variant="ghost" onClick={(e) => (e.stopPropagation(), void run('cancel', () => api('POST', `/v1/admin/commands/${c.id}/cancel`), 'Command canceled'))}>
                   Cancel
                 </Button>
               ) : null,

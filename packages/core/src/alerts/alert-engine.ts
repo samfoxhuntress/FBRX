@@ -54,14 +54,14 @@ export interface AlertEngineDeps {
   notify: (title: string, body: string, level: 'info' | 'warning' | 'error') => void;
   /** Pushes an alert to paired phones; returns how many received it. */
   toMobile: (alert: AlertItem) => number;
-  /** Forwards an alert to the organisation's control plane; false when not enrolled. */
+  /** Forwards an alert to the organization's control plane; false when not enrolled. */
   toOrganisation: (alert: AlertItem) => boolean;
   secret: (name: string) => string | undefined;
   meshPeers: () => Array<{ id: string; name: string; online: boolean }>;
 }
 
 /**
- * Background alert rules with an inbox and delivery to the desktop, phones, the organisation's control plane,
+ * Background alert rules with an inbox and delivery to the desktop, phones, the organization's control plane,
  * webhooks (Slack, Teams, Discord, ntfy, JSON) and e-mail. Cooldowns stop repeats; quiet hours hold back
  * everything but critical alerts.
  */

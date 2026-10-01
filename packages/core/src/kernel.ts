@@ -840,7 +840,7 @@ export class Kernel {
 
   // ------------------------------------------------------------------------------- command center
 
-  /** False when the organisation's network policy blocks every internet host. */
+  /** False when the organization's network policy blocks every internet host. */
   internetAllowed(): boolean {
     return this.policy.policy.network.allowedDomains.length > 0;
   }

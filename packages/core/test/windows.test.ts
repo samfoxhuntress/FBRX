@@ -44,7 +44,7 @@ describe.runIf(IS_WIN)('Windows integration', () => {
     expect(troubleshoot.fixes().map((f) => f.id)).toContain('sfc');
   }, 180_000);
 
-  it('lists installed updates and virtualisation status', async () => {
+  it('lists installed updates and virtualization status', async () => {
     expect(Array.isArray(await updates.hotfixes())).toBe(true);
     const st = await lab.labStatus();
     expect(st.edition).toMatch(/Windows/);

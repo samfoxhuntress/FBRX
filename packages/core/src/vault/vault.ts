@@ -156,7 +156,7 @@ export class Vault {
   /** Unlocks with the recovery passphrase and re-binds the key to this machine's keychain. */
   async unlockWithRecovery(passphrase: string): Promise<void> {
     const row = this.keyRow();
-    if (!row) throw new CoreError('NOT_FOUND', 'Vault is not initialised');
+    if (!row) throw new CoreError('NOT_FOUND', 'Vault is not initialized');
     if (!row.dek_recovery || !row.recovery_salt) {
       throw new CoreError('FORBIDDEN', 'No recovery passphrase is configured for this vault');
     }
@@ -176,7 +176,7 @@ export class Vault {
   /** Installs a DEK recovered from a snapshot and binds it to this machine. */
   async adoptKey(dek: Buffer): Promise<void> {
     const row = this.keyRow();
-    if (!row) throw new CoreError('NOT_FOUND', 'Vault is not initialised');
+    if (!row) throw new CoreError('NOT_FOUND', 'Vault is not initialized');
     this.assertKey(dek, row);
     await this.bindKeychain(dek);
     this.dek = dek;
@@ -231,7 +231,7 @@ export class Vault {
     const dek = this.requireKey();
     const existing = this.db.get<SecretRow>('SELECT * FROM secrets WHERE name = ?', name);
     if (existing?.managed && !opts.managed && !opts.force) {
-      throw new CoreError('MANAGED', `"${name}" is managed by your organisation and cannot be changed locally`);
+      throw new CoreError('MANAGED', `"${name}" is managed by your organization and cannot be changed locally`);
     }
     const now = new Date().toISOString();
     const enc = sealString(dek, input.value, `secret:${name}`);
@@ -265,7 +265,7 @@ export class Vault {
     return toMeta(this.db.get<SecretRow>('SELECT * FROM secrets WHERE name = ?', name)!);
   }
 
-  /** Decrypts a secret. Callers are responsible for authorisation and auditing. */
+  /** Decrypts a secret. Callers are responsible for authorization and auditing. */
   get(name: string, opts: { allowInternal?: boolean } = {}): string | undefined {
     const row = this.db.get<SecretRow>('SELECT * FROM secrets WHERE name = ?', name);
     if (!row) return undefined;
@@ -278,14 +278,14 @@ export class Vault {
   delete(name: string, opts: { managed?: boolean; internal?: boolean } = {}): boolean {
     const row = this.db.get<SecretRow>('SELECT * FROM secrets WHERE name = ?', name);
     if (!row) return false;
-    if (row.managed && !opts.managed) throw new CoreError('MANAGED', `"${name}" is managed by your organisation`);
+    if (row.managed && !opts.managed) throw new CoreError('MANAGED', `"${name}" is managed by your organization`);
     if (row.internal && !opts.internal) throw new CoreError('FORBIDDEN', 'Internal secret');
     this.db.run('DELETE FROM secrets WHERE name = ?', name);
     this.changed();
     return true;
   }
 
-  /** Replaces the full set of organisation-managed secrets with what the control plane sent. */
+  /** Replaces the full set of organization-managed secrets with what the control plane sent. */
   applyManaged(secrets: ManagedSecret[]): { added: number; updated: number; removed: number } {
     const dek = this.requireKey();
     const now = new Date().toISOString();

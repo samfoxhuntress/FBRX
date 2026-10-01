@@ -4,8 +4,9 @@ import { Button, Callout, Card, Empty, Field, Grid, Input, Page, Select, Status,
 import { call } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { IS_WINDOWS, navigate } from '../app';
+import { AskButton, askAgent } from '../widgets';
 
-const CHANNEL_LABEL: Record<AlertChannel, string> = { inbox: 'Inbox', desktop: 'Desktop', mobile: 'Phone', organisation: 'Organisation', webhook: 'Webhook', email: 'E-mail' };
+const CHANNEL_LABEL: Record<AlertChannel, string> = { inbox: 'Inbox', desktop: 'Desktop', mobile: 'Phone', organisation: 'Organization', webhook: 'Webhook', email: 'Email' };
 const SEV: AlertSeverity[] = ['info', 'warning', 'critical'];
 type Alerts = Settings['alerts'];
 
@@ -43,6 +44,15 @@ export function AlertsPage() {
         tab === 'inbox' && (
           <>
             <Toggle checked={unreadOnly} onChange={setUnreadOnly} label="Unread only" />
+            {!!inbox.data?.length && (
+              <Button
+                icon="sparkles"
+                className="ask-btn"
+                onClick={() => askAgent('Summarize my recent FBRX OS alerts: group them, tell me which ones need action, the likely cause, and what to do first.', inbox.data!.slice(0, 40).map((a) => ({ when: a.createdAt, severity: a.severity, title: a.title, details: a.body, read: a.read })))}
+              >
+                Summarize my alerts
+              </Button>
+            )}
             <Button icon="check" onClick={() => void run('read', () => call('alerts.markRead', { id: '*' }))}>
               Mark all read
             </Button>
@@ -75,6 +85,7 @@ export function AlertsPage() {
                       {timeAgo(a.createdAt)} · sent to {Object.keys(a.deliveries).map((c) => CHANNEL_LABEL[c as AlertChannel] ?? c).join(', ') || 'inbox'}
                     </div>
                   </div>
+                  <AskButton iconOnly prompt="Explain this alert from FBRX OS on my PC: what it means, the likely cause, and what I should do. Check the current state with your tools first." context={{ when: a.createdAt, severity: a.severity, title: a.title, details: a.body }} />
                   {!a.read && <Button size="sm" variant="ghost" icon="check" aria-label="Mark read" onClick={() => void run(a.id, () => call('alerts.markRead', { id: a.id }))} />}
                   <Button size="sm" variant="ghost" icon="trash" aria-label="Delete" onClick={() => void run(a.id, () => call('alerts.delete', { id: a.id }))} />
                 </div>
@@ -168,7 +179,7 @@ export function AlertsPage() {
             </div>
           </Card>
           <Grid cols={2}>
-            <Card title="Desktop, phone and organisation" subtitle="Built-in channels">
+            <Card title="Desktop, phone and organization" subtitle="Built-in channels">
               <div className="fx-grid" style={{ gap: 10 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
                   <Toggle checked={cfg.channels.desktop} onChange={(v) => void save({ channels: { ...cfg.channels, desktop: v } })} label="Desktop notifications" />
@@ -182,7 +193,7 @@ export function AlertsPage() {
                   <Button size="sm" loading={busy === 'test-mobile'} onClick={() => void test('mobile')}>Test</Button>
                 </div>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                  <Toggle checked={cfg.channels.organisation} onChange={(v) => void save({ channels: { ...cfg.channels, organisation: v } })} label="My organisation's admin console" />
+                  <Toggle checked={cfg.channels.organisation} onChange={(v) => void save({ channels: { ...cfg.channels, organisation: v } })} label="My organization's admin console" />
                   <span className="fx-spacer" />
                   <Button size="sm" loading={busy === 'test-organisation'} onClick={() => void test('organisation')}>Test</Button>
                 </div>

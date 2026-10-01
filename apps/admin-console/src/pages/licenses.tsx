@@ -178,7 +178,7 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
         </Field>
         {!base.includes('fleet') && !extra.includes('fleet') && (
           <Callout tone="warning" title="No fleet management">
-            Without “{FEATURES.fleet}”, new workstations cannot enroll in this organisation. Use the license as an offline key, or add the feature.
+            Without “{FEATURES.fleet}”, new workstations cannot enroll in this organization. Use the license as an offline key, or add the feature.
           </Callout>
         )}
       </div>
