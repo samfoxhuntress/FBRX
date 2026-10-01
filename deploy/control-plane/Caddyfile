@@ -1,0 +1,19 @@
+{
+	email {$ACME_EMAIL}
+}
+
+{$FBRX_DOMAIN} {
+	encode zstd gzip
+	# Large uploads (release installers, snapshots) stream straight through.
+	request_body {
+		max_size 4GB
+	}
+	reverse_proxy control-plane:8787 {
+		# Stream responses (downloads, long-lived device/admin WebSockets) without buffering.
+		flush_interval -1
+	}
+	header {
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		-Server
+	}
+}

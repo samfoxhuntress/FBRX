@@ -1,0 +1,49 @@
+# Production-style control plane: FBRX control plane behind Caddy (automatic HTTPS via Let's Encrypt).
+#
+#   cp deploy/control-plane/.env.example deploy/control-plane/.env   # then edit it
+#   docker compose -f deploy/control-plane/docker-compose.yml --env-file deploy/control-plane/.env up -d
+#
+# Everything the control plane knows (database, keys, uploaded releases, snapshots, plugin packages) lives in
+# the `fbrx-data` volume. Back that volume up and you can rebuild the server anywhere (see docs/BACKUP_RESTORE.md).
+name: fbrx
+
+services:
+  control-plane:
+    build:
+      context: ../..
+      dockerfile: Dockerfile
+    image: ${FBRX_IMAGE:-fbrx/control-plane:latest}
+    restart: unless-stopped
+    env_file: .env
+    environment:
+      FBRX_CP_DATA_DIR: /data
+      FBRX_CP_PORT: "8787"
+      FBRX_CP_TRUST_PROXY: "1"
+      FBRX_CP_PUBLIC_URL: https://${FBRX_DOMAIN:?set FBRX_DOMAIN in .env}
+    volumes:
+      - fbrx-data:/data
+    expose:
+      - "8787"
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on:
+      control-plane:
+        condition: service_healthy
+    environment:
+      FBRX_DOMAIN: ${FBRX_DOMAIN}
+      ACME_EMAIL: ${ACME_EMAIL:-}
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+
+volumes:
+  fbrx-data:
+  caddy-data:
+  caddy-config:

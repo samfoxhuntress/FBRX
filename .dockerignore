@@ -1,0 +1,11 @@
+**/node_modules
+**/dist
+**/release
+**/dist-plugin
+.git
+.fbrx-*
+apps/desktop/resources/runtime
+*.fbrxsnap
+*.log
+.env
+.env.*

@@ -1,0 +1,8 @@
+{
+  "fbrxProvisioning": 1,
+  "serverUrl": "https://fleet.example.com",
+  "enrollmentToken": "fbrx_enr_REPLACE_WITH_TOKEN_FROM_ADMIN_CONSOLE",
+  "deviceName": "FINANCE-LAPTOP-07",
+  "templateSnapshotUrl": "https://fleet.example.com/v1/templates/snp_...?exp=...&sig=...",
+  "templateSnapshotPassphrase": "passphrase-of-the-golden-snapshot"
+}

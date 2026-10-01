@@ -1,0 +1,167 @@
+# Builds signed FBRX OS installers for macOS and Windows, publishes the control-plane image to GHCR,
+# attaches everything to a GitHub release and (optionally) pushes the build to your control plane so
+# enrolled workstations can update to it.
+#
+# Trigger: push a tag like v1.2.0 (v1.2.0-beta.1 goes to the beta channel), or run it manually.
+#
+# Repository secrets (all optional; unsigned builds are produced when signing secrets are missing):
+#   FBRX_LICENSE_PUBLIC_KEY      PEM from `npm run keys:generate` (embedded so installs verify licenses offline)
+#   MAC_CSC_LINK, MAC_CSC_KEY_PASSWORD           base64 .p12 "Developer ID Application" certificate + password
+#   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID   notarization (required for Gatekeeper on macOS)
+#   WIN_CSC_LINK, WIN_CSC_KEY_PASSWORD           base64 .pfx code-signing certificate + password
+#   FBRX_CP_URL, FBRX_CP_API_KEY                 control plane URL + superadmin API key for auto-publishing
+name: Release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+  workflow_dispatch:
+    inputs:
+      version:
+        description: Version to build (semver, e.g. 1.2.0). Defaults to apps/desktop/package.json.
+        required: false
+      channel:
+        description: Update channel on the control plane
+        type: choice
+        options: [stable, beta, dev]
+        default: beta
+      publish:
+        description: Publish to the control plane immediately (otherwise uploaded as a draft)
+        type: boolean
+        default: false
+      rollout:
+        description: Staged rollout percentage
+        default: "100"
+
+permissions:
+  contents: write
+  packages: write
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      channel: ${{ steps.v.outputs.channel }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: v
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then V="${GITHUB_REF_NAME#v}"; else V="${{ inputs.version }}"; fi
+          [[ -z "$V" ]] && V=$(node -p "require('./apps/desktop/package.json').version")
+          C="${{ inputs.channel }}"; [[ -z "$C" ]] && { [[ "$V" == *-* ]] && C=beta || C=stable; }
+          echo "version=$V" >> "$GITHUB_OUTPUT"; echo "channel=$C" >> "$GITHUB_OUTPUT"
+          echo "Building FBRX OS $V for the $C channel"
+
+  desktop:
+    needs: meta
+    name: Desktop (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: macOS
+            os: macos-latest
+            platform: darwin
+            arches: arm64,x64
+            package: package:mac
+          - name: Windows
+            os: windows-latest
+            platform: win32
+            arches: x64,arm64
+            package: package:win
+    env:
+      FBRX_LICENSE_PUBLIC_KEY: ${{ secrets.FBRX_LICENSE_PUBLIC_KEY }}
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Set version
+        shell: bash
+        run: npm version "${{ needs.meta.outputs.version }}" --no-git-tag-version --allow-same-version -w @fbrx/desktop
+      - name: Bundle the local AI runtime (llama.cpp)
+        run: npm run runtime:fetch -- --platform ${{ matrix.platform }} --arch ${{ matrix.arches }}
+      - name: Package
+        shell: bash
+        env:
+          CSC_LINK: ${{ matrix.platform == 'darwin' && secrets.MAC_CSC_LINK || secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ matrix.platform == 'darwin' && secrets.MAC_CSC_KEY_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          EXTRA=""
+          if [[ -z "$CSC_LINK" ]]; then export CSC_IDENTITY_AUTO_DISCOVERY=false; echo "::warning::No signing certificate configured; building unsigned ${{ matrix.name }} packages."; fi
+          if [[ "${{ matrix.platform }}" == "darwin" && -n "$APPLE_ID" && -n "$CSC_LINK" ]]; then EXTRA="-c.mac.notarize=true"; fi
+          npm run ${{ matrix.package }} -w @fbrx/desktop -- $EXTRA
+      - uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}
+          path: |
+            apps/desktop/release/${{ needs.meta.outputs.version }}/*.dmg
+            apps/desktop/release/${{ needs.meta.outputs.version }}/*.zip
+            apps/desktop/release/${{ needs.meta.outputs.version }}/*.exe
+            apps/desktop/release/${{ needs.meta.outputs.version }}/*.blockmap
+          if-no-files-found: error
+
+  control-plane-image:
+    needs: meta
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: img
+        shell: bash
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY,,}/control-plane" >> "$GITHUB_OUTPUT"
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          build-args: FBRX_CP_VERSION=${{ needs.meta.outputs.version }}
+          tags: |
+            ${{ steps.img.outputs.name }}:${{ needs.meta.outputs.version }}
+            ${{ steps.img.outputs.name }}:${{ needs.meta.outputs.channel }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  publish:
+    needs: [meta, desktop]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: desktop-*
+          path: dist-release
+          merge-multiple: true
+      - name: GitHub release
+        if: github.ref_type == 'tag'
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist-release/*
+          prerelease: ${{ needs.meta.outputs.channel != 'stable' }}
+          generate_release_notes: true
+      - name: Push to the FBRX control plane
+        shell: bash
+        env:
+          FBRX_CP_URL: ${{ secrets.FBRX_CP_URL }}
+          FBRX_CP_API_KEY: ${{ secrets.FBRX_CP_API_KEY }}
+        run: |
+          if [[ -z "$FBRX_CP_URL" || -z "$FBRX_CP_API_KEY" ]]; then echo "::notice::FBRX_CP_URL/FBRX_CP_API_KEY not set; skipping control-plane upload."; exit 0; fi
+          ARGS=(--dir dist-release --version "${{ needs.meta.outputs.version }}" --channel "${{ needs.meta.outputs.channel }}" --rollout "${{ inputs.rollout || '100' }}")
+          if [[ "${{ inputs.publish }}" == "true" ]]; then ARGS+=(--publish); fi
+          node scripts/publish-release.mjs "${ARGS[@]}"

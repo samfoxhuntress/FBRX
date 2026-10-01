@@ -14,7 +14,8 @@ asarUnpack:
   # Forked as a separate (sandboxed) Node process; must live on the real filesystem.
   - dist/main/plugin-worker.mjs
 extraResources:
-  # Bundled local AI runtime (llama.cpp). Populated by scripts/fetch-llama-runtime.mjs in CI.
+  # Bundled local AI runtime (llama.cpp). Populated by `npm run runtime:fetch` (CI does this per platform).
+  # If it is missing, users can install it from the app (Local AI → Install runtime).
   - from: resources/runtime/${platform}-${arch}
     to: runtime/${platform}-${arch}
     filter: ["**/*"]
@@ -29,6 +30,8 @@ publish:
     url: https://updates.invalid/fbrx
 mac:
   category: public.app-category.productivity
+  # Arch in the name lets electron-updater pick the right zip on Apple silicon vs Intel.
+  artifactName: FBRX-OS-${version}-${arch}.${ext}
   target:
     - target: dmg
       arch: [arm64, x64]
@@ -45,7 +48,9 @@ win:
   target:
     - target: nsis
       arch: [x64, arm64]
-  publisherName: FBRX
+  signtoolOptions:
+    # Must match the certificate subject; electron-updater refuses updates signed by anyone else.
+    publisherName: FBRX
 nsis:
   oneClick: false
   perMachine: false
@@ -54,7 +59,10 @@ nsis:
   createDesktopShortcut: true
   createStartMenuShortcut: true
   shortcutName: FBRX OS
-  artifactName: FBRX-OS-Setup-${version}-${arch}.${ext}
+  # x64 + arm64 are combined into one installer that picks the right build at install time.
+  artifactName: FBRX-OS-Setup-${version}.${ext}
 linux:
+  executableName: fbrx-os
   target: [AppImage]
+  artifactName: FBRX-OS-${version}-${arch}.${ext}
   category: Utility

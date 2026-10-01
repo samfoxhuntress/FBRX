@@ -124,6 +124,27 @@ export class ServiceManager {
     return this.toStatus(e);
   }
 
+  /**
+   * Re-evaluates `enabled()` for every service (e.g. after a license change): starts services that just became
+   * available and stops ones that are no longer allowed.
+   */
+  async reconcile(): Promise<void> {
+    for (const e of this.order()) {
+      if (!e.def.enabled) continue;
+      const allowed = e.def.enabled();
+      if (allowed && e.state === 'disabled') {
+        await this.startEntry(e);
+      } else if (!allowed && e.state !== 'disabled' && e.state !== 'stopped') {
+        try {
+          await e.def.stop();
+        } catch (err) {
+          this.log.warn(`Service ${e.def.name} did not stop cleanly`, { error: errorMessage(err) });
+        }
+        this.set(e, 'disabled');
+      }
+    }
+  }
+
   startWatchdog(intervalMs = 15_000): void {
     this.stopWatchdog();
     this.watchdog = setInterval(() => void this.check(), intervalMs);

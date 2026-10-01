@@ -272,6 +272,12 @@ export class Kernel {
       }),
     );
     this.disposers.push(this.vault.onChange(() => this.redactor.setSecrets(this.vault.valuesForRedaction())));
+    // Licensed features (plugins, connectors, …) start or stop as soon as a license is activated, pushed or revoked.
+    this.disposers.push(
+      this.events.on('license.changed', () => {
+        if (this.started) void this.services.reconcile();
+      }),
+    );
     this.disposers.push(
       this.registry.onChange(() => {
         this.events.emit('tools.changed', this.registry.list().map((t) => this.gate.describe(t)));

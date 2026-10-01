@@ -16,3 +16,5 @@ apps/desktop/resources/runtime/
 *.fbrxsnap
 *.tsbuildinfo
 .fbrx-demo/
+.fbrx-keys/
+dist-plugin/

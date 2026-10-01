@@ -2,7 +2,7 @@
   "name": "fbrx-os",
   "version": "1.0.0",
   "private": true,
-  "description": "FBRX OS (Fabrics Operating System) \u2014 an enterprise desktop super-tool with a governed local AI agent, fleet control plane, and admin console.",
+  "description": "FBRX OS (Fabrics Operating System) — an enterprise desktop super-tool with a governed local AI agent, fleet control plane, and admin console.",
   "license": "UNLICENSED",
   "type": "module",
   "workspaces": [
@@ -26,7 +26,11 @@
     "package:win": "npm run package:win -w @fbrx/desktop",
     "keys:generate": "node scripts/generate-license-keys.mjs",
     "release:publish": "node scripts/publish-release.mjs",
-    "verify": "npm run typecheck && npm test"
+    "verify": "npm run typecheck && npm test",
+    "plugin:create": "node scripts/create-plugin.mjs",
+    "plugin:pack": "node scripts/pack-plugin.mjs",
+    "runtime:fetch": "node --import tsx scripts/fetch-llama-runtime.ts",
+    "demo": "node --import tsx scripts/demo-fleet.ts"
   },
   "devDependencies": {
     "@types/node": "^22.15.0",

@@ -100,7 +100,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     return reply.status(status).send({ error: { code: status === 429 ? 'RATE_LIMITED' : 'ERROR', message: status >= 500 ? 'Internal server error' : (err as Error).message } });
   });
 
-  app.get('/healthz', async () => ({ ok: true, version }));
+  app.get('/healthz', { logLevel: 'warn' }, async () => ({ ok: true, version }));
   await authRoutes(app, ctx);
   await deviceRoutes(app, ctx);
   await updateRoutes(app, ctx);
