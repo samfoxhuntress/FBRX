@@ -8,6 +8,7 @@ import { IS_WIN } from '../windows/ps';
 
 const HISTORY = 180; // 6 minutes at 2 s
 const TICK_MS = 2000;
+const NET_EVERY_WIN = 5;
 
 /** Processes FBRX refuses to end: killing them crashes or logs off Windows. */
 const PROTECTED = /^(system|idle|registry|smss|csrss|wininit|winlogon|services|lsass|lsaiso|svchost|fontdrvhost|dwm|memory compression|secure system|launchd|kernel_task|init|systemd)(\.exe)?$/i;
@@ -24,6 +25,7 @@ export class SystemMonitor {
   private slow = { swapUsed: 0, swapTotal: 0, battery: null as SystemLive['battery'], tempC: null as number | null, at: 0 };
   private ticks = 0;
   private sampling = false;
+  private net = { rx: 0, tx: 0 };
 
   constructor(
     private readonly events: EventBus,
@@ -32,14 +34,6 @@ export class SystemMonitor {
 
   start(): void {
     if (this.timer) return;
-    if (IS_WIN) {
-      try {
-        // One long-lived PowerShell instead of a new one per sample.
-        si.powerShellStart();
-      } catch {
-        /* older systeminformation */
-      }
-    }
     this.timer = setInterval(() => void this.sample(), TICK_MS);
     this.timer.unref?.();
     void this.sample();
@@ -48,13 +42,6 @@ export class SystemMonitor {
   stop(): void {
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
-    if (IS_WIN) {
-      try {
-        si.powerShellRelease();
-      } catch {
-        /* ignore */
-      }
-    }
   }
 
   get current(): SystemLive | null {
@@ -95,17 +82,25 @@ export class SystemMonitor {
     try {
       this.ticks++;
       const cpu = this.cpuSample();
-      let netRx = 0;
-      let netTx = 0;
-      try {
-        const stats = await si.networkStats('*');
-        for (const s of stats) {
-          if (s.rx_sec && s.rx_sec > 0) netRx += s.rx_sec;
-          if (s.tx_sec && s.tx_sec > 0) netTx += s.tx_sec;
+      // Windows reads interface counters through a PowerShell process, so sample them every 10 s there (the rates
+      // are per second either way). The library's shared persistent PowerShell is not used: it is process-global
+      // and releasing it while another monitor still samples breaks its pipe.
+      if (!IS_WIN || this.ticks % NET_EVERY_WIN === 1) {
+        try {
+          const stats = await si.networkStats('*');
+          let rx = 0;
+          let tx = 0;
+          for (const s of stats) {
+            if (s.rx_sec && s.rx_sec > 0) rx += s.rx_sec;
+            if (s.tx_sec && s.tx_sec > 0) tx += s.tx_sec;
+          }
+          this.net = { rx, tx };
+        } catch {
+          /* no network stats on this system */
         }
-      } catch {
-        /* no network stats on this system */
       }
+      const netRx = this.net.rx;
+      const netTx = this.net.tx;
       if (Date.now() - this.slow.at > 30_000) {
         this.slow.at = Date.now();
         const [mem, bat, temp] = await Promise.all([si.mem().catch(() => null), si.battery().catch(() => null), si.cpuTemperature().catch(() => null)]);

@@ -141,9 +141,9 @@ export async function elevated(script: string, opts: { timeoutMs?: number; workD
   const log = join(dir, 'output.log');
   const done = join(dir, 'done');
   const inner = [
-    "$ErrorActionPreference='Continue'; $ProgressPreference='SilentlyContinue'",
-    `try { & { ${script}\n } *>&1 | Out-File -FilePath ${psq(log)} -Encoding utf8 -Width 300 } catch { $_ | Out-File -FilePath ${psq(log)} -Append -Encoding utf8 }`,
-    `'ok' | Out-File -FilePath ${psq(done)} -Encoding ascii`,
+    "$ErrorActionPreference='Continue'; $ProgressPreference='SilentlyContinue'; $fbrxFailed=$false",
+    `try { & { ${script}\n } *>&1 | Out-File -FilePath ${psq(log)} -Encoding utf8 -Width 300 } catch { $fbrxFailed=$true; $_ | Out-File -FilePath ${psq(log)} -Append -Encoding utf8 }`,
+    `$(if ($fbrxFailed) { 'failed' } else { 'ok' }) | Out-File -FilePath ${psq(done)} -Encoding ascii`,
   ].join('\n');
   const b64 = encodeCommand(inner);
   if (b64.length > 30_000) throw new CoreError('INVALID_ARGUMENT', 'Administrator script is too long');
@@ -156,7 +156,8 @@ export async function elevated(script: string, opts: { timeoutMs?: number; workD
     const output = existsSync(log) ? readFileSync(log, 'utf8').replace(/^﻿/, '').trim() : '';
     const finished = existsSync(done);
     if (/cancelled/.test(r.out) && !finished) throw new CoreError('CANCELLED', 'Administrator permission was declined (UAC)');
-    return { ok: finished, output };
+    // The job writes "ok" or "failed" (a terminating error) as its last step.
+    return { ok: finished && readFileSync(done, 'utf8').trim() === 'ok', output };
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
