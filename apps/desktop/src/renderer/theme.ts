@@ -76,24 +76,12 @@ export function useAppearance(settings: Settings | undefined) {
   }, [theme, a?.preset, a?.density, a?.radius, a?.texture, a?.reduceMotion, a?.fontScale, a?.accent]);
 }
 
-/** A short two-note chime for the splash (Web Audio, no files). */
-export function playChime() {
+/** The FBRX start-up sound (from the FBRX intro), like a computer's chime when it boots. */
+export function playStartupSound(): void {
   try {
-    const ctx = new AudioContext();
-    const now = ctx.currentTime;
-    [523.25, 783.99].forEach((f, i) => {
-      const o = ctx.createOscillator();
-      const g = ctx.createGain();
-      o.type = 'sine';
-      o.frequency.value = f;
-      g.gain.setValueAtTime(0, now + i * 0.12);
-      g.gain.linearRampToValueAtTime(0.12, now + i * 0.12 + 0.02);
-      g.gain.exponentialRampToValueAtTime(0.0001, now + i * 0.12 + 0.6);
-      o.connect(g).connect(ctx.destination);
-      o.start(now + i * 0.12);
-      o.stop(now + i * 0.12 + 0.65);
-    });
-    setTimeout(() => void ctx.close(), 1200);
+    const audio = new Audio('./sounds/startup.ogg');
+    audio.volume = 0.85;
+    void audio.play().catch(() => undefined);
   } catch {
     /* audio unavailable */
   }

@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { SystemStatus } from '@fbrx/shared';
-import { Button, Shell, Spinner, Status, useToast, type NavItem } from '@fbrx/ui';
+import { Button, FBRX_MARK, Shell, Spinner, Status, useToast, type NavItem } from '@fbrx/ui';
 import { bridge, onEvent } from './client';
 import { useCore } from './hooks';
-import { playChime, useAppearance } from './theme';
+import { playStartupSound, useAppearance } from './theme';
 import { DashboardPage } from './pages/dashboard';
 import { AgentPage } from './pages/agent';
 import { ApprovalsPage } from './pages/approvals';
@@ -95,18 +95,29 @@ function useRoute(): Route {
 
 export const IS_WINDOWS = bridge.platform === 'win32';
 
-function Splash({ sound }: { sound: boolean }) {
+/** Start-up animation: the logo's frame is stitched in like a thread, then the letters appear. */
+function Splash() {
+  // A window started in the tray (at sign-in) shows the animation when it is first opened.
+  const [visible, setVisible] = useState(() => document.visibilityState === 'visible');
   const [gone, setGone] = useState(false);
   useEffect(() => {
-    if (sound) playChime();
-    const t = setTimeout(() => setGone(true), 1800);
-    return () => clearTimeout(t);
-  }, [sound]);
-  if (gone) return null;
+    if (visible) {
+      const t = setTimeout(() => setGone(true), 2600);
+      return () => clearTimeout(t);
+    }
+    const onChange = () => document.visibilityState === 'visible' && setVisible(true);
+    document.addEventListener('visibilitychange', onChange);
+    return () => document.removeEventListener('visibilitychange', onChange);
+  }, [visible]);
+  if (gone || !visible) return null;
+  const { frame } = FBRX_MARK;
   return (
     <div className="splash" aria-hidden>
       <div>
-        <div className="splash-mark" />
+        <svg className="splash-logo" viewBox={`0 0 ${FBRX_MARK.size} ${FBRX_MARK.size}`} width={116} height={116}>
+          <rect className="splash-frame" x={frame.x} y={frame.y} width={frame.side} height={frame.side} rx={frame.radius} strokeWidth={frame.stroke} />
+          <path className="splash-letters" d={FBRX_MARK.letters} fillRule="evenodd" />
+        </svg>
         <div className="splash-word">FBRX OS</div>
         <div className="splash-sub">Fabrics Operating System</div>
       </div>
@@ -127,7 +138,15 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const { data: status } = useCore('system.status', undefined, ['service.changed', 'vault.changed', 'fleet.changed', 'license.changed', 'approval.requested', 'approval.resolved', 'runtime.changed'], 15_000);
   const { data: alertCounts } = useCore('alerts.counts', undefined, ['alerts.changed'], 60_000);
   const [forceOnboarding, setForceOnboarding] = useState(false);
-  const [splash] = useState(() => !sessionStorage.getItem('fbrx.splashShown'));
+  // First start of this window: show the start-up animation and play the start-up sound once.
+  const [firstStart] = useState(() => !sessionStorage.getItem('fbrx.splashShown'));
+  const startupSound = settings?.settings.appearance.splashSound;
+  const soundDone = useRef(false);
+  useEffect(() => {
+    if (!firstStart || soundDone.current || startupSound === undefined) return;
+    soundDone.current = true;
+    if (startupSound) playStartupSound();
+  }, [firstStart, startupSound]);
 
   useEffect(() => {
     sessionStorage.setItem('fbrx.splashShown', '1');
@@ -150,7 +169,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     );
   }
   const s = settings.settings;
-  const showSplash = splash && s.appearance.splash;
+  const showSplash = firstStart && s.appearance.splash;
   if (!s.general.onboardingComplete || forceOnboarding) {
     return <Onboarding status={status} onDone={() => setForceOnboarding(false)} />;
   }
@@ -254,7 +273,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
 
   return (
     <>
-      {showSplash && <Splash sound={s.appearance.splashSound} />}
+      {showSplash && <Splash />}
       <Shell
         brandSub={status.deviceName}
         nav={nav}

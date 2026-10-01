@@ -19,7 +19,7 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 | Background texture | None, weave, grain, grid (behind the content, never behind text) |
 | Text and interface size | 85–130 % |
 | Advanced mode | Shows expert screens: disks and partitions, the virtual lab, network adapter configuration, Defender settings |
-| Motion and start-up | Reduce motion, start-up animation, start-up chime |
+| Motion and start-up | Reduce motion; start-up animation (the FBRX logo stitched in) and start-up sound (from the FBRX intro, on by default, with a Listen button) |
 
 Chart series and status colours stay on the validated design-system palette in every theme, so charts remain
 readable for colour-blind users. Organisations can lock any appearance setting from the admin console.

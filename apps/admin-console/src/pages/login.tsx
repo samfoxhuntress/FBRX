@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Button, Callout, Card, Field, Input } from '@fbrx/ui';
+import { Button, Callout, Card, Field, Input, FbrxMark } from '@fbrx/ui';
 import { api, session } from '../api';
 
 function Centered({ children }: { children: React.ReactNode }) {
@@ -7,7 +7,7 @@ function Centered({ children }: { children: React.ReactNode }) {
     <div style={{ minHeight: '100%', display: 'grid', placeItems: 'center', padding: 16 }}>
       <div style={{ width: 'min(420px, 100%)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
-          <div className="fx-brand-mark">FX</div>
+          <FbrxMark className="fx-brand-mark" size={34} />
           <div>
             <div className="fx-brand-name">FBRX OS</div>
             <div className="fx-brand-sub">Admin console</div>

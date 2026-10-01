@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentEvent, ApprovalRequest, ChatMessage, ProviderStatus, ToolCallRecord } from '@fbrx/shared';
-import { Button, Callout, Card, Icons, Select, Status, TextArea, timeAgo, useAction, useConfirm, type IconName } from '@fbrx/ui';
+import { Button, Callout, Card, Icons, Select, Status, TextArea, timeAgo, useAction, useConfirm, type IconName, FbrxMark } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
 import { Markdown } from '../markdown';
@@ -254,7 +254,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
         <div className="agent-thread" ref={thread} aria-live="polite">
           {!visible.length && !streaming && (
             <div className="msg" style={{ marginTop: '8vh', alignItems: 'center', textAlign: 'center' }}>
-              <div className="fx-brand-mark" style={{ width: 44, height: 44, fontSize: 16 }}>FX</div>
+              <FbrxMark className="fx-brand-mark" size={48} />
               <h2>Hi, I'm {agentName}. What should we do?</h2>
               <p className="fx-secondary" style={{ maxWidth: 560 }}>
                 I work with your files, apps, PC and network. Every action is checked by your governance policy, and anything that changes something waits for your approval.

@@ -1,4 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { FbrxMark } from './brand';
 import { Icons, type IconName } from './icons';
 
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
@@ -27,7 +28,7 @@ export function Shell(props: {
     <div className="fx-shell">
       <aside className="fx-sidebar">
         <div className="fx-brand">
-          <div className="fx-brand-mark">FX</div>
+          <FbrxMark className="fx-brand-mark" />
           <div>
             <div className="fx-brand-name">FBRX OS</div>
             <div className="fx-brand-sub">{props.brandSub ?? 'Fabrics Operating System'}</div>

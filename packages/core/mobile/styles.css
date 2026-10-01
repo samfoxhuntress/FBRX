@@ -68,8 +68,7 @@ h2 {
 .mark {
   width: 34px;
   height: 34px;
-  border-radius: 10px;
-  background: linear-gradient(135deg, #f5b443, #c4661a);
+  background: url(icon.png) center / contain no-repeat;
   flex: none;
 }
 .card {

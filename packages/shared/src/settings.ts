@@ -186,7 +186,7 @@ export const DEFAULT_SETTINGS: Settings = {
     radius: 'rounded',
     reduceMotion: false,
     splash: true,
-    splashSound: false,
+    splashSound: true,
     advancedMode: false,
   },
   spotlight: {

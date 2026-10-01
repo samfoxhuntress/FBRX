@@ -5,7 +5,7 @@ import { Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, P
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { routeArg } from '../app';
-import { PRESETS, resolvedMode } from '../theme';
+import { PRESETS, playStartupSound, resolvedMode } from '../theme';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -162,7 +162,12 @@ function Appearance() {
             <Toggle checked={a.advancedMode} disabled={L('appearance.advancedMode')} onChange={(v) => void patch({ appearance: { advancedMode: v } })} label="Advanced mode: show expert tools (disks and partitions, virtual lab, network adapters, Defender settings)" />
             <Toggle checked={a.reduceMotion} onChange={(v) => void patch({ appearance: { reduceMotion: v } })} label="Reduce motion" />
             <Toggle checked={a.splash} onChange={(v) => void patch({ appearance: { splash: v } })} label="Show the start-up animation" />
-            <Toggle checked={a.splashSound} disabled={!a.splash} onChange={(v) => void patch({ appearance: { splashSound: v } })} label="Play a chime at start-up" />
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <Toggle checked={a.splashSound} onChange={(v) => void patch({ appearance: { splashSound: v } })} label="Play the start-up sound" />
+              <Button size="sm" variant="ghost" icon="play" onClick={playStartupSound}>
+                Listen
+              </Button>
+            </div>
           </div>
         </Card>
       </Grid>

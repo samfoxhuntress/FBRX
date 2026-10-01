@@ -1,3 +1,10 @@
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/assets/fbrx-logo-dark.svg">
+    <img src="docs/assets/fbrx-logo-light.svg" width="96" height="96" alt="FBRX">
+  </picture>
+</p>
+
 # FBRX OS — Fabrics Operating System
 
 FBRX OS is a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabric,** that is governed
@@ -91,7 +98,7 @@ keys are kept, and a running FBRX OS is closed for you. Options: `--yes` (no que
 Run `Install FBRX OS.cmd` and choose **2 — Make an installer to send to someone else**. Enter their name to build a
 trial license into the installer (30 days by default; Enterprise features, then the free Community features), or
 leave it blank to send an update to someone who is already set up. The result is one file in the `Share` folder,
-for example `Share\FBRX-OS-Setup-1.1.0-for-Alex.exe`, plus a short *How to install* note to send along.
+for example `Share\FBRX-OS-Setup-1.2.0-for-Alex.exe`, plus a short *How to install* note to send along.
 
 On their PC they double-click it. A new install asks the usual questions. If FBRX OS is already there, Setup opens on
 a choice instead:

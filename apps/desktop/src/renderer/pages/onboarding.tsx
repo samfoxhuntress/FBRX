@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SnapshotHeader, SystemStatus } from '@fbrx/shared';
-import { Button, Callout, Card, Field, Input, Status, formatBytes, useAction } from '@fbrx/ui';
+import { Button, Callout, Card, Field, Input, Status, formatBytes, useAction, FbrxMark } from '@fbrx/ui';
 import { call, pickFile } from '../client';
 import { useCore } from '../hooks';
 import { RestoreModal } from './backup';
@@ -46,7 +46,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
     <div className="onboard">
       <div className="onboard-card">
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
-          <div className="fx-brand-mark">FX</div>
+          <FbrxMark className="fx-brand-mark" size={34} />
           <div>
             <div className="fx-brand-name">FBRX OS</div>
             <div className="fx-brand-sub">Fabrics Operating System</div>
