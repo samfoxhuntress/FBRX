@@ -1,0 +1,37 @@
+{
+  "name": "fbrx-os",
+  "version": "1.0.0",
+  "private": true,
+  "description": "FBRX OS (Fabrics Operating System) — an enterprise desktop super-tool with a governed local AI agent, fleet control plane, and admin console.",
+  "license": "UNLICENSED",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "plugins/*"
+  ],
+  "engines": {
+    "node": ">=22.13"
+  },
+  "scripts": {
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "npm run build -w @fbrx/plugin-sdk && npm run build -w @fbrx/admin-console && npm run build -w @fbrx/control-plane && npm run build -w @fbrx/desktop",
+    "dev:control-plane": "npm run dev -w @fbrx/control-plane",
+    "dev:console": "npm run dev -w @fbrx/admin-console",
+    "dev:desktop": "npm run dev -w @fbrx/desktop",
+    "headless": "node --import tsx packages/core/bin/fbrx-headless.ts",
+    "package:mac": "npm run package:mac -w @fbrx/desktop",
+    "package:win": "npm run package:win -w @fbrx/desktop",
+    "keys:generate": "node scripts/generate-license-keys.mjs",
+    "release:publish": "node scripts/publish-release.mjs",
+    "verify": "npm run typecheck && npm test"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.0",
+    "esbuild": "^0.28.2",
+    "tsx": "^4.20.0",
+    "typescript": "~5.9.3",
+    "vitest": "^5.0.3"
+  }
+}

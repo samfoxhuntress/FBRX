@@ -1,0 +1,14 @@
+{
+  "name": "@fbrx/plugin-example-toolkit",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Example FBRX OS plugin: text statistics, IDs, a persistent counter and a GitHub lookup.",
+  "type": "module",
+  "main": "index.mjs",
+  "scripts": {
+    "pack:plugin": "node ../../scripts/pack-plugin.mjs ."
+  },
+  "devDependencies": {
+    "@fbrx/plugin-sdk": "1.0.0"
+  }
+}

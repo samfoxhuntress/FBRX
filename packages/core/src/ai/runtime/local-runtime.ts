@@ -1,0 +1,229 @@
+import { spawn, type ChildProcess } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
+import { accessSync, constants, existsSync, readdirSync } from 'node:fs';
+import { delimiter, join } from 'node:path';
+import type { RuntimeStatus } from '@fbrx/shared';
+import { CoreError } from '../../errors';
+import type { EventBus } from '../../events';
+import type { Logger } from '../../logger';
+import type { SettingsService } from '../../settings/settings-service';
+import type { ModelManager } from './model-manager';
+import { sleep } from '../../util/misc';
+
+const EXE = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server';
+
+function isExecutable(p: string): boolean {
+  try {
+    accessSync(p, process.platform === 'win32' ? constants.F_OK : constants.X_OK);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** Finds `llama-server` inside a runtime folder (release archives nest it under build/bin or similar). */
+function findIn(dir: string, depth = 3): string | null {
+  if (!existsSync(dir)) return null;
+  const direct = join(dir, EXE);
+  if (existsSync(direct) && isExecutable(direct)) return direct;
+  if (depth === 0) return null;
+  try {
+    for (const e of readdirSync(dir, { withFileTypes: true })) {
+      if (e.isDirectory()) {
+        const hit = findIn(join(dir, e.name), depth - 1);
+        if (hit) return hit;
+      }
+    }
+  } catch {
+    /* unreadable */
+  }
+  return null;
+}
+
+/**
+ * The built-in local AI runtime: supervises a llama.cpp `llama-server` process bound to 127.0.0.1 with a
+ * per-launch random API key, so only FBRX OS can talk to it. Nothing leaves the machine.
+ */
+export class LocalRuntime {
+  private child: ChildProcess | null = null;
+  private state: RuntimeStatus['state'] = 'stopped';
+  private message: string | null = null;
+  private apiKeyValue = '';
+  private recentOutput: string[] = [];
+  private stopping = false;
+
+  constructor(
+    private readonly d: {
+      settings: SettingsService;
+      models: ModelManager;
+      runtimeDir: string;
+      resourcesDir: string | null;
+      log: Logger;
+      events?: EventBus;
+    },
+  ) {}
+
+  resolveBinary(): string | null {
+    const cfg = this.d.settings.get().runtime.binaryPath;
+    if (cfg && existsSync(cfg)) return cfg;
+    const plat = `${process.platform}-${process.arch}`;
+    if (this.d.resourcesDir) {
+      const bundled = findIn(join(this.d.resourcesDir, 'runtime', plat)) ?? findIn(join(this.d.resourcesDir, 'runtime'));
+      if (bundled) return bundled;
+    }
+    const downloaded = findIn(join(this.d.runtimeDir, plat)) ?? findIn(this.d.runtimeDir);
+    if (downloaded) return downloaded;
+    for (const dir of (process.env.PATH ?? '').split(delimiter)) {
+      if (dir && existsSync(join(dir, EXE)) && isExecutable(join(dir, EXE))) return join(dir, EXE);
+    }
+    return null;
+  }
+
+  get endpoint(): string {
+    return `http://127.0.0.1:${this.d.settings.get().runtime.port}/v1`;
+  }
+
+  get apiKey(): string {
+    return this.apiKeyValue;
+  }
+
+  status(): RuntimeStatus {
+    const s = this.d.settings.get().runtime;
+    const binary = this.resolveBinary();
+    const model = s.modelId ? this.d.models.get(s.modelId) : undefined;
+    let state = this.state;
+    let message = this.message;
+    if (!s.enabled) state = 'disabled';
+    else if (state === 'stopped' || state === 'failed') {
+      if (!binary) {
+        state = 'not-installed';
+        message = message ?? 'llama-server runtime not found. Install the bundled runtime or set its path in Settings.';
+      } else if (!model) {
+        state = 'no-model';
+        message = 'Download or import a model to use the local AI runtime.';
+      }
+    }
+    return {
+      state,
+      binaryPath: binary,
+      modelId: model?.id ?? null,
+      modelFile: model?.file ?? null,
+      port: s.port,
+      pid: this.child?.pid ?? null,
+      endpoint: this.state === 'running' ? this.endpoint : null,
+      message,
+    };
+  }
+
+  private setState(state: RuntimeStatus['state'], message: string | null = null) {
+    this.state = state;
+    this.message = message;
+    this.d.events?.emit('runtime.changed', this.status());
+  }
+
+  async start(): Promise<RuntimeStatus> {
+    if (this.child && (this.state === 'running' || this.state === 'starting')) return this.status();
+    const s = this.d.settings.get().runtime;
+    if (!s.enabled) throw new CoreError('UNAVAILABLE', 'The local runtime is disabled in settings');
+    const binary = this.resolveBinary();
+    if (!binary) throw new CoreError('UNAVAILABLE', 'llama-server runtime not found');
+    const model = s.modelId ? this.d.models.get(s.modelId) : undefined;
+    if (!model) throw new CoreError('UNAVAILABLE', 'No model selected for the local runtime');
+
+    this.apiKeyValue = randomBytes(24).toString('base64url');
+    const args = [
+      '--model', model.file,
+      '--host', '127.0.0.1',
+      '--port', String(s.port),
+      '--ctx-size', String(s.contextSize),
+      '--n-gpu-layers', String(s.gpuLayers < 0 ? 999 : s.gpuLayers),
+      '--jinja',
+      '--alias', model.id,
+      '--api-key', this.apiKeyValue,
+      ...(s.threads > 0 ? ['--threads', String(s.threads)] : []),
+    ];
+    this.stopping = false;
+    this.recentOutput = [];
+    this.setState('starting', `Loading ${model.name}…`);
+    this.d.log.info('Starting local runtime', { binary, model: model.id, port: s.port });
+    const child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
+    this.child = child;
+    const capture = (b: Buffer) => {
+      for (const line of b.toString('utf8').split(/\r?\n/)) {
+        if (!line.trim()) continue;
+        this.recentOutput.push(line.replace(this.apiKeyValue, '***'));
+        if (this.recentOutput.length > 200) this.recentOutput.shift();
+      }
+    };
+    child.stdout?.on('data', capture);
+    child.stderr?.on('data', capture);
+    child.on('exit', (code, signal) => {
+      if (this.child !== child) return;
+      this.child = null;
+      if (this.stopping) this.setState('stopped');
+      else {
+        const tail = this.recentOutput.slice(-5).join(' | ');
+        this.d.log.error('Local runtime exited unexpectedly', { code, signal, tail });
+        this.setState('failed', `Runtime exited (${code ?? signal}). ${tail}`.slice(0, 500));
+      }
+    });
+    child.on('error', (err) => {
+      this.d.log.error('Local runtime failed to spawn', err);
+      this.setState('failed', err.message);
+    });
+
+    const deadline = Date.now() + 180_000;
+    while (Date.now() < deadline) {
+      if (!this.child) break;
+      try {
+        const res = await fetch(`http://127.0.0.1:${s.port}/health`, { signal: AbortSignal.timeout(2000) });
+        if (res.ok) {
+          this.setState('running');
+          this.d.log.info('Local runtime ready', { model: model.id });
+          return this.status();
+        }
+      } catch {
+        /* still loading */
+      }
+      await sleep(750);
+    }
+    if (this.child) {
+      await this.stop();
+      this.setState('failed', 'Runtime did not become ready within 3 minutes');
+    }
+    throw new CoreError('UNAVAILABLE', this.message ?? 'Runtime failed to start');
+  }
+
+  async stop(): Promise<RuntimeStatus> {
+    const child = this.child;
+    if (!child) {
+      if (this.state !== 'stopped') this.setState('stopped');
+      return this.status();
+    }
+    this.stopping = true;
+    child.kill('SIGTERM');
+    const exited = await Promise.race([new Promise<boolean>((r) => child.once('exit', () => r(true))), sleep(5000).then(() => false)]);
+    if (!exited) child.kill('SIGKILL');
+    this.child = null;
+    this.setState('stopped');
+    return this.status();
+  }
+
+  async health(): Promise<{ ok: boolean; message: string | null }> {
+    if (this.state !== 'running') return { ok: this.state !== 'failed', message: this.message };
+    try {
+      const res = await fetch(`http://127.0.0.1:${this.d.settings.get().runtime.port}/health`, { signal: AbortSignal.timeout(3000) });
+      return res.ok ? { ok: true, message: null } : { ok: false, message: `Health check returned ${res.status}` };
+    } catch (err) {
+      return { ok: false, message: (err as Error).message };
+    }
+  }
+
+  get isRunning() {
+    return this.state === 'running';
+  }
+
+  recentLogs(): string[] {
+    return [...this.recentOutput];
+  }
+}

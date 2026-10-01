@@ -1,0 +1,17 @@
+node_modules/
+dist/
+out/
+release/
+coverage/
+*.log
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+# local runtime data
+.fbrx-data/
+.fbrx-cp-data/
+apps/desktop/resources/runtime/
+*.fbrxsnap
+*.tsbuildinfo

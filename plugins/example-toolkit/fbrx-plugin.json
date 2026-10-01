@@ -1,0 +1,11 @@
+{
+  "id": "com.fbrx.example-toolkit",
+  "name": "Example Toolkit",
+  "version": "1.0.0",
+  "description": "Reference plugin showing tools, storage, secrets and brokered network access.",
+  "author": "FBRX",
+  "namespace": "toolkit",
+  "main": "index.mjs",
+  "engines": { "fbrx": ">=1.0.0" },
+  "permissions": ["storage", "notifications", "network:api.github.com", "secrets:GITHUB_TOKEN"]
+}
