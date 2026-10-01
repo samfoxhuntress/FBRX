@@ -25,6 +25,13 @@
 ; Result of the last attempt to close the app: 0 nothing was running, 1 closed, 2 still running.
 Var fbrxClosed
 
+; The Windows makensis only accepts backslashes in File paths; the Linux/macOS one only forward slashes.
+!ifdef NSIS_WIN32_MAKENSIS
+  !define FBRX_CLOSE_SCRIPT "${BUILD_RESOURCES_DIR}\fbrx-close.ps1"
+!else
+  !define FBRX_CLOSE_SCRIPT "${BUILD_RESOURCES_DIR}/fbrx-close.ps1"
+!endif
+
 !ifndef BUILD_UNINSTALLER
   !include nsDialogs.nsh
 
@@ -45,7 +52,7 @@ Var fbrxClosed
 
 !macro FBRX_CLOSE_APP
   InitPluginsDir
-  File "/oname=$PLUGINSDIR\fbrx-close.ps1" "${BUILD_RESOURCES_DIR}/fbrx-close.ps1"
+  File "/oname=$PLUGINSDIR\fbrx-close.ps1" "${FBRX_CLOSE_SCRIPT}"
   DetailPrint "Closing ${PRODUCT_NAME}..."
   nsExec::Exec `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "$PLUGINSDIR\fbrx-close.ps1" -Dir "$INSTDIR"`
   Pop $fbrxClosed
