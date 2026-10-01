@@ -1,5 +1,5 @@
 import { fork, type ChildProcess } from 'node:child_process';
-import { existsSync, mkdirSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, realpathSync, statSync } from 'node:fs';
 import { cp, mkdtemp, rm } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import * as tar from 'tar';
@@ -79,18 +79,25 @@ class PluginProcess {
   async start(): Promise<void> {
     mkdirSync(this.dataDir, { recursive: true });
     this.stopping = false;
+    // Work with real paths only. The permission model matches paths literally, and Node's module loader walks every
+    // component of a path, so a symlink anywhere above the plugin (macOS /var → /private/var, a redirected home folder,
+    // FBRX_HOME on a linked volume) would otherwise be refused.
+    const real = (p: string) => {
+      try {
+        return realpathSync(p);
+      } catch {
+        return p;
+      }
+    };
+    const root = real(this.root);
+    const dataDir = real(this.dataDir);
+    const workerPath = real(this.d.workerPath);
     const execArgv = this.d.sandbox
-      ? [
-          '--permission',
-          `--allow-fs-read=${this.root}`,
-          `--allow-fs-read=${dirname(this.d.workerPath)}`,
-          `--allow-fs-read=${this.dataDir}`,
-          `--allow-fs-write=${this.dataDir}`,
-        ]
+      ? ['--permission', `--allow-fs-read=${root}`, `--allow-fs-read=${dirname(workerPath)}`, `--allow-fs-read=${dataDir}`, `--allow-fs-write=${dataDir}`]
       : [];
-    const child = fork(this.d.workerPath, [], {
+    const child = fork(workerPath, [], {
       execArgv,
-      cwd: this.dataDir,
+      cwd: dataDir,
       env: {
         ELECTRON_RUN_AS_NODE: '1',
         NODE_ENV: 'production',
@@ -122,7 +129,7 @@ class PluginProcess {
       }
       this.host.changed();
     });
-    this.send({ kind: 'init', manifest: this.manifest, root: this.root, dataDir: this.dataDir });
+    this.send({ kind: 'init', manifest: this.manifest, root, dataDir });
     const timeout = setTimeout(() => ready.reject(new Error('Plugin did not become ready within 15s')), 15_000);
     try {
       await ready.promise;

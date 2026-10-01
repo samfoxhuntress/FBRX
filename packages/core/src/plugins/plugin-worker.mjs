@@ -83,6 +83,12 @@ function makeContext(manifest, dataDir) {
   };
 }
 
+/** Error text for the host; permission-model errors name the resource that was refused. */
+function describeError(err) {
+  if (!(err instanceof Error)) return String(err);
+  return err.code === 'ERR_ACCESS_DENIED' && err.resource ? `${err.message} (${err.permission ?? 'access'}: ${err.resource})` : err.message;
+}
+
 function describeTool(t) {
   return { name: t.name, title: t.title, description: t.description, risk: t.risk, inputSchema: t.inputSchema };
 }
@@ -138,7 +144,7 @@ process.on('message', async (m) => {
         }
     }
   } catch (err) {
-    if (m.kind === 'init') send({ kind: 'init-failed', error: err instanceof Error ? `${err.message}` : String(err) });
+    if (m.kind === 'init') send({ kind: 'init-failed', error: describeError(err) });
     else log('error')(`Worker error: ${err instanceof Error ? err.message : String(err)}`);
   }
 });

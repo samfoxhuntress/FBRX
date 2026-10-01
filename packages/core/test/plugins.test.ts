@@ -1,4 +1,4 @@
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, symlinkSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import * as tar from 'tar';
@@ -115,6 +115,20 @@ export default {
       const results = r.data as Record<string, string>;
       for (const [attempt, outcome] of Object.entries(results)) expect([attempt, outcome]).not.toEqual([attempt, 'ALLOWED']);
       expect(Object.keys(results)).toHaveLength(11);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('runs sandboxed plugins when the data folder is reached through a symlink', async () => {
+    // macOS temp folders live under /var → /private/var; redirected home folders and linked volumes do the same.
+    const link = join(tempDir('fbrx-link-'), 'data');
+    symlinkSync(tempDir('fbrx-real-'), link, 'junction');
+    const { kernel, cleanup } = await makeKernel({ dataDir: link });
+    try {
+      const info = (await kernel.call('plugins.install', { path: EXAMPLE }, USER)) as any;
+      expect(info).toMatchObject({ state: 'running', error: null });
+      expect((await kernel.gate.invoke('toolkit.text_stats', { text: 'via a symlink' }, USER)).status).toBe('succeeded');
     } finally {
       await cleanup();
     }
