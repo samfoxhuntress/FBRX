@@ -109,7 +109,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   await adminAssetRoutes(app, ctx);
 
   if (config.adminConsoleDir && existsSync(join(config.adminConsoleDir, 'index.html'))) {
-    await app.register(fastifyStatic, { root: config.adminConsoleDir, wildcard: false, index: 'index.html' });
+    await app.register(fastifyStatic, { root: config.adminConsoleDir, index: 'index.html' });
     app.setNotFoundHandler((req, reply) => {
       if (req.method === 'GET' && !req.url.startsWith('/v1/') && !req.url.includes('.')) return reply.sendFile('index.html');
       return reply.status(404).send({ error: { code: 'NOT_FOUND', message: 'Not found' } });

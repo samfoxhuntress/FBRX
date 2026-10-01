@@ -2,8 +2,9 @@
   "name": "fbrx-os",
   "version": "1.0.0",
   "private": true,
-  "description": "FBRX OS (Fabrics Operating System) — an enterprise desktop super-tool with a governed local AI agent, fleet control plane, and admin console.",
+  "description": "FBRX OS (Fabrics Operating System) \u2014 an enterprise desktop super-tool with a governed local AI agent, fleet control plane, and admin console.",
   "license": "UNLICENSED",
+  "type": "module",
   "workspaces": [
     "packages/*",
     "apps/*",
