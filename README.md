@@ -54,6 +54,34 @@ deploy/             Docker compose + Caddy for the control plane, provisioning e
 docs/               Architecture, deployment, backup/restore, plugins, security, licensing, admin console
 ```
 
+## Install on your own laptop
+
+You need **Node.js 22 LTS** (or newer) from [nodejs.org](https://nodejs.org) to build; the installed app brings its
+own runtime. Open Terminal (macOS) or PowerShell (Windows) in this folder:
+
+```bash
+npm install                    # once; downloads dependencies
+```
+
+**Try it right away** — runs from this folder with every feature unlocked (development mode); close the terminal to quit:
+
+```bash
+npm run dev:desktop
+```
+
+**Install it as a real app** — a proper installed build that lives in the menu bar / system tray (turn on *launch at login* in Settings):
+
+```bash
+npm run keys:generate                                     # your license signing keys (once; back up .fbrx-keys/)
+npm run package:mac                                       # on a Mac  → apps/desktop/release/1.0.0/*.dmg
+npm run package:win                                       # on Windows → apps/desktop/release/1.0.0/FBRX-OS-Setup-1.0.0.exe
+npm run license:issue -- --customer "Your Name"           # prints a license key
+```
+
+Open the `.dmg` (`arm64` for Apple silicon, `x64` for Intel) and drag FBRX OS to Applications, or run the Windows
+setup (SmartScreen: *More info → Run anyway*, since your build isn't code-signed yet). In the app, go to
+**Settings → License** and paste the key to unlock Claude, plugins, MCP, scheduled backups and fleet features.
+
 ## Quick start (development)
 
 Requirements: Node.js 22.15+ (see `.nvmrc`). No native modules, no Python, no compilers.
@@ -79,6 +107,7 @@ Other entry points:
 | `npm run package:mac` / `npm run package:win` | Build installers into `apps/desktop/release/<version>/` |
 | `npm run runtime:fetch -- --arch arm64,x64` | Download the official llama.cpp server to bundle into installers |
 | `npm run keys:generate` | Create the license signing key pair (public key gets embedded in builds) |
+| `npm run license:issue -- --customer "Name"` | Sign an offline license key with that private key (no control plane needed) |
 | `npm run release:publish -- --publish` | Upload built installers to your control plane's update feed |
 | `npm run plugin:create -- my-tool` / `npm run plugin:pack -- plugins/my-tool` | Scaffold and package a plugin |
 

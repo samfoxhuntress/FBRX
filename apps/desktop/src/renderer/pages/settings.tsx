@@ -144,9 +144,9 @@ function License() {
             ['Edition', <span className="fx-badge accent">{l.edition}</span>],
             ['State', <Status tone={l.state === 'valid' || l.state === 'development' ? 'good' : l.state === 'unlicensed' ? 'neutral' : 'warning'}>{l.state}</Status>],
             ['Licensed to', l.customer ?? '—'],
-            ['Seats', l.seats ?? '—'],
+            ['Seats', l.seats === 0 ? 'Unlimited' : l.seats ?? '—'],
             ['Expires', l.expiresAt ? formatDate(l.expiresAt) : l.state === 'valid' ? 'Never' : '—'],
-            ['Source', l.source === 'managed' ? 'Your organisation' : l.source],
+            ['Source', { managed: 'Your organisation', local: 'License key on this device', development: 'Development build', none: '—' }[l.source]],
             ['Features', l.features.join(', ')],
           ]}
         />

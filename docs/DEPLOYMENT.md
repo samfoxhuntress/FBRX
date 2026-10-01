@@ -89,7 +89,8 @@ npm run package:win
 ```
 
 macOS packages must be built on a Mac and Windows packages are most reliably built on Windows (the Release
-workflow does both). Artifacts:
+workflow does both). Without a Developer ID certificate, Mac builds are ad-hoc signed: they run on the Mac that built
+them, but other Macs will refuse them until you sign and notarise. Artifacts:
 
 * macOS: `FBRX-OS-<v>-arm64.dmg`, `FBRX-OS-<v>-x64.dmg` (installers) and matching `.zip` files (auto-update).
 * Windows: `FBRX-OS-Setup-<v>.exe` — one NSIS installer containing x64 and arm64; per-user by default, per-machine

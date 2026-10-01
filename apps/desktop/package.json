@@ -13,10 +13,10 @@
     "dev": "node scripts/dev.mjs",
     "build": "node scripts/build.mjs",
     "start": "electron .",
-    "package": "npm run build && electron-builder --config electron-builder.yml --publish never",
-    "package:mac": "npm run build && electron-builder --config electron-builder.yml --publish never --mac",
-    "package:win": "npm run build && electron-builder --config electron-builder.yml --publish never --win",
-    "package:linux": "npm run build && electron-builder --config electron-builder.yml --publish never --linux"
+    "package": "node scripts/package.mjs",
+    "package:mac": "node scripts/package.mjs --mac",
+    "package:win": "node scripts/package.mjs --win",
+    "package:linux": "node scripts/package.mjs --linux"
   },
   "dependencies": {
     "electron-updater": "^6.8.9"

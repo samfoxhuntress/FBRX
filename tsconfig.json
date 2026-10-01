@@ -12,7 +12,8 @@
     "packages/*/test/**/*",
     "apps/*/src/**/*",
     "apps/*/test/**/*",
-    "plugins/*/src/**/*"
+    "plugins/*/src/**/*",
+    "scripts/*.ts"
   ],
   "exclude": ["**/node_modules", "**/dist"]
 }

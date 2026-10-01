@@ -51,6 +51,12 @@ features, issue date, optional expiry, optional maximum major version) signed wi
      **Settings → License** (for customers who do not connect to a control plane). Offline keys cannot be revoked
      remotely; use expiry dates.
 
+Without a control plane, sign keys from the command line with the same private key:
+
+```bash
+npm run license:issue -- --customer "Acme Ltd" --edition pro --seats 10 --expires 2027-12-31 --feature connectors.mcp
+```
+
 A managed license takes precedence over an offline one; if it is revoked, a device falls back to its offline key,
 if any, and otherwise to Community. License changes take effect immediately (licensed services start or stop
 without a restart).

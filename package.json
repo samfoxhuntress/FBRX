@@ -25,6 +25,7 @@
     "package:mac": "npm run package:mac -w @fbrx/desktop",
     "package:win": "npm run package:win -w @fbrx/desktop",
     "keys:generate": "node scripts/generate-license-keys.mjs",
+    "license:issue": "node --import tsx scripts/issue-license.ts",
     "release:publish": "node scripts/publish-release.mjs",
     "verify": "npm run typecheck && npm test",
     "plugin:create": "node scripts/create-plugin.mjs",
