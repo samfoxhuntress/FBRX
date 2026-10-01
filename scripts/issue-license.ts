@@ -10,8 +10,9 @@
  * apps/desktop/build/license-public-key.pem; rebuild after generating). Offline keys cannot be revoked remotely,
  * so prefer expiry dates for anything you sell.
  */
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join, resolve } from 'node:path';
 import { ALL_FEATURES, EDITIONS, featuresFor, newId, type Edition, type LicensePayload } from '../packages/shared/src';
 import { publicKeyFromPrivate, signLicense, verifyLicense } from '../packages/shared/src/node';
 
@@ -39,7 +40,8 @@ const features = all('--feature');
 const unknown = features.filter((f) => !(ALL_FEATURES as string[]).includes(f));
 if (unknown.length) fail(`Unknown feature(s): ${unknown.join(', ')}. Known: ${ALL_FEATURES.join(', ')}`);
 
-const keyFile = resolve(opt('--key') ?? '.fbrx-keys/license-signing.pem');
+// The setup wizard keeps a copy in ~/.fbrx-keys, so a fresh copy of the folder can still sign.
+const keyFile = resolve(opt('--key') ?? [resolve('.fbrx-keys/license-signing.pem'), join(homedir(), '.fbrx-keys', 'license-signing.pem')].find((f) => existsSync(f)) ?? '.fbrx-keys/license-signing.pem');
 let privateKeyPem: string;
 try {
   privateKeyPem = readFileSync(keyFile, 'utf8');

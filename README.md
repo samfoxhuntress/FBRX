@@ -56,31 +56,32 @@ docs/               Architecture, deployment, backup/restore, plugins, security,
 
 ## Install on your own laptop
 
-You need **Node.js 22 LTS** (or newer) from [nodejs.org](https://nodejs.org) to build; the installed app brings its
-own runtime. Open Terminal (macOS) or PowerShell (Windows) in this folder:
+Unzip the downloaded folder somewhere permanent and outside synced folders (for example `~/FBRX` or `C:\FBRX`),
+then double-click the installer for your computer:
 
-```bash
-npm install                    # once; downloads dependencies
-```
+| Computer | Double-click | If the computer warns you about a downloaded file |
+| --- | --- | --- |
+| Mac | **`Install FBRX OS.command`** | System Settings → Privacy & Security → **Open Anyway**. Or open Terminal, type `bash ` and drag the file in, then press Enter |
+| Windows | **`Install FBRX OS.cmd`** | **More info → Run anyway** |
 
-**Try it right away** — runs from this folder with every feature unlocked (development mode); close the terminal to quit:
+The installer asks for your name or company (it goes on your license), then does everything else, in about
+10–20 minutes the first time:
 
-```bash
-npm run dev:desktop
-```
+1. downloads a private copy of Node.js if this computer doesn't have a recent one (nothing is installed system-wide),
+2. installs the project's dependencies,
+3. creates your license signing key (in `.fbrx-keys/`, with a copy in `~/.fbrx-keys`), which you should **back up**:
+   it signs every license you sell,
+4. builds FBRX OS for this exact machine (Apple silicon or Intel, x64 or ARM),
+5. installs it in Applications (Mac) or for your user with Start menu and desktop shortcuts (Windows),
+6. issues you an Enterprise license that activates automatically, and opens the app.
 
-**Install it as a real app** — a proper installed build that lives in the menu bar / system tray (turn on *launch at login* in Settings):
+To update later, download the new version into the same place and run the installer again; your data, settings and
+keys are kept. Options: `--yes` (no questions), `--name "Acme Ltd"`, `--no-launch`. The full log is in
+`.fbrx-setup/setup.log`.
 
-```bash
-npm run keys:generate                                     # your license signing keys (once; back up .fbrx-keys/)
-npm run package:mac                                       # on a Mac  → apps/desktop/release/1.0.0/*.dmg
-npm run package:win                                       # on Windows → apps/desktop/release/1.0.0/FBRX-OS-Setup-1.0.0.exe
-npm run license:issue -- --customer "Your Name"           # prints a license key
-```
-
-Open the `.dmg` (`arm64` for Apple silicon, `x64` for Intel) and drag FBRX OS to Applications, or run the Windows
-setup (SmartScreen: *More info → Run anyway*, since your build isn't code-signed yet). In the app, go to
-**Settings → License** and paste the key to unlock Claude, plugins, MCP, scheduled backups and fleet features.
+Prefer to do it by hand? `npm install`, then `npm run dev:desktop` to try it, or `npm run keys:generate`,
+`npm run package:mac` / `npm run package:win` and `npm run license:issue -- --customer "Your Name"` to build and
+license an installer yourself.
 
 ## Quick start (development)
 

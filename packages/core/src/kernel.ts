@@ -3,6 +3,7 @@ import { cpus, freemem, hostname, loadavg, platform as osPlatform, arch as osArc
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
+  LICENSE_FILE_NAME,
   PRODUCT_NAME,
   ProvisioningFileSchema,
   type DeviceCommand,
@@ -469,6 +470,7 @@ export class Kernel {
     this.services.startWatchdog();
     this.started = true;
     this.log.info(`${PRODUCT_NAME} ${this.platform.appVersion} started`, { dataDir: this.paths.root, shell: this.platform.shell });
+    this.applyLicenseFile();
     void this.applyProvisioning().catch((err) => this.log.error('Provisioning failed', { error: errorMessage(err) }));
     this.audit.prune(365);
   }
@@ -674,6 +676,25 @@ export class Kernel {
   }
 
   // ------------------------------------------------------------------------------- provisioning
+
+  /**
+   * A license key saved as `fbrx-license.key` in the data folder (by the setup wizard or IT tooling) is activated on
+   * start and the file removed. A key that does not verify is kept as `fbrx-license.key.rejected` for inspection.
+   */
+  private applyLicenseFile(): void {
+    const file = join(this.paths.root, LICENSE_FILE_NAME);
+    if (!existsSync(file)) return;
+    try {
+      const status = this.license.activate(readFileSync(file, 'utf8').trim());
+      rmSync(file, { force: true });
+      this.audit.append({ category: 'license', action: 'activated', actor: 'license-file', outcome: 'success', details: { edition: status.edition, customer: status.customer } });
+      this.log.info('License activated from file', { edition: status.edition, customer: status.customer });
+    } catch (err) {
+      renameSync(file, `${file}.rejected`);
+      this.audit.append({ category: 'license', action: 'activated', actor: 'license-file', outcome: 'failure', details: { reason: errorMessage(err) } });
+      this.log.warn('License file rejected', { error: errorMessage(err) });
+    }
+  }
 
   /**
    * Zero-touch deployment: an `fbrx-provision.json` (from the admin console) placed in the data folder or

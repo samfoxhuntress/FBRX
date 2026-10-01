@@ -1,6 +1,9 @@
+import { existsSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+import { LICENSE_FILE_NAME } from '@fbrx/shared';
 import { generateSigningKeyPair, signLicense } from '@fbrx/shared/node';
-import { makeKernel, USER, waitFor } from './helpers';
+import { makeKernel, tempDir, USER, waitFor } from './helpers';
 
 describe('licensing', () => {
   it('starts and stops licensed services as soon as a license is activated or removed', async () => {
@@ -30,6 +33,32 @@ describe('licensing', () => {
       await waitFor(() => kernel.services.get('plugins')?.state === 'disabled');
     } finally {
       await cleanup();
+    }
+  });
+
+  it('activates a license key file dropped into the data folder (setup wizard / IT tooling) on start', async () => {
+    const keys = generateSigningKeyPair();
+    const payload = { v: 1 as const, lid: 'lic_file', tenantId: 'offline', customer: 'Sam', edition: 'enterprise' as const, seats: 0, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null };
+
+    const dataDir = tempDir();
+    writeFileSync(join(dataDir, LICENSE_FILE_NAME), `${signLicense(payload, keys.privateKeyPem)}\n`);
+    const ok = await makeKernel({ dataDir, devMode: false, licensePublicKeys: [keys.publicKeyPem] });
+    try {
+      expect(ok.kernel.license.status()).toMatchObject({ state: 'valid', edition: 'enterprise', customer: 'Sam', source: 'local' });
+      expect(existsSync(join(dataDir, LICENSE_FILE_NAME))).toBe(false);
+      await waitFor(() => ok.kernel.services.get('plugins')?.state === 'running');
+    } finally {
+      await ok.cleanup();
+    }
+
+    const otherDir = tempDir();
+    writeFileSync(join(otherDir, LICENSE_FILE_NAME), signLicense(payload, generateSigningKeyPair().privateKeyPem));
+    const bad = await makeKernel({ dataDir: otherDir, devMode: false, licensePublicKeys: [keys.publicKeyPem] });
+    try {
+      expect(bad.kernel.license.status().edition).toBe('community');
+      expect(existsSync(join(otherDir, `${LICENSE_FILE_NAME}.rejected`))).toBe(true);
+    } finally {
+      await bad.cleanup();
     }
   });
 });

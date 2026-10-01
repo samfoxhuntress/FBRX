@@ -18,3 +18,4 @@ apps/desktop/resources/runtime/
 .fbrx-demo/
 .fbrx-keys/
 dist-plugin/
+.fbrx-setup/

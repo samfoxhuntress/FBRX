@@ -1,0 +1,105 @@
+# Runs the double-click installer exactly as a user would on a fresh Mac and Windows PC: downloads a private
+# Node.js, installs dependencies, builds, installs and licenses the app. Then opens the installed app to prove it
+# starts and activates its license, and runs the installer a second time over the running app (the update path).
+name: Installer
+
+on:
+  push:
+    paths:
+      - "Install FBRX OS.*"
+      - "scripts/setup/**"
+      - "scripts/issue-license.ts"
+      - "scripts/generate-license-keys.mjs"
+      - "apps/desktop/**"
+      - "packages/core/**"
+      - "packages/shared/**"
+      - "package-lock.json"
+      - ".github/workflows/installer.yml"
+  workflow_dispatch:
+
+concurrency:
+  group: installer-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  FBRX_FORCE_PORTABLE_NODE: "1"
+  FBRX_NO_PAUSE: "1"
+
+jobs:
+  macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run "Install FBRX OS.command"
+        run: bash "Install FBRX OS.command" --yes --name "CI Runner" --no-launch
+      - name: The app is installed, signed for this Mac, and activates its license on first start
+        run: |
+          APP="/Applications/FBRX OS.app"
+          DATA="$HOME/Library/Application Support/FBRX OS"
+          test -d "$APP"
+          codesign --verify --deep --strict --verbose=2 "$APP"
+          test -f "$DATA/fbrx-license.key"
+          open "$APP"
+          for i in $(seq 1 90); do
+            if [ ! -f "$DATA/fbrx-license.key" ] && [ -f "$DATA/fbrx.db" ]; then break; fi
+            sleep 2
+          done
+          ls -la "$DATA"
+          test ! -f "$DATA/fbrx-license.key.rejected"
+          test ! -f "$DATA/fbrx-license.key"
+          pgrep -x "FBRX OS"
+      - name: Running the installer again updates the app while it is open
+        run: |
+          bash "Install FBRX OS.command" --yes --name "CI Runner" --no-launch
+          test -d "/Applications/FBRX OS.app"
+          if pgrep -x "FBRX OS"; then echo "The installer did not close the running app"; exit 1; fi
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-log-macos
+          path: |
+            .fbrx-setup/setup.log
+            ~/Library/Application Support/FBRX OS/logs/
+          if-no-files-found: ignore
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run "Install FBRX OS.cmd"
+        shell: cmd
+        run: call "Install FBRX OS.cmd" --yes --name "CI Runner" --no-launch
+      - name: The app is installed and activates its license on first start
+        shell: pwsh
+        run: |
+          $exe = Join-Path $env:LOCALAPPDATA 'Programs\FBRX OS\FBRX OS.exe'
+          $data = Join-Path $env:APPDATA 'FBRX OS'
+          if (-not (Test-Path $exe)) { throw "FBRX OS.exe was not installed" }
+          if (-not (Test-Path "$data\fbrx-license.key")) { throw "The license file was not written" }
+          Start-Process $exe
+          for ($i = 0; $i -lt 90; $i++) {
+            if (-not (Test-Path "$data\fbrx-license.key") -and (Test-Path "$data\fbrx.db")) { break }
+            Start-Sleep -Seconds 2
+          }
+          Get-ChildItem $data
+          if (Test-Path "$data\fbrx-license.key.rejected") { throw "The license was rejected" }
+          if (Test-Path "$data\fbrx-license.key") { throw "The app did not pick up its license" }
+          if (-not (Get-Process -Name 'FBRX OS' -ErrorAction SilentlyContinue)) { throw "The app is not running" }
+      - name: Running the installer again updates the app while it is open
+        shell: cmd
+        run: call "Install FBRX OS.cmd" --yes --name "CI Runner" --no-launch
+      - name: Still installed after the update
+        shell: pwsh
+        run: |
+          if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\FBRX OS\FBRX OS.exe'))) { throw "FBRX OS.exe missing after update" }
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: installer-log-windows
+          path: |
+            .fbrx-setup/setup.log
+            ~/AppData/Roaming/FBRX OS/logs/
+          if-no-files-found: ignore

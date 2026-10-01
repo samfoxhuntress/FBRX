@@ -12,6 +12,8 @@ export const SNAPSHOT_FORMAT_VERSION = 1;
 export const DEFAULT_LOCAL_API_PORT = 47821;
 export const DEFAULT_RUNTIME_PORT = 47822;
 export const DEFAULT_CONTROL_PLANE_PORT = 8787;
+/** License key file picked up from the data folder on start (written by the setup wizard or IT tooling). */
+export const LICENSE_FILE_NAME = 'fbrx-license.key';
 
 export const UPDATE_CHANNELS = ['stable', 'beta', 'dev'] as const;
 export type UpdateChannel = (typeof UPDATE_CHANNELS)[number];

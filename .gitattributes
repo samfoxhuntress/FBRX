@@ -1,0 +1,4 @@
+# Launchers must keep their native line endings, including in ZIP downloads from GitHub.
+*.cmd -text
+*.command text eol=lf
+*.sh text eol=lf
