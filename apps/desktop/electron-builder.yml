@@ -56,6 +56,8 @@ win:
     # Must match the certificate subject; electron-updater refuses updates signed by anyone else.
     publisherName: FBRX
 nsis:
+  # Maintenance mode (upgrade / repair / uninstall), closing a running app, silent switches and license drop.
+  include: build/installer.nsh
   oneClick: false
   perMachine: false
   allowElevation: true

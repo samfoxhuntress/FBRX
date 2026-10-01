@@ -1,6 +1,7 @@
 # Runs the double-click installer exactly as a user would on a fresh Mac and Windows PC: downloads a private
 # Node.js, installs dependencies, builds, installs and licenses the app. Then opens the installed app to prove it
 # starts and activates its license, and runs the installer a second time over the running app (the update path).
+# On Windows it also checks Setup's maintenance switches and the "make an installer to send" package.
 name: Installer
 
 on:
@@ -91,10 +92,78 @@ jobs:
       - name: Running the installer again updates the app while it is open
         shell: cmd
         run: call "Install FBRX OS.cmd" --yes --name "CI Runner" --no-launch
-      - name: Still installed after the update
+      - name: The installer asked the app to quit properly, and everything was kept
         shell: pwsh
         run: |
+          $data = Join-Path $env:APPDATA 'FBRX OS'
           if (-not (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\FBRX OS\FBRX OS.exe'))) { throw "FBRX OS.exe missing after update" }
+          if (Get-Process -Name 'FBRX OS' -ErrorAction SilentlyContinue) { throw "The installer did not close the running app" }
+          if (-not (Select-String -Path "$data\logs\*.log" -Pattern 'Stopped cleanly' -Quiet)) { throw "The app was ended without shutting down cleanly" }
+          if (-not (Test-Path "$data\fbrx.db")) { throw "Data was lost during the update" }
+
+      # The Setup.exe switches behind the maintenance page: downgrade guard, repair, uninstall.
+      - name: Setup refuses to downgrade silently unless allowed
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          $setup = Resolve-Path "apps/desktop/release/$version/FBRX-OS-Setup-$version.exe"
+          $key = Get-ChildItem 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' | Where-Object { (Get-ItemProperty $_.PSPath).DisplayName -like 'FBRX OS*' } | Select-Object -First 1
+          if (-not $key) { throw "No uninstall entry for FBRX OS" }
+          Set-ItemProperty $key.PSPath -Name DisplayVersion -Value '99.0.0'
+          $p = Start-Process $setup -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 3) { throw "Expected exit code 3 for a downgrade, got $($p.ExitCode)" }
+          $p = Start-Process $setup -ArgumentList '/S','/ALLOWDOWNGRADE' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Downgrade with /ALLOWDOWNGRADE failed: $($p.ExitCode)" }
+          if ((Get-ItemProperty $key.PSPath).DisplayVersion -ne $version) { throw "Version not restored after reinstall" }
+      - name: Repair closes the running app, clears caches and keeps data
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          $setup = Resolve-Path "apps/desktop/release/$version/FBRX-OS-Setup-$version.exe"
+          $data = Join-Path $env:APPDATA 'FBRX OS'
+          Start-Process (Join-Path $env:LOCALAPPDATA 'Programs\FBRX OS\FBRX OS.exe')
+          for ($i = 0; $i -lt 60 -and -not (Test-Path "$data\GPUCache"); $i++) { Start-Sleep -Seconds 1 }
+          New-Item -ItemType Directory -Force "$data\GPUCache" | Out-Null
+          Start-Sleep -Seconds 5
+          $p = Start-Process $setup -ArgumentList '/S','/REPAIR' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Repair failed: $($p.ExitCode)" }
+          if (Get-Process -Name 'FBRX OS' -ErrorAction SilentlyContinue) { throw "Repair did not close the app" }
+          if (Test-Path "$data\GPUCache") { throw "Repair did not clear the caches" }
+          if (-not (Test-Path "$data\fbrx.db")) { throw "Repair lost the data" }
+      - name: Uninstall closes the app and keeps the data unless asked
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          $setup = Resolve-Path "apps/desktop/release/$version/FBRX-OS-Setup-$version.exe"
+          $data = Join-Path $env:APPDATA 'FBRX OS'
+          Start-Process (Join-Path $env:LOCALAPPDATA 'Programs\FBRX OS\FBRX OS.exe')
+          Start-Sleep -Seconds 10
+          $p = Start-Process $setup -ArgumentList '/S','/UNINSTALL' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Uninstall failed: $($p.ExitCode)" }
+          if (Get-Process -Name 'FBRX OS' -ErrorAction SilentlyContinue) { throw "Uninstall did not close the app" }
+          if (Test-Path (Join-Path $env:LOCALAPPDATA 'Programs\FBRX OS\FBRX OS.exe')) { throw "FBRX OS is still installed" }
+          if (-not (Test-Path "$data\fbrx.db")) { throw "Uninstall deleted the data without being asked" }
+
+      # "Make an installer to send": a Setup.exe with a trial license built in, as a friend would receive it.
+      - name: Make an installer to send to someone else
+        shell: cmd
+        run: call "Install FBRX OS.cmd" --yes --share --for "CI Friend" --days 7
+      - name: The shared installer installs and licenses FBRX OS for them
+        shell: pwsh
+        run: |
+          $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          $setup = Resolve-Path "Share/FBRX-OS-Setup-$version-for-CI-Friend.exe"
+          $data = Join-Path $env:APPDATA 'FBRX OS'
+          $p = Start-Process $setup -ArgumentList '/S' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Shared installer failed: $($p.ExitCode)" }
+          if (-not (Test-Path "$data\fbrx-license.key")) { throw "The built-in license was not handed to the app" }
+          Start-Process (Join-Path $env:LOCALAPPDATA 'Programs\FBRX OS\FBRX OS.exe')
+          for ($i = 0; $i -lt 90 -and (Test-Path "$data\fbrx-license.key"); $i++) { Start-Sleep -Seconds 2 }
+          if (Test-Path "$data\fbrx-license.key.rejected") { throw "The built-in license was rejected" }
+          if (Test-Path "$data\fbrx-license.key") { throw "The app did not pick up the built-in license" }
+          $p = Start-Process $setup -ArgumentList '/S','/UNINSTALL','--delete-app-data' -Wait -PassThru
+          if ($p.ExitCode -ne 0) { throw "Uninstall failed: $($p.ExitCode)" }
+          if (Test-Path "$data\fbrx.db") { throw "--delete-app-data kept the data" }
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
@@ -102,4 +171,5 @@ jobs:
           path: |
             .fbrx-setup/setup.log
             ~/AppData/Roaming/FBRX OS/logs/
+            apps/desktop/release/*/builder-debug.yml
           if-no-files-found: ignore

@@ -19,3 +19,5 @@ apps/desktop/resources/runtime/
 .fbrx-keys/
 dist-plugin/
 .fbrx-setup/
+# installers made with "Install FBRX OS" -> "Make an installer to send"
+Share/

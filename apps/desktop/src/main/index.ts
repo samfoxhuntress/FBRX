@@ -25,10 +25,22 @@ let spotlightKey: string | null = null;
 let tray: Tray | null = null;
 let quitting = false;
 
-if (!app.requestSingleInstanceLock()) {
+/**
+ * The Windows installer starts `FBRX OS.exe --fbrx-quit` before replacing files: the running copy receives it as a
+ * second instance and quits properly (stopping the local AI runtime and closing the database), even when its
+ * window is hidden in the tray. Started with the flag while nothing is running, the app exits straight away.
+ */
+const QUIT_FLAG = '--fbrx-quit';
+const primary = app.requestSingleInstanceLock() && !process.argv.includes(QUIT_FLAG);
+if (!primary) {
   app.quit();
 } else {
-  app.on('second-instance', () => showWindow());
+  app.on('second-instance', (_e, argv) => {
+    if (argv.includes(QUIT_FLAG)) {
+      quitting = true;
+      app.quit();
+    } else showWindow();
+  });
 }
 app.setAppUserModelId('com.fbrx.os');
 
@@ -291,6 +303,7 @@ async function boot() {
 }
 
 app.whenReady().then(async () => {
+  if (!primary) return;
   registerIpc();
   appMenu();
   try {
@@ -307,6 +320,7 @@ app.whenReady().then(async () => {
 });
 
 app.on('before-quit', () => {
+  if (!primary) return;
   quitting = true;
   globalShortcut.unregisterAll();
   spotlight?.destroy();

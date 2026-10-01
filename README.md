@@ -83,8 +83,26 @@ The installer asks for your name or company (it goes on your license), then does
 6. issues you an Enterprise license that activates automatically, and opens the app.
 
 To update later, download the new version into the same place and run the installer again; your data, settings and
-keys are kept. Options: `--yes` (no questions), `--name "Acme Ltd"`, `--no-launch`. The full log is in
-`.fbrx-setup/setup.log`.
+keys are kept, and a running FBRX OS is closed for you. Options: `--yes` (no questions), `--name "Acme Ltd"`,
+`--no-launch`, `--allow-downgrade`. The full log is in `.fbrx-setup/setup.log`.
+
+### Sending FBRX OS to someone else (Windows)
+
+Run `Install FBRX OS.cmd` and choose **2 — Make an installer to send to someone else**. Enter their name to build a
+trial license into the installer (30 days by default; Enterprise features, then the free Community features), or
+leave it blank to send an update to someone who is already set up. The result is one file in the `Share` folder,
+for example `Share\FBRX-OS-Setup-1.1.0-for-Alex.exe`, plus a short *How to install* note to send along.
+
+On their PC they double-click it. A new install asks the usual questions. If FBRX OS is already there, Setup opens on
+a choice instead:
+
+* **Upgrade** (when the file is newer) — installs it and keeps all their data, settings, license and paired devices,
+* **Repair** — reinstalls from scratch and clears cached files, for an app that will not start or looks wrong,
+* **Uninstall** — removes FBRX OS, keeping their data unless they tick *Also delete my data*.
+
+If FBRX OS is open, Setup asks it to quit properly first (and ends anything left over, such as the local AI runtime).
+An older file than the installed version offers a downgrade, with a warning. Details and the command-line switches for
+IT tools: [DEPLOYMENT.md](docs/DEPLOYMENT.md#windows-installer-upgrade-repair-and-uninstall).
 
 Prefer to do it by hand? `npm install`, then `npm run dev:desktop` to try it, or `npm run keys:generate`,
 `npm run package:mac` / `npm run package:win` and `npm run license:issue -- --customer "Your Name"` to build and

@@ -640,6 +640,7 @@ export class Kernel {
     for (const d of this.disposers) d();
     this.disposers = [];
     this.events.removeAll();
+    this.log.info('Stopped cleanly');
     this.db.close();
   }
 

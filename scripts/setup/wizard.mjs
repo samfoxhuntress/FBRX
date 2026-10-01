@@ -4,15 +4,20 @@
  * Start it by double-clicking "Install FBRX OS.command" (macOS) or "Install FBRX OS.cmd" (Windows); those launchers
  * fetch a private copy of Node.js first when needed. Running it again updates the app and keeps all data.
  *
- *   node scripts/setup/wizard.mjs [--yes] [--name "Your Name"] [--no-launch]
+ *   node scripts/setup/wizard.mjs [--yes] [--name "Your Name"] [--no-launch] [--allow-downgrade]
+ *   node scripts/setup/wizard.mjs --share [--for "Their Name"] [--days 30]        (Windows)
  *
  * Steps: install dependencies → create license signing keys → build the app for this machine → install it →
  * issue a license for it → open it. Dependency-free on purpose: it runs before `npm install`.
+ *
+ * Share mode builds the same Windows installer without installing it here, optionally with a trial license for the
+ * recipient built in, and puts it in the Share folder. The recipient double-clicks it; on a computer that already
+ * has FBRX OS it offers Upgrade / Repair / Uninstall and closes the running app itself (build/installer.nsh).
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { accessSync, appendFileSync, chmodSync, constants, copyFileSync, existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statfsSync, writeFileSync } from 'node:fs';
-import { homedir, userInfo } from 'node:os';
+import { accessSync, appendFileSync, chmodSync, constants, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, statfsSync, statSync, writeFileSync } from 'node:fs';
+import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, delimiter, dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
@@ -32,6 +37,7 @@ const opt = (n) => {
 };
 const yes = flag('--yes') || flag('-y') || !process.stdin.isTTY;
 const launch = !flag('--no-launch');
+const allowDowngrade = flag('--allow-downgrade');
 
 // ------------------------------------------------------------------------------------------------ output
 const win = process.platform === 'win32';
@@ -57,14 +63,15 @@ const elapsed = (t) => {
 };
 
 class SetupError extends Error {
-  constructor(message, hint) {
+  constructor(message, hint, code) {
     super(message);
     this.hint = hint;
+    this.code = code;
   }
 }
 
 let stepNo = 0;
-const STEPS = 6;
+let STEPS = 6;
 async function step(title, fn) {
   stepNo++;
   const label = `${dim(`[${stepNo}/${STEPS}]`)} ${title}`;
@@ -141,7 +148,7 @@ function run(cmd, args, { cwd = ROOT, env = childEnv, onLine, label } = {}) {
     child.on('error', (err) => reject(new SetupError(`Could not start ${cmd}: ${err.message}`)));
     child.on('close', (code) => {
       if (code === 0) resolvePromise(out);
-      else reject(new SetupError(`${label ?? basename(cmd)} failed (exit code ${code})`, tail.join('\n')));
+      else reject(new SetupError(`${label ?? basename(cmd)} failed (exit code ${code})`, tail.join('\n'), code));
     });
   });
 }
@@ -284,7 +291,8 @@ async function buildApp(ui) {
 }
 
 async function installApp(artifact) {
-  const wasRunning = await quitRunningApp();
+  // On Windows the installer closes a running copy itself, asking it to quit properly first.
+  const wasRunning = win ? false : await quitRunningApp();
   if (process.platform === 'darwin') {
     const dest = writable('/Applications') ? '/Applications' : join(homedir(), 'Applications');
     mkdirSync(dest, { recursive: true });
@@ -294,7 +302,18 @@ async function installApp(artifact) {
     return { path: target, note: target, wasRunning };
   }
   if (win) {
-    await run(artifact, ['/S'], { label: 'The installer' });
+    // Silent mode upgrades or reinstalls over an existing copy and closes it first (build/installer.nsh).
+    try {
+      await run(artifact, allowDowngrade ? ['/S', '/ALLOWDOWNGRADE'] : ['/S'], { label: 'The installer' });
+    } catch (err) {
+      if (err.code === 3) {
+        throw new SetupError(
+          `A newer version of ${PRODUCT} is already installed on this PC than the ${version} in this folder.`,
+          'Download the latest FBRX folder, or run the installer with --allow-downgrade to replace it with this older version.',
+        );
+      }
+      throw err;
+    }
     const local = process.env.LOCALAPPDATA ?? join(homedir(), 'AppData', 'Local');
     const exe = [join(local, 'Programs', PRODUCT, `${PRODUCT}.exe`), join(local, 'Programs', 'fbrx-os', `${PRODUCT}.exe`)].find((p) => existsSync(p));
     if (!exe) throw new SetupError('The installer finished but FBRX OS could not be found under %LOCALAPPDATA%\\Programs', 'Try running apps\\desktop\\release\\' + version + '\\FBRX-OS-Setup-' + version + '.exe yourself.');
@@ -303,16 +322,86 @@ async function installApp(artifact) {
   return { path: artifact, note: 'runs from the build folder on Linux', wasRunning };
 }
 
-async function issueLicense(name) {
-  const out = await node(['--import', 'tsx', join(ROOT, 'scripts', 'issue-license.ts'), '--customer', name, '--edition', 'enterprise'], { label: 'Issuing the license' });
+/** Signs an Enterprise license key with your signing key. `expires` is YYYY-MM-DD or undefined (no expiry). */
+async function issueKey(customer, expires) {
+  const args = ['--import', 'tsx', join(ROOT, 'scripts', 'issue-license.ts'), '--customer', customer, '--edition', 'enterprise'];
+  if (expires) args.push('--expires', expires);
+  const out = await node(args, { label: 'Issuing the license' });
   const key = out.split(/\r?\n/).find((l) => l.startsWith('FBRX1.'));
   if (!key) throw new SetupError('The license key could not be created');
+  return key.trim();
+}
+
+async function issueLicense(name) {
+  const key = await issueKey(name);
   const dir = dataRoot();
   mkdirSync(dir, { recursive: true });
   // FBRX OS activates this file the next time it starts and then deletes it.
-  writeFileSync(join(dir, LICENSE_FILE), `${key.trim()}\n`, { mode: 0o600 });
-  writeFileSync(join(ROOT, '.fbrx-keys', 'my-license.txt'), `${key.trim()}\n`, { mode: 0o600 });
+  writeFileSync(join(dir, LICENSE_FILE), `${key}\n`, { mode: 0o600 });
+  writeFileSync(join(ROOT, '.fbrx-keys', 'my-license.txt'), `${key}\n`, { mode: 0o600 });
   return { note: `Enterprise · ${name}` };
+}
+
+const SHARE = join(ROOT, 'Share');
+const expiryDate = (days) => (days > 0 ? new Date(Date.now() + days * 86_400_000).toISOString().slice(0, 10) : undefined);
+
+/**
+ * Puts a Windows installer for someone else in the Share folder. With a recipient, a trial license for them is built
+ * into the installer (FBRX_SHARE_LICENSE, read by build/installer.nsh), so they do not have to enter a key.
+ */
+async function makeSharePackage(installer, recipient, days, ui) {
+  mkdirSync(SHARE, { recursive: true });
+  const slug = recipient
+    ? recipient
+        .normalize('NFKD')
+        .replace(/[^\w-]+/g, '-')
+        .replace(/^-+|-+$/g, '')
+        .slice(0, 40) || 'guest'
+    : '';
+  const name = `FBRX-OS-Setup-${version}${slug ? `-for-${slug}` : ''}.exe`;
+  const target = join(SHARE, name);
+  let expires;
+  if (!recipient) {
+    copyFileSync(installer, target);
+  } else {
+    expires = expiryDate(days);
+    const key = await issueKey(recipient, expires);
+    const tmp = mkdtempSync(join(tmpdir(), 'fbrx-share-'));
+    const keyFile = join(tmp, 'license.key');
+    writeFileSync(keyFile, key, { mode: 0o600 });
+    const outDir = join('release', `share-${version}`);
+    try {
+      ui.setDetail('adding the license to the installer');
+      // Rebuild only the installer around the app that was just packaged.
+      const unpacked = join(DESKTOP, 'release', version, arch === 'arm64' ? 'win-arm64-unpacked' : 'win-unpacked');
+      const builder = join(ROOT, 'node_modules', 'electron-builder', 'cli.js');
+      await node(
+        [builder, '--config', 'electron-builder.yml', '--publish', 'never', '--win', 'nsis', `--${arch}`, '--prepackaged', unpacked, `-c.nsis.artifactName=${name}`, `-c.directories.output=${outDir}`],
+        { cwd: DESKTOP, env: { ...childEnv, FBRX_SHARE_LICENSE: keyFile }, label: 'Building the installer' },
+      );
+      copyFileSync(join(DESKTOP, outDir, name), target);
+    } finally {
+      rmSync(tmp, { recursive: true, force: true });
+      rmSync(join(DESKTOP, outDir), { recursive: true, force: true });
+    }
+  }
+  writeFileSync(
+    join(SHARE, 'How to install FBRX OS.txt'),
+    [
+      'Installing or updating FBRX OS on Windows',
+      '',
+      '1. Double-click the FBRX-OS-Setup file.',
+      '2. If Windows says "Windows protected your PC", click "More info", then "Run anyway".',
+      '   (The installer is not signed with a purchased code-signing certificate.)',
+      '3. New install: follow the steps. Already installed: choose Upgrade (keeps all your data),',
+      '   Repair (reinstall if something is wrong) or Uninstall. If FBRX OS is open, Setup closes it for you.',
+      '',
+      'A license is built in when the file name ends in "-for-<your name>"; FBRX OS activates it on its first start.',
+      'To remove FBRX OS later: Windows Settings > Apps > FBRX OS > Uninstall, or run the Setup file again.',
+      '',
+    ].join('\r\n'),
+  );
+  return { path: target, expires, note: `Share${win ? '\\' : '/'}${name}` };
 }
 
 function openApp(path) {
@@ -332,8 +421,28 @@ async function main() {
   if (major < 22 || (major === 22 && minor < 15)) throw new SetupError(`Node.js ${process.version} is too old; 22.15 or newer is needed.`, 'Start the setup with the "Install FBRX OS" launcher, which downloads a suitable Node.js automatically.');
   if (!existsSync(join(ROOT, 'package-lock.json')) || !existsSync(DESKTOP)) throw new SetupError('This does not look like the FBRX OS folder.', 'Keep the installer inside the downloaded FBRX folder and run it from there.');
 
-  console.log(`This installs ${PRODUCT} on this ${platformName}, licensed to you. The first run takes about`);
-  console.log(`10–20 minutes and downloads around 1 GB. Run it again any time to update; your data is kept.\n`);
+  const rl = yes ? null : createInterface({ input: process.stdin, output: process.stdout });
+  const ask = async (q) => (await rl.question(q)).trim();
+  let share = flag('--share');
+  if (rl && win && !share) {
+    console.log(bold('What would you like to do?'));
+    console.log(`  1  Install or update ${PRODUCT} on this PC`);
+    console.log(`  2  Make an installer to send to someone else ${dim('(for example a friend trying it out)')}`);
+    share = (await ask(`Choose [1]: `)) === '2';
+    console.log('');
+  }
+  if (share && !win) {
+    rl?.close();
+    throw new SetupError('Making an installer to send is available on Windows for now.', 'Run this from the FBRX folder on a Windows PC.');
+  }
+
+  if (share) {
+    console.log(`This builds a ${PRODUCT} installer for someone else, without installing anything on this PC. It takes`);
+    console.log(`about 10 minutes the first time. The installer upgrades, repairs or removes an existing copy on their PC.\n`);
+  } else {
+    console.log(`This installs ${PRODUCT} on this ${platformName}, licensed to you. The first run takes about`);
+    console.log(`10–20 minutes and downloads around 1 GB. Run it again any time to update; your data is kept.\n`);
+  }
   const free = freeGb(ROOT);
   if (free < 3) console.log(`${yellow('!')} Only ${free.toFixed(1)} GB free here; about 3 GB is needed while building.\n`);
   if (/onedrive|icloud|dropbox|google drive/i.test(ROOT)) {
@@ -344,6 +453,8 @@ async function main() {
     console.log(`${yellow('!')} This folder path is long; if the build fails, move the folder to C:\\FBRX and run the installer again.\n`);
   }
 
+  if (share) return shareMain(rl, ask);
+
   let name = opt('--name') ?? process.env.FBRX_LICENSE_NAME;
   const fallback = (() => {
     try {
@@ -352,10 +463,9 @@ async function main() {
       return 'FBRX Owner';
     }
   })();
-  if (!name && !yes) {
-    const rl = createInterface({ input: process.stdin, output: process.stdout });
-    name = (await rl.question(`${bold('Your name or company')} ${dim('(shown on your license)')} [${fallback}]: `)).trim();
-    const go = (await rl.question(`${bold('Ready to install?')} [Y/n]: `)).trim().toLowerCase();
+  if (rl) {
+    if (!name) name = await ask(`${bold('Your name or company')} ${dim('(shown on your license)')} [${fallback}]: `);
+    const go = (await ask(`${bold('Ready to install?')} [Y/n]: `)).toLowerCase();
     rl.close();
     if (go.startsWith('n')) {
       console.log('\nNothing was changed.');
@@ -382,8 +492,59 @@ async function main() {
   console.log(`  ${bold('License')}        Enterprise, licensed to ${name} (activates when the app opens;`);
   console.log(`                 a copy of the key is in .fbrx-keys${win ? '\\' : '/'}my-license.txt)`);
   console.log(`  ${bold('Update later')}   download the new version and run this installer again; your data stays`);
+  if (win) console.log(`  ${bold('Share it')}       run this installer again and choose 2 to make an installer for someone else`);
   console.log(`\n  ${yellow(bold('Back up your license signing key'))}  ${dirname(KEY_BACKUP)}`);
   console.log(`  It signs every license you issue. Keep a copy somewhere safe (not just this computer) and never share it.\n`);
+  return 0;
+}
+
+async function shareMain(rl, ask) {
+  let recipient = (opt('--for') ?? '').trim();
+  let days = Number(opt('--days') ?? 30);
+  if (rl) {
+    console.log(`${bold('Who is it for?')} Their name goes on a trial license built into the installer.`);
+    recipient = await ask(`${dim('Leave blank for no license, for example to send an update to someone already set up')}: `);
+    if (recipient) {
+      const d = await ask(`${bold('Trial length in days')} ${dim('(0 = no expiry)')} [30]: `);
+      days = d ? Number(d) : 30;
+    }
+    const go = (await ask(`${bold('Ready to build?')} [Y/n]: `)).toLowerCase();
+    rl.close();
+    if (go.startsWith('n')) {
+      console.log('\nNothing was changed.');
+      return 0;
+    }
+    console.log('');
+  }
+  if (recipient.length > 80) throw new SetupError('The name is too long (80 characters at most).');
+  if (!Number.isInteger(days) || days < 0 || days > 3650) throw new SetupError('The trial length must be a whole number of days between 0 and 3650.');
+
+  STEPS = 4;
+  const started = Date.now();
+  await step('Installing dependencies', installDependencies);
+  await step('Creating your license signing keys', createKeys);
+  const { artifact } = await step(`Building ${PRODUCT} for Windows`, buildApp);
+  const pkg = await step(recipient ? `Making the installer for ${recipient}` : 'Making the installer', (ui) => makeSharePackage(artifact, recipient, days, ui));
+
+  const mb = Math.round(statSync(pkg.path).size / 1024 ** 2);
+  console.log(`\n${green(bold('The installer is ready'))} ${dim(`in ${elapsed(started)}`)}\n`);
+  console.log(`  ${bold('File')}           ${pkg.path} ${dim(`(${mb} MB)`)}`);
+  if (recipient) {
+    console.log(`  ${bold('License')}        Enterprise trial for ${recipient}, ${pkg.expires ? `until ${pkg.expires}` : 'no expiry'} (built in; activates on first start;`);
+    console.log(`                 afterwards ${PRODUCT} keeps working with the free Community features)`);
+  } else {
+    console.log(`  ${bold('License')}        none built in: their existing license is kept; a new user can paste a key in Settings`);
+  }
+  console.log(`  ${bold('Send it')}        with OneDrive, Google Drive, WeTransfer or a USB stick (too big for most e-mail)`);
+  console.log(`  ${bold('On their PC')}    they double-click it. If ${PRODUCT} is already installed it offers Upgrade, Repair or`);
+  console.log(`                 Uninstall and closes the app for them; their data is kept`);
+  console.log(`  ${bold('Windows warning')} "Windows protected your PC" appears for installers without a purchased signing`);
+  console.log(`                 certificate: More info > Run anyway (see Share\\How to install FBRX OS.txt)\n`);
+  if (process.stdout.isTTY) {
+    const child = spawn('explorer.exe', [`/select,"${pkg.path}"`], { detached: true, stdio: 'ignore', windowsVerbatimArguments: true });
+    child.on('error', () => undefined);
+    child.unref();
+  }
   return 0;
 }
 

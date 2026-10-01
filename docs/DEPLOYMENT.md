@@ -98,6 +98,47 @@ them, but other Macs will refuse them until you sign and notarise. Artifacts:
 
 If the runtime is not bundled, users can install it from **Local AI → Install runtime**, and onboarding offers it.
 
+### Windows installer: upgrade, repair and uninstall
+
+`FBRX-OS-Setup-<v>.exe` knows when FBRX OS is already installed (customisations in
+`apps/desktop/build/installer.nsh`). Instead of asking where to install, it opens on a maintenance page:
+
+| Installed version vs. this Setup | Choices (default first) |
+| --- | --- |
+| older | **Upgrade** (keeps data, settings, license, paired devices) · Repair · Uninstall |
+| same | **Repair** (reinstall the program files, clear Chromium caches; data kept) · Uninstall |
+| newer | Downgrade (warns that newer data may not be readable; must be picked explicitly) · Uninstall |
+
+*Uninstall* keeps the data folder (`%APPDATA%\FBRX OS`) unless *Also delete my data* is ticked. Uninstalling from
+Windows Settings asks the same question, defaulting to keep. Upgrades and repairs reuse the existing install folder
+and mode (just me / all users).
+
+**Closing a running app.** Setup and the uninstaller find every process started from the install folder: the app,
+its helpers, the local AI runtime and bridges that other AI apps start (`apps/desktop/build/fbrx-close.ps1`). The app
+is asked to quit properly first (`"FBRX OS.exe" --fbrx-quit` reaches the running copy, which stops the AI runtime and
+closes its database even when it is minimised to the tray); anything still running after 20 seconds is ended. If
+something cannot be ended (for example it runs as administrator), Setup asks the user to quit it and retry. Without
+PowerShell, it falls back to `taskkill`.
+
+**Command line** (IT tools, scripts):
+
+| Switch | Effect | Exit code |
+| --- | --- | --- |
+| `/S` | install, upgrade or reinstall without questions | 0; **3** if a newer version is installed |
+| `/S /ALLOWDOWNGRADE` | also allow replacing a newer version | 0 |
+| `/S /REPAIR` | reinstall and clear cached files | 0 |
+| `/S /UNINSTALL` | uninstall, keep the data | 0 (also when not installed) |
+| `/S /UNINSTALL --delete-app-data` | uninstall and delete the data folder | 0 |
+
+**Licenses.** A key saved as `fbrx-license.key` next to `Setup.exe` is copied to the user's data folder and activated
+when FBRX OS next starts. The setup wizard's *Make an installer to send* (`Install FBRX OS.cmd --share --for "Name"
+--days 30`) builds the key into the installer instead: it re-packages only the installer with
+`FBRX_SHARE_LICENSE=<key file>` set, which `installer.nsh` embeds at build time, and writes the result to `Share\`.
+Without `--for` it copies the plain installer there (for updates; the recipient's license is kept).
+
+**Unsigned installers** show *Windows protected your PC*; recipients click **More info → Run anyway**. A code-signing
+certificate (see Signing) removes the warning.
+
 ### Signing
 
 | Platform | What you need | Environment / secrets |
