@@ -50,6 +50,10 @@ features, issue date, optional expiry, optional maximum major version) signed wi
    * **Offline** — copy the key from the console and paste it in the desktop app under
      **Settings → License** (for customers who do not connect to a control plane). Offline keys cannot be revoked
      remotely; use expiry dates.
+   * **File drop** — save the key as `fbrx-license.key` in the app's data folder
+     (`~/Library/Application Support/FBRX OS` or `%APPDATA%\FBRX OS`) with your deployment tool; FBRX OS activates
+     it on its next start and deletes the file (a key that fails verification is kept as `fbrx-license.key.rejected`).
+     The setup wizard licenses your own laptop this way.
 
 Without a control plane, sign keys from the command line with the same private key:
 
