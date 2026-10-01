@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, nativeImage, shell, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, screen, shell, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { userInfo } from 'node:os';
@@ -20,6 +20,8 @@ const actor = `user:${(() => {
 
 let kernel: Kernel | null = null;
 let win: BrowserWindow | null = null;
+let spotlight: BrowserWindow | null = null;
+let spotlightKey: string | null = null;
 let tray: Tray | null = null;
 let quitting = false;
 
@@ -92,8 +94,77 @@ function createWindow() {
     }
   });
   win.on('closed', () => (win = null));
-  if (rendererUrl) void win.loadURL(rendererUrl);
-  else void win.loadFile(join(app.getAppPath(), 'dist', 'renderer', 'index.html'));
+  loadRenderer(win);
+}
+
+function loadRenderer(w: BrowserWindow, hash?: string) {
+  if (rendererUrl) void w.loadURL(hash ? `${rendererUrl}#${hash}` : rendererUrl);
+  else void w.loadFile(join(app.getAppPath(), 'dist', 'renderer', 'index.html'), hash ? { hash } : undefined);
+}
+
+/** The Spotlight launcher: a small frameless window on the screen with the mouse, hidden when it loses focus. */
+function createSpotlight() {
+  spotlight = new BrowserWindow({
+    width: 720,
+    height: 480,
+    show: false,
+    frame: false,
+    resizable: false,
+    movable: true,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    transparent: process.platform !== 'linux',
+    backgroundColor: process.platform === 'linux' ? '#1a1714' : '#00000000',
+    fullscreenable: false,
+    minimizable: false,
+    maximizable: false,
+    title: 'FBRX Spotlight',
+    webPreferences: {
+      preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      webSecurity: true,
+    },
+  });
+  spotlight.on('blur', () => spotlight?.hide());
+  spotlight.on('closed', () => (spotlight = null));
+  spotlight.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalSafe(url);
+    return { action: 'deny' };
+  });
+  spotlight.webContents.on('will-navigate', (e) => e.preventDefault());
+  loadRenderer(spotlight, '/spotlight');
+}
+
+function showSpotlight() {
+  if (!spotlight) createSpotlight();
+  const s = spotlight!;
+  if (s.isVisible() && s.isFocused()) {
+    s.hide();
+    return;
+  }
+  const area = screen.getDisplayNearestPoint(screen.getCursorScreenPoint()).workArea;
+  const [w] = s.getSize();
+  s.setPosition(Math.round(area.x + (area.width - w) / 2), Math.round(area.y + area.height * 0.18));
+  s.show();
+  s.focus();
+}
+
+/** (Re)binds the global Spotlight shortcut from settings. */
+function bindSpotlightKey() {
+  const cfg = kernel?.settings.get().spotlight;
+  const next = cfg?.enabled ? cfg.hotkey : null;
+  if (next === spotlightKey) return;
+  if (spotlightKey) globalShortcut.unregister(spotlightKey);
+  spotlightKey = null;
+  if (!next) return;
+  try {
+    if (globalShortcut.register(next, showSpotlight)) spotlightKey = next;
+    else kernel?.log.warn('Spotlight shortcut is taken by another app', { hotkey: next });
+  } catch (err) {
+    kernel?.log.warn('Invalid Spotlight shortcut', { hotkey: next, error: (err as Error).message });
+  }
 }
 
 function trayMenu() {
@@ -108,6 +179,7 @@ function trayMenu() {
     { type: 'separator' },
     { label: 'Open FBRX OS', click: () => showWindow() },
     { label: 'New agent chat', click: () => showWindow('agent') },
+    { label: `Spotlight${spotlightKey ? ` (${spotlightKey})` : ''}`, click: () => showSpotlight() },
     { label: pending ? `Review ${pending} pending approval${pending > 1 ? 's' : ''}` : 'No pending approvals', enabled: pending > 0, click: () => showWindow('approvals') },
     { type: 'separator' },
     { label: 'Quit', click: () => ((quitting = true), app.quit()) },
@@ -165,6 +237,17 @@ function registerIpc() {
   ipcMain.handle('fbrx:reveal', (e, p: string) => trusted(e) && typeof p === 'string' && shell.showItemInFolder(p));
   ipcMain.handle('fbrx:openExternal', (e, url: string) => trusted(e) && openExternalSafe(String(url)));
   ipcMain.handle('fbrx:app', (e) => (trusted(e) ? { version: app.getVersion(), platform: process.platform, arch: process.arch, dataDir, packaged: app.isPackaged } : null));
+  ipcMain.handle('fbrx:spotlight', (e, action: string, arg?: string) => {
+    if (!trusted(e)) return false;
+    if (action === 'show') showSpotlight();
+    else if (action === 'hide') spotlight?.hide();
+    else if (action === 'open') {
+      spotlight?.hide();
+      showWindow(typeof arg === 'string' ? arg.slice(0, 20_000) : undefined);
+    }
+    return true;
+  });
+  ipcMain.handle('fbrx:copy', (e, text: string) => trusted(e) && typeof text === 'string' && clipboard.writeText(text.slice(0, 1_000_000)));
 }
 
 async function boot() {
@@ -187,6 +270,7 @@ async function boot() {
   kernel = await Kernel.create({ dataDir, platform, provisioningFiles: provisioningLocations() });
   kernel.events.onAny((name, payload) => {
     win?.webContents.send('fbrx:event', name, payload);
+    if (name === 'settings.changed') bindSpotlightKey();
     if (name === 'approval.requested' || name === 'approval.resolved' || name === 'fleet.changed' || name === 'vault.changed') trayMenu();
   });
   kernel.events.on('approval.requested', (r) => {
@@ -218,11 +302,14 @@ app.whenReady().then(async () => {
   }
   createWindow();
   createTray();
+  bindSpotlightKey();
   app.on('activate', () => showWindow());
 });
 
 app.on('before-quit', () => {
   quitting = true;
+  globalShortcut.unregisterAll();
+  spotlight?.destroy();
 });
 
 app.on('window-all-closed', () => {

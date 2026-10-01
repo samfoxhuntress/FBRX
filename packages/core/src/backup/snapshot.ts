@@ -245,7 +245,9 @@ export async function stageRestore(o: StageRestoreOptions): Promise<SnapshotHead
       }
       if (o.mode === 'clone') {
         db.run("DELETE FROM meta WHERE key LIKE 'fleet.%' OR key = 'license.managed'");
-        db.run("DELETE FROM secrets WHERE (internal = 1 AND (name LIKE 'fbrx.fleet.%' OR name LIKE 'fbrx.localapi.%')) OR managed = 1");
+        db.run("DELETE FROM secrets WHERE (internal = 1 AND (name LIKE 'fbrx.fleet.%' OR name LIKE 'fbrx.localapi.%' OR name LIKE 'fbrx.mesh.%')) OR managed = 1");
+        // A clone is a new machine: it gets its own mesh identity and pairs its own devices.
+        if (db.get("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'mesh_devices'")) db.run('DELETE FROM mesh_devices');
         db.run("DELETE FROM settings_layers WHERE layer = 'managed'");
         db.run("DELETE FROM policy_layers WHERE layer = 'managed'");
         db.run('DELETE FROM fleet_commands');

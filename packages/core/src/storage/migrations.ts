@@ -157,6 +157,109 @@ export const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 2,
+    name: 'command-center',
+    up: `
+      ALTER TABLE conversations ADD COLUMN offline INTEGER NOT NULL DEFAULT 0;
+
+      CREATE TABLE projects (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        description TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'active',
+        color TEXT NOT NULL DEFAULT '',
+        due TEXT,
+        milestones TEXT NOT NULL DEFAULT '[]',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE notes (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        content TEXT NOT NULL DEFAULT '',
+        tags TEXT NOT NULL DEFAULT '[]',
+        project_id TEXT,
+        pinned INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX notes_updated ON notes (updated_at);
+      CREATE TABLE tasks (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        details TEXT NOT NULL DEFAULT '',
+        status TEXT NOT NULL DEFAULT 'todo',
+        priority TEXT NOT NULL DEFAULT 'medium',
+        due TEXT,
+        project_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        completed_at TEXT
+      );
+      CREATE INDEX tasks_status ON tasks (status, due);
+      CREATE TABLE snippets (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        language TEXT NOT NULL DEFAULT '',
+        content TEXT NOT NULL DEFAULT '',
+        tags TEXT NOT NULL DEFAULT '[]',
+        project_id TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+
+      CREATE TABLE alerts (
+        id TEXT PRIMARY KEY,
+        rule_id TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        title TEXT NOT NULL,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        read INTEGER NOT NULL DEFAULT 0,
+        deliveries TEXT NOT NULL DEFAULT '{}'
+      );
+      CREATE INDEX alerts_created ON alerts (created_at);
+
+      CREATE TABLE net_scans (
+        id TEXT PRIMARY KEY,
+        subnet TEXT NOT NULL,
+        label TEXT NOT NULL,
+        scanned_at TEXT NOT NULL,
+        duration_ms INTEGER NOT NULL,
+        devices TEXT NOT NULL
+      );
+      CREATE TABLE speed_tests (
+        at TEXT PRIMARY KEY,
+        download REAL NOT NULL,
+        upload REAL NOT NULL,
+        latency REAL,
+        jitter REAL,
+        server TEXT
+      );
+
+      CREATE TABLE mesh_devices (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        platform TEXT NOT NULL DEFAULT '',
+        version TEXT NOT NULL DEFAULT '',
+        public_key TEXT NOT NULL,
+        addr TEXT,
+        port INTEGER,
+        last_seen TEXT,
+        paired_at TEXT NOT NULL,
+        permissions TEXT NOT NULL
+      );
+      CREATE TABLE mesh_messages (
+        id TEXT PRIMARY KEY,
+        from_id TEXT NOT NULL,
+        from_name TEXT NOT NULL,
+        text TEXT NOT NULL,
+        at TEXT NOT NULL
+      );
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

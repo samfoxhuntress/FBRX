@@ -2,6 +2,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fbrx/ui/styles.css';
 import './desktop.css';
+import './theme.css';
 import { ToastProvider } from '@fbrx/ui';
 import { App } from './app';
 

@@ -1,16 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentEvent, ApprovalRequest, ChatMessage, ProviderStatus, ToolCallRecord } from '@fbrx/shared';
-import { Button, Callout, Card, Icons, Select, Status, TextArea, timeAgo, useAction, useConfirm } from '@fbrx/ui';
+import { Button, Callout, Card, Icons, Select, Status, TextArea, timeAgo, useAction, useConfirm, type IconName } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
 import { Markdown } from '../markdown';
-import { navigate } from '../app';
+import { navigate, routeArg } from '../app';
 
-const SUGGESTIONS = [
-  'What is using the most disk space in my Downloads folder?',
-  'Summarise the health of this workstation and FBRX OS services.',
-  'Create a weekly-report.md in my workspace with a template for status updates.',
-  'Remember that our quarterly reports are due on the 5th of each quarter.',
+const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
+  { icon: 'activity', title: 'Check my PC', prompt: 'Give me a quick health check of this computer: performance right now, storage, security status and any recent errors. Tell me what (if anything) needs attention.' },
+  { icon: 'tasks', title: 'Plan my day', prompt: 'Look at my open tasks and projects and suggest a realistic plan for today, most important first.' },
+  { icon: 'drive', title: 'Free up space', prompt: 'Find out what is using the most space on my drives and in Downloads, and suggest safe things to clean up. Do not delete anything without asking me.' },
+  { icon: 'wifi', title: 'Why is my internet slow?', prompt: 'My internet feels slow. Check my connection step by step (router, DNS, latency to the internet) and explain what you find in plain language.' },
+  { icon: 'shield', title: 'Is this link safe?', prompt: 'Check whether this link is safe to open: ' },
+  { icon: 'bug', title: 'Explain recent crashes', prompt: 'Look at the errors and crashes Windows recorded in the last few days, explain the important ones and suggest fixes.' },
 ];
 
 function toolTone(s: ToolCallRecord['status']) {
@@ -72,7 +74,7 @@ function ToolCard({ c, approval }: { c: ToolCallRecord; approval: ApprovalReques
   );
 }
 
-export function AgentPage() {
+export function AgentPage({ agentName }: { agentName: string }) {
   const convs = useCore('ai.conversations.list', undefined, []);
   const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed']);
   const settings = useCore('settings.get', undefined, ['settings.changed']);
@@ -85,6 +87,7 @@ export function AgentPage() {
   const [providerId, setProviderId] = useState('');
   const [model, setModel] = useState('');
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
+  const [offline, setOffline] = useState(true);
   const thread = useRef<HTMLDivElement>(null);
   const runRef = useRef(activeRun);
   runRef.current = activeRun;
@@ -98,14 +101,27 @@ export function AgentPage() {
   useEffect(() => {
     if (settings.data && !providerId) setProviderId(settings.data.settings.ai.defaultProvider);
   }, [settings.data, providerId]);
+  const defaultOffline = settings.data?.settings.ai.newChatsOffline ?? true;
+  useEffect(() => {
+    if (!selected) setOffline(defaultOffline);
+  }, [defaultOffline, selected]);
+
+  const toggleOffline = async (next: boolean) => {
+    setOffline(next);
+    if (selected) await call('ai.conversations.setOffline', { id: selected, offline: next }).catch(() => setOffline(!next));
+  };
 
   const loadConversation = async (id: string | null) => {
     setSelected(id);
     setStreaming(null);
     setError(null);
-    if (!id) return setMessages([]);
+    if (!id) {
+      setOffline(defaultOffline);
+      return setMessages([]);
+    }
     const c = await call('ai.conversations.get', { id });
     setMessages(c.messages);
+    setOffline(c.offline);
     if (c.providerId) setProviderId(c.providerId);
   };
 
@@ -115,6 +131,10 @@ export function AgentPage() {
       onEvent('approval.requested', (r) => setApprovals((a) => [...a, r])),
       onEvent('approval.resolved', (r) => setApprovals((a) => a.filter((x) => x.id !== r.id))),
       onEvent('agent', (e: AgentEvent) => {
+        if (e.type === 'mode.changed') {
+          if (e.conversationId === selectedRef.current) setOffline(e.offline);
+          return;
+        }
         if (sending.current && !runRef.current) {
           runRef.current = { runId: e.runId, conversationId: e.conversationId };
           setActiveRun(runRef.current);
@@ -163,6 +183,28 @@ export function AgentPage() {
     thread.current?.scrollTo({ top: thread.current.scrollHeight, behavior: 'smooth' });
   }, [messages, streaming]);
 
+  // Prompts handed over by other pages (sessionStorage) or by Spotlight (#/agent/ask/<text>).
+  const sendRef = useRef<(t: string) => void>(() => undefined);
+  useEffect(() => {
+    const draft = sessionStorage.getItem('fbrx.agentDraft');
+    if (draft) {
+      sessionStorage.removeItem('fbrx.agentDraft');
+      setInput(draft);
+    }
+    const pick = () => {
+      const arg = routeArg();
+      if (arg?.startsWith('ask/')) {
+        const text = decodeURIComponent(arg.slice(4));
+        navigate('agent');
+        void loadConversation(null).then(() => setTimeout(() => sendRef.current(text), 50));
+      }
+    };
+    pick();
+    window.addEventListener('hashchange', pick);
+    return () => window.removeEventListener('hashchange', pick);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const send = async (text = input) => {
     const message = text.trim();
     if (!message || activeRun) return;
@@ -172,7 +214,7 @@ export function AgentPage() {
     setMessages((m) => [...m, optimistic]);
     sending.current = true;
     try {
-      const r = await call('ai.chat', { conversationId: selected ?? undefined, message, providerId: providerId || undefined, model: model || undefined });
+      const r = await call('ai.chat', { conversationId: selected ?? undefined, message, providerId: providerId || undefined, model: model || undefined, offline: selected ? undefined : offline });
       // A fast run may already have finished before this reply arrived.
       if (!activeRunDone.current.has(r.runId)) setActiveRun(r);
       if (!selected) {
@@ -188,6 +230,7 @@ export function AgentPage() {
     }
   };
 
+  sendRef.current = (t: string) => void send(t);
   const visible = useMemo(() => messages.filter((m) => m.role === 'user' || m.role === 'assistant'), [messages]);
   const usable = (providers.data ?? []).filter((p) => p.enabled && !p.blockedByPolicy);
   const currentProvider = usable.find((p) => p.id === providerId) as ProviderStatus | undefined;
@@ -212,16 +255,33 @@ export function AgentPage() {
           {!visible.length && !streaming && (
             <div className="msg" style={{ marginTop: '8vh', alignItems: 'center', textAlign: 'center' }}>
               <div className="fx-brand-mark" style={{ width: 44, height: 44, fontSize: 16 }}>FX</div>
-              <h2>What should FBRX do?</h2>
-              <p className="fx-secondary" style={{ maxWidth: 520 }}>
-                The agent works with your files, apps and connected systems. Every action is checked by your governance policy, and anything that changes something waits for your approval.
+              <h2>Hi, I'm {agentName}. What should we do?</h2>
+              <p className="fx-secondary" style={{ maxWidth: 560 }}>
+                I work with your files, apps, PC and network. Every action is checked by your governance policy, and anything that changes something waits for your approval.
+                {offline ? ' This chat is offline: I will ask before using the internet.' : ' This chat is online: I may use internet tools.'}
               </p>
               <div className="choice-grid" style={{ width: '100%', marginTop: 8 }}>
-                {SUGGESTIONS.map((s) => (
-                  <button key={s} className="choice" onClick={() => void send(s)}>
-                    <span style={{ fontSize: 13 }}>{s}</span>
-                  </button>
-                ))}
+                {STARTERS.map((st) => {
+                  const Ico = Icons[st.icon];
+                  return (
+                    <button
+                      key={st.title}
+                      className="choice"
+                      onClick={() => {
+                        if (st.prompt.endsWith(': ')) setInput(st.prompt);
+                        else void send(st.prompt);
+                      }}
+                    >
+                      <span style={{ display: 'flex', gap: 8, alignItems: 'center', fontWeight: 600 }}>
+                        <Ico size={16} style={{ color: 'var(--accent)' }} />
+                        {st.title}
+                      </span>
+                      <span className="fx-muted" style={{ fontSize: 12.5 }}>
+                        {st.prompt.length > 90 ? `${st.prompt.slice(0, 90)}…` : st.prompt}
+                      </span>
+                    </button>
+                  );
+                })}
               </div>
             </div>
           )}
@@ -256,7 +316,7 @@ export function AgentPage() {
           )}
           {error && (
             <div className="msg">
-              <Callout tone="critical" title="The agent could not finish" actions={error.includes('runtime') || error.includes('model') || error.includes('API key') ? <Button size="sm" onClick={() => navigate('runtime')}>AI models</Button> : undefined}>
+              <Callout tone="critical" title={`${agentName} could not finish`} actions={error.includes('runtime') || error.includes('model') || error.includes('API key') ? <Button size="sm" onClick={() => navigate('runtime')}>AI models</Button> : undefined}>
                 {error}
               </Callout>
             </div>
@@ -265,7 +325,7 @@ export function AgentPage() {
         <div className="composer">
           <TextArea
             value={input}
-            placeholder={activeRun ? 'The agent is working…' : 'Ask FBRX to do something — Enter to send, Shift+Enter for a new line'}
+            placeholder={activeRun ? `${agentName} is working…` : `Ask ${agentName} to do something — Enter to send, Shift+Enter for a new line`}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter' && !e.shiftKey) {
@@ -277,6 +337,14 @@ export function AgentPage() {
             aria-label="Message"
           />
           <div className="composer-bar">
+            <div className="seg" role="group" aria-label="Internet access for this chat">
+              <button className={offline ? 'on' : ''} onClick={() => void toggleOffline(true)} title={`Offline: ${agentName} asks before using the internet in this chat`}>
+                <Icons.offline size={14} /> Offline
+              </button>
+              <button className={!offline ? 'on' : ''} onClick={() => void toggleOffline(false)} title={`Online: ${agentName} may use internet tools in this chat`}>
+                <Icons.globe size={14} /> Online
+              </button>
+            </div>
             <div style={{ width: 200 }}>
               <Select aria-label="AI provider" value={providerId} onChange={(e) => setProviderId(e.target.value)} options={usable.map((p) => ({ value: p.id, label: `${p.name}${p.available ? '' : ' (unavailable)'}` }))} />
             </div>

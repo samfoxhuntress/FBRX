@@ -15,11 +15,19 @@
     "@fbrx/plugin-sdk": "1.0.0",
     "@fbrx/shared": "1.0.0",
     "@modelcontextprotocol/sdk": "^1.31.0",
+    "multicast-dns": "^7.2.5",
+    "nodemailer": "^7.0.13",
+    "qrcode": "^1.5.4",
+    "systeminformation": "^5.33.15",
     "tar": "^7.5.2",
+    "tweetnacl": "^1.0.3",
     "ws": "^8.18.3",
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@types/multicast-dns": "^7.2.4",
+    "@types/nodemailer": "^8.0.2",
+    "@types/qrcode": "^1.5.6",
     "@types/ws": "^8.18.1"
   }
 }

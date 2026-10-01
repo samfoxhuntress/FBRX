@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { cpus, freemem, hostname, loadavg, platform as osPlatform, arch as osArch, totalmem, uptime as osUptime } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -33,6 +33,16 @@ import { checkUrl } from './governance/network-guard';
 import { LicenseService } from './license/license-service';
 import { ToolRegistry } from './tools/registry';
 import { fbrxTools, fsTools, memoryTools, netTools, shellTools, systemTools, diskFreeGb } from './tools/builtin';
+import { pcTools, workspaceTools } from './tools/builtin/command-center-tools';
+import { WorkspaceStore } from './workspace/workspace-store';
+import { SystemMonitor } from './system/system-monitor';
+import { FileBrowser, TerminalSessions } from './system/files';
+import { Spotlight } from './spotlight/spotlight';
+import { AlertEngine } from './alerts/alert-engine';
+import { NetDiag } from './network/netdiag';
+import { MeshService } from './mesh/mesh-service';
+import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
+import { AiCoordination } from './aicoord/aicoord';
 import { ConversationStore } from './ai/conversations';
 import { ModelManager } from './ai/runtime/model-manager';
 import { LocalRuntime } from './ai/runtime/local-runtime';
@@ -48,6 +58,7 @@ import { deviceFacts } from './fleet/machine';
 import { LocalApiServer } from './localapi/local-api';
 import { ServiceManager } from './services/service-manager';
 import { buildCoreApi, isReadOnly, isUserOnly, scrubParams, type CallContext } from './api/core-api';
+import { buildExtApi } from './api/ext-api';
 
 export interface KernelOptions {
   dataDir: string;
@@ -60,6 +71,9 @@ export interface KernelOptions {
 
 const LOCAL_API_TOKEN = 'fbrx.localapi.token';
 const LOCAL_API_AGENT_TOKEN = 'fbrx.localapi.agentToken';
+const MESH_KEY = 'fbrx.mesh.key';
+/** Where the MCP bridge finds the Local API address and agent token (readable by this user only). */
+const AGENT_TOKEN_FILE = 'localapi-agent.json';
 
 /**
  * The FBRX OS kernel: owns storage and every service, exposes the single core API surface used by the
@@ -98,6 +112,15 @@ export class Kernel {
   readonly fleet: FleetAgent;
   readonly localApi: LocalApiServer;
   readonly services: ServiceManager;
+  readonly workspace: WorkspaceStore;
+  readonly monitor: SystemMonitor;
+  readonly files: FileBrowser;
+  readonly terminal: TerminalSessions;
+  readonly spotlight: Spotlight;
+  readonly alerts: AlertEngine;
+  readonly net: NetDiag;
+  readonly mesh: MeshService;
+  readonly aicoord: AiCoordination;
   private readonly api: Record<string, (p: any, ctx: CallContext) => unknown>;
   private disposers: Array<() => void> = [];
   private started = false;
@@ -170,6 +193,7 @@ export class Kernel {
       gate: this.gate,
       registry: this.registry,
       policy: this.policy,
+      approvals: this.approvals,
       license: this.license,
       settings: this.settings,
       audit: this.audit,
@@ -245,7 +269,90 @@ export class Kernel {
       appVersion: this.platform.appVersion,
     });
     this.services = new ServiceManager(L('services'), this.events, () => this.audit);
-    this.api = buildCoreApi(this);
+
+    // Command center
+    this.workspace = new WorkspaceStore(this.db, this.events);
+    this.monitor = new SystemMonitor(this.events, L('monitor'));
+    this.files = new FileBrowser(() => this.platform.specialDirs());
+    this.terminal = new TerminalSessions(this.events, () => this.platform.specialDirs().home);
+    this.spotlight = new Spotlight({
+      meta: this.meta,
+      workspace: this.workspace,
+      webSearch: () => this.settings.get().spotlight.webSearch,
+      fileSearch: () => this.settings.get().spotlight.fileSearch,
+    });
+    this.net = new NetDiag({ db: this.db, events: this.events, ouiFile: join(this.paths.root, 'oui-vendors.txt'), internet: () => this.internetAllowed() });
+    this.mesh = new MeshService(this.db, this.events, L('mesh'), {
+      appVersion: this.platform.appVersion,
+      deviceName: () => this.deviceName(),
+      settings: () => this.settings.get().mesh,
+      keyPair: () => this.meshKeyPair(),
+      mobileDir: this.platform.meshMobileDir ?? null,
+      status: () => this.meshStatusSummary(),
+      approvals: () => this.approvals.list(),
+      resolveApproval: (id, decision, by) => this.approvals.resolve(id, decision, by),
+      requestApproval: async (deviceName, prompt, deviceId) => {
+        const r = await this.approvals.request(
+          {
+            runId: null,
+            tool: 'mesh.ask',
+            toolTitle: `Request from ${deviceName}`,
+            risk: 'execute',
+            input: { deviceId, prompt },
+            reason: `${deviceName} asks ${this.settings.get().ai.agentName} to do something on this computer`,
+            origin: 'remote',
+            findings: [],
+          },
+          this.policy.policy.approvals.timeoutSeconds,
+        );
+        return r.decision === 'approve';
+      },
+      runAsk: async (prompt, deviceName, onTool) => {
+        const off = this.events.on('agent', (e) => {
+          if (e.type === 'tool.updated' && e.call.status === 'running') onTool(e.call.name);
+        });
+        try {
+          const r = await this.agent.runToCompletion({ message: prompt, origin: 'remote', actor: `mesh:${deviceName}` });
+          return { answer: r.answer, status: r.status, error: r.error };
+        } finally {
+          off();
+        }
+      },
+      tasks: () => this.workspace.listTasks(),
+      saveTask: (t) => this.workspace.saveTask(t),
+      notes: () => this.workspace.listNotes(),
+      saveNote: (n) => this.workspace.saveNote(n),
+      alerts: () => this.alerts.inbox({ limit: 50 }),
+      notify: (title, body) => this.notify({ title, body, level: 'info', source: 'mesh' }),
+      system: (cmd) => this.spotlight.system(cmd),
+      audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
+    });
+    this.alerts = new AlertEngine({
+      db: this.db,
+      events: this.events,
+      log: L('alerts'),
+      settings: () => this.settings.get(),
+      monitor: this.monitor,
+      workspace: this.workspace,
+      notify: (title, body, level) => this.notify({ title, body, level, source: 'alerts' }),
+      toMobile: (a) => this.mesh.pushAlert(a),
+      toOrganisation: (a) => {
+        if (!this.fleet.enrolled) return false;
+        this.fleet.reportEvent({ kind: 'alert', severity: a.severity, message: `${a.title}: ${a.body}`.slice(0, 2000), data: { ruleId: a.ruleId }, at: a.createdAt });
+        return true;
+      },
+      secret: (name) => (this.vault.isUnlocked ? this.vault.get(name) : undefined),
+      meshPeers: () => (this.mesh.running ? this.mesh.peers() : []),
+    });
+    this.aicoord = new AiCoordination({
+      shim: () => {
+        const s = this.platform.mcpShim;
+        return s ? { command: s.command, args: s.args, env: { ...(s.env ?? {}), FBRX_DATA_DIR: this.paths.root } } : null;
+      },
+      localApiRunning: () => this.localApi.running,
+    });
+
+    this.api = { ...buildCoreApi(this), ...buildExtApi(this) };
     this.registerServices();
     this.wire();
   }
@@ -293,6 +400,19 @@ export class Kernel {
       }),
     );
     this.platform.updates?.onStatus((s) => this.events.emit('updates.changed', s));
+    this.disposers.push(
+      this.settings.onChange((next, prev) => {
+        if (!prev || !this.started) return;
+        const m = next.settings.mesh;
+        if (m.enabled !== prev.mesh.enabled) void this.services.reconcile();
+        else if (m.enabled && m.port !== prev.mesh.port) void this.services.restart('mesh');
+      }),
+    );
+    this.disposers.push(
+      this.events.on('approval.requested', (a) => {
+        if (a.tool !== 'mesh.ask') void this.alerts.fire('approval_waiting', `${a.toolTitle} is waiting for approval`, a.reason.slice(0, 300), { key: a.id });
+      }),
+    );
     installModelReviewer(this);
   }
 
@@ -366,6 +486,8 @@ export class Kernel {
           ...systemTools({ workspace: ws, notify: (title, body) => this.notify({ title, body, level: 'info', source: 'agent' }) }),
           ...memoryTools(this.db),
           ...fbrxTools({ status: () => this.status(), recentAudit: (n) => this.audit.query({ limit: n }) }),
+          ...workspaceTools(this.workspace),
+          ...pcTools({ monitor: this.monitor, net: this.net, alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined) }),
         ]);
       },
       stop: () => undefined,
@@ -450,6 +572,33 @@ export class Kernel {
       },
     });
     s.register({
+      name: 'monitor',
+      title: 'System monitor & alerts',
+      description: 'Live performance metrics and background alert rules',
+      dependsOn: ['storage'],
+      start: () => {
+        this.monitor.start();
+        this.alerts.start();
+      },
+      stop: () => {
+        this.alerts.stop();
+        this.monitor.stop();
+      },
+    });
+    s.register({
+      name: 'mesh',
+      title: 'Mesh',
+      description: 'Encrypted link to your other FBRX computers and your phone',
+      dependsOn: ['vault', 'tools'],
+      enabled: () => this.settings.get().mesh.enabled,
+      start: async () => {
+        if (!this.vault.isUnlocked) throw new CoreError('LOCKED', 'Vault is locked');
+        await this.mesh.start();
+      },
+      stop: () => this.mesh.stop(),
+      health: async () => (this.mesh.running ? { state: 'running', message: `${this.mesh.devices().length} paired device(s)` } : { state: 'failed', message: 'Not listening' }),
+    });
+    s.register({
       name: 'localapi',
       title: 'Local API',
       description: 'Authenticated automation API for scripts, apps and FBRX peers',
@@ -459,8 +608,12 @@ export class Kernel {
         if (!this.vault.isUnlocked) throw new CoreError('LOCKED', 'Vault is locked');
         this.ensureLocalApiTokens();
         await this.localApi.start();
+        this.writeAgentTokenFile();
       },
-      stop: () => this.localApi.stop(),
+      stop: async () => {
+        rmSync(join(this.paths.root, AGENT_TOKEN_FILE), { force: true });
+        await this.localApi.stop();
+      },
       health: async () => (this.localApi.running ? { state: 'running' } : { state: 'failed', message: 'Not listening' }),
     });
   }
@@ -481,6 +634,8 @@ export class Kernel {
       return;
     }
     this.started = false;
+    this.terminal.killAll();
+    this.spotlight.dispose();
     await this.services.stopAll();
     for (const d of this.disposers) d();
     this.disposers = [];
@@ -490,7 +645,7 @@ export class Kernel {
 
   async onVaultUnlocked(): Promise<void> {
     this.redactor.setSecrets(this.vault.valuesForRedaction());
-    for (const name of ['localapi', 'plugins', 'connectors']) {
+    for (const name of ['localapi', 'plugins', 'connectors', 'mesh']) {
       const st = this.services.get(name);
       if (st && st.state !== 'disabled') await this.services.restart(name);
     }
@@ -666,6 +821,66 @@ export class Kernel {
     this.vault.set({ name: LOCAL_API_TOKEN, value: `fbrx_lapi_${randomBytes(32).toString('base64url')}`, kind: 'token' }, { internal: true });
     this.vault.set({ name: LOCAL_API_AGENT_TOKEN, value: `fbrx_lapi_${randomBytes(32).toString('base64url')}`, kind: 'token' }, { internal: true });
     if (audit) this.audit.append({ category: 'localapi', action: 'tokens.rotated', actor: 'user', outcome: 'success' });
+    if (this.localApi.running) this.writeAgentTokenFile();
+  }
+
+  /** The MCP bridge reads the Local API address and the agent-scoped token from the data folder. */
+  private writeAgentTokenFile() {
+    const t = this.localApiTokens();
+    if (!t) return;
+    const file = join(this.paths.root, AGENT_TOKEN_FILE);
+    writeFileSync(file, JSON.stringify({ url: `http://127.0.0.1:${this.settings.get().localApi.port}`, token: t.agent }), { mode: 0o600 });
+    try {
+      chmodSync(file, 0o600);
+    } catch {
+      /* windows: the data folder is already per-user */
+    }
+  }
+
+  // ------------------------------------------------------------------------------- command center
+
+  /** False when the organisation's network policy blocks every internet host. */
+  internetAllowed(): boolean {
+    return this.policy.policy.network.allowedDomains.length > 0;
+  }
+
+  private meshKeyPair(): KeyPair {
+    const raw = this.vault.get(MESH_KEY, { allowInternal: true });
+    if (raw) return JSON.parse(raw) as KeyPair;
+    const kp = generateKeyPair();
+    this.vault.set({ name: MESH_KEY, value: JSON.stringify(kp), kind: 'token' }, { internal: true });
+    return kp;
+  }
+
+  private async meshStatusSummary() {
+    const st = await this.status();
+    const live = this.monitor.current;
+    return {
+      name: this.deviceName(),
+      platform: st.platform,
+      version: st.version,
+      uptimeSeconds: live?.uptime ?? null,
+      cpu: live?.cpu ?? null,
+      memUsedPct: live ? Math.round((live.memUsed / live.memTotal) * 100) : null,
+      battery: live?.battery ?? null,
+      tempC: live?.tempC ?? null,
+      services: st.services.map((x) => ({ name: x.title, state: x.state })),
+      vault: st.vault.state,
+      pendingApprovals: st.pendingApprovals,
+      alerts: this.alerts.counts(),
+      openTasks: this.workspace.listTasks().filter((t) => t.status !== 'done').length,
+    };
+  }
+
+  /** Asks a configured AI provider for a second opinion, without tools. */
+  async consult(providerId: string, prompt: string, model?: string): Promise<{ answer: string; providerId: string; model: string }> {
+    const { provider, config, model: m } = this.providers.resolve(providerId, model);
+    let answer = '';
+    for await (const chunk of provider.chat({ model: m, messages: [{ role: 'user', content: prompt }], tools: [], temperature: 0.4, signal: AbortSignal.timeout(300_000) })) {
+      if (chunk.type === 'text') answer += chunk.delta;
+    }
+    this.audit.append({ category: 'agent', action: 'consult', actor: 'user', outcome: 'success', details: { provider: config.id, model: m } });
+    return { answer, providerId: config.id, model: m };
   }
 
   private localApiTokens(): { full: string; agent: string } | null {

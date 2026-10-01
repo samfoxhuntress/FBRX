@@ -1,0 +1,209 @@
+import { useEffect, useState } from 'react';
+import type { SystemLive, SystemStatus } from '@fbrx/shared';
+import { Button, Callout, Card, Empty, Grid, KeyValue, LineChart, Meter, Page, StatTile, Status, formatBytes, formatDuration, timeAgo, useAction } from '@fbrx/ui';
+import { call, onEvent } from '../client';
+import { useCore } from '../hooks';
+import { navigate } from '../app';
+
+function serviceTone(state: string) {
+  return state === 'running' ? 'good' : state === 'failed' ? 'critical' : state === 'degraded' ? 'warning' : 'neutral';
+}
+
+/** Live metrics: history from the core plus pushed samples. */
+export function useLive(): SystemLive[] {
+  const [points, setPoints] = useState<SystemLive[]>([]);
+  useEffect(() => {
+    let alive = true;
+    void call('sysinfo.live').then((r) => alive && setPoints(r.history));
+    const off = onEvent('sysinfo.live', (p) => setPoints((prev) => [...prev.slice(-179), p]));
+    return () => {
+      alive = false;
+      off();
+    };
+  }, []);
+  return points;
+}
+
+const rate = (b: number) => `${formatBytes(b)}/s`;
+
+export function DashboardPage({ status, agentName }: { status: SystemStatus; agentName: string }) {
+  const { run, busy } = useAction();
+  const live = useLive();
+  const cur = live[live.length - 1];
+  const info = useCore('sysinfo.static');
+  const tasks = useCore('tasks.list', undefined, ['workspace.changed']);
+  const alerts = useCore('alerts.inbox', { limit: 6 }, ['alerts.changed']);
+  const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed']);
+  const updates = useCore('updates.status', undefined, ['updates.changed']);
+  const aiReady = providers.data?.some((p) => p.available);
+  const hour = new Date().getHours();
+  const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const today = new Date().toISOString().slice(0, 10);
+  const open = (tasks.data ?? []).filter((t) => t.status !== 'done');
+  const due = open.filter((t) => t.due && t.due.slice(0, 10) <= today);
+  const memPct = cur ? (cur.memUsed / cur.memTotal) * 100 : 0;
+  const disks = info.data?.disks ?? [];
+  const t = (k: (p: SystemLive) => number) => live.map((p) => ({ t: p.ts, v: k(p) }));
+
+  return (
+    <Page
+      title={greeting}
+      description={`${status.deviceName} · ${status.product} ${status.version} · up ${formatDuration(cur?.uptime ?? status.uptimeSeconds)}`}
+      actions={
+        <>
+          <Button icon="tasks" onClick={() => navigate('tasks')}>
+            Tasks
+          </Button>
+          <Button variant="primary" icon="sparkles" onClick={() => navigate('agent')}>
+            Ask {agentName}
+          </Button>
+        </>
+      }
+    >
+      {status.vault.state === 'locked' && (
+        <Callout tone="warning" title="Your vault is locked" actions={<Button size="sm" onClick={() => navigate('vault')}>Unlock</Button>}>
+          This machine's keychain could not unlock your credentials (for example after copying the data folder). Enter your recovery passphrase to unlock.
+        </Callout>
+      )}
+      {providers.data && !aiReady && (
+        <Callout tone="info" title={`Give ${agentName} a brain`} actions={<Button size="sm" onClick={() => navigate('runtime')}>Choose a model</Button>}>
+          Download a local model to run fully offline, connect Ollama, or add a Claude API key.
+        </Callout>
+      )}
+      {status.pendingApprovals > 0 && (
+        <Callout tone="warning" title={`${status.pendingApprovals} action(s) need your approval`} actions={<Button size="sm" variant="primary" onClick={() => navigate('approvals')}>Review</Button>}>
+          {agentName} is waiting for you before it changes files, runs commands or contacts other systems.
+        </Callout>
+      )}
+      {updates.data?.state === 'downloaded' && (
+        <Callout tone="good" title={`FBRX OS ${updates.data.availableVersion} is ready`} actions={<Button size="sm" onClick={() => void run('u', () => call('updates.install'))}>Restart to update</Button>}>
+          The update was downloaded from your organisation's control plane.
+        </Callout>
+      )}
+
+      <Grid cols={4}>
+        <StatTile label="Processor" value={cur ? `${cur.cpu.toFixed(0)}%` : '—'} foot={cur?.tempC ? `${cur.tempC} °C` : `${cur?.cores.length ?? '—'} threads`} trend={live.slice(-12).map((p) => p.cpu)} />
+        <StatTile label="Memory" value={cur ? `${memPct.toFixed(0)}%` : '—'} foot={cur ? `${formatBytes(cur.memUsed)} of ${formatBytes(cur.memTotal)}` : ''} trend={live.slice(-12).map((p) => (p.memUsed / p.memTotal) * 100)} />
+        <StatTile label="Network" value={cur ? `↓ ${rate(cur.netRx)}` : '—'} foot={cur ? `↑ ${rate(cur.netTx)}` : ''} trend={live.slice(-12).map((p) => p.netRx)} />
+        <StatTile
+          label={cur?.battery ? 'Battery' : 'Open tasks'}
+          value={cur?.battery ? `${cur.battery.percent}%` : String(open.length)}
+          foot={cur?.battery ? (cur.battery.charging ? 'Charging' : 'On battery') : due.length ? <Status tone="warning">{due.length} due today</Status> : 'Nothing due today'}
+        />
+      </Grid>
+
+      <Grid cols={2}>
+        <Card title="Performance" subtitle="Last few minutes, sampled every 2 seconds">
+          {live.length > 1 ? (
+            <LineChart
+              height={190}
+              yMax={100}
+              yFormat={(n) => `${n}%`}
+              series={[
+                { key: 'cpu', label: 'Processor', slot: 0, points: t((p) => Math.round(p.cpu)) },
+                { key: 'mem', label: 'Memory', slot: 1, points: t((p) => Math.round((p.memUsed / p.memTotal) * 100)) },
+              ]}
+            />
+          ) : (
+            <Empty title="Collecting samples…" />
+          )}
+        </Card>
+        <Card title="Today" subtitle={`${open.length} open task(s)`} actions={<Button size="sm" variant="ghost" onClick={() => navigate('tasks')}>All tasks</Button>} flush>
+          {open.length ? (
+            <div className="fx-list">
+              {open.slice(0, 7).map((tk) => (
+                <div className="fx-list-item" key={tk.id}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Complete ${tk.title}`}
+                    onChange={() => void run(tk.id, () => call('tasks.save', { id: tk.id, title: tk.title, status: 'done' }))}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div className="fx-cell-title" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {tk.title}
+                    </div>
+                    <div className="fx-cell-sub">
+                      {tk.priority}
+                      {tk.due ? ` · due ${tk.due.slice(0, 10)}` : ''}
+                    </div>
+                  </div>
+                  {tk.due && tk.due.slice(0, 10) < today ? <Status tone="critical">overdue</Status> : tk.status === 'doing' ? <Status tone="busy">doing</Status> : null}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Empty title="All clear" action={<Button size="sm" icon="plus" onClick={() => navigate('tasks')}>Add a task</Button>}>
+              Nothing on your list.
+            </Empty>
+          )}
+        </Card>
+      </Grid>
+
+      <Grid cols={3}>
+        <Card title="Drives" actions={<Button size="sm" variant="ghost" onClick={() => navigate('storage')}>Storage</Button>}>
+          <div className="fx-grid" style={{ gap: 12 }}>
+            {disks.map((d) => (
+              <div key={d.mount}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, marginBottom: 4 }}>
+                  <span className="mono">{d.mount}</span>
+                  <span className="fx-muted">
+                    {formatBytes(d.size - d.used)} free of {formatBytes(d.size)}
+                  </span>
+                </div>
+                <Meter value={d.used} max={d.size} label={`${d.mount} used`} />
+              </div>
+            ))}
+            {!disks.length && <span className="fx-muted">Reading drives…</span>}
+          </div>
+        </Card>
+        <Card title="Recent alerts" actions={<Button size="sm" variant="ghost" onClick={() => navigate('alerts')}>Inbox</Button>} flush>
+          {alerts.data?.length ? (
+            <div className="fx-list">
+              {alerts.data.map((a) => (
+                <div className="fx-list-item" key={a.id} style={{ fontSize: 13 }}>
+                  <Status tone={a.severity === 'critical' ? 'critical' : a.severity === 'warning' ? 'warning' : 'info'}>{a.severity}</Status>
+                  <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontWeight: a.read ? 400 : 600 }}>{a.title}</span>
+                  <span className="fx-muted" style={{ fontSize: 12 }}>{timeAgo(a.createdAt)}</span>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <Empty title="No alerts">FBRX OS watches performance, storage, security and your network in the background.</Empty>
+          )}
+        </Card>
+        <Card title="This computer">
+          <KeyValue
+            items={[
+              ['Model', info.data ? `${info.data.machine.manufacturer} ${info.data.machine.model}`.trim() || '—' : '…'],
+              ['System', info.data ? `${info.data.os.name} ${info.data.os.version}` : status.platform],
+              ['Processor', info.data ? `${info.data.cpu.model} (${info.data.cpu.cores} cores)` : '…'],
+              ['Memory', info.data ? formatBytes(info.data.memoryTotal) : '…'],
+              ['Graphics', info.data?.gpus.map((g) => g.model).join(', ') || '—'],
+              ['License', `${status.license.edition} (${status.license.state})`],
+              ['Organisation', status.fleet.state === 'unenrolled' ? 'Standalone' : `${status.fleet.tenantName} · ${status.fleet.state}`],
+            ]}
+          />
+        </Card>
+      </Grid>
+
+      <Card title="Services" subtitle="Supervised by the watchdog; failed services restart automatically" flush>
+        <div className="fx-list">
+          {status.services.map((sv) => (
+            <div className="fx-list-item" key={sv.name}>
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div className="fx-cell-title">{sv.title}</div>
+                <div className="fx-cell-sub" style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {sv.message ?? sv.description}
+                </div>
+              </div>
+              <Status tone={serviceTone(sv.state)}>{sv.state}</Status>
+              {sv.state !== 'disabled' && (
+                <Button size="sm" variant="ghost" icon="refresh" title={`Restart ${sv.title}`} aria-label={`Restart ${sv.title}`} loading={busy === sv.name} onClick={() => void run(sv.name, () => call('system.restartService', { name: sv.name }), `${sv.title} restarted`)} />
+              )}
+            </div>
+          ))}
+        </div>
+      </Card>
+    </Page>
+  );
+}

@@ -52,6 +52,10 @@ export interface PlatformAdapter {
   /** Run plugins under the Node permission model. Disable only for debugging. */
   sandboxPlugins: boolean;
   updates: UpdateController | null;
+  /** Folder with the FBRX Mobile web app served to paired phones. */
+  meshMobileDir?: string | null;
+  /** How AI apps start the FBRX MCP bridge (the app executable in Node mode plus the bridge script). */
+  mcpShim?: { command: string; args: string[]; env?: Record<string, string> } | null;
   specialDirs(): SpecialDirs;
   notify(n: NotificationEvent): void;
   /** Ask the shell to restart the core (after restore, update, remote `app.restart`). */

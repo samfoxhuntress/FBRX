@@ -45,6 +45,8 @@ export function createElectronPlatform(o: {
     licensePublicKeys: keys,
     sandboxPlugins: process.env.FBRX_PLUGIN_SANDBOX !== '0',
     updates: o.updates,
+    meshMobileDir: join(workerDir, 'mobile'),
+    mcpShim: { command: process.execPath, args: [join(workerDir, 'fbrx-mcp.mjs')], env: { ELECTRON_RUN_AS_NODE: '1' } },
     specialDirs: () => {
       const d = defaultSpecialDirs();
       try {

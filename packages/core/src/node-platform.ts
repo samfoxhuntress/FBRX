@@ -30,6 +30,15 @@ export function defaultPluginWorkerPath(): string {
   return join(here, 'plugin-worker.mjs');
 }
 
+/** FBRX Mobile files (next to a bundle as `mobile/`, or `packages/core/mobile` from source). */
+export function defaultMobileDir(): string | null {
+  const here = dirname(fileURLToPath(import.meta.url));
+  for (const candidate of [join(here, 'mobile'), join(here, '..', 'mobile')]) {
+    if (existsSync(join(candidate, 'app.js'))) return candidate;
+  }
+  return null;
+}
+
 /** Keychain for headless installs: `FBRX_MASTER_KEY` (base64, 32 bytes) if set, else a 0600 key file. */
 export function headlessKeychain(keyFile: string): KeychainAdapter {
   const env = process.env.FBRX_MASTER_KEY;
@@ -61,6 +70,8 @@ export function createNodePlatform(o: NodePlatformOptions): PlatformAdapter {
     licensePublicKeys: keys,
     sandboxPlugins: o.sandboxPlugins ?? process.env.FBRX_PLUGIN_SANDBOX !== '0',
     updates: null,
+    meshMobileDir: defaultMobileDir(),
+    mcpShim: null,
     specialDirs: defaultSpecialDirs,
     notify: (n) => console.log(`[notification] ${n.title}: ${n.body}`),
     requestRestart: o.requestRestart ?? ((reason) => console.log(`[restart requested: ${reason}]`)),

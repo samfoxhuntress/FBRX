@@ -14,6 +14,9 @@ design assumes the model can be wrong or manipulated and puts every action behin
 | Local scripts → core | Local API on 127.0.0.1 only (remote opt-in), bearer tokens (full / agent-scoped), Host-header checks against DNS rebinding |
 | Device ↔ control plane | HTTPS/WSS; device bearer token issued at enrollment and stored hashed on the server and in the device vault; idempotent, expiring commands; privileged commands need an admin role |
 | Admin → control plane | scrypt passwords, TOTP MFA, short revocable sessions, scoped API keys, RBAC, tenant isolation, rate-limited auth endpoints, full audit |
+| Paired devices → workstation | Mesh off by default; one-time pairing codes proven with HMAC over both public keys; every request sealed with NaCl box, timestamped and replay-checked; per-device permissions and instant revocation ([details](MESH.md)) |
+| Other AI apps → workstation | MCP bridge over the Local API with the agent-scoped token, so calls get the same policy, guardian, approvals and audit as Fabric; the token is read from the data folder, never copied into other apps' configuration |
+| FBRX → Windows administrator rights | Only for actions the person starts at the workstation (never the Local API, the agent's read tools or mesh peers); scripts go to the elevated PowerShell as an encoded command, not a file, and Windows shows the UAC prompt every time |
 
 ## Policy defaults
 
@@ -27,6 +30,12 @@ Out of the box (`packages/shared/src/policy.ts`):
 * Destructive shell patterns (`rm -rf /`, `mkfs`, `dd of=/dev/…`, fork bombs, `format C:`, `diskpart`,
   `curl … | sh`) are blocked outright.
 * Limits: 12 model steps and 40 tool calls per run, 60 tool calls per minute, approvals time out after 5 minutes.
+* New chats start **offline**: the first network tool in a chat asks the person to put that chat online.
+* Methods that change the computer (terminal, file writes, ending processes, Defender, firewall, repairs, Hyper-V,
+  network adapters, mesh pairing, connecting AI apps) are reserved for the person at the workstation. Automation
+  through the Local API can only read files inside the folders the policy allows.
+* The link checker follows redirects itself without running page code and refuses to follow a link into a private
+  network address, so a malicious link cannot use it to reach your router or other local devices.
 
 Administrators can tighten or relax all of this per tenant, group or device from the console and lock settings
 so users cannot change them. `mode: audit` lets you trial a stricter policy and see what it would block first.

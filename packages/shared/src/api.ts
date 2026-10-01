@@ -7,6 +7,7 @@
  */
 import type { LicenseStatus } from './license';
 import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
+import type { ExtEvents, ExtMethods } from './ext';
 import type { Settings } from './settings';
 import type { UpdateChannel } from './constants';
 
@@ -163,6 +164,8 @@ export interface ConversationSummary {
   providerId: string | null;
   model: string | null;
   origin: InvocationOrigin;
+  /** Offline chats ask before the agent uses an internet tool for the first time. */
+  offline: boolean;
 }
 
 export interface Conversation extends ConversationSummary {
@@ -181,7 +184,8 @@ export type AgentEvent =
   | { type: 'tool.updated'; runId: string; conversationId: string; messageId: string; call: ToolCallRecord }
   | { type: 'run.completed'; runId: string; conversationId: string; steps: number; usage: TokenUsage }
   | { type: 'run.failed'; runId: string; conversationId: string; error: string }
-  | { type: 'run.cancelled'; runId: string; conversationId: string };
+  | { type: 'run.cancelled'; runId: string; conversationId: string }
+  | { type: 'mode.changed'; runId: string | null; conversationId: string; offline: boolean };
 
 export interface ProviderStatus {
   id: string;
@@ -425,7 +429,7 @@ export interface NotificationEvent {
 }
 
 /** Method name → (params) => result. Results may be returned as promises by implementations. */
-export interface CoreMethods {
+export interface CoreMethods extends ExtMethods {
   'system.status': () => SystemStatus;
   'system.restartService': (p: { name: string }) => ServiceStatus;
   'logs.tail': (p: { lines?: number; level?: LogLine['level'] }) => LogLine[];
@@ -445,12 +449,13 @@ export interface CoreMethods {
 
   'ai.providers': () => ProviderStatus[];
   'ai.models': (p: { providerId: string }) => ModelInfo[];
-  'ai.chat': (p: { conversationId?: string; message: string; providerId?: string; model?: string }) => { runId: string; conversationId: string };
+  'ai.chat': (p: { conversationId?: string; message: string; providerId?: string; model?: string; offline?: boolean }) => { runId: string; conversationId: string };
   'ai.cancel': (p: { runId: string }) => { cancelled: boolean };
   'ai.conversations.list': () => ConversationSummary[];
   'ai.conversations.get': (p: { id: string }) => Conversation;
   'ai.conversations.rename': (p: { id: string; title: string }) => ConversationSummary;
   'ai.conversations.delete': (p: { id: string }) => { deleted: boolean };
+  'ai.conversations.setOffline': (p: { id: string; offline: boolean }) => ConversationSummary;
 
   'runtime.status': () => RuntimeStatus;
   'runtime.start': () => RuntimeStatus;
@@ -519,7 +524,7 @@ export type CoreMethod = keyof CoreMethods;
 export type CoreParams<M extends CoreMethod> = Parameters<CoreMethods[M]> extends [infer P] ? P : undefined;
 export type CoreResult<M extends CoreMethod> = ReturnType<CoreMethods[M]>;
 
-export interface CoreEvents {
+export interface CoreEvents extends ExtEvents {
   agent: AgentEvent;
   'approval.requested': ApprovalRequest;
   'approval.resolved': { id: string; decision: 'approve' | 'deny' | 'expired'; by: string };

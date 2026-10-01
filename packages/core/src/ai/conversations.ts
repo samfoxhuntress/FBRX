@@ -9,6 +9,7 @@ interface ConvRow {
   provider_id: string | null;
   model: string | null;
   origin: InvocationOrigin;
+  offline: number;
   created_at: string;
   updated_at: string;
   message_count?: number;
@@ -36,17 +37,28 @@ export interface StoredMessage extends ChatMessage {
 export class ConversationStore {
   constructor(private readonly db: Db) {}
 
-  create(title: string, origin: InvocationOrigin): ConversationSummary {
+  create(title: string, origin: InvocationOrigin, offline = false): ConversationSummary {
     const id = newId('conv');
     const now = new Date().toISOString();
     this.db.run(
-      'INSERT INTO conversations (id, title, origin, created_at, updated_at) VALUES (?, ?, ?, ?, ?)',
+      'INSERT INTO conversations (id, title, origin, offline, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)',
       id,
       title.slice(0, 120) || 'New conversation',
       origin,
+      offline ? 1 : 0,
       now,
       now,
     );
+    return this.summary(id);
+  }
+
+  isOffline(id: string): boolean {
+    return !!this.db.get<{ offline: number }>('SELECT offline FROM conversations WHERE id = ?', id)?.offline;
+  }
+
+  setOffline(id: string, offline: boolean): ConversationSummary {
+    const { changes } = this.db.run('UPDATE conversations SET offline = ? WHERE id = ?', offline ? 1 : 0, id);
+    if (!changes) throw new CoreError('NOT_FOUND', `Conversation ${id} not found`);
     return this.summary(id);
   }
 
@@ -142,6 +154,7 @@ function toSummary(r: ConvRow): ConversationSummary {
     providerId: r.provider_id,
     model: r.model,
     origin: r.origin,
+    offline: !!r.offline,
   };
 }
 

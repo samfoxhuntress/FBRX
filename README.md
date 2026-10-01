@@ -1,8 +1,9 @@
 # FBRX OS — Fabrics Operating System
 
-FBRX OS is a desktop super-tool for macOS and Windows with a **local-first AI agent** that is governed end to end,
-plus a **control plane** and **admin console** for running it across a fleet of workstations — or selling it to
-other companies, each in its own tenant.
+FBRX OS is a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabric,** that is governed
+end to end, an everyday **command center** (dashboard, tasks, notes, Spotlight, alerts, PC care, Network Center,
+your phone), plus a **control plane** and **admin console** for running it across a fleet of workstations — or
+selling it to other companies, each in its own tenant.
 
 ```
  ┌──────────────────────────── Workstation (macOS / Windows) ────────────────────────────┐
@@ -35,6 +36,9 @@ other companies, each in its own tenant.
 | Sell it | Tenants per customer, editions (Community / Pro / Enterprise), offline-verifiable Ed25519 license keys, seats, expiry, version caps. See [docs/LICENSING.md](docs/LICENSING.md). |
 | Admin console, credentials management, real-time backend | Fleet dashboard, device detail and live commands, managed settings/policy with locks, secrets pushed into device vaults, users/roles/MFA/API keys, releases, packages, snapshots, webhooks, audit. See [docs/ADMIN_CONSOLE.md](docs/ADMIN_CONSOLE.md). |
 | Build in other tools and connect to other apps | Plugin SDK (sandboxed workers), REST / MCP / webhook / FBRX-peer connectors, Local API for scripts and other apps. See [docs/PLUGINS.md](docs/PLUGINS.md). |
+| An everyday command center | Live dashboard, tasks / notes / projects / snippets, Spotlight (Alt+Space), files, processes, terminal, toolbox, library, alerts to desktop / phone / Slack / Teams / e-mail / your admin console, and a theme studio with nine looks. See [docs/COMMAND_CENTER.md](docs/COMMAND_CENTER.md). |
+| PC care for Windows | Storage clean-up and disk health, Microsoft Defender and firewall, link and file checks, Windows Sandbox, winget / Windows Update / drivers, a bug catcher with one-click repairs, a Hyper-V lab, and a Network Center (trace route, device discovery, speed, Wi-Fi, Bluetooth, printers). |
+| Your other devices and AI apps | An encrypted mesh with your other FBRX computers and the FBRX Mobile phone app (per-device permissions, one-time pairing codes); one-click MCP connection for Claude Desktop, Claude Code, Cursor, Windsurf and VS Code. See [docs/MESH.md](docs/MESH.md). |
 
 ## Repository layout
 
@@ -44,14 +48,17 @@ apps/
   control-plane/    Fastify server: fleet, licensing, updates, admin API (bundled to one file)
   admin-console/    React admin console (served by the control plane)
 packages/
-  core/             The FBRX OS runtime (agent, governance, vault, plugins, connectors, backup, fleet agent)
+  core/             The FBRX OS runtime (agent, governance, vault, plugins, connectors, backup, fleet agent,
+                    workspace, alerts, Windows PC care, network diagnostics, mesh, AI coordination)
+  core/mobile/      FBRX Mobile, the phone web app served over the mesh
   shared/           Types, schemas, protocol, crypto helpers shared by everything
   ui/               Design system + charts used by both UIs
   plugin-sdk/       Types and helpers for plugin authors
 plugins/example-toolkit/   Reference plugin
 scripts/            Release, licensing, plugin and runtime tooling; local fleet demo
 deploy/             Docker compose + Caddy for the control plane, provisioning example
-docs/               Architecture, deployment, backup/restore, plugins, security, licensing, admin console
+docs/               Architecture, deployment, backup/restore, plugins, security, licensing, admin console,
+                    command center, mesh
 ```
 
 ## Install on your own laptop
@@ -129,6 +136,9 @@ Other entry points:
 * The packaged app has been exercised end to end on Linux (unpacked build: onboarding, plugin install, enrollment,
   remote commands, encrypted backup upload). macOS and Windows installers are produced by the Release workflow on
   GitHub-hosted runners; signing and notarization need your Apple Developer ID and Windows code-signing certificate.
+* The PC-care pages (Defender, firewall, updates, bug catcher, Hyper-V, printers, adapters) use Windows PowerShell
+  and are Windows-only; CI runs their read-only checks on a Windows runner. Actions that change Windows are
+  exercised by hand and always go through the UAC prompt.
 * The local runtime downloads models from Hugging Face and llama.cpp from GitHub; air-gapped sites can pre-seed
   `models/` or point the catalog at an internal mirror.
 * The control plane uses SQLite (`node:sqlite`) — fine for thousands of devices on one node. Put the data volume

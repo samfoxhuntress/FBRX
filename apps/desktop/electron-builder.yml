@@ -13,6 +13,10 @@ files:
 asarUnpack:
   # Forked as a separate (sandboxed) Node process; must live on the real filesystem.
   - dist/main/plugin-worker.mjs
+  # Started by other AI apps (Claude Desktop, Cursor, …) with the app executable in Node mode.
+  - dist/main/fbrx-mcp.mjs
+  # FBRX Mobile, served to paired phones over the local network.
+  - dist/main/mobile/**
 extraResources:
   # Bundled local AI runtime (llama.cpp). Populated by `npm run runtime:fetch` (CI does this per platform).
   # If it is missing, users can install it from the app (Local AI → Install runtime).

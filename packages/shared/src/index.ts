@@ -8,3 +8,4 @@ export * from './license';
 export * from './commands';
 export * from './protocol';
 export * from './api';
+export * from './ext';

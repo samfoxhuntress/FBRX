@@ -198,8 +198,8 @@ pre,
   border-radius: 8px;
   display: grid;
   place-items: center;
-  background: linear-gradient(135deg, #2a78d6, #4a3aa7);
-  color: #fff;
+  background: linear-gradient(135deg, var(--brand-a, #2a78d6), var(--brand-b, #4a3aa7));
+  color: var(--brand-ink, #fff);
   font-weight: 700;
   font-size: 12px;
   letter-spacing: 0.02em;

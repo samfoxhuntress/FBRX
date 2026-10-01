@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { CoreEventName, CoreMethod, CoreMethods } from '@fbrx/shared';
 import { call, onAnyEvent } from './client';
 
-type Params<M extends CoreMethod> = Parameters<CoreMethods[M]> extends [infer P] ? P : undefined;
+type Params<M extends CoreMethod> = Parameters<CoreMethods[M]>[0];
 type Result<M extends CoreMethod> = Awaited<ReturnType<CoreMethods[M]>>;
 
 /** Calls a core method, keeps the result fresh on the given events (debounced) and on demand. */
@@ -58,4 +58,15 @@ export function useInterval(fn: () => void, ms: number) {
 /** Whether a settings path is locked by the organisation. */
 export function isLocked(locked: string[] | undefined, path: string) {
   return !!locked?.some((l) => path === l || path.startsWith(`${l}.`) || l.startsWith(`${path}.`));
+}
+
+/** The agent's display name (Settings → Agent). */
+export function useAgentName(): string {
+  const { data } = useCore('settings.get', undefined, ['settings.changed']);
+  return data?.settings.ai.agentName ?? 'Fabric';
+}
+
+/** A unique id for correlating streamed progress events with the request that started them. */
+export function newReqId(): string {
+  return `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }

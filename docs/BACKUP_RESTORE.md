@@ -61,6 +61,7 @@ Use **clone** to stand up *additional* machines that start from the same state (
 * Keeps settings, local policy, the user's own vault secrets, plugins, connectors, workspace and memory.
 * Drops the fleet identity, the managed layers (settings, policy, secrets, license) and queued commands, so the copy
   enrolls as a new device and receives its own managed configuration.
+* Drops the mesh identity and paired devices, so each copy pairs its own phone and computers.
 
 Desktop: **Restore from file → Clone**. Headless: `fbrx-headless restore snapshot.fbrxsnap "<passphrase>" --clone`.
 Fleet: pick the snapshot as the **template** on an enrollment token — every machine provisioned with that token

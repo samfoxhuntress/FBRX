@@ -1,6 +1,5 @@
 import type { CoreEventName, CoreEvents, CoreMethod, CoreMethods } from '@fbrx/shared';
 
-type Params<M extends CoreMethod> = Parameters<CoreMethods[M]> extends [infer P] ? P : undefined;
 type Result<M extends CoreMethod> = Awaited<ReturnType<CoreMethods[M]>>;
 
 export interface DialogOptions {
@@ -20,6 +19,11 @@ interface Bridge {
   reveal?(path: string): Promise<unknown>;
   openExternal?(url: string): Promise<unknown>;
   appInfo?(): Promise<{ version: string; platform: string; arch: string; dataDir: string; packaged: boolean } | null>;
+  /** Spotlight window helpers (Electron only). */
+  showSpotlight?(): void;
+  spotlightHide?(): void;
+  openMain?(route: string): void;
+  copyText?(text: string): Promise<void>;
 }
 
 declare global {
@@ -47,7 +51,7 @@ function httpBridge(): Bridge {
     },
     on(cb) {
       const es = new EventSource(`${base}/v1/events?token=${encodeURIComponent(token)}`);
-      const names: CoreEventName[] = ['agent', 'approval.requested', 'approval.resolved', 'service.changed', 'vault.changed', 'audit.appended', 'runtime.changed', 'runtime.download', 'settings.changed', 'policy.changed', 'plugins.changed', 'connectors.changed', 'tools.changed', 'fleet.changed', 'license.changed', 'updates.changed', 'notification'];
+      const names: CoreEventName[] = ['agent', 'approval.requested', 'approval.resolved', 'service.changed', 'vault.changed', 'audit.appended', 'runtime.changed', 'runtime.download', 'settings.changed', 'policy.changed', 'plugins.changed', 'connectors.changed', 'tools.changed', 'fleet.changed', 'license.changed', 'updates.changed', 'notification', 'workspace.changed', 'alerts.new', 'alerts.changed', 'mesh.changed', 'mesh.message'];
       for (const n of names) es.addEventListener(n, (e) => cb(n, JSON.parse((e as MessageEvent).data)));
       return () => es.close();
     },
@@ -56,7 +60,7 @@ function httpBridge(): Bridge {
 
 export const bridge: Bridge = window.fbrx ? { kind: 'electron', ...window.fbrx } : httpBridge();
 
-export function call<M extends CoreMethod>(method: M, ...args: Params<M> extends undefined ? [] : [Params<M>]): Promise<Result<M>> {
+export function call<M extends CoreMethod>(method: M, ...args: Parameters<CoreMethods[M]>): Promise<Result<M>> {
   return bridge.call(method, args[0]) as Promise<Result<M>>;
 }
 

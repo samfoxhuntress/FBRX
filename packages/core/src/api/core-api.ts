@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { SECRET_KINDS, type CoreMethod, type InvocationOrigin } from '@fbrx/shared';
+import { EXT_USER_ONLY, SECRET_KINDS, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -32,10 +32,14 @@ const USER_ONLY = new Set<string>([
   'settings.update',
   'approvals.resolve',
   'updates.install',
+  ...EXT_USER_ONLY,
 ]);
 
 /** Read-only methods are not audited (they would drown the log). */
 const READ_ONLY = /\.(status|list|get|types|catalog|installed|policy|query|stats|verify|models|providers|inspect|info)$|^logs\.tail$|^ai\.conversations\.(list|get)$/;
+/** Command-center reads (dashboards poll these). */
+const EXT_READ_ONLY =
+  /^(sysinfo\.\w+|files\.(home|read|search)|spotlight\.(query|files)|alerts\.(rules|inbox|counts)|storage\.(drives|disks|cleanupInfo|analyze)|security\.(defender|defenderPrefs|threats|firewall|ports|processAudit|startup|fileReport|linkCheck)|bugs\.(scan|fixes)|winupdates\.(apps|windows|drivers|hotfixes)|lab\.vms|net\.(context|publicIp|ping|traceroute|scans|scanGet|compare|speedHistory|wifi|bluetooth|printers|dns|port|adapters)|mesh\.(messages|peerInfo)|aicoord\.(detect|bridge))$/;
 
 const SENSITIVE_KEYS = new Set(['value', 'passphrase', 'recoveryPassphrase', 'current', 'next', 'key', 'token', 'password']);
 
@@ -55,7 +59,7 @@ const NameSchema = z.object({ name: z.string().min(1) });
 const IdSchema = z.object({ id: z.string().min(1) });
 
 export function buildCoreApi(k: Kernel): Record<string, Handler> {
-  const h: Record<CoreMethod | 'agent.runToCompletion', Handler> = {
+  const h: Record<Exclude<CoreMethod, keyof ExtMethods> | 'agent.runToCompletion', Handler> = {
     'system.status': () => k.status(),
     'system.restartService': (p) => k.services.restart(NameSchema.parse(p).name),
     'logs.tail': (p) => k.logSink.tail(Math.min(Number(p?.lines ?? 200), 2000), p?.level),
@@ -111,7 +115,7 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'ai.providers': () => k.providers.status(),
     'ai.models': (p) => k.providers.models(z.object({ providerId: z.string() }).parse(p).providerId),
     'ai.chat': (p, ctx) => {
-      const q = z.object({ conversationId: z.string().optional(), message: z.string(), providerId: z.string().optional(), model: z.string().optional() }).parse(p);
+      const q = z.object({ conversationId: z.string().optional(), message: z.string(), providerId: z.string().optional(), model: z.string().optional(), offline: z.boolean().optional() }).parse(p);
       const { runId, conversationId } = k.agent.start({ ...q, origin: ctx.origin, actor: ctx.actor });
       return { runId, conversationId };
     },
@@ -127,6 +131,10 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       return k.conversations.rename(q.id, q.title);
     },
     'ai.conversations.delete': (p) => ({ deleted: k.conversations.delete(IdSchema.parse(p).id) }),
+    'ai.conversations.setOffline': (p) => {
+      const q = z.object({ id: z.string(), offline: z.boolean() }).parse(p);
+      return k.agent.setOffline(q.id, q.offline);
+    },
 
     'runtime.status': () => k.runtime.status(),
     'runtime.start': () => k.runtime.start(),
@@ -263,7 +271,7 @@ export function isUserOnly(method: string) {
 }
 
 export function isReadOnly(method: string) {
-  return READ_ONLY.test(method);
+  return READ_ONLY.test(method) || EXT_READ_ONLY.test(method);
 }
 
 export { scrub as scrubParams };

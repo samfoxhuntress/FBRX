@@ -22,6 +22,7 @@ export function runShell(
   cwd: string,
   timeoutMs: number,
   signal: AbortSignal,
+  onChunk?: (stream: 'out' | 'err', text: string) => void,
 ): Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }> {
   return new Promise((resolve, reject) => {
     const { file, args } = shellCommand(command);
@@ -38,9 +39,11 @@ export function runShell(
     const LIMIT = 400_000;
     child.stdout.on('data', (b: Buffer) => {
       if (stdout.length < LIMIT) stdout += b.toString('utf8');
+      onChunk?.('out', b.toString('utf8'));
     });
     child.stderr.on('data', (b: Buffer) => {
       if (stderr.length < LIMIT) stderr += b.toString('utf8');
+      onChunk?.('err', b.toString('utf8'));
     });
     const kill = () => {
       if (child.exitCode !== null || !child.pid) return;

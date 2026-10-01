@@ -1,6 +1,6 @@
 // Builds the desktop app: main (ESM) + preload (CJS) with esbuild, renderer with Vite, icons and the plugin worker.
 import { build } from 'esbuild';
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { execFileSync } from 'node:child_process';
@@ -39,6 +39,21 @@ await build({
   external: ['electron'],
 });
 copyFileSync(join(root, 'packages/core/src/plugins/plugin-worker.mjs'), join(app, 'dist/main/plugin-worker.mjs'));
+// MCP bridge for other AI apps: a self-contained Node script run by the app executable (ELECTRON_RUN_AS_NODE).
+await build({
+  ...common,
+  entryPoints: [join(root, 'packages/core/src/aicoord/mcp-shim.ts')],
+  outfile: join(app, 'dist/main/fbrx-mcp.mjs'),
+  format: 'esm',
+  banner: { js: "import { createRequire as __fbrxRequire } from 'node:module'; const require = __fbrxRequire(import.meta.url);" },
+});
+// FBRX Mobile (phone web app) plus the NaCl library it uses for end-to-end encryption.
+const mobileOut = join(app, 'dist/main/mobile');
+mkdirSync(mobileOut, { recursive: true });
+const mobileSrc = join(root, 'packages/core/mobile');
+for (const f of readdirSync(mobileSrc)) copyFileSync(join(mobileSrc, f), join(mobileOut, f));
+copyFileSync(join(root, 'node_modules/tweetnacl/nacl-fast.min.js'), join(mobileOut, 'nacl.min.js'));
+copyFileSync(join(app, 'build', 'icon.png'), join(mobileOut, 'icon.png'));
 
 execFileSync(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build', '--config', join(app, 'vite.config.ts')], { stdio: 'inherit', cwd: app });
 console.log(`Built FBRX OS desktop ${pkg.version}`);

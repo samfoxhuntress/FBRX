@@ -97,6 +97,12 @@ export const DEFAULT_POLICY: Policy = {
       match: { tool: 'memory.*', source: 'builtin' },
       action: 'allow',
     },
+    {
+      id: 'builtin-workspace',
+      description: 'Notes, tasks, projects and snippets stay inside FBRX OS, so the agent may manage them without approval',
+      match: { tool: 'workspace.*', source: 'builtin' },
+      action: 'allow',
+    },
   ],
   filesystem: {
     allowedRoots: ['${HOME}', '${WORKSPACE}'],

@@ -21,6 +21,10 @@ const api = {
   reveal: (path: string) => ipcRenderer.invoke('fbrx:reveal', path),
   openExternal: (url: string) => ipcRenderer.invoke('fbrx:openExternal', url),
   appInfo: () => ipcRenderer.invoke('fbrx:app'),
+  showSpotlight: () => void ipcRenderer.invoke('fbrx:spotlight', 'show'),
+  spotlightHide: () => void ipcRenderer.invoke('fbrx:spotlight', 'hide'),
+  openMain: (route: string) => void ipcRenderer.invoke('fbrx:spotlight', 'open', route),
+  copyText: async (text: string) => void (await ipcRenderer.invoke('fbrx:copy', text)),
   platform: process.platform,
 };
 

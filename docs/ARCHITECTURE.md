@@ -25,8 +25,8 @@ and an agent-scoped Local API token can only run the agent and invoke tools.
 Each subsystem is a service with dependencies, an optional license/settings gate and a health check:
 
 ```
-storage → audit → vault → governance → tools → { plugins, connectors, runtime, agent }
-                                         backup · fleet · localapi
+storage → audit → vault → governance → tools → { plugins, connectors, runtime, agent, mesh }
+                                         backup · fleet · localapi · monitor (live metrics + alert rules)
 ```
 
 `ServiceManager` starts them in dependency order, health-checks them every 15 s, restarts failed services with
@@ -121,6 +121,20 @@ An HTTP server on `127.0.0.1:47821` (remote access opt-in) with two bearer token
 `localapi` origin may call) and **agent** (agent runs and tool calls only). Host-header checks block DNS rebinding.
 Used by scripts, other desktop apps and FBRX-peer connectors on other workstations.
 
+### Command center
+
+The everyday modules live beside the agent and share its contract (`packages/shared/src/ext.ts`, merged into
+`CoreMethods`): `WorkspaceStore` (notes, tasks, projects, snippets in SQLite), `SystemMonitor` (2-second samples
+with a 6-minute history, pushed as `sysinfo.live` events), `Spotlight`, `AlertEngine` (rules every 30 s, inbox and
+delivery channels), `NetDiag`, the Windows modules under `src/windows/` (storage, security, updates, troubleshooting,
+Hyper-V lab) and `MeshService`. Windows modules run PowerShell through `windows/ps.ts`: scripts are passed as
+`-EncodedCommand`, values are single-quote escaped, and `elevated()` starts an elevated PowerShell through UAC with
+the script in the command line (never a temporary file). Each module also exposes governed agent tools
+(`workspace.*`, `pc.*`, `net.*`, `alerts.recent`). See [COMMAND_CENTER.md](COMMAND_CENTER.md) and [MESH.md](MESH.md).
+
+The MCP bridge for other AI apps (`src/aicoord/mcp-shim.ts`, bundled to `fbrx-mcp.mjs`) is a stdio MCP server that
+forwards to the Local API with the agent-scoped token.
+
 ## Fleet protocol
 
 ```
@@ -161,3 +175,7 @@ falls under the rollout percentage.
 * The renderer is sandboxed with context isolation and a strict CSP; its only capability is the `window.fbrx`
   bridge (`call`, `on`, file dialogs, reveal in Finder/Explorer, open `http(s)` links in the browser).
 * Single-instance lock, start hidden on login, minimise to tray.
+* Spotlight is a second small frameless window on the same renderer bundle (`#/spotlight`), opened by a global
+  shortcut (`spotlight.hotkey`) or Ctrl+K, positioned on the screen with the mouse and hidden when it loses focus.
+* The build also bundles the MCP bridge (`dist/main/fbrx-mcp.mjs`) and FBRX Mobile (`dist/main/mobile/`), both
+  unpacked from the asar so other processes and the mesh server can read them.
