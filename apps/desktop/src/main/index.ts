@@ -9,6 +9,7 @@ import { ElectronUpdateController } from './updater';
 
 const dataDir = process.env.FBRX_HOME ?? app.getPath('userData');
 const rendererUrl = process.env.FBRX_RENDERER_URL ?? null;
+const UPDATE_CHECK_INTERVAL_MS = 4 * 60 * 60_000;
 const actor = `user:${(() => {
   try {
     return userInfo().username;
@@ -197,7 +198,12 @@ async function boot() {
   const general = kernel.settings.get().general;
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: general.launchAtLogin, args: ['--hidden'] });
   kernel.settings.onChange((s) => app.isPackaged && app.setLoginItemSettings({ openAtLogin: s.settings.general.launchAtLogin, args: ['--hidden'] }));
-  if (kernel.fleet.enrolled) setTimeout(() => void updates.check(), 15_000);
+  // Check shortly after launch and then every few hours, so machines that live in the tray still pick up releases.
+  const checkUpdates = () => {
+    if (kernel?.fleet.enrolled) void updates.check();
+  };
+  setTimeout(checkUpdates, 15_000);
+  setInterval(checkUpdates, UPDATE_CHECK_INTERVAL_MS).unref();
 }
 
 app.whenReady().then(async () => {

@@ -2,13 +2,14 @@ import { createReadStream, existsSync, openSync, readSync, closeSync, rmSync } f
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { Readable } from 'node:stream';
-import { CommandResultSchema, DeviceEventSchema, EnrollRequestSchema, PROTOCOL_VERSION, type DeviceToServerMessage, type EnrollResponse, type HeartbeatResponse } from '@fbrx/shared';
+import { CommandResultSchema, DeviceEventSchema, EnrollRequestSchema, PROTOCOL_VERSION, featuresFor, type DeviceToServerMessage, type Edition, type EnrollResponse, type HeartbeatResponse } from '@fbrx/shared';
 import { randomToken, sha256Hex } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
 import { actorOf, deviceAuth } from '../auth';
 import { HttpError, badRequest, forbidden, notFound, unauthorized } from '../errors';
 import { resolveDeviceConfig } from '../services/device-config';
+import { parseJson } from './util';
 import { commandView, processCommandResult, processHeartbeat, recordDeviceEvent, takePendingCommands } from '../services/devices';
 import { storeStream } from '../services/storage';
 
@@ -47,11 +48,17 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
     }
     const tenant = ctx.db.get<any>('SELECT * FROM tenants WHERE id = ?', t.tenant_id);
     if (!tenant || tenant.status !== 'active') throw forbidden('Organisation is not active');
-    const lic = ctx.db.get<{ seats: number }>(
-      'SELECT seats FROM licenses WHERE tenant_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?) ORDER BY issued_at DESC LIMIT 1',
+    const lic = ctx.db.get<{ seats: number; edition: Edition; features: string }>(
+      'SELECT seats, edition, features FROM licenses WHERE tenant_id = ? AND revoked_at IS NULL AND (expires_at IS NULL OR expires_at > ?) ORDER BY issued_at DESC LIMIT 1',
       t.tenant_id,
       now,
     );
+    // Tenants without a licence may enroll (trials, internal use; devices run Community features). A licensed tenant
+    // needs fleet management in its edition or as an extra feature.
+    if (lic && !featuresFor({ edition: lic.edition, features: parseJson<string[]>(lic.features, []) }).includes('fleet')) {
+      ctx.audit.record({ type: 'system', id: null, label: `enroll:${body.device.hostname}`, tenantId: t.tenant_id, ip: req.ip }, 'device.enroll.rejected', {}, { reason: 'license lacks fleet' });
+      throw forbidden(`The ${lic.edition} license for this organisation does not include fleet management`);
+    }
     if (lic && Number(lic.seats) > 0) {
       const active = Number(ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM devices WHERE tenant_id = ? AND status = 'active'", t.tenant_id)?.n ?? 0);
       if (active >= Number(lic.seats)) throw forbidden(`License seat limit reached (${lic.seats} devices)`);

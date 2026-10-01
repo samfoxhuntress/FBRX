@@ -176,6 +176,11 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
             {ALL_FEATURES.every((x) => base.includes(x)) && <span className="fx-muted">Enterprise includes every feature.</span>}
           </div>
         </Field>
+        {!base.includes('fleet') && !extra.includes('fleet') && (
+          <Callout tone="warning" title="No fleet management">
+            Without “{FEATURES.fleet}”, new workstations cannot enroll in this organisation. Use the license as an offline key, or add the feature.
+          </Callout>
+        )}
       </div>
     </Modal>
   );

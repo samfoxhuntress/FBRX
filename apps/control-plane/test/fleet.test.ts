@@ -220,6 +220,29 @@ describe('control plane ⇄ device fleet', () => {
     expect((await asViewer('/v1/admin/releases', { method: 'POST', body: JSON.stringify({ version: '9.9.9', channel: 'stable' }) })).status).toBe(403);
   });
 
+  it('only lets tenants whose licence includes fleet management enroll devices, within their seats', async () => {
+    const c = await api('POST', '/v1/admin/tenants', { name: 'Customer C' });
+    const asC = { 'x-fbrx-tenant': c.id };
+    const enroll = async () => {
+      const t = await api('POST', '/v1/admin/enrollment-tokens', { label: 'c', maxUses: 5 }, asC);
+      return fetch(`${base}/v1/enroll`, {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ token: t.token, protocolVersion: 1, device: { name: 'c-1', hostname: 'c-1', platform: 'win32', arch: 'x64', osVersion: '11', appVersion: '1.0.0', machineId: randomBytes(8).toString('hex') } }),
+      });
+    };
+    const pro = await api('POST', '/v1/admin/licenses', { edition: 'pro', seats: 1 }, asC);
+    const refused = await enroll();
+    expect(refused.status).toBe(403);
+    expect((await refused.json()).error.message).toMatch(/does not include fleet management/);
+    await api('POST', `/v1/admin/licenses/${pro.id}/revoke`, {}, asC);
+    await api('POST', '/v1/admin/licenses', { edition: 'pro', seats: 1, features: ['fleet'] }, asC);
+    expect((await enroll()).status).toBe(200);
+    const full = await enroll();
+    expect(full.status).toBe(403);
+    expect((await full.json()).error.message).toMatch(/seat limit/);
+  });
+
   it('cuts off a retired device immediately', async () => {
     const [device] = await api('GET', '/v1/admin/devices');
     await api('DELETE', `/v1/admin/devices/${device.id}`);

@@ -5,7 +5,7 @@
  *   node scripts/pack-plugin.mjs <plugin dir> [--out <dir>] [--bundle]
  *
  * The package can be installed from the desktop app (Tools → Install plugin), pushed to a whole fleet from the
- * admin console (Packages → Upload, then the plugin.install command), or with `fbrx-headless`.
+ * admin console (Plugins → Upload plugin, then Deploy), or through the Local API (plugins.install).
  *
  * --bundle (implied when `main` is TypeScript) bundles the entry point and its npm dependencies into a single
  * index.mjs with esbuild, so the plugin needs no node_modules on the target machine. Without it, the files listed

@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { SystemStatus } from '@fbrx/shared';
+import type { SnapshotHeader, SystemStatus } from '@fbrx/shared';
 import { Button, Callout, Card, Field, Input, Status, formatBytes, useAction } from '@fbrx/ui';
-import { call } from '../client';
+import { call, pickFile } from '../client';
 import { useCore } from '../hooks';
+import { RestoreModal } from './backup';
 
 type Step = 'welcome' | 'vault' | 'ai' | 'org' | 'done';
 const STEPS: Step[] = ['welcome', 'vault', 'ai', 'org', 'done'];
@@ -14,6 +15,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
   const [ai, setAi] = useState<'local' | 'ollama' | 'anthropic' | 'skip'>('local');
   const [apiKey, setApiKey] = useState('');
   const [org, setOrg] = useState({ serverUrl: '', token: '' });
+  const [restore, setRestore] = useState<{ file: string; header: SnapshotHeader } | null>(null);
   const catalog = useCore('runtime.catalog');
   const providers = useCore('ai.providers');
   const { run, busy } = useAction();
@@ -63,11 +65,24 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
               <Field label="Name this workstation">
                 <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
               </Field>
-              <div className="fx-actions" style={{ justifyContent: 'flex-end' }}>
+              <div className="fx-actions" style={{ justifyContent: 'space-between' }}>
+                <Button
+                  icon="upload"
+                  loading={busy === 'restore'}
+                  onClick={async () => {
+                    const file = await pickFile({ kind: 'file', title: 'Choose a snapshot to restore', filters: [{ name: 'FBRX snapshot', extensions: ['fbrxsnap'] }] });
+                    if (!file) return;
+                    const header = await run('restore', () => call('backup.inspect', { file }));
+                    if (header) setRestore({ file, header });
+                  }}
+                >
+                  Restore from a backup…
+                </Button>
                 <Button variant="primary" loading={busy === 'n'} onClick={() => void run('n', () => call('settings.update', { patch: { general: { deviceName: name } } }).then(next))}>
                   Continue
                 </Button>
               </div>
+              <p className="fx-muted" style={{ fontSize: 13, margin: 0 }}>Moving from another computer? Restore its snapshot and FBRX OS picks up exactly where it left off.</p>
             </div>
           )}
           {step === 'vault' && (
@@ -168,6 +183,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
           )}
         </Card>
       </div>
+      {restore && <RestoreModal file={restore.file} header={restore.header} onClose={() => setRestore(null)} />}
     </div>
   );
 }

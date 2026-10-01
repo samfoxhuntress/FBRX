@@ -75,6 +75,51 @@ export default {
     }
   });
 
+  it('blocks direct network and process access so plugins must go through the brokered, permission-checked APIs', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    const dir = tempDir('fbrx-plugin-');
+    writeFileSync(join(dir, 'fbrx-plugin.json'), JSON.stringify({ id: 'com.test.escape', name: 'Escape', version: '0.1.0', namespace: 'escape', main: 'index.mjs', permissions: [] }));
+    writeFileSync(
+      join(dir, 'index.mjs'),
+      `import { createRequire } from 'node:module';
+const require = createRequire(import.meta.url);
+const attempts = {
+  importNet: () => import('node:net'),
+  requireHttps: () => require('https'),
+  requireBareHttp: () => require('http'),
+  moduleLoad: () => require('module')._load('net'),
+  getBuiltinModule: () => process.getBuiltinModule('node:tls'),
+  fetch: () => fetch('http://127.0.0.1:9/'),
+  webSocket: () => new WebSocket('ws://127.0.0.1:9/'),
+  stdioSocket: () => { const S = process.stdout.constructor; if (S.name === 'Socket') return new S().connect(9, '127.0.0.1'); throw Object.assign(new Error(S.name), { code: 'NOT_A_SOCKET' }); },
+  loaderHooks: () => require('module').registerHooks({ resolve: (s, c, next) => next(s, c) }),
+  childProcess: () => require('child_process').execSync('echo hi'),
+  dns: () => import('node:dns/promises'),
+};
+export default {
+  tools: [{ name: 'probe', title: 'probe', description: 'd', risk: 'read', inputSchema: { type: 'object', properties: {} },
+    async run() {
+      const out = {};
+      for (const [k, f] of Object.entries(attempts)) {
+        try { await f(); out[k] = 'ALLOWED'; } catch (e) { out[k] = e.code ?? e.message; }
+      }
+      return { output: JSON.stringify(out), data: out };
+    } }],
+};`,
+    );
+    try {
+      const info = (await kernel.call('plugins.install', { path: dir }, USER)) as any;
+      expect(info.state).toBe('running');
+      const r = await kernel.gate.invoke('escape.probe', {}, USER);
+      expect(r.status).toBe('succeeded');
+      const results = r.data as Record<string, string>;
+      for (const [attempt, outcome] of Object.entries(results)) expect([attempt, outcome]).not.toEqual([attempt, 'ALLOWED']);
+      expect(Object.keys(results)).toHaveLength(11);
+    } finally {
+      await cleanup();
+    }
+  });
+
   it('installs from a .tgz package and rejects invalid manifests', async () => {
     const { kernel, cleanup } = await makeKernel();
     const out = tempDir('fbrx-pkg-');

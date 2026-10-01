@@ -98,11 +98,11 @@ class PluginProcess {
         FBRX_PLUGIN_ID: this.manifest.id,
       },
       serialization: 'json',
-      stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
+      // No stdio pipes: a pipe would hand the plugin a net.Socket it could reuse for raw network access.
+      // The worker forwards console output and errors over IPC instead.
+      stdio: ['ignore', 'ignore', 'ignore', 'ipc'],
     });
     this.child = child;
-    child.stdout?.on('data', (b: Buffer) => this.d.log.debug(`[${this.manifest.id}] ${b.toString().trim()}`));
-    child.stderr?.on('data', (b: Buffer) => this.d.log.warn(`[${this.manifest.id}] ${b.toString().trim()}`));
     const ready = new Deferred<void>();
     child.on('message', (m: WorkerToHost) => this.onMessage(m, ready));
     child.on('exit', (code, signal) => {

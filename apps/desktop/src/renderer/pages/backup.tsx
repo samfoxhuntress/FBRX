@@ -176,7 +176,7 @@ function CreateSnapshot({ onClose, onDone, defaultIncludeModels }: { onClose: ()
   );
 }
 
-function RestoreModal({ file, header, onClose }: { file: string; header: SnapshotHeader; onClose: () => void }) {
+export function RestoreModal({ file, header, onClose }: { file: string; header: SnapshotHeader; onClose: () => void }) {
   const [passphrase, setPassphrase] = useState('');
   const [mode, setMode] = useState<'migrate' | 'clone'>('migrate');
   const [restarting, setRestarting] = useState(false);

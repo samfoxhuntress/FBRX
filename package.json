@@ -11,7 +11,7 @@
     "plugins/*"
   ],
   "engines": {
-    "node": ">=22.13"
+    "node": ">=22.15"
   },
   "scripts": {
     "typecheck": "tsc -p tsconfig.json --noEmit",

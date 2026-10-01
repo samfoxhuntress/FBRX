@@ -6,9 +6,9 @@
  *     [--version 1.2.0] [--channel stable|beta|dev] [--notes "..."|--notes-file CHANGELOG.md] \
  *     [--dir apps/desktop/release/1.2.0] [--publish] [--rollout 25] [--dry-run]
  *
- * Releases are platform-wide, so the API key must have the `superadmin` role (Account → API keys in the admin console).
+ * Releases are platform-wide, so the API key must have the `superadmin` role (Users & API keys in the admin console).
  * Re-running is safe: the release is reused and files with the same name are replaced. Without --publish the
- * release stays a draft you can review and publish from the admin console (Releases page).
+ * release stays a draft you can review and publish from the admin console (Releases).
  */
 import { createReadStream, existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -69,7 +69,7 @@ async function api(method, path, body, headers = {}) {
   } catch {
     json = { message: text };
   }
-  if (!res.ok) throw new Error(`${method} ${path} → ${res.status}: ${json?.message ?? json?.error ?? text}`);
+  if (!res.ok) throw new Error(`${method} ${path} → ${res.status}: ${json?.error?.message ?? json?.message ?? text}`);
   return json;
 }
 
