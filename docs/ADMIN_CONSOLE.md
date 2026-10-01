@@ -17,14 +17,14 @@ support every FBRX OS workstation in real time. Development: `npm run dev:consol
 | | **Plugins** | Upload plugin packages (manifest and permissions shown), deploy to devices or groups |
 | | **Backups** | Snapshots uploaded by devices; download, mark as an enrollment template, delete |
 | Platform | **Releases** | Upload installers (or let CI do it), publish to `stable`/`beta`/`dev`, staged rollout percentage |
-| | **Licenses** | Issue and revoke signed licences per tenant; copy keys for offline activation |
+| | **Licenses** | Issue and revoke signed licenses per tenant; copy keys for offline activation |
 | | **Tenants** | (superadmin) Create customers/business units, suspend them, set their default channel |
 | Access | **Users & API keys** | Invite users with a role, reset access, create API keys for automation |
 | | **Webhooks** | Signed outgoing webhooks for fleet events |
 | | **Audit log** | Every admin action and device enrollment, hash-chained and verifiable |
 | | Account (your name, top right) | Change your password (signs out your other sessions) and enable TOTP MFA |
 
-Changes to profiles, groups, credentials and licences are pushed to online devices over their WebSocket within
+Changes to profiles, groups, credentials and licenses are pushed to online devices over their WebSocket within
 seconds; offline devices pick them up when they reconnect. Device detail and the overview update live.
 
 ## Roles
@@ -37,8 +37,8 @@ seconds; offline devices pick them up when they reconnect. Device detail and the
 | Privileged commands (agent run, plugin install/uninstall, update install, back up, lock vault, restart app) | ✔ | ✔ | ✔ | | |
 | Profiles, policy, credentials, enrollment, plugins, backups, webhooks, audit | ✔ | ✔ | ✔ | | |
 | Users and API keys | ✔ | ✔ | ✔ | | |
-| Read licences | ✔ | ✔ | ✔ | | |
-| Tenants, releases, issuing licences | ✔ | | | | |
+| Read licenses | ✔ | ✔ | ✔ | | |
+| Tenants, releases, issuing licenses | ✔ | | | | |
 
 `superadmin` is the platform operator (you) and is not bound to a tenant — use the tenant switcher in the top bar.
 Everyone else belongs to exactly one tenant and only ever sees that tenant's data. Users can only grant roles at or

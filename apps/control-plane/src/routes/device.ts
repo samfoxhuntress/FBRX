@@ -53,7 +53,7 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
       t.tenant_id,
       now,
     );
-    // Tenants without a licence may enroll (trials, internal use; devices run Community features). A licensed tenant
+    // Tenants without a license may enroll (trials, internal use; devices run Community features). A licensed tenant
     // needs fleet management in its edition or as an extra feature.
     if (lic && !featuresFor({ edition: lic.edition, features: parseJson<string[]>(lic.features, []) }).includes('fleet')) {
       ctx.audit.record({ type: 'system', id: null, label: `enroll:${body.device.hostname}`, tenantId: t.tenant_id, ip: req.ip }, 'device.enroll.rejected', {}, { reason: 'license lacks fleet' });

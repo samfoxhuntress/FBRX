@@ -220,7 +220,7 @@ describe('control plane ⇄ device fleet', () => {
     expect((await asViewer('/v1/admin/releases', { method: 'POST', body: JSON.stringify({ version: '9.9.9', channel: 'stable' }) })).status).toBe(403);
   });
 
-  it('only lets tenants whose licence includes fleet management enroll devices, within their seats', async () => {
+  it('only lets tenants whose license includes fleet management enroll devices, within their seats', async () => {
     const c = await api('POST', '/v1/admin/tenants', { name: 'Customer C' });
     const asC = { 'x-fbrx-tenant': c.id };
     const enroll = async () => {

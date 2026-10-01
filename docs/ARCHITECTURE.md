@@ -22,7 +22,7 @@ and an agent-scoped Local API token can only run the agent and invoke tools.
 
 ### Services and watchdog
 
-Each subsystem is a service with dependencies, an optional licence/settings gate and a health check:
+Each subsystem is a service with dependencies, an optional license/settings gate and a health check:
 
 ```
 storage → audit → vault → governance → tools → { plugins, connectors, runtime, agent }
@@ -31,7 +31,7 @@ storage → audit → vault → governance → tools → { plugins, connectors, 
 
 `ServiceManager` starts them in dependency order, health-checks them every 15 s, restarts failed services with
 exponential backoff, opens a circuit after five restarts in ten minutes (the user is notified and the control plane
-sees it in the next heartbeat), and re-evaluates licence-gated services the moment a licence is activated, pushed or revoked.
+sees it in the next heartbeat), and re-evaluates license-gated services the moment a license is activated, pushed or revoked.
 
 ### Data layout
 
@@ -66,7 +66,7 @@ read-only in the UI and rejected by the API. Unlocked managed values act as defa
 Every tool call — whether the agent, a user, the Local API, a plugin or a remote command asked for it — goes through
 `ToolGate`:
 
-1. **Licence** — the tool's feature must be licensed.
+1. **License** — the tool's feature must be licensed.
 2. **Enabled** — disabled tools are invisible to the agent.
 3. **Schema** — input validated (and safely coerced) against the tool's JSON Schema.
 4. **Rate limit** — a per-minute ceiling on tool calls (`rateLimits.toolCallsPerMinute`).
@@ -128,7 +128,7 @@ device                                         control plane
   │ POST /v1/enroll {token, machine facts}  ─►  verifies token → device id + device bearer token (stored hashed)
   │ GET  /v1/device/ws  (WebSocket)        ◄─►  config pushes, commands, acks, heartbeats
   │ POST /v1/device/heartbeat  (fallback)   ─►  health, metrics, audit chain head, versions
-  │ GET  /v1/device/config                 ◄─   settings + locks, policy, licence, secrets, update channel/pin
+  │ GET  /v1/device/config                 ◄─   settings + locks, policy, license, secrets, update channel/pin
   │ POST /v1/device/commands/:id/result     ─►  command outcome (idempotent by command id)
   │ POST /v1/device/snapshots               ─►  encrypted snapshot upload
   │ GET  /v1/device/packages/:id           ◄─   plugin package (SHA-256 verified on the device)
@@ -149,9 +149,9 @@ falls under the rollout percentage.
 * Fastify 5 + `@fastify/websocket`, Helmet, rate limits; SQLite via `node:sqlite`; files on disk under the data dir.
 * Admin auth: scrypt passwords, TOTP MFA, revocable JWT sessions, API keys; roles `superadmin` (you, the vendor),
   then per tenant `owner`, `admin`, `operator`, `viewer`.
-* Multi-tenant: every device, token, group, profile, secret, licence, package, snapshot, webhook and audit entry is
+* Multi-tenant: every device, token, group, profile, secret, license, package, snapshot, webhook and audit entry is
   tenant-scoped. Superadmins switch tenant in the console.
-* Secrets, MFA seeds and webhook secrets are sealed with the master key; licences are signed with the Ed25519 key.
+* Secrets, MFA seeds and webhook secrets are sealed with the master key; licenses are signed with the Ed25519 key.
 * Its own audit log is hash-chained too, and every admin action lands in it.
 
 ## Desktop shell (`apps/desktop`)

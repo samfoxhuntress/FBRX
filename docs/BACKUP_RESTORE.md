@@ -48,7 +48,7 @@ newer version is refused until the target is updated.
 Use **migrate** when the new machine *replaces* the old one (hardware refresh, lost laptop, reinstall):
 
 * Everything comes back, including the fleet identity: same device record in the console, same group, managed
-  configuration, licence and secrets. The device simply reconnects from new hardware.
+  configuration, license and secrets. The device simply reconnects from new hardware.
 * The audit log continues on the same hash chain and records the restore.
 * Retire or wipe the old machine afterwards — two machines with one identity will fight over the same device record.
 
@@ -59,7 +59,7 @@ Desktop: **Backup → Restore from file → Migrate**. Headless: `fbrx-headless 
 Use **clone** to stand up *additional* machines that start from the same state (a golden image):
 
 * Keeps settings, local policy, the user's own vault secrets, plugins, connectors, workspace and memory.
-* Drops the fleet identity, the managed layers (settings, policy, secrets, licence) and queued commands, so the copy
+* Drops the fleet identity, the managed layers (settings, policy, secrets, license) and queued commands, so the copy
   enrolls as a new device and receives its own managed configuration.
 
 Desktop: **Restore from file → Clone**. Headless: `fbrx-headless restore snapshot.fbrxsnap "<passphrase>" --clone`.
@@ -88,8 +88,8 @@ Everything the control plane knows is in its data directory (`/data` in Docker):
 
 | Item | Notes |
 | --- | --- |
-| `control-plane.db` (+ `-wal`, `-shm`) | Tenants, users, devices, configuration, secrets (sealed), licences, audit |
-| `keys/` | `jwt.key`, `master.key` (seals secrets), `license-signing.pem`. Unless supplied via environment variables, **losing these is unrecoverable**: sealed secrets become unreadable and licences can no longer be issued under the same key |
+| `control-plane.db` (+ `-wal`, `-shm`) | Tenants, users, devices, configuration, secrets (sealed), licenses, audit |
+| `keys/` | `jwt.key`, `master.key` (seals secrets), `license-signing.pem`. Unless supplied via environment variables, **losing these is unrecoverable**: sealed secrets become unreadable and licenses can no longer be issued under the same key |
 | `releases/`, `snapshots/`, `packages/` | Uploaded files |
 
 Back it up with the volume stopped, or take a consistent online copy of the database:

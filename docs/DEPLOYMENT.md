@@ -6,10 +6,10 @@ plane.
 ```
 keys:generate ─► control plane (Docker) ─► tag v1.x ─► Release workflow ─► installers + update feed
                                                                               │
-                     admin console: tenant ─► licence ─► enrollment token ─► fbrx-provision.json ─► workstations
+                     admin console: tenant ─► license ─► enrollment token ─► fbrx-provision.json ─► workstations
 ```
 
-## 1. Licence signing keys
+## 1. License signing keys
 
 ```bash
 npm run keys:generate
@@ -18,7 +18,7 @@ npm run keys:generate
 * `.fbrx-keys/license-signing.pem` — **private**. Give it only to the control plane (`FBRX_LICENSE_PRIVATE_KEY`)
   and keep an offline backup. It is git-ignored.
 * `apps/desktop/build/license-public-key.pem` — public. Commit it (or store it as the `FBRX_LICENSE_PUBLIC_KEY`
-  CI secret); `apps/desktop/scripts/build.mjs` embeds it so installs verify licences offline.
+  CI secret); `apps/desktop/scripts/build.mjs` embeds it so installs verify licenses offline.
 
 Already running a control plane that generated its own key? Export the public half instead:
 
@@ -137,7 +137,7 @@ Manual equivalent: `FBRX_CP_URL=… FBRX_CP_API_KEY=… npm run release:publish 
    * Windows: `%ProgramData%\FBRX OS\fbrx-provision.json`,
    * the data folder root.
 4. On first launch the device restores the template (if any, as a **clone** — fresh identity), enrolls, pulls its
-   managed configuration, licence and secrets, and shows up in **Devices**. Users can also enroll by hand in
+   managed configuration, license and secrets, and shows up in **Devices**. Users can also enroll by hand in
    **Fleet** with the server URL and token.
 
 Headless machines: `fbrx-headless enroll https://fleet.example.com fbrx_enr_… --name LAB-01`.

@@ -7,7 +7,7 @@ design assumes the model can be wrong or manipulated and puts every action behin
 
 | Boundary | Control |
 | --- | --- |
-| Model → workstation | Every tool call passes the [governance pipeline](ARCHITECTURE.md#governance-pipeline): licence, schema validation, rate limit, policy (hard constraints → rules → risk defaults), guardian, human approval, redaction, audit |
+| Model → workstation | Every tool call passes the [governance pipeline](ARCHITECTURE.md#governance-pipeline): license, schema validation, rate limit, policy (hard constraints → rules → risk defaults), guardian, human approval, redaction, audit |
 | Untrusted content → model | Tool output (files, web pages, API responses) is scanned for prompt-injection language and handed to the model explicitly marked as untrusted data; any tool call whose input carries such language, or any other guardian warning, requires human approval with the finding shown |
 | Plugin → workstation | Separate process, Node permission model (files, processes, addons), network and process-control modules removed, all capabilities brokered and permission-checked ([details](PLUGINS.md#sandbox)) |
 | Renderer → core | Sandboxed, context-isolated renderer with a strict CSP; only the `window.fbrx` bridge, which routes through the same API and origin checks as everything else |
@@ -51,8 +51,8 @@ streamed to a SIEM via webhook connectors (device) and webhooks (control plane).
 
 ## Licensing integrity
 
-Licences are Ed25519-signed by your control plane's private key; the public key is compiled into your desktop
-builds. A customer running their own control plane cannot mint licences your builds accept.
+Licenses are Ed25519-signed by your control plane's private key; the public key is compiled into your desktop
+builds. A customer running their own control plane cannot mint licenses your builds accept.
 
 ## Supply chain and updates
 
