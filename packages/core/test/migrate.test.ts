@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readFileSync, utimesSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+import { homedir } from 'node:os';
 import { describe, expect, it } from 'vitest';
 import type { MigrateJob, MigrateRequest } from '@fbrx/shared';
 import { EventBus } from '../src/events';
@@ -79,6 +80,11 @@ describe('copy & migrate (FBRX copier)', () => {
     expect(() => m.plan({ engine: 'builtin', mode: 'mirror', source: src, dest: process.platform === 'win32' ? 'D:\\' : '/' })).toThrow(/whole drive|system or home/);
     expect(() => m.plan({ engine: 'builtin', mode: 'copy', source: join(root, 'missing'), dest: dst })).toThrow(/does not exist/);
     expect(() => m.plan({ engine: 'builtin', mode: 'copy', source: 'relative/path', dest: dst })).toThrow(/full folder paths/);
+    // Folders inside a home folder are fine to mirror into (a backup in Documents); the home folder itself is not.
+    expect(() => m.plan({ engine: 'builtin', mode: 'mirror', source: src, dest: join(homedir(), 'Documents', 'FBRX mirror test') })).not.toThrow();
+    expect(() => m.plan({ engine: 'builtin', mode: 'mirror', source: src, dest: homedir() })).toThrow(/system or home/);
+    expect(() => m.plan({ engine: 'builtin', mode: 'mirror', source: src, dest: process.platform === 'win32' ? 'C:\\Windows\\Temp\\x' : '/usr/local/x' })).toThrow(/system or home/);
+    expect(() => m.plan({ engine: 'builtin', mode: 'move', source: homedir(), dest: dst })).toThrow(/system or home/);
     const p = m.plan({ engine: 'builtin', mode: 'mirror', source: src, dest: dst });
     expect(p.warnings.join(' ')).toMatch(/deletes files/);
     if (process.platform === 'win32') {

@@ -45,14 +45,23 @@ const isRoot = (p: string) => {
   return r === parse(r).root;
 };
 
-/** Folders that must never be mirrored onto or moved away. */
-function protectedPaths(): string[] {
-  const out = [homedir()];
+/**
+ * Folders that must never be mirrored onto or moved away: system folders, including everything inside them, and
+ * the folders that hold people's files (home, Users), themselves only, so a backup into Documents\Backup is fine.
+ */
+function protectedPaths(): { tree: string[]; exact: string[] } {
+  const key = (p: string) => resolve(p).toLowerCase();
   if (process.platform === 'win32') {
     const sys = process.env.SystemRoot ?? 'C:\\Windows';
-    out.push(sys, process.env.ProgramFiles ?? 'C:\\Program Files', process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', process.env.ProgramData ?? 'C:\\ProgramData', join(parse(sys).root, 'Users'));
-  } else out.push('/System', '/Library', '/Applications', '/usr', '/bin', '/sbin', '/etc', '/var', '/opt', '/Users', '/home');
-  return out.map((p) => resolve(p).toLowerCase());
+    return {
+      tree: [sys, process.env.ProgramFiles ?? 'C:\\Program Files', process.env['ProgramFiles(x86)'] ?? 'C:\\Program Files (x86)', process.env.ProgramData ?? 'C:\\ProgramData'].map(key),
+      exact: [homedir(), join(parse(sys).root, 'Users')].map(key),
+    };
+  }
+  return {
+    tree: ['/System', '/usr', '/bin', '/sbin', '/etc', '/boot', '/dev', '/proc', '/sys'].map(key),
+    exact: [homedir(), '/Users', '/home', '/var', '/opt', '/Library', '/Applications', '/private'].map(key),
+  };
 }
 
 const inside = (child: string, parent: string) => {
@@ -100,15 +109,18 @@ export class Migrator {
     if (resolve(source).toLowerCase() === resolve(dest).toLowerCase()) throw new CoreError('INVALID_ARGUMENT', 'The source and the destination are the same folder');
     if (inside(dest, source)) throw new CoreError('INVALID_ARGUMENT', 'The destination is inside the source; that would copy the folder into itself forever');
     const prot = protectedPaths();
-    const destKey = resolve(dest).toLowerCase();
+    const isProtected = (p: string) => {
+      const k = resolve(p).toLowerCase();
+      return prot.exact.includes(k) || prot.tree.some((t) => inside(k, t));
+    };
     if (r.mode === 'mirror') {
       if (isRoot(dest)) throw new CoreError('FORBIDDEN', 'Mirroring onto a whole drive would delete everything on it that is not in the source. Mirror into a folder on the drive instead.');
-      if (prot.some((p) => destKey === p || (p !== resolve(homedir()).toLowerCase() && inside(destKey, p)))) throw new CoreError('FORBIDDEN', `FBRX will not mirror onto ${dest}: it is a system or home folder`);
+      if (isProtected(dest)) throw new CoreError('FORBIDDEN', `FBRX will not mirror onto ${dest}: it is a system or home folder`);
       if (inside(source, dest)) throw new CoreError('INVALID_ARGUMENT', 'The source is inside the destination; mirroring would delete it');
     }
     if (r.mode === 'move') {
       if (isRoot(source)) throw new CoreError('FORBIDDEN', 'FBRX will not move a whole drive. Copy it instead.');
-      if (prot.includes(resolve(source).toLowerCase())) throw new CoreError('FORBIDDEN', `FBRX will not move ${source} away: it is a system or home folder. Copy it instead.`);
+      if (isProtected(source)) throw new CoreError('FORBIDDEN', `FBRX will not move ${source} away: it is a system or home folder. Copy it instead.`);
     }
     const warnings: string[] = [];
     if (r.mode === 'mirror') warnings.push(`Mirror deletes files in ${dest} that are not in ${source}.`);
