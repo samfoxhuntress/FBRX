@@ -89,7 +89,7 @@ function Join({ onClose }: { onClose: () => void }) {
           </datalist>
         </Field>
         <Field label="Pairing code">
-          <Input className="fx-input mono" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" />
+          <Input className="mono" value={code} onChange={(e) => setCode(e.target.value.toUpperCase())} placeholder="XXXX-XXXX-XXXX-XXXX-XXXX" />
         </Field>
       </div>
     </Modal>

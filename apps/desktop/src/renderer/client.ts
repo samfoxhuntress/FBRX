@@ -29,6 +29,42 @@ interface Bridge {
   /** Where the goose's beak is while it holds the pointer (moves the real pointer on Windows). */
   gooseDrag?(x: number, y: number): void;
   onGoose?(cb: (e: { type: 'cursor'; x: number; y: number } | { type: 'honk' } | { type: 'shoo' }) => void): () => void;
+  /** Clipboard history, kept in memory by the desktop app (Electron only). */
+  clip?(action: 'list' | 'read' | 'remove' | 'pin' | 'clear', id?: number, on?: boolean): Promise<unknown>;
+  onClips?(cb: (entries: unknown) => void): () => void;
+  /** Code lab: runs JavaScript in a hidden, network-blocked window (Electron only). */
+  runCode?(code: string, inputs: string[]): Promise<unknown>;
+  stopCode?(): Promise<unknown>;
+}
+
+export interface ClipEntry {
+  id: number;
+  text: string;
+  at: string;
+  pinned: boolean;
+}
+export interface CodeRunResult {
+  lines: Array<{ level: 'log' | 'info' | 'warn' | 'error'; text: string }>;
+  ms: number;
+  timedOut: boolean;
+  truncated: boolean;
+}
+
+/** Reads the clipboard as text: through the desktop app, or the browser's clipboard API in development. */
+export async function readClipboard(): Promise<string> {
+  if (bridge.clip) return String((await bridge.clip('read')) ?? '');
+  return navigator.clipboard.readText().catch(() => '');
+}
+
+/** Puts text on the clipboard. */
+export async function writeClipboard(text: string): Promise<void> {
+  if (bridge.copyText) await bridge.copyText(text);
+  else await navigator.clipboard.writeText(text);
+}
+
+export async function clipHistory(action: 'list' | 'remove' | 'pin' | 'clear' = 'list', id?: number, on?: boolean): Promise<{ enabled: boolean; entries: ClipEntry[] } | null> {
+  if (!bridge.clip) return null;
+  return (await bridge.clip(action, id, on)) as { enabled: boolean; entries: ClipEntry[] } | null;
 }
 
 declare global {
@@ -56,7 +92,7 @@ function httpBridge(): Bridge {
     },
     on(cb) {
       const es = new EventSource(`${base}/v1/events?token=${encodeURIComponent(token)}`);
-      const names: CoreEventName[] = ['agent', 'approval.requested', 'approval.resolved', 'service.changed', 'vault.changed', 'audit.appended', 'runtime.changed', 'runtime.download', 'settings.changed', 'policy.changed', 'plugins.changed', 'connectors.changed', 'tools.changed', 'fleet.changed', 'license.changed', 'updates.changed', 'notification', 'workspace.changed', 'alerts.new', 'alerts.changed', 'mesh.changed', 'mesh.message', 'fun.trophy', 'ai.halted', 'migrate.event'];
+      const names: CoreEventName[] = ['agent', 'approval.requested', 'approval.resolved', 'service.changed', 'vault.changed', 'audit.appended', 'runtime.changed', 'runtime.download', 'settings.changed', 'policy.changed', 'plugins.changed', 'connectors.changed', 'tools.changed', 'fleet.changed', 'license.changed', 'updates.changed', 'notification', 'workspace.changed', 'alerts.new', 'alerts.changed', 'mesh.changed', 'mesh.message', 'fun.trophy', 'ai.halted', 'migrate.event', 'ai.quick'];
       for (const n of names) es.addEventListener(n, (e) => cb(n, JSON.parse((e as MessageEvent).data)));
       return () => es.close();
     },

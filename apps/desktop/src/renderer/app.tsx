@@ -42,6 +42,7 @@ const LabPage = lazy(() => import('./pages/lab').then((m) => ({ default: m.LabPa
 const MeshPage = lazy(() => import('./pages/mesh').then((m) => ({ default: m.MeshPage })));
 const AiCoordPage = lazy(() => import('./pages/aicoord').then((m) => ({ default: m.AiCoordPage })));
 const MigratePage = lazy(() => import('./pages/migrate').then((m) => ({ default: m.MigratePage })));
+const ClipboardPage = lazy(() => import('./pages/clipboard').then((m) => ({ default: m.ClipboardPage })));
 
 export type Route =
   | 'home'
@@ -60,6 +61,7 @@ export type Route =
   | 'files'
   | 'processes'
   | 'migrate'
+  | 'clipboard'
   | 'terminal'
   | 'toolbox'
   | 'library'
@@ -246,7 +248,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'bugs', label: 'Bug catcher', icon: 'bug', section: 'PC care' },
     { id: 'network', label: 'Network Center', icon: 'network', section: 'PC care' },
     { id: 'files', label: 'Files', icon: 'folder', section: 'Utilities' },
-    { id: 'processes', label: 'Processes', icon: 'activity', section: 'Utilities' },
+    { id: 'processes', label: 'Task Manager', icon: 'activity', section: 'Utilities' },
+    { id: 'clipboard', label: 'Clipboard', icon: 'clipboard', section: 'Utilities' },
     { id: 'migrate', label: 'Copy & migrate', icon: 'copy', section: 'Utilities' },
     { id: 'toolbox', label: 'Toolbox', icon: 'toolbox', section: 'Utilities' },
     { id: 'library', label: 'Library', icon: 'book', section: 'Utilities' },
@@ -304,6 +307,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return <ProcessesPage />;
       case 'migrate':
         return <MigratePage />;
+      case 'clipboard':
+        return <ClipboardPage />;
       case 'terminal':
         return advanced ? <TerminalPage easterEggs={fun} /> : <AdvancedOnly title="Terminal" onEnable={() => setAdvanced(true)} locked={advancedLocked} />;
       case 'toolbox':

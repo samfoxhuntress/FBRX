@@ -7,6 +7,8 @@ import { PRODUCT_NAME, funEnabled } from '@fbrx/shared';
 import { createElectronPlatform, openExternalSafe } from './platform';
 import { ElectronUpdateController } from './updater';
 import { CursorPuppet } from './cursor-puppet';
+import { ClipHistory } from './clip-history';
+import { runJavaScript, stopJavaScript } from './code-sandbox';
 
 const dataDir = process.env.FBRX_HOME ?? app.getPath('userData');
 const rendererUrl = process.env.FBRX_RENDERER_URL ?? null;
@@ -30,6 +32,7 @@ let gooseFeed: ReturnType<typeof setInterval> | null = null;
 let gooseArea: Rectangle | null = null;
 let gooseHolding = false;
 const puppet = new CursorPuppet();
+const clips = new ClipHistory((entries) => win?.webContents.send('fbrx:clips', entries));
 
 /**
  * The Windows installer starts `FBRX OS.exe --fbrx-quit` before replacing files: the running copy receives it as a
@@ -347,6 +350,22 @@ function registerIpc() {
     return true;
   });
   ipcMain.handle('fbrx:copy', (e, text: string) => trusted(e) && typeof text === 'string' && clipboard.writeText(text.slice(0, 1_000_000)));
+  ipcMain.handle('fbrx:clip', async (e, action: string, id?: number, on?: boolean) => {
+    if (!trusted(e)) return null;
+    if (action === 'read') return (await clipboard.readText()).slice(0, 1_000_000);
+    if (action === 'remove' && typeof id === 'number') clips.remove(id);
+    else if (action === 'pin' && typeof id === 'number') clips.pin(id, !!on);
+    else if (action === 'clear') clips.clear();
+    return { enabled: clips.enabled, entries: clips.list() };
+  });
+  // Code lab: JavaScript runs in a hidden, network-blocked window (see code-sandbox.ts), one program at a time.
+  ipcMain.handle('fbrx:code-run', (e, code: unknown, inputs: unknown) => {
+    if (!trusted(e) || typeof code !== 'string' || code.length > 600_000) return null;
+    const answers = Array.isArray(inputs) ? inputs.filter((x): x is string => typeof x === 'string') : [];
+    kernel?.audit.append({ category: 'security', action: 'codelab.run', actor, outcome: 'success', details: { language: 'javascript', chars: code.length } });
+    return runJavaScript(code, answers);
+  });
+  ipcMain.handle('fbrx:code-stop', (e) => trusted(e) && (stopJavaScript(), true));
   ipcMain.handle('fbrx:goose', (e, action: string, on?: boolean) => {
     if (!trusted(e)) return false;
     if (action === 'summon') summonGoose();
@@ -403,6 +422,7 @@ async function boot() {
     win?.webContents.send('fbrx:event', name, payload);
     if (name === 'settings.changed') {
       bindSpotlightKey();
+      clips.setEnabled(!!kernel?.settings.get().clipboard.history);
       if (!funAllowed()) goose?.close();
       trayMenu();
     }
@@ -414,6 +434,7 @@ async function boot() {
     }
   });
   await kernel.start();
+  clips.setEnabled(kernel.settings.get().clipboard.history);
   const general = kernel.settings.get().general;
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: general.launchAtLogin, args: ['--hidden'] });
   kernel.settings.onChange((s) => app.isPackaged && app.setLoginItemSettings({ openAtLogin: s.settings.general.launchAtLogin, args: ['--hidden'] }));
@@ -457,6 +478,8 @@ app.on('before-quit', () => {
   spotlight?.destroy();
   goose?.destroy();
   puppet.stop();
+  clips.setEnabled(false);
+  stopJavaScript();
 });
 
 app.on('window-all-closed', () => {

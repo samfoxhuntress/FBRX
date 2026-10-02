@@ -78,7 +78,7 @@ export function FilesPage() {
       <Card className="split-main" flush>
         <div className="files-bar">
           <Button size="sm" variant="ghost" icon="chevronRight" style={{ transform: 'rotate(180deg)' }} aria-label="Up one folder" disabled={!listing?.parent} onClick={() => listing?.parent && setPath(listing.parent)} />
-          <Input value={addr} onChange={(e) => setAddr(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && setPath(addr)} aria-label="Folder path" className="fx-input mono" />
+          <Input value={addr} onChange={(e) => setAddr(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && setPath(addr)} aria-label="Folder path" className="mono" />
           <div style={{ width: 220 }}>
             <Input placeholder="Find in this folder…" value={search} onChange={(e) => setSearch(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void doSearch()} aria-label="Search files" />
           </div>

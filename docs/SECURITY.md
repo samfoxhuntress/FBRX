@@ -73,6 +73,28 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   moving a whole drive or a home folder away. Mirror and move ask for confirmation in the app, and Preview runs the
   same command in list-only mode. Every start and finish is in the audit log.
 
+## Code lab, clipboard and side-panel AI
+
+* **Code lab files** live in the `codelab` folder of the data directory; names are limited to simple file names with
+  a known code extension (no paths), 512 KB each. Every `codelab.*` method is reserved for the person at the
+  computer.
+* **JavaScript** runs in a hidden, throwaway browser window on its own in-memory session: every network request is
+  cancelled, WebRTC is limited to a proxy that doesn't exist, there is no Node.js, no preload bridge, no permissions,
+  no downloads, no navigation and no pop-ups, and the page is `about:blank`. The window is destroyed when the program
+  ends or after ten seconds (an endless loop is cut off). Output is capped.
+* **PowerShell and batch** files never run on the computer itself: *Run in Sandbox* starts Windows Sandbox with
+  networking off, the code folder mapped **read-only**, and the file started inside it. Closing the sandbox discards
+  everything. Each run is in the audit log. Other languages are not run by FBRX at all.
+* **Clipboard history** is off by default (an organization can lock `clipboard.history`). When on, the desktop app
+  checks the clipboard once a second and keeps the last 50 text copies **in memory only**: never written to disk,
+  never synced or backed up, cleared when FBRX quits or the switch is turned off. Copies marked by password managers
+  (`ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory`, `org.nspasteboard.ConcealedType`
+  and similar) are skipped.
+* **Side-panel answers** (`ai.quick`: the code lab, Event Viewer, Task Manager and *What if?*) use the default model
+  with **no tools**, so they can explain but never act. Known vault secrets are masked in the code, log lines or
+  process details before they are sent, the emergency stop refuses them, and they are reserved for the person at
+  the computer.
+
 ## Audit and tamper evidence
 
 Every tool decision, approval, configuration change, vault access, plugin event, backup and remote command is

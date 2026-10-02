@@ -2,6 +2,7 @@ import { join } from 'node:path';
 import { z } from 'zod';
 import {
   ALERT_CHANNELS,
+  EVENT_LEVELS,
   LAB_FEATURES,
   MESH_ACTIONS,
   MIGRATE_ENGINES,
@@ -16,6 +17,7 @@ import {
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { checkLink } from '../security/linkcheck';
+import { eventLogs, queryEvents } from '../system/events';
 import { expandPath } from '../system/files';
 import * as lab from '../windows/lab';
 import * as sec from '../windows/security';
@@ -44,6 +46,7 @@ type Handler = (params: any, ctx: CallContext) => unknown | Promise<unknown>;
 const Id = z.object({ id: z.string().min(1) });
 const Path = z.object({ path: z.string().min(1).max(4096) });
 const ReqId = z.string().min(1).max(64);
+const CodeName = z.object({ name: z.string().min(1).max(100) });
 const VIRUSTOTAL_SECRET = 'VIRUSTOTAL_API_KEY';
 
 const SpotlightItemSchema = z.object({
@@ -366,6 +369,62 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     },
     'migrate.jobs': () => k.migrator.list(),
     'fun.unlock': (p) => k.trophies.unlock(z.object({ id: z.string().max(40) }).parse(p).id),
+    'ai.quick': (p) =>
+      k.quick(
+        z
+          .object({
+            reqId: ReqId,
+            prompt: z.string().min(1).max(20_000),
+            context: z.string().max(60_000).optional(),
+            history: z.array(z.object({ role: z.enum(['user', 'assistant']), content: z.string().max(20_000) })).max(20).optional(),
+          })
+          .parse(p),
+      ),
+    'ai.quickCancel': (p) => {
+      k.cancelQuick(z.object({ reqId: ReqId }).parse(p).reqId);
+      return { ok: true };
+    },
+
+    // ---------------------------------------------------------------------------------- event viewer
+    'events.logs': () => eventLogs(),
+    'events.query': (p) =>
+      queryEvents(
+        z
+          .object({
+            log: z.string().min(1).max(200),
+            levels: z.array(z.enum(EVENT_LEVELS)).max(4),
+            hours: z.number().int().min(1).max(720),
+            source: z.string().max(200).optional(),
+            eventId: z.number().int().min(0).max(65535).optional(),
+            limit: z.number().int().min(1).max(2000).optional(),
+          })
+          .parse(p),
+      ),
+
+    // -------------------------------------------------------------------------------------- code lab
+    'codelab.list': () => k.codelab.list(),
+    'codelab.read': (p) => k.codelab.read(CodeName.parse(p).name),
+    'codelab.save': (p) => {
+      const q = z.object({ name: z.string().min(1).max(100), content: z.string().max(600_000) }).parse(p);
+      return k.codelab.save(q.name, q.content);
+    },
+    'codelab.delete': (p) => {
+      k.codelab.remove(CodeName.parse(p).name);
+      return { ok: true };
+    },
+    'codelab.folder': () => ({ path: k.codelab.folder() }),
+    'codelab.editors': () => k.codelab.editors(),
+    'codelab.open': (p) => {
+      const q = z.object({ name: z.string().min(1).max(100), app: z.enum(['vscode', 'ise', 'notepad', 'folder']) }).parse(p);
+      k.codelab.open(q.name, q.app);
+      return { ok: true };
+    },
+    'codelab.sandbox': async (p) => {
+      await k.codelab.sandbox(CodeName.parse(p).name, k.paths.tmp);
+      k.audit.append({ category: 'security', action: 'codelab.sandbox', actor: 'user', outcome: 'success', details: { name: CodeName.parse(p).name } });
+      return { ok: true };
+    },
+
     'ai.hardStop': (_p, ctx) => k.hardStop(ctx.actor),
     'ai.resume': async (_p, ctx) => {
       await k.resumeAi(ctx.actor);

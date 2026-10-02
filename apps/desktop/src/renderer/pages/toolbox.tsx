@@ -227,7 +227,7 @@ function Pane({ id, seed, fun }: { id: string; seed: Example | null; fun: boolea
         <>
           <div className="fx-row">
             <Field label="Pattern">
-              <Input className="fx-input mono" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="\\b\\w+@\\w+\\.\\w+\\b" />
+              <Input className="mono" value={extra} onChange={(e) => setExtra(e.target.value)} placeholder="\\b\\w+@\\w+\\.\\w+\\b" />
             </Field>
           </div>
           {area(8, 'Text to search')}
@@ -268,7 +268,7 @@ function Pane({ id, seed, fun }: { id: string; seed: Example | null; fun: boolea
       return (
         <>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Input className="fx-input mono" placeholder="#f0a530, rgb(240,165,48) or hsl(36,86%,56%)" value={input} onChange={(e) => setInput(e.target.value)} />
+            <Input className="mono" placeholder="#f0a530, rgb(240,165,48) or hsl(36,86%,56%)" value={input} onChange={(e) => setInput(e.target.value)} />
             <input type="color" aria-label="Pick a color" value={/^#[0-9a-f]{6}$/i.test(input) ? input : '#f0a530'} onChange={(e) => setInput(e.target.value)} style={{ width: 44, height: 34, border: 0, background: 'none' }} />
           </div>
           {buttons([
@@ -332,7 +332,7 @@ function Pane({ id, seed, fun }: { id: string; seed: Example | null; fun: boolea
     case 'subnet':
       return (
         <>
-          <Input className="fx-input mono" placeholder="192.168.1.20/24" value={input} onChange={(e) => setInput(e.target.value)} />
+          <Input className="mono" placeholder="192.168.1.20/24" value={input} onChange={(e) => setInput(e.target.value)} />
           {buttons([
             [
               'Calculate',
@@ -556,7 +556,7 @@ function SizesTool({ seed }: { seed: Example | null }) {
   }, [v]);
   return (
     <>
-      <Input className="fx-input mono" value={v} onChange={(e) => setV(e.target.value)} placeholder="1 TB, 512 MiB, 255, 0xFF…" />
+      <Input className="mono" value={v} onChange={(e) => setV(e.target.value)} placeholder="1 TB, 512 MiB, 255, 0xFF…" />
       {out && <Out value={out} />}
     </>
   );

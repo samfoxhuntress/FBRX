@@ -75,8 +75,37 @@ export const SettingsSchema = z.object({
     gooseVisits: z.boolean(),
     /** Fun extras stay hidden until someone enters 418 as a license key (see funEnabled). */
     funUnlocked: z.boolean(),
-    /** Visual effects: full (glass, glows, animation), light (flat and quick) or auto (light on battery and small PCs). */
+    /** Visual effects: full (glass, glows, animation), light (shown as "Lite": flat and quick) or auto (Lite on small PCs). */
     effects: z.enum(['auto', 'full', 'light']),
+  }),
+  /**
+   * Slash macros: type /trigger in the chat, the Terminal, FBRX/1 or the clipboard editor and it expands. The text may
+   * contain {date}, {time}, {datetime}, {name}, {callme}, {host}, {clipboard} and {cursor}.
+   */
+  macros: z
+    .array(
+      z.object({
+        id: z.string().max(40),
+        trigger: z.string().regex(/^[a-z0-9][a-z0-9_-]{0,23}$/),
+        description: z.string().max(120),
+        text: z.string().max(5000),
+        scope: z.enum(['everywhere', 'chat', 'terminal']),
+      }),
+    )
+    .max(200),
+  clipboard: z.object({
+    /** Keep a history of copied text while FBRX runs (in memory only; never written to disk). */
+    history: z.boolean(),
+    /** Saved transform pipelines for the clipboard processor. */
+    macros: z
+      .array(
+        z.object({
+          id: z.string().max(40),
+          name: z.string().min(1).max(60),
+          steps: z.array(z.object({ op: z.string().max(40), a: z.string().max(500).optional(), b: z.string().max(500).optional(), flag: z.boolean().optional() })).max(30),
+        }),
+      )
+      .max(100),
   }),
   /** Who uses this computer: shown on FBRX Glass and used by the agent. */
   profile: z.object({
@@ -221,6 +250,18 @@ export const DEFAULT_SETTINGS: Settings = {
     gooseVisits: false,
     funUnlocked: false,
     effects: 'auto',
+  },
+  macros: [
+    { id: 'm-sig', trigger: 'sig', description: 'Sign off with your name', text: 'Thanks,\n{name}', scope: 'everywhere' },
+    { id: 'm-ts', trigger: 'stamp', description: 'Date and time stamp', text: '[{datetime}]', scope: 'everywhere' },
+    { id: 'm-flush', trigger: 'flushdns', description: 'Flush DNS and renew the address', text: 'ipconfig /flushdns; ipconfig /release; ipconfig /renew', scope: 'terminal' },
+  ],
+  clipboard: {
+    history: false,
+    macros: [
+      { id: 'c-clean', name: 'Clean up pasted text', steps: [{ op: 'straightQuotes' }, { op: 'collapseSpaces' }, { op: 'trimLines' }, { op: 'removeBlank' }] },
+      { id: 'c-ps', name: 'Lines → PowerShell array', steps: [{ op: 'trimLines' }, { op: 'removeBlank' }, { op: 'dedupe' }, { op: 'wrapLines', a: "'", b: "'" }, { op: 'join', a: ', ' }, { op: 'wrap', a: '@(', b: ')' }] },
+    ],
   },
   profile: {
     name: '',

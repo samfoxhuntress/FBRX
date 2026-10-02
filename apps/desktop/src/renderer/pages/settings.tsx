@@ -9,6 +9,7 @@ import { PRESETS, TEXTURE_NAMES, playStartupSound, resolvedMode, resolvedTexture
 import { summonGoose } from '../fun';
 import { TrophyBadge, TrophyCase } from '../trophies';
 import { AskButton, EmergencyStop, ProfileFields, saveProfile } from '../widgets';
+import { MacroSettings } from './settings-macros';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -18,11 +19,12 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'agent' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
+type SectionId = 'general' | 'appearance' | 'agent' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; advanced?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
   { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
+  { id: 'macros', label: 'Macros', icon: 'zap', group: 'You' },
   { id: 'spotlight', label: 'Spotlight', icon: 'search', group: 'You' },
   { id: 'trophies', label: 'Trophy case', icon: 'trophy', group: 'You' },
   { id: 'updates', label: 'Updates', icon: 'download', group: 'This computer' },
@@ -71,6 +73,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'general' && <General onRerunSetup={onRerunSetup} />}
           {tab === 'appearance' && <Appearance />}
           {tab === 'agent' && <AgentSettings />}
+          {tab === 'macros' && <MacroSettings />}
           {tab === 'spotlight' && <SpotlightSettings />}
           {tab === 'trophies' && <Trophies />}
           {tab === 'updates' && <Updates />}
@@ -259,8 +262,8 @@ function Appearance() {
         </Card>
         <Card title="Behavior">
           <div className="fx-form">
-            <Field label="Effects" help="Light turns off frosted glass, glows and decorative animation. Auto picks Light on smaller computers.">
-              {seg(a.effects, [{ value: 'auto', label: 'Auto' }, { value: 'full', label: 'Full' }, { value: 'light', label: 'Light' }], (v) => void patch({ appearance: { effects: v } }))}
+            <Field label="Effects" help="Lite turns off frosted glass, glows and decorative animation. Auto picks Lite on smaller computers.">
+              {seg(a.effects, [{ value: 'auto', label: 'Auto' }, { value: 'full', label: 'Full' }, { value: 'light', label: 'Lite' }], (v) => void patch({ appearance: { effects: v } }))}
             </Field>
             <Toggle checked={a.reduceMotion} onChange={(v) => void patch({ appearance: { reduceMotion: v } })} label="Reduce motion" />
             <Toggle checked={a.splash} onChange={(v) => void patch({ appearance: { splash: v } })} label="Show the start-up animation" />

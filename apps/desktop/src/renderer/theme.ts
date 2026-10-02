@@ -156,7 +156,7 @@ function shade(hex: string, amount: number): string {
 }
 
 /**
- * Light effects (no frosted glass, glows or decorative animation) on request, and automatically on computers with
+ * Lite effects (no frosted glass, glows or decorative animation) on request, and automatically on computers with
  * four or fewer processor threads or 4 GB of memory or less, where blurring big panels costs real time.
  */
 export function resolvedEffects(effects: Settings['appearance']['effects']): 'full' | 'light' {

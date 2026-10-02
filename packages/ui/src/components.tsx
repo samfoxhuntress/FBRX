@@ -148,13 +148,13 @@ export function Field({ label, help, error, children }: { label?: ReactNode; hel
   );
 }
 
-export function Input(props: ComponentProps<'input'>) {
-  return <input className="fx-input" {...props} />;
+export function Input({ className, ...props }: ComponentProps<'input'>) {
+  return <input className={cx('fx-input', className)} {...props} />;
 }
 
-export function Select({ options, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { options: Array<{ value: string; label: string; disabled?: boolean } | string> }) {
+export function Select({ options, className, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { options: Array<{ value: string; label: string; disabled?: boolean } | string> }) {
   return (
-    <select className="fx-select" {...props}>
+    <select className={cx('fx-select', className)} {...props}>
       {options.map((o) => {
         const v = typeof o === 'string' ? { value: o, label: o } : o;
         return (

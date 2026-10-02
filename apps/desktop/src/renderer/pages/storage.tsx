@@ -20,7 +20,7 @@ function Analyzer() {
     <Card title="What is using space?" subtitle="Sizes of the folders inside a folder, and its largest files">
       <div className="fx-actions" style={{ marginBottom: 12 }}>
         <div style={{ flex: 1, minWidth: 240 }}>
-          <Input className="fx-input mono" placeholder="Folder to analyze" value={path} onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void analyze(path)} />
+          <Input className="mono" placeholder="Folder to analyze" value={path} onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void analyze(path)} />
         </div>
         <Button icon="folder" onClick={async () => { const p = await pickFile({ kind: 'folder', title: 'Folder to analyze' }); if (p) void analyze(p); }}>
           Choose…

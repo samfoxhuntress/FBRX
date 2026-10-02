@@ -11,3 +11,4 @@ export * from './api';
 export * from './ext';
 export * from './devices';
 export * from './fun';
+export * from './text-tools';

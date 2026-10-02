@@ -231,7 +231,7 @@ export async function fileReport(path: string, virustotalKey?: string): Promise<
  * Opens a link or folder inside Windows Sandbox: a throw-away virtual machine that is wiped when closed.
  * Clipboard, printers, microphone and camera are not shared; a mapped folder is read-only.
  */
-export async function openSandbox(o: { url?: string; folder?: string; networking?: boolean }, workDir: string): Promise<void> {
+export async function openSandbox(o: { url?: string; folder?: string; networking?: boolean; folderName?: string; command?: string }, workDir: string): Promise<void> {
   requireWindows('Windows Sandbox');
   const esc = (s: string) => s.replace(/[<>&"]/g, '');
   let url = '';
@@ -249,8 +249,8 @@ export async function openSandbox(o: { url?: string; folder?: string; networking
   <AudioInput>Disable</AudioInput>
   <VideoInput>Disable</VideoInput>
   <ProtectedClient>Enable</ProtectedClient>
-  ${folder ? `<MappedFolders><MappedFolder><HostFolder>${esc(folder)}</HostFolder><SandboxFolder>C:\\Users\\WDAGUtilityAccount\\Desktop\\Shared</SandboxFolder><ReadOnly>true</ReadOnly></MappedFolder></MappedFolders>` : ''}
-  ${url ? `<LogonCommand><Command>cmd.exe /c start "" "${esc(url)}"</Command></LogonCommand>` : ''}
+  ${folder ? `<MappedFolders><MappedFolder><HostFolder>${esc(folder)}</HostFolder><SandboxFolder>C:\\Users\\WDAGUtilityAccount\\Desktop\\${esc(o.folderName ?? 'Shared')}</SandboxFolder><ReadOnly>true</ReadOnly></MappedFolder></MappedFolders>` : ''}
+  ${url ? `<LogonCommand><Command>cmd.exe /c start "" "${esc(url)}"</Command></LogonCommand>` : o.command ? `<LogonCommand><Command>${o.command.replace(/[<>&]/g, '')}</Command></LogonCommand>` : ''}
 </Configuration>
 `;
   const dir = join(workDir, 'sandbox');

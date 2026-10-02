@@ -1335,7 +1335,7 @@
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
 }
 
-/* ------------------------------------------------------------------------------------- Light effects */
+/* ------------------------------------------------------------------------------------- Lite effects */
 /* Flat and quick: no frosted glass, glows, perspective floors or flip animations. */
 :root[data-effects='light'] .glass-dash .fx-card,
 :root[data-effects='light'] .glass-tile,

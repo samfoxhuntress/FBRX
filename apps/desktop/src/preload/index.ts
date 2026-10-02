@@ -32,6 +32,14 @@ const api = {
     ipcRenderer.on('fbrx:goose', h);
     return () => ipcRenderer.removeListener('fbrx:goose', h);
   },
+  clip: (action: 'list' | 'read' | 'remove' | 'pin' | 'clear', id?: number, on?: boolean) => ipcRenderer.invoke('fbrx:clip', action, id, on) as Promise<unknown>,
+  onClips(cb: (entries: unknown) => void): () => void {
+    const h = (_e: unknown, entries: unknown) => cb(entries);
+    ipcRenderer.on('fbrx:clips', h);
+    return () => ipcRenderer.removeListener('fbrx:clips', h);
+  },
+  runCode: (code: string, inputs: string[]) => ipcRenderer.invoke('fbrx:code-run', code, inputs) as Promise<unknown>,
+  stopCode: () => ipcRenderer.invoke('fbrx:code-stop') as Promise<unknown>,
   platform: process.platform,
 };
 

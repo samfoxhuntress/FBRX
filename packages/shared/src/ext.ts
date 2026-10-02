@@ -313,6 +313,44 @@ export interface EventLogEntry {
   source: string;
   eventId: number;
   message: string;
+  /** Event Viewer extras (when the log provides them). */
+  recordId?: number;
+  task?: string;
+  user?: string;
+  pid?: number;
+}
+
+export const EVENT_LEVELS = ['critical', 'error', 'warning', 'information'] as const;
+export type EventLevel = (typeof EVENT_LEVELS)[number];
+
+export interface EventLogInfo {
+  id: string;
+  name: string;
+  description: string;
+  /** Reading it needs administrator rights (the Windows Security log). */
+  admin?: boolean;
+}
+
+export interface EventQuery {
+  log: string;
+  levels: EventLevel[];
+  /** How far back, in hours (up to 30 days). */
+  hours: number;
+  source?: string;
+  eventId?: number;
+  limit?: number;
+}
+
+// ------------------------------------------------------------------------------------------- code lab
+
+export const CODE_LANGUAGES = ['powershell', 'python', 'javascript', 'typescript', 'csharp', 'java', 'go', 'rust', 'c', 'cpp', 'ruby', 'bash', 'lua', 'php', 'kotlin', 'swift', 'batch'] as const;
+export type CodeLanguage = (typeof CODE_LANGUAGES)[number];
+
+export interface CodeFile {
+  name: string;
+  language: CodeLanguage;
+  size: number;
+  updatedAt: string;
 }
 export interface FixInfo {
   id: string;
@@ -843,6 +881,27 @@ export interface ExtMethods {
   'net.speedTest': (p: { reqId: string }) => SpeedTestResult;
   'net.speedHistory': () => SpeedTestResult[];
 
+  /**
+   * A quick answer from the default model with no tools (it cannot change anything): for side panels that explain
+   * code, logs or processes. Text streams as `ai.quick` events with the same reqId.
+   */
+  'ai.quick': (p: { reqId: string; prompt: string; context?: string; history?: Array<{ role: 'user' | 'assistant'; content: string }> }) => { answer: string; model: string };
+  'ai.quickCancel': (p: { reqId: string }) => Ok;
+
+  'events.logs': () => EventLogInfo[];
+  'events.query': (p: EventQuery) => { entries: EventLogEntry[]; note: string | null };
+
+  'codelab.list': () => CodeFile[];
+  'codelab.read': (p: { name: string }) => { name: string; content: string };
+  'codelab.save': (p: { name: string; content: string }) => CodeFile;
+  'codelab.delete': (p: { name: string }) => Ok;
+  'codelab.folder': () => { path: string };
+  'codelab.editors': () => { vscode: boolean; ise: boolean; sandbox: boolean };
+  /** Opens a file from the code lab in VS Code, PowerShell ISE, Notepad, or shows its folder. */
+  'codelab.open': (p: { name: string; app: 'vscode' | 'ise' | 'notepad' | 'folder' }) => Ok;
+  /** Runs a PowerShell or batch file inside Windows Sandbox: a throw-away Windows with no network and the code lab folder read-only. */
+  'codelab.sandbox': (p: { name: string }) => Ok;
+
   'migrate.engines': () => MigrateEngineInfo[];
   /** The exact command a request would run, and warnings about it, without running anything. */
   'migrate.plan': (p: MigrateRequest) => { command: string; warnings: string[] };
@@ -921,6 +980,7 @@ export interface ExtEvents {
   'alerts.changed': { unread: number; critical: number };
   'net.event': NetEvent;
   'migrate.event': MigrateEvent;
+  'ai.quick': { reqId: string; delta: string };
   'winupdates.event': { reqId: string; line: string };
   'mesh.changed': MeshStatus;
   'mesh.message': MeshMessage;
@@ -953,6 +1013,15 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'lab.openManager',
   'lab.openConsole',
   'migrate.plan',
+  'ai.quick',
+  'ai.quickCancel',
+  'codelab.list',
+  'codelab.read',
+  'codelab.save',
+  'codelab.delete',
+  'codelab.folder',
+  'codelab.open',
+  'codelab.sandbox',
   'migrate.start',
   'migrate.cancel',
   'net.setIp',

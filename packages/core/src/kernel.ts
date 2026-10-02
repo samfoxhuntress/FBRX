@@ -6,6 +6,7 @@ import {
   LICENSE_FILE_NAME,
   PRODUCT_NAME,
   ProvisioningFileSchema,
+  addressAs,
   funEnabled,
   type DeviceCommand,
   type Heartbeat,
@@ -38,6 +39,7 @@ import { pcTools, workspaceTools } from './tools/builtin/command-center-tools';
 import { WorkspaceStore } from './workspace/workspace-store';
 import { SystemMonitor } from './system/system-monitor';
 import { Migrator } from './system/migrate';
+import { CodeLab } from './system/codelab';
 import { FileBrowser, TerminalSessions } from './system/files';
 import { Spotlight } from './spotlight/spotlight';
 import { AlertEngine } from './alerts/alert-engine';
@@ -55,6 +57,7 @@ import { ModelManager } from './ai/runtime/model-manager';
 import { LocalRuntime } from './ai/runtime/local-runtime';
 import { ProviderManager } from './ai/provider-manager';
 import { AgentRuntime } from './ai/agent';
+import type { ProviderMessage } from './ai/providers/types';
 import { installModelReviewer } from './ai/guardian-reviewer';
 import { PluginHost } from './plugins/plugin-host';
 import { ConnectorHub } from './connectors/hub';
@@ -130,6 +133,7 @@ export class Kernel {
   readonly consoles: DeviceConsoles;
   readonly trophies: Trophies;
   readonly migrator: Migrator;
+  readonly codelab: CodeLab;
   readonly cli: Fbrx1Cli;
   readonly mesh: MeshService;
   readonly aicoord: AiCoordination;
@@ -316,6 +320,7 @@ export class Kernel {
       log: L('migrate'),
       audit: (action, outcome, details) => this.audit.append({ category: 'files', action, actor: 'user', outcome, details }),
     });
+    this.codelab = new CodeLab(join(this.paths.root, 'codelab'));
     // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
     this.cli = new Fbrx1Cli({
       call: (method, params) => this.call(method, params ?? {}, { origin: 'user', actor: 'fbrx1' }),
@@ -723,7 +728,7 @@ export class Kernel {
     if (ctx.origin !== 'user' && isUserOnly(method)) {
       throw new CoreError('FORBIDDEN', `${method} can only be performed by a person at this workstation`);
     }
-    const audited = !isReadOnly(method) && method !== 'ai.chat' && method !== 'agent.runToCompletion' && method !== 'tools.invoke';
+    const audited = !isReadOnly(method) && method !== 'ai.chat' && method !== 'ai.quick' && method !== 'agent.runToCompletion' && method !== 'tools.invoke';
     try {
       const result = await handler(params ?? {}, ctx);
       if (audited) this.audit.append({ category: 'api', action: method, actor: ctx.actor, outcome: 'success', details: { origin: ctx.origin, params: scrubParams(params) } });
@@ -985,6 +990,71 @@ export class Kernel {
     }
     this.audit.append({ category: 'agent', action: 'consult', actor: 'user', outcome: 'success', details: { provider: config.id, model: m } });
     return { answer, providerId: config.id, model: m };
+  }
+
+  private readonly quickRuns = new Map<string, AbortController>();
+
+  /**
+   * A quick answer for a side panel (code lab, event viewer, task manager): the default model, no tools, streamed as
+   * `ai.quick` events. The context (code, log lines, process details) has known secrets masked before it leaves.
+   */
+  async quick(p: { reqId: string; prompt: string; context?: string; history?: Array<{ role: 'user' | 'assistant'; content: string }> }): Promise<{ answer: string; model: string }> {
+    if (this.aiHalt()) throw new CoreError('UNAVAILABLE', 'The AI is on emergency stop on this computer');
+    const { provider, config, model } = this.providers.resolve();
+    const ctrl = new AbortController();
+    this.quickRuns.get(p.reqId)?.abort();
+    this.quickRuns.set(p.reqId, ctrl);
+    const s = this.settings.get();
+    const who = addressAs(s);
+    const system = [
+      `You are ${s.ai.agentName || 'Fabrix'}, the assistant built into FBRX OS, answering in a side panel next to the person's work.`,
+      'Be direct and practical. Use short paragraphs or bullets and Markdown code blocks with a language tag for any code.',
+      'You cannot run anything yourself here; when something should be run, say exactly what and where.',
+      ...(who ? [`You are helping ${who}.`] : []),
+    ].join(' ');
+    const context = p.context ? this.redactor.redact(p.context).text : '';
+    // Turns alternate and start with a question (some providers insist); back-to-back turns of one side are merged.
+    const turns: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    for (const h of [...(p.history ?? []).slice(-8), { role: 'user' as const, content: context ? `${p.prompt}\n\n---\n${context}` : p.prompt }]) {
+      if (!h.content.trim() || (!turns.length && h.role === 'assistant')) continue;
+      const last = turns[turns.length - 1];
+      if (last?.role === h.role) last.content += `\n\n${h.content}`;
+      else turns.push({ role: h.role, content: h.content });
+    }
+    const messages: ProviderMessage[] = [{ role: 'system', content: system }, ...turns];
+    let answer = '';
+    let pending = '';
+    let last = 0;
+    const flush = () => {
+      if (!pending) return;
+      this.events.emit('ai.quick', { reqId: p.reqId, delta: pending });
+      pending = '';
+      last = Date.now();
+    };
+    const timeout = setTimeout(() => ctrl.abort(), 300_000);
+    try {
+      for await (const chunk of provider.chat({ model, messages, tools: [], temperature: 0.3, signal: ctrl.signal })) {
+        if (chunk.type === 'text') {
+          answer += chunk.delta;
+          pending += chunk.delta;
+          if (Date.now() - last > 66) flush();
+        } else if (chunk.type === 'done' && chunk.finishReason === 'error' && !answer) throw new CoreError('UNAVAILABLE', chunk.message || 'The model did not answer');
+        if (this.aiHalt()) ctrl.abort();
+      }
+      flush();
+    } catch (e) {
+      flush();
+      if (!ctrl.signal.aborted) throw toCoreError(e);
+    } finally {
+      clearTimeout(timeout);
+      if (this.quickRuns.get(p.reqId) === ctrl) this.quickRuns.delete(p.reqId);
+    }
+    this.audit.append({ category: 'agent', action: 'quick', actor: 'user', outcome: 'success', details: { provider: config.id, model, chars: answer.length } });
+    return { answer, model };
+  }
+
+  cancelQuick(reqId: string): void {
+    this.quickRuns.get(reqId)?.abort();
   }
 
   private localApiTokens(): { full: string; agent: string } | null {

@@ -1,17 +1,23 @@
-import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 
 /** Categorical slots in validated order. Color follows the entity: pass a stable slot per series. */
 export const SERIES = ['var(--series-1)', 'var(--series-2)', 'var(--series-3)', 'var(--series-4)', 'var(--series-5)', 'var(--series-6)', 'var(--series-7)', 'var(--series-8)'];
 
-function useWidth<T extends HTMLElement>(): [React.RefObject<T | null>, number] {
-  const ref = useRef<T>(null);
+/**
+ * The element's width, kept up to date. A callback ref, so it also works when the element only appears after the
+ * first render (a chart that starts with "no data yet").
+ */
+function useWidth<T extends HTMLElement>(): [(el: T | null) => void, number] {
   const [w, setW] = useState(0);
-  useEffect(() => {
-    if (!ref.current) return;
-    const ro = new ResizeObserver((entries) => setW(Math.floor(entries[0].contentRect.width)));
-    ro.observe(ref.current);
-    return () => ro.disconnect();
+  const ro = useRef<ResizeObserver | null>(null);
+  const ref = useCallback((el: T | null) => {
+    ro.current?.disconnect();
+    ro.current = null;
+    if (!el) return;
+    ro.current = new ResizeObserver((entries) => setW(Math.floor(entries[0].contentRect.width)));
+    ro.current.observe(el);
   }, []);
+  useEffect(() => () => ro.current?.disconnect(), []);
   return [ref, w];
 }
 
@@ -176,7 +182,9 @@ export function LineChart({
   const top = yMax ?? Math.max(...values, 1);
   const step = niceStep(top);
   const maxY = Math.ceil(top / step) * step;
-  const m = { l: 40, r: series.length <= 4 ? 64 : 12, t: 10, b: 24 };
+  // Room on the left for the longest y-axis label ("391 KB/s" needs more than "100%").
+  const labelChars = Math.max(4, ...Array.from({ length: Math.floor(maxY / step) + 1 }, (_x, i) => yFormat(i * step).length));
+  const m = { l: Math.max(40, Math.ceil(labelChars * 6.2) + 10), r: series.length <= 4 ? 64 : 12, t: 10, b: 24 };
   const w = Math.max(0, width - m.l - m.r);
   const h = height - m.t - m.b;
   const t0 = times[0] ?? 0;

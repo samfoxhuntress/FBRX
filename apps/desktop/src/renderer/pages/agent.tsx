@@ -7,6 +7,7 @@ import { useCore } from '../hooks';
 import { Markdown } from '../markdown';
 import { navigate, routeArg } from '../app';
 import { EmergencyStop, ModelPicker } from '../widgets';
+import { useSlashMenu } from '../slash-menu';
 
 const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'activity', title: 'Check my PC', prompt: 'Give me a quick health check of this computer: performance right now, storage, security status and any recent errors. Tell me what (if anything) needs attention.' },
@@ -136,6 +137,8 @@ export function AgentPage({ agentName }: { agentName: string }) {
   const [activeRun, setActiveRun] = useState<{ runId: string; conversationId: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState('');
+  const composerRef = useRef<HTMLTextAreaElement>(null);
+  const slash = useSlashMenu({ value: input, setValue: setInput, inputRef: composerRef, scope: 'chat' });
   const [providerId, setProviderId] = useState('');
   const [model, setModel] = useState('');
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
@@ -390,11 +393,14 @@ export function AgentPage({ agentName }: { agentName: string }) {
           )}
         </div>
         <div className="composer">
+          {slash.menu}
           <TextArea
+            ref={composerRef}
             value={input}
-            placeholder={activeRun ? `${agentName} is working…` : `Ask ${agentName} to do something — Enter to send, Shift+Enter for a new line`}
+            placeholder={activeRun ? `${agentName} is working…` : `Ask ${agentName} to do something — Enter to send, Shift+Enter for a new line, / for macros`}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
+              if (slash.onKeyDown(e)) return;
               if (e.key === 'Enter' && !e.shiftKey) {
                 e.preventDefault();
                 void send();

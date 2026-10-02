@@ -178,8 +178,11 @@ function EventLogs({ days, agentName }: { days: number; agentName: string }) {
           <Button size="sm" variant="primary" icon="sparkles" disabled={!rows?.length} onClick={() => askAgent(`Read these Windows ${log} log entries from my PC (newest first). Group them by cause, tell me which ones matter, what they mean in plain language, and the safest fixes in order. Ignore harmless noise.`, rows!.slice(0, 60).map((r) => ({ time: r.time, level: r.level, source: r.source, id: r.eventId, message: r.message.slice(0, 400) })))}>
             Analyze with {agentName}
           </Button>
+          <Button size="sm" variant="ghost" icon="activity" onClick={() => navigate('processes/events')} title="Task Manager → Event Viewer: every log, filters, and Fabrix beside it">
+            All logs
+          </Button>
           <Button size="sm" variant="ghost" icon="external" onClick={() => void call('spotlight.run', { item: { id: 'tool:eventvwr', kind: 'app', title: 'Event Viewer', score: 0, action: { type: 'app', appId: 'tool:eventvwr' } } })}>
-            Event Viewer
+            Windows Event Viewer
           </Button>
         </>
       }

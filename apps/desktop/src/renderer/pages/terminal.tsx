@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { Note, ProjectSummary, Snippet, TerminalShell } from '@fbrx/shared';
 import { Button, Card, Empty, Input, Page, Select, Status, Tabs, TextArea, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
@@ -9,6 +9,11 @@ import { COMMAND_GROUPS, type LibraryCommand } from '../command-library';
 import { DeviceConsolesPanel } from '../consoles';
 import { summonGoose, unlockTrophy } from '../fun';
 import { Fbrx1Panel } from '../fbrx1';
+import { useSlashMenu } from '../slash-menu';
+import { WhatIfButton } from '../quick-ai';
+
+// The code lab brings a full code editor; it loads the first time the Code tab opens.
+const CodeLabPanel = lazy(() => import('../code-lab').then((m) => ({ default: m.CodeLabPanel })));
 
 interface Block {
   id: string;
@@ -219,7 +224,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
-  const [tab, setTab] = useState<'commands' | 'consoles' | 'fbrx1'>(arg.startsWith('console') ? 'consoles' : arg.startsWith('fbrx1') ? 'fbrx1' : 'commands');
+  const [tab, setTab] = useState<'commands' | 'code' | 'consoles' | 'fbrx1'>(arg.startsWith('console') ? 'consoles' : arg.startsWith('fbrx1') ? 'fbrx1' : arg.startsWith('code') ? 'code' : 'commands');
   const [consoleId, setConsoleId] = useState<string | null>(arg.startsWith('console/') ? arg.slice(8) : null);
   const consoles = useConsoleSessions();
   const openConsoles = (consoles.data ?? []).filter((s) => s.state !== 'closed').length;
@@ -234,6 +239,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
   const shell = (shells.data ?? []).find((s) => s.id === shellId) ?? (shells.data ?? []).find((s) => s.default);
   const out = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLTextAreaElement>(null);
+  const slash = useSlashMenu({ value: cmd, setValue: setCmd, inputRef: box, scope: 'terminal' });
   const { run } = useAction();
   const { confirm, dialog } = useConfirm();
   const toast = useToast();
@@ -247,6 +253,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
       setTab('consoles');
       if (a.startsWith('console/')) setConsoleId(a.slice(8));
     } else if (a.startsWith('fbrx1')) setTab('fbrx1');
+    else if (a.startsWith('code')) setTab('code');
   }, [arg]);
   useEffect(() => {
     const offs = [
@@ -324,6 +331,8 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
           ? `Run ${shellName} commands. Each command starts fresh in the folder shown; type “cd folder” to move, or start with ? to ask for a command. Commands are recorded in the audit log.`
           : tab === 'fbrx1'
             ? 'FBRX/1 manages FBRX OS itself, like the command line of a switch or firewall: show, request, configure and commit.'
+            : tab === 'code'
+              ? 'Write code with Fabrix beside you. Sandboxed: JavaScript runs with no network or file access, PowerShell and batch only in Windows Sandbox, everything else is explained, not run.'
             : 'Command lines of switches, firewalls, access points and servers, over SSH or Telnet, with the maker\'s guide alongside.'
       }
     >
@@ -331,16 +340,21 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
         active={tab}
         onChange={(t) => {
           setTab(t);
-          navigate(t === 'consoles' ? `terminal/console${consoleId ? `/${consoleId}` : ''}` : t === 'fbrx1' ? 'terminal/fbrx1' : 'terminal');
+          navigate(t === 'consoles' ? `terminal/console${consoleId ? `/${consoleId}` : ''}` : t === 'fbrx1' ? 'terminal/fbrx1' : t === 'code' ? 'terminal/code' : 'terminal');
         }}
         tabs={[
           { id: 'commands', label: shellName },
+          { id: 'code', label: 'Code' },
           { id: 'consoles', label: `Device consoles${openConsoles ? ` (${openConsoles})` : ''}` },
           { id: 'fbrx1', label: 'FBRX/1' },
         ]}
       />
       {tab === 'fbrx1' ? (
         <Fbrx1Panel />
+      ) : tab === 'code' ? (
+        <Suspense fallback={<div className="fx-muted" style={{ padding: 24 }}>Loading the code lab…</div>}>
+          <CodeLabPanel />
+        </Suspense>
       ) : tab === 'consoles' ? (
         <DeviceConsolesPanel
           selected={consoleId}
@@ -422,17 +436,19 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
             </div>
             </div>
             <div className="term-input">
+              {slash.menu}
               <span className="term-prompt">❯</span>
               <TextArea
                 ref={box}
                 className="mono term-box"
                 rows={Math.min(6, Math.max(1, cmd.split('\n').length))}
                 value={cmd}
-                placeholder={`${shellName} command (Shift+Enter for a new line, ? to ask)`}
+                placeholder={`${shellName} command (Shift+Enter for a new line, ? to ask, / for macros)`}
                 aria-label="Command"
                 autoFocus
                 onChange={(e) => setCmd(e.target.value)}
                 onKeyDown={(e) => {
+                  if (slash.onKeyDown(e)) return;
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     void exec();
@@ -449,6 +465,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
                   }
                 }}
               />
+              <WhatIfButton command={cmd} kind={`${shellName} command`} />
               <Button variant="primary" icon="play" onClick={() => void exec()}>
                 Run
               </Button>

@@ -4,6 +4,7 @@ import { Button, Card, Icons, Input, useToast } from '@fbrx/ui';
 import { call } from './client';
 import { useCore } from './hooks';
 import { AskButton } from './widgets';
+import { useSlashMenu } from './slash-menu';
 
 /**
  * FBRX/1: the FBRX management console, in the spirit of a network operating system's CLI. "show" reads, "request"
@@ -127,6 +128,7 @@ function Fbrx1Console({ apiRef }: { apiRef: { current: ConsoleApi | null } }) {
   const ids = useRef(1);
   const out = useRef<HTMLDivElement>(null);
   const box = useRef<HTMLInputElement>(null);
+  const slash = useSlashMenu({ value: line, setValue: setLine, inputRef: box, scope: 'terminal' });
   const toast = useToast();
 
   useEffect(() => {
@@ -241,6 +243,7 @@ function Fbrx1Console({ apiRef }: { apiRef: { current: ConsoleApi | null } }) {
         ))}
       </div>
       <div className="term-input cli-input">
+        {slash.menu}
         <div className="cli-input-prompt">
           {editLine && <span className="cli-edit">{editLine}</span>}
           <span className="cli-prompt">{promptLine || '…'}</span>
@@ -256,6 +259,7 @@ function Fbrx1Console({ apiRef }: { apiRef: { current: ConsoleApi | null } }) {
           spellCheck={false}
           onChange={(e) => setLine(e.target.value)}
           onKeyDown={(e) => {
+            if (slash.onKeyDown(e)) return;
             if (e.key === 'Enter') {
               e.preventDefault();
               submit();

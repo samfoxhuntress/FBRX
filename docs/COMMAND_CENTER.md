@@ -20,7 +20,7 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 | Texture | The theme's own (weave for Fabrics, palms for Tropical, a neon grid for Neon Grid, grain for Ember, dots for Midnight, carbon fiber for Graphite, waves for Ocean, linen for Forest…), or pick none, weave (a large basket weave), linen, grain, grid (glowing lines in the accent color), dots, carbon fiber, waves or palms; subtle, medium or bold. Drawn as sharp SVG patterns in the theme's ink on the sidebar, the top bar and the page behind the cards (never behind text in cards) |
 | Text and interface size | 85–130 % |
 | Motion and start-up | Reduce motion; start-up animation (the FBRX logo stitched in) and start-up sound (from the FBRX intro, on by default, with a Listen button) |
-| Effects | Auto, Full or Light. Light turns off frosted glass, glows and decorative animation; Auto picks Light on computers with four or fewer processor threads or 4 GB of memory |
+| Effects | Auto, Full or Lite. Lite turns off frosted glass, glows and decorative animation; Auto picks Lite on computers with four or fewer processor threads or 4 GB of memory |
 | Fun extras | Hidden until unlocked (see [EASTER_EGGS.md](EASTER_EGGS.md), spoilers). Then: easter eggs and jokes, the Silly Goose's occasional visits, a *Release the goose* button and the **Trophy case**. An organization can lock fun extras off |
 
 Chart series and status colors stay on the validated design-system palette in every theme, so charts remain
@@ -59,11 +59,51 @@ the dashboard health check and your tasks for the day. Long content is trimmed t
 | **Projects** | Progress, overdue tasks, milestones, linked notes and snippets |
 | **Snippets** | Reusable commands and text; press Enter in Spotlight to copy one |
 | **Files** | Places and drives, folder search, previews (text and images), a plain-text editor |
-| **Processes** | Live list by CPU or memory with end-process (core Windows processes are protected) |
+| **Task Manager** | Three tabs. **Processes**: live list by CPU or memory with search, details and End task (core Windows processes are protected); *What is this?* on any process, and *What's using my PC?* / *Anything suspicious?* in the Fabrix panel beside it. **Performance**: live processor, memory and network graphs, every core, uptime, battery and temperature. **Event Viewer**: see below |
+| **Clipboard** | A copy-and-paste processor. Paste text (or type `/` for macros and snippets), add steps — trim, remove blank or duplicate lines, sort, straighten quotes, strip HTML or terminal colors, change case (UPPER, Title, camelCase, snake_case…), find and replace (plain or regular expression), keep or drop matching lines, extract emails, web addresses, IP or MAC addresses and numbers, join or split, wrap each line, number lines, JSON format/minify, CSV or Excel cells → Markdown table, Base64 and URL encode/decode — and the result updates as you go. **Save as macro** keeps the steps; ▶ next to a saved macro runs it straight on the clipboard (copy, click, paste). Optional **History** keeps the last 50 things you copied while FBRX runs (see Security) |
 | **Copy & migrate** | Copy, back up, mirror or move folders between drives, computers and network shares with **Robocopy** (Windows), **rsync** (Mac and Linux) or FBRX's own copier. Pick the folders, the tool and what to do (copy; new and changed only; mirror; move), skip clutter, retries, files at once, files and folders to leave out; the exact command is shown before it runs. **Preview** lists what would happen without changing anything; mirror and move ask first. Live output, counts and a summary, with *Explain this result*. Recipes: back up Documents, mirror to a NAS, copy a USB stick, move a project, and **Move my user folders to a new PC** (Desktop, Documents, Pictures, Music, Videos and Downloads, one after another). Guard rails refuse mirroring onto a drive root or a system or home folder, copying a folder into itself, and moving a whole drive or home folder away |
-| **Terminal** (advanced) | Runs commands with streaming output in **PowerShell 7** when it is installed, otherwise **Windows PowerShell 5.1**, or Command Prompt (picker in the header). A **reference panel** puts ready-made commands (network, system, disks, processes, repair, security, power, printing; admin-only ones marked), your snippets, the code in your notes, and each project's snippets and notes one click away; ▶ runs one (commands that change something ask first). Save any command you ran as a snippet. Start a line with `?` to ask Fabrix for a command. Every command is in the audit log. The **Device consoles** tab holds SSH and Telnet sessions (see Network Center), and **FBRX/1** is the management console for FBRX itself (below) |
+| **Terminal** (advanced) | **What if?** next to Run has Fabrix explain what the command in the box would do — what it reads, changes, deletes or downloads, whether it needs admin rights, and a verdict — without running it. Runs commands with streaming output in **PowerShell 7** when it is installed, otherwise **Windows PowerShell 5.1**, or Command Prompt (picker in the header). A **reference panel** puts ready-made commands (network, system, disks, processes, repair, security, power, printing; admin-only ones marked), your snippets, the code in your notes, and each project's snippets and notes one click away; ▶ runs one (commands that change something ask first). Save any command you ran as a snippet. Start a line with `?` to ask Fabrix for a command. Every command is in the audit log. The **Code** tab is the code lab (below), the **Device consoles** tab holds SSH and Telnet sessions (see Network Center), and **FBRX/1** is the management console for FBRX itself (below) |
 | **Toolbox** | Passwords, QR codes (guest Wi-Fi codes phones join by scanning, links, text), text tools, compare text, sizes and numbers (why a 1 TB drive shows 931 GB; decimal, hex, binary), decision maker, colors. Advanced: JSON, Base64, URL, hashes, UUIDs, timestamps, regex, JWT, subnet calculator, MAC vendor lookup, port reference (with risky ports flagged) and the command library. Every tool has *Try* examples, and the top row recommends common jobs — all offline |
 | **Library** | 61 short how-tos (Windows basics, files, Wi-Fi, security, speed, devices, troubleshooting) with buttons that open the right Windows setting or ask Fabrix. In Advanced mode, **The Lab** adds power-user how-tos (install USBs, dual boot, a malware lab, device consoles, blue screen dumps, repairs, verifying downloads) and official download pages for Windows, Linux, security distributions and power tools, plus your computer maker's driver page. Safety goggles recommended (sold separately) |
+
+### Macros and the / menu
+
+Type **/** in the Fabrix chat, the Terminal, FBRX/1, the Clipboard editor or any Fabrix side panel and your macros
+pop up; ↑ ↓ and Enter insert one. **/snip** lists your saved snippets (keep typing to search: `/snip dns`), **/clip**
+pastes the clipboard, **/date**, **/time** and **/now** insert the date and time, and **/macros** opens the editor.
+Program your own in **Settings → Macros**: the word you type, a description, where it works (everywhere, chat only, or
+Terminal and FBRX/1 only) and the text it types, with placeholders `{date}`, `{time}`, `{datetime}`, `{isodate}`,
+`{name}`, `{callme}`, `{host}`, `{clipboard}` and `{cursor}` (where the cursor lands). Three come built in: `/sig`
+(sign-off with your name), `/stamp` (date and time) and `/flushdns` (terminal). The same page lists your clipboard
+macros and the clipboard history switch.
+
+### Code lab
+
+**Terminal → Code** is a small IDE with Fabrix beside you: a real code editor (syntax colors, line numbers, brackets,
+folding, search, undo) for PowerShell, Python, JavaScript, TypeScript, C#, Java, Go, Rust, C, C++, Ruby, Bash, Lua,
+PHP, Kotlin, Swift and batch files. **Quick start** opens Rock, Paper, Scissors in every one of those languages, all
+playing the same game the same way so they are easy to compare.
+
+* **Fabrix panel**: *Explain*, *Fix* (finds bugs and gives a corrected file), *Comment*, *Convert to…* another language,
+  *What if?*, or ask anything (select lines first to ask about just those). Code in an answer can be inserted at the
+  cursor, replace the file (Ctrl+Z undoes it) or open as a new file in its language.
+* **What if?** summarizes what the file would do before you run it anywhere: step by step, what it touches (files,
+  network, settings, admin rights) and a verdict: *Safe to run*, *Changes things* or *Risky*.
+* **Run** (JavaScript): runs right in FBRX, completely sandboxed; answers for `prompt()` come from the Input box.
+  **Run in Sandbox** (PowerShell and batch, Windows Pro/Enterprise): opens the file inside Windows Sandbox with no
+  network and the code folder read-only. Other languages are never run by FBRX.
+* **Run it yourself** shows, for the language in the editor, where to get the tools and the exact commands
+  (`python rps.py`, `go run rps.go`, `java Rps.java`…), plus where the files are. **VS Code**, **PowerShell ISE** and
+  **Editor** open the file in those apps (shown when installed). Ctrl+S saves, Ctrl+Enter runs.
+
+### Event Viewer
+
+**Task Manager → Event Viewer** reads the Windows event logs (Application, System, Setup, Security with admin
+rights, Microsoft Defender, PowerShell, Task Scheduler, Wi-Fi), the systemd journal on Linux, or the unified log on a
+Mac (errors and faults, last six hours). Filter by level (counts on each), time range (an hour to 30 days), source
+and event ID, then search within the results. Click an event for the full message and details, *Explain this
+event*, copy it or search the web. The Fabrix panel's *Analyze these events* groups repeats, separates what matters
+from harmless noise and suggests what to fix first. **Bug catcher → Show logs → All logs** opens it too.
 
 ### FBRX/1
 

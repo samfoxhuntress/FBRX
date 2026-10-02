@@ -5,7 +5,7 @@ import { openExternal } from './client';
  * Minimal, safe Markdown → React (no HTML injection): code fences, headings, lists, emphasis, links. Memoized: chat
  * threads re-render while text streams in, and parsing every earlier message again would be wasted work.
  */
-export const Markdown = memo(function Markdown({ text }: { text: string }) {
+export const Markdown = memo(function Markdown({ text, codeActions }: { text: string; codeActions?: (code: string, lang: string) => ReactNode }) {
   const blocks: ReactNode[] = [];
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   let i = 0;
@@ -18,10 +18,20 @@ export const Markdown = memo(function Markdown({ text }: { text: string }) {
       i++;
       while (i < lines.length && !lines[i].startsWith('```')) body.push(lines[i++]);
       i++;
-      blocks.push(
+      const code = (
         <pre key={key++} className="md-code" data-lang={fence[1] || undefined}>
           <code>{body.join('\n')}</code>
-        </pre>,
+        </pre>
+      );
+      blocks.push(
+        codeActions ? (
+          <div key={key++} className="md-code-wrap">
+            {code}
+            <div className="md-code-actions">{codeActions(body.join('\n'), fence[1] ?? '')}</div>
+          </div>
+        ) : (
+          code
+        ),
       );
       continue;
     }
