@@ -86,6 +86,47 @@
   --focus: rgba(255, 162, 58, 0.5);
 }
 
+/* ---------------------------------------------------------------------------------- Neon Grid (cyan) */
+/* Deep night blue, a cyan light line, a glowing grid and a floor that runs to the horizon. */
+:root[data-preset='neon'] {
+  --page: #eef6fa;
+  --surface-1: #fbfeff;
+  --surface-2: #e8f2f7;
+  --surface-3: #d6e7f0;
+  --sidebar: #f3f9fc;
+  --text-primary: #06141c;
+  --text-secondary: #2f5566;
+  --text-muted: #5f8394;
+  --border: rgba(0, 60, 90, 0.12);
+  --border-strong: rgba(0, 60, 90, 0.2);
+  --grid: #d3e6ef;
+  --axis: #a9c8d6;
+  --accent: #0086ad;
+  --accent-hover: #006f8f;
+  --accent-ink: #ffffff;
+  --accent-wash: rgba(0, 134, 173, 0.12);
+  --focus: rgba(0, 134, 173, 0.4);
+}
+:root[data-preset='neon'][data-theme='dark'] {
+  --page: #03060c;
+  --surface-1: #08101a;
+  --surface-2: #0d1724;
+  --surface-3: #132032;
+  --sidebar: #040910;
+  --text-primary: #e6f6ff;
+  --text-secondary: #a3c6d8;
+  --text-muted: #62869a;
+  --border: rgba(0, 229, 255, 0.13);
+  --border-strong: rgba(0, 229, 255, 0.26);
+  --grid: #10202e;
+  --axis: #1b3346;
+  --accent: #00e5ff;
+  --accent-hover: #6ff2ff;
+  --accent-ink: #001318;
+  --accent-wash: rgba(0, 229, 255, 0.12);
+  --focus: rgba(0, 229, 255, 0.5);
+}
+
 /* ------------------------------------------------------------------------------------------- Ember */
 :root[data-preset='ember'] {
   --page: #f7f1ee;
@@ -446,10 +487,12 @@
   --glow-2: transparent;
   --glow-strength: 1;
 }
-:root[data-preset='fabrics'] { --glow: #e3a86b; }
+:root[data-preset='fabrics'] { --glow: #c7c7c4; }
 :root[data-preset='tropical'] { --glow: #ff9f6b; --glow-2: #5fd3c6; }
 :root[data-preset='tropical'][data-theme='dark'] { --glow: #ff4f81; --glow-2: #0f8f86; }
-:root[data-preset='fabrics'][data-theme='dark'] { --glow: #7a2232; }
+:root[data-preset='fabrics'][data-theme='dark'] { --glow: #b4b4b0; }
+:root[data-preset='neon'] { --glow: #5ccfff; --glow-2: #ff9d4d; }
+:root[data-preset='neon'][data-theme='dark'] { --glow: #0066ff; --glow-2: #ff6a00; }
 :root[data-preset='ember'] { --glow: #ef9a7a; }
 :root[data-preset='ember'][data-theme='dark'] { --glow: #7c2410; }
 :root[data-preset='midnight'] { --glow: #a5b0f5; }
@@ -707,4 +750,69 @@
   padding: 6px 8px;
   font-size: 12px;
   border-top: 1px solid var(--border);
+}
+
+/* ------------------------------------------------------------------------------ Neon Grid extras */
+/* Light lines: cards, the active page and primary buttons glow; a perspective floor fades in at the bottom. */
+:root[data-preset='neon'][data-theme='dark'] .fx-card {
+  border-color: rgba(0, 229, 255, 0.2);
+  box-shadow:
+    inset 0 1px 0 rgba(0, 229, 255, 0.12),
+    0 0 0 1px rgba(0, 229, 255, 0.04),
+    0 0 22px -8px rgba(0, 229, 255, 0.35);
+}
+:root[data-preset='neon'][data-theme='dark'] .fx-nav-item.active {
+  text-shadow: 0 0 8px rgba(0, 229, 255, 0.7);
+  box-shadow:
+    inset 2px 0 0 var(--accent),
+    -2px 0 12px -2px var(--accent);
+}
+:root[data-preset='neon'] .fx-btn.primary {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, #ffffff) 0%, var(--accent) 55%, color-mix(in srgb, var(--accent) 70%, #003040) 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.35),
+    0 0 16px -2px color-mix(in srgb, var(--accent) 75%, transparent);
+}
+:root[data-preset='neon'][data-theme='dark'] .fx-page-header h1 {
+  background: linear-gradient(90deg, #ffffff 0%, var(--accent) 120%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 0 10px rgba(0, 229, 255, 0.35));
+  letter-spacing: 0.01em;
+}
+:root[data-preset='neon'] .fx-sidebar {
+  border-right: 1px solid color-mix(in srgb, var(--accent) 35%, transparent);
+  box-shadow: 1px 0 14px -6px var(--accent);
+}
+:root[data-preset='neon'] .fx-topbar {
+  border-bottom-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+:root[data-preset='neon'] .fx-main {
+  position: relative;
+  overflow: hidden;
+}
+:root[data-preset='neon'][data-texture='grid'] .fx-main::after {
+  content: '';
+  position: absolute;
+  left: -25%;
+  right: -25%;
+  bottom: 0;
+  height: 34vh;
+  pointer-events: none;
+  z-index: 0;
+  background:
+    repeating-linear-gradient(90deg, color-mix(in srgb, var(--accent) 38%, transparent) 0 1.5px, transparent 1.5px 64px),
+    repeating-linear-gradient(0deg, color-mix(in srgb, var(--accent) 38%, transparent) 0 1.5px, transparent 1.5px 64px);
+  transform: perspective(320px) rotateX(62deg);
+  transform-origin: 50% 100%;
+  -webkit-mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.55) 0%, transparent 85%);
+  mask-image: linear-gradient(0deg, rgba(0, 0, 0, 0.55) 0%, transparent 85%);
+}
+:root[data-preset='neon'][data-theme='light'][data-texture='grid'] .fx-main::after {
+  opacity: 0.45;
+}
+:root[data-preset='neon'] .fx-main > * {
+  position: relative;
+  z-index: 1;
 }

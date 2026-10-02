@@ -3,7 +3,7 @@ import { DEFAULT_LOCAL_API_PORT, DEFAULT_RUNTIME_PORT, UPDATE_CHANNELS } from '.
 import { ALERT_CHANNELS } from './ext';
 
 /** Built-in color themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
-export const THEME_PRESETS = ['fabrics', 'tropical', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
+export const THEME_PRESETS = ['fabrics', 'tropical', 'neon', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
 export type ThemePreset = (typeof THEME_PRESETS)[number];
 /** Background textures. "theme" uses each theme's own (weave for Fabrics, palms for Tropical, …). */
 export const TEXTURES = ['theme', 'none', 'weave', 'linen', 'grain', 'grid', 'dots', 'carbon', 'waves', 'palms'] as const;

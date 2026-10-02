@@ -5,7 +5,7 @@ import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { navigate, routeArg } from '../app';
-import { PRESETS, TEXTURE_NAMES, playStartupSound, resolvedMode, resolvedTexture, textureImage } from '../theme';
+import { PRESETS, TEXTURE_NAMES, playStartupSound, resolvedMode, resolvedTexture, textureImage, themeAccent } from '../theme';
 import { summonGoose } from '../fun';
 import { TrophyCase } from '../trophies';
 import { AskButton, EmergencyStop } from '../widgets';
@@ -188,7 +188,7 @@ function Appearance() {
           <div className="swatches">
             {PRESETS.map((p) => {
               const [page, side, accent, glow] = mode === 'dark' ? p.dark : p.light;
-              const tex = textureImage(p.texture, mode, 'bold');
+              const tex = textureImage(p.texture, mode, 'bold', accent);
               return (
                 <button key={p.id} className={`swatch${a.preset === p.id ? ' selected' : ''}`} disabled={L('appearance.preset')} onClick={() => void patch({ appearance: { preset: p.id } })} aria-pressed={a.preset === p.id}>
                   <div className="swatch-preview">
@@ -218,10 +218,10 @@ function Appearance() {
           <div className="tex-tiles">
             {(['theme', ...Object.keys(TEXTURE_NAMES)] as Texture[]).map((t) => {
               const shown = t === 'theme' ? resolvedTexture({ texture: 'theme', preset: a.preset }) : t;
-              const img = textureImage(shown, mode, 'bold');
+              const img = textureImage(shown, mode, 'bold', themeAccent(a, mode));
               return (
                 <button key={t} className={`tex-tile${a.texture === t ? ' selected' : ''}`} disabled={L('appearance.texture')} aria-pressed={a.texture === t} onClick={() => void patch({ appearance: { texture: t } })}>
-                  <span className="tex-tile-preview" style={{ backgroundImage: img ?? 'none', backgroundSize: shown === 'palms' ? '96px 96px' : undefined }} />
+                  <span className="tex-tile-preview" style={{ backgroundImage: img ?? 'none', backgroundSize: shown === 'palms' ? '96px 96px' : shown === 'grid' ? '64px 64px' : undefined }} />
                   <span className="tex-tile-label">{t === 'theme' ? `Theme's own (${TEXTURE_NAMES[shown]})` : TEXTURE_NAMES[t]}</span>
                 </button>
               );

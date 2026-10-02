@@ -2106,3 +2106,73 @@ html.goose-mode #root {
   border-top: 1px solid var(--border);
   padding: 10px 12px;
 }
+
+/* ---------------------------------------------------------------------------------------------- FBRX/1 */
+.cli-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.cli-badge {
+  font-family: var(--mono);
+  font-weight: 800;
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 6px;
+  color: #001318;
+  background: linear-gradient(135deg, #7ef7ff, #00b8d4);
+  letter-spacing: 0.04em;
+}
+.term.cli {
+  background: radial-gradient(1200px 400px at 0% 0%, rgba(0, 184, 212, 0.08), transparent 60%), #070a0d;
+  color: #d8e6ea;
+}
+.cli-entry + .cli-entry {
+  margin-top: 8px;
+}
+.cli-cmd {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #ffffff;
+  min-height: 26px;
+}
+.cli-prompt {
+  color: #5fe3f2;
+  font-weight: 700;
+}
+.cli-edit {
+  color: #f3c969;
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.cli-entry-actions {
+  margin-left: auto;
+  display: inline-flex;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.cli-entry:hover .cli-entry-actions {
+  opacity: 1;
+}
+.cli-entry-actions .fx-btn {
+  color: #a9bcc2;
+}
+.cli-input {
+  align-items: center;
+}
+.cli-input-prompt {
+  display: flex;
+  flex-direction: column;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  line-height: 1.25;
+  white-space: nowrap;
+}
+.cli-input-prompt .cli-prompt {
+  color: var(--accent);
+}
+.term.cli .term-dim b,
+.term.cli .term-dim code {
+  color: #cfe9ee;
+}

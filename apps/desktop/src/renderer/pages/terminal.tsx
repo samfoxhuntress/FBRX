@@ -8,6 +8,7 @@ import { AskButton, askAgent } from '../widgets';
 import { COMMAND_GROUPS, type LibraryCommand } from '../command-library';
 import { DeviceConsolesPanel, useConsoleSessions } from '../consoles';
 import { summonGoose, unlockTrophy } from '../fun';
+import { Fbrx1Panel } from '../fbrx1';
 
 interface Block {
   id: string;
@@ -218,7 +219,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
-  const [tab, setTab] = useState<'commands' | 'consoles'>(arg.startsWith('console') ? 'consoles' : 'commands');
+  const [tab, setTab] = useState<'commands' | 'consoles' | 'fbrx1'>(arg.startsWith('console') ? 'consoles' : arg.startsWith('fbrx1') ? 'fbrx1' : 'commands');
   const [consoleId, setConsoleId] = useState<string | null>(arg.startsWith('console/') ? arg.slice(8) : null);
   const consoles = useConsoleSessions();
   const openConsoles = (consoles.data ?? []).filter((s) => s.state !== 'closed').length;
@@ -245,7 +246,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
     } else if (a.startsWith('console')) {
       setTab('consoles');
       if (a.startsWith('console/')) setConsoleId(a.slice(8));
-    }
+    } else if (a.startsWith('fbrx1')) setTab('fbrx1');
   }, [arg]);
   useEffect(() => {
     const offs = [
@@ -321,21 +322,26 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
       description={
         tab === 'commands'
           ? `Run ${shellName} commands. Each command starts fresh in the folder shown; type “cd folder” to move, or start with ? to ask for a command. Commands are recorded in the audit log.`
-          : 'Command lines of switches, firewalls, access points and servers, over SSH or Telnet, with the maker\'s guide alongside.'
+          : tab === 'fbrx1'
+            ? 'FBRX/1 manages FBRX OS itself, like the command line of a switch or firewall: show, request, configure and commit.'
+            : 'Command lines of switches, firewalls, access points and servers, over SSH or Telnet, with the maker\'s guide alongside.'
       }
     >
       <Tabs
         active={tab}
         onChange={(t) => {
           setTab(t);
-          navigate(t === 'consoles' ? `terminal/console${consoleId ? `/${consoleId}` : ''}` : 'terminal');
+          navigate(t === 'consoles' ? `terminal/console${consoleId ? `/${consoleId}` : ''}` : t === 'fbrx1' ? 'terminal/fbrx1' : 'terminal');
         }}
         tabs={[
           { id: 'commands', label: shellName },
           { id: 'consoles', label: `Device consoles${openConsoles ? ` (${openConsoles})` : ''}` },
+          { id: 'fbrx1', label: 'FBRX/1' },
         ]}
       />
-      {tab === 'consoles' ? (
+      {tab === 'fbrx1' ? (
+        <Fbrx1Panel />
+      ) : tab === 'consoles' ? (
         <DeviceConsolesPanel
           selected={consoleId}
           onSelect={(id) => {
