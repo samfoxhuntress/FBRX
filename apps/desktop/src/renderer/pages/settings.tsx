@@ -206,7 +206,7 @@ function Appearance() {
           </div>
           <Field label="Accent color" help="Leave on Theme to use the theme's own accent">
             <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <input type="color" aria-label="Accent color" value={a.accent || '#f0a530'} onChange={(e) => void patch({ appearance: { accent: e.target.value } })} style={{ width: 44, height: 32, border: 0, background: 'none' }} />
+              <input type="color" aria-label="Accent color" value={a.accent || themeAccent(a, mode)} onChange={(e) => void patch({ appearance: { accent: e.target.value } })} style={{ width: 44, height: 32, border: 0, background: 'none' }} />
               <span className="mono">{a.accent || 'Theme accent'}</span>
               {a.accent && <Button size="sm" variant="ghost" onClick={() => void patch({ appearance: { accent: '' } })}>Use theme accent</Button>}
             </div>
@@ -313,7 +313,7 @@ function AgentSettings() {
         </div>
       </Card>
       <div style={{ gridColumn: '1 / -1' }}>
-        <Card title="Emergency stop" subtitle="The big red button. Also on the agent page, in the tray menu and as `request ai stop` in FBRX/1.">
+        <Card title="Emergency stop" subtitle={'The big red button. Also on the agent page, in the tray menu, and as "request ai stop" in FBRX/1.'}>
           <EmergencyStop />
         </Card>
       </div>

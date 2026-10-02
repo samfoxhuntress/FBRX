@@ -130,7 +130,7 @@ export function EmergencyStop({ compact = false }: { compact?: boolean }) {
     setBusy(true);
     try {
       const r = await call('ai.hardStop');
-      toast.warning('AI stopped', `${r.cancelledRuns} run${r.cancelledRuns === 1 ? '' : 's'} cancelled, ${r.deniedApprovals} approval${r.deniedApprovals === 1 ? '' : 's'} denied. Nothing AI-driven runs until you resume.`);
+      toast.warning('AI stopped', `${r.cancelledRuns} run${r.cancelledRuns === 1 ? '' : 's'} canceled, ${r.deniedApprovals} approval${r.deniedApprovals === 1 ? '' : 's'} denied. Nothing AI-driven runs until you resume.`);
     } catch (e) {
       toast.error('Could not stop the AI', (e as Error).message);
     } finally {

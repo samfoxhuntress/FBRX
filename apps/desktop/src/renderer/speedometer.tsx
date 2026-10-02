@@ -117,14 +117,14 @@ export function Speedometer({ fraction, value, unit, label, flux = false, marks 
       </g>
       <circle cx={CX} cy={CY} r="12" fill="#2a313c" stroke="#9aa3ae" strokeWidth="2" />
       <circle cx={CX} cy={CY} r="4" fill="#cfd6df" />
-      <text x={CX} y={CY + 62} textAnchor="middle" className="speedo-value">
+      <text x={CX} y={CY + 80} textAnchor="middle" className="speedo-value">
         {value}
       </text>
-      <text x={CX} y={CY + 84} textAnchor="middle" className="speedo-unit">
+      <text x={CX} y={CY + 100} textAnchor="middle" className="speedo-unit">
         {unit}
       </text>
       {label && (
-        <text x={CX} y={CY + 104} textAnchor="middle" className="speedo-label">
+        <text x={CX} y={CY + 119} textAnchor="middle" className="speedo-label">
           {label}
         </text>
       )}

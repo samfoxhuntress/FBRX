@@ -52,6 +52,19 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
 * Snapshots contain the vault key encrypted under the snapshot passphrase — protect snapshot files and passphrases
   like the credentials they contain.
 
+## Emergency stop and the FBRX/1 console
+
+* The **emergency stop** (`ai.hardStop`) may be pressed from anywhere, including by an AI app over the Local API, so
+  that anything can pull the brake. It cancels agent runs, denies pending approvals, stops the local model and is
+  recorded in the audit log. While it is on, the agent, `aicoord.consult` and tool calls from any origin other than
+  the person at the computer are refused. **Resuming** (`ai.resume`) is reserved for the person at the computer.
+* **FBRX/1** (`cli.exec`, `cli.complete`) is reserved for the person at the computer. It calls the same core methods
+  as the app (so policy, locks, validation and audit all apply) and validates configuration commits against the
+  settings schema and the organization's locked paths before applying them.
+* The Silly Goose's pointer grab on Windows runs a small PowerShell helper (started with the goose, ended when it
+  leaves) that only moves the mouse pointer to coordinates sent by the goose's own window, for at most about three
+  seconds per grab. It is never started when Fun extras are off.
+
 ## Audit and tamper evidence
 
 Every tool decision, approval, configuration change, vault access, plugin event, backup and remote command is

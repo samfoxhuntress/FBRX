@@ -129,11 +129,11 @@ function LooseTip({ fun }: { fun: boolean }) {
   return (
     <div className="loose-slot">
       {state !== 'on' && (
-        <div className="loose-behind">
+        <div className={`loose-behind${state === 'off' ? ' settled' : ''}`}>
           <div className="loose-stripes" aria-hidden />
           <div className="loose-found">
             <b>Behind the panel you find:</b>
-            <span>a lost sock (so that's where it went), two dust bunnies, a shiny coin, and a sticky note in goose handwriting: “Honk. Also, someone should tighten these.”</span>
+            <span>a lost sock (so that's where it went), a shiny coin, and a note in goose handwriting: “Honk. Someone should tighten these.”</span>
           </div>
           {state === 'off' && (
             <Button

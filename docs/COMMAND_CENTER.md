@@ -12,14 +12,14 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 
 | Option | Choices |
 | --- | --- |
-| Theme | Fabrics (amber, the default), Tropical (mango orange with a hibiscus-pink glow and a hint of lagoon teal), Ember, Midnight, Graphite, Ocean, Forest, Orchid, Paper, High contrast. Each has a light and a dark version; *Mode* follows Windows or is fixed. Every theme except High contrast tints the sidebar, top bar and page with its own gradient glow, and charts use gradient area fills |
+| Theme | Fabrics (amber with a light-grey gradient and a woven texture, the default), Tropical (mango orange with a hibiscus-pink glow and a hint of lagoon teal), Neon Grid (deep night blue with cyan light lines, glowing cards and a grid floor that runs to the horizon), Ember, Midnight, Graphite, Ocean, Forest, Orchid, Paper, High contrast. Each has a light and a dark version; *Mode* follows Windows or is fixed. Every theme except High contrast tints the sidebar, top bar and page with its own gradient glow, and charts use gradient area fills |
 | Accent color | Any color; text on buttons switches between dark and light ink automatically |
 | Density | Compact, comfortable, spacious |
 | Corners | Sharp, rounded, soft |
-| Texture | The theme's own (weave for Fabrics, palms for Tropical, grain for Ember, dots for Midnight, carbon fiber for Graphite, waves for Ocean, linen for Forest…), or pick none, weave, linen, grain, grid, dots, carbon fiber, waves or palms; subtle, medium or bold. Drawn as sharp SVG patterns in the theme's ink on the sidebar, the top bar and the page behind the cards (never behind text in cards) |
+| Texture | The theme's own (weave for Fabrics, palms for Tropical, a neon grid for Neon Grid, grain for Ember, dots for Midnight, carbon fiber for Graphite, waves for Ocean, linen for Forest…), or pick none, weave (a large basket weave), linen, grain, grid (glowing lines in the accent color), dots, carbon fiber, waves or palms; subtle, medium or bold. Drawn as sharp SVG patterns in the theme's ink on the sidebar, the top bar and the page behind the cards (never behind text in cards) |
 | Text and interface size | 85–130 % |
 | Motion and start-up | Reduce motion; start-up animation (the FBRX logo stitched in) and start-up sound (from the FBRX intro, on by default, with a Listen button) |
-| Fun extras | Easter eggs and jokes (on by default), the Silly Goose's occasional visits (off by default) and a *Release the goose* button. An organization can lock fun extras off |
+| Fun extras | Easter eggs and jokes (on by default), the Silly Goose's occasional visits (off by default), a *Release the goose* button and the **Trophy case** (Settings → Trophy case: a badge for every easter egg found). An organization can lock fun extras off |
 
 Chart series and status colors stay on the validated design-system palette in every theme, so charts remain
 readable for color-blind users. Organizations can lock any appearance setting from the admin console.
@@ -44,7 +44,7 @@ the dashboard health check and your tasks for the day. Long content is trimmed t
 
 | Page | What it does |
 | --- | --- |
-| **Dashboard** | Live processor, memory, network and battery (sampled every 2 s), today's tasks, drives, recent alerts, this computer's hardware, and service health |
+| **FBRX Glass** | The dashboard, in frosted glass: a split-flap board that rotates through status messages, a health score out of 100 with what costs points, insight tiles (your next task, internet speed, storage, Fabrix, backups and the vault, alerts and approvals, a tip), then live processor, memory, network and battery (sampled every 2 s), today's tasks, drives, recent alerts, this computer's hardware, and service health |
 | **Fabrix** | The agent. Six starter cards (check my PC, plan my day, free up space, slow internet, is this link safe, explain crashes). Each chat is **Offline** or **Online**: new chats start offline (Settings → Agent); the first internet tool in an offline chat asks you to put that chat online |
 | **Tasks** | Board (drag between To do / In progress / Done) and list views, priorities, due dates, projects, quick add |
 | **Notes** | Markdown notes with preview, tags, pinning, projects and autosave |
@@ -52,9 +52,62 @@ the dashboard health check and your tasks for the day. Long content is trimmed t
 | **Snippets** | Reusable commands and text; press Enter in Spotlight to copy one |
 | **Files** | Places and drives, folder search, previews (text and images), a plain-text editor |
 | **Processes** | Live list by CPU or memory with end-process (core Windows processes are protected) |
-| **Terminal** (advanced) | Runs commands with streaming output in **PowerShell 7** when it is installed, otherwise **Windows PowerShell 5.1**, or Command Prompt (picker in the header). A **reference panel** puts ready-made commands (network, system, disks, processes, repair, security, power, printing; admin-only ones marked), your snippets, the code in your notes, and each project's snippets and notes one click away; ▶ runs one (commands that change something ask first). Save any command you ran as a snippet. Start a line with `?` to ask Fabrix for a command. Every command is in the audit log. The **Device consoles** tab holds SSH and Telnet sessions (see Network Center) |
+| **Terminal** (advanced) | Runs commands with streaming output in **PowerShell 7** when it is installed, otherwise **Windows PowerShell 5.1**, or Command Prompt (picker in the header). A **reference panel** puts ready-made commands (network, system, disks, processes, repair, security, power, printing; admin-only ones marked), your snippets, the code in your notes, and each project's snippets and notes one click away; ▶ runs one (commands that change something ask first). Save any command you ran as a snippet. Start a line with `?` to ask Fabrix for a command. Every command is in the audit log. The **Device consoles** tab holds SSH and Telnet sessions (see Network Center), and **FBRX/1** is the management console for FBRX itself (below) |
 | **Toolbox** | Passwords, QR codes (guest Wi-Fi codes phones join by scanning, links, text), text tools, compare text, sizes and numbers (why a 1 TB drive shows 931 GB; decimal, hex, binary), decision maker, colors. Advanced: JSON, Base64, URL, hashes, UUIDs, timestamps, regex, JWT, subnet calculator, MAC vendor lookup, port reference (with risky ports flagged) and the command library. Every tool has *Try* examples, and the top row recommends common jobs — all offline |
 | **Library** | 61 short how-tos (Windows basics, files, Wi-Fi, security, speed, devices, troubleshooting) with buttons that open the right Windows setting or ask Fabrix. In Advanced mode, **The Lab** adds power-user how-tos (install USBs, dual boot, a malware lab, device consoles, blue screen dumps, repairs, verifying downloads) and official download pages for Windows, Linux, security distributions and power tools, plus your computer maker's driver page. Safety goggles recommended (sold separately) |
+
+### FBRX/1
+
+**Terminal → FBRX/1** manages FBRX OS from a command line in the style of a network operating system (Junos or IOS):
+`show` reads, `request` acts, and `configure` edits settings as a candidate that only takes effect on `commit`.
+
+```
+root@PC> show system status
+root@PC> show services | except running
+root@PC> show log 200 | match error
+root@PC> request ai stop
+root@PC> configure
+[edit]
+root@PC# set appearance preset neon
+root@PC# show | compare
++ set appearance preset neon
+root@PC# commit check
+configuration check succeeds
+root@PC# commit
+commit complete (1 change)
+root@PC# exit
+```
+
+| Command | What it does |
+| --- | --- |
+| `show version`, `show license` | Product, version, build and license |
+| `show system status`, `show system resources` | Services, vault, fleet, agent and emergency stop; processor, memory and disks |
+| `show services`, `show alerts`, `show approvals`, `show tasks`, `show consoles`, `show trophies` | What they say |
+| `show ai providers`, `show ai models <provider>` | AI providers and their models |
+| `show network interfaces`, `show network devices`, `show network vendors` | Adapters, the last scan, the MAC registry in use |
+| `show audit <n>`, `show log <n>` | The audit log (newest first) and FBRX's log |
+| `show configuration [section]` | Settings in use, as a tree or (`| display set`) as `set` commands |
+| `request service restart <name>`, `request backup now`, `request network scan`, `request alerts mark-read` | Actions |
+| `request ai stop`, `request ai resume` | The emergency stop |
+| `ping <host> [count n]` | Ping |
+| `configure` → `set`, `delete`, `show [| compare]`, `commit [check]`, `rollback`, `run <command>`, `exit [discard]` | Edit settings safely: `commit check` validates against the schema and your organization's locks first |
+
+Unique prefixes work (`sh sys st`), **Tab** completes, **?** lists what can come next, ↑ / ↓ walk the history, and
+output can be piped: `| match <text>`, `| except <text>`, `| count`, `| last <n>`, `| display json`,
+`| display set`. The **FBRX/1 library** next to the console has pre-configured commands and multi-line recipes
+(health check, switch theme, offline-first agent, try-before-you-commit); ▶ runs every line in order, and the
+bookmark on any command you ran saves it as an FBRX/1 snippet that appears under *My snippets*. FBRX/1 is reserved
+for the person at the computer: it is not available over the Local API, the mesh or remote commands, and every
+change goes through the same checks and audit log as the rest of FBRX.
+
+### Emergency stop
+
+The big red **Emergency stop** (Settings → Agent, the bottom of the conversation list on the agent page, the tray
+menu, or `request ai stop` in FBRX/1) halts every AI action at once: running chats are canceled, tools waiting for
+approval are denied, the local model is stopped, and the agent and AI apps connected over the Local API are refused
+until someone resumes. A red **AI on emergency stop** pill with **Resume** stays in the top bar meanwhile. Only the
+person at the computer can resume (Resume, the tray menu or `request ai resume`); both are in the audit log. You can
+still use tools directly while the AI is stopped.
 
 ### Spotlight
 
@@ -95,7 +148,7 @@ Quiet hours hold back desktop and e-mail alerts that are not critical; a cooldow
 | **Security** | Microsoft Defender status, quick/full/folder scans, definitions update, threat history and removal; firewall profiles; listening ports (exposed vs local); what starts with Windows and unsigned programs running from user folders; file check (SHA-256, signature, VirusTotal with your key); **link check** (look-alike domains, redirects without running page code, domain age, certificate, VirusTotal); Windows Sandbox for unknown links and files. Advanced: Defender settings and exclusions |
 | **Updates** | App updates through winget (one or all, with live output), pending Windows updates, third-party drivers oldest first, installed updates |
 | **Bug catcher** | Errors from the event log grouped by source, app crashes, blue screens, unexpected shutdowns, problem devices and stopped services — with one-click repairs (SFC, DISM, network reset, Windows Update reset, Explorer restart, icon cache, print queue, Store cache, clock resync, battery and energy reports) and "explain with Fabrix" |
-| **Virtual lab** (advanced) | Turn on Hyper-V, Windows Sandbox, WSL; create Generation 2 VMs (secure boot, TPM for Windows guests) on an isolated switch, the internet switch or no network, with a starting checkpoint; start, stop, save, checkpoint, revert, isolate, delete |
+| **Virtual lab** (advanced) | **Room for a VM**: live processor, memory and disk gauges and which VM sizes fit right now (keeping 2 GB and a core for Windows). **My VMs**: cards with state, resources, network (isolate / internet / unplug), console, shut down, save, power off, named checkpoints, revert and delete (optionally keeping the disk). **New safe VM**: templates for Kali Linux, REMnux, FLARE-VM, Parrot Security, Ubuntu, a Windows 11 evaluation machine or your own disc, each with its official download page, a fit check and a setup guide from Fabrix; Generation 2, secure boot, a TPM for Windows guests and a first checkpoint. **Windows Sandbox**: launch it with a link or a read-only shared folder, networking on or off. **Readiness**: edition, firmware virtualization, memory, processors and account, plus turning on Hyper-V, Windows Sandbox, the Virtual Machine Platform and WSL. *Plan a lab* asks Fabrix to design one for this PC |
 
 Actions that need administrator rights show the Windows UAC prompt. FBRX passes the script to the elevated
 PowerShell as an encoded command — it is never written to a file that another program could swap before you
@@ -107,7 +160,7 @@ Overview (this PC, router, internet latency and loss, public address, plain-lang
 **trace route with hop identification** (your router, other local routers / double NAT, your provider, the
 internet, the destination; names, makers and locations), **device discovery** (ping sweep, ARP, mDNS/Bonjour,
 UPnP, port fingerprints and MAC vendors identify PCs, phones, printers, TVs, cameras, smart-home devices and NAS),
-saved scans with comparison and CSV export, speed test with history, Wi-Fi (signal, channel, band, congestion by
+saved scans with comparison and CSV export, a **speedometer** speed test (download, upload, latency and jitter, with history), Wi-Fi (signal, channel, band, congestion by
 channel), Bluetooth devices with battery, printers (test page, queue, default, clear, restart spooler), DNS
 comparison, port checks and device consoles. Advanced: adapter configuration (DHCP, static, secondary addresses).
 
@@ -168,7 +221,16 @@ with the **agent-scoped** token, read at start-up from `localapi-agent.json` in 
 the other app's configuration). Every call goes through the same governance as Fabrix's own: policy, guardian,
 approvals in FBRX, and the audit log. The Local API must be on.
 
-**Second opinion** asks another configured model the same question without tools.
+**Test** (next to a connected app) starts the bridge exactly the way the app will and checks that it lists the FBRX
+tools, so you know the link works before you switch apps. For Claude Desktop, FBRX writes the configuration for both
+the regular installer and the Microsoft Store version (which keeps its settings under
+`%LOCALAPPDATA%\Packages\Claude_…\LocalCache\Roaming\Claude`); quit Claude completely from its tray icon and start it
+again to load it. Then, in Claude, ask it to use FBRX ("use FBRX to check my disk space", "ask Fabrix …").
+
+**Second opinion** asks another configured model the same question without tools. Claude Code, when installed, is
+one of the choices: FBRX runs `claude -p` with the question and shows the answer, which is how to ask Claude from
+FBRX without an API key (an Anthropic API key, added in AI models, works too). FBRX cannot type into the Claude
+Desktop app itself.
 
 ## Agent tools added
 
