@@ -177,12 +177,13 @@ export class ModelManager {
   }
 }
 
+/** SHA-256 of a file. Resolves once the file is closed again, so Windows lets the caller move or delete it. */
 export function sha256File(path: string): Promise<string> {
   return new Promise((resolve, reject) => {
     const h = createHash('sha256');
     createReadStream(path)
       .on('data', (c) => h.update(c))
-      .on('end', () => resolve(h.digest('hex')))
+      .on('close', () => resolve(h.digest('hex')))
       .on('error', reject);
   });
 }

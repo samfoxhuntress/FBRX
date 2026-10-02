@@ -87,7 +87,10 @@ export async function createSnapshot(o: CreateSnapshotOptions): Promise<Snapshot
   validatePassphrase(o.passphrase);
   mkdirSync(o.outDir, { recursive: true });
   const work = join(o.paths.tmp, `snap-${Date.now()}-${randomBytes(3).toString('hex')}`);
-  mkdirSync(join(work, 'db'), { recursive: true });
+  // Payload tree: manifest.json + db/ (written here directly; renaming a folder with a just-written file in it fails
+  // on Windows while the file is still open or being scanned), then data/<dir> appended from the live root.
+  const tree = join(work, 'tree');
+  mkdirSync(join(tree, 'db'), { recursive: true });
   const createdAt = new Date().toISOString();
   const snapshotId = newId('snap');
   const stamp = createdAt.replace(/[-:]/g, '').replace('T', '-').slice(0, 15);
@@ -95,10 +98,10 @@ export async function createSnapshot(o: CreateSnapshotOptions): Promise<Snapshot
   const target = join(o.outDir, fileName);
   const tgz = join(work, 'payload.tgz');
   try {
-    o.db.snapshotTo(join(work, 'db', 'fbrx.db'));
+    o.db.snapshotTo(join(tree, 'db', 'fbrx.db'));
     const dirs = [...CONTENT_DIRS, ...(o.includeModels ? ['models'] : [])];
     const files: Manifest['files'] = [];
-    const dbFile = join(work, 'db', 'fbrx.db');
+    const dbFile = join(tree, 'db', 'fbrx.db');
     files.push({ path: 'db/fbrx.db', size: statSync(dbFile).size, sha256: await sha256File(dbFile) });
     for (const d of dirs) {
       for (const rel of walk(join(o.paths.root, d), o.paths.root)) {
@@ -115,11 +118,7 @@ export async function createSnapshot(o: CreateSnapshotOptions): Promise<Snapshot
       vaultKey: o.vaultKey ? o.vaultKey.toString('base64') : null,
       files,
     };
-    // Payload tree: manifest.json + db/ from the work dir, then data/<dir> appended from the live root.
-    const tree = join(work, 'tree');
-    mkdirSync(tree, { recursive: true });
     writeFileSync(join(tree, 'manifest.json'), JSON.stringify(manifest));
-    renameSync(join(work, 'db'), join(tree, 'db'));
     const plain = join(work, 'payload.tar');
     await tar.c({ file: plain, cwd: tree, portable: true }, ['manifest.json', 'db']);
     const existingDirs = dirs.filter((d) => existsSync(join(o.paths.root, d)));
