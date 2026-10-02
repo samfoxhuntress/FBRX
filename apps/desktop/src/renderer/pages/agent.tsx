@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentEvent, ApprovalRequest, ChatMessage, ProviderStatus, ToolCallRecord } from '@fbrx/shared';
+import { addressAs } from '@fbrx/shared';
 import { Button, Callout, Card, Icons, Select, Status, TextArea, timeAgo, useAction, useConfirm, type IconName, FbrxMark } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
@@ -230,9 +231,15 @@ export function AgentPage({ agentName }: { agentName: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // New messages glide into view; streamed text follows instantly, and only while you are at the bottom (so
+  // scrolling up to read something earlier isn't interrupted).
   useEffect(() => {
     thread.current?.scrollTo({ top: thread.current.scrollHeight, behavior: 'smooth' });
-  }, [messages, streaming]);
+  }, [messages]);
+  useEffect(() => {
+    const el = thread.current;
+    if (el && streaming && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
+  }, [streaming]);
 
   // Prompts handed over by other pages (sessionStorage) or by Spotlight (#/agent/ask/<text>).
   const sendRef = useRef<(t: string) => void>(() => undefined);
@@ -309,7 +316,9 @@ export function AgentPage({ agentName }: { agentName: string }) {
           {!visible.length && !streaming && (
             <div className="msg" style={{ marginTop: '8vh', alignItems: 'center', textAlign: 'center' }}>
               <FbrxMark className="fx-brand-mark" size={48} />
-              <h2>Hi, I'm {agentName}. What should we do?</h2>
+              <h2>
+                Hi{addressAs(settings.data?.settings) ? ` ${addressAs(settings.data?.settings)}` : ''}, I'm {agentName}. What should we do?
+              </h2>
               <p className="fx-secondary" style={{ maxWidth: 560 }}>
                 I work with your files, apps, PC and network. Every action is checked by your governance policy, and anything that changes something waits for your approval.
                 {offline ? ' This chat is offline: I will ask before using the internet.' : ' This chat is online: I may use internet tools.'}

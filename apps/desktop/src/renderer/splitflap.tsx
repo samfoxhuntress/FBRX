@@ -60,52 +60,75 @@ export function SplitFlapBoard({ messages, cols = 24, lines = 2, intervalMs = 70
   const current = msgs[index % msgs.length];
   const key = JSON.stringify(current);
 
+  // The stepper only runs while letters are moving; an idle board costs nothing.
+  const stepper = useRef<ReturnType<typeof setInterval> | null>(null);
+  const step = () => {
+    const s = st.current;
+    s.tick++;
+    const cur = shownRef.current;
+    const out = cur.slice();
+    const flipped: number[] = [];
+    let waiting = false;
+    for (let i = 0; i < out.length; i++) {
+      if (s.riffle[i] > 0) {
+        s.riffle[i]--;
+        out[i] = s.riffle[i] === 0 ? (s.target[i] ?? ' ') : CHARSET[1 + Math.floor(Math.random() * (CHARSET.length - 1))];
+      } else if (out[i] !== s.target[i]) {
+        if (s.tick < (s.startAt[i] ?? 0)) {
+          waiting = true;
+          continue;
+        }
+        out[i] = next(out[i]);
+      } else continue;
+      flipped.push(i);
+    }
+    if (!flipped.length) {
+      if (!waiting && stepper.current) {
+        clearInterval(stepper.current);
+        stepper.current = null;
+      }
+      return;
+    }
+    prev.current = cur;
+    shownRef.current = out;
+    setShown(out);
+    setFlipVer((v) => {
+      const n = v.slice();
+      for (const i of flipped) n[i]++;
+      return n;
+    });
+  };
+  const kick = () => {
+    if (!stepper.current) stepper.current = setInterval(step, STEP_MS);
+  };
+  useEffect(
+    () => () => {
+      if (stepper.current) clearInterval(stepper.current);
+    },
+    [],
+  );
+
   // New message: set the targets; each column starts a moment after the one to its left.
   useEffect(() => {
     const s = st.current;
     s.target = fit(current, cols, lines).join('').split('');
     s.tick = 0;
     s.startAt = s.target.map((_, i) => (i % cols) * 0.6 + Math.floor(i / cols) * 2);
+    kick();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key, cols, lines]);
 
+  // Rotate messages, but not while the window is hidden.
   useEffect(() => {
-    const t = setInterval(() => setIndex((i) => i + 1), intervalMs);
+    const t = setInterval(() => document.visibilityState === 'visible' && setIndex((i) => i + 1), intervalMs);
     return () => clearInterval(t);
   }, [intervalMs]);
-
-  useEffect(() => {
-    const t = setInterval(() => {
-      const s = st.current;
-      s.tick++;
-      const cur = shownRef.current;
-      const out = cur.slice();
-      const flipped: number[] = [];
-      for (let i = 0; i < out.length; i++) {
-        if (s.riffle[i] > 0) {
-          s.riffle[i]--;
-          out[i] = s.riffle[i] === 0 ? (s.target[i] ?? ' ') : CHARSET[1 + Math.floor(Math.random() * (CHARSET.length - 1))];
-        } else if (out[i] !== s.target[i] && s.tick >= (s.startAt[i] ?? 0)) out[i] = next(out[i]);
-        else continue;
-        flipped.push(i);
-      }
-      if (!flipped.length) return;
-      prev.current = cur;
-      shownRef.current = out;
-      setShown(out);
-      setFlipVer((v) => {
-        const n = v.slice();
-        for (const i of flipped) n[i]++;
-        return n;
-      });
-    }, STEP_MS);
-    return () => clearInterval(t);
-  }, []);
 
   const touch = (i: number) => {
     const s = st.current;
     if (s.riffle[i] > 0) return;
     s.riffle[i] = 3 + Math.floor(Math.random() * 4);
+    kick();
     if (sound) clack();
     if (!s.touched.has(i)) {
       s.touched.add(i);

@@ -4,6 +4,7 @@ import { Button, Callout, Card, Field, Input, Status, formatBytes, useAction, Fb
 import { call, pickFile } from '../client';
 import { useCore } from '../hooks';
 import { RestoreModal } from './backup';
+import { ProfileFields } from '../widgets';
 
 type Step = 'welcome' | 'vault' | 'ai' | 'org' | 'done';
 const STEPS: Step[] = ['welcome', 'vault', 'ai', 'org', 'done'];
@@ -11,6 +12,7 @@ const STEPS: Step[] = ['welcome', 'vault', 'ai', 'org', 'done'];
 export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: () => void }) {
   const [step, setStep] = useState<Step>('welcome');
   const [name, setName] = useState(status.deviceName);
+  const [profile, setProfile] = useState({ name: '', callMe: '' });
   const [pass, setPass] = useState({ a: '', b: '' });
   const [ai, setAi] = useState<'local' | 'ollama' | 'anthropic' | 'skip'>('local');
   const [apiKey, setApiKey] = useState('');
@@ -62,8 +64,9 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
             <div className="fx-form">
               <h1>Welcome to your workstation's operating layer</h1>
               <p className="fx-secondary">FBRX OS gives you a private AI agent that can work with your files, apps and systems — governed by clear rules, audited end to end, and backed up so you can move to any computer.</p>
+              <ProfileFields name={profile.name} callMe={profile.callMe} onChange={setProfile} autoFocus />
               <Field label="Name this workstation">
-                <Input value={name} onChange={(e) => setName(e.target.value)} autoFocus />
+                <Input value={name} onChange={(e) => setName(e.target.value)} />
               </Field>
               <div className="fx-actions" style={{ justifyContent: 'space-between' }}>
                 <Button
@@ -78,7 +81,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
                 >
                   Restore from a backup…
                 </Button>
-                <Button variant="primary" loading={busy === 'n'} onClick={() => void run('n', () => call('settings.update', { patch: { general: { deviceName: name } } }).then(next))}>
+                <Button variant="primary" loading={busy === 'n'} onClick={() => void run('n', () => call('settings.update', { patch: { general: { deviceName: name }, profile: { name: profile.name.trim(), callMe: profile.callMe.trim() } } }).then(next))}>
                   Continue
                 </Button>
               </div>

@@ -1,5 +1,6 @@
 import { arch, hostname, platform } from 'node:os';
 import {
+  addressAs,
   newId,
   type AgentEvent,
   type InvocationOrigin,
@@ -20,6 +21,7 @@ import type { ToolSpec } from '../tools/types';
 import type { ConversationStore, StoredMessage } from './conversations';
 import type { ProviderManager } from './provider-manager';
 import type { ProviderMessage, ProviderTool, ProviderToolCall } from './providers/types';
+import { chatEgg, type ChatEgg } from '../fun/chat-eggs';
 
 export interface ChatParams {
   conversationId?: string;
@@ -108,7 +110,7 @@ export class AgentRuntime {
     if (text.length > 100_000) throw new CoreError('INVALID_ARGUMENT', 'Message is too long');
     if (this.d.halt?.()) throw new CoreError('UNAVAILABLE', `${this.d.settings.get().ai.agentName} is on emergency stop. Resume it in Settings → Agent or on the ${this.d.settings.get().ai.agentName} page.`);
     const egg = this.easterEgg(text, p.conversationId);
-    if (egg) return this.cannedRun(p, text, egg.reply);
+    if (egg) return this.cannedRun(p, text, egg);
     // Resolve the provider first so configuration errors surface synchronously to the caller.
     const resolved = this.d.providers.resolve(p.providerId, p.model);
 
@@ -148,26 +150,15 @@ export class AgentRuntime {
 
   // ------------------------------------------------------------------------------------ easter eggs
 
-  /**
-   * "Where's my stapler?" (Office Space): an instant answer, then the rest of the chat in middle-manager jargon,
-   * every reply ending with "That would be great." Saying "I quit", "normal mode" or "PC load letter" ends it.
-   */
-  private easterEgg(text: string, conversationId?: string): { reply: string } | null {
+  /** A chat easter egg (see fun/chat-eggs.ts), or null for a normal answer. */
+  private easterEgg(text: string, conversationId?: string): ChatEgg | null {
     const fun = this.d.fun;
     if (!fun?.enabled()) return null;
-    if (/\b(where('?s| is| did)|have you seen|seen|find|took|has)\b[^?]{0,30}\bmy (red |swingline |red swingline )?stapler\b/i.test(text) || /^my stapler\b/i.test(text)) {
-      return {
-        reply: 'It\'s likely downstairs, in storage building B.\n\nMmm, yeah. And going forward, I\'m gonna need you to go ahead and route all of your requests through the proper synergy channels. That would be great.',
-      };
-    }
-    if (conversationId && fun.persona.get(conversationId) === 'lumbergh' && /^(i quit|normal mode|stop (the )?jargon|no more jargon|pc load letter)\b/i.test(text)) {
-      return { reply: 'PC load letter? What does that even mean?\n\n…Fine. The stapler stays in storage building B, and I\'m back to talking like a normal assistant. What do you need?' };
-    }
-    return null;
+    return chatEgg(text, conversationId ? fun.persona.get(conversationId) : null);
   }
 
   /** A reply that needs no model: stored and streamed like a normal run. */
-  private cannedRun(p: ChatParams, text: string, reply: string): { runId: string; conversationId: string; done: Promise<RunResult> } {
+  private cannedRun(p: ChatParams, text: string, egg: ChatEgg): { runId: string; conversationId: string; done: Promise<RunResult> } {
     let conversationId = p.conversationId;
     if (conversationId) {
       if (!this.d.store.exists(conversationId)) throw new CoreError('NOT_FOUND', 'Conversation not found');
@@ -176,9 +167,9 @@ export class AgentRuntime {
     }
     const runId = newId('run');
     const convId = conversationId;
-    const exiting = !/stapler/i.test(text);
-    this.d.fun!.persona.set(convId, exiting ? null : 'lumbergh');
-    if (!exiting) this.d.fun!.trophy('stapler');
+    const reply = egg.reply;
+    if (egg.persona !== undefined) this.d.fun!.persona.set(convId, egg.persona);
+    for (const t of egg.trophies) this.d.fun!.trophy(t);
     this.d.store.append(convId, { role: 'user', content: text });
     this.emit({ type: 'run.started', runId, conversationId: convId, providerId: 'fbrx', model: 'easter egg' });
     const assistant = this.d.store.append(convId, { id: newId('msg'), role: 'assistant', content: reply });
@@ -225,6 +216,7 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
       s.ai.systemPrompt.trim(),
       '',
       `Your name is ${s.ai.agentName}. Introduce yourself by that name when it is natural.`,
+      ...(addressAs(s) ? [`You are working with ${s.profile.name.trim() || addressAs(s)}. Address them as "${addressAs(s)}" (a greeting, a closing line); don't overdo it.`] : []),
       '',
       '## Environment',
       `- Date: ${date} (time zone ${tz}); call time.now for the exact time`,
@@ -336,6 +328,16 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
 
         const messageId = newId('msg');
         let content = '';
+        // Text is sent to the windows in small batches (about 15 a second) instead of token by token, so a fast
+        // local model doesn't flood the app with re-renders.
+        let pending = '';
+        let lastFlush = 0;
+        const flush = () => {
+          if (!pending) return;
+          this.emit({ type: 'message.delta', runId, conversationId, messageId, delta: pending });
+          pending = '';
+          lastFlush = Date.now();
+        };
         const calls: ProviderToolCall[] = [];
         let finish: { finishReason: string; providerData?: any; servedModel?: string; message?: string } = { finishReason: 'stop' };
         for await (const chunk of provider.chat({
@@ -347,13 +349,15 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
         })) {
           if (chunk.type === 'text') {
             content += chunk.delta;
-            this.emit({ type: 'message.delta', runId, conversationId, messageId, delta: chunk.delta });
+            pending += chunk.delta;
+            if (Date.now() - lastFlush >= 66) flush();
           } else if (chunk.type === 'tool_call') calls.push(chunk.call);
           else if (chunk.type === 'usage') {
             usage.inputTokens += chunk.inputTokens;
             usage.outputTokens += chunk.outputTokens;
           } else if (chunk.type === 'done') finish = chunk;
         }
+        flush();
 
         if (finish.finishReason === 'refusal' || (finish.finishReason === 'length' && finish.message)) {
           content = `${content}${content ? '\n\n' : ''}_${finish.message}_`;

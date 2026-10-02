@@ -15,6 +15,8 @@ export class OllamaProvider implements ChatProvider {
     private readonly baseUrl: string,
     private readonly defaultModel?: string,
     historyBudgetChars = 60_000,
+    /** Processor threads for the model and how long Ollama keeps it loaded (see resourcePlan). */
+    private readonly limits: { numThread?: number; keepAlive?: string } = {},
   ) {
     this.historyBudgetChars = historyBudgetChars;
   }
@@ -80,7 +82,12 @@ export class OllamaProvider implements ChatProvider {
         ...(req.tools.length
           ? { tools: req.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } })) }
           : {}),
-        options: { ...(req.temperature !== undefined ? { temperature: req.temperature } : {}), ...(req.maxTokens ? { num_predict: req.maxTokens } : {}) },
+        options: {
+          ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
+          ...(req.maxTokens ? { num_predict: req.maxTokens } : {}),
+          ...(this.limits.numThread ? { num_thread: this.limits.numThread } : {}),
+        },
+        ...(this.limits.keepAlive ? { keep_alive: this.limits.keepAlive } : {}),
       }),
       signal: req.signal,
     });

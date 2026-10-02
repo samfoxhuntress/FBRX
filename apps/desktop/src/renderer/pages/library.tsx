@@ -1,11 +1,11 @@
 import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Button, Card, Empty, Icons, Input, Page } from '@fbrx/ui';
+import { Button, Callout, Card, Empty, Icons, Input, Page } from '@fbrx/ui';
 import { ARTICLES, CATS, type Article } from '../library-data';
 import { LAB_HOWTOS, LAB_SECTIONS, supportPage } from '../lab-data';
 import { bridge, call } from '../client';
 import { navigate } from '../app';
 import { useCore } from '../hooks';
-import { unlockTrophy } from '../fun';
+import { LUKE_1_37, NOTHING_IS_IMPOSSIBLE, unlockTrophy } from '../fun';
 import { STORIES, STORY_TRIGGER, type Story } from '../story-data';
 
 /** Renders article text, allowing only <kbd> and <code> (everything else stays literal text). */
@@ -107,7 +107,7 @@ function StoryTime({ q, agentName }: { q: string; agentName: string }) {
         <Icons.book size={34} />
         <div>
           <h2>Story time</h2>
-          <div>Gather round. None of these will help you with your computer. Well, a few might. Each one is inspired by a film or game; can you guess which before you read the end?</div>
+          <div>Gather round. None of these will help you with your computer. Well, a few might. Each one is inspired by a film or game. No titles: can you guess them?</div>
         </div>
       </div>
       {open ? (
@@ -161,6 +161,12 @@ export function LibraryPage({ agentName, advanced, easterEggs }: { agentName: st
   const trophies = useCore('fun.trophies', undefined, ['fun.trophy']);
   const storyAsked = easterEggs && STORY_TRIGGER.test(q.trim());
   const storiesFound = easterEggs && (!!trophies.data?.unlocked.stories || storyAsked);
+  const [verse, setVerse] = useState(false);
+  const impossible = easterEggs && NOTHING_IS_IMPOSSIBLE.test(q);
+  useEffect(() => {
+    if (!impossible) return;
+    void call('settings.update', { patch: { appearance: { advancedMode: true } } }).then(() => setVerse(true));
+  }, [impossible]);
   useEffect(() => {
     if (!storyAsked) return;
     unlockTrophy('stories');
@@ -197,6 +203,7 @@ export function LibraryPage({ agentName, advanced, easterEggs }: { agentName: st
           );
         })}
       </div>
+      {verse && impossible && <Callout tone="good">{LUKE_1_37}</Callout>}
       {cat === 'lab' && advanced && !q.trim() ? (
         <TheLab agentName={agentName} />
       ) : cat === 'stories' && storiesFound ? (

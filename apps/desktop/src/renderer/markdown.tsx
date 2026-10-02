@@ -1,8 +1,11 @@
-import type { ReactNode } from 'react';
+import { memo, type ReactNode } from 'react';
 import { openExternal } from './client';
 
-/** Minimal, safe Markdown → React (no HTML injection): code fences, headings, lists, emphasis, links. */
-export function Markdown({ text }: { text: string }) {
+/**
+ * Minimal, safe Markdown → React (no HTML injection): code fences, headings, lists, emphasis, links. Memoized: chat
+ * threads re-render while text streams in, and parsing every earlier message again would be wasted work.
+ */
+export const Markdown = memo(function Markdown({ text }: { text: string }) {
   const blocks: ReactNode[] = [];
   const lines = text.replace(/\r\n/g, '\n').split('\n');
   let i = 0;
@@ -48,7 +51,7 @@ export function Markdown({ text }: { text: string }) {
     blocks.push(<p key={key++}>{inline(para.join('\n'))}</p>);
   }
   return <div className="md">{blocks}</div>;
-}
+});
 
 function inline(s: string): ReactNode[] {
   const out: ReactNode[] = [];

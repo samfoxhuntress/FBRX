@@ -12,6 +12,10 @@ export function summonGoose(): void {
   bridge.goose?.('summon');
 }
 
+/** Luke 1:37: typed into Spotlight or the Library search, it turns on Advanced mode (a quiet easter egg). */
+export const NOTHING_IS_IMPOSSIBLE = /^\s*nothing\s+is\s+impossible[.!]*\s*$/i;
+export const LUKE_1_37 = '“For nothing will be impossible with God.” Luke 1:37. Advanced mode is on.';
+
 /** Records a found easter egg for the trophy case. Quiet when Fun extras are off or it was already found. */
 export function unlockTrophy(id: string): void {
   void call('fun.unlock', { id }).catch(() => undefined);
@@ -182,9 +186,8 @@ function GooseSvg({ walking, honking, golden = false, flipped = false, fast = fa
         <path d="M30 46 Q22 30 26 14" stroke="#f7f7f2" strokeWidth="10" strokeLinecap="round" fill="none" />
         <path d="M30 46 Q22 30 26 14" stroke="#cfcfc6" strokeWidth="11.5" strokeLinecap="round" fill="none" opacity="0.35" />
         <circle cx="27" cy="13" r="8.5" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="1.2" />
-        {/* Safety goggles: a strap around the head, the far lens peeking over the top, the near lens over the eye. */}
-        <path d="M21 9.2 Q28 6.4 35.2 10.4" stroke="#6b4a1f" strokeWidth="2.4" strokeLinecap="round" fill="none" />
-        <ellipse cx="29.6" cy="8.4" rx="2.6" ry="2.1" fill="#9fd6f5" stroke="#2f2f2f" strokeWidth="1.3" />
+        {/* Safety goggles, seen from the side: one lens over the eye and a strap around the back of the head. */}
+        <path d="M26.5 9.6 Q31.5 8.2 35.3 11.6" stroke="#6b4a1f" strokeWidth="2.4" strokeLinecap="round" fill="none" />
         <circle cx="23.6" cy="11" r="3.7" fill="#bfe8ff" fillOpacity="0.85" stroke="#2f2f2f" strokeWidth="1.6" />
         <circle cx="23.4" cy="11.2" r="1.5" fill="#1b1b1b" />
         <path d="M21.6 9.4 l1.4 -1" stroke="#ffffff" strokeWidth="1" strokeLinecap="round" />
@@ -479,4 +482,39 @@ export function GooseOverlay() {
       )}
     </div>
   );
+}
+
+/** A chicken: four quick clucks and a big "bagawk" (a nasal square wave through a throat-like filter). */
+export function cluck(volume = 0.2): void {
+  try {
+    audio ??= new AudioContext();
+    const ctx = audio;
+    const t0 = ctx.currentTime;
+    const notes: Array<[number, number, number, number]> = [
+      [0, 0.07, 620, 480],
+      [0.12, 0.07, 640, 500],
+      [0.24, 0.07, 600, 470],
+      [0.42, 0.3, 520, 880],
+    ];
+    for (const [start, dur, f0, f1] of notes) {
+      const osc = ctx.createOscillator();
+      const filter = ctx.createBiquadFilter();
+      const gain = ctx.createGain();
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(f0, t0 + start);
+      osc.frequency.exponentialRampToValueAtTime(f1, t0 + start + dur * 0.6);
+      osc.frequency.exponentialRampToValueAtTime(f0 * 0.8, t0 + start + dur);
+      filter.type = 'bandpass';
+      filter.frequency.value = 1600;
+      filter.Q.value = 2.2;
+      gain.gain.setValueAtTime(0, t0 + start);
+      gain.gain.linearRampToValueAtTime(volume, t0 + start + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, t0 + start + dur);
+      osc.connect(filter).connect(gain).connect(ctx.destination);
+      osc.start(t0 + start);
+      osc.stop(t0 + start + dur + 0.02);
+    }
+  } catch {
+    /* no audio */
+  }
 }

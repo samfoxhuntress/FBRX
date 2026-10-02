@@ -8,6 +8,8 @@ export type ThemePreset = (typeof THEME_PRESETS)[number];
 /** Background textures. "theme" uses each theme's own (weave for Fabrics, palms for Tropical, …). */
 export const TEXTURES = ['theme', 'none', 'weave', 'linen', 'grain', 'grid', 'dots', 'carbon', 'waves', 'palms'] as const;
 export type Texture = (typeof TEXTURES)[number];
+export const AI_RESOURCES = ['light', 'balanced', 'full'] as const;
+export type AiResources = (typeof AI_RESOURCES)[number];
 export const DEFAULT_MESH_PORT = 47800;
 
 export const PROVIDER_TYPES = ['local-runtime', 'ollama', 'openai-compatible', 'openai', 'anthropic'] as const;
@@ -47,6 +49,11 @@ export const SettingsSchema = z.object({
     agentName: z.string().min(1).max(40),
     /** New chats start offline: the first internet tool asks permission to go online. */
     newChatsOffline: z.boolean(),
+    /**
+     * How much of the computer a local model may use: light (a quarter of the processor, lowest priority), balanced
+     * (half, below-normal priority) or full (all but one core). Applies to the built-in runtime and to Ollama.
+     */
+    resources: z.enum(AI_RESOURCES),
   }),
   appearance: z.object({
     preset: z.enum(THEME_PRESETS),
@@ -66,6 +73,16 @@ export const SettingsSchema = z.object({
     easterEggs: z.boolean(),
     /** The Silly Goose drops by now and then on its own. */
     gooseVisits: z.boolean(),
+    /** Fun extras stay hidden until someone enters 418 as a license key (see funEnabled). */
+    funUnlocked: z.boolean(),
+    /** Visual effects: full (glass, glows, animation), light (flat and quick) or auto (light on battery and small PCs). */
+    effects: z.enum(['auto', 'full', 'light']),
+  }),
+  /** Who uses this computer: shown on FBRX Glass and used by the agent. */
+  profile: z.object({
+    name: z.string().max(60),
+    /** What FBRX and the agent call you ("Sam", "Sir"); empty uses the first name. */
+    callMe: z.string().max(40),
   }),
   spotlight: z.object({
     enabled: z.boolean(),
@@ -111,6 +128,8 @@ export const SettingsSchema = z.object({
     contextSize: z.number().int().min(512).max(262144),
     gpuLayers: z.number().int().min(-1).max(999),
     threads: z.number().int().min(0).max(256),
+    /** Stop the runtime after this many idle minutes to give the memory back (0 = keep it loaded); it starts again when needed. */
+    idleStopMinutes: z.number().int().min(0).max(1440),
   }),
   localApi: z.object({
     enabled: z.boolean(),
@@ -184,6 +203,7 @@ export const DEFAULT_SETTINGS: Settings = {
     providers: DEFAULT_PROVIDERS,
     agentName: 'Fabrix',
     newChatsOffline: true,
+    resources: 'balanced',
   },
   appearance: {
     preset: 'fabrics',
@@ -199,6 +219,12 @@ export const DEFAULT_SETTINGS: Settings = {
     advancedMode: false,
     easterEggs: true,
     gooseVisits: false,
+    funUnlocked: false,
+    effects: 'auto',
+  },
+  profile: {
+    name: '',
+    callMe: '',
   },
   spotlight: {
     enabled: true,
@@ -233,6 +259,7 @@ export const DEFAULT_SETTINGS: Settings = {
     contextSize: 8192,
     gpuLayers: -1,
     threads: 0,
+    idleStopMinutes: 20,
   },
   localApi: {
     enabled: true,
@@ -259,3 +286,18 @@ export const DEFAULT_SETTINGS: Settings = {
 
 /** Settings paths that can never be changed remotely or by the renderer (identity-bearing). */
 export const PROTECTED_SETTING_PATHS: readonly string[] = [];
+
+/** Fun extras are on only when they are switched on and someone has unlocked them with 418. */
+export function funEnabled(s: Pick<Settings, 'appearance'> | null | undefined): boolean {
+  return !!s && s.appearance.easterEggs && s.appearance.funUnlocked;
+}
+
+/** What to call the user: their chosen form of address, else their first name, else null. */
+export function addressAs(s: Pick<Settings, 'profile'> | null | undefined): string | null {
+  const p = s?.profile;
+  if (!p) return null;
+  const call = p.callMe.trim();
+  if (call) return call;
+  const first = p.name.trim().split(/\s+/)[0];
+  return first || null;
+}

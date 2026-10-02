@@ -3,7 +3,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { userInfo } from 'node:os';
 import { Kernel, toCoreError } from '@fbrx/core';
-import { PRODUCT_NAME } from '@fbrx/shared';
+import { PRODUCT_NAME, funEnabled } from '@fbrx/shared';
 import { createElectronPlatform, openExternalSafe } from './platform';
 import { ElectronUpdateController } from './updater';
 import { CursorPuppet } from './cursor-puppet';
@@ -94,7 +94,16 @@ function createWindow() {
     },
   });
   // Launched at sign-in with --hidden: start in the tray.
-  win.once('ready-to-show', () => !process.argv.includes('--hidden') && win?.show());
+  win.once('ready-to-show', () => {
+    if (!process.argv.includes('--hidden')) win?.show();
+    visibility();
+  });
+  // While nobody can see the window, sample the system less often.
+  const visibility = () => kernel?.monitor.setBackground(!win || !win.isVisible() || win.isMinimized());
+  win.on('show', visibility);
+  win.on('hide', visibility);
+  win.on('minimize', visibility);
+  win.on('restore', visibility);
   win.webContents.setWindowOpenHandler(({ url }) => {
     openExternalSafe(url);
     return { action: 'deny' };
@@ -185,7 +194,7 @@ function bindSpotlightKey() {
   }
 }
 
-const funAllowed = () => kernel?.settings.get().appearance.easterEggs ?? false;
+const funAllowed = () => funEnabled(kernel?.settings.get());
 
 /**
  * The Silly Goose: a transparent, always-on-top window over the work area of the screen FBRX is on. Mouse clicks
@@ -418,7 +427,7 @@ async function boot() {
   // every two hours; and once on April Fools' Day.
   setInterval(() => {
     const a = kernel?.settings.get().appearance;
-    if (a?.easterEggs && a.gooseVisits && !goose && powerMonitor.getSystemIdleTime() < 120 && Math.random() < 1 / 12) summonGoose();
+    if (funAllowed() && a?.gooseVisits && !goose && powerMonitor.getSystemIdleTime() < 120 && Math.random() < 1 / 12) summonGoose();
   }, 10 * 60_000).unref();
   const today = new Date();
   if (today.getMonth() === 3 && today.getDate() === 1) setTimeout(summonGoose, 90_000).unref();

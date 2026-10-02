@@ -6,6 +6,7 @@ import {
   LICENSE_FILE_NAME,
   PRODUCT_NAME,
   ProvisioningFileSchema,
+  funEnabled,
   type DeviceCommand,
   type Heartbeat,
   type NotificationEvent,
@@ -212,7 +213,7 @@ export class Kernel {
       allowedRoots: () => this.policy.allowedRoots(),
       halt: () => this.aiHalt(),
       fun: {
-        enabled: () => this.settings.get().appearance.easterEggs,
+        enabled: () => funEnabled(this.settings.get()),
         trophy: (id) => void this.trophies.unlock(id),
         persona: {
           get: (c) => this.meta.get<string>(`agent.persona.${c}`),
@@ -298,7 +299,7 @@ export class Kernel {
       workspace: this.workspace,
       webSearch: () => this.settings.get().spotlight.webSearch,
       fileSearch: () => this.settings.get().spotlight.fileSearch,
-      easterEggs: () => this.settings.get().appearance.easterEggs,
+      easterEggs: () => funEnabled(this.settings.get()),
     });
     this.vendors = new VendorDb({
       builtinFile: this.platform.vendorDbFile ?? null,
@@ -307,7 +308,7 @@ export class Kernel {
       internet: () => this.internetAllowed(),
     });
     this.net = new NetDiag({ db: this.db, events: this.events, vendors: this.vendors, internet: () => this.internetAllowed() });
-    this.trophies = new Trophies({ meta: this.meta, events: this.events, enabled: () => this.settings.get().appearance.easterEggs });
+    this.trophies = new Trophies({ meta: this.meta, events: this.events, enabled: () => funEnabled(this.settings.get()) });
     // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
     this.cli = new Fbrx1Cli({
       call: (method, params) => this.call(method, params ?? {}, { origin: 'user', actor: 'fbrx1' }),
@@ -571,7 +572,7 @@ export class Kernel {
       enabled: () => this.settings.get().runtime.enabled,
       start: async () => {
         const st = this.runtime.status();
-        if (this.settings.get().runtime.autoStart && st.state === 'stopped') {
+        if (this.runtimeWanted() && st.state === 'stopped') {
           // Model loading can take minutes; don't block boot on it.
           void this.runtime.start().catch((err) => this.log.warn('Local runtime did not start', { error: errorMessage(err) }));
         }
@@ -768,8 +769,17 @@ export class Kernel {
     this.meta.delete('ai.halt');
     this.audit.append({ category: 'agent', action: 'emergency-stop.resumed', actor: by, outcome: 'info' });
     this.events.emit('ai.halted', { halted: false, at: null, by });
-    const rt = this.settings.get().runtime;
-    if (rt.enabled && rt.autoStart) void this.runtime.start().catch((err) => this.log.warn('Local runtime did not start', { error: errorMessage(err) }));
+    if (this.runtimeWanted()) void this.runtime.start().catch((err) => this.log.warn('Local runtime did not start', { error: errorMessage(err) }));
+  }
+
+  /**
+   * Whether to load the local model ahead of time: only when it is set to start automatically and the agent uses it.
+   * Otherwise it would sit in memory next to Ollama or a cloud model; it still loads on demand when a chat picks it.
+   */
+  private runtimeWanted(): boolean {
+    const s = this.settings.get();
+    if (!s.runtime.enabled || !s.runtime.autoStart) return false;
+    return s.ai.providers.find((p) => p.id === s.ai.defaultProvider)?.type === 'local-runtime';
   }
 
   async status(): Promise<SystemStatus> {

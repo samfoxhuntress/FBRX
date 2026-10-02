@@ -8,7 +8,11 @@ import { IS_WIN } from '../windows/ps';
 
 const HISTORY = 180; // 6 minutes at 2 s
 const TICK_MS = 2000;
-const NET_EVERY_WIN = 5;
+/** While no window shows the numbers, sample every 10 s (the alert rules average over minutes anyway). */
+const BACKGROUND_TICK_MS = 10_000;
+/** Windows reads interface counters, battery, swap and temperature by starting PowerShell, so read them less often. */
+const NET_EVERY_MS = IS_WIN ? 10_000 : 0;
+const SLOW_EVERY_MS = IS_WIN ? 90_000 : 30_000;
 
 /** Processes FBRX refuses to end: killing them crashes or logs off Windows. */
 const PROTECTED = /^(system|idle|registry|smss|csrss|wininit|winlogon|services|lsass|lsaiso|svchost|fontdrvhost|dwm|memory compression|secure system|launchd|kernel_task|init|systemd)(\.exe)?$/i;
@@ -25,7 +29,11 @@ export class SystemMonitor {
   private slow = { swapUsed: 0, swapTotal: 0, battery: null as SystemLive['battery'], tempC: null as number | null, at: 0 };
   private ticks = 0;
   private sampling = false;
-  private net = { rx: 0, tx: 0 };
+  private net = { rx: 0, tx: 0, at: 0 };
+  private background = false;
+  /** Sensors this computer does not have stop being asked for (each ask is a PowerShell process on Windows). */
+  private noBattery = false;
+  private tempMisses = 0;
 
   constructor(
     private readonly events: EventBus,
@@ -34,9 +42,19 @@ export class SystemMonitor {
 
   start(): void {
     if (this.timer) return;
-    this.timer = setInterval(() => void this.sample(), TICK_MS);
+    this.timer = setInterval(() => void this.sample(), this.background ? BACKGROUND_TICK_MS : TICK_MS);
     this.timer.unref?.();
     void this.sample();
+  }
+
+  /** Slows sampling down while the app is hidden or minimized, and back to every 2 s when it is shown. */
+  setBackground(background: boolean): void {
+    if (this.background === background) return;
+    this.background = background;
+    if (!this.timer) return;
+    clearInterval(this.timer);
+    this.timer = null;
+    this.start();
   }
 
   stop(): void {
@@ -56,7 +74,7 @@ export class SystemMonitor {
   average(metric: 'cpu' | 'mem', seconds: number): number | null {
     const since = Date.now() - seconds * 1000;
     const pts = this.history.filter((h) => h.ts >= since);
-    if (pts.length < Math.min(5, (seconds * 1000) / TICK_MS)) return null;
+    if (pts.length < Math.min(5, (seconds * 1000) / (this.background ? BACKGROUND_TICK_MS : TICK_MS))) return null;
     const v = (h: SystemLive) => (metric === 'cpu' ? h.cpu : (h.memUsed / Math.max(1, h.memTotal)) * 100);
     return pts.reduce((a, h) => a + v(h), 0) / pts.length;
   }
@@ -82,10 +100,11 @@ export class SystemMonitor {
     try {
       this.ticks++;
       const cpu = this.cpuSample();
-      // Windows reads interface counters through a PowerShell process, so sample them every 10 s there (the rates
-      // are per second either way). The library's shared persistent PowerShell is not used: it is process-global
-      // and releasing it while another monitor still samples breaks its pipe.
-      if (!IS_WIN || this.ticks % NET_EVERY_WIN === 1) {
+      // Windows reads interface counters through a PowerShell process, so sample them every 10 s there (every 30 s
+      // in the background; the rates are per second either way). The library's shared persistent PowerShell is not
+      // used: it is process-global and releasing it while another monitor still samples breaks its pipe.
+      if (Date.now() - this.net.at >= (this.background ? NET_EVERY_MS * 3 : NET_EVERY_MS)) {
+        this.net.at = Date.now();
         try {
           const stats = await si.networkStats('*');
           let rx = 0;
@@ -94,22 +113,31 @@ export class SystemMonitor {
             if (s.rx_sec && s.rx_sec > 0) rx += s.rx_sec;
             if (s.tx_sec && s.tx_sec > 0) tx += s.tx_sec;
           }
-          this.net = { rx, tx };
+          this.net = { rx, tx, at: this.net.at };
         } catch {
           /* no network stats on this system */
         }
       }
       const netRx = this.net.rx;
       const netTx = this.net.tx;
-      if (Date.now() - this.slow.at > 30_000) {
+      if (Date.now() - this.slow.at > SLOW_EVERY_MS) {
         this.slow.at = Date.now();
-        const [mem, bat, temp] = await Promise.all([si.mem().catch(() => null), si.battery().catch(() => null), si.cpuTemperature().catch(() => null)]);
+        const [mem, bat, temp] = await Promise.all([
+          si.mem().catch(() => null),
+          this.noBattery ? null : si.battery().catch(() => null),
+          // Most Windows PCs only report a temperature to administrators; stop asking after three blanks.
+          this.tempMisses >= 3 ? null : si.cpuTemperature().catch(() => null),
+        ]);
         if (mem) {
           this.slow.swapUsed = mem.swapused;
           this.slow.swapTotal = mem.swaptotal;
         }
+        if (bat && !bat.hasBattery) this.noBattery = true;
         this.slow.battery = bat?.hasBattery ? { percent: Math.round(bat.percent), charging: !!bat.isCharging || !!bat.acConnected } : null;
-        this.slow.tempC = temp && typeof temp.main === 'number' && temp.main > 0 ? Math.round(temp.main) : null;
+        if (this.tempMisses < 3) {
+          this.slow.tempC = temp && typeof temp.main === 'number' && temp.main > 0 ? Math.round(temp.main) : null;
+          this.tempMisses = this.slow.tempC == null ? this.tempMisses + 1 : 0;
+        }
       }
       const total = totalmem();
       const point: SystemLive = {

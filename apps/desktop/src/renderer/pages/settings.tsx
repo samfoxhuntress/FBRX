@@ -1,14 +1,14 @@
 import { useEffect, useState } from 'react';
 import type { DeepPartial, Settings, Texture } from '@fbrx/shared';
-import { UPDATE_CHANNELS } from '@fbrx/shared';
-import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, type IconName } from '@fbrx/ui';
+import { UPDATE_CHANNELS, funEnabled } from '@fbrx/shared';
+import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { navigate, routeArg } from '../app';
 import { PRESETS, TEXTURE_NAMES, playStartupSound, resolvedMode, resolvedTexture, textureImage, themeAccent } from '../theme';
 import { summonGoose } from '../fun';
-import { TrophyCase } from '../trophies';
-import { AskButton, EmergencyStop } from '../widgets';
+import { TrophyBadge, TrophyCase } from '../trophies';
+import { AskButton, EmergencyStop, ProfileFields, saveProfile } from '../widgets';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -35,6 +35,7 @@ const sectionFromRoute = (): SectionId | null => (SECTIONS.some((x) => x.id === 
 
 export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   const [tab, setTab] = useState<SectionId>(() => sectionFromRoute() ?? 'general');
+  const funUnlocked = useCore('settings.get', undefined, ['settings.changed']).data?.settings.appearance.funUnlocked ?? false;
   // A link to a section (such as "See it" on a trophy) while Settings is already open.
   useEffect(() => {
     const on = () => {
@@ -56,10 +57,11 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
             return (
               <div key={x.id}>
                 {header && <div className="settings-nav-group">{header}</div>}
-                <button className={`settings-nav-item${tab === x.id ? ' active' : ''}`} aria-current={tab === x.id ? 'page' : undefined} onClick={() => setTab(x.id)}>
+                <button className={`settings-nav-item${tab === x.id ? ' active' : ''}${x.id === 'trophies' && !funUnlocked ? ' locked' : ''}`} aria-current={tab === x.id ? 'page' : undefined} onClick={() => setTab(x.id)}>
                   <Ico size={15} />
                   <span>{x.label}</span>
                   {x.advanced && <AdvancedTag />}
+                  {x.id === 'trophies' && !funUnlocked && <Icons.lock size={12} className="settings-nav-lock" />}
                 </button>
               </div>
             );
@@ -122,10 +124,25 @@ function useSettings() {
 function General({ onRerunSetup }: { onRerunSetup: () => void }) {
   const { s, locked, patch } = useSettings();
   const [name, setName] = useState<string | null>(null);
+  const [profile, setProfile] = useState<{ name: string; callMe: string } | null>(null);
+  const toast = useToast();
   if (!s) return null;
   const L = (p: string) => isLocked(locked, p);
+  const prof = profile ?? s.profile;
   return (
     <Grid cols={2}>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Card title="You" subtitle={`FBRX Glass and ${s.ai.agentName} greet you by this name.`}>
+          <div className="fx-form">
+            <ProfileFields name={prof.name} callMe={prof.callMe} onChange={setProfile} />
+            <div>
+              <Button variant="primary" disabled={!profile} onClick={() => void saveProfile(prof, funEnabled(s), toast).then(() => setProfile(null))}>
+                Save
+              </Button>
+            </div>
+          </div>
+        </Card>
+      </div>
       <Card title="This workstation">
         <div className="fx-form">
           <Field label={<>Device name <Locked show={L('general.deviceName')} /></>}>
@@ -242,6 +259,9 @@ function Appearance() {
         </Card>
         <Card title="Behavior">
           <div className="fx-form">
+            <Field label="Effects" help="Light turns off frosted glass, glows and decorative animation. Auto picks Light on smaller computers.">
+              {seg(a.effects, [{ value: 'auto', label: 'Auto' }, { value: 'full', label: 'Full' }, { value: 'light', label: 'Light' }], (v) => void patch({ appearance: { effects: v } }))}
+            </Field>
             <Toggle checked={a.reduceMotion} onChange={(v) => void patch({ appearance: { reduceMotion: v } })} label="Reduce motion" />
             <Toggle checked={a.splash} onChange={(v) => void patch({ appearance: { splash: v } })} label="Show the start-up animation" />
             <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
@@ -253,7 +273,7 @@ function Appearance() {
           </div>
         </Card>
       </Grid>
-      <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and the Silly Goose. Nothing here touches your files or settings.">
+      {a.funUnlocked && <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and the Silly Goose. Nothing here touches your files or settings.">
         <div className="fx-form">
           <Toggle checked={a.easterEggs} disabled={L('appearance.easterEggs')} onChange={(v) => void patch({ appearance: { easterEggs: v } })} label="Easter eggs and jokes" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -269,7 +289,7 @@ function Appearance() {
             The goose waddles across your screen for about a minute and a half, honks, tracks a little mud, borrows your mouse pointer and leaves notes. Clicks go straight through it to your apps. Click the goose three times, or choose Shoo the goose in the tray menu, to send it home. Other surprises are hidden around the app; every one you find earns a badge in the Trophy case.
           </p>
         </div>
-      </Card>
+      </Card>}
     </>
   );
 }
@@ -277,8 +297,37 @@ function Appearance() {
 function Trophies() {
   const { s, patch } = useSettings();
   if (!s) return null;
+  if (!s.appearance.funUnlocked) return <LockedCase />;
   return <TrophyCase enabled={s.appearance.easterEggs} onEnable={() => void patch({ appearance: { easterEggs: true } })} />;
 }
+
+/** Before 418: a locked display case with the badges' outlines behind the glass, and a hint. */
+function LockedCase() {
+  return (
+    <Card title="Trophy case" subtitle="Locked">
+      <div className="locked-case">
+        <div className="locked-case-glass" aria-hidden>
+          {Array.from({ length: 12 }, (_, i) => (
+            <span key={i} className="locked-case-slot" />
+          ))}
+        </div>
+        <div className="locked-case-lock">
+          <Icons.lock size={22} />
+          <div>
+            <b>This case is locked.</b>
+            <span>The key is short and stout.</span>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+const RESOURCE_HELP = {
+  light: 'A quarter of the processor at the lowest priority: slower answers, and the PC stays smooth while it thinks.',
+  balanced: 'Half the processor at below-normal priority: good answers without the PC stuttering. Recommended.',
+  full: 'Every core but one at normal priority: fastest answers, but other apps may slow down while it thinks.',
+} as const;
 
 function AgentSettings() {
   const { s, locked, patch } = useSettings();
@@ -298,6 +347,28 @@ function AgentSettings() {
             </div>
           </Field>
           <Toggle checked={s.ai.newChatsOffline} disabled={L('ai.newChatsOffline')} onChange={(v) => void patch({ ai: { newChatsOffline: v } })} label="Start new chats offline (ask before using the internet)" />
+          <Field label={<>How hard a local model may work this PC <Locked show={L('ai.resources')} /></>} help={RESOURCE_HELP[s.ai.resources]}>
+            <div className="seg" role="group" aria-label="Local AI resources">
+              {(['light', 'balanced', 'full'] as const).map((r) => (
+                <button key={r} className={s.ai.resources === r ? 'on' : ''} disabled={L('ai.resources')} onClick={() => void patch({ ai: { resources: r } })}>
+                  {r === 'light' ? 'Light' : r === 'balanced' ? 'Balanced' : 'Full speed'}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label={<>Unload the local model when idle <Locked show={L('runtime.idleStopMinutes')} /></>} help="Gives its memory back to the computer; it loads again with the next question (a few seconds).">
+            <Select
+              value={String(s.runtime.idleStopMinutes)}
+              disabled={L('runtime.idleStopMinutes')}
+              onChange={(e) => void patch({ runtime: { idleStopMinutes: Number(e.target.value) } })}
+              options={[
+                { value: '5', label: 'After 5 minutes' },
+                { value: '20', label: 'After 20 minutes' },
+                { value: '60', label: 'After an hour' },
+                { value: '0', label: 'Never (keep it loaded)' },
+              ]}
+            />
+          </Field>
           <p className="fx-muted" style={{ fontSize: 12.5, margin: 0 }}>
             Offline chats keep everything on this computer. When {s.ai.agentName} needs a web or network tool, you get an approval to put that chat online.
           </p>
@@ -396,9 +467,31 @@ function Updates() {
 
 function License() {
   const { data: l } = useCore('license.status', undefined, ['license.changed']);
+  const { s, patch } = useSettings();
   const [key, setKey] = useState('');
   const { run, busy } = useAction();
-  if (!l) return null;
+  const toast = useToast();
+  if (!l || !s) return null;
+  const activate = () => {
+    // 418: not a license at all. The teapot unlocks the fun extras.
+    if (key === '418') {
+      setKey('');
+      if (s.appearance.funUnlocked && s.appearance.easterEggs) {
+        toast.info('Still a teapot', 'Short and stout, and already unlocked.');
+        return;
+      }
+      void patch({ appearance: { funUnlocked: true, easterEggs: true } }).then(() =>
+        toast.custom({
+          title: '418 I\'m a teapot',
+          body: 'Short and stout, and now unlocked: easter eggs, the Silly Goose and the Trophy case. Have fun.',
+          icon: <TrophyBadge id="teapot" found size={36} />,
+          action: { label: 'Open the trophy case', onClick: () => navigate('settings/trophies') },
+        }),
+      );
+      return;
+    }
+    void run('a', () => call('license.activate', { key }).then(() => setKey('')), 'License activated');
+  };
   return (
     <Grid cols={2}>
       <Card title="Your license">
@@ -419,7 +512,7 @@ function License() {
         <div className="fx-form">
           <TextArea code rows={4} value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder="FBRX1.…" />
           <div className="fx-actions">
-            <Button variant="primary" loading={busy === 'a'} disabled={!key} onClick={() => void run('a', () => call('license.activate', { key }).then(() => setKey('')), 'License activated')}>
+            <Button variant="primary" loading={busy === 'a'} disabled={!key} onClick={activate}>
               Activate
             </Button>
             {l.source === 'local' && (

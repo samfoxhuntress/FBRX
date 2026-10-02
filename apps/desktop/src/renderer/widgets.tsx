@@ -1,9 +1,10 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ModelInfo } from '@fbrx/shared';
-import { Button, formatBytes, formatDate, useConfirm, useToast } from '@fbrx/ui';
+import { Button, Field, Icons, Input, formatBytes, formatDate, useConfirm, useToast } from '@fbrx/ui';
 import { navigate } from './app';
 import { call } from './client';
 import { useCore } from './hooks';
+import { cluck, unlockTrophy } from './fun';
 
 const OTHER = '__other__';
 
@@ -184,6 +185,73 @@ export function EmergencyStop({ compact = false }: { compact?: boolean }) {
         </div>
       )}
       {dialog}
+    </div>
+  );
+}
+
+/** Saves who uses this computer (and handles the chicken). */
+export async function saveProfile(p: { name: string; callMe: string }, fun: boolean, toast: ReturnType<typeof useToast>): Promise<void> {
+  await call('settings.update', { patch: { profile: { name: p.name.trim().slice(0, 60), callMe: p.callMe.trim().slice(0, 40) } } });
+  if (fun && /^chicken$/i.test(p.callMe.trim())) {
+    cluck();
+    unlockTrophy('chicken');
+    toast.info('Nobody calls me chicken!', '…but if you insist. Bawk.');
+  }
+}
+
+/** Name and form of address, side by side. */
+export function ProfileFields({ name, callMe, onChange, autoFocus }: { name: string; callMe: string; onChange: (p: { name: string; callMe: string }) => void; autoFocus?: boolean }) {
+  return (
+    <div className="fx-row">
+      <Field label="Your name">
+        <Input value={name} maxLength={60} placeholder="Samuel Fox" autoFocus={autoFocus} onChange={(e) => onChange({ name: e.target.value, callMe })} />
+      </Field>
+      <Field label="What should FBRX call you?" help="Optional: a nickname or title, like Sam or Sir">
+        <Input value={callMe} maxLength={40} placeholder={name.trim().split(/\s+/)[0] || 'Sam'} onChange={(e) => onChange({ name, callMe: e.target.value })} />
+      </Field>
+    </div>
+  );
+}
+
+/** On FBRX Glass, once: asks for a name when none is set (people who set FBRX up before it asked). */
+export function NamePrompt({ fun }: { fun: boolean }) {
+  const { data } = useCore('settings.get', undefined, ['settings.changed']);
+  const toast = useToast();
+  const [p, setP] = useState({ name: '', callMe: '' });
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return localStorage.getItem('fbrx.namePromptDismissed') === '1';
+    } catch {
+      return false;
+    }
+  });
+  if (!data || hidden || data.settings.profile.name.trim()) return null;
+  const dismiss = () => {
+    setHidden(true);
+    try {
+      localStorage.setItem('fbrx.namePromptDismissed', '1');
+    } catch {
+      /* fine */
+    }
+  };
+  return (
+    <div className="glass-tile name-prompt">
+      <div className="glass-tile-head">
+        <Icons.users size={15} />
+        Nice to meet you
+      </div>
+      <div className="fx-secondary" style={{ fontSize: 13, margin: '6px 0 10px' }}>
+        What's your name? FBRX Glass and {data.settings.ai.agentName} will greet you by it. You can change it any time in Settings → General.
+      </div>
+      <ProfileFields name={p.name} callMe={p.callMe} onChange={setP} />
+      <div className="fx-actions" style={{ marginTop: 10 }}>
+        <Button size="sm" variant="primary" disabled={!p.name.trim()} onClick={() => void saveProfile(p, fun, toast)}>
+          Save
+        </Button>
+        <Button size="sm" variant="ghost" onClick={dismiss}>
+          Not now
+        </Button>
+      </div>
     </div>
   );
 }

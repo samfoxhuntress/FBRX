@@ -8,7 +8,8 @@ import type { LocalRuntime } from './runtime/local-runtime';
 import { AnthropicProvider } from './providers/anthropic';
 import { OllamaProvider, ollamaModelsOnDisk } from './providers/ollama';
 import { OpenAICompatibleProvider } from './providers/openai-compatible';
-import type { ChatProvider } from './providers/types';
+import type { ChatProvider, ChatRequest, ProviderChunk } from './providers/types';
+import { resourcePlan } from './resources';
 
 /** Builds chat providers from settings, resolves API keys from the vault and enforces AI policy. */
 export class ProviderManager {
@@ -56,16 +57,34 @@ export class ProviderManager {
       case 'local-runtime': {
         const ctx = this.d.settings.get().runtime.contextSize;
         const rt = this.d.runtime;
-        return new OpenAICompatibleProvider({
+        const inner = new OpenAICompatibleProvider({
           id: cfg.id,
           type: 'local-runtime',
           baseUrl: rt.endpoint,
           apiKey: () => rt.apiKey,
           historyBudgetChars: Math.max(4000, Math.floor(ctx * 2.5)),
         });
+        // The runtime loads the model on the first question (and again after it was unloaded for being idle).
+        return {
+          id: inner.id,
+          type: inner.type,
+          historyBudgetChars: inner.historyBudgetChars,
+          listModels: (signal) => inner.listModels(signal),
+          health: (signal) => inner.health(signal),
+          async *chat(req: ChatRequest): AsyncIterable<ProviderChunk> {
+            await rt.acquire();
+            try {
+              yield* inner.chat(req);
+            } finally {
+              rt.release();
+            }
+          },
+        };
       }
-      case 'ollama':
-        return new OllamaProvider(cfg.id, cfg.baseUrl ?? 'http://127.0.0.1:11434', cfg.defaultModel);
+      case 'ollama': {
+        const plan = resourcePlan(this.d.settings.get().ai.resources);
+        return new OllamaProvider(cfg.id, cfg.baseUrl ?? 'http://127.0.0.1:11434', cfg.defaultModel, undefined, { numThread: plan.threads, keepAlive: plan.keepAlive });
+      }
       case 'anthropic':
         return new AnthropicProvider({ id: cfg.id, baseUrl: cfg.baseUrl, apiKey: this.apiKey(cfg), defaultModel: cfg.defaultModel });
       case 'openai':
@@ -89,8 +108,8 @@ export class ProviderManager {
     const cfg = this.config(id);
     const blocked = this.blockReason(cfg);
     if (blocked) throw new CoreError('POLICY_DENIED', `${cfg.name}: ${blocked}`);
-    if (cfg.type === 'local-runtime' && !this.d.runtime.isRunning) {
-      throw new CoreError('UNAVAILABLE', 'The local AI runtime is not running. Start it from the AI Runtime page or pick another provider.');
+    if (cfg.type === 'local-runtime' && !this.d.runtime.isRunning && !this.d.runtime.canStart) {
+      throw new CoreError('UNAVAILABLE', 'The local AI runtime has no model to run. Download one in AI models, or pick another provider.');
     }
     // Ollama picks its best installed model when none is chosen (see OllamaProvider.pickModel).
     const chosen =
@@ -102,7 +121,23 @@ export class ProviderManager {
     return { provider: this.build(cfg), config: cfg, model: chosen };
   }
 
-  async status(): Promise<ProviderStatus[]> {
+  private statusCache: { key: string; at: number; value: Promise<ProviderStatus[]> } | null = null;
+
+  /**
+   * Whether each provider can be used. Several windows ask at once and on every settings change, and each check
+   * may be a network call (cloud APIs, Ollama), so answers are shared for 15 seconds unless the setup changed.
+   */
+  status(): Promise<ProviderStatus[]> {
+    const key = JSON.stringify([this.configs(), this.d.runtime.status().state, this.d.policy.policy.ai, this.d.settings.get().ai.defaultProvider]);
+    const c = this.statusCache;
+    if (c && c.key === key && Date.now() - c.at < 15_000) return c.value;
+    const value = this.checkAll();
+    this.statusCache = { key, at: Date.now(), value };
+    value.catch(() => (this.statusCache = null));
+    return value;
+  }
+
+  private async checkAll(): Promise<ProviderStatus[]> {
     return Promise.all(
       this.configs().map(async (cfg) => {
         const blocked = this.blockReason(cfg);
@@ -111,8 +146,9 @@ export class ProviderManager {
         if (!blocked) {
           if (cfg.type === 'local-runtime') {
             const rt = this.d.runtime.status();
-            available = rt.state === 'running';
-            message = available ? null : rt.message ?? `Runtime ${rt.state}`;
+            // Ready also when stopped with a model set up: it loads on the first question.
+            available = rt.state === 'running' || rt.state === 'starting' || (rt.state === 'stopped' && this.d.runtime.canStart);
+            message = rt.state === 'running' ? null : rt.message ?? (available ? 'Loads the model on the first question' : `Runtime ${rt.state}`);
           } else {
             try {
               const h = await this.build(cfg).health(AbortSignal.timeout(4000));

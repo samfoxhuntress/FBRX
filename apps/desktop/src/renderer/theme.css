@@ -462,6 +462,7 @@
  */
 :root {
   --texture: none;
+  --texture-nav: none;
 }
 .fx-content {
   background-image: var(--texture);
@@ -510,44 +511,29 @@
 :root[data-theme='light'] { --glow-strength: 0.55; }
 
 :root:not([data-preset='contrast']) .fx-sidebar {
+  /* A soft wash of the theme's glow at the top, and only a whisper of texture that fades out behind the menu. */
   background:
-    var(--texture),
-    radial-gradient(140% 55% at 0% 0%, color-mix(in srgb, var(--glow) calc(42% * var(--glow-strength)), transparent), transparent 72%),
-    linear-gradient(180deg, color-mix(in srgb, var(--glow) calc(20% * var(--glow-strength)), var(--sidebar)) 0%, var(--sidebar) 58%);
+    linear-gradient(180deg, transparent 0%, var(--sidebar) 46%),
+    var(--texture-nav),
+    radial-gradient(140% 50% at 0% 0%, color-mix(in srgb, var(--glow) calc(24% * var(--glow-strength)), transparent), transparent 72%),
+    var(--sidebar);
 }
 :root:not([data-preset='contrast']) .fx-topbar {
-  background: var(--texture), linear-gradient(90deg, color-mix(in srgb, var(--glow) calc(34% * var(--glow-strength)), var(--page)) 0%, color-mix(in srgb, var(--glow) calc(10% * var(--glow-strength)), var(--page)) 38%, color-mix(in srgb, var(--page) 92%, transparent) 75%);
+  background:
+    linear-gradient(90deg, color-mix(in srgb, var(--glow) calc(12% * var(--glow-strength)), var(--page)) 0%, var(--page) 45%),
+    var(--page);
 }
 :root:not([data-preset='contrast']) .fx-main {
   background:
-    radial-gradient(1000px 460px at 8% -12%, color-mix(in srgb, var(--glow) calc(18% * var(--glow-strength)), transparent), transparent 70%),
-    radial-gradient(700px 380px at 100% 0%, color-mix(in srgb, var(--accent) calc(6% * var(--glow-strength)), transparent), transparent 70%),
-    radial-gradient(900px 520px at 100% 100%, color-mix(in srgb, var(--glow-2) calc(14% * var(--glow-strength)), transparent), transparent 70%),
+    radial-gradient(1000px 460px at 8% -12%, color-mix(in srgb, var(--glow) calc(11% * var(--glow-strength)), transparent), transparent 70%),
+    radial-gradient(900px 520px at 100% 100%, color-mix(in srgb, var(--glow-2) calc(9% * var(--glow-strength)), transparent), transparent 70%),
     var(--page);
-}
-/* Cards: a faint sheen at the top edge and a soft depth shadow. */
-:root:not([data-preset='contrast'])[data-theme='dark'] .fx-card {
-  background: linear-gradient(180deg, color-mix(in srgb, #ffffff 3.5%, var(--surface-1)) 0%, var(--surface-1) 42%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.045),
-    0 10px 28px -18px rgba(0, 0, 0, 0.7);
-}
-:root:not([data-preset='contrast'])[data-theme='light'] .fx-card {
-  background: linear-gradient(180deg, var(--surface-1) 0%, color-mix(in srgb, var(--glow) 4%, var(--surface-1)) 100%);
-  box-shadow:
-    0 1px 2px rgba(0, 0, 0, 0.04),
-    0 12px 28px -20px color-mix(in srgb, var(--glow) 60%, rgba(0, 0, 0, 0.3));
-}
-/* Primary buttons: a lit gradient with a soft accent glow. */
-:root:not([data-preset='contrast']) .fx-btn.primary {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 80%, #ffffff) 0%, var(--accent) 52%, color-mix(in srgb, var(--accent) 86%, #000000) 100%);
-  border-color: color-mix(in srgb, var(--accent) 78%, #000000);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 6px 16px -8px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 :root[data-preset='tropical'] .fx-btn.primary {
   background: linear-gradient(135deg, #ffb347 0%, var(--accent) 55%, #ff4f81 130%);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    0 4px 12px -6px color-mix(in srgb, var(--accent) 65%, transparent);
 }
 :root[data-preset='tropical'][data-theme='light'] .fx-btn.primary {
   background: linear-gradient(135deg, #f7891f 0%, var(--accent) 55%, #d6336c 130%);
@@ -555,20 +541,8 @@
 :root:not([data-preset='contrast']) .fx-btn.primary:hover:not(:disabled) {
   filter: brightness(1.06);
 }
-/* Navigation: the active page glows from the left edge. */
-:root:not([data-preset='contrast']) .fx-nav-item.active {
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent) 24%, transparent) 0%, color-mix(in srgb, var(--accent) 6%, transparent) 100%);
-  box-shadow: inset 2px 0 0 var(--accent);
-}
 :root:not([data-preset='contrast']) .fx-tab.active {
   background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--accent) 10%, transparent) 100%);
-}
-/* Headings pick up a subtle accent sheen in dark themes. */
-:root:not([data-preset='contrast'])[data-theme='dark'] .fx-page-header h1 {
-  background: linear-gradient(90deg, var(--text-primary) 0%, var(--text-primary) 55%, color-mix(in srgb, var(--accent) 55%, var(--text-primary)) 100%);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
 }
 :root:not([data-preset='contrast']) .fx-brand-mark {
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--glow) calc(60% * var(--glow-strength)), transparent));
@@ -842,8 +816,8 @@
     radial-gradient(38% 46% at 14% 18%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 70%),
     radial-gradient(34% 40% at 82% 10%, color-mix(in srgb, var(--glow) 42%, transparent), transparent 70%),
     radial-gradient(40% 50% at 60% 72%, color-mix(in srgb, var(--glow-2, var(--accent)) 26%, transparent), transparent 70%);
-  filter: blur(36px);
-  opacity: 0.85;
+  /* Soft by construction (wide radial falloffs), so no blur filter is needed to paint it. */
+  opacity: 0.7;
 }
 :root[data-preset='contrast'] .glass-aurora {
   display: none;
@@ -851,9 +825,9 @@
 :root:not([data-preset='contrast'])[data-theme] .glass-dash .fx-card,
 :root:not([data-preset='contrast'])[data-theme] .glass-tile,
 :root:not([data-preset='contrast'])[data-theme] .glass-hero {
-  background: color-mix(in srgb, var(--surface-1) 56%, transparent);
-  -webkit-backdrop-filter: blur(22px) saturate(1.5);
-  backdrop-filter: blur(22px) saturate(1.5);
+  background: color-mix(in srgb, var(--surface-1) 62%, transparent);
+  -webkit-backdrop-filter: blur(14px) saturate(1.4);
+  backdrop-filter: blur(14px) saturate(1.4);
   border: 1px solid color-mix(in srgb, #ffffff 20%, transparent);
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.32),
@@ -1251,4 +1225,138 @@
 }
 .flap.blank {
   color: transparent;
+}
+
+/* ------------------------------------------------------------------------------------ Smooth finish */
+/*
+ * Calmer surfaces in the spirit of Windows 11, macOS and UniFi: the system font, rounder corners, hairline borders,
+ * soft layered shadows, a pill indicator for the current page, and gentle gradients instead of hard edges.
+ */
+:root {
+  --font: 'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', -apple-system, BlinkMacSystemFont, 'SF Pro Text', system-ui, Roboto, sans-serif;
+}
+:root[data-radius='rounded'] {
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+}
+:root:not([data-preset='contrast'])[data-theme] {
+  --border: color-mix(in srgb, var(--text-primary) 8%, transparent);
+  --border-strong: color-mix(in srgb, var(--text-primary) 13%, transparent);
+}
+:root:not([data-preset='contrast'])[data-theme='light'] {
+  --shadow: 0 1px 2px rgba(20, 20, 20, 0.04), 0 8px 24px -14px rgba(20, 20, 20, 0.16);
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] {
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.25), 0 12px 30px -18px rgba(0, 0, 0, 0.7);
+}
+:root:not([data-preset='contrast']) .fx-sidebar {
+  border-right-color: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+:root:not([data-preset='contrast']) .fx-topbar {
+  border-bottom-color: color-mix(in srgb, var(--text-primary) 6%, transparent);
+}
+:root:not([data-preset='contrast']) .fx-nav-item {
+  position: relative;
+  border-radius: 8px;
+  padding: 7px 10px 7px 12px;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+:root:not([data-preset='contrast']) .fx-nav-item:hover {
+  background: color-mix(in srgb, var(--text-primary) 5%, transparent);
+}
+/* The current page: a quiet fill and a short accent pill on the left, like Windows 11. */
+:root:not([data-preset='contrast']) .fx-nav-item.active {
+  background: color-mix(in srgb, var(--text-primary) 7%, transparent);
+  box-shadow: none;
+}
+:root:not([data-preset='contrast']) .fx-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 3px;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, #ffffff), var(--accent));
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-card {
+  background: var(--surface-1);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.035),
+    var(--shadow);
+}
+:root:not([data-preset='contrast'])[data-theme='light'] .fx-card {
+  background: var(--surface-1);
+  box-shadow: var(--shadow);
+}
+:root:not([data-preset='contrast']) .fx-btn {
+  border-radius: 8px;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease,
+    box-shadow 0.15s ease,
+    filter 0.15s ease;
+}
+:root:not([data-preset='contrast']):not([data-preset='tropical']) .fx-btn.primary {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, #ffffff) 0%, var(--accent) 100%);
+  border-color: color-mix(in srgb, var(--accent) 85%, #000000);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.25),
+    0 4px 12px -6px color-mix(in srgb, var(--accent) 65%, transparent);
+}
+:root:not([data-preset='contrast']) .fx-input,
+:root:not([data-preset='contrast']) .fx-select,
+:root:not([data-preset='contrast']) .fx-textarea {
+  border-radius: 8px;
+  transition:
+    border-color 0.15s ease,
+    box-shadow 0.15s ease;
+}
+/* Top-right pills: the same lit-orange shape as the Ask button, much quieter. */
+:root:not([data-preset='contrast']) .fx-topbar .mode-pill,
+:root:not([data-preset='contrast']) .fx-topbar .model-pill {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 15%, var(--surface-1)) 0%, color-mix(in srgb, var(--accent) 6%, var(--surface-1)) 100%);
+  border-color: color-mix(in srgb, var(--accent) 28%, transparent);
+  color: var(--text-primary);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.08),
+    0 3px 10px -6px color-mix(in srgb, var(--accent) 55%, transparent);
+}
+:root:not([data-preset='contrast']) .fx-topbar .mode-pill.on {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 34%, var(--surface-1)) 0%, color-mix(in srgb, var(--accent) 18%, var(--surface-1)) 100%);
+  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
+  color: var(--text-primary);
+}
+:root:not([data-preset='contrast']) .fx-topbar .mode-pill:not(:disabled):hover,
+:root:not([data-preset='contrast']) .fx-topbar .model-pill:hover {
+  filter: brightness(1.06);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+
+/* ------------------------------------------------------------------------------------- Light effects */
+/* Flat and quick: no frosted glass, glows, perspective floors or flip animations. */
+:root[data-effects='light'] .glass-dash .fx-card,
+:root[data-effects='light'] .glass-tile,
+:root[data-effects='light'] .glass-hero {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+  background: var(--surface-1) !important;
+}
+:root[data-effects='light'] .glass-aurora,
+:root[data-effects='light'] .fx-main::after,
+:root[data-effects='light'] .flap-leaf {
+  display: none !important;
+}
+:root[data-effects='light'] .fx-sidebar {
+  background: var(--sidebar) !important;
+}
+:root[data-effects='light'] .speedo,
+:root[data-effects='light'] .speedo-needle,
+:root[data-effects='light'] .goose {
+  filter: none !important;
+}
+:root[data-effects='light'] .fx-card {
+  box-shadow: none !important;
 }

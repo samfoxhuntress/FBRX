@@ -28,6 +28,12 @@ export const TROPHIES: TrophyInfo[] = [
   { id: 'stapler', name: 'My Stapler', hint: 'Fabrix knows where the office supplies went.', how: 'Asked Fabrix where your stapler is.' },
   { id: 'loose', name: 'Loose Screw', hint: 'One dashboard panel rattles.', how: 'Clicked the loose dashboard panel until it fell off.' },
   { id: 'flaps', name: 'Flap Happy', hint: 'The board on the dashboard is touchy.', how: 'Ran your mouse across twenty split-flap letters.' },
+  { id: 'chicken', name: 'Nobody Calls Me Chicken', hint: 'Choose a braver name for yourself in Settings. Or a less brave one.', how: 'Asked FBRX to call you "chicken". Bawk.' },
+  { id: 'pcload', name: 'PC Load Letter', hint: 'The printer\'s most confusing error message, said to Fabrix.', how: 'Told Fabrix "PC load letter" (what does that even mean?).' },
+  { id: 'chewie', name: 'Punch It', hint: 'Tell Fabrix you made it back to the ship.', how: 'Said "Chewie, we\'re home" and Fabrix answered in Wookiee.' },
+  { id: 'fuzzball', name: 'Laugh It Up', hint: 'A Wookiee only understands one insult.', how: 'Said "Laugh it up, fuzzball" to get plain English back.' },
+  { id: 'father', name: 'Search Your Feelings', hint: 'Say no to a Wookiee. Loudly. With extra o\'s.', how: 'Said "Nooo" and learned the truth.' },
+  { id: 'wookiee', name: 'Wookiee Whisperer', hint: 'Keep the Wookiee talking.', how: 'Kept a conversation going in Wookiee for five messages.' },
 ];
 
 /** Unlocked by itself once every other trophy is found. */

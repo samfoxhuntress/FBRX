@@ -2359,3 +2359,66 @@ html.goose-mode #root {
   background: var(--accent-wash);
   color: var(--accent);
 }
+
+/* Before 418: the trophy case behind locked glass. */
+.settings-nav-item.locked {
+  opacity: 0.55;
+}
+.settings-nav-lock {
+  margin-left: auto;
+  color: var(--text-muted);
+}
+.locked-case {
+  position: relative;
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+.locked-case-glass {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 14px;
+  padding: 22px;
+  border-radius: var(--radius-lg);
+  background: linear-gradient(135deg, color-mix(in srgb, var(--surface-2) 90%, #ffffff 4%), var(--surface-2));
+  filter: blur(1.5px) grayscale(1);
+  opacity: 0.6;
+}
+.locked-case-slot {
+  aspect-ratio: 1;
+  border-radius: 50%;
+  border: 2px dashed var(--border-strong);
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--text-primary) 8%, transparent), transparent 70%);
+}
+.locked-case-lock {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: var(--surface-1);
+  border: 1px solid var(--border-strong);
+  box-shadow: var(--shadow-pop);
+  white-space: nowrap;
+}
+.locked-case-lock div {
+  display: flex;
+  flex-direction: column;
+  font-size: 13px;
+}
+.locked-case-lock span {
+  color: var(--text-secondary);
+  font-style: italic;
+}
+
+/* FBRX Glass: the one-time "what's your name?" card. */
+.glass-tile.name-prompt {
+  min-height: 0;
+  padding: 16px 18px;
+}
+.glass-tile.name-prompt .fx-row {
+  max-width: 720px;
+}

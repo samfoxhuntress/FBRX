@@ -56,9 +56,9 @@ function palmsPath(): string {
  * The background texture as a CSS image, drawn in the theme's ink at the chosen strength (null for none). SVG tiles,
  * so they stay sharp at any zoom.
  */
-export function textureImage(t: Exclude<Texture, 'theme'>, mode: 'light' | 'dark', strength: Settings['appearance']['textureStrength'] = 'medium', accent = '#00e5ff'): string | null {
+export function textureImage(t: Exclude<Texture, 'theme'>, mode: 'light' | 'dark', strength: Settings['appearance']['textureStrength'] = 'medium', accent = '#00e5ff', scale = 1): string | null {
   if (t === 'none') return null;
-  const k = { subtle: 0.6, medium: 1, bold: 1.7 }[strength];
+  const k = { subtle: 0.6, medium: 1, bold: 1.7 }[strength] * scale;
   const ink = (a: number) => (mode === 'dark' ? `rgba(255,255,255,${(a * k).toFixed(3)})` : `rgba(60,40,20,${(a * k * 1.15).toFixed(3)})`);
   const neon = (a: number) => {
     const [r, g, b] = hexToRgb(/^#[0-9a-f]{6}$/i.test(accent) ? accent : '#00e5ff');
@@ -155,6 +155,16 @@ function shade(hex: string, amount: number): string {
   return `#${[mix(r), mix(g), mix(b)].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
 }
 
+/**
+ * Light effects (no frosted glass, glows or decorative animation) on request, and automatically on computers with
+ * four or fewer processor threads or 4 GB of memory or less, where blurring big panels costs real time.
+ */
+export function resolvedEffects(effects: Settings['appearance']['effects']): 'full' | 'light' {
+  if (effects !== 'auto') return effects;
+  const memGB = (navigator as Navigator & { deviceMemory?: number }).deviceMemory ?? 8;
+  return (navigator.hardwareConcurrency || 8) <= 4 || memGB <= 4 ? 'light' : 'full';
+}
+
 export function resolvedMode(theme: Settings['general']['theme']): 'light' | 'dark' {
   if (theme === 'system') return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   return theme;
@@ -175,8 +185,13 @@ export function useAppearance(settings: Settings | undefined) {
       const texture = resolvedTexture(a);
       root.dataset.texture = texture;
       const img = textureImage(texture, mode, a?.textureStrength, themeAccent(a, mode));
+      // The sidebar and top bar get a much fainter copy, so the pattern frames the page without crowding the menu.
+      const nav = textureImage(texture, mode, a?.textureStrength, themeAccent(a, mode), 0.35);
       if (img) root.style.setProperty('--texture', img);
       else root.style.removeProperty('--texture');
+      if (nav) root.style.setProperty('--texture-nav', nav);
+      else root.style.removeProperty('--texture-nav');
+      root.dataset.effects = resolvedEffects(a?.effects ?? 'auto');
       root.dataset.motion = a?.reduceMotion ? 'reduce' : 'full';
       root.style.zoom = String(a?.fontScale ?? 1);
       const accent = a?.accent;
@@ -196,7 +211,7 @@ export function useAppearance(settings: Settings | undefined) {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, [theme, a?.preset, a?.density, a?.radius, a?.texture, a?.textureStrength, a?.reduceMotion, a?.fontScale, a?.accent]);
+  }, [theme, a?.preset, a?.density, a?.radius, a?.texture, a?.textureStrength, a?.reduceMotion, a?.fontScale, a?.accent, a?.effects]);
 }
 
 /** The FBRX start-up sound (from the FBRX intro), like a computer's chime when it boots. */

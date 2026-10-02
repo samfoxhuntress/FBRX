@@ -1,6 +1,7 @@
 /**
  * Story time: how-tos nobody needed, unlocked by searching the Library for "tell me a story". Each one winks at a
- * film or game; the reference is revealed at the end. Family friendly, and a few even point at a real FBRX feature.
+ * film or game, with a riddle-like hint at the end and never the title: guessing is the fun. Family friendly, and a
+ * few even point at a real FBRX feature.
  */
 export interface Story {
   id: string;
@@ -26,7 +27,7 @@ export const STORIES: Story[] = [
       'Bounce off a ball, ride a toy car down a ramp and loop once around the ceiling fan.',
       'Land on your feet. If someone says that was not flying, agree: it was falling, with style.',
     ],
-    ref: 'Inspired by a certain space ranger and his cowboy friend (Toy Story).',
+    ref: 'Inspired by a certain space ranger and his cowboy friend.',
   },
   {
     id: 'swim',
@@ -38,7 +39,7 @@ export const STORIES: Story[] = [
       'Forget what you were waiting for. Remember again. Keep swimming.',
       'Still stuck? Open the Network Center and run a speed test. The fish would want you to.',
     ],
-    ref: 'Inspired by a forgetful blue tang (Finding Nemo).',
+    ref: 'Inspired by a forgetful blue tang.',
     go: 'speed',
   },
   {
@@ -50,7 +51,7 @@ export const STORIES: Story[] = [
       'Build a communicator from a toy keyboard and an umbrella. Ask a grown-up before borrowing the umbrella.',
       'Or skip all that: open Mesh & phone, scan the pairing code with your phone and you are connected. No flying bicycles required.',
     ],
-    ref: 'Inspired by a homesick visitor who liked candy (E.T. the Extra-Terrestrial).',
+    ref: 'Inspired by a homesick visitor who liked candy.',
     go: 'mesh',
   },
   {
@@ -62,7 +63,7 @@ export const STORIES: Story[] = [
       'Breathe. Remember the answer is 42. The question is still loading.',
       'Make a nice cup of tea. If the computer tries to make it instead, it will be almost, but not quite, entirely unlike tea.',
     ],
-    ref: 'Inspired by a very useful guide for galactic hitchhikers (The Hitchhiker\'s Guide to the Galaxy).',
+    ref: 'Inspired by a very useful guide for galactic hitchhikers.',
   },
   {
     id: '1985',
@@ -74,7 +75,7 @@ export const STORIES: Story[] = [
       'Reach exactly 88 miles per hour.',
       'Tip: the speed test in the Network Center seems to know something about this. Impatient people find out first.',
     ],
-    ref: 'Inspired by a teenager, a scientist and a very fast car (Back to the Future).',
+    ref: 'Inspired by a teenager, a scientist and a very fast car.',
     go: 'speed',
   },
   {
@@ -86,7 +87,7 @@ export const STORIES: Story[] = [
       'Roll three snowballs: big, medium, small. Add a carrot. Add a warm hug (he likes those).',
       'Let it go. Then go to Storage and let go of a few gigabytes of temporary files too.',
     ],
-    ref: 'Inspired by two royal sisters and a cheerful snowman (Frozen).',
+    ref: 'Inspired by two royal sisters and a cheerful snowman.',
     go: 'storage',
   },
   {
@@ -99,7 +100,7 @@ export const STORIES: Story[] = [
       'Say "There\'s no place like home." For computers it is 127.0.0.1, which is also home.',
       'Follow the yellow brick road if that doesn\'t work. Watch out for flying monkeys and pop-up ads.',
     ],
-    ref: 'Inspired by a girl from Kansas and her little dog (The Wizard of Oz).',
+    ref: 'Inspired by a girl from Kansas and her little dog.',
   },
   {
     id: 'force',
@@ -110,7 +111,7 @@ export const STORIES: Story[] = [
       'Wave your hand gently. Say: "You will print my document."',
       'If it still says "paper jam", it may be strong with the dark side. Open the Network Center\'s Printers tab instead. Use the Settings, Luke.',
     ],
-    ref: 'Inspired by a galaxy far, far away (Star Wars).',
+    ref: 'Inspired by a galaxy far, far away.',
     go: 'printers',
   },
   {
@@ -122,7 +123,7 @@ export const STORIES: Story[] = [
       'Do not cross the streams. (Do not plug the power strip into itself, either.)',
       'Who you gonna call? Fabrix. Open the Bug catcher and let it look for the ghost.',
     ],
-    ref: 'Inspired by four scientists with proton packs (Ghostbusters).',
+    ref: 'Inspired by four scientists with proton packs.',
     go: 'bugs',
   },
   {
@@ -135,7 +136,7 @@ export const STORIES: Story[] = [
       'Do not put it on. Not even to try it. Especially not to try it.',
       'When it gets hard, remember: even the smallest person can change the course of the future.',
     ],
-    ref: 'Inspired by a hobbit and his gardener (The Lord of the Rings).',
+    ref: 'Inspired by a hobbit and his gardener.',
   },
   {
     id: 'capes',
@@ -146,7 +147,7 @@ export const STORIES: Story[] = [
       'Pick a bold color. Red is classic.',
       'No capes! (They catch on things. Jet turbines. Elevator doors. Revolving doors.)',
     ],
-    ref: 'Inspired by a tiny, brilliant costume designer (The Incredibles).',
+    ref: 'Inspired by a tiny, brilliant costume designer.',
   },
   {
     id: 'worries',
@@ -157,7 +158,7 @@ export const STORIES: Story[] = [
       'Sing loudly. Eat bugs (optional, discouraged).',
       'Turn on scheduled backups in Backup & restore. Then it really is a problem-free philosophy.',
     ],
-    ref: 'Inspired by a lion cub and his two carefree friends (The Lion King).',
+    ref: 'Inspired by a lion cub and his two carefree friends.',
     go: 'backup',
   },
   {
@@ -169,7 +170,7 @@ export const STORIES: Story[] = [
       'Right-click a big folder and compress it to a .zip. It gets smaller and nobody has to ride an ant home.',
       'For bigger savings, open Storage and see what is taking all the room.',
     ],
-    ref: 'Inspired by an inventor dad and a very large backyard (Honey, I Shrunk the Kids).',
+    ref: 'Inspired by an inventor dad and a very large backyard.',
     go: 'storage',
   },
   {
@@ -181,7 +182,7 @@ export const STORIES: Story[] = [
       'Go down every green pipe. Look behind the waterfall.',
       'Or press Ctrl+K and type its name: Spotlight finds files, settings and apps in one go. Much less jumping.',
     ],
-    ref: 'Inspired by a plumber who keeps checking the wrong castle (Super Mario Bros.).',
+    ref: 'Inspired by a plumber who keeps checking the wrong castle.',
   },
   {
     id: 'groundhog',
@@ -192,7 +193,7 @@ export const STORIES: Story[] = [
       'Learn something new each day: the piano, ice sculpture, reading the event log.',
       'Finally fix the root cause (it was the driver). Tomorrow is, at last, tomorrow.',
     ],
-    ref: 'Inspired by a weatherman stuck in a small town (Groundhog Day).',
+    ref: 'Inspired by a weatherman stuck in a small town.',
     go: 'bugs',
   },
   {
@@ -204,6 +205,6 @@ export const STORIES: Story[] = [
       'Offer a fish. Not eel. Never eel.',
       'Scratch under the chin. If it falls over purring, congratulations, you have a dragon.',
     ],
-    ref: 'Inspired by a Viking and his night-black dragon (How to Train Your Dragon).',
+    ref: 'Inspired by a Viking and his night-black dragon.',
   },
 ];

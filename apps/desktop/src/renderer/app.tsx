@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SystemStatus } from '@fbrx/shared';
+import { addressAs, funEnabled } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, FBRX_MARK, Icons, Shell, Spinner, Status, useToast, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
 import { isLocked, useCore } from './hooks';
@@ -135,7 +136,7 @@ export function App() {
   const route = useRoute();
   const { data: settings } = useCore('settings.get', undefined, ['settings.changed']);
   useAppearance(settings?.settings);
-  if (route === 'spotlight') return settings ? <SpotlightView agentName={settings.settings.ai.agentName} /> : null;
+  if (route === 'spotlight') return settings ? <SpotlightView agentName={settings.settings.ai.agentName} fun={funEnabled(settings.settings)} /> : null;
   if (route === 'goose-overlay') return <GooseOverlay />;
   return <MainApp route={route} settings={settings} />;
 }
@@ -181,7 +182,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       ),
     [toast],
   );
-  const fun = settings?.settings.appearance.easterEggs ?? false;
+  const fun = funEnabled(settings?.settings);
   useKonami(
     fun,
     useCallback(() => {
@@ -292,17 +293,17 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'lab':
         return advanced ? <LabPage /> : <AdvancedOnly title="Virtual lab" onEnable={() => setAdvanced(true)} locked={advancedLocked} />;
       case 'network':
-        return <NetworkPage advanced={advanced} easterEggs={s.appearance.easterEggs} />;
+        return <NetworkPage advanced={advanced} easterEggs={fun} />;
       case 'files':
         return <FilesPage />;
       case 'processes':
         return <ProcessesPage />;
       case 'terminal':
-        return advanced ? <TerminalPage easterEggs={s.appearance.easterEggs} /> : <AdvancedOnly title="Terminal" onEnable={() => setAdvanced(true)} locked={advancedLocked} />;
+        return advanced ? <TerminalPage easterEggs={fun} /> : <AdvancedOnly title="Terminal" onEnable={() => setAdvanced(true)} locked={advancedLocked} />;
       case 'toolbox':
-        return <ToolboxPage advanced={advanced} easterEggs={s.appearance.easterEggs} />;
+        return <ToolboxPage advanced={advanced} easterEggs={fun} />;
       case 'library':
-        return <LibraryPage agentName={agentName} advanced={advanced} easterEggs={s.appearance.easterEggs} />;
+        return <LibraryPage agentName={agentName} advanced={advanced} easterEggs={fun} />;
       case 'mesh':
         return <MeshPage />;
       case 'aicoord':
@@ -326,7 +327,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'settings':
         return <SettingsPage onRerunSetup={() => setForceOnboarding(true)} />;
       default:
-        return <DashboardPage status={status} agentName={agentName} easterEggs={s.appearance.easterEggs} />;
+        return <DashboardPage status={status} agentName={agentName} easterEggs={fun} who={addressAs(s)} />;
     }
   })();
 

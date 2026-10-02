@@ -3,6 +3,7 @@ import type { SpotlightItem } from '@fbrx/shared';
 import { Icons, Spinner, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { Markdown } from '../markdown';
+import { LUKE_1_37, NOTHING_IS_IMPOSSIBLE } from '../fun';
 
 const KIND_ICON: Record<SpotlightItem['kind'], IconName> = {
   app: 'grid',
@@ -21,7 +22,7 @@ const KIND_ICON: Record<SpotlightItem['kind'], IconName> = {
 const KIND_LABEL: Partial<Record<SpotlightItem['kind'], string>> = { app: 'Apps', file: 'Files', page: 'FBRX OS', command: 'Settings & commands', note: 'Notes', task: 'Tasks', snippet: 'Snippets', recent: 'Recent' };
 
 /** The Spotlight launcher (its own small window, opened with the global hotkey). */
-export function SpotlightView({ agentName }: { agentName: string }) {
+export function SpotlightView({ agentName, fun }: { agentName: string; fun: boolean }) {
   const [q, setQ] = useState('');
   const [items, setItems] = useState<SpotlightItem[]>([]);
   const [files, setFiles] = useState<SpotlightItem[]>([]);
@@ -50,12 +51,17 @@ export function SpotlightView({ agentName }: { agentName: string }) {
     setAnswer(null);
     setConfirmItem(null);
     setMessage(null);
+    if (fun && NOTHING_IS_IMPOSSIBLE.test(q)) {
+      void call('settings.update', { patch: { appearance: { advancedMode: true } } })
+        .then(() => setMessage(LUKE_1_37))
+        .catch(() => undefined);
+    }
     return () => {
       alive = false;
       clearTimeout(t);
       clearTimeout(f);
     };
-  }, [q]);
+  }, [q, fun]);
 
   // Merge file hits in before the trailing "ask" and "web" rows.
   const merged = useMemo(() => {

@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { accessSync, constants, existsSync, readdirSync } from 'node:fs';
+import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs';
+import { freemem, setPriority, totalmem } from 'node:os';
 import { delimiter, join } from 'node:path';
 import type { RuntimeStatus } from '@fbrx/shared';
 import { CoreError } from '../../errors';
@@ -11,6 +12,7 @@ import type { ModelManager } from './model-manager';
 import { sleep } from '../../util/misc';
 import si from 'systeminformation';
 import { installLlamaRuntime } from './runtime-installer';
+import { resourcePlan } from '../resources';
 
 const EXE = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server';
 
@@ -68,6 +70,11 @@ export class LocalRuntime {
   private apiKeyValue = '';
   private recentOutput: string[] = [];
   private stopping = false;
+  private starting: Promise<RuntimeStatus> | null = null;
+  /** Requests using the model right now, and when it was last used (for unloading it when idle). */
+  private active = 0;
+  private lastUsed = 0;
+  private idleTimer: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly d: {
@@ -138,14 +145,59 @@ export class LocalRuntime {
     this.d.events?.emit('runtime.changed', this.status());
   }
 
+  /** Whether a model is set up so the runtime could start on demand. */
+  get canStart(): boolean {
+    const s = this.d.settings.get().runtime;
+    return s.enabled && !!s.modelId && !!this.d.models.get(s.modelId) && !!this.resolveBinary();
+  }
+
+  /** Marks the model in use, starting the runtime first if it is not running (it may have been unloaded when idle). */
+  async acquire(): Promise<void> {
+    this.active++;
+    this.lastUsed = Date.now();
+    if (this.state === 'running' && this.child) return;
+    try {
+      await this.start();
+      if (this.state !== 'running') throw new CoreError('UNAVAILABLE', this.message ?? 'The local AI runtime did not start');
+    } catch (err) {
+      this.active = Math.max(0, this.active - 1);
+      throw err;
+    }
+  }
+
+  release(): void {
+    this.active = Math.max(0, this.active - 1);
+    this.lastUsed = Date.now();
+  }
+
   async start(): Promise<RuntimeStatus> {
-    if (this.child && (this.state === 'running' || this.state === 'starting')) return this.status();
+    if (this.starting) return this.starting;
+    if (this.child && this.state === 'running') return this.status();
+    this.starting = this.launch().finally(() => {
+      this.starting = null;
+    });
+    return this.starting;
+  }
+
+  private async launch(): Promise<RuntimeStatus> {
     const s = this.d.settings.get().runtime;
     if (!s.enabled) throw new CoreError('UNAVAILABLE', 'The local runtime is disabled in settings');
     const binary = this.resolveBinary();
     if (!binary) throw new CoreError('UNAVAILABLE', 'llama-server runtime not found');
     const model = s.modelId ? this.d.models.get(s.modelId) : undefined;
     if (!model) throw new CoreError('UNAVAILABLE', 'No model selected for the local runtime');
+    // A model that does not fit in memory makes the whole computer swap until it freezes; refuse it up front.
+    let size = 0;
+    try {
+      size = statSync(model.file).size;
+    } catch {
+      /* the runtime reports a missing file itself */
+    }
+    if (size > totalmem() * 0.8) {
+      throw new CoreError('UNAVAILABLE', `${model.name} needs about ${Math.ceil(size / 1e9)} GB of memory, more than this computer can spare (${Math.round(totalmem() / 1e9)} GB in total). Choose a smaller model.`);
+    }
+    if (size + 1.5e9 > freemem()) this.d.log.warn('Little free memory for the local model; the computer may slow down while it loads', { modelGB: +(size / 1e9).toFixed(1), freeGB: +(freemem() / 1e9).toFixed(1) });
+    const plan = resourcePlan(this.d.settings.get().ai.resources);
 
     this.apiKeyValue = randomBytes(24).toString('base64url');
     const args = [
@@ -157,7 +209,9 @@ export class LocalRuntime {
       '--jinja',
       '--alias', model.id,
       '--api-key', this.apiKeyValue,
-      ...(s.threads > 0 ? ['--threads', String(s.threads)] : []),
+      '--threads', String(s.threads > 0 ? s.threads : plan.threads),
+      // One conversation at a time: the whole context goes to it and the memory for extra slots is not reserved.
+      '--parallel', '1',
     ];
     this.stopping = false;
     this.recentOutput = [];
@@ -165,6 +219,14 @@ export class LocalRuntime {
     this.d.log.info('Starting local runtime', { binary, model: model.id, port: s.port });
     const child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     this.child = child;
+    // Below-normal priority keeps the desktop responsive while the model thinks.
+    if (child.pid) {
+      try {
+        setPriority(child.pid, plan.priority);
+      } catch {
+        /* not permitted here; runs at normal priority */
+      }
+    }
     const capture = (b: Buffer) => {
       for (const line of b.toString('utf8').split(/\r?\n/)) {
         if (!line.trim()) continue;
@@ -196,7 +258,9 @@ export class LocalRuntime {
         const res = await fetch(`http://127.0.0.1:${s.port}/health`, { signal: AbortSignal.timeout(2000) });
         if (res.ok) {
           this.setState('running');
-          this.d.log.info('Local runtime ready', { model: model.id });
+          this.lastUsed = Date.now();
+          this.watchIdle();
+          this.d.log.info('Local runtime ready', { model: model.id, threads: s.threads > 0 ? s.threads : plan.threads });
           return this.status();
         }
       } catch {
@@ -211,10 +275,25 @@ export class LocalRuntime {
     throw new CoreError('UNAVAILABLE', this.message ?? 'Runtime failed to start');
   }
 
-  async stop(): Promise<RuntimeStatus> {
+  /** Unloads the model after the configured idle time, so the memory goes back to the computer. */
+  private watchIdle(): void {
+    if (this.idleTimer) return;
+    this.idleTimer = setInterval(() => {
+      const mins = this.d.settings.get().runtime.idleStopMinutes;
+      if (this.state !== 'running' || this.active > 0 || mins <= 0) return;
+      if (Date.now() - this.lastUsed < mins * 60_000) return;
+      this.d.log.info('Unloading the idle local model', { idleMinutes: mins });
+      void this.stop(`Unloaded after ${mins} idle minutes to free memory. It starts again with the next question.`);
+    }, 60_000);
+    this.idleTimer.unref?.();
+  }
+
+  async stop(message: string | null = null): Promise<RuntimeStatus> {
+    if (this.idleTimer) clearInterval(this.idleTimer);
+    this.idleTimer = null;
     const child = this.child;
     if (!child) {
-      if (this.state !== 'stopped') this.setState('stopped');
+      if (this.state !== 'stopped') this.setState('stopped', message);
       return this.status();
     }
     this.stopping = true;
@@ -222,7 +301,7 @@ export class LocalRuntime {
     const exited = await Promise.race([new Promise<boolean>((r) => child.once('exit', () => r(true))), sleep(5000).then(() => false)]);
     if (!exited) child.kill('SIGKILL');
     this.child = null;
-    this.setState('stopped');
+    this.setState('stopped', message);
     return this.status();
   }
 

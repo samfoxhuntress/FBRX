@@ -6,7 +6,7 @@ import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
 import { navigate } from '../app';
 import { dashboardQuip, unlockTrophy } from '../fun';
-import { AskButton } from '../widgets';
+import { AskButton, NamePrompt } from '../widgets';
 import { SplitFlapBoard } from '../splitflap';
 
 function serviceTone(state: string) {
@@ -171,7 +171,7 @@ function LooseTip({ fun }: { fun: boolean }) {
   );
 }
 
-export function DashboardPage({ status, agentName, easterEggs }: { status: SystemStatus; agentName: string; easterEggs: boolean }) {
+export function DashboardPage({ status, agentName, easterEggs, who }: { status: SystemStatus; agentName: string; easterEggs: boolean; who: string | null }) {
   const { run, busy } = useAction();
   const live = useLive();
   const cur = live[live.length - 1];
@@ -202,7 +202,7 @@ export function DashboardPage({ status, agentName, easterEggs }: { status: Syste
   const flapsDone = useRef(false);
   const now = new Date();
   const messages = useMemo(() => {
-    const m: string[][] = [[greeting, status.deviceName]];
+    const m: string[][] = [who ? [`${greeting},`, who] : [greeting, status.deviceName]];
     const failing = status.services.filter((x) => x.state === 'failed').length;
     m.push([failing ? `${failing} SERVICE${failing > 1 ? 'S' : ''} FAILING` : 'ALL SYSTEMS GO', cur ? `CPU ${cur.cpu.toFixed(0)}%  MEM ${memPct.toFixed(0)}%` : 'MEASURING…']);
     m.push([`${open.length} OPEN TASK${open.length === 1 ? '' : 'S'}`, due.length ? `${due.length} DUE TODAY` : 'NOTHING DUE TODAY']);
@@ -214,7 +214,7 @@ export function DashboardPage({ status, agentName, easterEggs }: { status: Syste
     return m;
     // Rebuilt every half minute (and when the big things change) so the board isn't restarted on every sample.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [greeting, status.deviceName, status.aiHalt, open.length, due.length, aiReady, health.score, easterEggs, Math.floor(Date.now() / 30_000)]);
+  }, [greeting, who, status.deviceName, status.aiHalt, open.length, due.length, aiReady, health.score, easterEggs, Math.floor(Date.now() / 30_000)]);
 
   return (
     <div className="fx-page glass-dash">
@@ -259,6 +259,7 @@ export function DashboardPage({ status, agentName, easterEggs }: { status: Syste
         </div>
       </section>
 
+      <NamePrompt fun={easterEggs} />
       <div className="glass-insights">
         <Insight icon="tasks" title="Focus" value={open.length ? (open[0].title.length > 38 ? `${open[0].title.slice(0, 38)}…` : open[0].title) : 'All clear'} foot={due.length ? `${due.length} due today · ${open.length} open` : `${open.length} open task${open.length === 1 ? '' : 's'}`} onClick={() => navigate('tasks')} />
         <Insight icon="gauge" title="Internet" value={lastSpeed ? `↓ ${lastSpeed.downloadMbps} Mbps` : 'Not measured'} foot={lastSpeed ? `↑ ${lastSpeed.uploadMbps} Mbps · ${timeAgo(lastSpeed.at)}` : 'Run a speed test'} onClick={() => navigate('network/speed')} />

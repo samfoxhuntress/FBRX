@@ -27,6 +27,12 @@ const COLORS: Record<string, [string, string]> = {
   loose: ['#b9bec7', '#5f6570'],
   flaps: ['#5c6270', '#22252c'],
   golden: ['#ffd95a', '#b8860b'],
+  chicken: ['#ffe9a8', '#c9962b'],
+  pcload: ['#d7dde4', '#6c7682'],
+  chewie: ['#c08a5a', '#6b4423'],
+  fuzzball: ['#d9a46c', '#7a4f26'],
+  father: ['#ef5350', '#5a0f0f'],
+  wookiee: ['#a9784c', '#4e3018'],
 };
 
 /** The picture on each badge, drawn in a 64 × 64 box. */
@@ -184,6 +190,72 @@ function Glyph({ id }: { id: string }): ReactNode {
           </text>
           <circle cx="21.5" cy="32" r="1.3" fill="#888" />
           <circle cx="42.5" cy="32" r="1.3" fill="#888" />
+        </g>
+      );
+    case 'chicken':
+      return (
+        <g>
+          <ellipse cx="34" cy="40" rx="13" ry="10" fill="#fff" stroke="#b07a1a" strokeWidth="1.2" />
+          <circle cx="26" cy="27" r="7" fill="#fff" stroke="#b07a1a" strokeWidth="1.2" />
+          <path d="M23 20 q2 -5 4 0 q2 -5 4 0" fill="#e0262b" />
+          <path d="M19.5 27 l-5 1.5 5 1.5z" fill="#f08c00" />
+          <path d="M22 31 q-1 4 1.5 4.5" fill="#e0262b" />
+          <circle cx="25" cy="26" r="1.2" fill="#1b1b1b" />
+          <path d="M44 34 q6 -4 5 4" stroke="#b07a1a" strokeWidth="1.2" fill="#fff" />
+          <path d="M30 50 v5 M37 50 v5" stroke="#f08c00" strokeWidth="2" strokeLinecap="round" />
+        </g>
+      );
+    case 'pcload':
+      return (
+        <g>
+          <rect x="16" y="26" width="32" height="15" rx="3" fill="#3a3f47" />
+          <rect x="22" y="15" width="20" height="12" fill="#fff" stroke="#999" strokeWidth="1" />
+          <rect x="21" y="38" width="22" height="12" fill="#fff" stroke="#999" strokeWidth="1" />
+          <rect x="34" y="29" width="10" height="4" rx="1" fill="#9be38f" />
+          <text x="32" y="47" textAnchor="middle" fontSize="5.4" fontWeight="800" fill="#c62828">LETTER?</text>
+        </g>
+      );
+    case 'chewie':
+      return (
+        <g>
+          <path d="M20 14 L44 50" stroke="#3e2a14" strokeWidth="6" strokeLinecap="round" />
+          {[0, 1, 2, 3, 4].map((i) => (
+            <rect key={i} x={22.5 + i * 4.4} y={17 + i * 6.6} width="4.5" height="5" rx="1" fill="#c9c9c9" stroke="#555" strokeWidth="0.6" transform={`rotate(-34 ${24.7 + i * 4.4} ${19.5 + i * 6.6})`} />
+          ))}
+          <path d="M40 18 l4 -6 2 7 6 1 -5 4" fill="#ffd34d" />
+        </g>
+      );
+    case 'fuzzball':
+      return (
+        <g>
+          <circle cx="32" cy="33" r="15" fill="#8a5a2b" />
+          {Array.from({ length: 14 }, (_, i) => {
+            const a = (i / 14) * Math.PI * 2;
+            return <path key={i} d={`M${32 + Math.cos(a) * 13} ${33 + Math.sin(a) * 13} l${Math.cos(a) * 5} ${Math.sin(a) * 5}`} stroke="#8a5a2b" strokeWidth="2.4" strokeLinecap="round" />;
+          })}
+          <circle cx="27" cy="29" r="2" fill="#1b1b1b" />
+          <circle cx="37" cy="29" r="2" fill="#1b1b1b" />
+          <path d="M25 36 q7 8 14 0 z" fill="#3a1d0b" />
+        </g>
+      );
+    case 'father':
+      return (
+        <g>
+          <path d="M18 40 Q18 16 32 15 Q46 16 46 40 L50 47 H14 Z" fill="#1d1d1f" stroke="#555" strokeWidth="1" />
+          <path d="M24 30 h7 v5 h-7z M33 30 h7 v5 h-7z" fill="#5a0f0f" />
+          <path d="M28 39 h8 l2 7 h-12z" fill="#3a3a3c" />
+          <path d="M29.5 41 v4 M32 41 v4 M34.5 41 v4" stroke="#888" strokeWidth="0.8" />
+        </g>
+      );
+    case 'wookiee':
+      return (
+        <g>
+          <path d="M18 22 Q20 10 32 10 Q44 10 46 22 L48 44 Q40 54 32 54 Q24 54 16 44 Z" fill="#7a4f26" />
+          <path d="M22 26 Q32 20 42 26 L41 42 Q32 48 23 42 Z" fill="#a8774a" />
+          <circle cx="27" cy="31" r="2" fill="#1b1b1b" />
+          <circle cx="37" cy="31" r="2" fill="#1b1b1b" />
+          <path d="M28 40 q4 3 8 0" stroke="#3a1d0b" strokeWidth="1.6" fill="none" strokeLinecap="round" />
+          <path d="M30 35 h4 l-2 2z" fill="#2a1508" />
         </g>
       );
     case 'golden':
