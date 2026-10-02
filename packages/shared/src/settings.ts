@@ -3,8 +3,11 @@ import { DEFAULT_LOCAL_API_PORT, DEFAULT_RUNTIME_PORT, UPDATE_CHANNELS } from '.
 import { ALERT_CHANNELS } from './ext';
 
 /** Built-in color themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
-export const THEME_PRESETS = ['fabrics', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
+export const THEME_PRESETS = ['fabrics', 'tropical', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
 export type ThemePreset = (typeof THEME_PRESETS)[number];
+/** Background textures. "theme" uses each theme's own (weave for Fabrics, palms for Tropical, …). */
+export const TEXTURES = ['theme', 'none', 'weave', 'linen', 'grain', 'grid', 'dots', 'carbon', 'waves', 'palms'] as const;
+export type Texture = (typeof TEXTURES)[number];
 export const DEFAULT_MESH_PORT = 47800;
 
 export const PROVIDER_TYPES = ['local-runtime', 'ollama', 'openai-compatible', 'openai', 'anthropic'] as const;
@@ -51,13 +54,18 @@ export const SettingsSchema = z.object({
     accent: z.string().regex(/^(#[0-9a-fA-F]{6})?$/),
     density: z.enum(['compact', 'comfortable', 'spacious']),
     fontScale: z.number().min(0.85).max(1.3),
-    texture: z.enum(['none', 'weave', 'grain', 'grid']),
+    texture: z.enum(TEXTURES),
+    textureStrength: z.enum(['subtle', 'medium', 'bold']),
     radius: z.enum(['sharp', 'rounded', 'soft']),
     reduceMotion: z.boolean(),
     splash: z.boolean(),
     splashSound: z.boolean(),
     /** Show expert screens (disks and partitions, Hyper-V lab, network adapters, registry-level fixes). */
     advancedMode: z.boolean(),
+    /** Easter eggs, jokes and the Silly Goose. An organization can turn them off. */
+    easterEggs: z.boolean(),
+    /** The Silly Goose drops by now and then on its own. */
+    gooseVisits: z.boolean(),
   }),
   spotlight: z.object({
     enabled: z.boolean(),
@@ -174,7 +182,7 @@ export const DEFAULT_SETTINGS: Settings = {
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     temperature: 0.2,
     providers: DEFAULT_PROVIDERS,
-    agentName: 'Fabric',
+    agentName: 'Fabrix',
     newChatsOffline: true,
   },
   appearance: {
@@ -182,12 +190,15 @@ export const DEFAULT_SETTINGS: Settings = {
     accent: '',
     density: 'comfortable',
     fontScale: 1,
-    texture: 'none',
+    texture: 'theme',
+    textureStrength: 'medium',
     radius: 'rounded',
     reduceMotion: false,
     splash: true,
     splashSound: true,
     advancedMode: false,
+    easterEggs: true,
+    gooseVisits: false,
   },
   spotlight: {
     enabled: true,

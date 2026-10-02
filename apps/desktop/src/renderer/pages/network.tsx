@@ -1,10 +1,12 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { LanDevice, LanScan, LanScanCompare, NetAdapter, PingResult, SpeedTestResult, TraceHop } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
-import { call, onEvent, pickFile } from '../client';
+import { bridge, call, onEvent, pickFile } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
 import { IS_WINDOWS, navigate } from '../app';
-import { AskButton } from '../widgets';
+import { AskButton, askAgent } from '../widgets';
+import { ConnectDialog, type ConnectTarget } from '../consoles';
+import { commandSearchUrl, matchDeviceProfile } from '@fbrx/shared';
 
 type Tab = 'overview' | 'trace' | 'devices' | 'speed' | 'wifi' | 'bluetooth' | 'printers' | 'tools' | 'adapters';
 
@@ -42,7 +44,7 @@ function Overview() {
         <StatTile label="Public address" value={pub.data?.ip ?? '—'} foot={pub.data?.isp ?? pub.error ?? ''} />
       </Grid>
       {verdict && (
-        <Callout tone={web?.received ? 'good' : 'warning'} actions={<Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent('Diagnose my network connection step by step and explain any problem in plain language.')}`)}>Ask {agent}</Button>}>
+        <Callout tone={web?.received ? 'good' : 'warning'} actions={<Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent('Diagnose my network connection step by step and explain any problem in plain language.')}`)}>Diagnose with {agent}</Button>}>
           {verdict}
         </Callout>
       )}
@@ -177,12 +179,16 @@ function Devices({ advanced }: { advanced: boolean }) {
   const [label, setLabel] = useState('');
   const [cmp, setCmp] = useState<{ a: string; b: string; result: LanScanCompare | null } | null>(null);
   const [detail, setDetail] = useState<LanDevice | null>(null);
+  const [connect, setConnect] = useState<ConnectTarget | null>(null);
+  const vendors = useCore('net.vendorInfo');
   const { run, busy } = useAction();
   const toast = useToast();
   const { confirm, dialog } = useConfirm();
   useEffect(() => {
     if (!scan && scans.data?.[0]) void call('net.scanGet', { id: scans.data[0].id }).then(setScan);
   }, [scans.data, scan]);
+  const hasCli = (d: LanDevice) => d.ports.some((p) => p === 22 || p === 23 || p === 4118);
+  const target = (d: LanDevice, protocol?: 'ssh' | 'telnet'): ConnectTarget => ({ host: d.ip, name: d.name, vendor: d.vendor, model: d.model, ports: d.ports, protocol });
   const start = async () => {
     const reqId = newReqId();
     setProgress({ phase: 'Starting', pct: 0 });
@@ -204,7 +210,21 @@ function Devices({ advanced }: { advanced: boolean }) {
     { key: 'name', header: 'Name', render: (d) => d.name ?? <span className="fx-muted">—</span> },
     { key: 'vendor', header: 'Maker', render: (d) => d.vendor ?? <span className="fx-muted">Unknown</span> },
     { key: 'ports', header: 'Open ports', render: (d) => <span className="mono fx-muted">{d.ports.join(', ') || '—'}</span> },
-    { key: 'x', header: '', render: (d) => <AskButton iconOnly label="What is this device" prompt="What is this device on my home or office network, and is anything about it (open ports, unknown maker) a concern?" context={d} />, width: 50 },
+    {
+      key: 'x',
+      header: '',
+      render: (d) => (
+        <span style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
+          {hasCli(d) && !d.isSelf && (
+            <Button size="sm" icon="terminal" disabled={!advanced} title={advanced ? `Open a console (${matchDeviceProfile(d)?.name ?? 'command line'})` : 'Turn on Advanced mode to open device consoles'} onClick={() => setConnect(target(d))}>
+              Connect
+            </Button>
+          )}
+          <AskButton iconOnly label="What is this device" prompt="What is this device on my home or office network, and is anything about it (open ports, unknown maker) a concern?" context={d} />
+        </span>
+      ),
+      width: 130,
+    },
   ];
   return (
     <>
@@ -241,6 +261,7 @@ function Devices({ advanced }: { advanced: boolean }) {
           )}
         </div>
         <div className="fx-muted" style={{ fontSize: 12.5, marginTop: 8 }}>
+          {vendors.data?.entries ? `Makers come from the IEEE registry (${vendors.data.entries.toLocaleString()} MAC blocks, ${vendors.data.source}${vendors.data.updatedAt ? ` ${vendors.data.updatedAt}` : ''}). ` : ''}
           {subnet ? `Scans ${subnet}${hosts ? ` (${hosts} addresses)` : ''}${advanced && subnet !== autoSubnet ? ` · adapter network is ${autoSubnet}` : ''}.` : 'Connect to a network to scan it.'}
           {!advanced && ' Advanced mode lets you scan a different subnet.'}
         </div>
@@ -298,31 +319,86 @@ function Devices({ advanced }: { advanced: boolean }) {
       ) : (
         !progress && <Empty title="No scans yet">Run a scan to see every device on your network.</Empty>
       )}
-      {detail && (
-        <Modal title={detail.name ?? detail.ip} description={detail.typeLabel} onClose={() => setDetail(null)}>
-          <KeyValue
-            items={[
-              ['Address', <span className="mono">{detail.ip}</span>],
-              ['MAC', <span className="mono">{detail.mac ?? '—'}</span>],
-              ['Maker', detail.vendor ?? 'Unknown'],
-              ['Open ports', detail.ports.join(', ') || 'None found'],
-              ['Services', detail.services.join(', ') || '—'],
-              ['Router', detail.isGateway ? 'Yes' : 'No'],
-            ]}
-          />
-          <div className="fx-actions" style={{ marginTop: 12 }}>
-            {detail.ports.some((p) => p === 80 || p === 443) && (
-              <Button icon="external" onClick={() => void call('spotlight.run', { item: { id: 'dev', kind: 'web', title: detail.ip, score: 0, action: { type: 'url', url: `${detail.ports.includes(443) ? 'https' : 'http'}://${detail.ip}` } } })}>
-                Open web page
-              </Button>
-            )}
-            {IS_WINDOWS && detail.ports.includes(22) && (
-              <Button icon="terminal" onClick={() => void call('net.ssh', { host: detail.ip })}>
-                SSH
-              </Button>
-            )}
-          </div>
-        </Modal>
+      {detail &&
+        (() => {
+          const profile = matchDeviceProfile(detail);
+          const web = (profile?.webPorts ?? [443, 80, 8443, 8080]).find((p) => detail.ports.includes(p)) ?? (detail.ports.includes(443) ? 443 : detail.ports.includes(80) ? 80 : null);
+          return (
+            <Modal title={detail.name ?? detail.ip} description={detail.typeLabel} onClose={() => setDetail(null)}>
+              <KeyValue
+                items={[
+                  ['Address', <span className="mono">{detail.ip}</span>],
+                  ['MAC', <span className="mono">{detail.mac ?? '—'}</span>],
+                  ['Maker', detail.vendor ?? 'Unknown'],
+                  ...(detail.model ? [['Model', detail.model] as [string, string]] : []),
+                  ['Open ports', detail.ports.join(', ') || 'None found'],
+                  ['Services', detail.services.join(', ') || '—'],
+                  ['Router', detail.isGateway ? 'Yes' : 'No'],
+                  ...(profile ? [['Device guide', `${profile.name} (${profile.kind})`] as [string, string]] : []),
+                ]}
+              />
+              <div className="fx-actions" style={{ marginTop: 12 }}>
+                {hasCli(detail) && !detail.isSelf && (
+                  <>
+                    {detail.ports.some((p) => p === 22 || p === 4118) && (
+                      <Button variant="primary" icon="terminal" disabled={!advanced} title={advanced ? undefined : 'Turn on Advanced mode to open device consoles'} onClick={() => setConnect(target(detail, 'ssh'))}>
+                        Connect (SSH)
+                      </Button>
+                    )}
+                    {detail.ports.includes(23) && (
+                      <Button icon="terminal" disabled={!advanced} onClick={() => setConnect(target(detail, 'telnet'))}>
+                        Connect (Telnet)
+                      </Button>
+                    )}
+                  </>
+                )}
+                {web && (
+                  <Button icon="external" onClick={() => bridge.openExternal?.(`${[80, 8080, 5000].includes(web) ? 'http' : 'https'}://${detail.ip}${web === 80 || web === 443 ? '' : `:${web}`}`)}>
+                    {profile ? 'Web admin' : 'Open web page'}
+                  </Button>
+                )}
+                {profile?.docs[0] && (
+                  <Button icon="book" onClick={() => bridge.openExternal?.(profile.docs[0].url)}>
+                    {profile.docs[0].label}
+                  </Button>
+                )}
+                {!profile && detail.vendor && !/private/i.test(detail.vendor) && (
+                  <Button icon="book" variant="ghost" onClick={() => bridge.openExternal?.(commandSearchUrl(detail.vendor!, detail.model))}>
+                    Find its manual
+                  </Button>
+                )}
+                {IS_WINDOWS && detail.ports.includes(22) && advanced && (
+                  <Button variant="ghost" icon="terminal" onClick={() => void call('net.ssh', { host: detail.ip })}>
+                    Windows Terminal
+                  </Button>
+                )}
+                <Button
+                  className="ask-btn"
+                  icon="sparkles"
+                  onClick={() =>
+                    askAgent(
+                      `Tell me about this device on my network and how to manage it safely: what it probably is, how to log in to it (web admin or command line), how to update its firmware, and what to harden (default passwords, Telnet, open ports).${profile ? ` It looks like ${profile.name}.` : ''}`,
+                      detail,
+                    )
+                  }
+                >
+                  Ask about it
+                </Button>
+              </div>
+              {hasCli(detail) && !advanced && <div className="fx-muted" style={{ fontSize: 12.5, marginTop: 8 }}>Turn on Advanced mode to open its command line here.</div>}
+            </Modal>
+          );
+        })()}
+      {connect && (
+        <ConnectDialog
+          target={connect}
+          onClose={() => setConnect(null)}
+          onConnected={(s) => {
+            setConnect(null);
+            setDetail(null);
+            navigate(`terminal/console/${s.id}`);
+          }}
+        />
       )}
       {cmp && (
         <Modal
@@ -549,7 +625,8 @@ function Printers() {
   );
 }
 
-function Tools() {
+function Tools({ advanced }: { advanced: boolean }) {
+  const [console_, setConsole] = useState<ConnectTarget | null>(null);
   const [name, setName] = useState('example.com');
   const [host, setHost] = useState('');
   const [port, setPort] = useState('443');
@@ -595,17 +672,30 @@ function Tools() {
         </div>
         {portRes && <div style={{ marginTop: 10 }}><Status tone={portRes.startsWith('Open') ? 'good' : 'warning'}>{portRes}</Status></div>}
       </Card>
-      {IS_WINDOWS && (
-        <Card title="SSH" subtitle="Open a secure shell to a server in Windows Terminal">
-          <div className="fx-actions">
-            <Input placeholder="user" value={ssh.user} onChange={(e) => setSsh({ ...ssh, user: e.target.value })} aria-label="User" style={{ width: 110 }} />
-            <Input placeholder="host" value={ssh.host} onChange={(e) => setSsh({ ...ssh, host: e.target.value })} aria-label="SSH host" style={{ flex: 1 }} />
-            <Input type="number" value={ssh.port} onChange={(e) => setSsh({ ...ssh, port: e.target.value })} aria-label="SSH port" style={{ width: 80 }} />
-            <Button variant="primary" icon="terminal" disabled={!ssh.host} onClick={() => void run('ssh', () => call('net.ssh', { host: ssh.host, user: ssh.user || undefined, port: Number(ssh.port) || 22 }))}>
-              Connect
+      <Card title="Device console" subtitle="SSH or Telnet to a switch, firewall, access point or server, with the maker's guide alongside">
+        <div className="fx-actions">
+          <Input placeholder="user" value={ssh.user} onChange={(e) => setSsh({ ...ssh, user: e.target.value })} aria-label="User" style={{ width: 110 }} />
+          <Input placeholder="host or IP address" value={ssh.host} onChange={(e) => setSsh({ ...ssh, host: e.target.value })} aria-label="SSH host" style={{ flex: 1 }} />
+          <Input type="number" value={ssh.port} onChange={(e) => setSsh({ ...ssh, port: e.target.value })} aria-label="SSH port" style={{ width: 80 }} />
+          <Button variant="primary" icon="terminal" disabled={!ssh.host || !advanced} title={advanced ? undefined : 'Turn on Advanced mode to open device consoles'} onClick={() => setConsole({ host: ssh.host })}>
+            Connect
+          </Button>
+          {IS_WINDOWS && (
+            <Button variant="ghost" disabled={!ssh.host} onClick={() => void run('ssh', () => call('net.ssh', { host: ssh.host, user: ssh.user || undefined, port: Number(ssh.port) || 22 }))}>
+              Windows Terminal
             </Button>
-          </div>
-        </Card>
+          )}
+        </div>
+      </Card>
+      {console_ && (
+        <ConnectDialog
+          target={console_}
+          onClose={() => setConsole(null)}
+          onConnected={(s) => {
+            setConsole(null);
+            navigate(`terminal/console/${s.id}`);
+          }}
+        />
       )}
     </Grid>
   );
@@ -713,7 +803,7 @@ export function NetworkPage({ advanced }: { advanced: boolean }) {
       {tab === 'wifi' && <Wifi />}
       {tab === 'bluetooth' && <Bluetooth />}
       {tab === 'printers' && <Printers />}
-      {tab === 'tools' && <Tools />}
+      {tab === 'tools' && <Tools advanced={advanced} />}
       {tab === 'adapters' && <Adapters />}
     </Page>
   );

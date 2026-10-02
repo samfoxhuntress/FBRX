@@ -54,6 +54,8 @@ export interface PlatformAdapter {
   updates: UpdateController | null;
   /** Folder with the FBRX Mobile web app served to paired phones. */
   meshMobileDir?: string | null;
+  /** The IEEE MAC vendor registry shipped with the app (gzip, see network/vendors.ts). */
+  vendorDbFile?: string | null;
   /** How AI apps start the FBRX MCP bridge (the app executable in Node mode plus the bridge script). */
   mcpShim?: { command: string; args: string[]; env?: Record<string, string> } | null;
   specialDirs(): SpecialDirs;

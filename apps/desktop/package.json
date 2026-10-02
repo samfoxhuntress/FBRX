@@ -1,7 +1,7 @@
 {
   "name": "@fbrx/desktop",
   "productName": "FBRX OS",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "private": true,
   "description": "FBRX OS — the Fabrics Operating System desktop super-tool with a governed, local-first AI agent",
   "author": "FBRX",
@@ -26,8 +26,12 @@
     "@fbrx/shared": "1.0.0",
     "@fbrx/ui": "1.0.0",
     "@vitejs/plugin-react": "^6.1.1",
+    "@xterm/addon-fit": "^0.11.0",
+    "@xterm/xterm": "^6.0.0",
     "electron": "44.5.1",
     "electron-builder": "^26.15.3",
+    "oui-data": "^2.1.33",
+    "qrcode": "^1.5.4",
     "react": "^19.3.0",
     "react-dom": "^19.3.0",
     "vite": "^8.3.1"

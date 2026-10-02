@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type InputHTMLAttributes, type ReactNode, type SelectHTMLAttributes, type TextareaHTMLAttributes } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentProps, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { FbrxMark } from './brand';
 import { Icons, type IconName } from './icons';
 
@@ -36,6 +36,9 @@ export function advancedLabel(label: ReactNode): ReactNode {
 
 export function Shell(props: {
   brandSub?: string;
+  /** Clicks on the logo (the desktop app counts them for an easter egg). */
+  onBrandClick?: () => void;
+  brandClassName?: string;
   nav: NavItem[];
   active: string;
   onNavigate: (id: string) => void;
@@ -48,7 +51,7 @@ export function Shell(props: {
     <div className="fx-shell">
       <aside className="fx-sidebar">
         <div className="fx-brand">
-          <FbrxMark className="fx-brand-mark" />
+          <FbrxMark className={cx('fx-brand-mark', props.brandClassName)} onClick={props.onBrandClick} />
           <div>
             <div className="fx-brand-name">FBRX OS</div>
             <div className="fx-brand-sub">{props.brandSub ?? 'Fabrics Operating System'}</div>
@@ -145,7 +148,7 @@ export function Field({ label, help, error, children }: { label?: ReactNode; hel
   );
 }
 
-export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
+export function Input(props: ComponentProps<'input'>) {
   return <input className="fx-input" {...props} />;
 }
 
@@ -164,8 +167,8 @@ export function Select({ options, ...props }: SelectHTMLAttributes<HTMLSelectEle
   );
 }
 
-export function TextArea({ code, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement> & { code?: boolean }) {
-  return <textarea className={cx('fx-textarea', code && 'code')} spellCheck={!code} {...props} />;
+export function TextArea({ code, className, ...props }: ComponentProps<'textarea'> & { code?: boolean }) {
+  return <textarea className={cx('fx-textarea', code && 'code', className)} spellCheck={!code} {...props} />;
 }
 
 export function Toggle({ checked, onChange, label, disabled, title }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; disabled?: boolean; title?: string }) {

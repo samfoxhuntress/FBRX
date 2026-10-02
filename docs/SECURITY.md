@@ -15,7 +15,8 @@ design assumes the model can be wrong or manipulated and puts every action behin
 | Device ↔ control plane | HTTPS/WSS; device bearer token issued at enrollment and stored hashed on the server and in the device vault; idempotent, expiring commands; privileged commands need an admin role |
 | Admin → control plane | scrypt passwords, TOTP MFA, short revocable sessions, scoped API keys, RBAC, tenant isolation, rate-limited auth endpoints, full audit |
 | Paired devices → workstation | Mesh off by default; one-time pairing codes proven with HMAC over both public keys; every request sealed with NaCl box, timestamped and replay-checked; per-device permissions and instant revocation ([details](MESH.md)) |
-| Other AI apps → workstation | MCP bridge over the Local API with the agent-scoped token, so calls get the same policy, guardian, approvals and audit as Fabric; the token is read from the data folder, never copied into other apps' configuration |
+| Other AI apps → workstation | MCP bridge over the Local API with the agent-scoped token, so calls get the same policy, guardian, approvals and audit as Fabrix; the token is read from the data folder, never copied into other apps' configuration |
+| FBRX → network devices (device consoles) | Opened only by the person at the workstation; SSH host keys pinned on first use and a changed key refused until confirmed; saved passwords kept in the vault as internal secrets (not readable by plugins, the Local API or the agent); the agent can type into a console the person opened only through `device_console.send`, an execute-risk tool that asks for approval by default; connections audited |
 | FBRX → Windows administrator rights | Only for actions the person starts at the workstation (never the Local API, the agent's read tools or mesh peers); scripts go to the elevated PowerShell as an encoded command, not a file, and Windows shows the UAC prompt every time |
 
 ## Policy defaults

@@ -95,6 +95,12 @@ export const Icons = {
   grid: make(['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M14 14h7v7h-7z', 'M3 14h7v7H3z']),
   message: make(['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z']),
   qr: make(['M3 3h7v7H3z', 'M14 3h7v7h-7z', 'M3 14h7v7H3z', 'M14 14h3v3h-3z', 'M20 14v.01', 'M14 20h.01', 'M17 17h4v4h-4']),
+  flask: make(['M9 2h6', 'M10 2v7L4.5 18.5A2 2 0 0 0 6.2 21.5h11.6a2 2 0 0 0 1.7-3L14 9V2', 'M7 15h10']),
+  bookmark: make(['M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z']),
+  dice: make(['M4 4h16v16H4z', 'M8.5 8.5h.01', 'M15.5 8.5h.01', 'M12 12h.01', 'M8.5 15.5h.01', 'M15.5 15.5h.01']),
+  feather: make(['M20.2 12.2a6 6 0 0 0-8.5-8.5L5 10.5V19h8.5z', 'M16 8L2 22', 'M17.5 15H9']),
+  goggles: make(['M2 10a3 3 0 0 1 3-3h14a3 3 0 0 1 3 3v3a4 4 0 0 1-4 4h-1.5a2 2 0 0 1-1.8-1.1l-.4-.8a1.5 1.5 0 0 0-2.6 0l-.4.8A2 2 0 0 1 9.5 17H6a4 4 0 0 1-4-4z']),
+  diff: make(['M6 3v12', 'M18 9v12', 'M6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6z', 'M15 18H9a3 3 0 0 1-3-3', 'M9 6h6a3 3 0 0 1 3 3']),
 };
 
 export type IconName = keyof typeof Icons;

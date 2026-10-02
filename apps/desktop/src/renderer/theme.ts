@@ -1,18 +1,99 @@
 import { useEffect } from 'react';
-import type { Settings, ThemePreset } from '@fbrx/shared';
+import type { Settings, Texture, ThemePreset } from '@fbrx/shared';
 
-/** Swatch colors for the preset picker: [page, sidebar, accent] for light and dark. */
-export const PRESETS: Array<{ id: ThemePreset; name: string; light: [string, string, string]; dark: [string, string, string] }> = [
-  { id: 'fabrics', name: 'Fabrics', light: ['#f6f2ea', '#fbf7f0', '#a35f08'], dark: ['#100e0b', '#1a1714', '#f0a530'] },
-  { id: 'ember', name: 'Ember', light: ['#f7f1ee', '#fcf7f4', '#c2410c'], dark: ['#110c0a', '#1b1412', '#ff6b3d'] },
-  { id: 'midnight', name: 'Midnight', light: ['#eef0f8', '#f6f7fd', '#4f46e5'], dark: ['#0a0d1a', '#121730', '#8b93ff'] },
-  { id: 'graphite', name: 'Graphite', light: ['#f4f4f1', '#fbfbf9', '#2a78d6'], dark: ['#0d0d0d', '#1a1a19', '#3987e5'] },
-  { id: 'ocean', name: 'Ocean', light: ['#edf5f6', '#f5fafb', '#0e7c86'], dark: ['#071417', '#0e1f23', '#2cc4c4'] },
-  { id: 'forest', name: 'Forest', light: ['#eff4ee', '#f6faf5', '#15803d'], dark: ['#0b120d', '#131d15', '#4cc77a'] },
-  { id: 'orchid', name: 'Orchid', light: ['#f6f0f8', '#fbf7fc', '#9333ea'], dark: ['#120c16', '#1c1422', '#d07af0'] },
-  { id: 'paper', name: 'Paper', light: ['#f1eadb', '#f7f0e1', '#8a5a2b'], dark: ['#1a1611', '#231e17', '#d9a066'] },
-  { id: 'contrast', name: 'High contrast', light: ['#ffffff', '#ffffff', '#0040c0'], dark: ['#000000', '#0a0a0a', '#ffd400'] },
+/** Swatch colors for the preset picker: [page, sidebar, accent, glow] for light and dark. */
+export const PRESETS: Array<{ id: ThemePreset; name: string; light: [string, string, string, string?]; dark: [string, string, string, string?]; texture: Exclude<Texture, 'theme'> }> = [
+  { id: 'fabrics', name: 'Fabrics', light: ['#f6f2ea', '#fbf7f0', '#a35f08', '#e3a86b'], dark: ['#100e0b', '#1a1714', '#f0a530', '#7a2232'], texture: 'weave' },
+  { id: 'tropical', name: 'Tropical', light: ['#fff6ec', '#fff3e4', '#e8590c', '#ff9f6b'], dark: ['#150b07', '#180d08', '#ffa23a', '#ff4f81'], texture: 'palms' },
+  { id: 'ember', name: 'Ember', light: ['#f7f1ee', '#fcf7f4', '#c2410c', '#ef9a7a'], dark: ['#110c0a', '#1b1412', '#ff6b3d', '#7c2410'], texture: 'grain' },
+  { id: 'midnight', name: 'Midnight', light: ['#eef0f8', '#f6f7fd', '#4f46e5', '#a5b0f5'], dark: ['#0a0d1a', '#121730', '#8b93ff', '#2b2f8f'], texture: 'dots' },
+  { id: 'graphite', name: 'Graphite', light: ['#f4f4f1', '#fbfbf9', '#2a78d6', '#b9c2cf'], dark: ['#0d0d0d', '#1a1a19', '#3987e5', '#344055'], texture: 'carbon' },
+  { id: 'ocean', name: 'Ocean', light: ['#edf5f6', '#f5fafb', '#0e7c86', '#8fd3d8'], dark: ['#071417', '#0e1f23', '#2cc4c4', '#0d5263'], texture: 'waves' },
+  { id: 'forest', name: 'Forest', light: ['#eff4ee', '#f6faf5', '#15803d', '#9fd6ae'], dark: ['#0b120d', '#131d15', '#4cc77a', '#164a2c'], texture: 'linen' },
+  { id: 'orchid', name: 'Orchid', light: ['#f6f0f8', '#fbf7fc', '#9333ea', '#e2b3f2'], dark: ['#120c16', '#1c1422', '#d07af0', '#5a1f7a'], texture: 'grain' },
+  { id: 'paper', name: 'Paper', light: ['#f1eadb', '#f7f0e1', '#8a5a2b', '#d9b98c'], dark: ['#1a1611', '#231e17', '#d9a066', '#5c3e1f'], texture: 'grain' },
+  { id: 'contrast', name: 'High contrast', light: ['#ffffff', '#ffffff', '#0040c0'], dark: ['#000000', '#0a0a0a', '#ffd400'], texture: 'none' },
 ];
+
+export const TEXTURE_NAMES: Record<Exclude<Texture, 'theme'>, string> = {
+  none: 'None',
+  weave: 'Weave',
+  linen: 'Linen',
+  grain: 'Grain',
+  grid: 'Grid',
+  dots: 'Dots',
+  carbon: 'Carbon fiber',
+  waves: 'Waves',
+  palms: 'Palms',
+};
+
+/** Palm fronds: leaflets along two curved stems (one tile). */
+function palmsPath(): string {
+  const frond = (x0: number, y0: number, cx: number, cy: number, x1: number, y1: number, len: number) => {
+    let d = `M${x0} ${y0}Q${cx} ${cy} ${x1} ${y1}`;
+    for (let i = 1; i < 14; i++) {
+      const t = i / 14;
+      const x = (1 - t) ** 2 * x0 + 2 * (1 - t) * t * cx + t * t * x1;
+      const y = (1 - t) ** 2 * y0 + 2 * (1 - t) * t * cy + t * t * y1;
+      const dx = 2 * (1 - t) * (cx - x0) + 2 * t * (x1 - cx);
+      const dy = 2 * (1 - t) * (cy - y0) + 2 * t * (y1 - cy);
+      const n = Math.hypot(dx, dy);
+      const l = len * Math.sin(Math.PI * Math.min(1, t * 1.15));
+      for (const side of [1, -1]) {
+        // Leaflets sweep back toward the stem's base.
+        const ex = x + (-dy / n) * l * side - (dx / n) * l * 0.55;
+        const ey = y + (dx / n) * l * side - (dy / n) * l * 0.55;
+        d += `M${x.toFixed(1)} ${y.toFixed(1)}L${ex.toFixed(1)} ${ey.toFixed(1)}`;
+      }
+    }
+    return d;
+  };
+  return frond(10, 150, 40, 70, 120, 40, 22) + frond(170, 170, 150, 110, 90, 100, 16);
+}
+
+/**
+ * The background texture as a CSS image, drawn in the theme's ink at the chosen strength (null for none). SVG tiles,
+ * so they stay sharp at any zoom.
+ */
+export function textureImage(t: Exclude<Texture, 'theme'>, mode: 'light' | 'dark', strength: Settings['appearance']['textureStrength'] = 'medium'): string | null {
+  if (t === 'none') return null;
+  const k = { subtle: 0.6, medium: 1, bold: 1.7 }[strength];
+  const ink = (a: number) => (mode === 'dark' ? `rgba(255,255,255,${(a * k).toFixed(3)})` : `rgba(60,40,20,${(a * k * 1.15).toFixed(3)})`);
+  let svg: string;
+  switch (t) {
+    case 'weave':
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"><g fill="${ink(0.055)}"><rect x="0" y="1" width="8" height="2"/><rect x="0" y="5" width="8" height="2"/><rect x="9" y="0" width="2" height="8"/><rect x="13" y="0" width="2" height="8"/><rect x="1" y="8" width="2" height="8"/><rect x="5" y="8" width="2" height="8"/><rect x="8" y="9" width="8" height="2"/><rect x="8" y="13" width="8" height="2"/></g></svg>`;
+      break;
+    case 'linen':
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="6" height="6"><path d="M0 .5H6M0 3.5H6" stroke="${ink(0.05)}" stroke-width=".7"/><path d="M.5 0V6M3.5 0V6" stroke="${ink(0.035)}" stroke-width=".6"/></svg>`;
+      break;
+    case 'grain':
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="180" height="180"><filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.85" numOctaves="3" stitchTiles="stitch"/><feColorMatrix values="0 0 0 0 ${mode === 'dark' ? 1 : 0.2} 0 0 0 0 ${mode === 'dark' ? 1 : 0.15} 0 0 0 0 ${mode === 'dark' ? 1 : 0.1} 0 0 0 ${(0.11 * k).toFixed(3)} 0"/></filter><rect width="100%" height="100%" filter="url(#n)"/></svg>`;
+      break;
+    case 'grid':
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="26" height="26"><path d="M0 .5H26M.5 0V26" stroke="${ink(0.06)}"/></svg>`;
+      break;
+    case 'dots':
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14"><circle cx="7" cy="7" r="1.1" fill="${ink(0.09)}"/></svg>`;
+      break;
+    case 'carbon':
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10"><path d="M0 0h5v5H0zM5 5h5v5H5z" fill="${ink(0.05)}"/><path d="M0 0h5L0 5zM5 5h5L5 10z" fill="${ink(0.035)}"/></svg>`;
+      break;
+    case 'waves':
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="48" height="20"><path d="M0 10Q12 1 24 10T48 10" fill="none" stroke="${ink(0.07)}" stroke-width="1.3"/></svg>`;
+      break;
+    case 'palms':
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="190" height="190"><path d="${palmsPath()}" fill="none" stroke="${ink(0.06)}" stroke-width="1.6" stroke-linecap="round"/></svg>`;
+      break;
+  }
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+}
+
+/** The texture in use: the theme's own unless one is picked. */
+export function resolvedTexture(a: Pick<Settings['appearance'], 'texture' | 'preset'> | undefined): Exclude<Texture, 'theme'> {
+  const t = a?.texture ?? 'theme';
+  return t === 'theme' ? (PRESETS.find((p) => p.id === (a?.preset ?? 'fabrics'))?.texture ?? 'none') : t;
+}
 
 function hexToRgb(hex: string): [number, number, number] {
   const n = parseInt(hex.slice(1), 16);
@@ -53,7 +134,11 @@ export function useAppearance(settings: Settings | undefined) {
       root.dataset.preset = a?.preset ?? 'fabrics';
       root.dataset.density = a?.density ?? 'comfortable';
       root.dataset.radius = a?.radius ?? 'rounded';
-      root.dataset.texture = a?.texture ?? 'none';
+      const texture = resolvedTexture(a);
+      root.dataset.texture = texture;
+      const img = textureImage(texture, mode, a?.textureStrength);
+      if (img) root.style.setProperty('--texture', img);
+      else root.style.removeProperty('--texture');
       root.dataset.motion = a?.reduceMotion ? 'reduce' : 'full';
       root.style.zoom = String(a?.fontScale ?? 1);
       const accent = a?.accent;
@@ -73,7 +158,7 @@ export function useAppearance(settings: Settings | undefined) {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, [theme, a?.preset, a?.density, a?.radius, a?.texture, a?.reduceMotion, a?.fontScale, a?.accent]);
+  }, [theme, a?.preset, a?.density, a?.radius, a?.texture, a?.textureStrength, a?.reduceMotion, a?.fontScale, a?.accent]);
 }
 
 /** The FBRX start-up sound (from the FBRX intro), like a computer's chime when it boots. */

@@ -276,7 +276,7 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       timeoutMs: 600_000,
       inputSchema: { type: 'object', properties: {} },
       async run() {
-        const s = await d.net.scan(`tool-${Date.now()}`, undefined, 'Scan by Fabric');
+        const s = await d.net.scan(`tool-${Date.now()}`, undefined, 'Scan by Fabrix');
         return {
           output: `${s.devices.length} devices on ${s.subnet}:\n${s.devices.map((x) => `- ${x.ip} ${x.typeLabel}${x.name ? ` "${x.name}"` : ''}${x.vendor ? ` (${x.vendor})` : ''}${x.ports.length ? ` ports ${x.ports.join(',')}` : ''}`).join('\n')}`,
           data: s,

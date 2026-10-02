@@ -3,10 +3,10 @@ import { existsSync } from 'node:fs';
 import { open, readdir, stat, writeFile } from 'node:fs/promises';
 import { homedir } from 'node:os';
 import { basename, dirname, extname, isAbsolute, join, resolve } from 'node:path';
-import { newId, type FileEntry, type FilePreview } from '@fbrx/shared';
+import { newId, type FileEntry, type FilePreview, type TerminalShell } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
-import { IS_WIN } from '../windows/ps';
+import { exec, IS_WIN } from '../windows/ps';
 import { runShell } from '../tools/builtin/shell-tools';
 
 const TEXT_EXT = new Set(
@@ -155,18 +155,53 @@ export class FileBrowser {
   }
 }
 
+/** PowerShell 7 lives here when installed from the MSI, the Microsoft Store or winget. */
+function pwshCandidates(): string[] {
+  const pf = process.env.ProgramFiles ?? 'C:\\Program Files';
+  const out = [join(pf, 'PowerShell', '7', 'pwsh.exe'), join(pf, 'PowerShell', '7-preview', 'pwsh.exe')];
+  if (process.env.LOCALAPPDATA) out.push(join(process.env.LOCALAPPDATA, 'Microsoft', 'WindowsApps', 'pwsh.exe'));
+  return out;
+}
+
+async function psVersion(file: string): Promise<string | null> {
+  const r = await exec(file, ['-NoProfile', '-NonInteractive', '-Command', '$PSVersionTable.PSVersion.ToString()'], { timeoutMs: 15_000 }).catch(() => null);
+  const v = r?.out.trim().split(/\r?\n/).pop() ?? '';
+  return /^\d+\.\d+/.test(v) ? v : null;
+}
+
 /** Interactive command sessions for the built-in terminal page (output streams as `terminal.output` events). */
 export class TerminalSessions {
   private readonly sessions = new Map<string, AbortController>();
+  private shellList: Promise<TerminalShell[]> | null = null;
 
   constructor(
     private readonly events: EventBus,
     private readonly defaultCwd: () => string,
   ) {}
 
-  run(command: string, cwd?: string): { sessionId: string } {
+  /** The shells on this computer: PowerShell 7 (when installed, and then the default), Windows PowerShell 5.1, Command Prompt. */
+  shells(): Promise<TerminalShell[]> {
+    this.shellList ??= (async () => {
+      if (!IS_WIN) {
+        const sh = process.env.SHELL && existsSync(process.env.SHELL) ? process.env.SHELL : '/bin/sh';
+        return [{ id: 'sh', name: basename(sh), version: null, path: sh, default: true }];
+      }
+      const out: TerminalShell[] = [];
+      const pwsh = pwshCandidates().find((p) => existsSync(p));
+      const [v7, v5] = await Promise.all([pwsh ? psVersion(pwsh) : null, psVersion('powershell.exe')]);
+      if (pwsh && v7) out.push({ id: 'pwsh', name: `PowerShell ${v7.split('.').slice(0, 2).join('.')}`, version: v7, path: pwsh, default: true });
+      out.push({ id: 'powershell', name: `Windows PowerShell ${v5 ? v5.split('.').slice(0, 2).join('.') : '5.1'}`, version: v5, path: 'powershell.exe', default: !out.length });
+      out.push({ id: 'cmd', name: 'Command Prompt', version: null, path: join(process.env.SystemRoot ?? 'C:\\Windows', 'System32', 'cmd.exe'), default: false });
+      return out;
+    })();
+    return this.shellList;
+  }
+
+  async run(command: string, cwd?: string, shellId?: TerminalShell['id']): Promise<{ sessionId: string }> {
     if (!command.trim()) throw new CoreError('INVALID_ARGUMENT', 'Enter a command');
     if (this.sessions.size >= 8) throw new CoreError('CONFLICT', 'Too many commands running; stop one first');
+    const shells = await this.shells();
+    const shell = shells.find((s) => s.id === shellId) ?? shells.find((s) => s.default) ?? shells[0];
     const dir = cwd ? expandPath(cwd) : this.defaultCwd();
     const sessionId = newId('term');
     const controller = new AbortController();
@@ -174,7 +209,7 @@ export class TerminalSessions {
     const emitChunk = (stream: 'out' | 'err', text: string) => {
       if (text) this.events.emit('terminal.output', { sessionId, stream, text });
     };
-    void runShell(command, dir, 30 * 60_000, controller.signal, (stream, text) => emitChunk(stream, text))
+    void runShell(command, dir, 30 * 60_000, controller.signal, (stream, text) => emitChunk(stream, text), shell && shell.id !== 'sh' ? { id: shell.id, path: shell.path } : undefined)
       .then((r) => this.events.emit('terminal.exit', { sessionId, code: r.timedOut ? null : r.code }))
       .catch((err) => {
         emitChunk('err', `${(err as Error).message}\n`);

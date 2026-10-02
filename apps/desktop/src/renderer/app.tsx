@@ -1,10 +1,12 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { SystemStatus } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, FBRX_MARK, Icons, Shell, Spinner, Status, useToast, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
 import { isLocked, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
 import { AgentNameContext } from './widgets';
+import { GooseOverlay, summonGoose, useKonami } from './fun';
+import { useConsoleSessions } from './consoles';
 import { DashboardPage } from './pages/dashboard';
 import { AgentPage } from './pages/agent';
 import { ApprovalsPage } from './pages/approvals';
@@ -67,7 +69,9 @@ export type Route =
   | 'backup'
   | 'fleet'
   | 'settings'
-  | 'spotlight';
+  | 'spotlight'
+  | 'goose'
+  | 'goose-overlay';
 
 /** Navigates to a page; `to` may carry a sub-path such as `notes/note_123` or `settings/appearance`. */
 export function navigate(to: string) {
@@ -131,6 +135,7 @@ export function App() {
   const { data: settings } = useCore('settings.get', undefined, ['settings.changed']);
   useAppearance(settings?.settings);
   if (route === 'spotlight') return settings ? <SpotlightView agentName={settings.settings.ai.agentName} /> : null;
+  if (route === 'goose-overlay') return <GooseOverlay />;
   return <MainApp route={route} settings={settings} />;
 }
 
@@ -161,6 +166,34 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   useEffect(() => onEvent('notification', (n) => toast[n.level === 'error' ? 'error' : n.level === 'warning' ? 'warning' : n.level === 'success' ? 'success' : 'info'](n.title, n.body)), [toast]);
+  const fun = settings?.settings.appearance.easterEggs ?? false;
+  useKonami(
+    fun,
+    useCallback(() => {
+      summonGoose();
+      toast.success('Cheat code accepted', '30 extra lives. Also, a goose.');
+    }, [toast]),
+  );
+  // Seven quick clicks on the logo: the loom spins.
+  const [weaving, setWeaving] = useState(false);
+  const logoClicks = useRef<number[]>([]);
+  const onBrandClick = () => {
+    if (!fun) return;
+    const now = Date.now();
+    logoClicks.current = [...logoClicks.current.filter((t) => now - t < 2500), now];
+    if (logoClicks.current.length >= 7) {
+      logoClicks.current = [];
+      setWeaving(true);
+      setTimeout(() => setWeaving(false), 2400);
+      toast.success('You found the loom', 'Achievement unlocked: Master Weaver.');
+    }
+  };
+  // "goose" (from Spotlight or a link) releases the goose and goes back to where you were.
+  useEffect(() => {
+    if (route !== 'goose') return;
+    summonGoose();
+    window.history.back();
+  }, [route]);
 
   if (!settings || !status) {
     return (
@@ -247,11 +280,11 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'processes':
         return <ProcessesPage />;
       case 'terminal':
-        return advanced ? <TerminalPage /> : <AdvancedOnly title="Terminal" onEnable={() => setAdvanced(true)} locked={advancedLocked} />;
+        return advanced ? <TerminalPage easterEggs={s.appearance.easterEggs} /> : <AdvancedOnly title="Terminal" onEnable={() => setAdvanced(true)} locked={advancedLocked} />;
       case 'toolbox':
-        return <ToolboxPage advanced={advanced} />;
+        return <ToolboxPage advanced={advanced} easterEggs={s.appearance.easterEggs} />;
       case 'library':
-        return <LibraryPage agentName={agentName} />;
+        return <LibraryPage agentName={agentName} advanced={advanced} />;
       case 'mesh':
         return <MeshPage />;
       case 'aicoord':
@@ -275,7 +308,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'settings':
         return <SettingsPage onRerunSetup={() => setForceOnboarding(true)} />;
       default:
-        return <DashboardPage status={status} agentName={agentName} />;
+        return <DashboardPage status={status} agentName={agentName} easterEggs={s.appearance.easterEggs} />;
     }
   })();
 
@@ -284,10 +317,12 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       {showSplash && <Splash />}
       <Shell
         brandSub={status.deviceName}
+        onBrandClick={onBrandClick}
+        brandClassName={weaving ? 'weaving' : undefined}
         nav={nav}
         active={route}
         onNavigate={(id) => navigate(id)}
-        topbar={<TopBar status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} advanced={advanced} advancedLocked={advancedLocked} onAdvanced={setAdvanced} defaultProvider={s.ai.defaultProvider} defaultModel={s.ai.defaultModel} />}
+        topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} advanced={advanced} advancedLocked={advancedLocked} onAdvanced={setAdvanced} defaultProvider={s.ai.defaultProvider} defaultModel={s.ai.defaultModel} />}
         footer={
           <span>
             v{status.version} · {status.license.edition}
@@ -303,6 +338,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
 }
 
 function TopBar({
+  route,
   status,
   agentName,
   critical,
@@ -313,6 +349,7 @@ function TopBar({
   defaultProvider,
   defaultModel,
 }: {
+  route: Route;
   status: SystemStatus;
   agentName: string;
   critical: number;
@@ -325,6 +362,8 @@ function TopBar({
 }) {
   const failing = status.services.filter((s) => s.state === 'failed');
   const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed'], 60_000);
+  const consoles = useConsoleSessions();
+  const openConsoles = (consoles.data ?? []).filter((c) => c.state === 'open').length;
   const p = providers.data?.find((x) => x.id === defaultProvider);
   const model = defaultModel || p?.defaultModel || null;
   return (
@@ -353,6 +392,12 @@ function TopBar({
         </span>
       )}
       <span className="fx-spacer" />
+      {openConsoles > 0 && route !== 'terminal' && (
+        <button className="model-pill console-pill" onClick={() => navigate('terminal/console')} title="Device consoles that are connected">
+          <span className="dot ok" aria-hidden />
+          {openConsoles} console{openConsoles > 1 ? 's' : ''}
+        </button>
+      )}
       {status.activeRuns > 0 && <Status tone="busy">{agentName} working</Status>}
       {status.pendingApprovals > 0 && (
         <Button size="sm" variant="primary" icon="shield" onClick={() => navigate('approvals')}>
@@ -374,9 +419,12 @@ function TopBar({
         <span className={`dot ${p?.available ? 'ok' : 'bad'}`} aria-hidden />
         {model ? <span className="mono">{model}</span> : <span>{p?.name ?? 'Choose a model'}</span>}
       </button>
-      <Button size="sm" variant="primary" icon="sparkles" onClick={() => navigate('agent')}>
-        Ask {agentName}
-      </Button>
+      {/* The one general "Ask" button in the app; pages only add buttons that ask about something specific. */}
+      {route !== 'agent' && (
+        <Button size="sm" variant="primary" icon="sparkles" onClick={() => navigate('agent')}>
+          Ask {agentName}
+        </Button>
+      )}
     </>
   );
 }

@@ -6,7 +6,9 @@ import * as troubleshoot from '../src/windows/troubleshoot';
 import * as updates from '../src/windows/updates';
 import * as lab from '../src/windows/lab';
 import { NetDiag } from '../src/network/netdiag';
-import { makeKernel } from './helpers';
+import { makeKernel, waitFor } from './helpers';
+import { EventBus } from '../src/events';
+import { TerminalSessions } from '../src/system/files';
 
 // Real PowerShell on a Windows machine (the CI Windows runner). Read-only checks only: nothing here changes the PC.
 describe.runIf(IS_WIN)('Windows integration', () => {
@@ -18,6 +20,31 @@ describe.runIf(IS_WIN)('Windows integration', () => {
     const rows = await psJson<{ n: number }>("1..3 | ForEach-Object { [pscustomobject]@{ n = $_ } }");
     expect(rows.map((x) => x.n)).toEqual([1, 2, 3]);
   });
+
+  it('finds the shells and runs a command in each (PowerShell 7 when installed)', async () => {
+    const events = new EventBus();
+    const term = new TerminalSessions(events, () => process.env.USERPROFILE!);
+    const shells = await term.shells();
+    const ids = shells.map((x) => x.id);
+    expect(ids).toEqual(expect.arrayContaining(['powershell', 'cmd']));
+    expect(shells.find((x) => x.id === 'powershell')!.version).toMatch(/^5\.1\./);
+    // GitHub's Windows runners have PowerShell 7: it becomes the default.
+    if (ids.includes('pwsh')) expect(shells.find((x) => x.default)!.id).toBe('pwsh');
+    const run = async (command: string, shell: 'pwsh' | 'powershell' | 'cmd') => {
+      let out = '';
+      let code: number | null | undefined;
+      const offOut = events.on('terminal.output', (e) => (out += e.text));
+      const offExit = events.on('terminal.exit', (e) => (code = e.code));
+      await term.run(command, undefined, shell);
+      await waitFor(() => code !== undefined, 30_000);
+      offOut();
+      offExit();
+      return { out: out.trim(), code };
+    };
+    expect(await run('Write-Output $PSVersionTable.PSVersion.Major', 'powershell')).toEqual({ out: '5', code: 0 });
+    if (ids.includes('pwsh')) expect(await run('Write-Output $PSVersionTable.PSVersion.Major', 'pwsh')).toEqual({ out: '7', code: 0 });
+    expect((await run('echo %OS% & ver', 'cmd')).out).toContain('Windows_NT');
+  }, 90_000);
 
   it('reads drives, cleanup sizes and a folder analysis', async () => {
     const drives = await storage.drives();

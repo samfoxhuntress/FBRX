@@ -40,6 +40,9 @@ import { FileBrowser, TerminalSessions } from './system/files';
 import { Spotlight } from './spotlight/spotlight';
 import { AlertEngine } from './alerts/alert-engine';
 import { NetDiag } from './network/netdiag';
+import { VendorDb } from './network/vendors';
+import { DeviceConsoles } from './network/device-console';
+import { deviceConsoleTools } from './tools/builtin/device-console-tools';
 import { MeshService } from './mesh/mesh-service';
 import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
 import { AiCoordination } from './aicoord/aicoord';
@@ -119,6 +122,8 @@ export class Kernel {
   readonly spotlight: Spotlight;
   readonly alerts: AlertEngine;
   readonly net: NetDiag;
+  readonly vendors: VendorDb;
+  readonly consoles: DeviceConsoles;
   readonly mesh: MeshService;
   readonly aicoord: AiCoordination;
   private readonly api: Record<string, (p: any, ctx: CallContext) => unknown>;
@@ -280,8 +285,22 @@ export class Kernel {
       workspace: this.workspace,
       webSearch: () => this.settings.get().spotlight.webSearch,
       fileSearch: () => this.settings.get().spotlight.fileSearch,
+      easterEggs: () => this.settings.get().appearance.easterEggs,
     });
-    this.net = new NetDiag({ db: this.db, events: this.events, ouiFile: join(this.paths.root, 'oui-vendors.txt'), internet: () => this.internetAllowed() });
+    this.vendors = new VendorDb({
+      builtinFile: this.platform.vendorDbFile ?? null,
+      userFile: join(this.paths.root, 'oui-vendors.tsv.gz'),
+      legacyFile: join(this.paths.root, 'oui-vendors.txt'),
+      internet: () => this.internetAllowed(),
+    });
+    this.net = new NetDiag({ db: this.db, events: this.events, vendors: this.vendors, internet: () => this.internetAllowed() });
+    this.consoles = new DeviceConsoles({
+      events: this.events,
+      meta: this.meta,
+      vault: this.vault,
+      home: () => this.platform.specialDirs().home,
+      audit: (action, outcome, details) => this.audit.append({ category: 'console', action, actor: 'user', outcome, details }),
+    });
     this.mesh = new MeshService(this.db, this.events, L('mesh'), {
       appVersion: this.platform.appVersion,
       deviceName: () => this.deviceName(),
@@ -487,6 +506,7 @@ export class Kernel {
           ...memoryTools(this.db),
           ...fbrxTools({ status: () => this.status(), recentAudit: (n) => this.audit.query({ limit: n }) }),
           ...workspaceTools(this.workspace),
+          ...deviceConsoleTools(this.consoles),
           ...pcTools({ monitor: this.monitor, net: this.net, alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined) }),
         ]);
       },
@@ -635,6 +655,7 @@ export class Kernel {
     }
     this.started = false;
     this.terminal.killAll();
+    this.consoles.closeAll();
     this.spotlight.dispose();
     await this.services.stopAll();
     for (const d of this.disposers) d();

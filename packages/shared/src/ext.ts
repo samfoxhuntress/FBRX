@@ -423,6 +423,8 @@ export interface LanDevice {
   mac: string | null;
   vendor: string | null;
   name: string | null;
+  /** Model reported over UPnP or Bonjour, when the device tells. */
+  model?: string | null;
   type: string;
   typeLabel: string;
   ports: number[];
@@ -431,6 +433,86 @@ export interface LanDevice {
   isGateway: boolean;
   isSelf: boolean;
 }
+// ------------------------------------------------------------------------------------- MAC vendors
+
+export interface VendorDbInfo {
+  entries: number;
+  source: 'built-in' | 'downloaded' | 'none';
+  /** When the IEEE list in use was published or downloaded. */
+  updatedAt: string | null;
+}
+export interface MacLookup {
+  mac: string;
+  vendor: string | null;
+  /** Private (randomized by a phone or laptop), multicast or a normal maker-assigned address. */
+  kind: 'global' | 'private' | 'multicast' | 'invalid';
+  /** IEEE block size of the match: MA-L (24-bit), MA-M (28-bit) or MA-S (36-bit). */
+  block: 'MA-L' | 'MA-M' | 'MA-S' | null;
+  prefix: string | null;
+}
+
+// ----------------------------------------------------------------------------------- device console
+
+export type ConsoleProtocol = 'ssh' | 'telnet';
+export interface ConsoleSession {
+  id: string;
+  host: string;
+  port: number;
+  protocol: ConsoleProtocol;
+  username: string | null;
+  label: string;
+  /** Device guide in use (see DEVICE_PROFILES). */
+  profileId: string | null;
+  vendor: string | null;
+  state: 'connecting' | 'open' | 'closed';
+  openedAt: string;
+  closedAt: string | null;
+  reason: string | null;
+  /** SSH host key fingerprint (SHA256:…). */
+  fingerprint: string | null;
+}
+export interface ConsoleConnectInput {
+  host: string;
+  port?: number;
+  protocol: ConsoleProtocol;
+  username?: string;
+  password?: string;
+  /** Use the password saved for this host and user. */
+  useSaved?: boolean;
+  /** Save the password (encrypted in the FBRX vault) after a successful login. */
+  remember?: boolean;
+  /** Allow older SSH algorithms (SHA-1 key exchange, CBC ciphers) for old firmware. */
+  legacy?: boolean;
+  /** The host key fingerprint the person confirmed. */
+  trustFingerprint?: string;
+  cols?: number;
+  rows?: number;
+  profileId?: string;
+  vendor?: string;
+  label?: string;
+}
+export type ConsoleConnectResult =
+  | { session: ConsoleSession }
+  | { hostKey: { host: string; port: number; fingerprint: string; keyType: string; status: 'new' | 'changed'; previous: string | null } };
+export interface ConsoleLogin {
+  host: string;
+  port: number;
+  protocol: ConsoleProtocol;
+  username: string;
+  savedAt: string;
+}
+
+// ---------------------------------------------------------------------------------- terminal shells
+
+export interface TerminalShell {
+  id: 'pwsh' | 'powershell' | 'cmd' | 'sh';
+  name: string;
+  version: string | null;
+  path: string;
+  /** Used when the person has not picked one: PowerShell 7 when installed. */
+  default: boolean;
+}
+
 export interface LanScan {
   id: string;
   subnet: string;
@@ -619,8 +701,9 @@ export interface ExtMethods {
   'files.write': (p: { path: string; content: string }) => Ok;
   'files.open': (p: { path: string }) => Ok;
   'files.search': (p: { root: string; pattern: string }) => { results: FileEntry[] };
-  'terminal.run': (p: { command: string; cwd?: string }) => { sessionId: string };
+  'terminal.run': (p: { command: string; cwd?: string; shell?: TerminalShell['id'] }) => { sessionId: string };
   'terminal.kill': (p: { sessionId: string }) => { killed: boolean };
+  'terminal.shells': () => TerminalShell[];
 
   'spotlight.query': (p: { q: string }) => SpotlightItem[];
   'spotlight.files': (p: { q: string }) => SpotlightItem[];
@@ -700,6 +783,19 @@ export interface ExtMethods {
   'net.adapters': () => NetAdapter[];
   'net.setIp': (p: { alias: string; mode: 'dhcp' | 'static' | 'secondary' | 'removeSecondary'; ip?: string; prefix?: number | string; gateway?: string; dns?: string[] }) => ElevatedResult;
   'net.ssh': (p: { host: string; user?: string; port?: number }) => Ok;
+  'net.vendorInfo': () => VendorDbInfo;
+  'net.vendorUpdate': () => VendorDbInfo;
+  'net.macLookup': (p: { mac: string }) => MacLookup;
+
+  'console.connect': (p: ConsoleConnectInput) => ConsoleConnectResult;
+  'console.write': (p: { id: string; data: string }) => Ok;
+  'console.resize': (p: { id: string; cols: number; rows: number }) => Ok;
+  'console.close': (p: { id: string }) => Ok;
+  'console.list': () => ConsoleSession[];
+  'console.transcript': (p: { id: string }) => { text: string };
+  'console.logins': () => ConsoleLogin[];
+  'console.forgetLogin': (p: { host: string; port: number; username: string }) => Ok;
+  'console.forgetHostKey': (p: { host: string; port: number }) => Ok;
 
   'mesh.status': () => MeshStatus;
   'mesh.setEnabled': (p: { enabled: boolean }) => MeshStatus;
@@ -728,6 +824,8 @@ export interface ExtEvents {
   'sysinfo.live': SystemLive;
   'terminal.output': { sessionId: string; stream: 'out' | 'err'; text: string };
   'terminal.exit': { sessionId: string; code: number | null };
+  'console.data': { id: string; data: string };
+  'console.changed': ConsoleSession;
   'alerts.new': AlertItem;
   /** Unread counts after any inbox change (new, read, deleted). */
   'alerts.changed': { unread: number; critical: number };
@@ -766,6 +864,16 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'net.printerAction',
   'net.exportCsv',
   'net.ssh',
+  'net.vendorUpdate',
+  'console.connect',
+  'console.write',
+  'console.resize',
+  'console.close',
+  'console.list',
+  'console.transcript',
+  'console.logins',
+  'console.forgetLogin',
+  'console.forgetHostKey',
   'mesh.setEnabled',
   'mesh.startPairing',
   'mesh.pair',

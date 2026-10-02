@@ -362,7 +362,7 @@ $bs=@(Get-WinEvent -FilterHashtable @{LogName='System'; Id=1001; ProviderName='M
     } else this.lastThreat ??= '0';
     for (const name of [].concat(j.firewall ?? [])) void this.fire('firewall_off', `Firewall is off (${name} profile)`, 'Turn Windows Firewall back on in Security → Firewall.', { key: name });
     for (const p of [].concat(j.printers ?? []) as Array<{ name: string; status: string }>) void this.fire('printer_error', `Printer "${p.name}" needs attention`, `Status: ${p.status}. Open Network Center → Printers.`, { key: p.name });
-    for (const c of [].concat(j.crashes ?? []) as Array<{ app: string; time: string }>) void this.fire('crash', `${c.app} crashed`, 'Open Bug catcher to investigate with Fabric.', { key: c.time });
+    for (const c of [].concat(j.crashes ?? []) as Array<{ app: string; time: string }>) void this.fire('crash', `${c.app} crashed`, 'Open Bug catcher to investigate with Fabrix.', { key: c.time });
     if (j.bsod) void this.fire('crash', 'Windows recovered from a stop error (blue screen)', 'Open Bug catcher for the crash details.', { key: 'bsod', severity: 'critical' });
   }
 }

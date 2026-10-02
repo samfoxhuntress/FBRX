@@ -11,9 +11,9 @@ export const FBRX_MARK = { size: mark.size, frame: { x: inset, y: inset, side, r
  * The FBRX logo: a rounded frame around the stacked letters FB / RX, in the current text color. `tile` puts it on
  * its black square as in the app icon.
  */
-export function FbrxMark({ size = 30, tile = false, className, style, title = 'FBRX' }: { size?: number; tile?: boolean; className?: string; style?: CSSProperties; title?: string }) {
+export function FbrxMark({ size = 30, tile = false, className, style, title = 'FBRX', onClick }: { size?: number; tile?: boolean; className?: string; style?: CSSProperties; title?: string; onClick?: () => void }) {
   return (
-    <svg className={className} style={style} width={size} height={size} viewBox={`0 0 ${mark.size} ${mark.size}`} role="img" aria-label={title}>
+    <svg className={className} style={style} onClick={onClick} width={size} height={size} viewBox={`0 0 ${mark.size} ${mark.size}`} role="img" aria-label={title}>
       {tile && <rect width={mark.size} height={mark.size} rx={radius + stroke / 2} fill="#0a0a0a" />}
       <rect x={inset} y={inset} width={side} height={side} rx={radius} fill="none" stroke={tile ? '#fff' : 'currentColor'} strokeWidth={stroke} />
       <path d={mark.letters} fill={tile ? '#fff' : 'currentColor'} fillRule="evenodd" />

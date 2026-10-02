@@ -1,11 +1,12 @@
 import { useState } from 'react';
-import type { DeepPartial, Settings } from '@fbrx/shared';
+import type { DeepPartial, Settings, Texture } from '@fbrx/shared';
 import { UPDATE_CHANNELS } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { routeArg } from '../app';
-import { PRESETS, playStartupSound, resolvedMode } from '../theme';
+import { PRESETS, TEXTURE_NAMES, playStartupSound, resolvedMode, resolvedTexture, textureImage } from '../theme';
+import { summonGoose } from '../fun';
 import { AskButton } from '../widgets';
 
 function Locked({ show }: { show: boolean }) {
@@ -172,11 +173,12 @@ function Appearance() {
           </Field>
           <div className="swatches">
             {PRESETS.map((p) => {
-              const [page, side, accent] = mode === 'dark' ? p.dark : p.light;
+              const [page, side, accent, glow] = mode === 'dark' ? p.dark : p.light;
+              const tex = textureImage(p.texture, mode, 'bold');
               return (
                 <button key={p.id} className={`swatch${a.preset === p.id ? ' selected' : ''}`} disabled={L('appearance.preset')} onClick={() => void patch({ appearance: { preset: p.id } })} aria-pressed={a.preset === p.id}>
                   <div className="swatch-preview">
-                    <div style={{ background: side }} />
+                    <div style={{ background: [tex, glow ? `linear-gradient(170deg, color-mix(in srgb, ${glow} 45%, ${side}), ${side} 75%)` : side].filter(Boolean).join(', ') }} />
                     <div style={{ background: page }}>
                       <div className="swatch-bar" style={{ background: accent, width: '70%' }} />
                       <div className="swatch-bar" style={{ background: mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)', width: '90%' }} />
@@ -197,12 +199,28 @@ function Appearance() {
           </Field>
         </div>
       </Card>
+      <Card title="Texture" subtitle="A woven, grainy or patterned finish on the sidebar, top bar and page. Each theme has its own.">
+        <div className="fx-form">
+          <div className="tex-tiles">
+            {(['theme', ...Object.keys(TEXTURE_NAMES)] as Texture[]).map((t) => {
+              const shown = t === 'theme' ? resolvedTexture({ texture: 'theme', preset: a.preset }) : t;
+              const img = textureImage(shown, mode, 'bold');
+              return (
+                <button key={t} className={`tex-tile${a.texture === t ? ' selected' : ''}`} disabled={L('appearance.texture')} aria-pressed={a.texture === t} onClick={() => void patch({ appearance: { texture: t } })}>
+                  <span className="tex-tile-preview" style={{ backgroundImage: img ?? 'none', backgroundSize: shown === 'palms' ? '96px 96px' : undefined }} />
+                  <span className="tex-tile-label">{t === 'theme' ? `Theme's own (${TEXTURE_NAMES[shown]})` : TEXTURE_NAMES[t]}</span>
+                </button>
+              );
+            })}
+          </div>
+          <Field label="Strength">{seg(a.textureStrength, [{ value: 'subtle', label: 'Subtle' }, { value: 'medium', label: 'Medium' }, { value: 'bold', label: 'Bold' }], (v) => void patch({ appearance: { textureStrength: v } }), resolvedTexture(a) === 'none')}</Field>
+        </div>
+      </Card>
       <Grid cols={2}>
         <Card title="Layout">
           <div className="fx-form">
             <Field label="Density">{seg(a.density, [{ value: 'compact', label: 'Compact' }, { value: 'comfortable', label: 'Comfortable' }, { value: 'spacious', label: 'Spacious' }], (v) => void patch({ appearance: { density: v } }))}</Field>
             <Field label="Corners">{seg(a.radius, [{ value: 'sharp', label: 'Sharp' }, { value: 'rounded', label: 'Rounded' }, { value: 'soft', label: 'Soft' }], (v) => void patch({ appearance: { radius: v } }))}</Field>
-            <Field label="Background texture">{seg(a.texture, [{ value: 'none', label: 'None' }, { value: 'weave', label: 'Weave' }, { value: 'grain', label: 'Grain' }, { value: 'grid', label: 'Grid' }], (v) => void patch({ appearance: { texture: v } }))}</Field>
             <Field label={`Text and interface size: ${Math.round(a.fontScale * 100)}%`}>
               <input type="range" min={0.85} max={1.3} step={0.05} value={a.fontScale} onChange={(e) => void patch({ appearance: { fontScale: Number(e.target.value) } })} />
             </Field>
@@ -221,6 +239,20 @@ function Appearance() {
           </div>
         </Card>
       </Grid>
+      <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and the Silly Goose. Nothing here touches your files or settings.">
+        <div className="fx-form">
+          <Toggle checked={a.easterEggs} disabled={L('appearance.easterEggs')} onChange={(v) => void patch({ appearance: { easterEggs: v } })} label="Easter eggs and jokes" />
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+            <Toggle checked={a.gooseVisits} disabled={!a.easterEggs || L('appearance.gooseVisits')} onChange={(v) => void patch({ appearance: { gooseVisits: v } })} label="Let the goose drop by now and then" />
+            <Button size="sm" icon="feather" disabled={!a.easterEggs} onClick={summonGoose}>
+              Release the goose
+            </Button>
+          </div>
+          <p className="fx-muted" style={{ margin: 0, fontSize: 12.5 }}>
+            The goose waddles across your screen for about a minute and a half, honks, tracks a little mud, borrows your mouse pointer and leaves notes. Clicks go straight through it to your apps. Click the goose three times, or choose Shoo the goose in the tray menu, to send it home. Other surprises are hidden around the app.
+          </p>
+        </div>
+      </Card>
     </>
   );
 }
@@ -444,6 +476,7 @@ function Logs() {
             ['Started', formatDate(status.data?.startedAt)],
           ]}
         />
+        <p className="fx-muted" style={{ margin: '10px 0 0', fontSize: 12.5, fontStyle: 'italic' }}>Woven from thread, coffee and one very determined goose.</p>
       </Card>
       <Card
         title="Logs"

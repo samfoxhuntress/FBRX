@@ -96,7 +96,7 @@ export function askAgent(prompt: string, context?: unknown): void {
 }
 
 /** The agent's name for buttons deep in the page tree (provided by the main app). */
-export const AgentNameContext = createContext('Fabric');
+export const AgentNameContext = createContext('Fabrix');
 
 /** A sparkle button that hands an item to the agent for analysis. */
 export function AskButton({ prompt, context, label = 'Analyze', iconOnly = false, variant }: { prompt: string; context?: unknown; label?: string; iconOnly?: boolean; variant?: 'primary' | 'ghost' }) {

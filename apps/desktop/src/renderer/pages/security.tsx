@@ -68,7 +68,7 @@ function Overview({ go }: { go: (t: Tab) => void }) {
         </div>
       </Card>
       {(active.length > 0 || fwOff.length > 0 || (d && !d.realtime)) && (
-        <Callout tone="critical" title="Your protection needs attention" actions={<Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent('Check my security status (Defender, firewall, threats) and tell me exactly what to do to fix any problem.')}`)}>Ask {agent}</Button>}>
+        <Callout tone="critical" title="Your protection needs attention" actions={<Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent('Check my security status (Defender, firewall, threats) and tell me exactly what to do to fix any problem.')}`)}>Fix it with {agent}</Button>}>
           {[d && !d.realtime && 'Real-time protection is off.', fwOff.length && `Firewall is off for ${fwOff.map((p) => p.name).join(', ')}.`, active.length && `${active.length} active threat(s).`].filter(Boolean).join(' ')}{' '}
           {active.length > 0 && <a href="#" onClick={(e) => (e.preventDefault(), go('threats'))}>See threats</a>}
         </Callout>

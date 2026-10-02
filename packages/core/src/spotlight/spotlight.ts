@@ -217,7 +217,7 @@ const SYSTEM: Array<[string, SystemCommand, string, boolean]> = [
 /** FBRX pages (route, title, keywords). */
 export const PAGES: Array<[string, string, string]> = [
   ['dashboard', 'Dashboard', 'home overview system health'],
-  ['agent', 'Fabric agent', 'ai chat assistant ask'],
+  ['agent', 'Fabrix agent', 'ai chat assistant ask'],
   ['tasks', 'Tasks', 'todo board kanban'],
   ['notes', 'Notes', 'notes notebook'],
   ['projects', 'Projects', 'project milestones'],
@@ -282,7 +282,7 @@ const HISTORY_KEY = 'spotlight.history';
 
 /**
  * Spotlight: one search box for apps, files, FBRX pages, workspace items, Windows settings, system commands,
- * calculator, unit conversion, the web and Fabric.
+ * calculator, unit conversion, the web and Fabrix.
  */
 export class Spotlight {
   private apps: AppEntry[] = [];
@@ -300,6 +300,8 @@ export class Spotlight {
       workspace: WorkspaceStore;
       webSearch: () => string;
       fileSearch: () => boolean;
+      /** Fun extras on (Settings → Appearance): a few easter-egg answers. */
+      easterEggs?: () => boolean;
     },
   ) {}
 
@@ -534,12 +536,15 @@ while ($true) {
         .map((h) => ({ ...h.item, kind: 'recent' as const }));
       return [
         ...recent,
-        { id: 'page:agent', kind: 'page', title: 'Ask Fabric anything', subtitle: 'Open the agent', action: { type: 'nav', route: 'agent' }, score: 0 },
+        { id: 'page:agent', kind: 'page', title: 'Ask Fabrix anything', subtitle: 'Open the agent', action: { type: 'nav', route: 'agent' }, score: 0 },
         { id: 'page:network', kind: 'page', title: 'Network Center', subtitle: 'Trace route, speed test, devices, printers', action: { type: 'nav', route: 'network' }, score: 0 },
         { id: 'page:tasks', kind: 'page', title: 'Tasks', subtitle: 'What is on your plate', action: { type: 'nav', route: 'tasks' }, score: 0 },
       ];
     }
     const out: SpotlightItem[] = [];
+    if (this.d.easterEggs?.() && /^(honk|goose|silly goose|release the goose|untitled goose)$/i.test(q)) {
+      out.push({ id: 'egg:goose', kind: 'command', title: 'Release the goose', subtitle: 'You were warned. Honk.', action: { type: 'nav', route: 'goose' }, score: 500 });
+    }
     const c = calc(q.replace(/^=/, ''));
     if (c != null) out.push({ id: 'calc', kind: 'calc', title: `= ${fmtNum(c)}`, subtitle: `${q} · Enter to copy`, action: { type: 'copy', text: String(+c.toPrecision(12)) }, score: 200 });
     const conv = convert(q);
@@ -587,7 +592,7 @@ while ($true) {
     out.sort((a, b) => b.score - a.score);
     const engine = this.d.webSearch();
     out.push(
-      { id: 'ask', kind: 'ask', title: `Ask Fabric: “${q}”`, subtitle: 'Tab for a quick answer · Enter to open the agent', action: { type: 'ask', prompt: q }, score: 1 },
+      { id: 'ask', kind: 'ask', title: `Ask Fabrix: “${q}”`, subtitle: 'Tab for a quick answer · Enter to open the agent', action: { type: 'ask', prompt: q }, score: 1 },
       { id: 'web', kind: 'web', title: `Search the web for “${q}”`, subtitle: engine[0].toUpperCase() + engine.slice(1), action: { type: 'url', url: (WEB[engine] ?? WEB.google) + encodeURIComponent(q) }, score: 0 },
     );
     return out.slice(0, 40);

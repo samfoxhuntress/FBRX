@@ -107,11 +107,12 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return { results: await k.files.search(guardPath(q.root, ctx), q.pattern) };
     },
     'terminal.run': (p) => {
-      const q = z.object({ command: z.string().min(1).max(10_000), cwd: z.string().optional() }).parse(p);
-      k.audit.append({ category: 'terminal', action: 'run', actor: 'user', outcome: 'info', details: { command: q.command.slice(0, 500) } });
-      return k.terminal.run(q.command, q.cwd);
+      const q = z.object({ command: z.string().min(1).max(10_000), cwd: z.string().optional(), shell: z.enum(['pwsh', 'powershell', 'cmd', 'sh']).optional() }).parse(p);
+      k.audit.append({ category: 'terminal', action: 'run', actor: 'user', outcome: 'info', details: { command: q.command.slice(0, 500), shell: q.shell ?? 'default' } });
+      return k.terminal.run(q.command, q.cwd, q.shell);
     },
     'terminal.kill': (p) => ({ killed: k.terminal.kill(z.object({ sessionId: z.string() }).parse(p).sessionId) }),
+    'terminal.shells': () => k.terminal.shells(),
 
     // -------------------------------------------------------------------------------------- spotlight
     'spotlight.query': (p) => k.spotlight.query(z.object({ q: z.string().max(500) }).parse(p).q),
@@ -325,6 +326,59 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'net.ssh': (p) => {
       const q = z.object({ host: z.string().min(1).max(253), user: z.string().max(64).optional(), port: z.number().int().optional() }).parse(p);
       k.net.ssh(q.host, q.user, q.port);
+      return { ok: true };
+    },
+    'net.vendorInfo': () => k.vendors.info(),
+    'net.vendorUpdate': () => k.vendors.update(),
+    'net.macLookup': (p) => k.vendors.lookup(z.object({ mac: z.string().min(1).max(64) }).parse(p).mac),
+
+    // -------------------------------------------------------------------------------- device console
+    'console.connect': (p) =>
+      k.consoles.connect(
+        z
+          .object({
+            host: z.string().min(1).max(253),
+            port: z.number().int().min(1).max(65535).optional(),
+            protocol: z.enum(['ssh', 'telnet']),
+            username: z.string().max(64).optional(),
+            password: z.string().max(1024).optional(),
+            useSaved: z.boolean().optional(),
+            remember: z.boolean().optional(),
+            legacy: z.boolean().optional(),
+            trustFingerprint: z.string().max(200).optional(),
+            cols: z.number().int().min(20).max(500).optional(),
+            rows: z.number().int().min(5).max(200).optional(),
+            profileId: z.string().max(40).optional(),
+            vendor: z.string().max(200).optional(),
+            label: z.string().max(200).optional(),
+          })
+          .parse(p),
+      ),
+    'console.write': (p) => {
+      const q = z.object({ id: z.string(), data: z.string().max(100_000) }).parse(p);
+      k.consoles.write(q.id, q.data);
+      return { ok: true };
+    },
+    'console.resize': (p) => {
+      const q = z.object({ id: z.string(), cols: z.number().int(), rows: z.number().int() }).parse(p);
+      k.consoles.resize(q.id, q.cols, q.rows);
+      return { ok: true };
+    },
+    'console.close': (p) => {
+      k.consoles.close(Id.parse(p).id);
+      return { ok: true };
+    },
+    'console.list': () => k.consoles.list(),
+    'console.transcript': (p) => ({ text: k.consoles.transcript(Id.parse(p).id) }),
+    'console.logins': () => k.consoles.logins(),
+    'console.forgetLogin': (p) => {
+      const q = z.object({ host: z.string().max(253), port: z.number().int(), username: z.string().max(64) }).parse(p);
+      k.consoles.forgetLogin(q.host, q.port, q.username);
+      return { ok: true };
+    },
+    'console.forgetHostKey': (p) => {
+      const q = z.object({ host: z.string().max(253), port: z.number().int() }).parse(p);
+      k.consoles.forgetHostKey(q.host, q.port);
       return { ok: true };
     },
 

@@ -45,7 +45,7 @@ export class SettingsService {
 
   effective(): EffectiveSettings {
     if (this.cache) return this.cache;
-    const local = this.layer('local');
+    const local = this.migrate(this.layer('local'));
     const managed = this.layer('managed');
     let merged = deepMerge(structuredClone(DEFAULT_SETTINGS), local.data);
     merged = deepMerge(merged, managed.data);
@@ -54,6 +54,19 @@ export class SettingsService {
     const settings = parsed.success ? parsed.data : SettingsSchema.parse(deepMerge(structuredClone(DEFAULT_SETTINGS), managed.data));
     this.cache = { settings, locked: managed.locked };
     return this.cache;
+  }
+
+  /** One-time upgrades of values saved by older versions. */
+  private migrate(local: { data: Record<string, unknown>; locked: string[] }) {
+    // Upgrades already applied are listed in the local layer (the schema ignores the key).
+    const done = new Set(Array.isArray(local.data._migrated) ? (local.data._migrated as string[]) : []);
+    if (done.has('agent-name-1.4')) return local;
+    const ai = local.data.ai as { agentName?: string } | undefined;
+    // The agent was called Fabric before 1.4.0; a saved old default becomes the new one (once).
+    if (ai?.agentName === 'Fabric') ai.agentName = 'Fabrix';
+    local.data._migrated = [...done, 'agent-name-1.4'];
+    this.writeLayer('local', local.data, local.locked);
+    return local;
   }
 
   get(): Settings {

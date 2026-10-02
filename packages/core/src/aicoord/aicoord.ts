@@ -29,7 +29,7 @@ interface CatalogEntry {
   api?: AiAppInfo['api'];
 }
 
-const NO_MCP = (app: string) => `${app} cannot load tools from other apps (MCP) on Windows yet. You can still ask Fabric from FBRX, and get second opinions from its model below.`;
+const NO_MCP = (app: string) => `${app} cannot load tools from other apps (MCP) on Windows yet. You can still ask Fabrix from FBRX, and get second opinions from its model below.`;
 
 const CATALOG: CatalogEntry[] = [
   {
@@ -149,7 +149,7 @@ export interface AiCoordDeps {
 
 /**
  * AI Coordination: finds other AI apps on this computer and connects the MCP-capable ones to FBRX OS, so they can
- * use FBRX tools and ask Fabric, always under FBRX governance.
+ * use FBRX tools and ask Fabrix, always under FBRX governance.
  */
 export class AiCoordination {
   constructor(private readonly d: AiCoordDeps) {}

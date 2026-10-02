@@ -1,7 +1,7 @@
 /**
  * FBRX OS MCP server (stdio). AI apps such as Claude Desktop, Claude Code, Cursor, Windsurf or VS Code start this
  * shim; it forwards to the running FBRX OS through the Local API with the agent-scoped token, so every tool call is
- * checked by FBRX governance (policy, guardian, approvals, audit) exactly like a call from Fabric itself.
+ * checked by FBRX governance (policy, guardian, approvals, audit) exactly like a call from Fabrix itself.
  *
  * Launched as `"FBRX OS.exe" fbrx-mcp.mjs` with ELECTRON_RUN_AS_NODE=1 and FBRX_DATA_DIR pointing at the data folder,
  * where FBRX keeps the current agent token (`localapi-agent.json`).
@@ -62,9 +62,9 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       return { name: wire(t.name), description: `${t.title}. ${t.description}`.slice(0, 1024), inputSchema: t.inputSchema ?? { type: 'object', properties: {} } };
     });
   out.push({
-    name: 'ask_fabric',
-    description: 'Ask Fabric, the FBRX OS agent on this computer, to do a task with all of its tools. Returns its final answer.',
-    inputSchema: { type: 'object', properties: { prompt: { type: 'string', description: 'What Fabric should do' } }, required: ['prompt'] },
+    name: 'ask_fabrix',
+    description: 'Ask Fabrix, the FBRX OS agent on this computer, to do a task with all of its tools. Returns its final answer.',
+    inputSchema: { type: 'object', properties: { prompt: { type: 'string', description: 'What Fabrix should do' } }, required: ['prompt'] },
   });
   return { tools: out };
 });
@@ -73,7 +73,8 @@ server.setRequestHandler(CallToolRequestSchema, async (req) => {
   const name = req.params.name;
   const args = (req.params.arguments ?? {}) as Record<string, unknown>;
   try {
-    if (name === 'ask_fabric') {
+    // ask_fabric: the tool's name before the agent was renamed, still used by apps that cached the tool list.
+    if (name === 'ask_fabrix' || name === 'ask_fabric') {
       const r = await api('/v1/agent/run', { prompt: String(args.prompt ?? '') });
       return { content: [{ type: 'text', text: String(r.answer ?? r.error ?? '') || '(no answer)' }], isError: r.status !== 'completed' };
     }

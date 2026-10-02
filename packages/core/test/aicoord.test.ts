@@ -27,7 +27,7 @@ describe('AI coordination', () => {
       );
       const { tools } = await client.listTools();
       const names = tools.map((t) => t.name);
-      expect(names).toEqual(expect.arrayContaining(['ask_fabric', 'time__now', 'workspace__add_task', 'fs__write_file']));
+      expect(names).toEqual(expect.arrayContaining(['ask_fabrix', 'time__now', 'workspace__add_task', 'fs__write_file']));
 
       const now = await client.callTool({ name: 'time__now', arguments: {} });
       expect(now.isError).toBe(false);

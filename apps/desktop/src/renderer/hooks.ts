@@ -63,7 +63,7 @@ export function isLocked(locked: string[] | undefined, path: string) {
 /** The agent's display name (Settings → Agent). */
 export function useAgentName(): string {
   const { data } = useCore('settings.get', undefined, ['settings.changed']);
-  return data?.settings.ai.agentName ?? 'Fabric';
+  return data?.settings.ai.agentName ?? 'Fabrix';
 }
 
 /** A unique id for correlating streamed progress events with the request that started them. */

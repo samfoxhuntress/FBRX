@@ -9,9 +9,14 @@ export interface ShellDeps {
   timeoutSeconds: () => number;
 }
 
-function shellCommand(command: string): { file: string; args: string[] } {
+export type ShellId = 'pwsh' | 'powershell' | 'cmd' | 'sh';
+
+function shellCommand(command: string, shell?: { id: ShellId; path?: string }): { file: string; args: string[]; verbatim?: boolean } {
   if (process.platform === 'win32') {
-    return { file: 'powershell.exe', args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command] };
+    // cmd.exe parses its own command line: pass it untouched rather than with Node's quoting.
+    if (shell?.id === 'cmd') return { file: shell.path || 'cmd.exe', args: ['/d', '/s', '/c', `"${command}"`], verbatim: true };
+    const file = shell?.id === 'pwsh' ? shell.path || 'pwsh.exe' : 'powershell.exe';
+    return { file, args: ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', command] };
   }
   const sh = process.env.SHELL && existsSync(process.env.SHELL) ? process.env.SHELL : '/bin/sh';
   return { file: sh, args: ['-c', command] };
@@ -23,11 +28,13 @@ export function runShell(
   timeoutMs: number,
   signal: AbortSignal,
   onChunk?: (stream: 'out' | 'err', text: string) => void,
+  shell?: { id: ShellId; path?: string },
 ): Promise<{ code: number | null; stdout: string; stderr: string; timedOut: boolean }> {
   return new Promise((resolve, reject) => {
-    const { file, args } = shellCommand(command);
+    const { file, args, verbatim } = shellCommand(command, shell);
     const child = spawn(file, args, {
       cwd,
+      windowsVerbatimArguments: verbatim,
       env: process.env,
       detached: process.platform !== 'win32',
       windowsHide: true,

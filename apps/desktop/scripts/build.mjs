@@ -20,16 +20,20 @@ if (!keys.length) console.warn('⚠ No license public key embedded (set FBRX_LIC
 if (!watch) rmSync(join(app, 'dist'), { recursive: true, force: true });
 mkdirSync(join(app, 'dist', 'main'), { recursive: true });
 execFileSync(process.execPath, [join(app, 'scripts', 'make-icons.mjs')], { stdio: 'inherit' });
+execFileSync(process.execPath, [join(app, 'scripts', 'make-vendors.mjs')], { stdio: 'inherit' });
 
+const ESM_BANNER = "import { createRequire as __fbrxRequire } from 'node:module'; import { fileURLToPath as __fbrxPath } from 'node:url'; const require = __fbrxRequire(import.meta.url); const __filename = __fbrxPath(import.meta.url); const __dirname = __fbrxPath(new URL('.', import.meta.url));";
 const common = { bundle: true, platform: 'node', target: 'node22', sourcemap: true, logLevel: 'info', legalComments: 'none' };
 await build({
   ...common,
   entryPoints: [join(app, 'src/main/index.ts')],
   outfile: join(app, 'dist/main/index.mjs'),
   format: 'esm',
-  external: ['electron', 'bufferutil', 'utf-8-validate'],
+  // ssh2's optional native speed-ups: without them it uses its pure-JavaScript code.
+  external: ['electron', 'bufferutil', 'utf-8-validate', 'cpu-features', '*.node'],
   define: { __FBRX_LICENSE_PUBKEYS__: JSON.stringify(keys), 'process.env.FBRX_APP_VERSION': JSON.stringify(pkg.version) },
-  banner: { js: "import { createRequire as __fbrxRequire } from 'node:module'; const require = __fbrxRequire(import.meta.url);" },
+  // CommonJS dependencies (ssh2 among them) expect require, __filename and __dirname.
+  banner: { js: ESM_BANNER },
 });
 await build({
   ...common,
@@ -45,7 +49,8 @@ await build({
   entryPoints: [join(root, 'packages/core/src/aicoord/mcp-shim.ts')],
   outfile: join(app, 'dist/main/fbrx-mcp.mjs'),
   format: 'esm',
-  banner: { js: "import { createRequire as __fbrxRequire } from 'node:module'; const require = __fbrxRequire(import.meta.url);" },
+  // CommonJS dependencies (ssh2 among them) expect require, __filename and __dirname.
+  banner: { js: ESM_BANNER },
 });
 // FBRX Mobile (phone web app) plus the NaCl library it uses for end-to-end encryption.
 const mobileOut = join(app, 'dist/main/mobile');

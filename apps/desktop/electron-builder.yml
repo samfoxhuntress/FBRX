@@ -17,6 +17,8 @@ asarUnpack:
   - dist/main/fbrx-mcp.mjs
   # FBRX Mobile, served to paired phones over the local network.
   - dist/main/mobile/**
+  # The IEEE MAC vendor registry, read from the unpacked folder next to the other runtime files.
+  - dist/main/oui-vendors.tsv.gz
 extraResources:
   # Bundled local AI runtime (llama.cpp). Populated by `npm run runtime:fetch` (CI does this per platform).
   # If it is missing, users can install it from the app (Local AI → Install runtime).

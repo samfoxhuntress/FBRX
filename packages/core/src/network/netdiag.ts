@@ -1,6 +1,6 @@
 import dgram from 'node:dgram';
 import dns from 'node:dns';
-import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { writeFileSync } from 'node:fs';
 import net from 'node:net';
 import { hostname, networkInterfaces } from 'node:os';
 import { spawn } from 'node:child_process';
@@ -24,6 +24,7 @@ import {
   type TraceHop,
   type WifiInfo,
 } from '@fbrx/shared';
+import type { VendorDb } from './vendors';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { Db } from '../storage/db';
@@ -91,7 +92,8 @@ async function reverse(ip: string, ms = 1500): Promise<string | null> {
   }
 }
 
-const FINGERPRINT_PORTS = [80, 443, 22, 445, 3389, 9100, 631, 515, 554, 8009, 62078, 5000, 8080, 1883, 548, 7000];
+/** 23 Telnet, 8443 UniFi / web admin, 4444 Sophos admin, 8291 MikroTik Winbox, 4118 WatchGuard SSH. */
+const FINGERPRINT_PORTS = [80, 443, 22, 23, 445, 3389, 9100, 631, 515, 554, 8009, 62078, 5000, 5001, 8080, 8443, 4444, 8291, 4118, 1883, 548, 7000];
 const MDNS_SERVICES = ['_ipp._tcp.local', '_ipps._tcp.local', '_printer._tcp.local', '_pdl-datastream._tcp.local', '_scanner._tcp.local', '_airplay._tcp.local', '_raop._tcp.local', '_googlecast._tcp.local', '_smb._tcp.local', '_device-info._tcp.local', '_companion-link._tcp.local', '_hap._tcp.local', '_spotify-connect._tcp.local', '_sonos._tcp.local', '_workstation._tcp.local', '_ssh._tcp.local', '_http._tcp.local', '_fbrx._tcp.local'];
 
 /**
@@ -99,14 +101,13 @@ const MDNS_SERVICES = ['_ipp._tcp.local', '_ipps._tcp.local', '_printer._tcp.loc
  * port fingerprinting + MAC vendor), speed test, Wi-Fi, Bluetooth, printers, DNS and adapter configuration.
  */
 export class NetDiag {
-  private oui: Map<string, string> | null = null;
   private readonly ipInfoCache = new Map<string, { org: string | null; location: string | null; name: string | null } | null>();
 
   constructor(
     private readonly d: {
       db: Db;
       events: EventBus;
-      ouiFile: string;
+      vendors: VendorDb;
       /** False when policy forbids FBRX from reaching the internet. */
       internet: () => boolean;
     },
@@ -204,49 +205,6 @@ export class NetDiag {
     return { open, ms: open ? Date.now() - t0 : null };
   }
 
-  // ------------------------------------------------------------------------------------ vendor data
-
-  private async loadOui(download: boolean): Promise<Map<string, string>> {
-    if (this.oui) return this.oui;
-    if (!existsSync(this.d.ouiFile) && download && this.d.internet()) {
-      for (const url of ['https://www.wireshark.org/download/automated/data/manuf', 'https://standards-oui.ieee.org/oui/oui.txt']) {
-        try {
-          const r = await fetch(url, { signal: AbortSignal.timeout(20_000) });
-          if (r.ok) {
-            writeFileSync(this.d.ouiFile, await r.text());
-            break;
-          }
-        } catch {
-          /* try the next mirror */
-        }
-      }
-    }
-    const map = new Map<string, string>();
-    try {
-      for (const line of readFileSync(this.d.ouiFile, 'utf8').split('\n')) {
-        let m = line.match(/^([0-9A-F]{2}[:-][0-9A-F]{2}[:-][0-9A-F]{2})\s+(\S+)\s*(.*)$/i);
-        if (m) {
-          map.set(m[1].replace(/[:-]/g, '').toUpperCase(), (m[3] || m[2]).trim());
-          continue;
-        }
-        m = line.match(/^([0-9A-F]{6})\s+\(base 16\)\s+(.*)$/i);
-        if (m) map.set(m[1].toUpperCase(), m[2].trim());
-      }
-    } catch {
-      /* no vendor database yet */
-    }
-    if (map.size) this.oui = map;
-    return map;
-  }
-
-  private vendorOf(mac: string | null): string | null {
-    if (!mac) return null;
-    const hex = mac.replace(/[^0-9a-f]/gi, '').toUpperCase();
-    if (hex.length < 6) return null;
-    if ([2, 6, 10, 14].includes(parseInt(hex[1], 16))) return 'Private (randomized) MAC';
-    return this.oui?.get(hex.slice(0, 6)) ?? null;
-  }
-
   private async arpTable(): Promise<Map<string, string>> {
     const r = IS_WIN ? await exec('arp', ['-a']) : await exec('ip', ['neigh']);
     const map = new Map<string, string>();
@@ -287,7 +245,6 @@ export class NetDiag {
         throw new CoreError('NOT_FOUND', `Cannot resolve ${target}: ${(e as NodeJS.ErrnoException).code ?? 'error'}`);
       }
     }
-    await this.loadOui(false);
     const hops: TraceHop[] = [];
     const role = (ip: string | null, idx: number): TraceHop['role'] => {
       if (!ip) return 'timeout';
@@ -328,7 +285,7 @@ export class NetDiag {
       hops.map(async (h) => {
         if (!h.ip) return;
         h.name = await reverse(h.ip);
-        if (isPrivate(h.ip)) h.vendor = this.vendorOf(arp.get(h.ip) ?? null);
+        if (isPrivate(h.ip)) h.vendor = this.d.vendors.vendorOf(arp.get(h.ip) ?? null);
         else if (!isCgnat(h.ip)) {
           const inf = await this.ipInfo(h.ip);
           if (inf) {
@@ -469,10 +426,12 @@ export class NetDiag {
     if (p.has(554)) return ['camera', 'IP camera / recorder'];
     if (p.has(3389) || (p.has(445) && !p.has(22))) return ['pc', 'Windows PC'];
     if (p.has(548) || /apple/.test(v)) return ['mac', 'Apple device'];
-    if (p.has(5000) && /synology|qnap|western digital/.test(v + n)) return ['nas', 'NAS storage'];
+    if ((p.has(5000) || p.has(5001)) && /synology|qnap|western digital/.test(v + n)) return ['nas', 'NAS storage'];
+    if (/sophos|fortinet|palo alto|sonicwall|watchguard|netgate|deciso|cyberoam/.test(v + n) || p.has(4444)) return ['firewall', 'Firewall'];
+    if (/ubiquiti|netgear|tp-link|asus|linksys|eero|cisco|aruba|hewlett packard enterprise|mikrotik|juniper|zyxel|draytek|ruckus|extreme networks|arris|technicolor|sagemcom/.test(v) || p.has(8291)) return ['network', 'Network equipment'];
     if (p.has(22)) return ['server', 'Linux / server'];
+    if (p.has(23)) return ['network', 'Network equipment (Telnet)'];
     if (/private/.test(v)) return ['phone', 'Phone or tablet (private MAC)'];
-    if (/ubiquiti|netgear|tp-link|asus|linksys|eero|cisco|aruba|mikrotik|arris|technicolor|sagemcom/.test(v)) return ['network', 'Network equipment'];
     return ['unknown', 'Unknown device'];
   }
 
@@ -483,7 +442,7 @@ export class NetDiag {
     if (!ctx.ip && !subnet) throw new CoreError('UNAVAILABLE', 'No active IPv4 network connection');
     const progress = (phase: string, done: number, total: number) => this.emit({ reqId, type: 'progress', phase, done, total });
     progress('Loading the vendor database', 0, 100);
-    await this.loadOui(true);
+    if (!this.d.vendors.info().entries && this.d.internet()) await this.d.vendors.update().catch(() => undefined);
     const range = cidrHosts(subnet || `${ctx.ip}/${Math.max(22, Math.min(30, maskToPrefix(ctx.mask) || 24))}`);
     const inRange = new Set(range.hosts);
     const targets = [...range.hosts];
@@ -522,7 +481,7 @@ export class NetDiag {
         const mac = ip === ctx.ip ? ctx.mac || null : (arpMap.get(ip) ?? null);
         const md = mdns.get(ip);
         const sd = ssdp.get(ip);
-        let vendor = this.vendorOf(mac);
+        let vendor = this.d.vendors.vendorOf(mac);
         if (!vendor && sd?.manufacturer) vendor = sd.manufacturer;
         const name = (await reverse(ip, 1200)) ?? md?.host ?? null;
         const friendly = sd?.friendlyName ?? (md ? [...md.names][0] : null) ?? null;
@@ -533,6 +492,7 @@ export class NetDiag {
           mac,
           vendor,
           name: friendly ?? name,
+          model: base.model,
           type,
           typeLabel,
           ports: base.ports,

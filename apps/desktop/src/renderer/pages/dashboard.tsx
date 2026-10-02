@@ -4,6 +4,7 @@ import { Button, Callout, Card, Empty, Grid, KeyValue, LineChart, Meter, Page, S
 import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
 import { navigate } from '../app';
+import { dashboardQuip } from '../fun';
 import { AskButton } from '../widgets';
 
 function serviceTone(state: string) {
@@ -27,7 +28,7 @@ export function useLive(): SystemLive[] {
 
 const rate = (b: number) => `${formatBytes(b)}/s`;
 
-export function DashboardPage({ status, agentName }: { status: SystemStatus; agentName: string }) {
+export function DashboardPage({ status, agentName, easterEggs }: { status: SystemStatus; agentName: string; easterEggs: boolean }) {
   const { run, busy } = useAction();
   const live = useLive();
   const cur = live[live.length - 1];
@@ -39,6 +40,7 @@ export function DashboardPage({ status, agentName }: { status: SystemStatus; age
   const aiReady = providers.data?.some((p) => p.available);
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+  const quip = easterEggs ? dashboardQuip({ uptimeSeconds: cur?.uptime ?? status.uptimeSeconds, battery: cur?.battery ?? null }) : null;
   const today = new Date().toISOString().slice(0, 10);
   const open = (tasks.data ?? []).filter((t) => t.status !== 'done');
   const due = open.filter((t) => t.due && t.due.slice(0, 10) <= today);
@@ -49,7 +51,12 @@ export function DashboardPage({ status, agentName }: { status: SystemStatus; age
   return (
     <Page
       title={greeting}
-      description={`${status.deviceName} · ${status.product} ${status.version} · up ${formatDuration(cur?.uptime ?? status.uptimeSeconds)}`}
+      description={
+        <>
+          {`${status.deviceName} · ${status.product} ${status.version} · up ${formatDuration(cur?.uptime ?? status.uptimeSeconds)}`}
+          {quip && <span className="quip">{quip}</span>}
+        </>
+      }
       actions={
         <>
           <AskButton
@@ -59,9 +66,6 @@ export function DashboardPage({ status, agentName }: { status: SystemStatus; age
           />
           <Button icon="tasks" onClick={() => navigate('tasks')}>
             Tasks
-          </Button>
-          <Button variant="primary" icon="sparkles" onClick={() => navigate('agent')}>
-            Ask {agentName}
           </Button>
         </>
       }

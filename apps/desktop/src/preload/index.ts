@@ -25,6 +25,12 @@ const api = {
   spotlightHide: () => void ipcRenderer.invoke('fbrx:spotlight', 'hide'),
   openMain: (route: string) => void ipcRenderer.invoke('fbrx:spotlight', 'open', route),
   copyText: async (text: string) => void (await ipcRenderer.invoke('fbrx:copy', text)),
+  goose: (action: string, on?: boolean) => void ipcRenderer.invoke('fbrx:goose', action, on),
+  onGoose(cb: (e: unknown) => void): () => void {
+    const h = (_e: unknown, payload: unknown) => cb(payload);
+    ipcRenderer.on('fbrx:goose', h);
+    return () => ipcRenderer.removeListener('fbrx:goose', h);
+  },
   platform: process.platform,
 };
 

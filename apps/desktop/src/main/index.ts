@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, screen, shell, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, shell, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { userInfo } from 'node:os';
@@ -24,6 +24,8 @@ let spotlight: BrowserWindow | null = null;
 let spotlightKey: string | null = null;
 let tray: Tray | null = null;
 let quitting = false;
+let goose: BrowserWindow | null = null;
+let gooseFeed: ReturnType<typeof setInterval> | null = null;
 
 /**
  * The Windows installer starts `FBRX OS.exe --fbrx-quit` before replacing files: the running copy receives it as a
@@ -179,6 +181,69 @@ function bindSpotlightKey() {
   }
 }
 
+const funAllowed = () => kernel?.settings.get().appearance.easterEggs ?? false;
+
+/**
+ * The Silly Goose: a transparent, always-on-top window over the work area of the screen FBRX is on. Mouse clicks
+ * pass through it to the apps below, except over the goose and its notes; the goose leaves by itself.
+ */
+function summonGoose() {
+  if (!funAllowed()) return;
+  if (goose) {
+    goose.webContents.send('fbrx:goose', { type: 'honk' });
+    return;
+  }
+  const display = win?.isVisible() ? screen.getDisplayMatching(win.getBounds()) : screen.getDisplayNearestPoint(screen.getCursorScreenPoint());
+  const area = display.workArea;
+  const g = new BrowserWindow({
+    ...area,
+    show: false,
+    frame: false,
+    transparent: true,
+    backgroundColor: '#00000000',
+    hasShadow: false,
+    resizable: false,
+    movable: false,
+    minimizable: false,
+    maximizable: false,
+    fullscreenable: false,
+    focusable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    title: 'Silly Goose',
+    webPreferences: {
+      preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      webSecurity: true,
+      backgroundThrottling: false,
+    },
+  });
+  goose = g;
+  g.setAlwaysOnTop(true, 'screen-saver');
+  g.setIgnoreMouseEvents(true, { forward: true });
+  g.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  g.webContents.on('will-navigate', (e) => e.preventDefault());
+  g.once('ready-to-show', () => g.showInactive());
+  // Where the pointer is, relative to the goose's window (works on every platform, unlike forwarded mouse moves).
+  gooseFeed = setInterval(() => {
+    if (g.isDestroyed()) return;
+    const p = screen.getCursorScreenPoint();
+    g.webContents.send('fbrx:goose', { type: 'cursor', x: p.x - area.x, y: p.y - area.y });
+  }, 40);
+  g.on('closed', () => {
+    if (gooseFeed) clearInterval(gooseFeed);
+    gooseFeed = null;
+    goose = null;
+    trayMenu();
+  });
+  // A goose that somehow stays too long is sent home.
+  setTimeout(() => !g.isDestroyed() && g.close(), 3 * 60_000).unref();
+  loadRenderer(g, '/goose-overlay');
+  trayMenu();
+}
+
 function trayMenu() {
   if (!tray || !kernel) return;
   const pending = kernel.approvals.size;
@@ -193,6 +258,7 @@ function trayMenu() {
     { label: 'New agent chat', click: () => showWindow('agent') },
     { label: `Spotlight${spotlightKey ? ` (${spotlightKey})` : ''}`, click: () => showSpotlight() },
     { label: pending ? `Review ${pending} pending approval${pending > 1 ? 's' : ''}` : 'No pending approvals', enabled: pending > 0, click: () => showWindow('approvals') },
+    ...(funAllowed() ? [goose ? { label: 'Shoo the goose', click: () => goose?.webContents.send('fbrx:goose', { type: 'shoo' }) } : { label: 'Release the goose', click: () => summonGoose() }] : []),
     { type: 'separator' },
     { label: 'Quit', click: () => ((quitting = true), app.quit()) },
   ];
@@ -260,6 +326,16 @@ function registerIpc() {
     return true;
   });
   ipcMain.handle('fbrx:copy', (e, text: string) => trusted(e) && typeof text === 'string' && clipboard.writeText(text.slice(0, 1_000_000)));
+  ipcMain.handle('fbrx:goose', (e, action: string, on?: boolean) => {
+    if (!trusted(e)) return false;
+    if (action === 'summon') summonGoose();
+    // Only the goose's own window may change how it takes the mouse.
+    else if (goose && e.sender === goose.webContents) {
+      if (action === 'leave') goose.close();
+      else if (action === 'interactive' || action === 'capture') goose.setIgnoreMouseEvents(!on, { forward: true });
+    }
+    return true;
+  });
 }
 
 async function boot() {
@@ -282,7 +358,11 @@ async function boot() {
   kernel = await Kernel.create({ dataDir, platform, provisioningFiles: provisioningLocations() });
   kernel.events.onAny((name, payload) => {
     win?.webContents.send('fbrx:event', name, payload);
-    if (name === 'settings.changed') bindSpotlightKey();
+    if (name === 'settings.changed') {
+      bindSpotlightKey();
+      if (!funAllowed()) goose?.close();
+      trayMenu();
+    }
     if (name === 'approval.requested' || name === 'approval.resolved' || name === 'fleet.changed' || name === 'vault.changed') trayMenu();
   });
   kernel.events.on('approval.requested', (r) => {
@@ -300,6 +380,14 @@ async function boot() {
   };
   setTimeout(checkUpdates, 15_000);
   setInterval(checkUpdates, UPDATE_CHECK_INTERVAL_MS).unref();
+  // Goose visits (Settings → Appearance → Fun extras): now and then while someone is at the computer, about once
+  // every two hours; and once on April Fools' Day.
+  setInterval(() => {
+    const a = kernel?.settings.get().appearance;
+    if (a?.easterEggs && a.gooseVisits && !goose && powerMonitor.getSystemIdleTime() < 120 && Math.random() < 1 / 12) summonGoose();
+  }, 10 * 60_000).unref();
+  const today = new Date();
+  if (today.getMonth() === 3 && today.getDate() === 1) setTimeout(summonGoose, 90_000).unref();
 }
 
 app.whenReady().then(async () => {
@@ -324,6 +412,7 @@ app.on('before-quit', () => {
   quitting = true;
   globalShortcut.unregisterAll();
   spotlight?.destroy();
+  goose?.destroy();
 });
 
 app.on('window-all-closed', () => {

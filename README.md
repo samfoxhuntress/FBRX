@@ -7,9 +7,9 @@
 
 # FBRX OS — Fabrics Operating System
 
-FBRX OS is a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabric,** that is governed
-end to end, an everyday **command center** (dashboard, tasks, notes, Spotlight, alerts, PC care, Network Center,
-your phone), plus a **control plane** and **admin console** for running it across a fleet of workstations — or
+FBRX OS is a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is governed
+end to end, an everyday **command center** (dashboard, tasks, notes, Spotlight, alerts, PC care, Network Center with SSH /
+Telnet device consoles and maker guides, your phone), plus a **control plane** and **admin console** for running it across a fleet of workstations — or
 selling it to other companies, each in its own tenant.
 
 ```

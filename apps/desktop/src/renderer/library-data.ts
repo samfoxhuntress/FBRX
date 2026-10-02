@@ -258,7 +258,7 @@ export const ARTICLES: Article[] = [
     cat: 'internet',
     t: 'See the Wi-Fi password',
     s: 'Find the password of the network you are connected to.',
-    steps: ['Settings → Network & internet → Wi-Fi → your network properties → "View Wi-Fi security key".', 'Or ask Fabric: "show the Wi-Fi password".'],
+    steps: ['Settings → Network & internet → Wi-Fi → your network properties → "View Wi-Fi security key".', 'Or ask Fabrix: "show the Wi-Fi password".'],
     open: 'ms-settings:network-wifi',
   },
   {
@@ -693,11 +693,11 @@ export const ARTICLES: Article[] = [
   {
     id: 'fbrx-fabric',
     cat: 'fbrx',
-    t: 'Ask Fabric anything',
+    t: 'Ask Fabrix anything',
     s: 'Your built-in assistant, offline by default.',
     steps: [
-      'Open Fabric from the sidebar or any "Ask Fabric" button.',
-      'Fabric runs on your PC; it asks before going online for a chat.',
+      'Open Fabrix from the sidebar or any "Ask Fabrix" button.',
+      'Fabrix runs on your PC; it asks before going online for a chat.',
       'Approve or deny each action it wants to take.',
     ],
     go: 'agent',
@@ -706,10 +706,10 @@ export const ARTICLES: Article[] = [
     id: 'fbrx-spotlight',
     cat: 'fbrx',
     t: 'Spotlight: find anything with Ctrl+K',
-    s: 'Apps, files, settings, commands and Fabric — from anywhere.',
+    s: 'Apps, files, settings, commands and Fabrix — from anywhere.',
     steps: [
       'Press <kbd>Alt</kbd>+<kbd>Space</kbd> anywhere, or <kbd>Ctrl</kbd>+<kbd>K</kbd> inside FBRX.',
-      'Type to search; press <kbd>Tab</kbd> to ask Fabric.',
+      'Type to search; press <kbd>Tab</kbd> to ask Fabrix.',
     ],
   },
   {
@@ -717,7 +717,7 @@ export const ARTICLES: Article[] = [
     cat: 'fbrx',
     t: 'Connect your other computers',
     s: 'FBRX Mesh lets your PCs talk to each other.',
-    steps: ['Mesh → Add a device → copy the join code.', 'Install FBRX on the other PC and enter the code.', 'Ask Fabric: "check disk space on all my PCs".'],
+    steps: ['Mesh → Add a device → copy the join code.', 'Install FBRX on the other PC and enter the code.', 'Ask Fabrix: "check disk space on all my PCs".'],
     go: 'mesh',
   },
   {
