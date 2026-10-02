@@ -12,6 +12,7 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 
 | Option | Choices |
 | --- | --- |
+| Look | A calm finish in the spirit of Windows 11 and macOS: the system font (Segoe UI Variable on Windows 11), rounded corners, hairline borders, soft shadows, a pill marker for the current page, and a texture that only whispers behind the menu |
 | Theme | Fabrics (amber with a light-grey gradient and a woven texture, the default), Tropical (mango orange with a hibiscus-pink glow and a hint of lagoon teal), Neon Grid (deep night blue with cyan light lines, glowing cards and a grid floor that runs to the horizon), Ember, Midnight, Graphite, Ocean, Forest, Orchid, Paper, High contrast. Each has a light and a dark version; *Mode* follows Windows or is fixed. Every theme except High contrast tints the sidebar, top bar and page with its own gradient glow, and charts use gradient area fills |
 | Accent color | Any color; text on buttons switches between dark and light ink automatically |
 | Density | Compact, comfortable, spacious |
@@ -19,7 +20,8 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 | Texture | The theme's own (weave for Fabrics, palms for Tropical, a neon grid for Neon Grid, grain for Ember, dots for Midnight, carbon fiber for Graphite, waves for Ocean, linen for Forest…), or pick none, weave (a large basket weave), linen, grain, grid (glowing lines in the accent color), dots, carbon fiber, waves or palms; subtle, medium or bold. Drawn as sharp SVG patterns in the theme's ink on the sidebar, the top bar and the page behind the cards (never behind text in cards) |
 | Text and interface size | 85–130 % |
 | Motion and start-up | Reduce motion; start-up animation (the FBRX logo stitched in) and start-up sound (from the FBRX intro, on by default, with a Listen button) |
-| Fun extras | Easter eggs and jokes (on by default), the Silly Goose's occasional visits (off by default), a *Release the goose* button and the **Trophy case** (Settings → Trophy case: a badge for every easter egg found). An organization can lock fun extras off |
+| Effects | Auto, Full or Light. Light turns off frosted glass, glows and decorative animation; Auto picks Light on computers with four or fewer processor threads or 4 GB of memory |
+| Fun extras | Hidden until unlocked (see [EASTER_EGGS.md](EASTER_EGGS.md), spoilers). Then: easter eggs and jokes, the Silly Goose's occasional visits, a *Release the goose* button and the **Trophy case**. An organization can lock fun extras off |
 
 Chart series and status colors stay on the validated design-system palette in every theme, so charts remain
 readable for color-blind users. Organizations can lock any appearance setting from the admin console.
@@ -31,6 +33,12 @@ appears: the Terminal and the virtual lab (in an *Advanced* section of the sideb
 settings, network adapter configuration, scanning a custom subnet, the bug catcher's event log view, and the
 developer tools in the Toolbox (JSON, Base64, URL, hashes, UUIDs, timestamps, regex, JWT, subnet calculator). Switch
 with the **Advanced** switch in the top bar or the *Experience* card at the top of **Settings**.
+
+### Your name
+
+FBRX asks your name during setup (or once on FBRX Glass, for computers set up before it asked) and what it should call
+you: "Samuel", called "Sam" or "Sir". FBRX Glass greets you by it and Fabrix addresses you that way. Change it in
+**Settings → General → You**.
 
 ### Ask the agent about anything
 
@@ -52,6 +60,7 @@ the dashboard health check and your tasks for the day. Long content is trimmed t
 | **Snippets** | Reusable commands and text; press Enter in Spotlight to copy one |
 | **Files** | Places and drives, folder search, previews (text and images), a plain-text editor |
 | **Processes** | Live list by CPU or memory with end-process (core Windows processes are protected) |
+| **Copy & migrate** | Copy, back up, mirror or move folders between drives, computers and network shares with **Robocopy** (Windows), **rsync** (Mac and Linux) or FBRX's own copier. Pick the folders, the tool and what to do (copy; new and changed only; mirror; move), skip clutter, retries, files at once, files and folders to leave out; the exact command is shown before it runs. **Preview** lists what would happen without changing anything; mirror and move ask first. Live output, counts and a summary, with *Explain this result*. Recipes: back up Documents, mirror to a NAS, copy a USB stick, move a project, and **Move my user folders to a new PC** (Desktop, Documents, Pictures, Music, Videos and Downloads, one after another). Guard rails refuse mirroring onto a drive root or a system or home folder, copying a folder into itself, and moving a whole drive or home folder away |
 | **Terminal** (advanced) | Runs commands with streaming output in **PowerShell 7** when it is installed, otherwise **Windows PowerShell 5.1**, or Command Prompt (picker in the header). A **reference panel** puts ready-made commands (network, system, disks, processes, repair, security, power, printing; admin-only ones marked), your snippets, the code in your notes, and each project's snippets and notes one click away; ▶ runs one (commands that change something ask first). Save any command you ran as a snippet. Start a line with `?` to ask Fabrix for a command. Every command is in the audit log. The **Device consoles** tab holds SSH and Telnet sessions (see Network Center), and **FBRX/1** is the management console for FBRX itself (below) |
 | **Toolbox** | Passwords, QR codes (guest Wi-Fi codes phones join by scanning, links, text), text tools, compare text, sizes and numbers (why a 1 TB drive shows 931 GB; decimal, hex, binary), decision maker, colors. Advanced: JSON, Base64, URL, hashes, UUIDs, timestamps, regex, JWT, subnet calculator, MAC vendor lookup, port reference (with risky ports flagged) and the command library. Every tool has *Try* examples, and the top row recommends common jobs — all offline |
 | **Library** | 61 short how-tos (Windows basics, files, Wi-Fi, security, speed, devices, troubleshooting) with buttons that open the right Windows setting or ask Fabrix. In Advanced mode, **The Lab** adds power-user how-tos (install USBs, dual boot, a malware lab, device consoles, blue screen dumps, repairs, verifying downloads) and official download pages for Windows, Linux, security distributions and power tools, plus your computer maker's driver page. Safety goggles recommended (sold separately) |
@@ -244,6 +253,23 @@ Desktop app itself.
 | `net.ping`, `net.traceroute`, `net.dns_lookup`, `net.port_check`, `net.scan_lan`, `net.check_link`, `net.speed_test` | network — offline chats ask to go online first |
 | `device_console.sessions`, `device_console.read` | read |
 | `device_console.send` | execute — asks by default, showing the exact command |
+
+## Local AI without the stutter
+
+A local model left to itself takes every processor core at normal priority, which makes the whole computer stutter
+while it thinks. **Settings → Agent → How hard a local model may work this PC** sets it:
+
+| Setting | Built-in runtime and Ollama |
+| --- | --- |
+| Light | A quarter of the processor threads, lowest priority; Ollama unloads the model after 2 minutes |
+| Balanced (default) | Half the threads, below-normal priority; Ollama keeps it for 5 minutes |
+| Full speed | All threads but one, normal priority; Ollama keeps it for 30 minutes |
+
+The built-in runtime also takes one conversation at a time (so the whole context goes to it), refuses a model that
+would not fit in memory, loads only when a chat needs it (or at start-up when it is the default provider), and is
+unloaded after 20 idle minutes (**Unload the local model when idle**: 5 minutes to never). Answers stream into the
+window in small batches rather than token by token, and the system monitor samples every 10 seconds instead of 2
+while the window is hidden.
 
 ## AI models
 

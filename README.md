@@ -43,7 +43,7 @@ selling it to other companies, each in its own tenant.
 | Sell it | Tenants per customer, editions (Community / Pro / Enterprise), offline-verifiable Ed25519 license keys, seats, expiry, version caps. See [docs/LICENSING.md](docs/LICENSING.md). |
 | Admin console, credentials management, real-time backend | Fleet dashboard, device detail and live commands, managed settings/policy with locks, secrets pushed into device vaults, users/roles/MFA/API keys, releases, packages, snapshots, webhooks, audit. See [docs/ADMIN_CONSOLE.md](docs/ADMIN_CONSOLE.md). |
 | Build in other tools and connect to other apps | Plugin SDK (sandboxed workers), REST / MCP / webhook / FBRX-peer connectors, Local API for scripts and other apps. See [docs/PLUGINS.md](docs/PLUGINS.md). |
-| An everyday command center | FBRX Glass (the live dashboard), tasks / notes / projects / snippets, Spotlight (Alt+Space), files, processes, terminal, the FBRX/1 management console, toolbox, library, alerts to desktop / phone / Slack / Teams / e-mail / your admin console, an AI emergency stop, and a theme studio with eleven looks. See [docs/COMMAND_CENTER.md](docs/COMMAND_CENTER.md). |
+| An everyday command center | FBRX Glass (the live dashboard), tasks / notes / projects / snippets, Spotlight (Alt+Space), files, processes, Copy & migrate (Robocopy / rsync), terminal, the FBRX/1 management console, toolbox, library, alerts to desktop / phone / Slack / Teams / e-mail / your admin console, an AI emergency stop, and a theme studio with eleven looks. See [docs/COMMAND_CENTER.md](docs/COMMAND_CENTER.md). |
 | PC care for Windows | Storage clean-up and disk health, Microsoft Defender and firewall, link and file checks, Windows Sandbox, winget / Windows Update / drivers, a bug catcher with one-click repairs, a Hyper-V lab, and a Network Center (trace route, device discovery, speed, Wi-Fi, Bluetooth, printers). |
 | Your other devices and AI apps | An encrypted mesh with your other FBRX computers and the FBRX Mobile phone app (per-device permissions, one-time pairing codes); one-click MCP connection for Claude Desktop, Claude Code, Cursor, Windsurf and VS Code. See [docs/MESH.md](docs/MESH.md). |
 
@@ -100,7 +100,7 @@ keys are kept, and a running FBRX OS is closed for you. Options: `--yes` (no que
 Run `Install FBRX OS.cmd` and choose **2 — Make an installer to send to someone else**. Enter their name to build a
 trial license into the installer (30 days by default; Enterprise features, then the free Community features), or
 leave it blank to send an update to someone who is already set up. The result is one file in the `Share` folder,
-for example `Share\FBRX-OS-Setup-1.5.0-for-Alex.exe`, plus a short *How to install* note to send along.
+for example `Share\FBRX-OS-Setup-1.6.0-for-Alex.exe`, plus a short *How to install* note to send along.
 
 On their PC they double-click it. A new install asks the usual questions. If FBRX OS is already there, Setup opens on
 a choice instead:

@@ -1,45 +1,47 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import type { SystemStatus } from '@fbrx/shared';
 import { addressAs, funEnabled } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, FBRX_MARK, Icons, Shell, Spinner, Status, useToast, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
-import { isLocked, useCore } from './hooks';
+import { isLocked, useConsoleSessions, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
 import { AgentNameContext, EmergencyStop } from './widgets';
 import { GooseOverlay, summonGoose, unlockTrophy, useKonami } from './fun';
 import { TrophyBadge } from './trophies';
-import { useConsoleSessions } from './consoles';
 import { DashboardPage } from './pages/dashboard';
-import { AgentPage } from './pages/agent';
-import { ApprovalsPage } from './pages/approvals';
-import { ToolsPage } from './pages/tools';
-import { ConnectionsPage } from './pages/connections';
-import { VaultPage } from './pages/vault';
-import { GovernancePage } from './pages/governance';
-import { RuntimePage } from './pages/runtime';
-import { BackupPage } from './pages/backup';
-import { FleetPage } from './pages/fleet';
-import { SettingsPage } from './pages/settings';
 import { Onboarding } from './pages/onboarding';
-import { TasksPage } from './pages/tasks';
-import { NotesPage } from './pages/notes';
-import { ProjectsPage } from './pages/projects';
-import { SnippetsPage } from './pages/snippets';
-import { FilesPage } from './pages/files';
-import { ProcessesPage } from './pages/processes';
-import { TerminalPage } from './pages/terminal';
-import { ToolboxPage } from './pages/toolbox';
-import { LibraryPage } from './pages/library';
-import { AlertsPage } from './pages/alerts';
-import { StoragePage } from './pages/storage';
-import { NetworkPage } from './pages/network';
-import { SecurityPage } from './pages/security';
-import { UpdatesPage } from './pages/updates';
-import { BugsPage } from './pages/bugs';
-import { LabPage } from './pages/lab';
-import { MeshPage } from './pages/mesh';
-import { AiCoordPage } from './pages/aicoord';
 import { SpotlightView } from './pages/spotlight';
+
+// Pages load when first opened, so the app starts with only what the first screen needs.
+const AgentPage = lazy(() => import('./pages/agent').then((m) => ({ default: m.AgentPage })));
+const ApprovalsPage = lazy(() => import('./pages/approvals').then((m) => ({ default: m.ApprovalsPage })));
+const ToolsPage = lazy(() => import('./pages/tools').then((m) => ({ default: m.ToolsPage })));
+const ConnectionsPage = lazy(() => import('./pages/connections').then((m) => ({ default: m.ConnectionsPage })));
+const VaultPage = lazy(() => import('./pages/vault').then((m) => ({ default: m.VaultPage })));
+const GovernancePage = lazy(() => import('./pages/governance').then((m) => ({ default: m.GovernancePage })));
+const RuntimePage = lazy(() => import('./pages/runtime').then((m) => ({ default: m.RuntimePage })));
+const BackupPage = lazy(() => import('./pages/backup').then((m) => ({ default: m.BackupPage })));
+const FleetPage = lazy(() => import('./pages/fleet').then((m) => ({ default: m.FleetPage })));
+const SettingsPage = lazy(() => import('./pages/settings').then((m) => ({ default: m.SettingsPage })));
+const TasksPage = lazy(() => import('./pages/tasks').then((m) => ({ default: m.TasksPage })));
+const NotesPage = lazy(() => import('./pages/notes').then((m) => ({ default: m.NotesPage })));
+const ProjectsPage = lazy(() => import('./pages/projects').then((m) => ({ default: m.ProjectsPage })));
+const SnippetsPage = lazy(() => import('./pages/snippets').then((m) => ({ default: m.SnippetsPage })));
+const FilesPage = lazy(() => import('./pages/files').then((m) => ({ default: m.FilesPage })));
+const ProcessesPage = lazy(() => import('./pages/processes').then((m) => ({ default: m.ProcessesPage })));
+const TerminalPage = lazy(() => import('./pages/terminal').then((m) => ({ default: m.TerminalPage })));
+const ToolboxPage = lazy(() => import('./pages/toolbox').then((m) => ({ default: m.ToolboxPage })));
+const LibraryPage = lazy(() => import('./pages/library').then((m) => ({ default: m.LibraryPage })));
+const AlertsPage = lazy(() => import('./pages/alerts').then((m) => ({ default: m.AlertsPage })));
+const StoragePage = lazy(() => import('./pages/storage').then((m) => ({ default: m.StoragePage })));
+const NetworkPage = lazy(() => import('./pages/network').then((m) => ({ default: m.NetworkPage })));
+const SecurityPage = lazy(() => import('./pages/security').then((m) => ({ default: m.SecurityPage })));
+const UpdatesPage = lazy(() => import('./pages/updates').then((m) => ({ default: m.UpdatesPage })));
+const BugsPage = lazy(() => import('./pages/bugs').then((m) => ({ default: m.BugsPage })));
+const LabPage = lazy(() => import('./pages/lab').then((m) => ({ default: m.LabPage })));
+const MeshPage = lazy(() => import('./pages/mesh').then((m) => ({ default: m.MeshPage })));
+const AiCoordPage = lazy(() => import('./pages/aicoord').then((m) => ({ default: m.AiCoordPage })));
+const MigratePage = lazy(() => import('./pages/migrate').then((m) => ({ default: m.MigratePage })));
 
 export type Route =
   | 'home'
@@ -57,6 +59,7 @@ export type Route =
   | 'network'
   | 'files'
   | 'processes'
+  | 'migrate'
   | 'terminal'
   | 'toolbox'
   | 'library'
@@ -244,6 +247,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'network', label: 'Network Center', icon: 'network', section: 'PC care' },
     { id: 'files', label: 'Files', icon: 'folder', section: 'Utilities' },
     { id: 'processes', label: 'Processes', icon: 'activity', section: 'Utilities' },
+    { id: 'migrate', label: 'Copy & migrate', icon: 'copy', section: 'Utilities' },
     { id: 'toolbox', label: 'Toolbox', icon: 'toolbox', section: 'Utilities' },
     { id: 'library', label: 'Library', icon: 'book', section: 'Utilities' },
     { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect' },
@@ -298,6 +302,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return <FilesPage />;
       case 'processes':
         return <ProcessesPage />;
+      case 'migrate':
+        return <MigratePage />;
       case 'terminal':
         return advanced ? <TerminalPage easterEggs={fun} /> : <AdvancedOnly title="Terminal" onEnable={() => setAdvanced(true)} locked={advancedLocked} />;
       case 'toolbox':
@@ -358,7 +364,15 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
           </span>
         }
       >
-        {page}
+        <Suspense
+          fallback={
+            <div style={{ display: 'grid', placeItems: 'center', height: '40vh' }}>
+              <Spinner />
+            </div>
+          }
+        >
+          {page}
+        </Suspense>
       </Shell>
     </AgentNameContext.Provider>
   );

@@ -37,6 +37,7 @@ import { fbrxTools, fsTools, memoryTools, netTools, shellTools, systemTools, dis
 import { pcTools, workspaceTools } from './tools/builtin/command-center-tools';
 import { WorkspaceStore } from './workspace/workspace-store';
 import { SystemMonitor } from './system/system-monitor';
+import { Migrator } from './system/migrate';
 import { FileBrowser, TerminalSessions } from './system/files';
 import { Spotlight } from './spotlight/spotlight';
 import { AlertEngine } from './alerts/alert-engine';
@@ -128,6 +129,7 @@ export class Kernel {
   readonly vendors: VendorDb;
   readonly consoles: DeviceConsoles;
   readonly trophies: Trophies;
+  readonly migrator: Migrator;
   readonly cli: Fbrx1Cli;
   readonly mesh: MeshService;
   readonly aicoord: AiCoordination;
@@ -309,6 +311,11 @@ export class Kernel {
     });
     this.net = new NetDiag({ db: this.db, events: this.events, vendors: this.vendors, internet: () => this.internetAllowed() });
     this.trophies = new Trophies({ meta: this.meta, events: this.events, enabled: () => funEnabled(this.settings.get()) });
+    this.migrator = new Migrator({
+      events: this.events,
+      log: L('migrate'),
+      audit: (action, outcome, details) => this.audit.append({ category: 'files', action, actor: 'user', outcome, details }),
+    });
     // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
     this.cli = new Fbrx1Cli({
       call: (method, params) => this.call(method, params ?? {}, { origin: 'user', actor: 'fbrx1' }),
@@ -678,11 +685,13 @@ export class Kernel {
   async stop(): Promise<void> {
     if (!this.started) {
       this.db.close();
+      this.logSink.flush();
       return;
     }
     this.started = false;
     this.terminal.killAll();
     this.consoles.closeAll();
+    this.migrator.cancelAll();
     this.spotlight.dispose();
     await this.services.stopAll();
     for (const d of this.disposers) d();
@@ -690,6 +699,7 @@ export class Kernel {
     this.events.removeAll();
     this.log.info('Stopped cleanly');
     this.db.close();
+    this.logSink.flush();
   }
 
   async onVaultUnlocked(): Promise<void> {

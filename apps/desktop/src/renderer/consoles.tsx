@@ -5,7 +5,7 @@ import '@xterm/xterm/css/xterm.css';
 import { DEVICE_PROFILES, commandSearchUrl, deviceProfile, matchDeviceProfile, type ConsoleProtocol, type ConsoleSession, type DeviceProfile } from '@fbrx/shared';
 import { Button, Callout, Empty, Field, Input, Modal, Select, Status, Toggle, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
-import { useAgentName, useCore } from './hooks';
+import { useAgentName, useConsoleSessions, useCore } from './hooks';
 import { askAgent } from './widgets';
 
 // ------------------------------------------------------------------------------------ session output
@@ -19,9 +19,6 @@ onEvent('console.data', (e) => {
   for (const l of listeners) l(e.id, e.data);
 });
 
-export function useConsoleSessions() {
-  return useCore('console.list', undefined, ['console.changed'], 30_000);
-}
 
 const webUrl = (host: string, port: number) => `${[80, 8080, 5000, 8000].includes(port) ? 'http' : 'https'}://${host}${port === 80 || port === 443 ? '' : `:${port}`}`;
 

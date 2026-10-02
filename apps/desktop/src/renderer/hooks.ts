@@ -70,3 +70,8 @@ export function useAgentName(): string {
 export function newReqId(): string {
   return `r${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 }
+
+/** Device console sessions (SSH / Telnet), refreshed as they change. */
+export function useConsoleSessions() {
+  return useCore('console.list', undefined, ['console.changed'], 30_000);
+}

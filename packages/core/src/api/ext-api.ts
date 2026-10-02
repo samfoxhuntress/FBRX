@@ -4,6 +4,8 @@ import {
   ALERT_CHANNELS,
   LAB_FEATURES,
   MESH_ACTIONS,
+  MIGRATE_ENGINES,
+  MIGRATE_MODES,
   PRINTER_ACTIONS,
   STORAGE_ACTIONS,
   TASK_STATUSES,
@@ -20,6 +22,21 @@ import * as sec from '../windows/security';
 import * as storage from '../windows/storage';
 import * as fixes from '../windows/troubleshoot';
 import * as updates from '../windows/updates';
+
+const MigrateRequestSchema = z.object({
+  engine: z.enum(MIGRATE_ENGINES),
+  mode: z.enum(MIGRATE_MODES),
+  source: z.string().min(1).max(1024),
+  dest: z.string().min(1).max(1024),
+  subfolders: z.boolean().optional(),
+  permissions: z.boolean().optional(),
+  skipJunk: z.boolean().optional(),
+  retries: z.number().int().min(0).max(10).optional(),
+  threads: z.number().int().min(1).max(64).optional(),
+  excludeFiles: z.array(z.string().max(200)).max(50).optional(),
+  excludeDirs: z.array(z.string().max(200)).max(50).optional(),
+  dryRun: z.boolean().optional(),
+});
 import type { CallContext } from './core-api';
 
 type Handler = (params: any, ctx: CallContext) => unknown | Promise<unknown>;
@@ -338,6 +355,16 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
 
     // ------------------------------------------------------------------------------- fun and safety
     'fun.trophies': () => k.trophies.state(),
+
+    // ------------------------------------------------------------------------------------- migration
+    'migrate.engines': () => k.migrator.engines(),
+    'migrate.plan': (p) => k.migrator.plan(MigrateRequestSchema.parse(p)),
+    'migrate.start': (p) => k.migrator.start(MigrateRequestSchema.parse(p)),
+    'migrate.cancel': (p) => {
+      k.migrator.cancel(z.object({ jobId: z.string().max(100) }).parse(p).jobId);
+      return { ok: true };
+    },
+    'migrate.jobs': () => k.migrator.list(),
     'fun.unlock': (p) => k.trophies.unlock(z.object({ id: z.string().max(40) }).parse(p).id),
     'ai.hardStop': (_p, ctx) => k.hardStop(ctx.actor),
     'ai.resume': async (_p, ctx) => {

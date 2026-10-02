@@ -1,6 +1,12 @@
 # Easter eggs (spoilers)
 
-All of these are switched by **Settings → Appearance → Fun extras → Easter eggs and jokes** (on by default). An
+## Unlocking them: 418
+
+Out of the box, none of this exists. The easter eggs, the Silly Goose and the trophy case stay hidden until someone
+enters **418** as a license key (**Settings → License → Activate a license key**). It is not a license: it is HTTP
+status 418, *I'm a teapot*. The locked trophy case in Settings drops the only hint: "The key is short and stout."
+
+Once unlocked, **Settings → Appearance → Fun extras** appears, with a switch to turn the easter eggs off again. An
 organization can turn them off and lock the setting from the admin console (`appearance.easterEggs`). None of them
 changes files or settings.
 
@@ -10,7 +16,7 @@ Every easter egg has a badge in **Settings → Trophy case** (also in Spotlight:
 count in the sidebar footer). Badges you haven't found are greyed out with a hint; found ones are in color with how and
 when you earned them. A toast with **See trophy case** pops up the moment you find one.
 
-Find all 15 and you unlock the **Golden Goose**: from then on the goose arrives wearing a golden egg with a red **#1**
+Find all 21 and you unlock the **Golden Goose**: from then on the goose arrives wearing a golden egg with a red **#1**
 ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `show trophies` in FBRX/1 lists it.
 
 | Badge | How to earn it |
@@ -30,6 +36,12 @@ ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `
 | My Stapler | Ask Fabrix "Where's my stapler?" |
 | Loose Screw | Click the loose **Tip** tile on FBRX Glass until it falls off |
 | Flap Happy | Run your mouse across twenty letters of the split-flap board on FBRX Glass |
+| Nobody Calls Me Chicken | Set "What should FBRX call you?" to `chicken` (Settings → General). Bawk. |
+| PC Load Letter | Say "PC load letter" (or "PC load better") to Fabrix |
+| Punch It | Say "Chewie, we're home" to Fabrix |
+| Laugh It Up | Say "Laugh it up, fuzzball" while Fabrix is a Wookiee |
+| Search Your Feelings | Say "Nooo" (three o's or more) while Fabrix is a Wookiee |
+| Wookiee Whisperer | Keep talking to the Wookiee for five messages |
 | **Golden Goose** | Find all of the above |
 
 ## The Silly Goose
@@ -64,11 +76,22 @@ How to summon it:
 
 ## Where's my stapler?
 
-Ask Fabrix "Where's my stapler?" (or "have you seen my stapler"). It answers at once, without asking a model: "It's
-likely downstairs, in storage building B." From then on, that conversation is run by a middle manager: every answer is
-still correct, but wrapped in corporate jargon (synergy, circling back, bandwidth, moving forward…) and ends with
-"That would be great." Say "PC load letter", "I quit", "normal mode" or "no more jargon" to get the normal Fabrix back.
-New conversations are always normal.
+Ask Fabrix "Where's my stapler?", "Where is my stapler?" or just "stapler". It answers at once, without asking a
+model: "It's likely downstairs, in storage building B." From then on, that conversation is run by a middle manager:
+every answer is still correct, but wrapped in corporate jargon (synergy, circling back, bandwidth, moving forward…)
+and ends with "That would be great." Say "PC load letter" (or "PC load better") to get the normal Fabrix back and a
+trophy; "I quit", "normal mode" or "no more jargon" work too. New conversations are always normal.
+
+## Chewie, we're home
+
+Say "Chewie, we're home" and Fabrix answers only in Wookiee (growls, roars, the occasional stage direction) for the
+rest of that conversation. Say "Nooo" (with at least three o's) and you get "No, I am your father." before it goes
+back to growling. "Laugh it up, fuzzball" brings plain English back. Four trophies hide in here.
+
+## Nothing is impossible
+
+Type "nothing is impossible" into Spotlight or the Library search: Advanced mode turns on, with Luke 1:37 ("For
+nothing will be impossible with God."). No trophy; it's a quiet one.
 
 ## 88 miles per hour
 
@@ -89,7 +112,7 @@ later everything drops back to zero as if nothing happened. (A real test you sta
 ## Story time
 
 Search the Library for "tell me a story" and a **Story time** chip appears (and stays): how-tos nobody needed, each
-inspired by a film or game, with the reference revealed at the end. *How to fly with style*, *How to wait for a
+inspired by a film or game, with a riddle-like hint at the end (never the title: guessing is the fun). *How to fly with style*, *How to wait for a
 download that is stuck at 99%*, *How to phone home*, *How not to panic*, *How to get back to 1985* (which hints at
 the speed test), *How to build a snowman*, *How to get home in three clicks* ("There's no place like 127.0.0.1"),
 *How to fix a printer with the Force*, *How to deal with a haunted computer*, *How to take a very long walk to return

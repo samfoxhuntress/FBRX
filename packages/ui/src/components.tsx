@@ -152,13 +152,13 @@ export function Input(props: ComponentProps<'input'>) {
   return <input className="fx-input" {...props} />;
 }
 
-export function Select({ options, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { options: Array<{ value: string; label: string } | string> }) {
+export function Select({ options, ...props }: SelectHTMLAttributes<HTMLSelectElement> & { options: Array<{ value: string; label: string; disabled?: boolean } | string> }) {
   return (
     <select className="fx-select" {...props}>
       {options.map((o) => {
         const v = typeof o === 'string' ? { value: o, label: o } : o;
         return (
-          <option key={v.value} value={v.value}>
+          <option key={v.value} value={v.value} disabled={'disabled' in v ? v.disabled : undefined}>
             {v.label}
           </option>
         );

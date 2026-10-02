@@ -347,6 +347,9 @@ function AgentSettings() {
             </div>
           </Field>
           <Toggle checked={s.ai.newChatsOffline} disabled={L('ai.newChatsOffline')} onChange={(v) => void patch({ ai: { newChatsOffline: v } })} label="Start new chats offline (ask before using the internet)" />
+          <p className="fx-muted" style={{ fontSize: 12.5, margin: 0 }}>
+            Offline chats keep everything on this computer. When {s.ai.agentName} needs a web or network tool, you get an approval to put that chat online.
+          </p>
           <Field label={<>How hard a local model may work this PC <Locked show={L('ai.resources')} /></>} help={RESOURCE_HELP[s.ai.resources]}>
             <div className="seg" role="group" aria-label="Local AI resources">
               {(['light', 'balanced', 'full'] as const).map((r) => (
@@ -369,9 +372,6 @@ function AgentSettings() {
               ]}
             />
           </Field>
-          <p className="fx-muted" style={{ fontSize: 12.5, margin: 0 }}>
-            Offline chats keep everything on this computer. When {s.ai.agentName} needs a web or network tool, you get an approval to put that chat online.
-          </p>
         </div>
       </Card>
       <Card title="Models and permissions">

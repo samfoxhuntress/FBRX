@@ -3,10 +3,10 @@ import type { Note, ProjectSummary, Snippet, TerminalShell } from '@fbrx/shared'
 import { Button, Card, Empty, Input, Page, Select, Status, Tabs, TextArea, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
 import { navigate, routeArg } from '../app';
-import { useCore } from '../hooks';
+import { useConsoleSessions, useCore } from '../hooks';
 import { AskButton, askAgent } from '../widgets';
 import { COMMAND_GROUPS, type LibraryCommand } from '../command-library';
-import { DeviceConsolesPanel, useConsoleSessions } from '../consoles';
+import { DeviceConsolesPanel } from '../consoles';
 import { summonGoose, unlockTrophy } from '../fun';
 import { Fbrx1Panel } from '../fbrx1';
 

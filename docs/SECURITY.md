@@ -65,6 +65,14 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   leaves) that only moves the mouse pointer to coordinates sent by the goose's own window, for at most about three
   seconds per grab. It is never started when Fun extras are off.
 
+## Copy & migrate
+
+* `migrate.plan`, `migrate.start` and `migrate.cancel` are reserved for the person at the computer. Robocopy and rsync
+  run from argument lists without a shell; folder paths with quotes or line breaks are refused.
+* Guard rails: no mirroring onto a drive root, a system folder or a home folder; no copying a folder into itself; no
+  moving a whole drive or a home folder away. Mirror and move ask for confirmation in the app, and Preview runs the
+  same command in list-only mode. Every start and finish is in the audit log.
+
 ## Audit and tamper evidence
 
 Every tool decision, approval, configuration change, vault access, plugin event, backup and remote command is

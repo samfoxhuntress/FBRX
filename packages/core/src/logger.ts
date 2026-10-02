@@ -1,4 +1,4 @@
-import { appendFileSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { appendFile, appendFileSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import type { LogLine } from '@fbrx/shared';
 
@@ -12,13 +12,19 @@ export interface LogSinkOptions {
   retentionDays?: number;
 }
 
-/** Shared sink: ring buffer for the UI, daily rotating files for support, optional console. */
+/**
+ * Shared sink: ring buffer for the UI, daily rotating files for support, optional console. File writes are batched
+ * and asynchronous (a synchronous write per line stalls the app on slow or busy disks); warnings and errors are
+ * written straight away so they survive a crash.
+ */
 export class LogSink {
   private readonly ring: LogLine[] = [];
   private readonly max = 3000;
   private readonly minLevel: number;
   private currentFile: string | null = null;
   private currentDay = '';
+  private buffer: string[] = [];
+  private timer: NodeJS.Timeout | null = null;
 
   constructor(private readonly opts: LogSinkOptions = {}) {
     this.minLevel = LEVELS[opts.level ?? 'info'];
@@ -41,15 +47,40 @@ export class LogSink {
     if (this.opts.dir) {
       const day = line.ts.slice(0, 10);
       if (day !== this.currentDay) {
+        this.flush();
+        if (this.currentDay) this.prune();
         this.currentDay = day;
         this.currentFile = join(this.opts.dir, `fbrx-${day}.log`);
       }
-      try {
-        appendFileSync(this.currentFile!, `${text}\n`);
-      } catch {
-        /* disk full or permissions: keep running, the ring buffer still works */
+      this.buffer.push(`${text}\n`);
+      if (LEVELS[line.level] >= LEVELS.warn || this.buffer.length > 500) this.flush();
+      else if (!this.timer) {
+        this.timer = setTimeout(() => this.flushAsync(), 500);
+        this.timer.unref?.();
       }
     }
+  }
+
+  /** Writes buffered lines now (on warnings and errors, at shutdown). */
+  flush(): void {
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    if (!this.buffer.length || !this.currentFile) return;
+    const chunk = this.buffer.join('');
+    this.buffer = [];
+    try {
+      appendFileSync(this.currentFile, chunk);
+    } catch {
+      /* disk full or permissions: keep running, the ring buffer still works */
+    }
+  }
+
+  private flushAsync(): void {
+    this.timer = null;
+    if (!this.buffer.length || !this.currentFile) return;
+    const chunk = this.buffer.join('');
+    this.buffer = [];
+    appendFile(this.currentFile, chunk, () => undefined);
   }
 
   tail(lines = 200, level?: Level): LogLine[] {

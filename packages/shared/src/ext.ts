@@ -689,6 +689,60 @@ export interface McpBridgeInfo {
 type Ok = { ok: true };
 type Deleted = { deleted: boolean };
 
+// ------------------------------------------------------------------------------------------ migration
+
+export const MIGRATE_ENGINES = ['robocopy', 'rsync', 'builtin'] as const;
+export type MigrateEngine = (typeof MIGRATE_ENGINES)[number];
+/** copy: everything, keeping extra files at the destination; update: only new and changed files (never overwrites
+ * newer ones); mirror: make the destination identical (deletes extras); move: copy, then delete the originals. */
+export const MIGRATE_MODES = ['copy', 'update', 'mirror', 'move'] as const;
+export type MigrateMode = (typeof MIGRATE_MODES)[number];
+
+export interface MigrateRequest {
+  engine: MigrateEngine;
+  mode: MigrateMode;
+  source: string;
+  dest: string;
+  /** Include subfolders (on by default). */
+  subfolders?: boolean;
+  /** Copy permissions (NTFS security / Unix modes and owners) as well as data, attributes and timestamps. */
+  permissions?: boolean;
+  /** Skip Thumbs.db, desktop.ini, ~$ Office lock files, temp files and the Recycle Bin. */
+  skipJunk?: boolean;
+  retries?: number;
+  /** Robocopy multi-threading (1–64). */
+  threads?: number;
+  excludeFiles?: string[];
+  excludeDirs?: string[];
+  /** List what would happen without copying anything. */
+  dryRun?: boolean;
+}
+
+export interface MigrateEngineInfo {
+  id: MigrateEngine;
+  name: string;
+  available: boolean;
+  note: string;
+}
+
+export interface MigrateJob {
+  jobId: string;
+  request: MigrateRequest;
+  state: 'running' | 'done' | 'failed' | 'canceled';
+  startedAt: string;
+  finishedAt: string | null;
+  files: number;
+  bytes: number;
+  errors: number;
+  summary: string | null;
+}
+
+export type MigrateEvent =
+  /** Output, a few times a second (a big copy prints a line per file). */
+  | { jobId: string; type: 'lines'; lines: string[] }
+  | { jobId: string; type: 'progress'; files: number; bytes: number; errors: number }
+  | { jobId: string; type: 'done'; job: MigrateJob };
+
 export interface ExtMethods {
   'notes.list': (p?: { projectId?: string; query?: string }) => Note[];
   'notes.save': (p: NoteInput) => Note;
@@ -788,6 +842,13 @@ export interface ExtMethods {
   'net.exportCsv': (p: { id: string; path: string }) => { path: string; rows: number };
   'net.speedTest': (p: { reqId: string }) => SpeedTestResult;
   'net.speedHistory': () => SpeedTestResult[];
+
+  'migrate.engines': () => MigrateEngineInfo[];
+  /** The exact command a request would run, and warnings about it, without running anything. */
+  'migrate.plan': (p: MigrateRequest) => { command: string; warnings: string[] };
+  'migrate.start': (p: MigrateRequest) => { jobId: string; command: string };
+  'migrate.cancel': (p: { jobId: string }) => Ok;
+  'migrate.jobs': () => MigrateJob[];
   'net.wifi': () => WifiInfo;
   'net.bluetooth': () => { adapters: string[]; devices: BluetoothDevice[] };
   'net.printers': () => PrinterInfo[];
@@ -859,6 +920,7 @@ export interface ExtEvents {
   /** Unread counts after any inbox change (new, read, deleted). */
   'alerts.changed': { unread: number; critical: number };
   'net.event': NetEvent;
+  'migrate.event': MigrateEvent;
   'winupdates.event': { reqId: string; line: string };
   'mesh.changed': MeshStatus;
   'mesh.message': MeshMessage;
@@ -890,6 +952,9 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'lab.vmAction',
   'lab.openManager',
   'lab.openConsole',
+  'migrate.plan',
+  'migrate.start',
+  'migrate.cancel',
   'net.setIp',
   'net.printerAction',
   'net.exportCsv',

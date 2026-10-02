@@ -175,7 +175,17 @@ export class AuditLog {
     });
   }
 
+  private statsCache: { at: number; value: AuditStats } | null = null;
+
+  /** Counts for the status line. A year of audit is a big table to count, so the answer is reused for 30 s. */
   stats(): AuditStats {
+    if (this.statsCache && Date.now() - this.statsCache.at < 30_000) return this.statsCache.value;
+    const value = this.computeStats();
+    this.statsCache = { at: Date.now(), value };
+    return value;
+  }
+
+  private computeStats(): AuditStats {
     const since = new Date(Date.now() - 86400_000).toISOString();
     const total = Number(this.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM audit_log')?.n ?? 0);
     const last24h = Number(this.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM audit_log WHERE ts >= ?', since)?.n ?? 0);

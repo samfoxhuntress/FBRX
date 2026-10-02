@@ -224,6 +224,7 @@ export const PAGES: Array<[string, string, string]> = [
   ['snippets', 'Snippets', 'code snippets clipboard'],
   ['files', 'Files', 'file browser explorer'],
   ['processes', 'Processes', 'task manager kill'],
+  ['migrate', 'Copy & migrate', 'robocopy rsync copy move mirror migrate transfer folders backup new pc'],
   ['terminal', 'Terminal', 'powershell command shell'],
   ['terminal/fbrx1', 'FBRX/1 console', 'fbrx1 cli junos cisco show configure commit management console'],
   ['settings/trophies', 'Trophy case', 'trophies badges achievements easter eggs'],

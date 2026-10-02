@@ -2422,3 +2422,64 @@ html.goose-mode #root {
 .glass-tile.name-prompt .fx-row {
   max-width: 720px;
 }
+
+/* ------------------------------------------------------------------------------------- copy & migrate */
+.migrate-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr);
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 1150px) {
+  .migrate-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.migrate-swap {
+  display: flex;
+  justify-content: center;
+  margin: -6px 0 -10px;
+}
+.migrate-options {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.migrate-command {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.migrate-command code {
+  display: block;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+.migrate-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  padding: 0 14px 12px;
+}
+.migrate-summary {
+  margin: 0 14px 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+.term.migrate-log {
+  height: 420px;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.migrate-extra {
+  color: #f3c969;
+}
