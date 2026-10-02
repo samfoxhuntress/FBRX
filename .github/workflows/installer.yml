@@ -70,9 +70,24 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Run "Install FBRX OS.cmd"
+      # Double-clicked inside the downloaded zip, Explorer unpacks only the .cmd into a temporary folder named after the
+      # zip. Setup then finds the zip in Downloads, unzips it (here over this checkout) and carries on from there.
+      - name: Download FBRX OS as a zip and open "Install FBRX OS.cmd" inside it, as Explorer does
+        shell: pwsh
+        run: |
+          $downloads = Join-Path $env:USERPROFILE 'Downloads'
+          New-Item -ItemType Directory -Force $downloads | Out-Null
+          git archive --format=zip --prefix=FBRX-test/ -o (Join-Path $downloads 'FBRX-test (2).zip') HEAD
+          if ($LASTEXITCODE) { throw 'git archive failed' }
+          $open = Join-Path $env:TEMP '0f8fad5b-d9cb-469f-a165-70867728950e_FBRX-test (2).zip.d47\FBRX-test'
+          New-Item -ItemType Directory -Force $open | Out-Null
+          Copy-Item 'Install FBRX OS.cmd' $open
+      - name: Run "Install FBRX OS.cmd" from inside the zip
         shell: cmd
-        run: call "Install FBRX OS.cmd" --yes --name "CI Runner" --no-launch
+        env:
+          FBRX_UNZIP_YES: '1'
+          FBRX_UNZIP_TO: ${{ github.workspace }}
+        run: call "%TEMP%\0f8fad5b-d9cb-469f-a165-70867728950e_FBRX-test (2).zip.d47\FBRX-test\Install FBRX OS.cmd" --yes --name "CI Runner" --no-launch
       - name: The app is installed and activates its license on first start
         shell: pwsh
         run: |

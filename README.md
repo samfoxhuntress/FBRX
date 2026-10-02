@@ -71,7 +71,9 @@ docs/               Architecture, deployment, backup/restore, plugins, security,
 ## Install on your own laptop
 
 Unzip the downloaded folder somewhere permanent and outside synced folders (for example `~/FBRX` or `C:\FBRX`),
-then double-click the installer for your computer:
+then double-click the installer for your computer. On Windows, right-click the zip and choose **Extract All…**;
+double-clicking `Install FBRX OS.cmd` inside the zip without extracting it also works: setup finds the zip in your
+Downloads folder, offers to unzip it to `%USERPROFILE%\FBRX` (or a folder you type) and continues from there.
 
 | Computer | Double-click | If the computer warns you about a downloaded file |
 | --- | --- | --- |
