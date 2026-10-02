@@ -1,10 +1,12 @@
-import { Fragment, useMemo, useState, type ReactNode } from 'react';
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { Button, Card, Empty, Icons, Input, Page } from '@fbrx/ui';
 import { ARTICLES, CATS, type Article } from '../library-data';
 import { LAB_HOWTOS, LAB_SECTIONS, supportPage } from '../lab-data';
 import { bridge, call } from '../client';
 import { navigate } from '../app';
 import { useCore } from '../hooks';
+import { unlockTrophy } from '../fun';
+import { STORIES, STORY_TRIGGER, type Story } from '../story-data';
 
 /** Renders article text, allowing only <kbd> and <code> (everything else stays literal text). */
 function Rich({ text, agentName }: { text: string; agentName: string }) {
@@ -22,11 +24,13 @@ function Rich({ text, agentName }: { text: string; agentName: string }) {
   return <>{parts.map((p, i) => <Fragment key={i}>{p}</Fragment>)}</>;
 }
 
-const ROUTES: Record<string, string> = { files: 'files', network: 'network', security: 'security', storage: 'storage', updates: 'updates', agent: 'agent', mesh: 'mesh', settings: 'settings' };
+const ROUTES: Record<string, string> = { files: 'files', network: 'network', security: 'security', storage: 'storage', updates: 'updates', agent: 'agent', mesh: 'mesh', settings: 'settings', bugs: 'bugs', backup: 'backup', speed: 'network/speed', printers: 'network/printers' };
 
 /** The Lab (Advanced mode): power-user how-tos and official download pages. */
 function TheLab({ agentName }: { agentName: string }) {
   const info = useCore('sysinfo.static');
+  // Safety first: the dress code earns a badge.
+  useEffect(() => unlockTrophy('goggles'), []);
   const support = info.data ? supportPage(info.data.machine.manufacturer, info.data.machine.model) : null;
   return (
     <>
@@ -92,10 +96,77 @@ function TheLab({ agentName }: { agentName: string }) {
   );
 }
 
-export function LibraryPage({ agentName, advanced }: { agentName: string; advanced: boolean }) {
+/** Story time: how-tos nobody needed, each with a wink at a film or game. */
+function StoryTime({ q, agentName }: { q: string; agentName: string }) {
+  const [open, setOpen] = useState<Story | null>(null);
+  const s = STORY_TRIGGER.test(q.trim()) ? '' : q.trim().toLowerCase();
+  const list = STORIES.filter((x) => !s || `${x.t} ${x.s} ${x.steps.join(' ')} ${x.ref}`.toLowerCase().includes(s));
+  return (
+    <>
+      <div className="lab-banner story-banner">
+        <Icons.book size={34} />
+        <div>
+          <h2>Story time</h2>
+          <div>Gather round. None of these will help you with your computer. Well, a few might. Each one is inspired by a film or game; can you guess which before you read the end?</div>
+        </div>
+      </div>
+      {open ? (
+        <Card
+          title={open.t}
+          subtitle={open.s}
+          actions={
+            <Button size="sm" variant="ghost" icon="x" onClick={() => setOpen(null)}>
+              Back
+            </Button>
+          }
+        >
+          <ol className="steps-list">
+            {open.steps.map((st, i) => (
+              <li key={i}>
+                <Rich text={st} agentName={agentName} />
+              </li>
+            ))}
+          </ol>
+          <div className="story-ref">{open.ref}</div>
+          {open.go && ROUTES[open.go] && (
+            <div className="fx-actions" style={{ marginTop: 10 }}>
+              <Button size="sm" icon="chevronRight" onClick={() => navigate(ROUTES[open.go!])}>
+                Take me there
+              </Button>
+            </div>
+          )}
+        </Card>
+      ) : list.length ? (
+        <div className="lib-grid">
+          {list.map((x) => (
+            <button key={x.id} className="choice story-choice" onClick={() => setOpen(x)}>
+              <span style={{ fontWeight: 600 }}>{x.t}</span>
+              <span className="fx-muted" style={{ fontSize: 12.5 }}>
+                {x.s}
+              </span>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <Empty title="No story like that">Try "tell me a story" again.</Empty>
+      )}
+    </>
+  );
+}
+
+export function LibraryPage({ agentName, advanced, easterEggs }: { agentName: string; advanced: boolean; easterEggs: boolean }) {
   const [cat, setCat] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<Article | null>(null);
+  const trophies = useCore('fun.trophies', undefined, ['fun.trophy']);
+  const storyAsked = easterEggs && STORY_TRIGGER.test(q.trim());
+  const storiesFound = easterEggs && (!!trophies.data?.unlocked.stories || storyAsked);
+  useEffect(() => {
+    if (!storyAsked) return;
+    unlockTrophy('stories');
+    setOpen(null);
+    setCat('stories');
+  }, [storyAsked]);
   const list = useMemo(() => {
     const s = q.trim().toLowerCase();
     return ARTICLES.filter((a) => (!cat || a.cat === cat) && (!s || `${a.t} ${a.s} ${a.steps.join(' ')}`.toLowerCase().includes(s)));
@@ -112,6 +183,11 @@ export function LibraryPage({ agentName, advanced }: { agentName: string; advanc
             <Icons.flask size={13} /> The Lab
           </button>
         )}
+        {storiesFound && (
+          <button className={`chip story-chip${cat === 'stories' ? ' on' : ''}`} onClick={() => setCat('stories')} title="How-tos nobody needed">
+            <Icons.book size={13} /> Story time
+          </button>
+        )}
         {CATS.map((c) => {
           const Ico = Icons[c.icon];
           return (
@@ -123,6 +199,8 @@ export function LibraryPage({ agentName, advanced }: { agentName: string; advanc
       </div>
       {cat === 'lab' && advanced && !q.trim() ? (
         <TheLab agentName={agentName} />
+      ) : cat === 'stories' && storiesFound ? (
+        <StoryTime q={q} agentName={agentName} />
       ) : open ? (
         <Card
           title={<Rich text={open.t} agentName={agentName} />}

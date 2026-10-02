@@ -25,7 +25,9 @@ interface Bridge {
   openMain?(route: string): void;
   copyText?(text: string): Promise<void>;
   /** The Silly Goose overlay window (Electron only). */
-  goose?(action: 'summon' | 'leave' | 'interactive' | 'capture', on?: boolean): void;
+  goose?(action: 'summon' | 'leave' | 'interactive' | 'capture', on?: boolean): Promise<unknown> | void;
+  /** Where the goose's beak is while it holds the pointer (moves the real pointer on Windows). */
+  gooseDrag?(x: number, y: number): void;
   onGoose?(cb: (e: { type: 'cursor'; x: number; y: number } | { type: 'honk' } | { type: 'shoo' }) => void): () => void;
 }
 

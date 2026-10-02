@@ -864,16 +864,88 @@
 .hop:last-child .hop-line {
   display: none;
 }
-.speed-live {
-  text-align: center;
-  padding: 18px 0;
+/* The speedometer. */
+.speed-panel {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
 }
-.speed-num {
-  font-size: 56px;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  color: var(--accent);
+.speed-dial {
+  flex: 0 1 340px;
+  min-width: 240px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+.speed-stats {
+  flex: 1 1 280px;
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.speed-go {
+  min-width: 150px;
+  justify-content: center;
+}
+.speedo {
+  width: 100%;
+  max-width: 340px;
+  height: auto;
+  filter: drop-shadow(0 10px 18px rgba(0, 0, 0, 0.35));
+}
+.speedo-needle {
+  transform-box: view-box;
+  transform-origin: 150px 150px;
+  /* A little overshoot, like a real needle on a spring. */
+  transition: transform 0.42s cubic-bezier(0.34, 1.56, 0.64, 1);
+  filter: drop-shadow(0 0 4px rgba(255, 90, 60, 0.7));
+}
+.speedo-arc {
+  transition: stroke-dasharray 0.42s cubic-bezier(0.34, 1.3, 0.64, 1);
+}
+.speedo-mark {
+  fill: #aeb7c3;
+  font: 600 12px var(--font);
+}
+.speedo-value {
+  fill: #f5f7fa;
+  font: 800 38px var(--font);
   font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+.speedo-unit {
+  fill: #aeb7c3;
+  font: 600 14px var(--font);
+  letter-spacing: 0.06em;
+}
+.speedo-label {
+  fill: var(--accent);
+  font: 700 12px var(--font);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.speedo.flux .speedo-face {
+  fill: #0d2a52;
+}
+.speedo.flux {
+  filter: drop-shadow(0 0 24px rgba(111, 179, 255, 0.85));
+}
+.speedo.flux .speedo-value {
+  fill: #dff1ff;
+}
+.speedo.flux .speedo-label {
+  fill: #ffd34d;
+}
+.speedo-bolts {
+  filter: drop-shadow(0 0 6px #9fd0ff);
+  animation: speedo-flicker 0.12s steps(2) infinite;
+}
+@keyframes speedo-flicker {
+  50% {
+    opacity: 0.35;
+  }
 }
 
 /* ------------------------------------------------------------------ mesh */
@@ -1503,21 +1575,52 @@ html.goose-mode #root {
 }
 .goose {
   position: absolute;
+  left: 0;
+  top: 0;
   width: 120px;
   height: 110px;
   cursor: pointer;
+  will-change: transform;
   filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.25));
 }
+/* Turning around is a quick pivot rather than an instant mirror. */
+.goose-flip {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  transition: transform 0.2s ease-in-out;
+}
+.goose-svg {
+  transform-origin: 50% 92%;
+}
+/* A waddle: the body rocks side to side in step with the feet. */
+.goose-svg.walking {
+  animation: goose-waddle 0.34s ease-in-out infinite alternate;
+}
 .goose-svg.walking .goose-leg-a {
-  animation: goose-step 0.32s ease-in-out infinite alternate;
+  animation: goose-step 0.34s ease-in-out infinite alternate;
   transform-origin: 44px 62px;
 }
 .goose-svg.walking .goose-leg-b {
-  animation: goose-step 0.32s ease-in-out infinite alternate-reverse;
+  animation: goose-step 0.34s ease-in-out infinite alternate-reverse;
   transform-origin: 54px 62px;
 }
 .goose-svg.walking .goose-neck {
-  animation: goose-bob 0.32s ease-in-out infinite alternate;
+  animation: goose-bob 0.34s ease-in-out infinite alternate;
+}
+.goose-svg.walking.fast,
+.goose-svg.walking.fast .goose-leg-a,
+.goose-svg.walking.fast .goose-leg-b,
+.goose-svg.walking.fast .goose-neck {
+  animation-duration: 0.22s;
+}
+@keyframes goose-waddle {
+  from {
+    transform: rotate(-2.5deg) translateY(0);
+  }
+  to {
+    transform: rotate(2.5deg) translateY(-1.5px);
+  }
 }
 .goose-beak.open .goose-jaw {
   transform: translateY(2.5px) rotate(-6deg);
@@ -1654,6 +1757,30 @@ html.goose-mode #root {
 .chip.lab-chip {
   border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
 }
+/* Story time: a starry storybook instead of hazard stripes. */
+.lab-banner.story-banner {
+  border-color: color-mix(in srgb, #8b5cf6 45%, transparent);
+  background:
+    radial-gradient(circle at 12% 30%, #ffffffaa 0 1px, transparent 2px),
+    radial-gradient(circle at 78% 20%, #ffffff88 0 1px, transparent 2px),
+    radial-gradient(circle at 60% 75%, #ffffff77 0 1px, transparent 2px),
+    radial-gradient(circle at 90% 60%, #ffffff99 0 1.4px, transparent 2.4px),
+    linear-gradient(135deg, color-mix(in srgb, #8b5cf6 18%, var(--surface-1)), var(--surface-1));
+}
+.lab-banner.story-banner svg {
+  color: #8b5cf6;
+}
+.chip.story-chip {
+  border-color: color-mix(in srgb, #8b5cf6 50%, var(--border));
+}
+.story-ref {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px dashed var(--border-strong);
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--text-secondary);
+}
 
 /* ------------------------------------------------------------------------------------ toolbox extras */
 .chips.recommended {
@@ -1759,4 +1886,223 @@ html.goose-mode #root {
 .fx-topbar > .fx-spacer {
   flex: 1 1 0;
   min-width: 0;
+}
+
+/* ---------------------------------------------------------------------------------------------- trophy case */
+.trophy-head {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex-wrap: wrap;
+  margin-bottom: 18px;
+}
+.trophy-golden {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+  flex: 1 1 340px;
+  padding: 12px 16px;
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--border-strong);
+}
+.trophy-golden.found {
+  border: 1px solid #d4a017;
+  background: linear-gradient(135deg, color-mix(in srgb, #ffd95a 22%, var(--surface-1)), var(--surface-1) 70%);
+  box-shadow: 0 0 0 3px color-mix(in srgb, #ffd95a 25%, transparent);
+}
+.trophy-golden .fx-btn {
+  margin-top: 8px;
+}
+.trophy-progress {
+  flex: 0 1 260px;
+  min-width: 200px;
+}
+.trophy-count {
+  font-size: 13px;
+  color: var(--text-secondary);
+  margin-bottom: 6px;
+}
+.trophy-count b {
+  font-size: 22px;
+  color: var(--text-primary);
+}
+.trophy-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--surface-3);
+  overflow: hidden;
+}
+.trophy-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent), #ffd95a);
+  transition: width 0.6s ease;
+}
+.trophy-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
+  gap: 12px;
+}
+.trophy-tile {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 14px 10px 12px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+}
+.trophy-tile.found {
+  background: var(--surface-1);
+  border-color: color-mix(in srgb, var(--accent) 40%, var(--border));
+}
+.trophy-name {
+  font-weight: 700;
+  font-size: 13.5px;
+  margin-top: 4px;
+}
+.trophy-tile:not(.found) .trophy-name {
+  color: var(--text-secondary);
+}
+.trophy-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.35;
+}
+.trophy-tile:not(.found) .trophy-text {
+  font-style: italic;
+  color: var(--text-muted);
+}
+.trophy-date {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.trophy-badge {
+  flex: none;
+  transition: transform 0.2s ease, filter 0.2s ease;
+}
+.trophy-badge:not(.found) {
+  filter: grayscale(1) contrast(0.85);
+  opacity: 0.42;
+}
+.trophy-tile.found:hover .trophy-badge {
+  transform: rotate(-8deg) scale(1.06);
+}
+.fx-toast .trophy-badge {
+  margin-top: 2px;
+}
+.footer-trophies {
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  padding: 0;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.footer-trophies:hover {
+  color: var(--accent);
+}
+
+/* -------------------------------------------------------------------------------------------- emergency stop */
+.estop {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+.estop-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+}
+.estop-text span {
+  color: var(--text-secondary);
+}
+.estop-button {
+  flex: none;
+  width: 84px;
+  height: 84px;
+  border-radius: 50%;
+  border: 6px solid #f4c430;
+  background: radial-gradient(circle at 35% 30%, #ff6b5e, #c4170c 62%, #8e0f07);
+  box-shadow: 0 6px 0 #6e0b05, 0 10px 18px rgba(0, 0, 0, 0.35), inset 0 -4px 8px rgba(0, 0, 0, 0.3);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
+}
+.estop-button:hover {
+  filter: brightness(1.08);
+}
+.estop-button:active {
+  transform: translateY(5px);
+  box-shadow: 0 1px 0 #6e0b05, 0 3px 8px rgba(0, 0, 0, 0.35), inset 0 -2px 6px rgba(0, 0, 0, 0.3);
+}
+.estop-cap {
+  color: #fff;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  font-size: 14px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
+}
+.estop.compact {
+  gap: 8px;
+}
+.estop.compact .estop-button {
+  width: 34px;
+  height: 34px;
+  border-width: 3px;
+  box-shadow: 0 3px 0 #6e0b05, 0 4px 8px rgba(0, 0, 0, 0.3);
+}
+.estop.compact .estop-button:active {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 #6e0b05;
+}
+.estop.compact .estop-cap {
+  font-size: 7.5px;
+  letter-spacing: 0.02em;
+}
+.estop-label {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
+.estop.halted {
+  padding: 10px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--critical);
+  background: color-mix(in srgb, var(--critical) 10%, var(--surface-1));
+}
+.estop.halted.compact {
+  padding: 2px 4px 2px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  white-space: nowrap;
+}
+.estop.halted .estop-text b {
+  color: var(--critical-text);
+}
+.estop-light {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--critical);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--critical) 60%, transparent);
+  animation: estop-pulse 1.4s ease-out infinite;
+  flex: none;
+}
+@keyframes estop-pulse {
+  70% {
+    box-shadow: 0 0 0 8px transparent;
+  }
+}
+.agent-list-foot {
+  border-top: 1px solid var(--border);
+  padding: 10px 12px;
 }

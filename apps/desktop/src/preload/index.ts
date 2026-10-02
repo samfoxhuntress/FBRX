@@ -25,7 +25,8 @@ const api = {
   spotlightHide: () => void ipcRenderer.invoke('fbrx:spotlight', 'hide'),
   openMain: (route: string) => void ipcRenderer.invoke('fbrx:spotlight', 'open', route),
   copyText: async (text: string) => void (await ipcRenderer.invoke('fbrx:copy', text)),
-  goose: (action: string, on?: boolean) => void ipcRenderer.invoke('fbrx:goose', action, on),
+  goose: (action: string, on?: boolean) => ipcRenderer.invoke('fbrx:goose', action, on) as Promise<unknown>,
+  gooseDrag: (x: number, y: number) => ipcRenderer.send('fbrx:goose-drag', x, y),
   onGoose(cb: (e: unknown) => void): () => void {
     const h = (_e: unknown, payload: unknown) => cb(payload);
     ipcRenderer.on('fbrx:goose', h);

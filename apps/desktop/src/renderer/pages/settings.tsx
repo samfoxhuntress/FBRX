@@ -1,13 +1,14 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { DeepPartial, Settings, Texture } from '@fbrx/shared';
 import { UPDATE_CHANNELS } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
-import { routeArg } from '../app';
+import { navigate, routeArg } from '../app';
 import { PRESETS, TEXTURE_NAMES, playStartupSound, resolvedMode, resolvedTexture, textureImage } from '../theme';
 import { summonGoose } from '../fun';
-import { AskButton } from '../widgets';
+import { TrophyCase } from '../trophies';
+import { AskButton, EmergencyStop } from '../widgets';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -17,20 +18,32 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'agent' | 'spotlight' | 'updates' | 'license' | 'api' | 'logs';
+type SectionId = 'general' | 'appearance' | 'agent' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; advanced?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
   { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
   { id: 'spotlight', label: 'Spotlight', icon: 'search', group: 'You' },
+  { id: 'trophies', label: 'Trophy case', icon: 'trophy', group: 'You' },
   { id: 'updates', label: 'Updates', icon: 'download', group: 'This computer' },
   { id: 'license', label: 'License', icon: 'key', group: 'This computer' },
   { id: 'api', label: 'Local API', icon: 'link', group: 'For experts', advanced: true },
   { id: 'logs', label: 'Logs & about', icon: 'book', group: 'For experts' },
 ];
 
+const sectionFromRoute = (): SectionId | null => (SECTIONS.some((x) => x.id === routeArg()) ? (routeArg() as SectionId) : null);
+
 export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
-  const [tab, setTab] = useState<SectionId>(() => (SECTIONS.some((x) => x.id === routeArg()) ? (routeArg() as SectionId) : 'general'));
+  const [tab, setTab] = useState<SectionId>(() => sectionFromRoute() ?? 'general');
+  // A link to a section (such as "See it" on a trophy) while Settings is already open.
+  useEffect(() => {
+    const on = () => {
+      const t = sectionFromRoute();
+      if (t) setTab(t);
+    };
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
   let group = '';
   return (
     <Page title="Settings" description="How FBRX OS looks and behaves on this computer. Settings your organization manages show a lock.">
@@ -57,6 +70,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'appearance' && <Appearance />}
           {tab === 'agent' && <AgentSettings />}
           {tab === 'spotlight' && <SpotlightSettings />}
+          {tab === 'trophies' && <Trophies />}
           {tab === 'updates' && <Updates />}
           {tab === 'license' && <License />}
           {tab === 'api' && <LocalApi />}
@@ -247,14 +261,23 @@ function Appearance() {
             <Button size="sm" icon="feather" disabled={!a.easterEggs} onClick={summonGoose}>
               Release the goose
             </Button>
+            <Button size="sm" icon="trophy" variant="ghost" onClick={() => navigate('settings/trophies')}>
+              Trophy case
+            </Button>
           </div>
           <p className="fx-muted" style={{ margin: 0, fontSize: 12.5 }}>
-            The goose waddles across your screen for about a minute and a half, honks, tracks a little mud, borrows your mouse pointer and leaves notes. Clicks go straight through it to your apps. Click the goose three times, or choose Shoo the goose in the tray menu, to send it home. Other surprises are hidden around the app.
+            The goose waddles across your screen for about a minute and a half, honks, tracks a little mud, borrows your mouse pointer and leaves notes. Clicks go straight through it to your apps. Click the goose three times, or choose Shoo the goose in the tray menu, to send it home. Other surprises are hidden around the app; every one you find earns a badge in the Trophy case.
           </p>
         </div>
       </Card>
     </>
   );
+}
+
+function Trophies() {
+  const { s, patch } = useSettings();
+  if (!s) return null;
+  return <TrophyCase enabled={s.appearance.easterEggs} onEnable={() => void patch({ appearance: { easterEggs: true } })} />;
 }
 
 function AgentSettings() {
@@ -289,6 +312,11 @@ function AgentSettings() {
           </div>
         </div>
       </Card>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Card title="Emergency stop" subtitle="The big red button. Also on the agent page, in the tray menu and as `request ai stop` in FBRX/1.">
+          <EmergencyStop />
+        </Card>
+      </div>
     </Grid>
   );
 }

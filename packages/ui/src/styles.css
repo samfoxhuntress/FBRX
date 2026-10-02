@@ -914,6 +914,22 @@ pre,
 .fx-toast-title {
   font-weight: 600;
 }
+.fx-toast-action {
+  margin-top: 6px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-2);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.fx-toast-action:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 @keyframes fx-fade {
   from {
     opacity: 0;

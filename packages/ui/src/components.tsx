@@ -374,11 +374,18 @@ export function Modal({ title, description, children, footer, onClose, wide }: {
   );
 }
 
+export interface ToastAction {
+  label: string;
+  onClick: () => void;
+}
+
 interface ToastItem {
   id: number;
   title: string;
   body?: string;
   tone: 'info' | 'good' | 'warning' | 'critical';
+  action?: ToastAction;
+  icon?: ReactNode;
 }
 
 const ToastCtx = createContext<(t: Omit<ToastItem, 'id'>) => void>(() => undefined);
@@ -388,7 +395,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const push = useCallback((t: Omit<ToastItem, 'id'>) => {
     const id = Date.now() + Math.random();
     setItems((xs) => [...xs.slice(-4), { ...t, id }]);
-    setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), t.tone === 'critical' ? 9000 : 5000);
+    setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), t.tone === 'critical' || t.action ? 9000 : 5000);
   }, []);
   return (
     <ToastCtx.Provider value={push}>
@@ -398,10 +405,21 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           const Ico = Icons[t.tone === 'good' ? 'checkCircle' : t.tone === 'critical' ? 'octagon' : t.tone === 'warning' ? 'alert' : 'info'];
           return (
             <div className="fx-toast" key={t.id}>
-              <Ico size={18} style={{ color: t.tone === 'info' ? 'var(--accent)' : `var(--${t.tone})`, flex: 'none' }} />
+              {t.icon ?? <Ico size={18} style={{ color: t.tone === 'info' ? 'var(--accent)' : `var(--${t.tone})`, flex: 'none' }} />}
               <div>
                 <div className="fx-toast-title">{t.title}</div>
                 {t.body && <div className="fx-secondary">{t.body}</div>}
+                {t.action && (
+                  <button
+                    className="fx-toast-action"
+                    onClick={() => {
+                      t.action!.onClick();
+                      setItems((xs) => xs.filter((x) => x.id !== t.id));
+                    }}
+                  >
+                    {t.action.label}
+                  </button>
+                )}
               </div>
             </div>
           );
@@ -414,10 +432,12 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 export function useToast() {
   const push = useContext(ToastCtx);
   return {
-    info: (title: string, body?: string) => push({ title, body, tone: 'info' }),
-    success: (title: string, body?: string) => push({ title, body, tone: 'good' }),
-    warning: (title: string, body?: string) => push({ title, body, tone: 'warning' }),
-    error: (title: string, body?: string) => push({ title, body, tone: 'critical' }),
+    info: (title: string, body?: string, action?: ToastAction) => push({ title, body, tone: 'info', action }),
+    success: (title: string, body?: string, action?: ToastAction) => push({ title, body, tone: 'good', action }),
+    warning: (title: string, body?: string, action?: ToastAction) => push({ title, body, tone: 'warning', action }),
+    error: (title: string, body?: string, action?: ToastAction) => push({ title, body, tone: 'critical', action }),
+    /** A toast with its own icon (for example a trophy badge). */
+    custom: (t: { title: string; body?: string; tone?: ToastItem['tone']; action?: ToastAction; icon?: ReactNode }) => push({ tone: 'good', ...t }),
   };
 }
 

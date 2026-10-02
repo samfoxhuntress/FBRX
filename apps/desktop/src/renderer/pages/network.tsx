@@ -1,11 +1,13 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { LanDevice, LanScan, LanScanCompare, NetAdapter, PingResult, SpeedTestResult, TraceHop } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Grid, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
+import { Button, Callout, Card, Empty, Field, Grid, Icons, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
 import { bridge, call, onEvent, pickFile } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
-import { IS_WINDOWS, navigate } from '../app';
+import { IS_WINDOWS, navigate, routeArg } from '../app';
 import { AskButton, askAgent } from '../widgets';
 import { ConnectDialog, type ConnectTarget } from '../consoles';
+import { Speedometer, speedFraction } from '../speedometer';
+import { unlockTrophy } from '../fun';
 import { commandSearchUrl, matchDeviceProfile } from '@fbrx/shared';
 
 type Tab = 'overview' | 'trace' | 'devices' | 'speed' | 'wifi' | 'bluetooth' | 'printers' | 'tools' | 'adapters';
@@ -445,55 +447,112 @@ function Devices({ advanced }: { advanced: boolean }) {
   );
 }
 
-function Speed() {
+/** The 88 mph sequence: needle position (0…1), readout, unit, remark, lightning; then back to zero. */
+const JIGOWATTS: Array<[number, { f?: number; value?: string; unit?: string; label?: string; flux?: boolean }]> = [
+  [0, { f: 0.3, value: '30', unit: 'mph', label: 'Roads? Where we\'re going…' }],
+  [380, { f: 0.62, value: '62' }],
+  [760, { f: 0.41, value: '41' }],
+  [1140, { f: 0.8, value: '80' }],
+  [1500, { f: 0.57, value: '57' }],
+  [1880, { f: 0.88, value: '88', label: 'Great Scott!' }],
+  [2220, { f: 0.79, value: '84' }],
+  [2520, { f: 0.9, value: '88' }],
+  [2820, { f: 0.85, value: '87' }],
+  [3120, { f: 0.88, value: '1.21', unit: 'jigowatts', label: '88 mph', flux: true }],
+  [3260, { flux: false }],
+  [3400, { flux: true }],
+  [3560, { flux: false }],
+  [3700, { flux: true }],
+  [5600, { f: 0, value: '0.0', unit: 'Mbps', label: '', flux: false }],
+];
+
+function Speed({ easterEggs }: { easterEggs: boolean }) {
   const hist = useCore('net.speedHistory');
   const [live, setLive] = useState<{ phase: string; mbps: number } | null>(null);
   const [last, setLast] = useState<SpeedTestResult | null>(null);
-  const { run, busy } = useAction();
+  const [testing, setTesting] = useState(false);
+  const [egg, setEgg] = useState<{ f: number; value: string; unit: string; label: string; flux: boolean } | null>(null);
+  const clicks = useRef<number[]>([]);
+  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
+  const toast = useToast();
+  useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const start = async () => {
     const reqId = newReqId();
+    setTesting(true);
     const off = onEvent('net.event', (e) => {
       if (e.reqId === reqId && e.type === 'speed') setLive({ phase: e.phase ?? '', mbps: e.mbps ?? 0 });
     });
-    const r = await run('speed', () => call('net.speedTest', { reqId }));
-    off();
-    setLive(null);
-    if (r) {
+    try {
+      const r = await call('net.speedTest', { reqId });
       setLast(r);
       hist.reload();
+    } catch (e) {
+      toast.error('Speed test failed', (e as Error).message);
+    } finally {
+      off();
+      setLive(null);
+      setTesting(false);
     }
+  };
+  const timeTravel = () => {
+    unlockTrophy('jigowatts');
+    let state = { f: 0, value: '0.0', unit: 'mph', label: '', flux: false };
+    for (const [t, patch] of JIGOWATTS) {
+      timers.current.push(
+        setTimeout(() => {
+          state = { ...state, ...patch };
+          setEgg(state);
+        }, t),
+      );
+    }
+    // Back to normal, as if nothing happened.
+    timers.current.push(setTimeout(() => setEgg(null), 6700));
+  };
+  const onRun = () => {
+    const now = Date.now();
+    clicks.current = [...clicks.current.filter((t) => now - t < 4000), now];
+    if (easterEggs && !egg && clicks.current.length >= 8) {
+      clicks.current = [];
+      timeTravel();
+      return;
+    }
+    if (!testing && !egg) void start();
   };
   const h = [...(hist.data ?? [])].reverse();
   const shown = last ?? hist.data?.[0];
+  const phaseName = (p: string) => (p ? p[0].toUpperCase() + p.slice(1) : 'Measuring');
+  const dial = egg
+    ? { fraction: egg.f, value: egg.value, unit: egg.unit, label: egg.label, flux: egg.flux }
+    : live
+      ? { fraction: speedFraction(live.mbps), value: live.mbps.toFixed(1), unit: 'Mbps', label: phaseName(live.phase) }
+      : testing
+        ? { fraction: 0, value: '…', unit: 'Mbps', label: 'Connecting' }
+        : shown
+          ? { fraction: speedFraction(shown.downloadMbps), value: String(shown.downloadMbps), unit: 'Mbps', label: 'Download' }
+          : { fraction: 0, value: '0.0', unit: 'Mbps', label: 'Press Run test' };
   return (
     <>
       <Card
         title="Internet speed"
         subtitle="Measured against Cloudflare's nearest server. Uses about 100 MB of data."
-        actions={
-          <>
-            {shown && !live && <AskButton label="Is this good?" prompt="Here are my internet speed test results (newest first). Is this good for what most people do (video calls, streaming, gaming, large downloads)? If something looks wrong, how do I fix it?" context={(hist.data ?? []).slice(0, 8)} />}
-            <Button variant="primary" icon="play" loading={busy === 'speed'} onClick={() => void start()}>
-              Run test
-            </Button>
-          </>
-        }
+        actions={shown && !live && !egg ? <AskButton label="Is this good?" prompt="Here are my internet speed test results (newest first). Is this good for what most people do (video calls, streaming, gaming, large downloads)? If something looks wrong, how do I fix it?" context={(hist.data ?? []).slice(0, 8)} /> : undefined}
       >
-        {live && (
-          <div className="speed-live">
-            <div className="speed-num">{live.mbps.toFixed(1)}</div>
-            <div className="fx-muted">Mbps · {live.phase}</div>
+        <div className="speed-panel">
+          <div className="speed-dial">
+            <Speedometer {...dial} />
+            {/* Stays clickable while a test runs, so an impatient person can click it again. And again. */}
+            <button type="button" className={`fx-btn primary speed-go${testing ? ' running' : ''}`} aria-busy={testing} onClick={onRun}>
+              {testing ? <span className="fx-spinner" /> : <Icons.play size={16} />}
+              {testing ? 'Testing…' : 'Run test'}
+            </button>
           </div>
-        )}
-        {!live && shown && (
-          <Grid cols={4}>
-            <StatTile label="Download" value={`${shown.downloadMbps} Mbps`} />
-            <StatTile label="Upload" value={`${shown.uploadMbps} Mbps`} />
-            <StatTile label="Latency" value={shown.latencyMs != null ? `${shown.latencyMs} ms` : '—'} foot={`jitter ${shown.jitterMs ?? '—'} ms`} />
-            <StatTile label="Server" value={shown.server ?? '—'} foot={formatDate(shown.at)} />
-          </Grid>
-        )}
-        {!live && !shown && <Empty title="No tests yet" />}
+          <div className="speed-stats">
+            <StatTile label="Download" value={shown ? `${shown.downloadMbps} Mbps` : '—'} />
+            <StatTile label="Upload" value={shown ? `${shown.uploadMbps} Mbps` : '—'} />
+            <StatTile label="Latency" value={shown?.latencyMs != null ? `${shown.latencyMs} ms` : '—'} foot={shown ? `jitter ${shown.jitterMs ?? '—'} ms` : undefined} />
+            <StatTile label="Server" value={shown?.server ?? '—'} foot={shown ? formatDate(shown.at) : 'No tests yet'} />
+          </div>
+        </div>
       </Card>
       {h.length > 1 && (
         <Card title="History">
@@ -780,8 +839,11 @@ function Adapters() {
   );
 }
 
-export function NetworkPage({ advanced }: { advanced: boolean }) {
-  const [tab, setTab] = useState<Tab>('overview');
+const NET_TABS: Tab[] = ['overview', 'trace', 'devices', 'speed', 'wifi', 'bluetooth', 'printers', 'tools', 'adapters'];
+
+export function NetworkPage({ advanced, easterEggs }: { advanced: boolean; easterEggs: boolean }) {
+  // network/speed, network/printers… open that tab directly.
+  const [tab, setTab] = useState<Tab>(() => (NET_TABS.includes(routeArg() as Tab) ? (routeArg() as Tab) : 'overview'));
   const tabs: Array<{ id: Tab; label: ReactNode }> = [
     { id: 'overview', label: 'Overview' },
     { id: 'trace', label: 'Ping & trace' },
@@ -799,7 +861,7 @@ export function NetworkPage({ advanced }: { advanced: boolean }) {
       {tab === 'overview' && <Overview />}
       {tab === 'trace' && <Trace />}
       {tab === 'devices' && <Devices advanced={advanced} />}
-      {tab === 'speed' && <Speed />}
+      {tab === 'speed' && <Speed easterEggs={easterEggs} />}
       {tab === 'wifi' && <Wifi />}
       {tab === 'bluetooth' && <Bluetooth />}
       {tab === 'printers' && <Printers />}

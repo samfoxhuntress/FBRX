@@ -7,7 +7,7 @@ import { useCore } from '../hooks';
 import { AskButton, askAgent } from '../widgets';
 import { COMMAND_GROUPS, type LibraryCommand } from '../command-library';
 import { DeviceConsolesPanel, useConsoleSessions } from '../consoles';
-import { summonGoose } from '../fun';
+import { summonGoose, unlockTrophy } from '../fun';
 
 interface Block {
   id: string;
@@ -281,9 +281,15 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
       }
       if (egg === 'matrix') {
         setMatrix(true);
+        unlockTrophy('matrix');
         return local(command, 'Follow the white rabbit.');
       }
-      if (egg) return local(command, egg);
+      if (egg) {
+        const c = command.trim().toLowerCase();
+        if (c === 'sudo make me a sandwich') unlockTrophy('sandwich');
+        if (egg.startsWith('418')) unlockTrophy('teapot');
+        return local(command, egg);
+      }
     }
     const m = command.match(/^cd\s+(.+)$/i);
     if (m) {

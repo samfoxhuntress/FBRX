@@ -1,8 +1,9 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import type { ModelInfo } from '@fbrx/shared';
-import { Button, formatBytes } from '@fbrx/ui';
+import { Button, formatBytes, formatDate, useConfirm, useToast } from '@fbrx/ui';
 import { navigate } from './app';
 import { call } from './client';
+import { useCore } from './hooks';
 
 const OTHER = '__other__';
 
@@ -105,5 +106,84 @@ export function AskButton({ prompt, context, label = 'Analyze', iconOnly = false
     <Button size="sm" variant={variant} className={variant ? undefined : 'ask-btn'} icon="sparkles" title={`${label} with ${agent}`} aria-label={`${label} with ${agent}`} onClick={() => askAgent(prompt, context)}>
       {iconOnly ? null : label}
     </Button>
+  );
+}
+
+/** Whether the AI is on emergency stop (and since when, by whom), kept fresh as it changes. */
+export function useAiHalt() {
+  const { data, reload } = useCore('system.status', undefined, ['ai.halted'], 30_000);
+  return { halt: data?.aiHalt ?? null, loaded: !!data, reload };
+}
+
+/**
+ * The emergency stop: one press cancels everything the AI is doing (chats, tools waiting for approval, AI apps using
+ * FBRX over the Local API) and keeps it stopped until someone at this computer resumes it.
+ */
+export function EmergencyStop({ compact = false }: { compact?: boolean }) {
+  const { halt, loaded } = useAiHalt();
+  const agent = useContext(AgentNameContext);
+  const toast = useToast();
+  const { confirm, dialog } = useConfirm();
+  const [busy, setBusy] = useState(false);
+  if (!loaded) return null;
+  const stop = async () => {
+    setBusy(true);
+    try {
+      const r = await call('ai.hardStop');
+      toast.warning('AI stopped', `${r.cancelledRuns} run${r.cancelledRuns === 1 ? '' : 's'} cancelled, ${r.deniedApprovals} approval${r.deniedApprovals === 1 ? '' : 's'} denied. Nothing AI-driven runs until you resume.`);
+    } catch (e) {
+      toast.error('Could not stop the AI', (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const resume = async () => {
+    if (!(await confirm({ title: `Resume ${agent}?`, body: `${agent} and AI apps connected to FBRX can work again, within your Governance rules.`, confirmLabel: 'Resume' }))) return;
+    setBusy(true);
+    try {
+      await call('ai.resume');
+      toast.success('AI resumed');
+    } catch (e) {
+      toast.error('Could not resume', (e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  if (halt) {
+    return (
+      <div className={`estop halted${compact ? ' compact' : ''}`}>
+        <span className="estop-light" aria-hidden />
+        <div className="estop-text">
+          <b>AI on emergency stop</b>
+          {!compact && (
+            <span>
+              Since {formatDate(halt.at)} ({halt.by.replace(/^user:/, '')}). Chats, AI tools and connected AI apps are blocked.
+            </span>
+          )}
+        </div>
+        <Button size="sm" variant="primary" icon="play" loading={busy} onClick={() => void resume()}>
+          Resume
+        </Button>
+        {dialog}
+      </div>
+    );
+  }
+  return (
+    <div className={`estop${compact ? ' compact' : ''}`}>
+      <button className="estop-button" disabled={busy} onClick={() => void stop()} title="Stops every AI action right now and keeps the AI stopped until you resume it">
+        <span className="estop-cap" aria-hidden>
+          STOP
+        </span>
+      </button>
+      {compact ? (
+        <span className="estop-label">Emergency stop</span>
+      ) : (
+        <div className="estop-text">
+          <b>Emergency stop</b>
+          <span>Cancels everything {agent} and connected AI apps are doing, denies waiting approvals and stops the local model. It stays stopped until you resume.</span>
+        </div>
+      )}
+      {dialog}
+    </div>
   );
 }

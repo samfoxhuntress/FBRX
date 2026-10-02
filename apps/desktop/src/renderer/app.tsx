@@ -4,8 +4,9 @@ import { AdvancedTag, Button, Callout, FBRX_MARK, Icons, Shell, Spinner, Status,
 import { bridge, call, onEvent } from './client';
 import { isLocked, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
-import { AgentNameContext } from './widgets';
-import { GooseOverlay, summonGoose, useKonami } from './fun';
+import { AgentNameContext, EmergencyStop } from './widgets';
+import { GooseOverlay, summonGoose, unlockTrophy, useKonami } from './fun';
+import { TrophyBadge } from './trophies';
 import { useConsoleSessions } from './consoles';
 import { DashboardPage } from './pages/dashboard';
 import { AgentPage } from './pages/agent';
@@ -141,7 +142,8 @@ export function App() {
 
 function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeof useCore<'settings.get'>>['data'] }) {
   const toast = useToast();
-  const { data: status } = useCore('system.status', undefined, ['service.changed', 'vault.changed', 'fleet.changed', 'license.changed', 'approval.requested', 'approval.resolved', 'runtime.changed'], 15_000);
+  const { data: status } = useCore('system.status', undefined, ['service.changed', 'vault.changed', 'fleet.changed', 'license.changed', 'approval.requested', 'approval.resolved', 'runtime.changed', 'ai.halted'], 15_000);
+  const { data: trophies } = useCore('fun.trophies', undefined, ['fun.trophy']);
   const { data: alertCounts } = useCore('alerts.counts', undefined, ['alerts.changed'], 60_000);
   const [forceOnboarding, setForceOnboarding] = useState(false);
   // First start of this window: show the start-up animation and play the start-up sound once.
@@ -166,11 +168,25 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     return () => window.removeEventListener('keydown', onKey);
   }, []);
   useEffect(() => onEvent('notification', (n) => toast[n.level === 'error' ? 'error' : n.level === 'warning' ? 'warning' : n.level === 'success' ? 'success' : 'info'](n.title, n.body)), [toast]);
+  // A badge for the trophy case, with a way to go and look at it.
+  useEffect(
+    () =>
+      onEvent('fun.trophy', (t) =>
+        toast.custom({
+          title: t.golden ? 'Golden Goose unlocked!' : `Trophy unlocked: ${t.name}`,
+          body: t.golden ? 'You found every easter egg. From now on the goose wears a golden egg with a #1 ribbon.' : 'It is in your Trophy case (Settings → Trophy case).',
+          icon: <TrophyBadge id={t.id} found size={36} />,
+          action: { label: 'See trophy case', onClick: () => navigate('settings/trophies') },
+        }),
+      ),
+    [toast],
+  );
   const fun = settings?.settings.appearance.easterEggs ?? false;
   useKonami(
     fun,
     useCallback(() => {
       summonGoose();
+      unlockTrophy('konami');
       toast.success('Cheat code accepted', '30 extra lives. Also, a goose.');
     }, [toast]),
   );
@@ -185,7 +201,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       logoClicks.current = [];
       setWeaving(true);
       setTimeout(() => setWeaving(false), 2400);
-      toast.success('You found the loom', 'Achievement unlocked: Master Weaver.');
+      // The first time, the trophy toast says where the badge went; after that the loom just spins.
+      if (trophies?.unlocked.loom) toast.info('The loom spins', 'Weave, weave, weave.');
+      unlockTrophy('loom');
     }
   };
   // "goose" (from Spotlight or a link) releases the goose and goes back to where you were.
@@ -274,7 +292,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'lab':
         return advanced ? <LabPage /> : <AdvancedOnly title="Virtual lab" onEnable={() => setAdvanced(true)} locked={advancedLocked} />;
       case 'network':
-        return <NetworkPage advanced={advanced} />;
+        return <NetworkPage advanced={advanced} easterEggs={s.appearance.easterEggs} />;
       case 'files':
         return <FilesPage />;
       case 'processes':
@@ -284,7 +302,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'toolbox':
         return <ToolboxPage advanced={advanced} easterEggs={s.appearance.easterEggs} />;
       case 'library':
-        return <LibraryPage agentName={agentName} advanced={advanced} />;
+        return <LibraryPage agentName={agentName} advanced={advanced} easterEggs={s.appearance.easterEggs} />;
       case 'mesh':
         return <MeshPage />;
       case 'aicoord':
@@ -328,6 +346,14 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
             v{status.version} · {status.license.edition}
             {status.devMode ? ' · dev' : ''}
             {advanced ? ' · advanced' : ''}
+            {fun && trophies && Object.keys(trophies.unlocked).length > 0 && (
+              <>
+                {' · '}
+                <button className="footer-trophies" onClick={() => navigate('settings/trophies')} title="Your trophy case">
+                  <Icons.trophy size={11} /> {Object.keys(trophies.unlocked).filter((k) => k !== 'golden').length}
+                </button>
+              </>
+            )}
           </span>
         }
       >
@@ -392,6 +418,7 @@ function TopBar({
         </span>
       )}
       <span className="fx-spacer" />
+      {status.aiHalt && <EmergencyStop compact />}
       {openConsoles > 0 && route !== 'terminal' && (
         <button className="model-pill console-pill" onClick={() => navigate('terminal/console')} title="Device consoles that are connected">
           <span className="dot ok" aria-hidden />

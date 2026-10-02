@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, shell, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, shell, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type Rectangle } from 'electron';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { userInfo } from 'node:os';
@@ -6,6 +6,7 @@ import { Kernel, toCoreError } from '@fbrx/core';
 import { PRODUCT_NAME } from '@fbrx/shared';
 import { createElectronPlatform, openExternalSafe } from './platform';
 import { ElectronUpdateController } from './updater';
+import { CursorPuppet } from './cursor-puppet';
 
 const dataDir = process.env.FBRX_HOME ?? app.getPath('userData');
 const rendererUrl = process.env.FBRX_RENDERER_URL ?? null;
@@ -26,6 +27,9 @@ let tray: Tray | null = null;
 let quitting = false;
 let goose: BrowserWindow | null = null;
 let gooseFeed: ReturnType<typeof setInterval> | null = null;
+let gooseArea: Rectangle | null = null;
+let gooseHolding = false;
+const puppet = new CursorPuppet();
 
 /**
  * The Windows installer starts `FBRX OS.exe --fbrx-quit` before replacing files: the running copy receives it as a
@@ -221,6 +225,9 @@ function summonGoose() {
     },
   });
   goose = g;
+  gooseArea = area;
+  // Warm up the pointer helper now, so it is ready when the goose grabs the pointer.
+  puppet.start();
   g.setAlwaysOnTop(true, 'screen-saver');
   g.setIgnoreMouseEvents(true, { forward: true });
   g.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -236,6 +243,8 @@ function summonGoose() {
     if (gooseFeed) clearInterval(gooseFeed);
     gooseFeed = null;
     goose = null;
+    gooseHolding = false;
+    puppet.stop();
     trayMenu();
   });
   // A goose that somehow stays too long is sent home.
@@ -258,6 +267,9 @@ function trayMenu() {
     { label: 'New agent chat', click: () => showWindow('agent') },
     { label: `Spotlight${spotlightKey ? ` (${spotlightKey})` : ''}`, click: () => showSpotlight() },
     { label: pending ? `Review ${pending} pending approval${pending > 1 ? 's' : ''}` : 'No pending approvals', enabled: pending > 0, click: () => showWindow('approvals') },
+    kernel.aiHalt()
+      ? { label: 'Resume the AI (on emergency stop)', click: () => void kernel?.resumeAi(actor) }
+      : { label: 'Emergency stop: halt the AI', click: () => void kernel?.hardStop(`${actor} (tray)`) },
     ...(funAllowed() ? [goose ? { label: 'Shoo the goose', click: () => goose?.webContents.send('fbrx:goose', { type: 'shoo' }) } : { label: 'Release the goose', click: () => summonGoose() }] : []),
     { type: 'separator' },
     { label: 'Quit', click: () => ((quitting = true), app.quit()) },
@@ -332,9 +344,31 @@ function registerIpc() {
     // Only the goose's own window may change how it takes the mouse.
     else if (goose && e.sender === goose.webContents) {
       if (action === 'leave') goose.close();
-      else if (action === 'interactive' || action === 'capture') goose.setIgnoreMouseEvents(!on, { forward: true });
+      else if (action === 'interactive') goose.setIgnoreMouseEvents(!on, { forward: true });
+      else if (action === 'capture') {
+        // While the goose holds the pointer its window takes the clicks, and on Windows the real pointer is dragged
+        // along with its beak (see fbrx:goose-drag). Held for two or three seconds at most.
+        goose.setIgnoreMouseEvents(!on, { forward: true });
+        gooseHolding = !!on && puppet.available;
+        if (gooseHolding) {
+          const g = goose;
+          setTimeout(() => {
+            if (goose === g) gooseHolding = false;
+          }, 3000).unref();
+        }
+        return { realPointer: gooseHolding };
+      }
     }
     return true;
+  });
+  // The goose's beak, in its window's coordinates, while it holds the pointer.
+  ipcMain.on('fbrx:goose-drag', (e, x: unknown, y: unknown) => {
+    if (!goose || e.sender !== goose.webContents || !gooseHolding || !gooseArea) return;
+    if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return;
+    const a = gooseArea;
+    const dip = { x: Math.round(a.x + Math.max(0, Math.min(a.width - 1, x))), y: Math.round(a.y + Math.max(0, Math.min(a.height - 1, y))) };
+    const p = process.platform === 'win32' ? screen.dipToScreenPoint(dip) : dip;
+    puppet.move(p.x, p.y);
   });
 }
 
@@ -363,7 +397,7 @@ async function boot() {
       if (!funAllowed()) goose?.close();
       trayMenu();
     }
-    if (name === 'approval.requested' || name === 'approval.resolved' || name === 'fleet.changed' || name === 'vault.changed') trayMenu();
+    if (name === 'approval.requested' || name === 'approval.resolved' || name === 'fleet.changed' || name === 'vault.changed' || name === 'ai.halted') trayMenu();
   });
   kernel.events.on('approval.requested', (r) => {
     if (!win?.isFocused()) {
@@ -413,6 +447,7 @@ app.on('before-quit', () => {
   globalShortcut.unregisterAll();
   spotlight?.destroy();
   goose?.destroy();
+  puppet.stop();
 });
 
 app.on('window-all-closed', () => {

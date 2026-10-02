@@ -7,6 +7,7 @@ import { navigate } from '../app';
 import { useCore } from '../hooks';
 import { AskButton } from '../widgets';
 import { COMMAND_GROUPS } from '../command-library';
+import { unlockTrophy } from '../fun';
 
 interface Example {
   label: string;
@@ -445,6 +446,17 @@ function QrTool({ seed }: { seed: Example | null }) {
   );
 }
 
+/** Counts coin flips across visits (reset after an edge). */
+function bumpFlips(reset = false): number {
+  try {
+    const n = reset ? 0 : Number(localStorage.getItem('fbrx.coinFlips') ?? 0) + 1;
+    localStorage.setItem('fbrx.coinFlips', String(n));
+    return n;
+  } catch {
+    return 0;
+  }
+}
+
 const GOOSE_ANSWERS = ['Honk.', 'Absolutely. Honk.', 'Ask again after a nap.', 'The goose says no.', 'Signs point to honk.', 'Without a doubt.', 'Very doubtful.', 'Outlook good, if you back up first.', 'The goose is busy. Try later.', 'Yes, but wear safety goggles.'];
 
 function DecideTool({ seed, fun }: { seed: Example | null; fun: boolean }) {
@@ -459,9 +471,13 @@ function DecideTool({ seed, fun }: { seed: Example | null; fun: boolean }) {
           variant="primary"
           icon="dice"
           onClick={() => {
-            // One in a thousand coins lands on its edge.
-            if (fun && rnd(1000) === 0) setOut({ big: 'Edge!', small: 'It landed on its edge. Take the rest of the day off.' });
-            else setOut({ big: rnd(2) ? 'Heads' : 'Tails' });
+            // About one coin in a hundred lands on its edge, and a patient flipper always gets there by flip 150.
+            const flips = fun ? bumpFlips() : 0;
+            if (fun && (rnd(100) === 0 || flips >= 150)) {
+              bumpFlips(true);
+              unlockTrophy('edge');
+              setOut({ big: 'Edge!', small: 'It landed on its edge. Take the rest of the day off.' });
+            } else setOut({ big: rnd(2) ? 'Heads' : 'Tails', small: fun && flips > 1 ? `Flip ${flips}` : undefined });
           }}
         >
           Flip a coin
@@ -479,6 +495,7 @@ function DecideTool({ seed, fun }: { seed: Example | null; fun: boolean }) {
           icon="dice"
           onClick={() => {
             const n = rnd(20) + 1;
+            if (n === 20 && fun) unlockTrophy('nat20');
             setOut({ big: String(n), small: n === 20 ? 'Natural 20! Critical success.' : n === 1 ? 'Natural 1. Oof.' : 'Twenty-sided die' });
           }}
         >

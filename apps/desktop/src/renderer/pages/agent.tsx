@@ -5,7 +5,7 @@ import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
 import { Markdown } from '../markdown';
 import { navigate, routeArg } from '../app';
-import { ModelPicker } from '../widgets';
+import { EmergencyStop, ModelPicker } from '../widgets';
 
 const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'activity', title: 'Check my PC', prompt: 'Give me a quick health check of this computer: performance right now, storage, security status and any recent errors. Tell me what (if anything) needs attention.' },
@@ -299,6 +299,9 @@ export function AgentPage({ agentName }: { agentName: string }) {
             </button>
           ))}
           {!convs.data?.length && <div className="fx-muted" style={{ padding: 12, fontSize: 13 }}>No conversations yet.</div>}
+        </div>
+        <div className="agent-list-foot">
+          <EmergencyStop compact />
         </div>
       </Card>
       <Card className="agent-main" flush>
