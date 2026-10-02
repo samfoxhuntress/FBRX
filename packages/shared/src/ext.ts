@@ -773,6 +773,8 @@ export interface ExtMethods {
   'lab.createVm': (p: VmSpec) => ElevatedResult;
   'lab.vmAction': (p: { name: string; action: (typeof VM_ACTIONS)[number]; arg?: string }) => ElevatedResult;
   'lab.openManager': () => Ok;
+  /** Opens a VM's console window (Virtual Machine Connection). */
+  'lab.openConsole': (p: { name: string }) => Ok;
 
   'net.context': () => NetContext;
   'net.publicIp': () => { ip: string | null; isp: string | null; location: string | null };
@@ -887,6 +889,7 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'lab.createVm',
   'lab.vmAction',
   'lab.openManager',
+  'lab.openConsole',
   'net.setIp',
   'net.printerAction',
   'net.exportCsv',

@@ -258,6 +258,10 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       lab.openManager();
       return { ok: true };
     },
+    'lab.openConsole': (p) => {
+      lab.openConsole(z.object({ name: z.string().min(1).max(100) }).parse(p).name);
+      return { ok: true };
+    },
 
     // --------------------------------------------------------------------------------------- network
     'net.context': () => k.net.context(),

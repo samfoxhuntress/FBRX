@@ -134,3 +134,11 @@ export function openManager(): void {
   requireWindows('Hyper-V Manager');
   spawn('mmc.exe', ['virtmgmt.msc'], { detached: true, stdio: 'ignore' }).unref();
 }
+
+/** Opens Virtual Machine Connection for a VM (Windows asks for administrator rights if the account needs them). */
+export function openConsole(name: string): void {
+  requireWindows('The VM console');
+  const n = name.replace(/["\r\n]/g, '').trim();
+  if (!n) throw new CoreError('INVALID_ARGUMENT', 'Choose a VM');
+  spawn('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command', `Start-Process vmconnect.exe -ArgumentList @('localhost', '"' + ${psq(n)} + '"')`], { detached: true, stdio: 'ignore', windowsHide: true }).unref();
+}

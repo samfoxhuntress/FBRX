@@ -816,3 +816,430 @@
   position: relative;
   z-index: 1;
 }
+
+/* ------------------------------------------------------------------------------------------ FBRX Glass */
+/*
+ * The dashboard: classic glass. Panels are frosted and see-through, with a glossy upper half like old-school
+ * desktop glass, over a soft aurora in the theme's colors. High contrast keeps solid panels.
+ */
+.glass-dash {
+  position: relative;
+}
+.glass-dash > *:not(.glass-aurora) {
+  position: relative;
+  z-index: 1;
+}
+.glass-aurora {
+  position: absolute;
+  inset: -40px -60px auto;
+  height: 620px;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    radial-gradient(38% 46% at 14% 18%, color-mix(in srgb, var(--accent) 34%, transparent), transparent 70%),
+    radial-gradient(34% 40% at 82% 10%, color-mix(in srgb, var(--glow) 42%, transparent), transparent 70%),
+    radial-gradient(40% 50% at 60% 72%, color-mix(in srgb, var(--glow-2, var(--accent)) 26%, transparent), transparent 70%);
+  filter: blur(36px);
+  opacity: 0.85;
+}
+:root[data-preset='contrast'] .glass-aurora {
+  display: none;
+}
+:root:not([data-preset='contrast'])[data-theme] .glass-dash .fx-card,
+:root:not([data-preset='contrast'])[data-theme] .glass-tile,
+:root:not([data-preset='contrast'])[data-theme] .glass-hero {
+  background: color-mix(in srgb, var(--surface-1) 56%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  backdrop-filter: blur(22px) saturate(1.5);
+  border: 1px solid color-mix(in srgb, #ffffff 20%, transparent);
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.32),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.1),
+    0 18px 40px -26px rgba(0, 0, 0, 0.6);
+}
+:root:not([data-preset='contrast'])[data-theme='light'] .glass-dash .fx-card,
+:root:not([data-preset='contrast'])[data-theme='light'] .glass-tile,
+:root:not([data-preset='contrast'])[data-theme='light'] .glass-hero {
+  background: color-mix(in srgb, #ffffff 58%, transparent);
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow:
+    inset 0 1px 0 #ffffff,
+    0 1px 2px rgba(0, 0, 0, 0.05),
+    0 18px 36px -26px rgba(0, 0, 0, 0.35);
+}
+/* The gloss: a bright upper half that stops at a soft line, like a pane of glass catching the light. */
+.glass-dash .fx-card,
+.glass-tile,
+.glass-hero {
+  position: relative;
+}
+:root:not([data-preset='contrast']) .glass-dash .fx-card::before,
+:root:not([data-preset='contrast']) .glass-tile::before,
+:root:not([data-preset='contrast']) .glass-hero::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.045) 46%, transparent 47%);
+}
+.glass-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 24px;
+  align-items: center;
+  padding: 22px 28px;
+  border-radius: var(--radius-lg);
+}
+@media (max-width: 960px) {
+  .glass-hero {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+.glass-hero-main {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.glass-eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.glass-eyebrow b {
+  color: var(--accent);
+  font-weight: 800;
+}
+.glass-sub {
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.glass-hero-side {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  min-width: 220px;
+}
+.glass-reasons {
+  font-size: 12px;
+  color: var(--text-muted);
+  text-align: center;
+  max-width: 240px;
+}
+.glass-ring {
+  position: relative;
+  width: 120px;
+  height: 120px;
+  color: var(--text-primary);
+}
+.glass-ring-text {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.glass-ring-text b {
+  font-size: 32px;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+}
+.glass-ring-text span {
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--text-secondary);
+  margin-top: 4px;
+}
+.glass-insights {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+}
+@media (max-width: 1100px) {
+  .glass-insights {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+.glass-tile {
+  padding: 14px 16px;
+  border-radius: var(--radius-lg);
+  min-height: 104px;
+  transition:
+    transform 0.18s ease,
+    border-color 0.18s ease;
+}
+.glass-tile.clickable {
+  cursor: pointer;
+}
+.glass-tile.clickable:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent) !important;
+}
+.glass-tile-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.glass-tile-head svg {
+  color: var(--accent);
+}
+.glass-tile-value {
+  margin-top: 8px;
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.glass-tile-foot {
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.glass-tile-tip {
+  margin-top: 8px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+/* Screws: the hero is bolted on at four corners. One tile is not. */
+.screw {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 35%, #f6f8fa, #9aa1aa 62%, #6b717a);
+  box-shadow:
+    inset 0 0 0 0.5px rgba(0, 0, 0, 0.35),
+    0 1px 1.5px rgba(0, 0, 0, 0.35);
+  z-index: 2;
+  transition: transform 0.25s ease;
+}
+.screw::after {
+  content: '';
+  position: absolute;
+  left: 1.5px;
+  right: 1.5px;
+  top: 50%;
+  height: 1.3px;
+  margin-top: -0.65px;
+  background: rgba(40, 40, 44, 0.75);
+  transform: rotate(45deg);
+}
+.glass-hero .screw {
+  width: 11px;
+  height: 11px;
+}
+.s-tl {
+  top: 8px;
+  left: 8px;
+}
+.s-tr {
+  top: 8px;
+  right: 8px;
+}
+.s-bl {
+  bottom: 8px;
+  left: 8px;
+}
+.s-br {
+  bottom: 8px;
+  right: 8px;
+}
+.screw.loose {
+  transform: translate(1px, 2px) rotate(70deg);
+}
+.screw.loose.looser {
+  transform: translate(3px, 4px) rotate(160deg);
+  box-shadow: 0 3px 4px rgba(0, 0, 0, 0.35);
+}
+.loose-slot {
+  position: relative;
+  min-height: 104px;
+}
+.loose-tile {
+  height: 100%;
+  cursor: pointer;
+}
+.loose-tile.wobbly {
+  transform: rotate(0.8deg);
+  transform-origin: 12px 12px;
+}
+.loose-tile.wobbly:hover {
+  transform: rotate(1.3deg);
+}
+.loose-tile.rattle {
+  animation: glass-rattle 0.38s ease;
+}
+@keyframes glass-rattle {
+  0% {
+    transform: rotate(0.8deg);
+  }
+  20% {
+    transform: rotate(-1.8deg);
+  }
+  40% {
+    transform: rotate(2.6deg) translateY(1px);
+  }
+  60% {
+    transform: rotate(-1deg);
+  }
+  80% {
+    transform: rotate(1.6deg);
+  }
+  100% {
+    transform: rotate(0.8deg);
+  }
+}
+/* Swings off its last screw, then falls. */
+.loose-tile.falling {
+  z-index: 5;
+  transform-origin: 12px 12px;
+  animation: glass-hinge 1.9s ease-in-out forwards;
+}
+@keyframes glass-hinge {
+  0% {
+    transform: rotate(0.8deg);
+  }
+  20%,
+  60% {
+    transform: rotate(80deg);
+    animation-timing-function: ease-in-out;
+  }
+  40%,
+  80% {
+    transform: rotate(62deg);
+    animation-timing-function: ease-in-out;
+    opacity: 1;
+  }
+  100% {
+    transform: translate3d(0, 700px, 0) rotate(80deg);
+    opacity: 0;
+  }
+}
+.loose-behind {
+  position: absolute;
+  inset: 0;
+  border-radius: var(--radius-lg);
+  border: 1px dashed var(--border-strong);
+  background: color-mix(in srgb, var(--surface-2) 70%, transparent);
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow: hidden;
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.loose-stripes {
+  height: 8px;
+  margin: -10px -12px 0;
+  background: repeating-linear-gradient(-45deg, #f0b429 0 10px, #1f1f1f 10px 20px);
+  opacity: 0.8;
+}
+.loose-found {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  line-height: 1.35;
+}
+.loose-found b {
+  color: var(--text-primary);
+}
+
+/* The split-flap board: dark, mechanical, a little worn. */
+.flapboard {
+  display: grid;
+  gap: 3px;
+  padding: 10px;
+  border-radius: 10px;
+  background: linear-gradient(180deg, #0d0e11, #08090b);
+  box-shadow:
+    inset 0 2px 10px rgba(0, 0, 0, 0.7),
+    0 1px 0 rgba(255, 255, 255, 0.08);
+  font-family: var(--mono);
+  font-size: clamp(12px, 1.45vw, 22px);
+  font-weight: 700;
+  user-select: none;
+}
+.flap {
+  position: relative;
+  height: 1.6em;
+  border-radius: 3px;
+  color: #f3f0e6;
+  perspective: 240px;
+  cursor: default;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.6);
+}
+.flap-half {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 50%;
+  overflow: hidden;
+}
+.flap-half > span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 200%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.flap-top {
+  top: 0;
+  border-radius: 3px 3px 0 0;
+  background: linear-gradient(180deg, #24272e, #1a1c21);
+}
+.flap-top > span {
+  top: 0;
+}
+.flap-bottom {
+  bottom: 0;
+  border-radius: 0 0 3px 3px;
+  background: linear-gradient(180deg, #16181c, #1d2025);
+}
+.flap-bottom > span {
+  bottom: 0;
+}
+.flap::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 50%;
+  height: 1px;
+  margin-top: -0.5px;
+  background: rgba(0, 0, 0, 0.8);
+  z-index: 3;
+}
+.flap-leaf {
+  z-index: 2;
+  transform-origin: 50% 100%;
+  backface-visibility: hidden;
+  animation: flap-fall 0.12s ease-in forwards;
+}
+@keyframes flap-fall {
+  to {
+    transform: rotateX(-90deg);
+  }
+}
+.flap:hover .flap-top,
+.flap:hover .flap-bottom {
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+.flap.blank {
+  color: transparent;
+}

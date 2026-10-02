@@ -229,7 +229,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const agentName = s.ai.agentName;
 
   const nav: NavItem[] = [
-    { id: 'home', label: 'Dashboard', icon: 'dashboard', section: 'Command' },
+    { id: 'home', label: 'FBRX Glass', icon: 'dashboard', section: 'Command' },
     { id: 'agent', label: agentName, icon: 'sparkles', section: 'Command' },
     { id: 'alerts', label: 'Alerts', icon: 'bell', count: alertCounts?.unread, section: 'Command' },
     { id: 'tasks', label: 'Tasks', icon: 'tasks', section: 'Workspace' },
