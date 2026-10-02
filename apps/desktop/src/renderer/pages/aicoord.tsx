@@ -18,7 +18,18 @@ export function AiCoordPage({ agentName }: { agentName: string }) {
   const [provider, setProvider] = useState('');
   const [prompt, setPrompt] = useState('');
   const [answer, setAnswer] = useState<{ text: string; who: string } | null>(null);
-  const usable = (providers.data ?? []).filter((p) => p.enabled && p.available && !p.blockedByPolicy);
+  const [tests, setTests] = useState<Record<string, { ok: boolean; message: string } | 'running'>>({});
+  const claudeCode = useCore('aicoord.claudeCode');
+  // Claude through Claude Code (no API key) joins the configured models as a second-opinion choice.
+  const usable = [
+    ...(providers.data ?? []).filter((p) => p.enabled && p.available && !p.blockedByPolicy).map((p) => ({ id: p.id, name: p.name })),
+    ...(claudeCode.data?.available ? [{ id: 'claude-code', name: 'Claude (via Claude Code on this PC)' }] : []),
+  ];
+  const test = async (id: string) => {
+    setTests((t) => ({ ...t, [id]: 'running' }));
+    const r = await call('aicoord.test', { appId: id }).catch((e: Error) => ({ ok: false, message: e.message, tools: 0, durationMs: 0 }));
+    setTests((t) => ({ ...t, [id]: { ok: r.ok, message: r.message } }));
+  };
 
   const scan = async (announce: boolean) => {
     setScanning(true);
@@ -72,8 +83,23 @@ export function AiCoordPage({ agentName }: { agentName: string }) {
                   </div>
                   <div className="fx-cell-sub">{a.found ? a.evidence : 'Not found on this computer'}</div>
                   {a.found && a.note && <div className="fx-cell-sub" style={{ marginTop: 2 }}>{a.note}</div>}
+                  {a.bridged && a.id === 'claude-desktop' && !tests[a.id] && (
+                    <div className="fx-cell-sub" style={{ marginTop: 2 }}>
+                      In Claude, the FBRX tools appear under the tools (slider) button in the chat box as "fbrx". Ask for example: "Use FBRX to check my disk space", or "Ask Fabrix what is slowing my PC down".
+                    </div>
+                  )}
+                  {tests[a.id] && tests[a.id] !== 'running' && (
+                    <div className="fx-cell-sub" style={{ marginTop: 4, color: (tests[a.id] as { ok: boolean }).ok ? 'var(--good)' : 'var(--critical)' }}>
+                      {(tests[a.id] as { message: string }).message}
+                    </div>
+                  )}
                 </div>
                 {a.bridged && <Status tone="good">connected</Status>}
+                {a.bridged && (
+                  <Button size="sm" variant="ghost" icon="activity" loading={tests[a.id] === 'running'} onClick={() => void test(a.id)} title="Start the FBRX bridge the way this app does and check that it answers">
+                    Test
+                  </Button>
+                )}
                 {a.found && a.launchable && (
                   <Button size="sm" variant="ghost" icon="external" loading={busy === `open:${a.id}`} onClick={() => void run(`open:${a.id}`, () => call('aicoord.launch', { appId: a.id })).then((r) => r && toast.info(r.message))}>
                     {a.kind === 'local-server' ? 'Start' : 'Open'}
@@ -109,7 +135,7 @@ export function AiCoordPage({ agentName }: { agentName: string }) {
         )}
       </Card>
       <Grid cols={2}>
-        <Card title="Second opinion" subtitle="Ask another configured model the same question (no tools, nothing is changed)">
+        <Card title="Second opinion" subtitle={`Ask another model the same question (no tools, nothing is changed). To ask Claude: install Claude Code (no API key needed) or add Claude with an API key in AI models.`}>
           {usable.length ? (
             <div className="fx-grid" style={{ gap: 10 }}>
               <Field label="Model">

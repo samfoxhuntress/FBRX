@@ -46,9 +46,24 @@
   font-size: 11.5px;
   color: var(--text-muted);
 }
+.agent-main,
+.agent-list {
+  overflow: hidden;
+}
 .agent-main {
   display: flex;
   flex-direction: column;
+  min-height: 0;
+}
+/* The card body takes the remaining height so the thread scrolls inside it instead of growing past the card. */
+.agent-main > .fx-card-body,
+.agent-list > .fx-card-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.agent-list > .fx-card-body > .agent-list-items {
   min-height: 0;
 }
 .agent-thread {
@@ -74,8 +89,63 @@
   padding: 9px 14px;
   border-radius: 14px 14px 4px 14px;
   max-width: 80%;
+  min-width: 0;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+/* Pasted tables and logs: keep the columns, scroll sideways inside the bubble. */
+.msg-user.tabular {
+  font-family: var(--mono);
+  font-size: 12px;
+  white-space: pre;
+  overflow-x: auto;
+  overflow-wrap: normal;
+  max-height: 60vh;
+  overflow-y: auto;
+}
+.msg-more {
+  display: block;
+  margin-top: 6px;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-family: var(--font, inherit);
+  font-size: 12px;
+  font-weight: 650;
+  text-decoration: underline;
+  cursor: pointer;
+  padding: 0;
+}
+.msg-actions {
+  display: flex;
+  gap: 4px;
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.msg-mine .msg-actions {
+  align-self: flex-end;
+}
+.msg:hover .msg-actions,
+.msg-actions:focus-within {
+  opacity: 1;
+}
+.msg-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 11.5px;
+  padding: 2px 6px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+}
+.msg-action:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
 }
 .msg-meta {
   font-size: 11.5px;

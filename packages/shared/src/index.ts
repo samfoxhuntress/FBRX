@@ -10,3 +10,4 @@ export * from './protocol';
 export * from './api';
 export * from './ext';
 export * from './devices';
+export * from './fun';

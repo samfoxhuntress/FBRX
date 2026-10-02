@@ -12,24 +12,38 @@ export function summonGoose(): void {
   bridge.goose?.('summon');
 }
 
-const KONAMI = ['ArrowUp', 'ArrowUp', 'ArrowDown', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'ArrowLeft', 'ArrowRight', 'b', 'a'];
+const KONAMI = ['arrowup', 'arrowup', 'arrowdown', 'arrowdown', 'arrowleft', 'arrowright', 'arrowleft', 'arrowright', 'b', 'a'];
+/** The last keys pressed, kept across re-renders so a re-subscription never loses progress. */
+const recentKeys: string[] = [];
 
-/** Calls `onUnlock` when someone types ↑ ↑ ↓ ↓ ← → ← → B A. */
+/** Normalizes a key press: arrows by name (also the old "Up"/"Down" names), letters by key or physical key. */
+function keyName(e: KeyboardEvent): string {
+  const k = e.key.toLowerCase();
+  if (k === 'up' || k === 'down' || k === 'left' || k === 'right') return `arrow${k}`;
+  if (k.startsWith('arrow')) return k;
+  if (e.code === 'KeyB' || e.code === 'KeyA') return e.code.slice(3).toLowerCase();
+  return k;
+}
+
+/** Calls `onUnlock` when someone types ↑ ↑ ↓ ↓ ← → ← → B A (anywhere in the window, even in a text box). */
 export function useKonami(enabled: boolean, onUnlock: () => void) {
+  const cb = useRef(onUnlock);
+  cb.current = onUnlock;
   useEffect(() => {
     if (!enabled) return;
-    let i = 0;
     const on = (e: KeyboardEvent) => {
-      const k = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-      i = k === KONAMI[i] ? i + 1 : k === KONAMI[0] ? 1 : 0;
-      if (i === KONAMI.length) {
-        i = 0;
-        onUnlock();
+      if (e.repeat) return;
+      recentKeys.push(keyName(e));
+      if (recentKeys.length > KONAMI.length) recentKeys.shift();
+      if (recentKeys.length === KONAMI.length && recentKeys.every((k, i) => k === KONAMI[i])) {
+        recentKeys.length = 0;
+        cb.current();
       }
     };
-    window.addEventListener('keydown', on);
-    return () => window.removeEventListener('keydown', on);
-  }, [enabled, onUnlock]);
+    // Capture phase: pages that handle arrow keys themselves (lists, terminals) cannot hide them.
+    window.addEventListener('keydown', on, true);
+    return () => window.removeEventListener('keydown', on, true);
+  }, [enabled]);
 }
 
 /** A little line under the dashboard greeting for special moments (null most of the time). */

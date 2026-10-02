@@ -177,6 +177,8 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     },
     'tools.invoke': async (p, ctx) => {
       const q = z.object({ name: z.string(), input: z.unknown() }).parse(p);
+      // The emergency stop also stops other AI apps (MCP bridge, Local API automation) from using tools.
+      if (ctx.origin !== 'user' && k.aiHalt()) throw new CoreError('UNAVAILABLE', 'The AI is on emergency stop on this computer');
       const r = await k.gate.invoke(q.name, q.input ?? {}, { origin: ctx.origin, actor: ctx.actor });
       return { ok: r.ok, output: r.output, data: r.data, error: r.error, durationMs: r.durationMs };
     },

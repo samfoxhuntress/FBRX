@@ -1,5 +1,5 @@
 import { chmodSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
-import { cpus, freemem, hostname, loadavg, platform as osPlatform, arch as osArch, totalmem, uptime as osUptime } from 'node:os';
+import { cpus, freemem, hostname, loadavg, userInfo, platform as osPlatform, arch as osArch, totalmem, uptime as osUptime } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
@@ -40,6 +40,8 @@ import { FileBrowser, TerminalSessions } from './system/files';
 import { Spotlight } from './spotlight/spotlight';
 import { AlertEngine } from './alerts/alert-engine';
 import { NetDiag } from './network/netdiag';
+import { Trophies } from './fun/trophies';
+import { Fbrx1Cli } from './cli/fbrx1';
 import { VendorDb } from './network/vendors';
 import { DeviceConsoles } from './network/device-console';
 import { deviceConsoleTools } from './tools/builtin/device-console-tools';
@@ -124,6 +126,8 @@ export class Kernel {
   readonly net: NetDiag;
   readonly vendors: VendorDb;
   readonly consoles: DeviceConsoles;
+  readonly trophies: Trophies;
+  readonly cli: Fbrx1Cli;
   readonly mesh: MeshService;
   readonly aicoord: AiCoordination;
   private readonly api: Record<string, (p: any, ctx: CallContext) => unknown>;
@@ -206,6 +210,15 @@ export class Kernel {
       log: L('agent'),
       workspace: this.paths.workspace,
       allowedRoots: () => this.policy.allowedRoots(),
+      halt: () => this.aiHalt(),
+      fun: {
+        enabled: () => this.settings.get().appearance.easterEggs,
+        trophy: (id) => void this.trophies.unlock(id),
+        persona: {
+          get: (c) => this.meta.get<string>(`agent.persona.${c}`),
+          set: (c, v) => (v ? this.meta.set(`agent.persona.${c}`, v) : this.meta.delete(`agent.persona.${c}`)),
+        },
+      },
     });
     const urlCheck = (u: string) => checkUrl(u, this.policy.policy.network);
     this.plugins = new PluginHost({
@@ -294,6 +307,19 @@ export class Kernel {
       internet: () => this.internetAllowed(),
     });
     this.net = new NetDiag({ db: this.db, events: this.events, vendors: this.vendors, internet: () => this.internetAllowed() });
+    this.trophies = new Trophies({ meta: this.meta, events: this.events, enabled: () => this.settings.get().appearance.easterEggs });
+    // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
+    this.cli = new Fbrx1Cli({
+      call: (method, params) => this.call(method, params ?? {}, { origin: 'user', actor: 'fbrx1' }),
+      user: () => {
+        try {
+          return userInfo().username;
+        } catch {
+          return 'user';
+        }
+      },
+      host: () => this.deviceName().replace(/\s+/g, '-'),
+    });
     this.consoles = new DeviceConsoles({
       events: this.events,
       meta: this.meta,
@@ -567,7 +593,7 @@ export class Kernel {
       description: 'Governed agent loop with streaming, tool use and conversation memory',
       dependsOn: ['tools', 'governance'],
       start: () => undefined,
-      stop: () => this.agent.cancelAll(),
+      stop: () => void this.agent.cancelAll(),
     });
     s.register({
       name: 'backup',
@@ -712,6 +738,40 @@ export class Kernel {
     );
   }
 
+  // ------------------------------------------------------------------------------------ emergency stop
+
+  /** The emergency stop in force, if any. It survives restarts until someone resumes the AI. */
+  aiHalt(): { at: string; by: string } | null {
+    return this.meta.get<{ at: string; by: string }>('ai.halt');
+  }
+
+  /**
+   * Emergency stop: cancels every agent run, denies every pending approval, stops the local model, and refuses new
+   * agent runs and tool calls from other AI apps (MCP / Local API) until resumed. The person at the workstation keeps
+   * every non-AI feature.
+   */
+  async hardStop(by: string): Promise<{ cancelledRuns: number; deniedApprovals: number }> {
+    const at = new Date().toISOString();
+    this.meta.set('ai.halt', { at, by });
+    const cancelledRuns = this.agent.cancelAll('Emergency stop');
+    const deniedApprovals = this.approvals.size;
+    this.approvals.denyAll('emergency-stop');
+    await this.runtime.stop().catch((err) => this.log.warn('Could not stop the local runtime', { error: errorMessage(err) }));
+    this.audit.append({ category: 'agent', action: 'emergency-stop', actor: by, outcome: 'info', details: { cancelledRuns, deniedApprovals } });
+    this.log.warn('AI emergency stop', { by, cancelledRuns, deniedApprovals });
+    this.events.emit('ai.halted', { halted: true, at, by });
+    return { cancelledRuns, deniedApprovals };
+  }
+
+  async resumeAi(by: string): Promise<void> {
+    if (!this.aiHalt()) return;
+    this.meta.delete('ai.halt');
+    this.audit.append({ category: 'agent', action: 'emergency-stop.resumed', actor: by, outcome: 'info' });
+    this.events.emit('ai.halted', { halted: false, at: null, by });
+    const rt = this.settings.get().runtime;
+    if (rt.enabled && rt.autoStart) void this.runtime.start().catch((err) => this.log.warn('Local runtime did not start', { error: errorMessage(err) }));
+  }
+
   async status(): Promise<SystemStatus> {
     const since = new Date(Date.now() - 86400_000).toISOString();
     const stats = this.audit.stats();
@@ -734,6 +794,7 @@ export class Kernel {
       runtime: this.runtime.status(),
       pendingApprovals: this.approvals.size,
       activeRuns: this.agent.activeCount,
+      aiHalt: this.aiHalt(),
       stats: {
         agentRuns24h: this.audit.count('agent', 'run.completed', since),
         toolCalls24h: this.audit.count('tool', null, since),
@@ -896,6 +957,7 @@ export class Kernel {
 
   /** Asks a configured AI provider for a second opinion, without tools. */
   async consult(providerId: string, prompt: string, model?: string): Promise<{ answer: string; providerId: string; model: string }> {
+    if (this.aiHalt()) throw new CoreError('UNAVAILABLE', 'The AI is on emergency stop on this computer');
     const { provider, config, model: m } = this.providers.resolve(providerId, model);
     let answer = '';
     for await (const chunk of provider.chat({ model: m, messages: [{ role: 'user', content: prompt }], tools: [], temperature: 0.4, signal: AbortSignal.timeout(300_000) })) {

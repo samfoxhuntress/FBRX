@@ -29,6 +29,28 @@ interface CatalogEntry {
   api?: AiAppInfo['api'];
 }
 
+/**
+ * Claude Desktop from the Microsoft Store (MSIX) reads its settings from its package folder
+ * (%LOCALAPPDATA%\\Packages\\Claude_…\\LocalCache\\Roaming\\Claude), not %APPDATA%\\Claude. FBRX writes both.
+ */
+function claudeMsixConfigs(): string[] {
+  if (!IS_WIN) return [];
+  const pkgs = join(LOCAL, 'Packages');
+  try {
+    return readdirSync(pkgs)
+      .filter((d) => /^(AnthropicPBC\.)?Claude_/i.test(d) || /^Anthropic\.Claude/i.test(d))
+      .map((d) => join(pkgs, d, 'LocalCache', 'Roaming', 'Claude', 'claude_desktop_config.json'));
+  } catch {
+    return [];
+  }
+}
+
+/** Every configuration file an app may read (Claude Desktop: the normal one plus the Store app's). */
+function configFiles(c: CatalogEntry): string[] {
+  if (!c.config) return [];
+  return c.id === 'claude-desktop' ? [c.config.file, ...claudeMsixConfigs()] : [c.config.file];
+}
+
 const NO_MCP = (app: string) => `${app} cannot load tools from other apps (MCP) on Windows yet. You can still ask Fabrix from FBRX, and get second opinions from its model below.`;
 
 const CATALOG: CatalogEntry[] = [
@@ -169,11 +191,13 @@ export class AiCoordination {
 
   private isBridged(c: CatalogEntry): boolean {
     if (!c.config) return false;
-    try {
-      return !!readJson(c.config.file)[c.config.key]?.fbrx;
-    } catch {
-      return false;
-    }
+    return configFiles(c).some((f) => {
+      try {
+        return !!readJson(f)[c.config!.key]?.fbrx;
+      } catch {
+        return false;
+      }
+    });
   }
 
   private inventoryCache: { at: number; value: Inventory } | null = null;
@@ -275,13 +299,16 @@ export class AiCoordination {
         if (r.code === 0) return { ok: true, path: null, message: 'Added with "claude mcp add". New Claude Code sessions can use FBRX OS.' };
       }
     }
-    const file = c.config.file;
-    mkdirSync(dirname(file), { recursive: true });
-    const j = readJson(file);
-    if (existsSync(file)) writeFileSync(`${file}.fbrx-backup`, readFileSync(file));
-    j[c.config.key] = { ...(j[c.config.key] ?? {}), fbrx: c.config.vscode ? { type: 'stdio', ...s } : s };
-    writeFileSync(file, `${JSON.stringify(j, null, 2)}\n`);
-    return { ok: true, path: file, message: `Connected. Restart ${c.name} to load the FBRX OS tools.` };
+    const files = configFiles(c);
+    for (const file of files) {
+      mkdirSync(dirname(file), { recursive: true });
+      const j = readJson(file);
+      if (existsSync(file)) writeFileSync(`${file}.fbrx-backup`, readFileSync(file));
+      j[c.config.key] = { ...(j[c.config.key] ?? {}), fbrx: c.config.vscode ? { type: 'stdio', ...s } : s };
+      writeFileSync(file, `${JSON.stringify(j, null, 2)}\n`);
+    }
+    const quit = c.id === 'claude-desktop' ? ' Quit it completely (right-click its tray icon → Quit), start it again, then use Test to check the link.' : '';
+    return { ok: true, path: files[0], message: `Connected. Restart ${c.name} to load the FBRX OS tools.${quit}` };
   }
 
   async remove(appId: string): Promise<{ ok: boolean; message: string }> {
@@ -291,8 +318,8 @@ export class AiCoordination {
       const cmd = await which('claude');
       if (cmd) await exec(cmd, ['mcp', 'remove', '--scope', 'user', 'fbrx'], { timeoutMs: 20_000 });
     }
-    const file = c.config.file;
-    if (existsSync(file)) {
+    for (const file of configFiles(c)) {
+      if (!existsSync(file)) continue;
       const j = readJson(file);
       if (j[c.config.key]?.fbrx) {
         delete j[c.config.key].fbrx;
@@ -300,5 +327,101 @@ export class AiCoordination {
       }
     }
     return { ok: true, message: `Disconnected from ${c.name}.` };
+  }
+
+  /**
+   * Tests the link the way the AI app uses it: starts the configured bridge command, does the MCP handshake and asks
+   * for the tool list. Proves that the app will find FBRX OS and its tools once it has restarted.
+   */
+  async test(appId: string): Promise<{ ok: boolean; message: string; tools: number; durationMs: number }> {
+    const c = CATALOG.find((x) => x.id === appId);
+    let entry: { command: string; args: string[]; env?: Record<string, string> } | null = null;
+    for (const f of c ? configFiles(c) : []) {
+      try {
+        entry = readJson(f)[c!.config!.key]?.fbrx ?? entry;
+      } catch {
+        /* unreadable config */
+      }
+    }
+    entry ??= this.d.shim();
+    if (!entry?.command) return { ok: false, message: 'FBRX OS is not connected to this app yet: use Connect first.', tools: 0, durationMs: 0 };
+    if (!this.d.localApiRunning()) return { ok: false, message: 'The Local API is off, so AI apps cannot reach FBRX OS. Turn it on in Settings → Local API.', tools: 0, durationMs: 0 };
+    const t0 = Date.now();
+    return new Promise((resolve) => {
+      let out = '';
+      let err = '';
+      let done = false;
+      const child = spawn(entry!.command, entry!.args, { env: { ...process.env, ...(entry!.env ?? {}) }, stdio: ['pipe', 'pipe', 'pipe'], windowsHide: true });
+      const finish = (r: { ok: boolean; message: string; tools: number }) => {
+        if (done) return;
+        done = true;
+        clearTimeout(timer);
+        child.kill();
+        resolve({ ...r, durationMs: Date.now() - t0 });
+      };
+      const timer = setTimeout(() => finish({ ok: false, message: `The bridge did not answer within 20 seconds.${err ? ` It said: ${err.trim().slice(-300)}` : ''}`, tools: 0 }), 20_000);
+      const send = (m: unknown) => child.stdin.write(`${JSON.stringify(m)}\n`);
+      child.on('error', (e) => finish({ ok: false, message: `The bridge command could not start (${e.message}). Reinstall FBRX OS, then Connect again.`, tools: 0 }));
+      child.on('exit', (code) => finish({ ok: false, message: `The bridge stopped (exit code ${code}).${err ? ` ${err.trim().slice(-300)}` : ''}`, tools: 0 }));
+      child.stderr.on('data', (b: Buffer) => (err += b.toString()));
+      child.stdout.on('data', (b: Buffer) => {
+        out += b.toString();
+        let nl: number;
+        while ((nl = out.indexOf('\n')) >= 0) {
+          const line = out.slice(0, nl).trim();
+          out = out.slice(nl + 1);
+          if (!line) continue;
+          let msg: any;
+          try {
+            msg = JSON.parse(line);
+          } catch {
+            continue;
+          }
+          if (msg.id === 1) {
+            if (msg.error) return finish({ ok: false, message: `The bridge refused the handshake: ${msg.error.message}`, tools: 0 });
+            send({ jsonrpc: '2.0', method: 'notifications/initialized' });
+            send({ jsonrpc: '2.0', id: 2, method: 'tools/list', params: {} });
+          } else if (msg.id === 2) {
+            const tools = Array.isArray(msg.result?.tools) ? msg.result.tools.length : 0;
+            if (msg.error || tools <= 1) {
+              return finish({ ok: false, message: `The bridge started but could not list FBRX tools${msg.error ? `: ${msg.error.message}` : ' (is FBRX OS running with the Local API on?)'}.`, tools });
+            }
+            finish({ ok: true, message: `Working: the bridge answered with ${tools} FBRX tools.${c ? ` After restarting ${c.name}, ask it for example "Use FBRX to check my disk space" or "Ask Fabrix what is slowing my PC down".` : ''}`, tools });
+          }
+        }
+      });
+      send({ jsonrpc: '2.0', id: 1, method: 'initialize', params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'fbrx-link-test', version: '1.0.0' } } });
+    });
+  }
+
+  /** Asks Claude through Claude Code (if installed and signed in) for a second opinion: no API key needed. */
+  async askClaudeCode(prompt: string): Promise<{ answer: string; providerId: string; model: string }> {
+    const cmd = await which('claude');
+    if (!cmd) throw new CoreError('NOT_FOUND', 'Claude Code is not installed. Install it, or add Claude with an API key in AI models.');
+    // The question goes in on stdin (never on a command line); npm installs claude as a .cmd on Windows.
+    const viaCmd = IS_WIN && /\.(cmd|bat)$/i.test(cmd);
+    const answer = await new Promise<string>((resolve, reject) => {
+      const child = viaCmd
+        ? spawn('cmd.exe', ['/d', '/s', '/c', `""${cmd}" -p --output-format text"`], { windowsVerbatimArguments: true, windowsHide: true })
+        : spawn(cmd, ['-p', '--output-format', 'text'], { windowsHide: true });
+      let out = '';
+      let err = '';
+      const timer = setTimeout(() => child.kill(), 300_000);
+      child.stdout.on('data', (b: Buffer) => (out += b.toString('utf8')));
+      child.stderr.on('data', (b: Buffer) => (err += b.toString('utf8')));
+      child.on('error', (e) => reject(new CoreError('UNAVAILABLE', `Claude Code could not start: ${e.message}`)));
+      child.on('close', (code) => {
+        clearTimeout(timer);
+        if (code === 0 && out.trim()) resolve(out.trim());
+        else reject(new CoreError('UNAVAILABLE', `Claude Code could not answer: ${(err || out).trim().slice(0, 400) || `exit code ${code}`}. Run "claude" once in a terminal to sign in.`));
+      });
+      child.stdin.end(prompt);
+    });
+    return { answer, providerId: 'claude-code', model: 'Claude (via Claude Code)' };
+  }
+
+  /** Whether Claude Code is on this computer (for the Second opinion list). */
+  async hasClaudeCode(): Promise<boolean> {
+    return !!(await which('claude'));
   }
 }

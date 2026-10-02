@@ -332,6 +332,24 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'net.vendorUpdate': () => k.vendors.update(),
     'net.macLookup': (p) => k.vendors.lookup(z.object({ mac: z.string().min(1).max(64) }).parse(p).mac),
 
+    // ------------------------------------------------------------------------------- fun and safety
+    'fun.trophies': () => k.trophies.state(),
+    'fun.unlock': (p) => k.trophies.unlock(z.object({ id: z.string().max(40) }).parse(p).id),
+    'ai.hardStop': (_p, ctx) => k.hardStop(ctx.actor),
+    'ai.resume': async (_p, ctx) => {
+      await k.resumeAi(ctx.actor);
+      return { ok: true };
+    },
+
+    'cli.exec': (p) => {
+      const q = z.object({ session: z.string().min(1).max(64), line: z.string().max(4000) }).parse(p);
+      return k.cli.exec(q.session, q.line);
+    },
+    'cli.complete': (p) => {
+      const q = z.object({ session: z.string().min(1).max(64), line: z.string().max(4000) }).parse(p);
+      return { completions: k.cli.complete(q.session, q.line) };
+    },
+
     // -------------------------------------------------------------------------------- device console
     'console.connect': (p) =>
       k.consoles.connect(
@@ -425,7 +443,15 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'aicoord.launch': (p) => k.aicoord.launch(z.object({ appId: z.string() }).parse(p).appId),
     'aicoord.consult': async (p) => {
       const q = z.object({ providerId: z.string(), prompt: z.string().min(1).max(50_000), model: z.string().optional() }).parse(p);
+      if (q.providerId === 'claude-code') {
+        if (k.aiHalt()) throw new CoreError('UNAVAILABLE', 'The AI is on emergency stop on this computer');
+        const r = await k.aicoord.askClaudeCode(q.prompt);
+        k.audit.append({ category: 'agent', action: 'consult', actor: 'user', outcome: 'success', details: { provider: 'claude-code' } });
+        return r;
+      }
       return k.consult(q.providerId, q.prompt, q.model);
     },
+    'aicoord.claudeCode': async () => ({ available: await k.aicoord.hasClaudeCode() }),
+    'aicoord.test': (p) => k.aicoord.test(z.object({ appId: z.string().max(60) }).parse(p).appId),
   };
 }

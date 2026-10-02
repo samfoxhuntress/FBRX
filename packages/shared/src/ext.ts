@@ -1,3 +1,4 @@
+import type { TrophyState } from './fun';
 /**
  * Contracts for the FBRX OS command-center modules: workspace (notes, tasks, projects, snippets), live system
  * information, Spotlight, alerts, PC care (storage, security, updates, troubleshooting, Hyper-V lab), the
@@ -502,6 +503,17 @@ export interface ConsoleLogin {
   savedAt: string;
 }
 
+// ------------------------------------------------------------------------------------------ FBRX/1
+
+export interface CliResult {
+  output: string;
+  /** Prompt for the next line, e.g. "you@laptop>" or "[edit]\nyou@laptop#". */
+  prompt: string;
+  mode: 'operational' | 'configure';
+  /** The screen should be cleared (the "clear" command). */
+  clear?: boolean;
+}
+
 // ---------------------------------------------------------------------------------- terminal shells
 
 export interface TerminalShell {
@@ -797,6 +809,17 @@ export interface ExtMethods {
   'console.forgetLogin': (p: { host: string; port: number; username: string }) => Ok;
   'console.forgetHostKey': (p: { host: string; port: number }) => Ok;
 
+  'fun.trophies': () => TrophyState;
+  'fun.unlock': (p: { id: string }) => { unlocked: boolean; golden: boolean };
+
+  'ai.hardStop': () => { cancelledRuns: number; deniedApprovals: number };
+  'ai.resume': () => Ok;
+
+  'cli.exec': (p: { session: string; line: string }) => CliResult;
+  'cli.complete': (p: { session: string; line: string }) => { completions: string[] };
+
+  'aicoord.test': (p: { appId: string }) => { ok: boolean; message: string; tools: number; durationMs: number };
+
   'mesh.status': () => MeshStatus;
   'mesh.setEnabled': (p: { enabled: boolean }) => MeshStatus;
   'mesh.startPairing': () => MeshPairing;
@@ -817,6 +840,8 @@ export interface ExtMethods {
   'aicoord.remove': (p: { appId: string }) => { ok: boolean; message: string };
   'aicoord.launch': (p: { appId: string }) => { ok: boolean; message: string };
   'aicoord.consult': (p: { providerId: string; prompt: string; model?: string }) => { answer: string; providerId: string; model: string };
+  /** Claude Code on this computer, usable for second opinions without an API key. */
+  'aicoord.claudeCode': () => { available: boolean };
 }
 
 export interface ExtEvents {
@@ -826,6 +851,8 @@ export interface ExtEvents {
   'terminal.exit': { sessionId: string; code: number | null };
   'console.data': { id: string; data: string };
   'console.changed': ConsoleSession;
+  'fun.trophy': { id: string; name: string; at: string; golden: boolean };
+  'ai.halted': { halted: boolean; at: string | null; by: string | null };
   'alerts.new': AlertItem;
   /** Unread counts after any inbox change (new, read, deleted). */
   'alerts.changed': { unread: number; critical: number };
@@ -874,6 +901,11 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'console.logins',
   'console.forgetLogin',
   'console.forgetHostKey',
+  'fun.unlock',
+  'ai.resume',
+  'cli.exec',
+  'cli.complete',
+  'aicoord.test',
   'mesh.setEnabled',
   'mesh.startPairing',
   'mesh.pair',

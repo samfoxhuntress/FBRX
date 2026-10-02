@@ -16,6 +16,56 @@ const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'bug', title: 'Explain recent crashes', prompt: 'Look at the errors and crashes Windows recorded in the last few days, explain the important ones and suggest fixes.' },
 ];
 
+/** Copy, edit and run-again under a message (shown on hover). */
+function MessageActions({ text, onRerun, onEdit }: { text: string; onRerun?: () => void; onEdit?: () => void }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="msg-actions">
+      <button
+        className="msg-action"
+        title="Copy"
+        onClick={() =>
+          void navigator.clipboard.writeText(text).then(() => {
+            setCopied(true);
+            setTimeout(() => setCopied(false), 1400);
+          })
+        }
+      >
+        {copied ? <Icons.check size={13} /> : <Icons.copy size={13} />} {copied ? 'Copied' : 'Copy'}
+      </button>
+      {onEdit && (
+        <button className="msg-action" title="Put it back in the message box to change it" onClick={onEdit}>
+          <Icons.edit size={13} /> Edit
+        </button>
+      )}
+      {onRerun && (
+        <button className="msg-action" title="Send it again" onClick={onRerun}>
+          <Icons.refresh size={13} /> Run again
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** A message you sent. Long ones (pasted logs, tables) fold, and text with columns keeps its alignment. */
+function UserMessage({ text }: { text: string }) {
+  const lines = text.split('\n');
+  const long = lines.length > 14 || text.length > 1600;
+  const [open, setOpen] = useState(false);
+  const tabular = /\t| {3,}/.test(text) && lines.length > 2;
+  const shown = long && !open ? `${lines.slice(0, 12).join('\n').slice(0, 1400)}…` : text;
+  return (
+    <div className={`msg-user${tabular ? ' tabular' : ''}`}>
+      {shown}
+      {long && (
+        <button className="msg-more" onClick={() => setOpen(!open)}>
+          {open ? 'Show less' : `Show all ${lines.length} lines`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function toolTone(s: ToolCallRecord['status']) {
   return s === 'succeeded' ? 'good' : s === 'failed' ? 'critical' : s === 'denied' ? 'serious' : s === 'awaiting-approval' ? 'warning' : s === 'running' ? 'busy' : 'neutral';
 }
@@ -288,8 +338,9 @@ export function AgentPage({ agentName }: { agentName: string }) {
           )}
           {visible.map((m) =>
             m.role === 'user' ? (
-              <div key={m.id} className="msg">
-                <div className="msg-user">{m.content}</div>
+              <div key={m.id} className="msg msg-mine">
+                <UserMessage text={m.content} />
+                <MessageActions text={m.content} onEdit={() => setInput(m.content)} onRerun={activeRun ? undefined : () => void send(m.content)} />
               </div>
             ) : (
               <div key={m.id} className="msg">
@@ -297,7 +348,10 @@ export function AgentPage({ agentName }: { agentName: string }) {
                 {(m.toolCalls ?? []).map((c) => (
                   <ToolCard key={c.id} c={c} approval={approvals.find((a) => a.runId === activeRun?.runId && a.tool === c.name)} />
                 ))}
-                {m.model && <div className="msg-meta">{m.model}</div>}
+                <div className="msg-meta">
+                  {m.model && <span>{m.model}</span>}
+                  {m.content && <MessageActions text={m.content} />}
+                </div>
               </div>
             ),
           )}

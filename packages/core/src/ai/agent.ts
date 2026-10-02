@@ -86,6 +86,14 @@ export class AgentRuntime {
       log: Logger;
       workspace: string;
       allowedRoots: () => string[];
+      /** Emergency stop in force (no new runs). */
+      halt?: () => { at: string; by: string } | null;
+      /** Easter eggs (Settings → Appearance → Fun extras). */
+      fun?: {
+        enabled: () => boolean;
+        trophy: (id: string) => void;
+        persona: { get: (conversationId: string) => string | null; set: (conversationId: string, persona: string | null) => void };
+      };
     },
   ) {}
 
@@ -98,6 +106,9 @@ export class AgentRuntime {
     const text = p.message.trim();
     if (!text) throw new CoreError('INVALID_ARGUMENT', 'Message is empty');
     if (text.length > 100_000) throw new CoreError('INVALID_ARGUMENT', 'Message is too long');
+    if (this.d.halt?.()) throw new CoreError('UNAVAILABLE', `${this.d.settings.get().ai.agentName} is on emergency stop. Resume it in Settings → Agent or on the ${this.d.settings.get().ai.agentName} page.`);
+    const egg = this.easterEgg(text, p.conversationId);
+    if (egg) return this.cannedRun(p, text, egg.reply);
     // Resolve the provider first so configuration errors surface synchronously to the caller.
     const resolved = this.d.providers.resolve(p.providerId, p.model);
 
@@ -129,8 +140,53 @@ export class AgentRuntime {
     return true;
   }
 
-  cancelAll(): void {
-    for (const r of this.runs.values()) r.controller.abort(new CoreError('CANCELLED', 'Shutting down'));
+  cancelAll(reason = 'Shutting down'): number {
+    const n = this.runs.size;
+    for (const r of this.runs.values()) r.controller.abort(new CoreError('CANCELLED', reason));
+    return n;
+  }
+
+  // ------------------------------------------------------------------------------------ easter eggs
+
+  /**
+   * "Where's my stapler?" (Office Space): an instant answer, then the rest of the chat in middle-manager jargon,
+   * every reply ending with "That would be great." Saying "I quit", "normal mode" or "PC load letter" ends it.
+   */
+  private easterEgg(text: string, conversationId?: string): { reply: string } | null {
+    const fun = this.d.fun;
+    if (!fun?.enabled()) return null;
+    if (/\b(where('?s| is| did)|have you seen|seen|find|took|has)\b[^?]{0,30}\bmy (red |swingline |red swingline )?stapler\b/i.test(text) || /^my stapler\b/i.test(text)) {
+      return {
+        reply: 'It\'s likely downstairs, in storage building B.\n\nMmm, yeah. And going forward, I\'m gonna need you to go ahead and route all of your requests through the proper synergy channels. That would be great.',
+      };
+    }
+    if (conversationId && fun.persona.get(conversationId) === 'lumbergh' && /^(i quit|normal mode|stop (the )?jargon|no more jargon|pc load letter)\b/i.test(text)) {
+      return { reply: 'PC load letter? What does that even mean?\n\n…Fine. The stapler stays in storage building B, and I\'m back to talking like a normal assistant. What do you need?' };
+    }
+    return null;
+  }
+
+  /** A reply that needs no model: stored and streamed like a normal run. */
+  private cannedRun(p: ChatParams, text: string, reply: string): { runId: string; conversationId: string; done: Promise<RunResult> } {
+    let conversationId = p.conversationId;
+    if (conversationId) {
+      if (!this.d.store.exists(conversationId)) throw new CoreError('NOT_FOUND', 'Conversation not found');
+    } else {
+      conversationId = this.d.store.create(text.replace(/\s+/g, ' ').slice(0, 80), p.origin, p.offline ?? true).id;
+    }
+    const runId = newId('run');
+    const convId = conversationId;
+    const exiting = !/stapler/i.test(text);
+    this.d.fun!.persona.set(convId, exiting ? null : 'lumbergh');
+    if (!exiting) this.d.fun!.trophy('stapler');
+    this.d.store.append(convId, { role: 'user', content: text });
+    this.emit({ type: 'run.started', runId, conversationId: convId, providerId: 'fbrx', model: 'easter egg' });
+    const assistant = this.d.store.append(convId, { id: newId('msg'), role: 'assistant', content: reply });
+    const { providerData: _replay, ...visible } = assistant;
+    this.emit({ type: 'message.completed', runId, conversationId: convId, message: visible });
+    const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+    this.emit({ type: 'run.completed', runId, conversationId: convId, steps: 0, usage });
+    return { runId, conversationId: convId, done: Promise.resolve({ runId, conversationId: convId, answer: reply, steps: 0, usage, status: 'completed' as const }) };
   }
 
   private emit(e: AgentEvent) {
@@ -151,7 +207,17 @@ export class AgentRuntime {
     return c;
   }
 
-  private systemPrompt(toolCount: number, offline: boolean): string {
+  private systemPrompt(toolCount: number, offline: boolean, conversationId?: string): string {
+    const lumbergh = conversationId && this.d.fun?.enabled() && this.d.fun.persona.get(conversationId) === 'lumbergh';
+    const base = this.basePrompt(toolCount, offline);
+    if (!lumbergh) return base;
+    return `${base}
+
+## Persona for this conversation (an easter egg the user asked for)
+Answer like a 1990s middle manager who adores corporate jargon: synergy, circle back, leverage, bandwidth, paradigm shift, action items, take this offline, TPS reports, move the needle, low-hanging fruit, going forward. Keep the actual help correct and complete, but wrap it in so much jargon that it is almost, but not quite, unintelligible. Stay friendly and family-friendly. Always end your reply with exactly: That would be great.`;
+  }
+
+  private basePrompt(toolCount: number, offline: boolean): string {
     const s = this.d.settings.get();
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const date = new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -264,7 +330,7 @@ export class AgentRuntime {
           parameters: t.inputSchema,
         }));
         const messages: ProviderMessage[] = [
-          { role: 'system', content: this.systemPrompt(tools.length, this.d.store.isOffline(conversationId)) },
+          { role: 'system', content: this.systemPrompt(tools.length, this.d.store.isOffline(conversationId), conversationId) },
           ...this.history(conversationId, provider.historyBudgetChars),
         ];
 
@@ -292,6 +358,13 @@ export class AgentRuntime {
         if (finish.finishReason === 'refusal' || (finish.finishReason === 'length' && finish.message)) {
           content = `${content}${content ? '\n\n' : ''}_${finish.message}_`;
           calls.length = 0;
+        }
+
+        // Corporate-speak mode always signs off the same way, even when the model forgets.
+        if (!calls.length && this.d.fun?.enabled() && this.d.fun.persona.get(conversationId) === 'lumbergh' && !/that would be great\.?\s*$/i.test(content)) {
+          const tail = `${content.trim() ? '\n\n' : ''}That would be great.`;
+          content += tail;
+          this.emit({ type: 'message.delta', runId, conversationId, messageId, delta: tail });
         }
 
         const records: ToolCallRecord[] = calls.map((c) => ({

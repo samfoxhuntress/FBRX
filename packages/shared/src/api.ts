@@ -414,6 +414,8 @@ export interface SystemStatus {
   runtime: RuntimeStatus;
   pendingApprovals: number;
   activeRuns: number;
+  /** Emergency stop: the agent and other AI apps cannot run until someone resumes it. */
+  aiHalt?: { at: string; by: string } | null;
   stats: { agentRuns24h: number; toolCalls24h: number; policyDenials24h: number; errors24h: number; lastBackupAt: string | null };
 }
 
