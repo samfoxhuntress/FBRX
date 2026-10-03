@@ -6,8 +6,8 @@ import type { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import * as tar from 'tar';
 import { z } from 'zod';
-import { ALL_FEATURES, EDITIONS, UPDATE_CHANNELS, compareSemver, isValidSemver, newId, type LicensePayload } from '@fbrx/shared';
-import { openString, randomToken, sealString, signLicense } from '@fbrx/shared/node';
+import { ALL_FEATURES, EDITIONS, TIERS, UPDATE_CHANNELS, compareSemver, decodeLicenseUnverified, isValidSemver, newId, tierFor, type Edition, type LicensePayload } from '@fbrx/shared';
+import { openString, randomToken, sealString, sha256Hex, signLicense } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
 import { actorOf, adminAuth, assertTenantAccess, requirePerm, requireTenant, resolvePrincipal, tenantScope } from '../auth';
@@ -186,11 +186,17 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
     });
 
     // ----------------------------------------------------------------------------- licenses
-    const licenseView = (l: any) => ({
+    const licenseView = (l: any) => {
+      const claims = decodeLicenseUnverified(l.key_text);
+      return {
       id: l.id,
       tenantId: l.tenant_id,
       customer: l.customer,
       edition: l.edition,
+      /** FBRX Endpoint Basic or Ultra on the devices that use it. */
+      tier: tierFor(l.edition as Edition, claims?.tier),
+      /** The FBRX Command address devices join when the key is pasted in. */
+      commandUrl: claims?.command?.url ?? null,
       seats: Number(l.seats),
       features: parseJson<string[]>(l.features, []),
       issuedAt: l.issued_at,
@@ -198,7 +204,8 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
       maxMajorVersion: l.max_major_version,
       revokedAt: l.revoked_at,
       key: l.key_text,
-    });
+      };
+    };
     admin.get('/v1/admin/licenses', async (req) => {
       requirePerm(req, 'licenses.read');
       const tenant = tenantScope(req);
@@ -217,9 +224,35 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
           expiresAt: z.string().datetime().nullable().optional(),
           maxMajorVersion: z.number().int().min(1).nullable().optional(),
           customer: z.string().max(200).optional(),
+          /** Endpoint Basic or Ultra (otherwise Community runs Basic and Pro or Enterprise run Ultra). */
+          tier: z.enum(TIERS).optional(),
+          /** Computers that activate the key join this tenant on their own (FBRX Command). */
+          joinTenant: z.boolean().optional(),
+          groupId: z.string().nullable().optional(),
         })
         .parse(req.body);
+      if (body.groupId && !ctx.db.get('SELECT 1 FROM groups WHERE id = ? AND tenant_id = ?', body.groupId, tenantId)) throw badRequest('Unknown group');
       const id = ids.license();
+      // Joining the tenant needs an enrollment token, made here for this license: one use per seat.
+      let command: LicensePayload['command'];
+      if (body.joinTenant) {
+        const token = randomToken('fbrx_enr');
+        ctx.db.run(
+          'INSERT INTO enrollment_tokens (id, tenant_id, group_id, label, prefix, token_hash, max_uses, template_snapshot_id, expires_at, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+          ids.enrollment(),
+          tenantId,
+          body.groupId ?? null,
+          `License ${id}`,
+          token.slice(0, 15),
+          sha256Hex(token),
+          body.seats > 0 ? body.seats : null,
+          null,
+          body.expiresAt ?? null,
+          p.id,
+          new Date().toISOString(),
+        );
+        command = { url: ctx.config.publicUrl, enrollmentToken: token };
+      }
       const payload: LicensePayload = {
         v: 1,
         lid: id,
@@ -227,10 +260,13 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
         customer: body.customer ?? tenant.name,
         edition: body.edition,
         seats: body.seats,
-        features: body.features ?? [],
+        // A key that joins the tenant must let its computers enroll.
+        features: [...new Set([...(body.features ?? []), ...(command ? ['fleet'] : [])])],
         issuedAt: new Date().toISOString(),
         expiresAt: body.expiresAt ?? null,
         maxMajorVersion: body.maxMajorVersion ?? null,
+        ...(body.tier ? { tier: body.tier } : {}),
+        ...(command ? { command } : {}),
       };
       const key = signLicense(payload, ctx.keys.licensePrivatePem);
       ctx.db.run(
@@ -248,7 +284,7 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
         p.label,
       );
       ctx.bumpConfig(tenantId);
-      ctx.audit.record(actorOf(req), 'license.issued', { type: 'license', id, tenantId }, { edition: body.edition, seats: body.seats, expiresAt: body.expiresAt });
+      ctx.audit.record(actorOf(req), 'license.issued', { type: 'license', id, tenantId }, { edition: body.edition, seats: body.seats, expiresAt: body.expiresAt, tier: tierFor(body.edition, body.tier), joinsTenant: !!command });
       ctx.webhooks.emit(tenantId, 'license.issued', { licenseId: id, edition: body.edition, seats: body.seats, expiresAt: payload.expiresAt });
       return licenseView(ctx.db.get('SELECT * FROM licenses WHERE id = ?', id));
     });

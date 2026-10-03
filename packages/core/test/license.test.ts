@@ -25,12 +25,20 @@ describe('licensing', () => {
         { v: 1, lid: 'lic_1', tenantId: 't', customer: 'Acme', edition: 'enterprise', seats: 5, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null },
         keys.privateKeyPem,
       );
+      expect(kernel.license.status().tier).toBe('basic');
       const status = (await kernel.call('license.activate', { key }, USER)) as any;
-      expect(status).toMatchObject({ state: 'valid', edition: 'enterprise' });
+      expect(status).toMatchObject({ state: 'valid', edition: 'enterprise', tier: 'ultra', commandUrl: null });
       await waitFor(() => kernel.services.get('plugins')?.state === 'running');
 
       await kernel.call('license.remove', {}, USER);
       await waitFor(() => kernel.services.get('plugins')?.state === 'disabled');
+      expect(kernel.license.status().tier).toBe('basic');
+
+      // Community runs Endpoint Basic; a tier claim overrides the edition either way.
+      const sign = (over: object) => signLicense({ v: 1, lid: 'lic_t', tenantId: 't', customer: 'Acme', edition: 'enterprise', seats: 5, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null, ...over }, keys.privateKeyPem);
+      expect(await kernel.call('license.activate', { key: sign({ edition: 'community' }) }, USER)).toMatchObject({ tier: 'basic' });
+      expect(await kernel.call('license.activate', { key: sign({ tier: 'basic' }) }, USER)).toMatchObject({ edition: 'enterprise', tier: 'basic' });
+      expect(await kernel.call('license.activate', { key: sign({ edition: 'community', tier: 'ultra' }) }, USER)).toMatchObject({ tier: 'ultra' });
     } finally {
       await cleanup();
     }

@@ -81,7 +81,7 @@ export function ClipboardPage() {
   const { run } = useAction();
   const toast = useToast();
 
-  // clipboard/<macro id> opens that macro (from Settings → Macros).
+  // clipboard/<transform id> opens that transform (from Settings → Snippets).
   useEffect(() => {
     const id = routeArg();
     const m = id ? macros.find((x) => x.id === id) : undefined;
@@ -134,8 +134,8 @@ export function ClipboardPage() {
   const histLocked = isLocked(s.data?.locked, 'clipboard.history');
 
   return (
-    <Page title="Clipboard" description="Clean up, convert and reuse copied text. Build the steps once, save them as a macro, then run it on whatever you copied in one click.">
-      <Card title="Clipboard macros" subtitle="Click a macro to load its steps. ▶ runs it straight on the clipboard: copy, click, paste." flush={false}>
+    <Page title="Clipboard" description="Clean up, convert and reuse copied text. Build the steps once, save them as a transform, then run it on whatever you copied in one click. Ctrl+Alt+Z opens your clipboard history from anywhere.">
+      <Card title="Transforms" subtitle="Click a transform to load its steps. ▶ runs it straight on the clipboard: copy, click, paste." flush={false}>
         <div className="clip-macros">
           {macros.map((m) => (
             <div key={m.id} className={`clip-macro${loaded?.id === m.id ? ' active' : ''}`}>
@@ -147,8 +147,8 @@ export function ClipboardPage() {
               </button>
             </div>
           ))}
-          {!macros.length && <span className="fx-muted">No macros yet. Add steps below and save them.</span>}
-          <Button size="sm" variant="ghost" icon="settings" onClick={() => navigate('settings/macros')}>
+          {!macros.length && <span className="fx-muted">No transforms yet. Add steps below and save them.</span>}
+          <Button size="sm" variant="ghost" icon="settings" onClick={() => navigate('settings/snippets')}>
             Manage
           </Button>
         </div>
@@ -175,7 +175,7 @@ export function ClipboardPage() {
               code
               rows={14}
               value={input}
-              placeholder="Paste or type text here. Type / for your macros and snippets."
+              placeholder="Paste or type text here. Type / for your snippets."
               aria-label="Text to process"
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => void slash.onKeyDown(e)}
@@ -238,12 +238,12 @@ export function ClipboardPage() {
                     </Button>
                   )}
                   <Button size="sm" icon="bookmark" onClick={() => setSaveName('')}>
-                    Save as macro
+                    Save as transform
                   </Button>
                 </>
               ) : (
                 <>
-                  <Input autoFocus value={saveName} placeholder="Name, like “Clean up a ticket”" maxLength={60} onChange={(e) => setSaveName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void saveAs()} aria-label="Macro name" />
+                  <Input autoFocus value={saveName} placeholder="Name, like “Clean up a ticket”" maxLength={60} onChange={(e) => setSaveName(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void saveAs()} aria-label="Transform name" />
                   <Button size="sm" variant="primary" disabled={!saveName.trim()} onClick={() => void saveAs()}>
                     Save
                   </Button>
@@ -293,7 +293,7 @@ export function ClipboardPage() {
         }
       >
         {!bridge.clip ? (
-          <Callout tone="info">Clipboard history is available in the FBRX OS desktop app.</Callout>
+          <Callout tone="info">Clipboard history is available in the FBRX desktop app.</Callout>
         ) : !hist?.enabled ? (
           <Empty
             title="Clipboard history is off"

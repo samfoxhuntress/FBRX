@@ -1,19 +1,18 @@
 {
   "product": "FBRX OS",
   "stage": "Alpha",
-  "version": "1.8.1",
+  "version": "1.8.2",
   "codename": "Spindle",
   "released": "2026-10-03",
   "importance": "recommended",
-  "summary": "A new sidebar, updates offered in the app, downloadable voices with a spoken hello, and fixes for the Mac Keychain prompt, flashing command windows and jumping cursors.",
+  "summary": "FBRX Endpoint Basic and Ultra, license keys that join FBRX Command by themselves, a Ctrl+Alt+Z clipboard history, finer texture control and new chat surprises.",
   "notes": [
-    "Sidebar sections (Bridge, Studio, Pit Stop, Workbench, Orbit, Shield, Lab, Control) open to their pages and fold down to icons.",
-    "FBRX OS checks for new versions and offers them; Update now downloads the new version and runs the installer for you.",
-    "Voice: Fabrix says it heard you, plays a soft thinking sound while it works, and you can download more natural voices, British butler included.",
-    "The Silly Goose wears flight goggles up on his head and dresses for the season.",
-    "Mac: no more 'FBRX OS Safe Storage' password prompts. Optionally ask for a vault password at every start.",
-    "Windows: no more command windows flashing up while Fabrix works.",
-    "Typing in a pop-up no longer jumps to the first box; numbered and nested lists in answers show correctly."
+    "Two products: FBRX Endpoint Basic (everyday tools and the agent, plain light or dark look) and FBRX Endpoint Ultra, turned on by a license key. The Advanced switch is gone.",
+    "A license key from FBRX Command joins the computer to its tenant on its own; the tenant decides Basic or Ultra.",
+    "Macros are keyboard shortcuts now: Ctrl+Alt+Z opens your clipboard history (W/S to move, Tab and ~ for paste formats, type to search, Enter pastes). Snippets are the text you paste from the / menu.",
+    "Textures have a strength slider (0 to 100%), start softer, and the weave is smaller again.",
+    "Ultra: say \"Talk to me, Goose\" for your wingman on the radio, and \"Have you seen my stapler?\" for the jargon manager. Three new trophies and a new story in the Library.",
+    "The Silly Goose keeps just his aviator goggles, drops the odd feather and boops your pointer instead of taking it."
   ],
   "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/heads/claude/fbrx-os-enterprise-app-bs7s2j.zip",
   "page": "https://github.com/samfoxhuntress/FBRX"

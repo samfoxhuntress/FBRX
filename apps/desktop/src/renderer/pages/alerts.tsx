@@ -39,7 +39,7 @@ export function AlertsPage() {
   return (
     <Page
       title="Alerts"
-      description="FBRX OS watches performance, storage, security, your network and your tasks in the background and tells you when something needs attention."
+      description="FBRX watches performance, storage, security, your network and your tasks in the background and tells you when something needs attention."
       actions={
         tab === 'inbox' && (
           <>
@@ -48,7 +48,7 @@ export function AlertsPage() {
               <Button
                 icon="sparkles"
                 className="ask-btn"
-                onClick={() => askAgent('Summarize my recent FBRX OS alerts: group them, tell me which ones need action, the likely cause, and what to do first.', inbox.data!.slice(0, 40).map((a) => ({ when: a.createdAt, severity: a.severity, title: a.title, details: a.body, read: a.read })))}
+                onClick={() => askAgent('Summarize my recent FBRX alerts: group them, tell me which ones need action, the likely cause, and what to do first.', inbox.data!.slice(0, 40).map((a) => ({ when: a.createdAt, severity: a.severity, title: a.title, details: a.body, read: a.read })))}
               >
                 Summarize my alerts
               </Button>
@@ -85,7 +85,7 @@ export function AlertsPage() {
                       {timeAgo(a.createdAt)} · sent to {Object.keys(a.deliveries).map((c) => CHANNEL_LABEL[c as AlertChannel] ?? c).join(', ') || 'inbox'}
                     </div>
                   </div>
-                  <AskButton iconOnly prompt="Explain this alert from FBRX OS on my PC: what it means, the likely cause, and what I should do. Check the current state with your tools first." context={{ when: a.createdAt, severity: a.severity, title: a.title, details: a.body }} />
+                  <AskButton iconOnly prompt="Explain this alert from FBRX on my PC: what it means, the likely cause, and what I should do. Check the current state with your tools first." context={{ when: a.createdAt, severity: a.severity, title: a.title, details: a.body }} />
                   {!a.read && <Button size="sm" variant="ghost" icon="check" aria-label="Mark read" onClick={() => void run(a.id, () => call('alerts.markRead', { id: a.id }))} />}
                   <Button size="sm" variant="ghost" icon="trash" aria-label="Delete" onClick={() => void run(a.id, () => call('alerts.delete', { id: a.id }))} />
                 </div>
@@ -224,7 +224,7 @@ export function AlertsPage() {
                   [
                     ['host', 'SMTP server', 'smtp.office365.com'],
                     ['user', 'User name', 'me@example.com'],
-                    ['from', 'From', 'FBRX OS <me@example.com>'],
+                    ['from', 'From', 'FBRX <me@example.com>'],
                     ['to', 'To', 'me@example.com'],
                   ] as const
                 ).map(([k, label, ph]) => (

@@ -284,3 +284,33 @@ export function applySteps(text: string, steps: TextStep[]): { text: string; err
   });
   return { text: out, errors };
 }
+
+// ---------------------------------------------------------------------------------- clipboard history formats
+
+/**
+ * The clipboard history's paste formats, in the order Tab steps through them (~ goes back): the copy as it was, then
+ * cleaned-up and converted versions. The saved clipboard transforms follow.
+ */
+export const PASTE_FORMATS: Array<{ id: string; label: string; steps: TextStep[] }> = [
+  { id: 'clean', label: 'Clean', steps: [{ op: 'invisible' }, { op: 'straightQuotes' }, { op: 'trimLines' }, { op: 'collapseSpaces' }, { op: 'trim' }] },
+  { id: 'oneLine', label: 'One line', steps: [{ op: 'trimLines' }, { op: 'removeBlank' }, { op: 'join', a: ' ' }, { op: 'collapseSpaces' }] },
+  { id: 'list', label: 'Comma list', steps: [{ op: 'trimLines' }, { op: 'removeBlank' }, { op: 'collapseSpaces' }, { op: 'join', a: ', ' }] },
+  { id: 'upper', label: 'UPPERCASE', steps: [{ op: 'upper' }] },
+  { id: 'lower', label: 'lowercase', steps: [{ op: 'lower' }] },
+  { id: 'title', label: 'Title Case', steps: [{ op: 'title' }] },
+  { id: 'quoted', label: 'Quoted string', steps: [{ op: 'jsonString' }] },
+];
+
+/**
+ * The ways one copy can be pasted: "As copied" first, then each format and saved transform that changes it (formats
+ * that fail, come out empty or repeat an earlier result are left out).
+ */
+export function pasteFormats(text: string, saved: ReadonlyArray<{ id: string; name: string; steps: TextStep[] }> = []): Array<{ id: string; label: string; text: string }> {
+  const out = [{ id: 'original', label: 'As copied', text }];
+  for (const f of [...PASTE_FORMATS, ...saved.map((m) => ({ id: `t:${m.id}`, label: m.name, steps: m.steps }))]) {
+    const r = applySteps(text, f.steps);
+    if (r.errors.length || !r.text.trim() || out.some((o) => o.text === r.text)) continue;
+    out.push({ id: f.id, label: f.label, text: r.text });
+  }
+  return out;
+}

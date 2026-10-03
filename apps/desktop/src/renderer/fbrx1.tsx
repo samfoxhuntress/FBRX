@@ -234,7 +234,7 @@ function Fbrx1Console({ apiRef }: { apiRef: { current: ConsoleApi | null } }) {
               {e.line.trim() && !/^(configure|exit|commit|rollback|help|clear)\b/.test(e.line.trim()) && (
                 <span className="cli-entry-actions">
                   <Button size="sm" variant="ghost" icon="bookmark" aria-label="Save as a snippet" title="Save as a snippet" onClick={() => save(e.line)} />
-                  <AskButton iconOnly label="Explain this output" prompt={`I ran "${e.line}" in FBRX/1, the FBRX OS management console. Explain the output in plain language and anything I should act on.`} context={e.output.slice(-6000)} />
+                  <AskButton iconOnly label="Explain this output" prompt={`I ran "${e.line}" in FBRX/1, the FBRX management console. Explain the output in plain language and anything I should act on.`} context={e.output.slice(-6000)} />
                 </span>
               )}
             </div>

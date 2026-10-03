@@ -218,7 +218,7 @@ function Devices({ advanced }: { advanced: boolean }) {
       render: (d) => (
         <span style={{ display: 'flex', gap: 4, justifyContent: 'flex-end' }} onClick={(e) => e.stopPropagation()}>
           {hasCli(d) && !d.isSelf && (
-            <Button size="sm" icon="terminal" disabled={!advanced} title={advanced ? `Open a console (${matchDeviceProfile(d)?.name ?? 'command line'})` : 'Turn on Advanced mode to open device consoles'} onClick={() => setConnect(target(d))}>
+            <Button size="sm" icon="terminal" disabled={!advanced} title={advanced ? `Open a console (${matchDeviceProfile(d)?.name ?? 'command line'})` : 'Device consoles come with Endpoint Ultra'} onClick={() => setConnect(target(d))}>
               Connect
             </Button>
           )}
@@ -244,7 +244,7 @@ function Devices({ advanced }: { advanced: boolean }) {
             {advanced ? (
               <Input value={subnet} placeholder="192.168.1.0/24" onChange={(e) => setSubnet(e.target.value)} aria-label="Subnet to scan" title="Advanced: any /22 to /30 network" />
             ) : (
-              <div className="fx-input" style={{ display: 'flex', alignItems: 'center' }} title="Turn on Advanced mode to scan a different subnet">
+              <div className="fx-input" style={{ display: 'flex', alignItems: 'center' }} title="Scanning a different subnet comes with Endpoint Ultra">
                 <span className="mono">{subnet || '—'}</span>
               </div>
             )}
@@ -265,7 +265,7 @@ function Devices({ advanced }: { advanced: boolean }) {
         <div className="fx-muted" style={{ fontSize: 12.5, marginTop: 8 }}>
           {vendors.data?.entries ? `Makers come from the IEEE registry (${vendors.data.entries.toLocaleString()} MAC blocks, ${vendors.data.source}${vendors.data.updatedAt ? ` ${vendors.data.updatedAt}` : ''}). ` : ''}
           {subnet ? `Scans ${subnet}${hosts ? ` (${hosts} addresses)` : ''}${advanced && subnet !== autoSubnet ? ` · adapter network is ${autoSubnet}` : ''}.` : 'Connect to a network to scan it.'}
-          {!advanced && ' Advanced mode lets you scan a different subnet.'}
+          {!advanced && ' Endpoint Ultra lets you scan a different subnet.'}
         </div>
         {progress && (
           <div style={{ marginTop: 12 }}>
@@ -282,7 +282,7 @@ function Devices({ advanced }: { advanced: boolean }) {
           subtitle={`${scan.subnet} · ${formatDate(scan.scannedAt)} · ${(scan.durationMs / 1000).toFixed(0)} s`}
           actions={
             <>
-              <AskButton label="Analyze my network" prompt="Here are the devices FBRX OS found on my network. Identify what they probably are, flag anything unknown or risky (open ports, unusual makers), and suggest what to check." context={{ subnet: scan.subnet, devices: scan.devices.map((d) => ({ ip: d.ip, type: d.typeLabel, name: d.name, maker: d.vendor, ports: d.ports, services: d.services, gateway: d.isGateway, thisPC: d.isSelf })) }} />
+              <AskButton label="Analyze my network" prompt="Here are the devices FBRX found on my network. Identify what they probably are, flag anything unknown or risky (open ports, unusual makers), and suggest what to check." context={{ subnet: scan.subnet, devices: scan.devices.map((d) => ({ ip: d.ip, type: d.typeLabel, name: d.name, maker: d.vendor, ports: d.ports, services: d.services, gateway: d.isGateway, thisPC: d.isSelf })) }} />
               <Select
                 aria-label="Saved scans"
                 value={scan.id}
@@ -343,7 +343,7 @@ function Devices({ advanced }: { advanced: boolean }) {
                 {hasCli(detail) && !detail.isSelf && (
                   <>
                     {detail.ports.some((p) => p === 22 || p === 4118) && (
-                      <Button variant="primary" icon="terminal" disabled={!advanced} title={advanced ? undefined : 'Turn on Advanced mode to open device consoles'} onClick={() => setConnect(target(detail, 'ssh'))}>
+                      <Button variant="primary" icon="terminal" disabled={!advanced} title={advanced ? undefined : 'Device consoles come with Endpoint Ultra'} onClick={() => setConnect(target(detail, 'ssh'))}>
                         Connect (SSH)
                       </Button>
                     )}
@@ -387,7 +387,7 @@ function Devices({ advanced }: { advanced: boolean }) {
                   Ask about it
                 </Button>
               </div>
-              {hasCli(detail) && !advanced && <div className="fx-muted" style={{ fontSize: 12.5, marginTop: 8 }}>Turn on Advanced mode to open its command line here.</div>}
+              {hasCli(detail) && !advanced && <div className="fx-muted" style={{ fontSize: 12.5, marginTop: 8 }}>Endpoint Ultra opens its command line here.</div>}
             </Modal>
           );
         })()}
@@ -736,7 +736,7 @@ function Tools({ advanced }: { advanced: boolean }) {
           <Input placeholder="user" value={ssh.user} onChange={(e) => setSsh({ ...ssh, user: e.target.value })} aria-label="User" style={{ width: 110 }} />
           <Input placeholder="host or IP address" value={ssh.host} onChange={(e) => setSsh({ ...ssh, host: e.target.value })} aria-label="SSH host" style={{ flex: 1 }} />
           <Input type="number" value={ssh.port} onChange={(e) => setSsh({ ...ssh, port: e.target.value })} aria-label="SSH port" style={{ width: 80 }} />
-          <Button variant="primary" icon="terminal" disabled={!ssh.host || !advanced} title={advanced ? undefined : 'Turn on Advanced mode to open device consoles'} onClick={() => setConsole({ host: ssh.host })}>
+          <Button variant="primary" icon="terminal" disabled={!ssh.host || !advanced} title={advanced ? undefined : 'Device consoles come with Endpoint Ultra'} onClick={() => setConsole({ host: ssh.host })}>
             Connect
           </Button>
           {IS_WINDOWS && (

@@ -58,7 +58,7 @@ export function AiCoordPage({ agentName }: { agentName: string }) {
   return (
     <Page
       title="AI coordination"
-      description={`Let the other AI apps on this computer use FBRX OS tools and ask ${agentName}, and get second opinions from other models. Everything goes through FBRX governance and approvals.`}
+      description={`Let the other AI apps on this computer use FBRX tools and ask ${agentName}, and get second opinions from other models. Everything goes through FBRX governance and approvals.`}
       actions={
         <Button icon="refresh" loading={scanning} onClick={() => void scan(true)}>
           {scanning ? 'Looking…' : 'Look again'}

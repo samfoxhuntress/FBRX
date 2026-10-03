@@ -1,10 +1,15 @@
 /**
- * Signs an offline FBRX OS license key with the private key from `npm run keys:generate`, no control plane needed.
- * Paste the printed key into the desktop app under Settings → License.
+ * Signs an offline FBRX license key with the private key from `npm run keys:generate`, no FBRX Command needed.
+ * Paste the printed key into FBRX Endpoint under Settings → License: Community runs Endpoint Basic, Pro and
+ * Enterprise run Endpoint Ultra (or pick one with --tier).
  *
  *   npm run license:issue -- --customer "Acme Ltd" [--edition enterprise|pro|community] [--seats 25]
- *                            [--expires 2027-12-31] [--max-major 2] [--feature fleet --feature plugins]
- *                            [--key .fbrx-keys/license-signing.pem]
+ *                            [--tier basic|ultra] [--expires 2027-12-31] [--max-major 2]
+ *                            [--feature fleet --feature plugins] [--key .fbrx-keys/license-signing.pem]
+ *                            [--command-url https://command.example.com --enroll-token fbrx_enr_…]
+ *
+ * With --command-url and --enroll-token (a token from FBRX Command → Deploy & enroll), computers that activate the
+ * key join that tenant on their own.
  *
  * The desktop build must embed the matching public key (keys:generate writes it to
  * apps/desktop/build/license-public-key.pem; rebuild after generating). Offline keys cannot be revoked remotely,
@@ -13,7 +18,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { ALL_FEATURES, EDITIONS, featuresFor, newId, type Edition, type LicensePayload } from '../packages/shared/src';
+import { ALL_FEATURES, EDITIONS, TIERS, TIER_NAMES, featuresFor, newId, tierFor, type Edition, type LicensePayload, type Tier } from '../packages/shared/src';
 import { publicKeyFromPrivate, signLicense, verifyLicense } from '../packages/shared/src/node';
 
 const argv = process.argv.slice(2);
@@ -36,6 +41,12 @@ const expires = opt('--expires');
 const expiresAt = expires ? new Date(`${expires}T23:59:59Z`) : null;
 if (expiresAt && Number.isNaN(expiresAt.getTime())) fail('--expires must be a date like 2027-12-31');
 const maxMajor = opt('--max-major');
+const tier = opt('--tier') as Tier | undefined;
+if (tier && !TIERS.includes(tier)) fail(`--tier must be one of ${TIERS.join(', ')}`);
+const commandUrl = opt('--command-url');
+const enrollToken = opt('--enroll-token');
+if (!!commandUrl !== !!enrollToken) fail('--command-url and --enroll-token go together');
+if (commandUrl && !/^https?:\/\//.test(commandUrl)) fail('--command-url must start with https://');
 const features = all('--feature');
 const unknown = features.filter((f) => !(ALL_FEATURES as string[]).includes(f));
 if (unknown.length) fail(`Unknown feature(s): ${unknown.join(', ')}. Known: ${ALL_FEATURES.join(', ')}`);
@@ -60,12 +71,15 @@ const payload: LicensePayload = {
   issuedAt: new Date().toISOString(),
   expiresAt: expiresAt ? expiresAt.toISOString() : null,
   maxMajorVersion: maxMajor ? Number(maxMajor) : null,
+  ...(tier ? { tier } : {}),
+  ...(commandUrl && enrollToken ? { command: { url: commandUrl, enrollmentToken: enrollToken } } : {}),
 };
 const key = signLicense(payload, privateKeyPem!);
 const check = verifyLicense(key, [publicKeyFromPrivate(privateKeyPem!)]);
 if (!check.ok) fail(`Signed key failed verification: ${check.error}`);
 
-console.log(`\n${customer} · ${edition} · ${seats || 'unlimited'} seat(s) · ${payload.expiresAt ? `expires ${expires}` : 'perpetual'}`);
+console.log(`\n${TIER_NAMES[tierFor(edition, tier)]} · ${customer} · ${edition} · ${seats || 'unlimited'} seat(s) · ${payload.expiresAt ? `expires ${expires}` : 'perpetual'}`);
+if (commandUrl) console.log(`Joins the FBRX Command tenant at ${commandUrl}`);
 console.log(`Features: ${featuresFor(payload).join(', ')}\n`);
 console.log(key);
-console.log('\nPaste this into FBRX OS → Settings → License.');
+console.log('\nPaste this into FBRX Endpoint → Settings → License.');

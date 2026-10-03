@@ -102,8 +102,8 @@ export async function record(o: RecordOptions = {}): Promise<Recording> {
   if (!perm.granted) {
     throw new Error(
       bridge.platform === 'darwin'
-        ? 'FBRX OS may not use the microphone. Allow it in System Settings → Privacy & Security → Microphone, then try again.'
-        : 'FBRX OS may not use the microphone. Turn on "Let desktop apps access your microphone" in Windows Settings → Privacy & security → Microphone.',
+        ? 'FBRX may not use the microphone. Allow it in System Settings → Privacy & Security → Microphone, then try again.'
+        : 'FBRX may not use the microphone. Turn on "Let desktop apps access your microphone" in Windows Settings → Privacy & security → Microphone.',
     );
   }
   const stream = await navigator.mediaDevices
@@ -250,6 +250,7 @@ export function speakable(md: string): string {
   t = t.replace(/^\s*[-*+]\s+/gm, '');
   t = t.replace(/(\*\*|__|\*|_|~~)/g, '');
   t = t.replace(/https?:\/\/\S+/g, 'a link');
+  t = t.replace(/\p{Extended_Pictographic}\uFE0F?/gu, '');
   t = t.replace(/[ \t]+/g, ' ').replace(/\n{2,}/g, '\n');
   return t.trim();
 }

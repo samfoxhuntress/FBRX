@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { codenameFor, displayVersion, type ReleaseCheck } from '@fbrx/shared';
+import { TIER_NAMES, codenameFor, displayVersion, type ReleaseCheck } from '@fbrx/shared';
 import { Button, Callout, Card, Icons, KeyValue, Modal, Status, Toggle, timeAgo, useAction } from '@fbrx/ui';
 import { call, openExternal } from './client';
 import { useCore } from './hooks';
+import { useTier } from './edition';
 
 /**
  * New versions published in the FBRX repository: a pill in the top bar, a dialog with what's new, and the panel in
@@ -22,7 +23,7 @@ export function UpdatePill() {
   const preparing = r?.installing && !['failed', 'started'].includes(r.installing.phase);
   return (
     <>
-      <button className={`update-pill${r?.latest?.importance === 'important' ? ' important' : ''}`} onClick={() => setOpen(true)} title="A new version of FBRX OS is ready">
+      <button className={`update-pill${r?.latest?.importance === 'important' ? ' important' : ''}`} onClick={() => setOpen(true)} title="A new version of FBRX is ready">
         <Icons.download size={13} />
         {preparing ? 'Preparing update…' : `Update to ${r?.latest?.version}`}
       </button>
@@ -39,7 +40,7 @@ export function ReleaseDialog({ release: r, onClose }: { release: ReleaseCheck; 
   return (
     <Modal
       wide
-      title={`FBRX OS ${l.stage} ${l.version}${l.codename ? ` · ${l.codename}` : ''}`}
+      title={`FBRX ${l.stage} ${l.version}${l.codename ? ` · ${l.codename}` : ''}`}
       description={`${l.released ? `Released ${l.released}. ` : ''}You have ${displayVersion(r.currentVersion)}. Your data, settings and license stay as they are.`}
       onClose={onClose}
       footer={
@@ -113,7 +114,7 @@ export function ReleasePanel({ checkRepo, locked, onToggle }: { checkRepo: boole
   const tone = r.state === 'available' ? 'warning' : r.state === 'current' ? 'good' : r.state === 'error' ? 'critical' : r.state === 'checking' ? 'busy' : 'neutral';
   const label = { idle: 'Not checked yet', checking: 'Checking…', current: 'Up to date', available: r.skipped ? `${r.latest?.version} skipped` : `${r.latest?.version} available`, error: 'Could not check', off: 'Not checking' }[r.state];
   return (
-    <Card title="New versions" subtitle="FBRX OS looks for new versions in its online repository and offers them. Nothing is installed unless you choose to.">
+    <Card title="New versions" subtitle="FBRX looks for new versions in its online repository and offers them. Nothing is installed unless you choose to.">
       <div className="fx-form">
         <KeyValue
           items={[
@@ -147,8 +148,9 @@ export function AboutVersion({ version }: { version: string }) {
   return (
     <div className="about-version">
       <div className="about-version-name">
-        FBRX OS <b>{displayVersion(version)}</b>
+        {TIER_NAMES[useTier()]} <b>{displayVersion(version)}</b>
       </div>
+      <div className="fx-muted" style={{ fontSize: 12 }}>Built on FBRX OS, the Fabrics Operating System.</div>
       {code && (
         <div className="about-codename">
           <span className="about-codename-chip">“{code.name}”</span>

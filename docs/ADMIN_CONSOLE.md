@@ -1,7 +1,9 @@
-# Admin console
+# FBRX Command (admin console)
 
-The admin console is served by the control plane at its public URL. It is the place to watch, configure, update and
-support every FBRX OS workstation in real time. Development: `npm run dev:console` (proxies the API on :8787).
+FBRX Command is the team tenant controller: the console served by the control plane at its public URL. It is the place
+to watch, configure, update and support every FBRX Endpoint computer in real time, with RMM-style tooling (remote
+commands, packages, credentials, updates, backups and audit). A license issued here can enroll computers by itself:
+paste the key into FBRX Endpoint Basic and it joins the tenant (see [LICENSING.md](LICENSING.md#joining-fbrx-command)). Development: `npm run dev:console` (proxies the API on :8787).
 
 ## Pages
 
@@ -17,7 +19,7 @@ support every FBRX OS workstation in real time. Development: `npm run dev:consol
 | | **Plugins** | Upload plugin packages (manifest and permissions shown), deploy to devices or groups |
 | | **Backups** | Snapshots uploaded by devices; download, mark as an enrollment template, delete |
 | Platform | **Releases** | Upload installers (or let CI do it), publish to `stable`/`beta`/`dev`, staged rollout percentage |
-| | **Licenses** | Issue and revoke signed licenses per tenant; copy keys for offline activation |
+| | **Licenses** | Issue and revoke signed licenses per tenant: the product (Endpoint Basic or Ultra), seats and expiry, and whether computers that activate the key join the tenant automatically; copy keys for offline activation |
 | | **Tenants** | (superadmin) Create customers/business units, suspend them, set their default channel |
 | Access | **Users & API keys** | Invite users with a role, reset access, create API keys for automation |
 | | **Webhooks** | Signed outgoing webhooks for fleet events |

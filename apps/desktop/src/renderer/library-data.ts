@@ -417,7 +417,7 @@ export const ARTICLES: Article[] = [
     steps: [
       'Press <kbd>Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>Esc</kbd> to open Task Manager.',
       'Select the app → End task.',
-      'Or use FBRX Processes (advanced mode).',
+      'Or use the FBRX Task Manager.',
     ],
   },
   {
@@ -427,7 +427,7 @@ export const ARTICLES: Article[] = [
     s: 'Spot a failing SSD or hard drive early.',
     steps: [
       'FBRX Storage → Drives shows health status.',
-      'Advanced mode → Disks & partitions shows temperature, wear and error counters.',
+      'In Endpoint Ultra, Storage → Disks & partitions shows temperature, wear and error counters.',
       'Back up immediately if health is not "Healthy".',
     ],
     go: 'storage',

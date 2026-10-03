@@ -1,6 +1,7 @@
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PROVIDERS, TROPHIES, type AgentEvent, type CliResult } from '@fbrx/shared';
+import { generateSigningKeyPair, signLicense } from '@fbrx/shared/node';
 import { makeKernel, waitFor, USER } from './helpers';
 import { mockOpenAI } from './mock-llm';
 import { AiCoordination } from '../src/aicoord/aicoord';
@@ -13,11 +14,17 @@ const API = { origin: 'api' as const, actor: 'localapi:agent' };
 
 describe('trophy case', () => {
   it('records trophies once, awards the golden goose for all of them, and stays quiet with fun extras off', async () => {
+    // Endpoint Basic (no license) has no easter eggs at all.
+    const basic = await makeKernel({ devMode: false });
+    try {
+      expect(basic.kernel.license.status().tier).toBe('basic');
+      expect(await basic.kernel.call('fun.unlock', { id: 'loom' }, USER)).toEqual({ unlocked: false, golden: false });
+    } finally {
+      await basic.cleanup();
+    }
     const { kernel, cleanup } = await makeKernel();
     try {
-      // Locked until someone enters 418.
-      expect(await kernel.call('fun.unlock', { id: 'loom' }, USER)).toEqual({ unlocked: false, golden: false });
-      kernel.settings.update({ appearance: { funUnlocked: true } });
+      expect(kernel.license.status().tier).toBe('ultra');
       const events: any[] = [];
       kernel.events.on('fun.trophy', (e) => events.push(e));
       expect(await kernel.call('fun.unlock', { id: 'loom' }, USER)).toEqual({ unlocked: true, golden: false });
@@ -31,7 +38,7 @@ describe('trophy case', () => {
 
       const { kernel: k2, cleanup: c2 } = await makeKernel();
       try {
-        k2.settings.update({ appearance: { easterEggs: false, funUnlocked: true } });
+        k2.settings.update({ appearance: { easterEggs: false } });
         expect(await k2.call('fun.unlock', { id: 'loom' }, USER)).toEqual({ unlocked: false, golden: false });
       } finally {
         await c2();
@@ -71,33 +78,31 @@ describe('emergency stop', () => {
 });
 
 describe('the stapler', () => {
-  it('answers at once, then the conversation talks in corporate jargon and ends with "That would be great."', async () => {
+  it('answers at once, then the conversation is canned corporate jargon (no model) until PC load letter', async () => {
     const { kernel, cleanup } = await makeKernel();
     const llm = await mockOpenAI(() => ({ text: 'Your disk has 120 GB free.' }));
     try {
-      kernel.settings.update({ appearance: { funUnlocked: true } });
       kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
       const events: AgentEvent[] = [];
       kernel.events.on('agent', (e) => events.push(e));
-      const first = (await kernel.call('ai.chat', { message: "Where's my stapler?" }, USER)) as any;
+      const first = (await kernel.call('ai.chat', { message: 'Has anyone seen my stapler?' }, USER)) as any;
       const reply = events.find((e) => e.type === 'message.completed') as any;
-      expect(reply.message.content).toMatch(/downstairs, in storage building B/);
-      expect(llm.requests).toHaveLength(0);
+      expect(reply.message.content).toMatch(/stapler[\s\S]*That would be great\.$/);
       expect(kernel.trophies.has('stapler')).toBe(true);
 
       await kernel.call('ai.chat', { conversationId: first.conversationId, message: 'How much disk space is free?' }, USER);
-      await waitFor(() => events.filter((e) => e.type === 'run.completed').length >= 2);
-      const system = llm.requests.at(-1).body.messages[0].content as string;
-      expect(system).toMatch(/corporate jargon/);
       const last = kernel.conversations.get(first.conversationId).messages.at(-1)!;
-      expect(last.content).toMatch(/120 GB free\.\n\nThat would be great\.$/);
+      expect(last.content).toMatch(/That would be great\.$/);
+      expect(last.content).not.toMatch(/120 GB/);
+      expect(llm.requests).toHaveLength(0);
 
       await kernel.call('ai.chat', { conversationId: first.conversationId, message: 'PC load better' }, USER);
       expect(kernel.conversations.get(first.conversationId).messages.at(-1)!.content).toMatch(/back to talking like a normal assistant/);
       expect(kernel.trophies.has('pcload')).toBe(true);
       await kernel.call('ai.chat', { conversationId: first.conversationId, message: 'And now?' }, USER);
       await waitFor(() => events.filter((e) => e.type === 'run.completed').length >= 4);
-      expect(llm.requests.at(-1).body.messages[0].content).not.toMatch(/corporate jargon/);
+      expect(llm.requests).toHaveLength(1);
+      expect(kernel.conversations.get(first.conversationId).messages.at(-1)!.content).toBe('Your disk has 120 GB free.');
     } finally {
       await llm.close();
       await cleanup();
@@ -167,15 +172,54 @@ describe('AI coordination link test', () => {
 });
 
 describe('chat eggs', () => {
-  it('knows the stapler however it is asked, and PC load letter or better', () => {
-    for (const q of ["Where's my stapler?", 'Where is my stapler', 'where’s my stapler', 'stapler', 'Stapler?', 'have you seen my red swingline stapler']) {
-      expect(chatEgg(q, null)?.trophies).toEqual(['stapler']);
+  it('turns on jargon mode for the stapler sayings, with random answers unrelated to the question', () => {
+    for (const q of ['Have you seen my stapler?', 'Where is my stapler?', 'Has anyone seen my stapler?', "Where's my stapler?", 'where’s my stapler', 'Has anybody seen my red stapler', 'stapler', 'Stapler?']) {
+      expect(chatEgg(q, null)).toMatchObject({ persona: 'jargon:0', trophies: ['stapler'] });
     }
     expect(chatEgg('Write a 2,000 word essay on the history of office supplies, including the humble stapler and the paper clip, with sources and footnotes please', null)).toBeNull();
-    expect(chatEgg('PC load letter', 'lumbergh')).toMatchObject({ persona: null, trophies: ['pcload'] });
+    expect(chatEgg('How do I fix a jammed stapler?', null)).toBeNull();
+    expect(chatEgg('How much disk space is free?', null)).toBeNull();
+
+    // Every answer is jargon, signed off the same way, and never about the question.
+    const seen = new Set<string>();
+    let persona = 'jargon:0';
+    for (let i = 0; i < 6; i++) {
+      const r = chatEgg('How much disk space is free?', persona)!;
+      expect(r.reply).toMatch(/That would be great\.$/);
+      expect(r.reply).not.toMatch(/disk/i);
+      seen.add(r.reply);
+      persona = r.persona!;
+    }
+    expect(persona).toBe('jargon:6');
+    expect(seen.size).toBeGreaterThan(1);
+    expect(chatEgg('still there?', 'jargon:4')!.trophies).toEqual(['synergy']);
+    // Conversations from before keep their manager.
+    expect(chatEgg('hello', 'lumbergh')).toMatchObject({ persona: 'jargon:1' });
+
+    expect(chatEgg('PC load letter', 'jargon:2')).toMatchObject({ persona: null, trophies: ['pcload'] });
     expect(chatEgg('pc load better', 'lumbergh')).toMatchObject({ persona: null, trophies: ['pcload'] });
     expect(chatEgg('PC load letter', null)).toMatchObject({ persona: undefined, trophies: ['pcload'] });
-    expect(chatEgg('How much disk space is free?', null)).toBeNull();
+    for (const q of ['I quit', 'normal mode', 'no more jargon']) expect(chatEgg(q, 'jargon:3')).toMatchObject({ persona: null, trophies: [] });
+  });
+
+  it('puts your wingman on the radio on "Talk to me, Goose" until wheels down', () => {
+    for (const q of ['Talk to me, Goose', 'talk to me goose!', 'Talk to me, Goose.']) expect(chatEgg(q, null)).toMatchObject({ persona: 'wingman:0', trophies: ['wingman'] });
+    expect(chatEgg('Talk to me about geese', null)).toBeNull();
+    let persona = 'wingman:0';
+    const seen = new Set<string>();
+    for (let i = 0; i < 5; i++) {
+      const r = chatEgg('What is my IP address?', persona)!;
+      expect(r.reply).toMatch(/^📻 .* Over\.$/s);
+      expect(r.reply).not.toMatch(/IP address/i);
+      seen.add(r.reply);
+      persona = r.persona!;
+    }
+    expect(persona).toBe('wingman:5');
+    expect(seen.size).toBeGreaterThan(1);
+    expect(chatEgg('roger', 'wingman:4')!.trophies).toEqual(['topwing']);
+    // The stapler still finds the manager, even mid-flight.
+    expect(chatEgg('Has anyone seen my stapler?', persona)).toMatchObject({ persona: 'jargon:0', trophies: ['stapler'] });
+    for (const q of ['Wheels down', 'return to base', 'land the plane', 'normal mode']) expect(chatEgg(q, persona)).toMatchObject({ persona: null, trophies: [] });
   });
 
   it('turns Wookiee on "Chewie, we\'re home" until "Laugh it up, fuzzball", with the father line on Nooo', () => {
@@ -195,8 +239,9 @@ describe('chat eggs', () => {
     expect(chatEgg('Laugh it up, fuzzball', persona, r)).toMatchObject({ persona: null, trophies: ['fuzzball'] });
   });
 
-  it('stays out of the way until fun extras are unlocked with 418', async () => {
-    const { kernel, cleanup } = await makeKernel();
+  it('stays out of the way in Endpoint Basic and wakes up with an Ultra license', async () => {
+    const keys = generateSigningKeyPair();
+    const { kernel, cleanup } = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem] });
     const llm = await mockOpenAI(() => ({ text: 'Plain answer.' }));
     try {
       kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
@@ -205,7 +250,8 @@ describe('chat eggs', () => {
       await kernel.call('ai.chat', { message: "Chewie, we're home" }, USER);
       await waitFor(() => events.some((e) => e.type === 'run.completed'));
       expect(llm.requests).toHaveLength(1);
-      kernel.settings.update({ appearance: { funUnlocked: true } });
+      const key = signLicense({ v: 1, lid: 'lic_u', tenantId: 't', customer: 'Acme', edition: 'pro', seats: 1, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null }, keys.privateKeyPem);
+      expect(await kernel.call('license.activate', { key }, USER)).toMatchObject({ state: 'valid', tier: 'ultra' });
       const r = (await kernel.call('ai.chat', { message: "Chewie, we're home" }, USER)) as any;
       expect(kernel.conversations.get(r.conversationId).messages.at(-1)!.content).toMatch(/^Rrrrrrr-ghghghghgh!/);
       expect(kernel.trophies.has('chewie')).toBe(true);

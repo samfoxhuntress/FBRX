@@ -1,5 +1,5 @@
 import type { CliResult, DeepPartial, EffectiveSettings, Settings } from '@fbrx/shared';
-import { DEFAULT_SETTINGS, SettingsSchema, deepMerge, funEnabled, isPathLocked, leafPaths, newId } from '@fbrx/shared';
+import { DEFAULT_SETTINGS, SettingsSchema, TIER_NAMES, deepMerge, funEnabled, isPathLocked, leafPaths, newId } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 
 /**
@@ -110,7 +110,7 @@ const OPERATIONAL: Record<string, Node> = {
         help: 'Product, version and license',
         run: async (_a, c) => {
           const s = await c.call('system.status');
-          return [`Product:      ${s.product}`, `Version:      ${s.version}`, `Platform:     ${s.platform} ${s.arch}`, `Device name:  ${s.deviceName}`, `License:      ${s.license.edition}${s.license.customer ? ` (${s.license.customer})` : ''}`, `Build:        ${s.devMode ? 'development' : 'release'}`].join('\n');
+          return [`Product:      ${s.product}`, `Version:      ${s.version}`, `Platform:     ${s.platform} ${s.arch}`, `Device name:  ${s.deviceName}`, `Edition:      ${s.license.tier === 'ultra' ? TIER_NAMES.ultra : TIER_NAMES.basic}`, `License:      ${s.license.edition}${s.license.customer ? ` (${s.license.customer})` : ''}`, `Build:        ${s.devMode ? 'development' : 'release'}`].join('\n');
         },
       },
       system: {
@@ -286,7 +286,7 @@ const OPERATIONAL: Record<string, Node> = {
         },
       },
       alerts: { help: 'Alert actions', children: { 'mark-read': { help: 'Mark every alert read', run: async (_a, c) => ((l: any[]) => Promise.all(l.filter((a) => !a.read).map((a) => c.call('alerts.markRead', { id: a.id }))).then((r) => `Marked ${r.length} alert(s) read.`))(await c.call('alerts.inbox', { limit: 200 })) } } },
-      goose: { help: 'Easter-egg department', children: { release: { help: 'You know what this does', run: async (_a, c) => (funEnabled((await c.call('settings.get')).settings) ? 'HONK. (Releasing the goose is a desktop-app thing: use Spotlight and type "honk".)' : 'Fun extras are off.') } } },
+      goose: { help: 'Easter-egg department', children: { release: { help: 'You know what this does', run: async (_a, c) => (funEnabled((await c.call('settings.get')).settings, (await c.call('license.status')).tier) ? 'HONK. (Releasing the goose is a desktop-app thing: use Spotlight and type "honk".)' : 'Fun extras are off.') } } },
     },
   },
   ping: {

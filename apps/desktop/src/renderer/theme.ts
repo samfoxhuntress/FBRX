@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { Settings, Texture, ThemePreset } from '@fbrx/shared';
+import type { Settings, Texture, ThemePreset, Tier } from '@fbrx/shared';
 
 /** Swatch colors for the preset picker: [page, sidebar, accent, glow] for light and dark. */
 export const PRESETS: Array<{ id: ThemePreset; name: string; light: [string, string, string, string?]; dark: [string, string, string, string?]; texture: Exclude<Texture, 'theme'> }> = [
@@ -56,9 +56,12 @@ function palmsPath(): string {
  * The background texture as a CSS image, drawn in the theme's ink at the chosen strength (null for none). SVG tiles,
  * so they stay sharp at any zoom.
  */
-export function textureImage(t: Exclude<Texture, 'theme'>, mode: 'light' | 'dark', strength: Settings['appearance']['textureStrength'] = 'medium', accent = '#00e5ff', scale = 1): string | null {
-  if (t === 'none') return null;
-  const k = { subtle: 0.6, medium: 1, bold: 1.7 }[strength] * scale;
+/** The strongest a texture gets (100 %): well short of the old "bold", so a texture never shouts. */
+const MAX_TEXTURE = 1.2;
+
+export function textureImage(t: Exclude<Texture, 'theme'>, mode: 'light' | 'dark', strength: number = 50, accent = '#00e5ff', scale = 1): string | null {
+  if (t === 'none' || strength <= 0) return null;
+  const k = (Math.min(100, strength) / 100) * MAX_TEXTURE * scale;
   const ink = (a: number) => (mode === 'dark' ? `rgba(255,255,255,${(a * k).toFixed(3)})` : `rgba(60,40,20,${(a * k * 1.15).toFixed(3)})`);
   const neon = (a: number) => {
     const [r, g, b] = hexToRgb(/^#[0-9a-f]{6}$/i.test(accent) ? accent : '#00e5ff');
@@ -67,8 +70,8 @@ export function textureImage(t: Exclude<Texture, 'theme'>, mode: 'light' | 'dark
   let svg: string;
   switch (t) {
     case 'weave': {
-      // A basket weave in 18 px blocks: three threads across, then three down, each with a soft shadow edge.
-      const B = 18;
+      // A small basket weave in 10 px blocks: two threads across, then two down, each with a soft shadow edge.
+      const B = 10;
       let d = '';
       let e = '';
       for (const [bx, by, across] of [
@@ -77,18 +80,18 @@ export function textureImage(t: Exclude<Texture, 'theme'>, mode: 'light' | 'dark
         [0, B, false],
         [B, B, true],
       ] as const) {
-        for (let i = 0; i < 3; i++) {
-          const o = 1 + i * 6;
+        for (let i = 0; i < 2; i++) {
+          const o = 1 + i * 5;
           if (across) {
-            d += `M${bx} ${by + o}h${B}v4h-${B}z`;
-            e += `M${bx} ${by + o + 3.5}h${B}`;
+            d += `M${bx} ${by + o}h${B}v3h-${B}z`;
+            e += `M${bx} ${by + o + 2.6}h${B}`;
           } else {
-            d += `M${bx + o} ${by}h4v${B}h-4z`;
-            e += `M${bx + o + 3.5} ${by}v${B}`;
+            d += `M${bx + o} ${by}h3v${B}h-3z`;
+            e += `M${bx + o + 2.6} ${by}v${B}`;
           }
         }
       }
-      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${B * 2}" height="${B * 2}"><path d="${d}" fill="${ink(0.05)}"/><path d="${e}" stroke="${ink(0.045)}" stroke-width="1"/></svg>`;
+      svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${B * 2}" height="${B * 2}"><path d="${d}" fill="${ink(0.055)}"/><path d="${e}" stroke="${ink(0.045)}" stroke-width=".8"/></svg>`;
       break;
     }
     case 'linen':
@@ -170,15 +173,22 @@ export function resolvedMode(theme: Settings['general']['theme']): 'light' | 'da
   return theme;
 }
 
-/** Applies appearance settings to <html> (presets live in theme.css). */
-export function useAppearance(settings: Settings | undefined) {
+/**
+ * Applies appearance settings to <html> (presets live in theme.css). Endpoint Basic gets the plain look: light or
+ * dark, no theme colors, gradients or textures (those come with Ultra). `tier` is undefined while the license loads.
+ */
+export function useAppearance(settings: Settings | undefined, tier: Tier | undefined) {
   const theme = settings?.general.theme ?? 'dark';
-  const a = settings?.appearance;
+  const basic = tier === 'basic';
+  const a = settings && basic ? { ...settings.appearance, preset: 'graphite' as const, texture: 'none' as const, accent: '' } : settings?.appearance;
   useEffect(() => {
+    // Wait for the license, so Basic never flashes the Ultra look (or the other way round).
+    if (!tier) return;
     const root = document.documentElement;
     const apply = () => {
       const mode = resolvedMode(theme);
       root.dataset.theme = mode;
+      root.dataset.edition = basic ? 'basic' : 'ultra';
       root.dataset.preset = a?.preset ?? 'fabrics';
       root.dataset.density = a?.density ?? 'comfortable';
       root.dataset.radius = a?.radius ?? 'rounded';
@@ -211,7 +221,7 @@ export function useAppearance(settings: Settings | undefined) {
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, [theme, a?.preset, a?.density, a?.radius, a?.texture, a?.textureStrength, a?.reduceMotion, a?.fontScale, a?.accent, a?.effects]);
+  }, [theme, tier, a?.preset, a?.density, a?.radius, a?.texture, a?.textureStrength, a?.reduceMotion, a?.fontScale, a?.accent, a?.effects]);
 }
 
 /** The FBRX start-up sound (from the FBRX intro), like a computer's chime when it boots. */

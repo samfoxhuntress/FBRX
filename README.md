@@ -7,13 +7,20 @@
 
 # FBRX OS — Fabrics Operating System
 
-> **Alpha 1.8.1 "Spindle".** FBRX OS is in alpha testing. Installed copies check this repository's
+> **Alpha 1.8.2 "Spindle".** FBRX is in alpha testing. Installed copies check this repository's
 > [`release.json`](release.json) and offer new versions in the app.
 
-FBRX OS is a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is governed
-end to end, an everyday **command center** (dashboard, tasks, notes, Spotlight, alerts, PC care, Network Center with SSH /
-Telnet device consoles and maker guides, your phone), plus a **control plane** and **admin console** for running it across a fleet of workstations — or
-selling it to other companies, each in its own tenant.
+FBRX OS is the platform behind two products:
+
+* **FBRX Endpoint** — a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is
+  governed end to end and an everyday **command center** (dashboard, tasks, notes, Spotlight, a Ctrl+Alt+Z clipboard
+  history, alerts, PC care, Network Center, your phone). **Endpoint Basic** runs without a license key: the everyday
+  tools and the agent, in a plain light or dark look. A license key turns on **Endpoint Ultra**: expert tool sets
+  (Terminal, FBRX/1, virtual lab, device consoles, disks and partitions…), Mesh and AI coordination, connections and
+  plugins, the theme studio and the easter eggs.
+* **FBRX Command** — the team tenant controller (control plane and console) for running FBRX Endpoint across a fleet
+  with RMM-level tooling, or selling it to other companies, each in its own tenant. A license key from FBRX Command
+  joins the computer to the tenant on its own.
 
 ```
  ┌──────────────────────────── Workstation (macOS / Windows) ────────────────────────────┐
@@ -43,10 +50,10 @@ selling it to other companies, each in its own tenant.
 | Agents and services that govern it | Policy engine, guardian (dangerous-command and prompt-injection detection, optional model review), human approvals, rate limits, secret redaction, tamper-evident audit log, service watchdog. |
 | Back up, redeploy, carry on as if nothing happened | Encrypted `.fbrxsnap` snapshots (manual, scheduled or remote) restored in **migrate** mode — same identity, same fleet enrollment, same vault. See [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md). |
 | Deploy to other Macs and PCs | Signed `.dmg`/`.zip` and NSIS `.exe` installers, zero-touch provisioning files, golden template snapshots, auto-updates by channel, pin and staged rollout. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). |
-| Sell it | Tenants per customer, editions (Community / Pro / Enterprise), offline-verifiable Ed25519 license keys, seats, expiry, version caps. See [docs/LICENSING.md](docs/LICENSING.md). |
-| Admin console, credentials management, real-time backend | Fleet dashboard, device detail and live commands, managed settings/policy with locks, secrets pushed into device vaults, users/roles/MFA/API keys, releases, packages, snapshots, webhooks, audit. See [docs/ADMIN_CONSOLE.md](docs/ADMIN_CONSOLE.md). |
+| Sell it | Endpoint Basic and Ultra, tenants per customer, editions (Community / Pro / Enterprise), offline-verifiable Ed25519 license keys that can join their FBRX Command tenant by themselves, seats, expiry, version caps. See [docs/LICENSING.md](docs/LICENSING.md). |
+| FBRX Command (admin console), credentials management, real-time backend | Fleet dashboard, device detail and live commands, managed settings/policy with locks, secrets pushed into device vaults, users/roles/MFA/API keys, releases, packages, snapshots, webhooks, audit. See [docs/ADMIN_CONSOLE.md](docs/ADMIN_CONSOLE.md). |
 | Build in other tools and connect to other apps | Plugin SDK (sandboxed workers), REST / MCP / webhook / FBRX-peer connectors, Local API for scripts and other apps. See [docs/PLUGINS.md](docs/PLUGINS.md). |
-| An everyday command center | FBRX Glass (the live dashboard), tasks / notes / projects / snippets, Spotlight (Alt+Space), files, Task Manager with an AI-assisted Event Viewer, a Clipboard processor, slash macros (`/snip`), Copy & migrate (Robocopy / rsync), terminal with a sandboxed code lab and *What if?*, the FBRX/1 management console, toolbox, library, alerts to desktop / phone / Slack / Teams / e-mail / your admin console, an AI emergency stop, and a theme studio with eleven looks. See [docs/COMMAND_CENTER.md](docs/COMMAND_CENTER.md). |
+| An everyday command center | FBRX Glass (the live dashboard), tasks / notes / projects / snippets, Spotlight (Alt+Space), files, Task Manager with an AI-assisted Event Viewer, a Clipboard processor with a Ctrl+Alt+Z clipboard history (W/S to move, Tab/~ for paste formats, type to search), snippets in a `/` menu, keyboard-shortcut macros, Copy & migrate (Robocopy / rsync), terminal with a sandboxed code lab and *What if?*, the FBRX/1 management console, toolbox, library, alerts to desktop / phone / Slack / Teams / e-mail / your admin console, an AI emergency stop, and a theme studio with eleven looks. See [docs/COMMAND_CENTER.md](docs/COMMAND_CENTER.md). |
 | PC care for Windows | Storage clean-up and disk health, Microsoft Defender and firewall, link and file checks, Windows Sandbox, winget / Windows Update / drivers, a bug catcher with one-click repairs, a Hyper-V lab, and a Network Center (trace route, device discovery, speed, Wi-Fi, Bluetooth, printers). |
 | Your other devices and AI apps | An encrypted mesh with your other FBRX computers and the FBRX Mobile phone app (per-device permissions, one-time pairing codes); one-click MCP connection for Claude Desktop, Claude Code, Cursor, Windsurf and VS Code. See [docs/MESH.md](docs/MESH.md). |
 

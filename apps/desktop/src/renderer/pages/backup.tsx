@@ -85,7 +85,7 @@ export function BackupPage() {
         <Card title="Moving to a new computer">
           <ol style={{ margin: 0, paddingLeft: 18, lineHeight: 1.7 }}>
             <li>Create a snapshot here (or let your organization back up this device).</li>
-            <li>Install FBRX OS on the new Mac or Windows machine.</li>
+            <li>Install FBRX on the new Mac or Windows machine.</li>
             <li>Choose <strong>Restore from file</strong>, enter the snapshot passphrase and pick <strong>Migrate</strong>.</li>
             <li>FBRX restarts and everything — credentials included — is back. Your organization sees the device move to new hardware.</li>
           </ol>
@@ -205,7 +205,7 @@ export function RestoreModal({ file, header, onClose }: { file: string; header: 
       }
     >
       {restarting ? (
-        <Callout tone="good" title="Snapshot verified">FBRX OS is restarting to finish the restore…</Callout>
+        <Callout tone="good" title="Snapshot verified">FBRX is restarting to finish the restore…</Callout>
       ) : (
         <div className="fx-form">
           <KeyValue
@@ -213,7 +213,7 @@ export function RestoreModal({ file, header, onClose }: { file: string; header: 
               ['From', `${header.deviceName} (${header.hostname}, ${header.platform})`],
               ['Created', formatDate(header.createdAt)],
               ['Label', header.label ?? '—'],
-              ['FBRX OS version', header.appVersion],
+              ['FBRX version', header.appVersion],
               ['Includes models', header.includesModels ? 'Yes' : 'No'],
             ]}
           />

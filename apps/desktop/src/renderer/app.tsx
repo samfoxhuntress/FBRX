@@ -1,9 +1,9 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import type { SystemStatus } from '@fbrx/shared';
-import { addressAs, displayVersion, funEnabled } from '@fbrx/shared';
-import { AdvancedTag, Button, Callout, FBRX_MARK, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
+import type { SystemStatus, Tier } from '@fbrx/shared';
+import { TIER_NAMES, addressAs, displayVersion, funEnabled } from '@fbrx/shared';
+import { Button, FBRX_MARK, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
-import { isLocked, useConsoleSessions, useCore } from './hooks';
+import { useConsoleSessions, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
 import { AgentNameContext, EmergencyStop } from './widgets';
 import { GooseOverlay, summonGoose, unlockTrophy, useKonami } from './fun';
@@ -13,6 +13,8 @@ import { Onboarding } from './pages/onboarding';
 import { VaultStartPrompt } from './vault-lock';
 import { UpdatePill } from './release';
 import { SpotlightView } from './pages/spotlight';
+import { ClipPicker } from './pages/clip-picker';
+import { TierContext, UltraOnly, useLicenseTier } from './edition';
 
 // Pages load when first opened, so the app starts with only what the first screen needs.
 const AgentPage = lazy(() => import('./pages/agent').then((m) => ({ default: m.AgentPage })));
@@ -79,6 +81,7 @@ export type Route =
   | 'fleet'
   | 'settings'
   | 'spotlight'
+  | 'clips'
   | 'goose'
   | 'goose-overlay';
 
@@ -110,7 +113,7 @@ function useRoute(): Route {
 export const IS_WINDOWS = bridge.platform === 'win32';
 
 /** Start-up animation: the logo's frame is stitched in like a thread, then the letters appear. */
-function Splash() {
+function Splash({ tier }: { tier: Tier | undefined }) {
   // A window started in the tray (at sign-in) shows the animation when it is first opened.
   const [visible, setVisible] = useState(() => document.visibilityState === 'visible');
   const [gone, setGone] = useState(false);
@@ -132,8 +135,8 @@ function Splash() {
           <rect className="splash-frame" x={frame.x} y={frame.y} width={frame.side} height={frame.side} rx={frame.radius} strokeWidth={frame.stroke} />
           <path className="splash-letters" d={FBRX_MARK.letters} fillRule="evenodd" />
         </svg>
-        <div className="splash-word">FBRX OS</div>
-        <div className="splash-sub">Fabrics Operating System</div>
+        <div className="splash-word">FBRX Endpoint</div>
+        <div className="splash-sub">{tier === 'ultra' ? 'Ultra' : tier === 'basic' ? 'Basic' : 'Fabrics Operating System'}</div>
       </div>
     </div>
   );
@@ -142,8 +145,10 @@ function Splash() {
 export function App() {
   const route = useRoute();
   const { data: settings } = useCore('settings.get', undefined, ['settings.changed']);
-  useAppearance(settings?.settings);
-  if (route === 'spotlight') return settings ? <SpotlightView agentName={settings.settings.ai.agentName} fun={funEnabled(settings.settings)} /> : null;
+  const tier = useLicenseTier();
+  useAppearance(settings?.settings, tier);
+  if (route === 'spotlight') return settings ? <SpotlightView agentName={settings.settings.ai.agentName} fun={funEnabled(settings.settings, tier)} /> : null;
+  if (route === 'clips') return <ClipPicker />;
   if (route === 'goose-overlay') return <GooseOverlay />;
   return <MainApp route={route} settings={settings} />;
 }
@@ -204,7 +209,12 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       ),
     [toast],
   );
-  const fun = funEnabled(settings?.settings);
+  const tier: Tier = status?.license.tier ?? 'basic';
+  const ultra = tier === 'ultra';
+  const fun = funEnabled(settings?.settings, tier);
+  useEffect(() => {
+    if (status) document.title = TIER_NAMES[tier];
+  }, [status, tier]);
   useKonami(
     fun,
     useCallback(() => {
@@ -248,10 +258,10 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   if (!s.general.onboardingComplete || forceOnboarding) {
     return <Onboarding status={status} onDone={() => setForceOnboarding(false)} />;
   }
-  const advanced = s.appearance.advancedMode;
   const agentName = s.ai.agentName;
+  const enrolled = status.fleet.state !== 'unenrolled';
 
-  const nav: NavItem[] = [
+  const all: Array<NavItem & { ultra?: boolean }> = [
     { id: 'home', label: 'FBRX Glass', icon: 'dashboard', section: 'Command' },
     { id: 'agent', label: agentName, icon: 'sparkles', section: 'Command' },
     { id: 'alerts', label: 'Alerts', icon: 'bell', count: alertCounts?.unread, section: 'Command' },
@@ -270,28 +280,25 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'migrate', label: 'Copy & migrate', icon: 'copy', section: 'Utilities' },
     { id: 'toolbox', label: 'Toolbox', icon: 'toolbox', section: 'Utilities' },
     { id: 'library', label: 'Library', icon: 'book', section: 'Utilities' },
-    { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect' },
+    { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect', ultra: true },
     { id: 'runtime', label: 'AI models', icon: 'cpu', section: 'Connect' },
-    { id: 'aicoord', label: 'AI coordination', icon: 'zap', section: 'Connect' },
-    { id: 'connections', label: 'Connections', icon: 'link', section: 'Connect' },
-    { id: 'tools', label: 'Tools & plugins', icon: 'wrench', section: 'Connect' },
+    { id: 'aicoord', label: 'AI coordination', icon: 'zap', section: 'Connect', ultra: true },
+    { id: 'connections', label: 'Connections', icon: 'link', section: 'Connect', ultra: true },
+    { id: 'tools', label: 'Tools & plugins', icon: 'wrench', section: 'Connect', ultra: true },
     { id: 'approvals', label: 'Approvals', icon: 'check', count: status.pendingApprovals, section: 'Protect' },
     { id: 'vault', label: 'Credentials', icon: 'key', section: 'Protect' },
-    { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect' },
+    { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect', ultra: true },
     { id: 'backup', label: 'Backup & restore', icon: 'archive', section: 'Protect' },
-    // Technical tools: only in Advanced mode (Settings → General, or the Advanced switch in the top bar).
-    ...(advanced
-      ? [
-          { id: 'terminal', label: 'Terminal', icon: 'terminal' as const, section: 'Advanced' },
-          { id: 'lab', label: 'Virtual lab', icon: 'box' as const, section: 'Advanced' },
-        ]
-      : []),
-    { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System' },
+    { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', ultra: true },
+    { id: 'lab', label: 'Virtual lab', icon: 'box', section: 'Advanced', ultra: true },
+    // A Basic computer that belongs to an FBRX Command tenant still sees its organization.
+    { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System', ultra: !enrolled },
     { id: 'settings', label: 'Settings', icon: 'settings', section: 'System' },
   ];
-  const groups: NavGroup[] = SECTIONS.map((g) => ({ ...g, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
-  const setAdvanced = (on: boolean) => void call('settings.update', { patch: { appearance: { advancedMode: on } } }).then(() => toast.info(on ? 'Advanced mode on' : 'Basic mode', on ? 'Expert tools are now in the sidebar under Advanced, marked with an Advanced tag.' : 'Expert tools are hidden.'));
-  const advancedLocked = isLocked(settings.locked, 'appearance.advancedMode');
+  // Endpoint Basic: the everyday tools and the agent. Ultra adds the rest.
+  const nav = all.filter((i) => ultra || !i.ultra).map(({ ultra: _u, ...i }) => i);
+  const groups: NavGroup[] = SECTIONS.map(({ basicHint, ...g }) => ({ ...g, hint: !ultra && basicHint ? basicHint : g.hint, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
+  const ultraOnly = (title: string, what: string) => <UltraOnly title={title} what={what} />;
 
   const page = (() => {
     switch (route) {
@@ -308,17 +315,17 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'snippets':
         return <SnippetsPage />;
       case 'storage':
-        return <StoragePage advanced={advanced} />;
+        return <StoragePage advanced={ultra} />;
       case 'security':
-        return <SecurityPage advanced={advanced} />;
+        return <SecurityPage advanced={ultra} />;
       case 'updates':
         return <UpdatesPage />;
       case 'bugs':
-        return <BugsPage agentName={agentName} advanced={advanced} />;
+        return <BugsPage agentName={agentName} advanced={ultra} />;
       case 'lab':
-        return advanced ? <LabPage /> : <AdvancedOnly title="Virtual lab" onEnable={() => setAdvanced(true)} locked={advancedLocked} />;
+        return ultra ? <LabPage /> : ultraOnly('The virtual lab', 'Test machines in Hyper-V or Windows Sandbox, with capacity gauges and one-click starts.');
       case 'network':
-        return <NetworkPage advanced={advanced} easterEggs={fun} />;
+        return <NetworkPage advanced={ultra} easterEggs={fun} />;
       case 'files':
         return <FilesPage />;
       case 'processes':
@@ -328,31 +335,31 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'clipboard':
         return <ClipboardPage />;
       case 'terminal':
-        return advanced ? <TerminalPage easterEggs={fun} /> : <AdvancedOnly title="Terminal" onEnable={() => setAdvanced(true)} locked={advancedLocked} />;
+        return ultra ? <TerminalPage easterEggs={fun} /> : ultraOnly('The Terminal', 'PowerShell, the command prompt and device consoles, with a code lab, commands and snippets beside them.');
       case 'toolbox':
-        return <ToolboxPage advanced={advanced} easterEggs={fun} />;
+        return <ToolboxPage advanced={ultra} easterEggs={fun} />;
       case 'library':
-        return <LibraryPage agentName={agentName} advanced={advanced} easterEggs={fun} />;
+        return <LibraryPage agentName={agentName} advanced={ultra} easterEggs={fun} />;
       case 'mesh':
-        return <MeshPage />;
+        return ultra ? <MeshPage /> : ultraOnly('Mesh & phone', 'Link your computers and your phone over an encrypted mesh, and reach FBRX from anywhere.');
       case 'aicoord':
-        return <AiCoordPage agentName={agentName} />;
+        return ultra ? <AiCoordPage agentName={agentName} /> : ultraOnly('AI coordination', 'Let other AI apps on this computer (such as Claude) use FBRX tools safely, through MCP.');
       case 'approvals':
         return <ApprovalsPage />;
       case 'tools':
-        return <ToolsPage />;
+        return ultra ? <ToolsPage /> : ultraOnly('Tools & plugins', 'Choose which tools the agent may use, and add plugins.');
       case 'connections':
-        return <ConnectionsPage />;
+        return ultra ? <ConnectionsPage /> : ultraOnly('Connections', 'Connect REST services, webhooks and MCP servers to the agent.');
       case 'vault':
         return <VaultPage />;
       case 'governance':
-        return <GovernancePage />;
+        return ultra ? <GovernancePage /> : ultraOnly('Governance', 'Policies, the audit log and guardian review for everything the agent does.');
       case 'runtime':
         return <RuntimePage />;
       case 'backup':
         return <BackupPage />;
       case 'fleet':
-        return <FleetPage />;
+        return ultra || enrolled ? <FleetPage /> : ultraOnly('Organization', 'Join your organization’s FBRX Command tenant. A license key from your organization joins it for you.');
       case 'settings':
         return <SettingsPage onRerunSetup={() => setForceOnboarding(true)} />;
       default:
@@ -361,9 +368,15 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   })();
 
   return (
+    <TierContext.Provider value={tier}>
     <AgentNameContext.Provider value={agentName}>
-      {showSplash && <Splash />}
+      {showSplash && <Splash tier={tier} />}
       <Shell
+        brandName={
+          <>
+            FBRX Endpoint <span className={`tier-badge ${tier}`}>{ultra ? 'Ultra' : 'Basic'}</span>
+          </>
+        }
         brandSub={status.deviceName}
         onBrandClick={onBrandClick}
         brandClassName={weaving ? 'weaving' : undefined}
@@ -373,12 +386,11 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         onCollapsedChange={setCollapsed}
         active={route}
         onNavigate={(id) => navigate(id)}
-        topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} advanced={advanced} advancedLocked={advancedLocked} onAdvanced={setAdvanced} defaultProvider={s.ai.defaultProvider} defaultModel={s.ai.defaultModel} />}
+        topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} defaultProvider={s.ai.defaultProvider} defaultModel={s.ai.defaultModel} />}
         footer={
           <span>
-            {displayVersion(status.version)} · {status.license.edition}
+            <span title={TIER_NAMES[tier]}>{displayVersion(status.version)}</span>
             {status.devMode ? ' · dev' : ''}
-            {advanced ? ' · advanced' : ''}
             {fun && trophies && Object.keys(trophies.unlocked).length > 0 && (
               <>
                 {' · '}
@@ -402,6 +414,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       </Shell>
       <VaultStartPrompt />
     </AgentNameContext.Provider>
+    </TierContext.Provider>
   );
 }
 
@@ -411,9 +424,6 @@ function TopBar({
   agentName,
   critical,
   spotlightKey,
-  advanced,
-  advancedLocked,
-  onAdvanced,
   defaultProvider,
   defaultModel,
 }: {
@@ -422,9 +432,6 @@ function TopBar({
   agentName: string;
   critical: number;
   spotlightKey: string | null;
-  advanced: boolean;
-  advancedLocked: boolean;
-  onAdvanced: (on: boolean) => void;
   defaultProvider: string;
   defaultModel: string;
 }) {
@@ -475,17 +482,6 @@ function TopBar({
           {status.pendingApprovals} approval{status.pendingApprovals > 1 ? 's' : ''} waiting
         </Button>
       )}
-      <button
-        className={`mode-pill${advanced ? ' on' : ''}`}
-        role="switch"
-        aria-checked={advanced}
-        disabled={advancedLocked}
-        onClick={() => onAdvanced(!advanced)}
-        title={advancedLocked ? 'Set by your organization' : advanced ? 'Advanced mode: expert tools are shown. Click for Basic mode.' : 'Basic mode. Click to show expert tools (Advanced mode).'}
-      >
-        <span className="mode-pill-knob" aria-hidden />
-        Advanced
-      </button>
       <button className="model-pill" onClick={() => navigate('runtime')} title={p ? `${p.name}: ${p.available ? 'ready' : (p.message ?? 'not available')}. Click to choose a model.` : 'Choose a model'}>
         <span className={`dot ${p?.available ? 'ok' : 'bad'}`} aria-hidden />
         {model ? <span className="mono">{model}</span> : <span>{p?.name ?? 'Choose a model'}</span>}
@@ -504,32 +500,14 @@ function TopBar({
  * The sidebar's sections, each with an FBRX name, an icon and plain words for what is inside. Pick a section to open
  * it; collapsed to icons, its pages slide out beside it.
  */
-const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; icon: IconName }> = [
+const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; basicHint?: string; icon: IconName }> = [
   { id: 'bridge', section: 'Command', label: 'Bridge', hint: 'Glass, agent, alerts', icon: 'compass' },
   { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Tasks, notes, projects', icon: 'layers' },
   { id: 'pitstop', section: 'PC care', label: 'Pit Stop', hint: 'Storage, security, repairs', icon: 'wrench' },
   { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', icon: 'toolbox' },
-  { id: 'orbit', section: 'Connect', label: 'Orbit', hint: 'Phone, mesh, AI models', icon: 'orbit' },
+  { id: 'orbit', section: 'Connect', label: 'Orbit', hint: 'Phone, mesh, AI models', basicHint: 'AI models', icon: 'orbit' },
   { id: 'shield', section: 'Protect', label: 'Shield', hint: 'Approvals, keys, backups', icon: 'shield' },
   { id: 'lab', section: 'Advanced', label: 'Lab', hint: 'Terminal, virtual lab', icon: 'flask' },
-  { id: 'control', section: 'System', label: 'Control', hint: 'Organization, settings', icon: 'settings' },
+  { id: 'control', section: 'System', label: 'Control', hint: 'Organization, settings', basicHint: 'Settings, license', icon: 'settings' },
 ];
 
-/** Shown for an Advanced-mode page while in Basic mode. */
-function AdvancedOnly({ title, onEnable, locked }: { title: string; onEnable: () => void; locked: boolean }) {
-  return (
-    <div className="fx-page">
-      <div className="fx-page-header">
-        <div>
-          <h1>
-            {title} <AdvancedTag />
-          </h1>
-          <p>This is an expert tool, shown in Advanced mode.</p>
-        </div>
-      </div>
-      <Callout tone="info" title="Turn on Advanced mode to use it" actions={<Button size="sm" variant="primary" disabled={locked} onClick={onEnable}>Turn on Advanced mode</Button>}>
-        Advanced mode adds technical tools such as the Terminal, the virtual lab, disk partitions, Defender settings, network adapters and the developer tools in the Toolbox. Each is marked with an Advanced tag.
-      </Callout>
-    </div>
-  );
-}

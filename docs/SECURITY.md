@@ -102,7 +102,10 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   checks the clipboard once a second and keeps the last 50 text copies **in memory only**: never written to disk,
   never synced or backed up, cleared when FBRX quits or the switch is turned off. Copies marked by password managers
   (`ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory`, `org.nspasteboard.ConcealedType`
-  and similar) are skipped.
+  and similar) are skipped. The **Ctrl+Alt+Z** window shows the same in-memory list. Picking a copy puts it on the
+  clipboard and, with *Paste right away* on, presses Ctrl+V once in the app that had the focus: on Windows through a
+  small hidden PowerShell helper (`SendKeys`) started when the history first opens, on Linux through `xdotool` if
+  installed; macOS only copies (pressing keys there would need an accessibility permission). Nothing else is typed.
 * **Side-panel answers** (`ai.quick`: the code lab, Event Viewer, Task Manager and *What if?*) use the default model
   with **no tools**, so they can explain but never act. Known vault secrets are masked in the code, log lines or
   process details before they are sent, the emergency stop refuses them, and they are reserved for the person at
@@ -152,6 +155,12 @@ streamed to a SIEM via webhook connectors (device) and webhooks (control plane).
 
 Licenses are Ed25519-signed by your control plane's private key; the public key is compiled into your desktop
 builds. A customer running their own control plane cannot mint licenses your builds accept.
+
+A license that joins its FBRX Command tenant carries that tenant's address and an enrollment token inside the signed
+payload, so treat such keys like enrollment tokens: the token is limited to one use per seat and expires with the
+license, and revoking the token in **Deploy & enroll** stops new joins without touching computers already enrolled.
+Joining happens only after the key verifies, only once per license, never while the computer already belongs to a
+tenant, and a deliberate *Disconnect* is respected.
 
 ## Supply chain and updates
 

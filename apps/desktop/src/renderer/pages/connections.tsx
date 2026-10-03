@@ -17,7 +17,7 @@ export function ConnectionsPage() {
   return (
     <Page
       title="Connections"
-      description="Connect FBRX to your other applications. Each connection becomes a set of governed tools for the agent: REST APIs, Model Context Protocol (MCP) servers, outgoing webhooks, and other FBRX OS workstations."
+      description="Connect FBRX to your other applications. Each connection becomes a set of governed tools for the agent: REST APIs, Model Context Protocol (MCP) servers, outgoing webhooks, and other FBRX workstations."
       actions={
         <Button variant="primary" icon="plus" onClick={() => setChoosing(true)}>
           New connection

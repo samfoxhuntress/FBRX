@@ -6,6 +6,7 @@ import {
   base64UrlDecode,
   base64UrlEncode,
   featuresFor,
+  tierFor,
   type LicensePayload,
   type LicenseStatus,
 } from '../license';
@@ -76,6 +77,7 @@ export function licenseStatusFrom(
   const base: LicenseStatus = {
     state: 'unlicensed',
     edition: 'community',
+    tier: 'basic',
     customer: null,
     tenantId: null,
     licenseId: null,
@@ -84,6 +86,7 @@ export function licenseStatusFrom(
     features: featuresFor({ edition: 'community', features: [] }),
     message: null,
     source: 'none',
+    commandUrl: null,
   };
   if (!key) return base;
   const v = verifyLicense(key, publicKeysPem);
@@ -96,10 +99,11 @@ export function licenseStatusFrom(
     seats: p.seats,
     expiresAt: p.expiresAt,
     source,
+    commandUrl: p.command?.url ?? null,
   };
   if (v.expired) return { ...base, ...info, state: 'expired', message: 'License has expired; running with Community features' };
   if (p.maxMajorVersion !== null && appMajorVersion > p.maxMajorVersion) {
     return { ...base, ...info, state: 'invalid', message: `License covers versions up to ${p.maxMajorVersion}.x` };
   }
-  return { ...base, ...info, state: 'valid', edition: p.edition, features: featuresFor(p), message: null };
+  return { ...base, ...info, state: 'valid', edition: p.edition, tier: tierFor(p.edition, p.tier), features: featuresFor(p), message: null };
 }

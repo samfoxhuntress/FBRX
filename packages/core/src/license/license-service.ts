@@ -27,11 +27,13 @@ export class LicenseService {
     let status = managed
       ? licenseStatusFrom(managed, this.publicKeys, 'managed', major)
       : licenseStatusFrom(local, this.publicKeys, 'local', major);
-    if (this.devMode && status.state !== 'valid') {
+    // Development builds run as Ultra with everything on, unless FBRX_EDITION=basic asks to try Endpoint Basic.
+    if (this.devMode && status.state !== 'valid' && process.env.FBRX_EDITION !== 'basic') {
       status = {
         ...status,
         state: 'development',
         edition: 'enterprise',
+        tier: 'ultra',
         features: [...ALL_FEATURES],
         source: 'development',
         message: 'Development build: all features unlocked',

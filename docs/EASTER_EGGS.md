@@ -1,14 +1,14 @@
 # Easter eggs (spoilers)
 
-## Unlocking them: 418
+## Where they live: Endpoint Ultra
 
-Out of the box, none of this exists. The easter eggs, the Silly Goose and the trophy case stay hidden until someone
-enters **418** as a license key (**Settings → License → Activate a license key**). It is not a license: it is HTTP
-status 418, *I'm a teapot*. The locked trophy case in Settings drops the only hint: "The key is short and stout."
+The easter eggs, the Silly Goose and the trophy case come with **FBRX Endpoint Ultra**, along with the other Ultra
+features, as soon as a license key turns it on (or the FBRX Command tenant this computer belongs to). Endpoint Basic
+has none of them. **Settings → Appearance → Fun extras** has a switch to turn them off; an organization can turn them
+off and lock the setting from FBRX Command (`appearance.easterEggs`). None of them changes files or settings.
 
-Once unlocked, **Settings → Appearance → Fun extras** appears, with a switch to turn the easter eggs off again. An
-organization can turn them off and lock the setting from the admin console (`appearance.easterEggs`). None of them
-changes files or settings.
+The old secret key still answers: enter **418** as a license key and it says *I'm a teapot*, short and stout (HTTP
+status 418). In Ultra it also switches the easter eggs back on if they were turned off.
 
 ## The trophy case
 
@@ -16,7 +16,7 @@ Every easter egg has a badge in **Settings → Trophy case** (also in Spotlight:
 count in the sidebar footer). Badges you haven't found are greyed out with a hint; found ones are in color with how and
 when you earned them. A toast with **See trophy case** pops up the moment you find one.
 
-Find all 22 and you unlock the **Golden Goose**: from then on the goose arrives wearing a golden egg with a red **#1**
+Find all 25 and you unlock the **Golden Goose**: from then on the goose arrives wearing a golden egg with a red **#1**
 ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `show trophies` in FBRX/1 lists it.
 
 | Badge | How to earn it |
@@ -25,7 +25,7 @@ ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `
 | Shoo! | Click the goose three times until it gives up and goes home |
 | Cheat Code | Type the classic cheat code anywhere in FBRX: ↑ ↑ ↓ ↓ ← → ← → B A |
 | Master Weaver | Click the FBRX logo (top left) seven times quickly: the loom spins |
-| Safety First | Open **Library → The Lab** (Advanced mode) |
+| Safety First | Open **Library → The Lab** |
 | Storyteller | Search the Library for "tell me a story" (or "story time", "once upon a time") |
 | Digital Rain | Type `matrix` in the Terminal |
 | Sandwich Artist | Type `sudo make me a sandwich` in the Terminal |
@@ -33,7 +33,10 @@ ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `
 | On the Edge | Flip coins in **Toolbox → Decision maker** until one lands on its edge |
 | Natural 20 | Roll a 20 on the Decision maker's d20 |
 | Time Traveler | Click **Run test** in **Network Center → Speed** eight times in a row |
-| My Stapler | Ask Fabrix "Where's my stapler?" |
+| My Stapler | Ask Fabrix "Have you seen my stapler?" (or "Where is…", "Has anyone seen…") |
+| Synergy Achieved | Keep the jargon manager talking for five answers |
+| Back-Seat Radar | Say "Talk to me, Goose" to Fabrix |
+| Wingman for Life | Keep your wingman on the radio for five messages |
 | Loose Screw | Click the loose **Tip** tile on FBRX Glass until it falls off |
 | Flap Happy | Run your mouse across twenty letters of the split-flap board on FBRX Glass |
 | Nobody Calls Me Chicken | Set "What should FBRX call you?" to `chicken` (Settings → General). Bawk. |
@@ -47,16 +50,14 @@ ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `
 
 ## The Silly Goose
 
-A nod to the classic mischievous desktop pet, with one visual upgrade: brass-rimmed flight goggles, pushed up on his
-head, with a tuft of feathers sticking up behind the strap. A goose waddles across the screen
-FBRX OS is on for about a minute and a half, then leaves by itself. It eases into and out of its walks, waddles in
-step with its feet and turns around with a little pivot. While it is around it:
+Our own desktop goose, with one signature look: brass-rimmed aviator goggles pushed up on his head. A goose waddles
+across the screen FBRX OS is on for about a minute and a half, then leaves by itself. It eases into and out of its
+walks, waddles in step with its feet and turns around with a little pivot. While it is around it:
 
 - honks (a synthesized honk, with a speech bubble),
-- tracks muddy footprints that fade away,
-- chases your mouse pointer, grabs it in its beak and drags it off for a couple of seconds ("MINE."). On Windows it
-  really takes the pointer: the real pointer is held in its beak and dragged along, and clicks are swallowed until it
-  lets go (about two seconds; it always lets go). On other systems it runs off with a drawn pointer instead,
+- drops a loose feather now and then, which drifts down and fades away,
+- chases your mouse pointer, and when it catches up gives it a friendly boop ("boop." or "tag. you're it.") and
+  waddles off. Your pointer always stays yours,
 - runs off the edge of the screen and comes back dragging a sticky note ("I ate your Wi-Fi password. It was
   delicious.") or a framed *Portrait of a Goose, oil on canvas*. Click a note to put it away.
 
@@ -65,7 +66,7 @@ pick under *The goose's wardrobe* in Settings → Appearance → Fun extras, whi
 
 | Season | What changes |
 | --- | --- |
-| Winter | A red striped scarf whose ends flap as he walks, green snow boots with fluffy cuffs, and snowy footprints instead of mud |
+| Winter | A red striped scarf whose ends flap as he walks, and green snow boots with fluffy cuffs |
 | Fall | An orange scarf, and a leaf that blew onto his back |
 | Spring | Nothing on him; a butterfly keeps him company |
 | Summer | Now and then he plants a beach umbrella and enjoys the shade ("ahh. ☀"), and his trips off screen sometimes come back with a postcard of himself at the beach ("Wish you were here. The Wi-Fi is terrible. — G") |
@@ -86,13 +87,24 @@ How to summon it:
 | Settings → Trophy case | *Show off the egg* (after the Golden Goose) |
 | April 1 | It drops by on its own, once |
 
-## Where's my stapler?
+## Have you seen my stapler?
 
-Ask Fabrix "Where's my stapler?", "Where is my stapler?" or just "stapler". It answers at once, without asking a
-model: "It's likely downstairs, in storage building B." From then on, that conversation is run by a middle manager:
-every answer is still correct, but wrapped in corporate jargon (synergy, circling back, bandwidth, moving forward…)
-and ends with "That would be great." Say "PC load letter" (or "PC load better") to get the normal Fabrix back and a
-trophy; "I quit", "normal mode" or "no more jargon" work too. New conversations are always normal.
+Ask Fabrix "Have you seen my stapler?", "Where is my stapler?" or "Has anyone seen my stapler?" (or just "stapler").
+It answers at once, without asking a model, with where the stapler went (storage, in the basement, most likely), and
+from then on that conversation is run by a middle manager in full office-comedy mode. Like the furry co-pilot below,
+every answer is made up on the spot from a big pile of corporate jargon (circling back, synergy, bandwidth, cover
+sheets, decks about decks…), has very little to do with what you asked, and ends with "That would be great." Keep him
+talking for five answers for a trophy. Say "PC load letter" (or "PC load better") to get the normal Fabrix back and
+another trophy; "I quit", "normal mode" or "no more jargon" work too. New conversations are always normal.
+
+## Talk to me, Goose
+
+Say "Talk to me, Goose" to Fabrix and your wingman gets on the radio from the back seat (and the Silly Goose flies in
+on your screen). For the rest of that conversation every answer is radio chatter: bogeys that turn out to be clouds,
+volleyball at 1600 hours, a very firm "no" from the tower. Random, and mostly unrelated to what you said. Say "wheels
+down", "return to base", "land the plane" or "normal mode" to land. Two trophies: one for getting him on the radio,
+one for keeping him there for five messages. The Library's Story time has a matching how-to, *How to be a great
+wingman*.
 
 ## Home sweet ship
 
@@ -103,8 +115,8 @@ hide in here.
 
 ## Nothing is impossible
 
-Type "nothing is impossible" into Spotlight or the Library search: Advanced mode turns on, with Luke 1:37 ("For
-nothing will be impossible with God."). No trophy; it's a quiet one.
+Type "nothing is impossible" into Spotlight or the Library search and it answers with Luke 1:37 ("For nothing will be
+impossible with God."). No trophy; it's a quiet one.
 
 ## 88 miles per hour
 
@@ -139,7 +151,7 @@ hints at the speed test), *How to build a snowman*, *How to get home in three cl
 a printer with a mind trick*, *How to deal with a haunted computer*, *How to take a very long walk to return some
 jewelry*, *How to design a superhero outfit* (skip the cape), *How to stop worrying about your computer*, *How to
 shrink things without shrinking the kids*, *How to find what you are looking for*, *How to fix the same problem every
-single day* and *How to befriend a dragon*. Several end with a button to the FBRX page that actually helps.
+single day*, *How to be a great wingman* (which tells you what to say to Fabrix) and *How to befriend a dragon*. Several end with a button to the FBRX page that actually helps.
 
 ## Toolbox → Decision maker
 
@@ -154,7 +166,7 @@ single day* and *How to befriend a dragon*. Several end with a button to the FBR
 
 | Where | What |
 | --- | --- |
-| Library (Advanced mode) | **The Lab**: power-user how-tos, a hazard-striped banner and "Safety goggles recommended (sold separately)", with a dry remark for every section of downloads |
+| Library | **The Lab**: power-user how-tos, a hazard-striped banner and "Safety goggles recommended (sold separately)", with a dry remark for every section of downloads |
 | FBRX Glass | A line under the board at special moments: after midnight, on Friday afternoons ("Maybe don't deploy anything"), after 14 days without a restart ("Have you tried turning it off and on again?"), when the battery is nearly empty, on Halloween and on April Fools' Day |
 | Terminal | `matrix` makes it rain green code; `sudo make me a sandwich` → "Okay."; `make me a sandwich` → "What? Make it yourself."; `coffee` → 418 I'm a teapot; `xyzzy` → "Nothing happens."; `hello`; `exit`. And `rm -rf /`, `format c:` and friends are refused: "Fabrix hid the sharp objects." |
 | FBRX/1 | `request goose release` |

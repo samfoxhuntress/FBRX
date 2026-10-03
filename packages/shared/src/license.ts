@@ -19,10 +19,34 @@ export type Feature = keyof typeof FEATURES;
 export const ALL_FEATURES = Object.keys(FEATURES) as Feature[];
 
 export const EDITION_FEATURES: Record<Edition, Feature[]> = {
-  community: ['agent.local', 'connectors', 'localapi'],
+  community: ['agent.local', 'agent.cloud', 'connectors', 'localapi'],
   pro: ['agent.local', 'agent.cloud', 'plugins', 'connectors', 'connectors.mcp', 'backup.scheduled', 'localapi'],
   enterprise: ALL_FEATURES,
 };
+
+/**
+ * The two FBRX Endpoint products. **Basic** is what runs without a license key: the everyday tools and the AI agent,
+ * with a plain light or dark look. **Ultra** is what a license key (or an FBRX Command tenant) turns on: expert tool
+ * sets, Mesh and AI coordination, connections and plugins, the theme studio with its gradients and textures, and the
+ * easter eggs.
+ */
+export const TIERS = ['basic', 'ultra'] as const;
+export type Tier = (typeof TIERS)[number];
+export const TIER_NAMES: Record<Tier, string> = { basic: 'FBRX Endpoint Basic', ultra: 'FBRX Endpoint Ultra' };
+
+/** Without a `tier` claim, a Community license runs Basic and Pro or Enterprise run Ultra. */
+export function tierFor(edition: Edition, claim?: Tier | null): Tier {
+  return claim ?? (edition === 'community' ? 'basic' : 'ultra');
+}
+
+/** The FBRX Command tenant a license belongs to: the device joins it on its own when the key is activated. */
+export const LicenseCommandSchema = z.object({
+  /** The tenant's FBRX Command address (https://…). */
+  url: z.string().url(),
+  /** An enrollment token for that tenant. */
+  enrollmentToken: z.string().min(8),
+});
+export type LicenseCommand = z.infer<typeof LicenseCommandSchema>;
 
 export const LicensePayloadSchema = z.object({
   v: z.literal(1),
@@ -38,6 +62,10 @@ export const LicensePayloadSchema = z.object({
   expiresAt: z.string().nullable(),
   /** Optional: the newest app major version this license covers (`null` = all). */
   maxMajorVersion: z.number().int().nullable(),
+  /** Optional: Basic or Ultra, when the tenant decides (otherwise it follows the edition, see tierFor). */
+  tier: z.enum(TIERS).optional(),
+  /** Optional: the FBRX Command tenant to join on activation. */
+  command: LicenseCommandSchema.optional(),
 });
 export type LicensePayload = z.infer<typeof LicensePayloadSchema>;
 
@@ -46,6 +74,8 @@ export const LICENSE_PREFIX = 'FBRX1';
 export interface LicenseStatus {
   state: 'unlicensed' | 'valid' | 'expired' | 'invalid' | 'development';
   edition: Edition;
+  /** FBRX Endpoint Basic or Ultra (see TIERS). */
+  tier: Tier;
   customer: string | null;
   tenantId: string | null;
   licenseId: string | null;
@@ -54,10 +84,13 @@ export interface LicenseStatus {
   features: string[];
   message: string | null;
   source: 'none' | 'local' | 'managed' | 'development';
+  /** The FBRX Command address this license joins, if it names one. */
+  commandUrl: string | null;
 }
 
-export function featuresFor(payload: Pick<LicensePayload, 'edition' | 'features'>): string[] {
-  return [...new Set([...EDITION_FEATURES[payload.edition], ...payload.features])].sort();
+export function featuresFor(payload: Pick<LicensePayload, 'edition' | 'features'> & { command?: LicenseCommand }): string[] {
+  // A license that names an FBRX Command tenant always lets the device join it.
+  return [...new Set([...EDITION_FEATURES[payload.edition], ...payload.features, ...(payload.command ? ['fleet'] : [])])].sort();
 }
 
 export function base64UrlEncode(bytes: Uint8Array): string {

@@ -166,7 +166,7 @@ export function UpdatesPage() {
   const fbrx = useRelease().data;
   const fbrxTile = (
     <StatTile
-      label="FBRX OS"
+      label="FBRX"
       value={fbrx ? displayVersion(fbrx.currentVersion) : '…'}
       foot={
         fbrx?.state === 'available' && fbrx.latest ? (

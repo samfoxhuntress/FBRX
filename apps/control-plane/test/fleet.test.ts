@@ -243,6 +243,36 @@ describe('control plane ⇄ device fleet', () => {
     expect((await full.json()).error.message).toMatch(/seat limit/);
   });
 
+  it('joins its tenant on its own when an Endpoint Basic computer activates a license from FBRX Command', async () => {
+    const d = await api('POST', '/v1/admin/tenants', { name: 'Customer D' });
+    const asD = { 'x-fbrx-tenant': d.id };
+    const lic = await api('POST', '/v1/admin/licenses', { edition: 'pro', seats: 3, joinTenant: true }, asD);
+    expect(lic).toMatchObject({ tier: 'ultra', commandUrl: base });
+    expect(lic.features).toContain('fleet');
+    const { publicKeyPem } = await api('GET', '/v1/admin/licensing/public-key');
+    const dir = mkdtempSync(join(tmpdir(), 'fbrx-dev-'));
+    const k = await Kernel.create({ dataDir: dir, platform: createNodePlatform({ dataDir: dir, devMode: false, keychain: new StaticKeyKeychain(randomBytes(32), 'memory'), licensePublicKeys: [publicKeyPem] }) });
+    try {
+      k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false } });
+      await k.start();
+      expect(k.license.status().tier).toBe('basic');
+      const st = (await k.call('license.activate', { key: lic.key }, USER)) as any;
+      expect(st).toMatchObject({ state: 'valid', tier: 'ultra', commandUrl: base });
+      expect(st.message).toMatch(/Joined Customer D/);
+      expect(k.fleet.status().tenantName).toBe('Customer D');
+      expect(await api('GET', '/v1/admin/devices', undefined, asD)).toHaveLength(1);
+      // Leaving the tenant on purpose sticks: the license does not join it again by itself.
+      await k.call('fleet.unenroll', {}, USER);
+      expect(await k.joinLicenseTenant('test')).toMatchObject({ joined: false });
+      expect(k.fleet.enrolled).toBe(false);
+      // The tenant decides the product: an Enterprise license can still run Endpoint Basic.
+      expect(await api('POST', '/v1/admin/licenses', { edition: 'enterprise', seats: 0, tier: 'basic' }, asD)).toMatchObject({ tier: 'basic', commandUrl: null });
+    } finally {
+      await k.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('cuts off a retired device immediately', async () => {
     const [device] = await api('GET', '/v1/admin/devices');
     await api('DELETE', `/v1/admin/devices/${device.id}`);

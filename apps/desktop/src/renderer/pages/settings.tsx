@@ -1,6 +1,6 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import type { DeepPartial, Settings, Texture } from '@fbrx/shared';
-import { UPDATE_CHANNELS, displayVersion, funEnabled } from '@fbrx/shared';
+import { TIER_NAMES, UPDATE_CHANNELS, displayVersion, funEnabled } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
@@ -9,9 +9,11 @@ import { PRESETS, TEXTURE_NAMES, playStartupSound, resolvedMode, resolvedTexture
 import { GoosePreview, seasonNow, summonGoose } from '../fun';
 import { TrophyBadge, TrophyCase } from '../trophies';
 import { AskButton, EmergencyStop, ProfileFields, saveProfile } from '../widgets';
-import { MacroSettings } from './settings-macros';
+import { KeyRecorder, MacroSettings } from './settings-macros';
+import { SnippetSettings } from './settings-snippets';
 import { VoiceSettings } from './settings-voice';
 import { AboutVersion, ReleasePanel } from '../release';
+import { UltraHint, useTier } from '../edition';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -21,26 +23,29 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'agent' | 'voice' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
-const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; advanced?: boolean }> = [
+type SectionId = 'general' | 'appearance' | 'agent' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
+const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
   { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
   { id: 'voice', label: 'Voice', icon: 'mic', group: 'You' },
+  { id: 'snippets', label: 'Snippets', icon: 'code', group: 'You' },
   { id: 'macros', label: 'Macros', icon: 'zap', group: 'You' },
   { id: 'spotlight', label: 'Spotlight', icon: 'search', group: 'You' },
-  { id: 'trophies', label: 'Trophy case', icon: 'trophy', group: 'You' },
+  { id: 'trophies', label: 'Trophy case', icon: 'trophy', group: 'You', ultra: true },
   { id: 'updates', label: 'Updates', icon: 'download', group: 'This computer' },
   { id: 'license', label: 'License', icon: 'key', group: 'This computer' },
-  { id: 'api', label: 'Local API', icon: 'link', group: 'For experts', advanced: true },
+  { id: 'api', label: 'Local API', icon: 'link', group: 'For experts', ultra: true },
   { id: 'logs', label: 'Logs & about', icon: 'book', group: 'For experts' },
 ];
 
 const sectionFromRoute = (): SectionId | null => (SECTIONS.some((x) => x.id === routeArg()) ? (routeArg() as SectionId) : null);
 
 export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
-  const [tab, setTab] = useState<SectionId>(() => sectionFromRoute() ?? 'general');
-  const funUnlocked = useCore('settings.get', undefined, ['settings.changed']).data?.settings.appearance.funUnlocked ?? false;
+  const ultra = useTier() === 'ultra';
+  const sections = SECTIONS.filter((x) => ultra || !x.ultra);
+  const [picked, setTab] = useState<SectionId>(() => sectionFromRoute() ?? 'general');
+  const tab = sections.some((x) => x.id === picked) ? picked : 'general';
   // A link to a section (such as "See it" on a trophy) while Settings is already open.
   useEffect(() => {
     const on = () => {
@@ -52,21 +57,20 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   }, []);
   let group = '';
   return (
-    <Page title="Settings" description="How FBRX OS looks and behaves on this computer. Settings your organization manages show a lock.">
-      <ModeCard />
+    <Page title="Settings" description="How FBRX looks and behaves on this computer. Settings your organization manages show a lock.">
+      <EditionCard />
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Settings sections">
-          {SECTIONS.map((x) => {
+          {sections.map((x) => {
             const Ico = Icons[x.icon];
             const header = x.group !== group ? (group = x.group) : null;
             return (
               <div key={x.id}>
                 {header && <div className="settings-nav-group">{header}</div>}
-                <button className={`settings-nav-item${tab === x.id ? ' active' : ''}${x.id === 'trophies' && !funUnlocked ? ' locked' : ''}`} aria-current={tab === x.id ? 'page' : undefined} onClick={() => setTab(x.id)}>
+                <button className={`settings-nav-item${tab === x.id ? ' active' : ''}`} aria-current={tab === x.id ? 'page' : undefined} onClick={() => setTab(x.id)}>
                   <Ico size={15} />
                   <span>{x.label}</span>
-                  {x.advanced && <AdvancedTag />}
-                  {x.id === 'trophies' && !funUnlocked && <Icons.lock size={12} className="settings-nav-lock" />}
+                  {x.ultra && <AdvancedTag />}
                 </button>
               </div>
             );
@@ -77,6 +81,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'appearance' && <Appearance />}
           {tab === 'agent' && <AgentSettings />}
           {tab === 'voice' && <VoiceSettings />}
+          {tab === 'snippets' && <SnippetSettings />}
           {tab === 'macros' && <MacroSettings />}
           {tab === 'spotlight' && <SpotlightSettings />}
           {tab === 'trophies' && <Trophies />}
@@ -90,33 +95,31 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   );
 }
 
-/** Basic or Advanced mode, at the top of Settings so it is easy to find. */
-function ModeCard() {
-  const { s, locked, patch } = useSettings();
-  if (!s) return null;
-  const on = s.appearance.advancedMode;
-  const lockedMode = isLocked(locked, 'appearance.advancedMode');
-  const choice = (advanced: boolean, title: string, body: string) => (
-    <button className={`mode-choice${on === advanced ? ' active' : ''}`} disabled={lockedMode} aria-pressed={on === advanced} onClick={() => on !== advanced && void patch({ appearance: { advancedMode: advanced } })}>
-      <div className="mode-choice-title">
-        {title}
-        {advanced && <AdvancedTag label="Expert tools" />}
-      </div>
-      <div className="mode-choice-body">{body}</div>
-    </button>
-  );
+/** Which FBRX Endpoint this is, at the top of Settings: Basic with a way up to Ultra, or Ultra and who it is licensed to. */
+function EditionCard() {
+  const { data: l } = useCore('license.status', undefined, ['license.changed']);
+  const { data: fleet } = useCore('fleet.status', undefined, ['fleet.changed']);
+  if (!l) return null;
+  const ultra = l.tier === 'ultra';
+  const by = l.source === 'managed' ? `Set by ${fleet?.tenantName ?? 'your organization'} (FBRX Command)` : l.source === 'development' ? 'Development build' : l.customer ? `Licensed to ${l.customer}` : null;
   return (
-    <div className="mode-card">
+    <div className={`mode-card edition-card ${l.tier}`}>
       <div>
         <div className="mode-card-title">
-          Experience <Locked show={lockedMode} />
+          {TIER_NAMES[l.tier]} <span className={`tier-badge ${l.tier}`}>{ultra ? 'Ultra' : 'Basic'}</span>
         </div>
-        <div className="fx-muted" style={{ fontSize: 12.5 }}>Also in the top bar. Advanced features are marked with an Advanced tag wherever they appear.</div>
+        <div className="fx-muted" style={{ fontSize: 12.5 }}>
+          {ultra
+            ? 'Everything is on: expert tool sets, Mesh, AI coordination, connections and plugins, every theme, and the easter eggs.'
+            : 'The everyday tools and the agent, with a simple light or dark look. A license key turns on Endpoint Ultra.'}
+          {by && <> · {by}</>}
+        </div>
       </div>
-      <div className="mode-choices">
-        {choice(false, 'Basic', 'Everyday tools: dashboard, workspace, PC care, network, your phone and the agent.')}
-        {choice(true, 'Advanced', 'Adds the Terminal, virtual lab, disks and partitions, Defender settings, network adapters, custom scan ranges, logs and developer tools.')}
-      </div>
+      {!ultra && (
+        <Button variant="primary" icon="key" onClick={() => navigate('settings/license')}>
+          Upgrade to Ultra
+        </Button>
+      )}
     </div>
   );
 }
@@ -133,6 +136,7 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
   const [name, setName] = useState<string | null>(null);
   const [profile, setProfile] = useState<{ name: string; callMe: string } | null>(null);
   const toast = useToast();
+  const tier = useTier();
   if (!s) return null;
   const L = (p: string) => isLocked(locked, p);
   const prof = profile ?? s.profile;
@@ -143,7 +147,7 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
           <div className="fx-form">
             <ProfileFields name={prof.name} callMe={prof.callMe} onChange={setProfile} />
             <div>
-              <Button variant="primary" disabled={!profile} onClick={() => void saveProfile(prof, funEnabled(s), toast).then(() => setProfile(null))}>
+              <Button variant="primary" disabled={!profile} onClick={() => void saveProfile(prof, funEnabled(s, tier), toast).then(() => setProfile(null))}>
                 Save
               </Button>
             </div>
@@ -163,7 +167,7 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
           <Field label={<>Theme <Locked show={L('general.theme')} /></>}>
             <Select value={s.general.theme} disabled={L('general.theme')} onChange={(e) => void patch({ general: { theme: e.target.value as Settings['general']['theme'] } })} options={[{ value: 'system', label: 'Match system' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]} />
           </Field>
-          <Toggle checked={s.general.launchAtLogin} disabled={L('general.launchAtLogin')} onChange={(v) => void patch({ general: { launchAtLogin: v } })} label="Start FBRX OS when I sign in" />
+          <Toggle checked={s.general.launchAtLogin} disabled={L('general.launchAtLogin')} onChange={(v) => void patch({ general: { launchAtLogin: v } })} label="Start FBRX when I sign in" />
           <Toggle checked={s.general.minimizeToTray} disabled={L('general.minimizeToTray')} onChange={(v) => void patch({ general: { minimizeToTray: v } })} label="Keep running in the tray when the window is closed" />
           <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organization's control plane" />
         </div>
@@ -189,6 +193,7 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
 
 function Appearance() {
   const { s, locked, patch } = useSettings();
+  const ultra = useTier() === 'ultra';
   if (!s) return null;
   const a = s.appearance;
   const mode = resolvedMode(s.general.theme);
@@ -204,15 +209,17 @@ function Appearance() {
   );
   return (
     <>
-      <Card title="Theme" subtitle="Pick a look. Each theme has a light and a dark version.">
+      <Card title="Theme" subtitle={ultra ? 'Pick a look. Each theme has a light and a dark version.' : 'Light or dark, or follow your computer.'}>
         <div className="fx-form">
           <Field label={<>Mode <Locked show={L('general.theme')} /></>}>
             {seg(s.general.theme, [{ value: 'system', label: 'Match Windows' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], (v) => void patch({ general: { theme: v } }), L('general.theme'))}
           </Field>
+          {!ultra && <UltraHint>More themes, accent colors, gradients and textures come with Endpoint Ultra.</UltraHint>}
+          {ultra && <>
           <div className="swatches">
             {PRESETS.map((p) => {
               const [page, side, accent, glow] = mode === 'dark' ? p.dark : p.light;
-              const tex = textureImage(p.texture, mode, 'bold', accent);
+              const tex = textureImage(p.texture, mode, 100, accent);
               return (
                 <button key={p.id} className={`swatch${a.preset === p.id ? ' selected' : ''}`} disabled={L('appearance.preset')} onClick={() => void patch({ appearance: { preset: p.id } })} aria-pressed={a.preset === p.id}>
                   <div className="swatch-preview">
@@ -235,14 +242,15 @@ function Appearance() {
               {a.accent && <Button size="sm" variant="ghost" onClick={() => void patch({ appearance: { accent: '' } })}>Use theme accent</Button>}
             </div>
           </Field>
+          </>}
         </div>
       </Card>
-      <Card title="Texture" subtitle="A woven, grainy or patterned finish on the sidebar, top bar and page. Each theme has its own.">
+      {ultra && <Card title="Texture" subtitle="A woven, grainy or patterned finish on the sidebar, top bar and page. Each theme has its own.">
         <div className="fx-form">
           <div className="tex-tiles">
             {(['theme', ...Object.keys(TEXTURE_NAMES)] as Texture[]).map((t) => {
               const shown = t === 'theme' ? resolvedTexture({ texture: 'theme', preset: a.preset }) : t;
-              const img = textureImage(shown, mode, 'bold', themeAccent(a, mode));
+              const img = textureImage(shown, mode, 100, themeAccent(a, mode));
               return (
                 <button key={t} className={`tex-tile${a.texture === t ? ' selected' : ''}`} disabled={L('appearance.texture')} aria-pressed={a.texture === t} onClick={() => void patch({ appearance: { texture: t } })}>
                   <span className="tex-tile-preview" style={{ backgroundImage: img ?? 'none', backgroundSize: shown === 'palms' ? '96px 96px' : shown === 'grid' ? '64px 64px' : undefined }} />
@@ -251,9 +259,15 @@ function Appearance() {
               );
             })}
           </div>
-          <Field label="Strength">{seg(a.textureStrength, [{ value: 'subtle', label: 'Subtle' }, { value: 'medium', label: 'Medium' }, { value: 'bold', label: 'Bold' }], (v) => void patch({ appearance: { textureStrength: v } }), resolvedTexture(a) === 'none')}</Field>
+          <Field label={`Strength: ${a.textureStrength === 0 ? 'off' : `${Math.round(a.textureStrength)}%`}`} help="From barely there to clearly woven. New installs start at a soft 50%.">
+            <div className="tex-strength">
+              <span>Faint</span>
+              <input type="range" min={0} max={100} step={5} disabled={resolvedTexture(a) === 'none' || L('appearance.textureStrength')} value={a.textureStrength} onChange={(e) => void patch({ appearance: { textureStrength: Number(e.target.value) } })} />
+              <span>Strong</span>
+            </div>
+          </Field>
         </div>
-      </Card>
+      </Card>}
       <Grid cols={2}>
         <Card title="Layout">
           <div className="fx-form">
@@ -280,7 +294,7 @@ function Appearance() {
           </div>
         </Card>
       </Grid>
-      {a.funUnlocked && <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and the Silly Goose. Nothing here touches your files or settings.">
+      {ultra && <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and the Silly Goose. Nothing here touches your files or settings.">
         <div className="fx-form">
           <Toggle checked={a.easterEggs} disabled={L('appearance.easterEggs')} onChange={(v) => void patch({ appearance: { easterEggs: v } })} label="Easter eggs and jokes" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -305,7 +319,7 @@ function Appearance() {
             <GoosePreview season={a.gooseSeason === 'auto' ? seasonNow() : a.gooseSeason} />
           </div>
           <p className="fx-muted" style={{ margin: 0, fontSize: 12.5 }}>
-            The goose waddles across your screen for about a minute and a half, honks, tracks a little mud, borrows your mouse pointer and leaves notes. Clicks go straight through it to your apps. Click the goose three times, or choose Shoo the goose in the tray menu, to send it home. Other surprises are hidden around the app; every one you find earns a badge in the Trophy case.
+            The goose waddles across your screen for about a minute and a half, honks, drops the odd feather, boops your mouse pointer and leaves notes. Clicks go straight through it to your apps. Click the goose three times, or choose Shoo the goose in the tray menu, to send it home. Other surprises are hidden around the app; every one you find earns a badge in the Trophy case.
           </p>
         </div>
       </Card>}
@@ -316,30 +330,7 @@ function Appearance() {
 function Trophies() {
   const { s, patch } = useSettings();
   if (!s) return null;
-  if (!s.appearance.funUnlocked) return <LockedCase />;
   return <TrophyCase enabled={s.appearance.easterEggs} onEnable={() => void patch({ appearance: { easterEggs: true } })} />;
-}
-
-/** Before 418: a locked display case with the badges' outlines behind the glass, and a hint. */
-function LockedCase() {
-  return (
-    <Card title="Trophy case" subtitle="Locked">
-      <div className="locked-case">
-        <div className="locked-case-glass" aria-hidden>
-          {Array.from({ length: 12 }, (_, i) => (
-            <span key={i} className="locked-case-slot" />
-          ))}
-        </div>
-        <div className="locked-case-lock">
-          <Icons.lock size={22} />
-          <div>
-            <b>This case is locked.</b>
-            <span>The key is short and stout.</span>
-          </div>
-        </div>
-      </div>
-    </Card>
-  );
 }
 
 const RESOURCE_HELP = {
@@ -357,7 +348,7 @@ function AgentSettings() {
     <Grid cols={2}>
       <Card title="Your agent">
         <div className="fx-form">
-          <Field label={<>Name <Locked show={L('ai.agentName')} /></>} help="Used throughout FBRX OS and in how the agent introduces itself">
+          <Field label={<>Name <Locked show={L('ai.agentName')} /></>} help="Used throughout FBRX and in how the agent introduces itself">
             <div style={{ display: 'flex', gap: 8 }}>
               <Input maxLength={40} value={name ?? s.ai.agentName} disabled={L('ai.agentName')} onChange={(e) => setName(e.target.value)} />
               <Button disabled={name === null || !name.trim()} onClick={() => void patch({ ai: { agentName: name!.trim() } }).then(() => setName(null))}>
@@ -503,19 +494,13 @@ function WorkBudget() {
 
 function SpotlightSettings() {
   const { s, patch } = useSettings();
-  const [key, setKey] = useState<string | null>(null);
   if (!s) return null;
   return (
     <Card title="Spotlight" subtitle="One search box for apps, files, settings, commands, calculations and quick answers, from anywhere">
       <div className="fx-form">
         <Toggle checked={s.spotlight.enabled} onChange={(v) => void patch({ spotlight: { enabled: v } })} label="Turn on Spotlight" />
-        <Field label="Keyboard shortcut" help="For example Alt+Space, Control+Space or Alt+Shift+F. Inside FBRX OS, Ctrl+K also opens it.">
-          <div style={{ display: 'flex', gap: 8 }}>
-            <Input value={key ?? s.spotlight.hotkey} onChange={(e) => setKey(e.target.value)} />
-            <Button disabled={key === null || !key.trim()} onClick={() => void patch({ spotlight: { hotkey: key!.trim() } }).then(() => setKey(null))}>
-              Save
-            </Button>
-          </div>
+        <Field label="Keyboard shortcut (a macro)" help="Click it and press the new keys, for example Alt+Space or Ctrl+Shift+F. Inside FBRX, Ctrl+K also opens it. All shortcuts are in Settings → Macros.">
+          <KeyRecorder value={s.spotlight.hotkey} disabled={!s.spotlight.enabled} onChange={(v) => void patch({ spotlight: { hotkey: v } })} />
         </Field>
         <Toggle checked={s.spotlight.fileSearch} onChange={(v) => void patch({ spotlight: { fileSearch: v } })} label="Search files (uses the Windows search index)" />
         <Field label="Web search">
@@ -587,43 +572,57 @@ function License() {
   const { run, busy } = useAction();
   const toast = useToast();
   if (!l || !s) return null;
+  const ultra = l.tier === 'ultra';
   const activate = () => {
-    // 418: not a license at all. The teapot unlocks the fun extras.
+    // 418: not a license at all, just a teapot. In Ultra it switches the easter eggs back on.
     if (key === '418') {
       setKey('');
-      if (s.appearance.funUnlocked && s.appearance.easterEggs) {
-        toast.info('Still a teapot', 'Short and stout, and already unlocked.');
+      if (!ultra) {
+        toast.info('418 I\'m a teapot', 'Short and stout. The easter eggs live in Endpoint Ultra, though.');
         return;
       }
-      void patch({ appearance: { funUnlocked: true, easterEggs: true } }).then(() =>
+      if (s.appearance.easterEggs) {
+        toast.info('Still a teapot', 'Short and stout, and the easter eggs are already on.');
+        return;
+      }
+      void patch({ appearance: { easterEggs: true } }).then(() =>
         toast.custom({
           title: '418 I\'m a teapot',
-          body: 'Short and stout, and now unlocked: easter eggs, the Silly Goose and the Trophy case. Have fun.',
+          body: 'Short and stout, and the easter eggs, the Silly Goose and the Trophy case are back on. Have fun.',
           icon: <TrophyBadge id="teapot" found size={36} />,
           action: { label: 'Open the trophy case', onClick: () => navigate('settings/trophies') },
         }),
       );
       return;
     }
-    void run('a', () => call('license.activate', { key }).then(() => setKey('')), 'License activated');
+    void run(
+      'a',
+      () =>
+        call('license.activate', { key }).then((r) => {
+          setKey('');
+          toast.success(r.tier === 'ultra' ? 'Welcome to Endpoint Ultra' : 'License activated', r.message ?? (r.tier === 'ultra' ? 'Every tool, theme and easter egg is on.' : undefined));
+        }),
+    );
   };
   return (
     <Grid cols={2}>
       <Card title="Your license">
         <KeyValue
           items={[
-            ['Edition', <span className="fx-badge accent">{l.edition}</span>],
+            ['Product', <span className={`tier-badge ${l.tier}`}>{TIER_NAMES[l.tier]}</span>],
+            ['License', <span className="fx-badge accent">{l.edition}</span>],
             ['State', <Status tone={l.state === 'valid' || l.state === 'development' ? 'good' : l.state === 'unlicensed' ? 'neutral' : 'warning'}>{l.state}</Status>],
             ['Licensed to', l.customer ?? '—'],
             ['Seats', l.seats === 0 ? 'Unlimited' : l.seats ?? '—'],
             ['Expires', l.expiresAt ? formatDate(l.expiresAt) : l.state === 'valid' ? 'Never' : '—'],
-            ['Source', { managed: 'Your organization', local: 'License key on this device', development: 'Development build', none: '—' }[l.source]],
+            ['Source', { managed: 'Your organization (FBRX Command)', local: 'License key on this device', development: 'Development build', none: '—' }[l.source]],
+            ...(l.commandUrl ? [['FBRX Command', <span className="mono">{l.commandUrl}</span>] as [string, ReactNode]] : []),
             ['Features', l.features.join(', ')],
           ]}
         />
         {l.message && <Callout tone="info">{l.message}</Callout>}
       </Card>
-      <Card title="Activate a license key" subtitle="Enrolled devices receive their license automatically">
+      <Card title={ultra ? 'Change the license key' : 'Upgrade to Endpoint Ultra'} subtitle={ultra ? 'Enrolled devices receive their license automatically' : 'Paste the license key from your organization or from FBRX. If it belongs to an FBRX Command tenant, this computer joins it too.'}>
         <div className="fx-form">
           <TextArea code rows={4} value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder="FBRX1.…" />
           <div className="fx-actions">
@@ -702,7 +701,7 @@ function Logs() {
   if (!info && bridge.appInfo) void bridge.appInfo().then((x) => x && setInfo(x));
   return (
     <>
-      <Card title="About FBRX OS">
+      <Card title="About FBRX Endpoint">
         {status.data && <AboutVersion version={status.data.version} />}
         <KeyValue
           items={[
@@ -719,7 +718,7 @@ function Logs() {
         title="Logs"
         actions={
           <>
-            <AskButton label="Analyze these logs" prompt="These are the recent FBRX OS log lines from my PC. Tell me whether anything is wrong, what the warnings and errors mean, and what to do about them." context={(logs.data ?? []).slice(-150).map((l) => `${l.ts} ${l.level} [${l.scope}] ${l.message}${l.data ? ` ${JSON.stringify(l.data)}` : ''}`).join('\n')} />
+            <AskButton label="Analyze these logs" prompt="These are the recent FBRX log lines from my PC. Tell me whether anything is wrong, what the warnings and errors mean, and what to do about them." context={(logs.data ?? []).slice(-150).map((l) => `${l.ts} ${l.level} [${l.scope}] ${l.message}${l.data ? ` ${JSON.stringify(l.data)}` : ''}`).join('\n')} />
             <div style={{ width: 140 }}>
               <Select value={level} onChange={(e) => setLevel(e.target.value as typeof level)} options={['debug', 'info', 'warn', 'error']} />
             </div>

@@ -197,6 +197,20 @@ export const STORIES: Story[] = [
     go: 'bugs',
   },
   {
+    id: 'wingman',
+    t: 'How to be a great wingman',
+    s: 'Every hotshot needs someone in the back seat.',
+    steps: [
+      'Sit in the back. Watch the radar. Call out anything shaped like trouble (or like a duck).',
+      'Push your goggles up on your head. You are not flying today; you are looking fabulous.',
+      'When the pilot gets a little too confident, remind him, kindly, that the tower said no.',
+      'Sing loudly at the piano after work. Bring the whole squadron in on the chorus.',
+      'And when your pilot needs you, answer the radio: type "Talk to me, Goose" to Fabrix and see who picks up.',
+    ],
+    ref: 'Inspired by a hotshot flight-school pilot and his loyal radar officer.',
+    go: 'agent',
+  },
+  {
     id: 'dragon',
     t: 'How to befriend a dragon',
     s: 'Dragons are misunderstood.',

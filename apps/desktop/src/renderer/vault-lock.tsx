@@ -39,7 +39,7 @@ export function LockedNotice({ status: s, onStartOver, compact }: { status: Vaul
   if (s.lockReason === 'password' || s.lockReason === 'manual') {
     return (
       <Callout tone="info" title="Saved credentials are locked">
-        {s.lockReason === 'password' ? 'You asked FBRX to lock them at every start. Enter your vault passphrase to use them.' : 'Enter your vault passphrase to unlock them, or restart FBRX OS.'}
+        {s.lockReason === 'password' ? 'You asked FBRX to lock them at every start. Enter your vault passphrase to use them.' : 'Enter your vault passphrase to unlock them, or restart FBRX.'}
         {passField('Vault passphrase')}
       </Callout>
     );

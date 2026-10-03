@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_SETTINGS, SettingsSchema, TEXT_OPS, applySteps, expandMacro, slashAt, textOp, unescapeArg } from '../src';
+import { DEFAULT_SETTINGS, SettingsSchema, TEXT_OPS, applySteps, expandMacro, pasteFormats, slashAt, textOp, unescapeArg } from '../src';
 
 const ctx = { name: 'Samuel Fox', callMe: 'Sam', host: 'LOBBY-PC', now: new Date(2026, 9, 2, 14, 5) };
 
@@ -27,6 +27,14 @@ describe('slash macros', () => {
     expect(() => SettingsSchema.parse(DEFAULT_SETTINGS)).not.toThrow();
     expect(DEFAULT_SETTINGS.macros.map((m) => m.trigger)).toEqual(['sig', 'stamp', 'flushdns']);
     expect(DEFAULT_SETTINGS.clipboard.history).toBe(false);
+  });
+
+  it('reads the old texture strengths as percentages, with a soft default', () => {
+    const strength = (v: unknown) => SettingsSchema.parse({ ...DEFAULT_SETTINGS, appearance: { ...DEFAULT_SETTINGS.appearance, textureStrength: v } }).appearance.textureStrength;
+    expect(DEFAULT_SETTINGS.appearance.textureStrength).toBe(50);
+    expect([strength('subtle'), strength('medium'), strength('bold'), strength(70)]).toEqual([35, 50, 100, 70]);
+    expect(() => strength(150)).toThrow();
+    expect(() => strength('loud')).toThrow();
   });
 });
 
@@ -106,5 +114,20 @@ describe('clipboard transforms', () => {
     expect(r.errors[0].message).toMatch(/Format JSON/);
     expect(textOp('upper')?.label).toBe('UPPERCASE');
     expect(unescapeArg('a\\nb\\tc\\\\')).toBe('a\nb\tc\\');
+  });
+});
+
+describe('clipboard history formats', () => {
+  it('offers the copy as it was first, then only formats that change it, then saved transforms', () => {
+    const f = pasteFormats('  “Hello”   world  \nsecond line ');
+    expect(f[0]).toEqual({ id: 'original', label: 'As copied', text: '  “Hello”   world  \nsecond line ' });
+    expect(f.find((x) => x.id === 'clean')?.text).toBe('"Hello" world\nsecond line');
+    expect(f.find((x) => x.id === 'oneLine')?.text).toBe('“Hello” world second line');
+    expect(f.find((x) => x.id === 'upper')?.text).toBe('  “HELLO”   WORLD  \nSECOND LINE ');
+    // Nothing to clean or join on a plain lowercase word, so those are left out.
+    expect(pasteFormats('dns').map((x) => x.id)).toEqual(['original', 'upper', 'title', 'quoted']);
+    const saved = pasteFormats('a\nb', [{ id: 'x', name: 'Wrap', steps: [{ op: 'wrap', a: '[', b: ']' }] }]);
+    expect(saved.at(-1)).toEqual({ id: 't:x', label: 'Wrap', text: '[a\nb]' });
+    expect(DEFAULT_SETTINGS.clipboard).toMatchObject({ hotkey: 'Control+Alt+Z', autoPaste: true, history: false });
   });
 });

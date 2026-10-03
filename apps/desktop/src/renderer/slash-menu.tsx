@@ -7,8 +7,8 @@ import { useCore } from './hooks';
 import { navigate } from './app';
 
 /**
- * The "/" menu: type a slash in the chat, the Terminal, FBRX/1 or the clipboard editor and your macros pop up.
- * "/snip" lists saved snippets (keep typing to search them). Macros are edited in Settings → Macros.
+ * The "/" menu: type a slash in the chat, the Terminal, FBRX/1 or the clipboard editor and your quick snippets pop up.
+ * "/snip" lists the snippet library (keep typing to search it). Quick snippets are edited in Settings → Snippets.
  */
 
 export type SlashScope = 'chat' | 'terminal' | 'text';
@@ -22,7 +22,7 @@ interface Item {
   apply: () => Promise<{ text: string; cursor?: number } | null>;
 }
 
-export const RESERVED_TRIGGERS = ['snip', 'clip', 'date', 'time', 'now', 'macros'];
+export const RESERVED_TRIGGERS = ['snip', 'clip', 'date', 'time', 'now', 'snippets', 'macros'];
 
 let hostCache: string | null = null;
 async function hostName(): Promise<string> {
@@ -102,15 +102,25 @@ export function useSlashMenu<T extends HTMLTextAreaElement | HTMLInputElement>(o
         .map((s) => ({ key: `snip-${s.id}`, title: s.title, hint: `${s.language} · ${s.content.split('\n')[0].slice(0, 80)}`, icon: 'bookmark' as const, apply: async () => ({ text: s.content }) }));
     }
     const builtins: Item[] = [
-      { key: 'b-snip', title: '/snip', hint: 'Insert a saved snippet', icon: 'bookmark', apply: async () => ({ text: '/snip ' }) },
+      { key: 'b-snip', title: '/snip', hint: 'Insert a snippet from your library', icon: 'bookmark', apply: async () => ({ text: '/snip ' }) },
       { key: 'b-clip', title: '/clip', hint: 'Paste what is on the clipboard', icon: 'copy', apply: async () => ({ text: await readClipboard() }) },
       { key: 'b-date', title: '/date', hint: "Today's date", icon: 'clock', apply: async () => expand('{date}', settings) },
       { key: 'b-time', title: '/time', hint: 'The time', icon: 'clock', apply: async () => expand('{time}', settings) },
       { key: 'b-now', title: '/now', hint: 'Date and time', icon: 'clock', apply: async () => expand('{datetime}', settings) },
       {
+        key: 'b-snippets',
+        title: '/snippets',
+        hint: 'Add or edit your quick snippets',
+        icon: 'settings',
+        apply: async () => {
+          navigate('settings/snippets');
+          return { text: '' };
+        },
+      },
+      {
         key: 'b-macros',
         title: '/macros',
-        hint: 'Add or edit your macros',
+        hint: 'Keyboard shortcuts, like the clipboard history',
         icon: 'settings',
         apply: async () => {
           navigate('settings/macros');
@@ -171,7 +181,7 @@ export function useSlashMenu<T extends HTMLTextAreaElement | HTMLInputElement>(o
   };
 
   const menu = open ? (
-    <div className="slash-menu" role="listbox" aria-label={snipMode ? 'Snippets' : 'Macros'} ref={listRef}>
+    <div className="slash-menu" role="listbox" aria-label={snipMode ? 'Snippet library' : 'Snippets'} ref={listRef}>
       <div className="slash-head">
         {snipMode ? (
           <>
@@ -179,7 +189,7 @@ export function useSlashMenu<T extends HTMLTextAreaElement | HTMLInputElement>(o
           </>
         ) : (
           <>
-            <Icons.zap size={12} /> Macros: ↑ ↓ to choose, Enter to insert, Esc to close
+            <Icons.zap size={12} /> Snippets: ↑ ↓ to choose, Enter to insert, Esc to close
           </>
         )}
       </div>

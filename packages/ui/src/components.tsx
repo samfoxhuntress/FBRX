@@ -26,8 +26,8 @@ export interface NavGroup {
   items: NavItem[];
 }
 
-/** Marks a feature that only shows in Advanced mode. */
-export function AdvancedTag({ label = 'Advanced', title = 'Shown in Advanced mode' }: { label?: string; title?: string }) {
+/** Marks a feature that comes with FBRX Endpoint Ultra. */
+export function AdvancedTag({ label = 'Ultra', title = 'Part of FBRX Endpoint Ultra' }: { label?: string; title?: string }) {
   return (
     <span className="fx-adv-tag" title={title}>
       {label}
@@ -35,7 +35,7 @@ export function AdvancedTag({ label = 'Advanced', title = 'Shown in Advanced mod
   );
 }
 
-/** A tab label with the Advanced tag. */
+/** A tab label with the Ultra tag. */
 export function advancedLabel(label: ReactNode): ReactNode {
   return (
     <>
@@ -45,6 +45,8 @@ export function advancedLabel(label: ReactNode): ReactNode {
 }
 
 export function Shell(props: {
+  /** The product name beside the logo (FBRX OS unless told otherwise). */
+  brandName?: ReactNode;
   brandSub?: string;
   /** Clicks on the logo (the desktop app counts them for an easter egg). */
   onBrandClick?: () => void;
@@ -70,7 +72,7 @@ export function Shell(props: {
           <FbrxMark className={cx('fx-brand-mark', props.brandClassName)} onClick={props.onBrandClick} />
           {!collapsed && (
             <div>
-              <div className="fx-brand-name">FBRX OS</div>
+              <div className="fx-brand-name">{props.brandName ?? 'FBRX OS'}</div>
               <div className="fx-brand-sub">{props.brandSub ?? 'Fabrics Operating System'}</div>
             </div>
           )}

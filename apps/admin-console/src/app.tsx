@@ -146,13 +146,14 @@ function Console() {
 
   return (
     <Shell
-      brandSub="Admin console"
+      brandName="FBRX Command"
+      brandSub="Tenant controller"
       nav={nav}
       active={activeNav}
       onNavigate={(id) => go(id)}
       footer={
         <span>
-          Control plane {app.me.version} ·{' '}
+          FBRX Command {app.me.version} ·{' '}
           <span style={{ color: app.live ? 'var(--good-text)' : 'var(--text-muted)' }}>{app.live ? '● live' : '○ reconnecting'}</span>
         </span>
       }

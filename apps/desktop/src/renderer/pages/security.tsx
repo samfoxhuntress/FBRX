@@ -231,7 +231,7 @@ function Check() {
             </div>
             <div className="mono" style={{ fontSize: 12.5, wordBreak: 'break-all' }}>Lands on {link.finalUrl}</div>
             <div>
-              <AskButton label="Explain this result" prompt="I checked this link with FBRX OS. Explain the findings in plain language and tell me whether I should open it." context={link} />
+              <AskButton label="Explain this result" prompt="I checked this link with FBRX. Explain the findings in plain language and tell me whether I should open it." context={link} />
             </div>
             <div className="fx-list">
               {link.findings.map((f, i) => (
@@ -272,7 +272,7 @@ function Check() {
           {file && (
             <div style={{ marginTop: 12 }}>
               <div style={{ marginBottom: 8 }}>
-                <AskButton label="Explain this result" prompt="I checked this file with FBRX OS. Explain the signature, reputation and other findings in plain language and tell me whether it is safe to open." context={file} />
+                <AskButton label="Explain this result" prompt="I checked this file with FBRX. Explain the signature, reputation and other findings in plain language and tell me whether it is safe to open." context={file} />
               </div>
               <KeyValue
                 items={[

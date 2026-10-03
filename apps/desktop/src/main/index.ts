@@ -1,14 +1,14 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, protocol, screen, session, shell, systemPreferences, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type Rectangle } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, protocol, screen, session, shell, systemPreferences, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
 import { createReadStream, existsSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { userInfo } from 'node:os';
 import { Kernel, toCoreError } from '@fbrx/core';
-import { PRODUCT_NAME, funEnabled } from '@fbrx/shared';
+import { PRODUCT_NAME, TIER_NAMES, funEnabled } from '@fbrx/shared';
 import { createElectronPlatform, openExternalSafe } from './platform';
 import { ElectronUpdateController } from './updater';
-import { CursorPuppet } from './cursor-puppet';
 import { ClipHistory } from './clip-history';
+import { PasteKeys } from './paste-keys';
 import { runJavaScript, stopJavaScript } from './code-sandbox';
 
 const dataDir = process.env.FBRX_HOME ?? app.getPath('userData');
@@ -26,14 +26,19 @@ let kernel: Kernel | null = null;
 let win: BrowserWindow | null = null;
 let spotlight: BrowserWindow | null = null;
 let spotlightKey: string | null = null;
+let picker: BrowserWindow | null = null;
+let pickerKey: string | null = null;
+/** Whether FBRX's own window had the focus when the clipboard history opened (macOS gives the focus back otherwise). */
+let pickerFromMain = false;
+const pasteKeys = new PasteKeys();
 let tray: Tray | null = null;
 let quitting = false;
 let goose: BrowserWindow | null = null;
 let gooseFeed: ReturnType<typeof setInterval> | null = null;
-let gooseArea: Rectangle | null = null;
-let gooseHolding = false;
-const puppet = new CursorPuppet();
-const clips = new ClipHistory((entries) => win?.webContents.send('fbrx:clips', entries));
+const clips = new ClipHistory((entries) => {
+  win?.webContents.send('fbrx:clips', entries);
+  picker?.webContents.send('fbrx:clips', entries);
+});
 
 /**
  * The Windows installer starts `FBRX OS.exe --fbrx-quit` before replacing files: the running copy receives it as a
@@ -244,23 +249,88 @@ function showSpotlight() {
   s.focus();
 }
 
-/** (Re)binds the global Spotlight shortcut from settings. */
-function bindSpotlightKey() {
-  const cfg = kernel?.settings.get().spotlight;
-  const next = cfg?.enabled ? cfg.hotkey : null;
-  if (next === spotlightKey) return;
-  if (spotlightKey) globalShortcut.unregister(spotlightKey);
-  spotlightKey = null;
-  if (!next) return;
+/** (Re)binds a global shortcut (a macro), keeping track of what is bound now. */
+function bindKey(current: string | null, next: string | null, run: () => void, what: string): string | null {
+  if (next === current) return current;
+  if (current) globalShortcut.unregister(current);
+  if (!next) return null;
   try {
-    if (globalShortcut.register(next, showSpotlight)) spotlightKey = next;
-    else kernel?.log.warn('Spotlight shortcut is taken by another app', { hotkey: next });
+    if (globalShortcut.register(next, run)) return next;
+    kernel?.log.warn(`${what} shortcut is taken by another app`, { hotkey: next });
   } catch (err) {
-    kernel?.log.warn('Invalid Spotlight shortcut', { hotkey: next, error: (err as Error).message });
+    kernel?.log.warn(`Invalid ${what} shortcut`, { hotkey: next, error: (err as Error).message });
   }
+  return null;
 }
 
-const funAllowed = () => funEnabled(kernel?.settings.get());
+/** (Re)binds the macros from settings: Spotlight and the clipboard history. */
+function bindMacroKeys() {
+  const s = kernel?.settings.get();
+  spotlightKey = bindKey(spotlightKey, s?.spotlight.enabled ? s.spotlight.hotkey : null, showSpotlight, 'Spotlight');
+  pickerKey = bindKey(pickerKey, s?.clipboard.hotkey || null, showClipPicker, 'Clipboard history');
+}
+
+/**
+ * The clipboard history (Ctrl+Alt+Z by default), like Windows' Win+V: a small window near the pointer with your
+ * recent copies, newest first. Picking one puts it on the clipboard and pastes it where you were typing.
+ */
+function createClipPicker() {
+  picker = new BrowserWindow({
+    width: 460,
+    height: 540,
+    show: false,
+    frame: false,
+    resizable: false,
+    movable: true,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    transparent: process.platform !== 'linux',
+    backgroundColor: process.platform === 'linux' ? '#1a1714' : '#00000000',
+    fullscreenable: false,
+    minimizable: false,
+    maximizable: false,
+    title: 'FBRX Clipboard history',
+    webPreferences: {
+      preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      webSecurity: true,
+    },
+  });
+  picker.on('blur', () => picker?.hide());
+  picker.on('closed', () => (picker = null));
+  picker.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
+  picker.webContents.on('will-navigate', (e) => e.preventDefault());
+  loadRenderer(picker, '/clips');
+}
+
+function showClipPicker() {
+  if (!picker) createClipPicker();
+  const p = picker!;
+  if (p.isVisible() && p.isFocused()) {
+    hideClipPicker();
+    return;
+  }
+  pickerFromMain = !!win?.isFocused();
+  // Near the pointer, kept on its screen.
+  const at = screen.getCursorScreenPoint();
+  const area = screen.getDisplayNearestPoint(at).workArea;
+  const [w, h] = p.getSize();
+  p.setPosition(Math.round(Math.min(Math.max(at.x - w / 2, area.x + 8), area.x + area.width - w - 8)), Math.round(Math.min(Math.max(at.y + 16, area.y + 8), area.y + area.height - h - 8)));
+  if (kernel?.settings.get().clipboard.autoPaste) pasteKeys.warm();
+  p.show();
+  p.focus();
+  p.webContents.send('fbrx:clip-picker', 'shown');
+}
+
+/** Hides the history and gives the focus back to the app you were in. */
+function hideClipPicker() {
+  picker?.hide();
+  if (process.platform === 'darwin' && !pickerFromMain) app.hide();
+}
+
+const funAllowed = () => funEnabled(kernel?.settings.get(), kernel?.license.status().tier);
 
 /**
  * The Silly Goose: a transparent, always-on-top window over the work area of the screen FBRX is on. Mouse clicks
@@ -300,9 +370,6 @@ function summonGoose() {
     },
   });
   goose = g;
-  gooseArea = area;
-  // Warm up the pointer helper now, so it is ready when the goose grabs the pointer.
-  puppet.start();
   g.setAlwaysOnTop(true, 'screen-saver');
   g.setIgnoreMouseEvents(true, { forward: true });
   g.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -318,8 +385,6 @@ function summonGoose() {
     if (gooseFeed) clearInterval(gooseFeed);
     gooseFeed = null;
     goose = null;
-    gooseHolding = false;
-    puppet.stop();
     trayMenu();
   });
   // A goose that somehow stays too long is sent home.
@@ -334,13 +399,14 @@ function trayMenu() {
   const fleet = kernel.fleet.status();
   const vault = kernel.vault.status();
   const template: MenuItemConstructorOptions[] = [
-    { label: `${PRODUCT_NAME} ${app.getVersion()}`, enabled: false },
+    { label: `${TIER_NAMES[kernel.license.status().tier]} ${app.getVersion()}`, enabled: false },
     { label: `Vault: ${vault.state}`, enabled: false },
     { label: `Fleet: ${fleet.state}${fleet.tenantName ? ` · ${fleet.tenantName}` : ''}`, enabled: false },
     { type: 'separator' },
-    { label: 'Open FBRX OS', click: () => showWindow() },
+    { label: 'Open FBRX Endpoint', click: () => showWindow() },
     { label: 'New agent chat', click: () => showWindow('agent') },
     { label: `Spotlight${spotlightKey ? ` (${spotlightKey})` : ''}`, click: () => showSpotlight() },
+    { label: `Clipboard history${pickerKey ? ` (${pickerKey.replace('Control', 'Ctrl')})` : ''}`, click: () => showClipPicker() },
     { label: pending ? `Review ${pending} pending approval${pending > 1 ? 's' : ''}` : 'No pending approvals', enabled: pending > 0, click: () => showWindow('approvals') },
     kernel.aiHalt()
       ? { label: 'Resume the AI (on emergency stop)', click: () => void kernel?.resumeAi(actor) }
@@ -350,7 +416,8 @@ function trayMenu() {
     { label: 'Quit', click: () => ((quitting = true), app.quit()) },
   ];
   tray.setContextMenu(Menu.buildFromTemplate(template));
-  tray.setToolTip(pending ? `${PRODUCT_NAME} — ${pending} approval(s) waiting` : PRODUCT_NAME);
+  const name = TIER_NAMES[kernel?.license.status().tier ?? 'basic'];
+  tray.setToolTip(pending ? `${name} — ${pending} approval(s) waiting` : name);
 }
 
 function createTray() {
@@ -421,6 +488,31 @@ function registerIpc() {
     else if (action === 'clear') clips.clear();
     return { enabled: clips.enabled, entries: clips.list() };
   });
+  // The clipboard history window: paste a pick, turn the history on, or close.
+  ipcMain.handle('fbrx:clip-picker', async (e, action: string, text?: unknown) => {
+    if (!trusted(e)) return null;
+    if (action === 'show') showClipPicker();
+    else if (action === 'hide') hideClipPicker();
+    else if (action === 'enable') {
+      try {
+        kernel?.settings.update({ clipboard: { history: true } });
+        clips.setEnabled(true);
+      } catch {
+        /* turned off by your organization */
+      }
+      return { enabled: clips.enabled, entries: clips.list() };
+    } else if (action === 'paste' && typeof text === 'string') {
+      clipboard.writeText(text.slice(0, 1_000_000));
+      if (!picker || e.sender !== picker.webContents) return { pasted: false };
+      // Without automatic pasting the window stays a moment to say "press Ctrl+V" and closes itself.
+      if (!kernel?.settings.get().clipboard.autoPaste || !pasteKeys.supported()) return { pasted: false };
+      hideClipPicker();
+      // Give the focus a moment to get back to the app you were in, then press paste there.
+      setTimeout(() => pasteKeys.paste(), 140);
+      return { pasted: true };
+    }
+    return true;
+  });
   // Code lab: JavaScript runs in a hidden, network-blocked window (see code-sandbox.ts), one program at a time.
   ipcMain.handle('fbrx:code-run', (e, code: unknown, inputs: unknown) => {
     if (!trusted(e) || typeof code !== 'string' || code.length > 600_000) return null;
@@ -451,30 +543,8 @@ function registerIpc() {
     else if (goose && e.sender === goose.webContents) {
       if (action === 'leave') goose.close();
       else if (action === 'interactive') goose.setIgnoreMouseEvents(!on, { forward: true });
-      else if (action === 'capture') {
-        // While the goose holds the pointer its window takes the clicks, and on Windows the real pointer is dragged
-        // along with its beak (see fbrx:goose-drag). Held for two or three seconds at most.
-        goose.setIgnoreMouseEvents(!on, { forward: true });
-        gooseHolding = !!on && puppet.available;
-        if (gooseHolding) {
-          const g = goose;
-          setTimeout(() => {
-            if (goose === g) gooseHolding = false;
-          }, 3000).unref();
-        }
-        return { realPointer: gooseHolding };
-      }
     }
     return true;
-  });
-  // The goose's beak, in its window's coordinates, while it holds the pointer.
-  ipcMain.on('fbrx:goose-drag', (e, x: unknown, y: unknown) => {
-    if (!goose || e.sender !== goose.webContents || !gooseHolding || !gooseArea) return;
-    if (typeof x !== 'number' || typeof y !== 'number' || !Number.isFinite(x) || !Number.isFinite(y)) return;
-    const a = gooseArea;
-    const dip = { x: Math.round(a.x + Math.max(0, Math.min(a.width - 1, x))), y: Math.round(a.y + Math.max(0, Math.min(a.height - 1, y))) };
-    const p = process.platform === 'win32' ? screen.dipToScreenPoint(dip) : dip;
-    puppet.move(p.x, p.y);
   });
 }
 
@@ -499,12 +569,13 @@ async function boot() {
   kernel.events.onAny((name, payload) => {
     win?.webContents.send('fbrx:event', name, payload);
     if (name === 'settings.changed') {
-      bindSpotlightKey();
+      bindMacroKeys();
       clips.setEnabled(!!kernel?.settings.get().clipboard.history);
       if (!funAllowed()) goose?.close();
       trayMenu();
     }
-    if (name === 'approval.requested' || name === 'approval.resolved' || name === 'fleet.changed' || name === 'vault.changed' || name === 'ai.halted') trayMenu();
+    if (name === 'license.changed' && !funAllowed()) goose?.close();
+    if (name === 'approval.requested' || name === 'approval.resolved' || name === 'fleet.changed' || name === 'vault.changed' || name === 'ai.halted' || name === 'license.changed') trayMenu();
   });
   kernel.events.on('approval.requested', (r) => {
     if (!win?.isFocused()) {
@@ -547,7 +618,7 @@ app.whenReady().then(async () => {
   }
   createWindow();
   createTray();
-  bindSpotlightKey();
+  bindMacroKeys();
   app.on('activate', () => showWindow());
 });
 
@@ -556,8 +627,9 @@ app.on('before-quit', () => {
   quitting = true;
   globalShortcut.unregisterAll();
   spotlight?.destroy();
+  picker?.destroy();
+  pasteKeys.stop();
   goose?.destroy();
-  puppet.stop();
   clips.setEnabled(false);
   stopJavaScript();
 });

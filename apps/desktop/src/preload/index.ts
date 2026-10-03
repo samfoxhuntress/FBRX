@@ -26,7 +26,6 @@ const api = {
   openMain: (route: string) => void ipcRenderer.invoke('fbrx:spotlight', 'open', route),
   copyText: async (text: string) => void (await ipcRenderer.invoke('fbrx:copy', text)),
   goose: (action: string, on?: boolean) => ipcRenderer.invoke('fbrx:goose', action, on) as Promise<unknown>,
-  gooseDrag: (x: number, y: number) => ipcRenderer.send('fbrx:goose-drag', x, y),
   onGoose(cb: (e: unknown) => void): () => void {
     const h = (_e: unknown, payload: unknown) => cb(payload);
     ipcRenderer.on('fbrx:goose', h);
@@ -37,6 +36,12 @@ const api = {
     const h = (_e: unknown, entries: unknown) => cb(entries);
     ipcRenderer.on('fbrx:clips', h);
     return () => ipcRenderer.removeListener('fbrx:clips', h);
+  },
+  clipPicker: (action: 'show' | 'hide' | 'enable' | 'paste', text?: string) => ipcRenderer.invoke('fbrx:clip-picker', action, text) as Promise<unknown>,
+  onClipPicker(cb: (what: string) => void): () => void {
+    const h = (_e: unknown, what: string) => cb(what);
+    ipcRenderer.on('fbrx:clip-picker', h);
+    return () => ipcRenderer.removeListener('fbrx:clip-picker', h);
   },
   runCode: (code: string, inputs: string[]) => ipcRenderer.invoke('fbrx:code-run', code, inputs) as Promise<unknown>,
   stopCode: () => ipcRenderer.invoke('fbrx:code-stop') as Promise<unknown>,

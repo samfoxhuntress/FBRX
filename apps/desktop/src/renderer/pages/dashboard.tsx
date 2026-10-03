@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { SystemLive, SystemStatus } from '@fbrx/shared';
-import { TROPHIES, displayVersion } from '@fbrx/shared';
+import { TIER_NAMES, TROPHIES, displayVersion } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Grid, Icons, KeyValue, LineChart, Meter, StatTile, Status, formatBytes, formatDuration, timeAgo, useAction, type IconName } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
@@ -8,6 +8,7 @@ import { navigate } from '../app';
 import { dashboardQuip, unlockTrophy } from '../fun';
 import { AskButton, NamePrompt } from '../widgets';
 import { SplitFlapBoard } from '../splitflap';
+import { useTier } from '../edition';
 
 function serviceTone(state: string) {
   return state === 'running' ? 'good' : state === 'failed' ? 'critical' : state === 'degraded' ? 'warning' : 'neutral';
@@ -30,12 +31,15 @@ export function useLive(): SystemLive[] {
 
 const rate = (b: number) => `${formatBytes(b)}/s`;
 
-const TIPS = [
-  'Press Ctrl+K anywhere for Spotlight: apps, files, settings and quick answers.',
+const ULTRA_TIPS = [
   'Terminal → FBRX/1 manages FBRX like a switch: try "show system status".',
+  'Library → The Lab has power-user how-tos. Goggles recommended.',
+];
+const ALL_TIPS = [
+  'Press Ctrl+K anywhere for Spotlight: apps, files, settings and quick answers.',
+  'Press Ctrl+Alt+Z for your clipboard history: W and S move, type to search, Enter pastes.',
   'The big red Emergency stop in Settings → Agent halts every AI action at once.',
   'Network Center → Speed is a real speedometer. Patience is rewarded. Impatience more so.',
-  'Library → The Lab (Advanced mode) has power-user how-tos. Goggles recommended.',
   'Snippets save commands you reuse; the Terminal lists them on the right.',
   'Backups are encrypted .fbrxsnap files: restore one on a new PC and carry on.',
   'Ask Fabrix "is this good?" next to most results to get them explained.',
@@ -104,6 +108,7 @@ function Insight({ icon, title, value, foot, onClick, className, children }: { i
  * and falls, showing what was behind it. "Screw it back on" puts it back.
  */
 function LooseTip({ fun }: { fun: boolean }) {
+  const TIPS = useTier() === 'ultra' ? [...ALL_TIPS, ...ULTRA_TIPS] : ALL_TIPS;
   const [tip, setTip] = useState(() => Math.floor(Math.random() * TIPS.length));
   const [clicks, setClicks] = useState(0);
   const [rattle, setRattle] = useState(0);
@@ -164,7 +169,7 @@ function LooseTip({ fun }: { fun: boolean }) {
             <Icons.info size={15} />
             Tip
           </div>
-          <div className="glass-tile-tip">{TIPS[tip]}</div>
+          <div className="glass-tile-tip">{TIPS[tip % TIPS.length]}</div>
           {fun && clicks > 0 && <div className="glass-tile-foot">{remark}</div>}
         </div>
       )}
@@ -240,7 +245,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
             }}
           />
           <div className="glass-sub">
-            {`${status.deviceName} · ${status.product} ${displayVersion(status.version)} · up ${formatDuration(cur?.uptime ?? status.uptimeSeconds)}`}
+            {`${status.deviceName} · ${TIER_NAMES[status.license.tier]} ${displayVersion(status.version)} · up ${formatDuration(cur?.uptime ?? status.uptimeSeconds)}`}
             {quip && <span className="quip">{quip}</span>}
           </div>
         </div>
@@ -300,7 +305,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
         </Callout>
       )}
       {updates.data?.state === 'downloaded' && (
-        <Callout tone="good" title={`FBRX OS ${updates.data.availableVersion} is ready`} actions={<Button size="sm" onClick={() => void run('u', () => call('updates.install'))}>Restart to update</Button>}>
+        <Callout tone="good" title={`FBRX ${updates.data.availableVersion} is ready`} actions={<Button size="sm" onClick={() => void run('u', () => call('updates.install'))}>Restart to update</Button>}>
           The update was downloaded from your organization's control plane.
         </Callout>
       )}
@@ -404,7 +409,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
               ))}
             </div>
           ) : (
-            <Empty title="No alerts">FBRX OS watches performance, storage, security and your network in the background.</Empty>
+            <Empty title="No alerts">FBRX watches performance, storage, security and your network in the background.</Empty>
           )}
         </Card>
         <Card title="This computer">

@@ -26,7 +26,7 @@ function Rich({ text, agentName }: { text: string; agentName: string }) {
 
 const ROUTES: Record<string, string> = { files: 'files', network: 'network', security: 'security', storage: 'storage', updates: 'updates', agent: 'agent', mesh: 'mesh', settings: 'settings', bugs: 'bugs', backup: 'backup', speed: 'network/speed', printers: 'network/printers' };
 
-/** The Lab (Advanced mode): power-user how-tos and official download pages. */
+/** The Lab (Endpoint Ultra): power-user how-tos and official download pages. */
 function TheLab({ agentName }: { agentName: string }) {
   const info = useCore('sysinfo.static');
   // Safety first: the dress code earns a badge.
@@ -161,12 +161,7 @@ export function LibraryPage({ agentName, advanced, easterEggs }: { agentName: st
   const trophies = useCore('fun.trophies', undefined, ['fun.trophy']);
   const storyAsked = easterEggs && STORY_TRIGGER.test(q.trim());
   const storiesFound = easterEggs && (!!trophies.data?.unlocked.stories || storyAsked);
-  const [verse, setVerse] = useState(false);
-  const impossible = easterEggs && NOTHING_IS_IMPOSSIBLE.test(q);
-  useEffect(() => {
-    if (!impossible) return;
-    void call('settings.update', { patch: { appearance: { advancedMode: true } } }).then(() => setVerse(true));
-  }, [impossible]);
+  const verse = easterEggs && NOTHING_IS_IMPOSSIBLE.test(q);
   useEffect(() => {
     if (!storyAsked) return;
     unlockTrophy('stories');
@@ -203,7 +198,7 @@ export function LibraryPage({ agentName, advanced, easterEggs }: { agentName: st
           );
         })}
       </div>
-      {verse && impossible && <Callout tone="good">{LUKE_1_37}</Callout>}
+      {verse && <Callout tone="good">{LUKE_1_37}</Callout>}
       {cat === 'lab' && advanced && !q.trim() ? (
         <TheLab agentName={agentName} />
       ) : cat === 'stories' && storiesFound ? (

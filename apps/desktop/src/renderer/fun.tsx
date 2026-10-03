@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { bridge, call } from './client';
 
 /**
- * Easter eggs and the Silly Goose (a tribute to Desktop Goose by samperson): a goose that waddles across the screen,
- * tracks mud, honks, steals the mouse pointer for a moment and drags in notes. It lives in a transparent,
+ * Easter eggs and the Silly Goose: a goose in aviator goggles that waddles across the screen, honks, drops a loose
+ * feather now and then, boops your mouse pointer and drags in notes. It lives in a transparent,
  * click-through window over the desktop (see the main process) and leaves on its own after a minute and a half.
  * Everything here is switched off by Settings → Appearance → Fun extras (and an organization can lock that off).
  */
@@ -12,9 +12,9 @@ export function summonGoose(): void {
   bridge.goose?.('summon');
 }
 
-/** Luke 1:37: typed into Spotlight or the Library search, it turns on Advanced mode (a quiet easter egg). */
+/** Luke 1:37: typed into Spotlight or the Library search, it answers with the verse (a quiet easter egg). */
 export const NOTHING_IS_IMPOSSIBLE = /^\s*nothing\s+is\s+impossible[.!]*\s*$/i;
-export const LUKE_1_37 = '“For nothing will be impossible with God.” Luke 1:37. Advanced mode is on.';
+export const LUKE_1_37 = '“For nothing will be impossible with God.” Luke 1:37.';
 
 /** Records a found easter egg for the trophy case. Quiet when Fun extras are off or it was already found. */
 export function unlockTrophy(id: string): void {
@@ -124,7 +124,6 @@ const NOTES = [
   'Ctrl+K opens Spotlight.\nYou\'re welcome.',
   'Restart once in a while.\nI do. (It\'s called a nap.)',
   'Honk if you love FBRX.',
-  'Peace was never an option.',
   'Strong passwords only.\n"password123" is not one.',
 ];
 
@@ -133,11 +132,12 @@ const GOOSE_H = 110;
 const VISIT_MS = 95_000;
 
 type Mode = 'enter' | 'walk' | 'chase' | 'carry' | 'fetch-out' | 'fetch-in' | 'pause' | 'leave';
-interface Print {
+interface Feather {
   id: number;
   x: number;
   y: number;
   a: number;
+  at: number;
 }
 interface Note {
   id: number;
@@ -197,9 +197,8 @@ function Leaf() {
   );
 }
 
-/** The goose, drawn facing left. Flight goggles pushed up on his head with a tuft of feathers sticking up behind
- * the strap; dressed for the season; once every trophy is found he carries a golden egg with a #1 ribbon on his
- * back. `flipped` keeps the ribbon's text readable. */
+/** The goose, drawn facing left. Aviator goggles pushed up on his head, dressed for the season; once every trophy is
+ * found he carries a golden egg with a #1 ribbon on his back. `flipped` keeps the ribbon's text readable. */
 function GooseSvg({ walking, honking, golden = false, flipped = false, fast = false, season = null }: { walking: boolean; honking: boolean; golden?: boolean; flipped?: boolean; fast?: boolean; season?: Season | null }) {
   const winter = season === 'winter';
   return (
@@ -245,12 +244,6 @@ function GooseSvg({ walking, honking, golden = false, flipped = false, fast = fa
         <path d="M30 46 Q22 30 26 14" stroke="#cfcfc6" strokeWidth="11.5" strokeLinecap="round" fill="none" opacity="0.35" />
         {(season === 'winter' || season === 'fall') && <Scarf season={season} />}
         <circle cx="27" cy="13" r="8.5" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="1.2" />
-        {/* Feathers sticking up behind the goggle strap, like hair under pushed-up goggles. */}
-        <g className="goose-tuft">
-          <path d="M28.2 5.6 Q26.8 -0.6 30.4 -3.4 Q30.2 1.4 30.9 5.4 Z" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="0.8" strokeLinejoin="round" />
-          <path d="M30.6 6 Q31.4 0.4 35.6 -1.4 Q33.6 2.6 33.2 6.6 Z" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="0.8" strokeLinejoin="round" />
-          <path d="M32.9 7.4 Q35.6 3.6 38.6 3.4 Q36.4 6 35.2 8.6 Z" fill="#f2f2ec" stroke="#cfcfc6" strokeWidth="0.8" strokeLinejoin="round" />
-        </g>
         {/* Flight goggles pushed up on the head: a leather strap round the back, two brass-rimmed lenses on top. */}
         <path d="M19.6 8.6 Q27 3.8 35.6 9.4" stroke="#6b4a1f" strokeWidth="2.8" strokeLinecap="round" fill="none" />
         <path d="M20.4 8 Q27 3.6 34.8 8.6" stroke="#8a6230" strokeWidth="0.8" strokeLinecap="round" fill="none" />
@@ -372,15 +365,12 @@ export function GooseOverlay() {
     bubble: '' as string,
     cursor: { x: -1000, y: -1000 },
     carrying: null as Note | null,
-    stolen: null as { x: number; y: number } | null,
-    /** The real pointer is being dragged (Windows); otherwise a drawn pointer rides in the beak. */
-    realPointer: false,
-    lastDrag: 0,
-    prints: [] as Print[],
+    /** Loose feathers drifting down behind him now and then. */
+    feathers: [] as Feather[],
+    nextFeather: Date.now() + 2500,
+    /** Where he booped the pointer, for the little ring. */
+    boop: null as { id: number; x: number; y: number } | null,
     notes: [] as Note[],
-    muddy: true,
-    lastPrint: 0,
-    printSide: 1,
     clicks: 0,
     started: Date.now(),
     interactive: false,
@@ -429,12 +419,6 @@ export function GooseOverlay() {
       s.tx = 100 + Math.random() * (W() - 200);
       s.ty = 110 + Math.random() * (H() - 220);
     };
-    const release = () => {
-      if (!s.stolen) return;
-      s.stolen = null;
-      s.realPointer = false;
-      bridge.goose?.('capture', false);
-    };
     const pick = () => {
       if (Date.now() - s.started > VISIT_MS || s.leaving) {
         s.mode = 'leave';
@@ -468,7 +452,7 @@ export function GooseOverlay() {
     const step = (now: number) => {
       const dt = Math.min(40, now - last);
       last = now;
-      const maxSpeed = s.mode === 'chase' ? 0.34 : s.mode === 'carry' && s.stolen ? 0.3 : s.mode === 'leave' ? 0.22 : 0.15;
+      const maxSpeed = s.mode === 'chase' ? 0.34 : s.mode === 'leave' ? 0.22 : 0.15;
       if (s.mode === 'chase') {
         // The pointer is on another screen (or hasn't moved yet): wander instead.
         if (s.cursor.x < 0 || s.cursor.y < 0 || s.cursor.x > W() || s.cursor.y > H()) wander();
@@ -504,19 +488,11 @@ export function GooseOverlay() {
       // Turn around only when clearly heading the other way, so it doesn't flicker on vertical walks.
       if (s.vx > 0.04) s.facing = 1;
       else if (s.vx < -0.04) s.facing = -1;
-      // Muddy footprints for the first part of the visit, spaced by distance walked.
-      if (s.muddy && s.walking && now - s.lastPrint > 120 / Math.max(0.6, speed * 6)) {
-        s.lastPrint = now;
-        s.printSide *= -1;
-        const a = Math.atan2(s.vy, s.vx);
-        s.prints.push({ id: ids.current++, x: cx + Math.sin(a) * 4 * s.printSide, y: s.y + GOOSE_H - 4 - Math.cos(a) * 3 * s.printSide, a: a * (180 / Math.PI) + 90 });
-        if (s.prints.length > 140) s.prints.shift();
-      }
-      // Holding the pointer: drag the real one along with the beak (about 60 times a second).
-      if (s.stolen && s.realPointer && now - s.lastDrag > 15) {
-        s.lastDrag = now;
-        const b = beak();
-        bridge.gooseDrag?.(b.x, b.y);
+      // Now and then a loose feather drifts down behind him.
+      if (s.walking && Date.now() > s.nextFeather) {
+        s.nextFeather = Date.now() + 3000 + Math.random() * 5000;
+        s.feathers.push({ id: ids.current++, x: s.x + GOOSE_W / 2 - s.facing * 26, y: s.y + 40, a: Math.random() * 60 - 30, at: Date.now() });
+        s.feathers = s.feathers.filter((f) => Date.now() - f.at < 6000);
       }
       if (s.mode === 'pause') {
         if (Date.now() > s.until) {
@@ -525,31 +501,18 @@ export function GooseOverlay() {
         }
       } else if (dist < (s.mode === 'chase' ? 14 : 6)) {
         if (s.mode === 'chase') {
-          // Caught the pointer: take it for a short walk.
-          s.mode = 'carry';
-          s.stolen = { x: s.cursor.x, y: s.cursor.y };
-          s.realPointer = false;
-          void Promise.resolve(bridge.goose?.('capture', true)).then((r) => {
-            if (s.stolen) s.realPointer = !!(r as { realPointer?: boolean } | undefined)?.realPointer;
-          });
-          say('MINE.', 1500);
-          const dir = Math.random() < 0.5 ? -1 : 1;
-          s.tx = Math.max(90, Math.min(W() - 90, cx + dir * (260 + Math.random() * 260)));
-          s.ty = Math.max(110, Math.min(H() - 110, cy + (Math.random() - 0.5) * 300));
-          setTimeout(() => {
-            if (s.stolen) {
-              release();
-              s.mode = 'pause';
-              s.until = Date.now() + 900;
-            }
-          }, 2200);
+          // Caught up with the pointer: a friendly boop on it, and off he goes. (It stays yours.)
+          const b = beak();
+          s.boop = { id: ids.current++, x: b.x, y: b.y };
+          say(Math.random() < 0.5 ? 'boop.' : 'tag. you\'re it.', 1300);
+          s.mode = 'pause';
+          s.until = Date.now() + 1100;
         } else if (s.mode === 'carry') {
           if (s.carrying) {
             s.notes.push({ ...s.carrying, x: s.x + (s.facing > 0 ? GOOSE_W - 10 : -150), y: s.y - 20 });
             s.carrying = null;
             say('honk', 900);
           }
-          release();
           s.mode = 'pause';
           s.until = Date.now() + 1200;
         } else if (s.mode === 'fetch-out') {
@@ -562,7 +525,6 @@ export function GooseOverlay() {
           s.ty = H() * (0.25 + Math.random() * 0.5);
         } else if (s.mode === 'leave') {
           cancelAnimationFrame(raf);
-          release();
           // Notes it brought stay a little longer so you can read them.
           setTimeout(() => bridge.goose?.('leave'), s.notes.length ? 20_000 : 300);
           return;
@@ -572,7 +534,6 @@ export function GooseOverlay() {
           s.until = Date.now() + 700 + Math.random() * 1600;
         }
       }
-      if (Date.now() - s.started > 35_000) s.muddy = false;
       force((n) => (n + 1) % 1_000_000);
       raf = requestAnimationFrame(step);
     };
@@ -586,7 +547,7 @@ export function GooseOverlay() {
       if (e.type === 'cursor') {
         s.cursor = { x: e.x, y: e.y };
         const over = hit(e.x, e.y);
-        if (over !== s.interactive && !s.stolen) {
+        if (over !== s.interactive) {
           s.interactive = over;
           bridge.goose?.('interactive', over);
         }
@@ -594,7 +555,6 @@ export function GooseOverlay() {
       else if (e.type === 'shoo') {
         s.leaving = true;
         s.notes = [];
-        release();
         pick();
       }
     });
@@ -621,10 +581,14 @@ export function GooseOverlay() {
   };
   const flipped = s.facing > 0;
   return (
-    <div className={`goose-stage${s.stolen && !s.realPointer ? ' stolen' : ''}`}>
-      {s.prints.map((p) => (
-        <span key={p.id} className={`goose-print${s.season === 'winter' ? ' snow' : ''}`} style={{ left: p.x, top: p.y, transform: `rotate(${p.a}deg)` }} />
+    <div className="goose-stage">
+      {s.feathers.map((f) => (
+        <svg key={f.id} className="goose-feather" style={{ left: f.x, top: f.y, ['--a' as string]: `${f.a}deg` }} width="16" height="28" viewBox="0 0 16 28" aria-hidden>
+          <path d="M8 1 Q15 9 10 20 Q8 24 8 27 Q8 24 6 20 Q1 9 8 1 Z" fill="#fbfbf7" stroke="#cfcfc6" strokeWidth="0.8" />
+          <path d="M8 4 V27" stroke="#d9d9d0" strokeWidth="0.7" />
+        </svg>
       ))}
+      {s.boop && <span key={s.boop.id} className="goose-boop" style={{ left: s.boop.x, top: s.boop.y }} />}
       {s.notes.map((n) => (
         <button key={n.id} className={`goose-${n.kind}`} style={{ left: n.x, top: n.y }} onClick={() => (s.notes = s.notes.filter((x) => x.id !== n.id))} title="Click to put it away">
           {n.kind === 'postcard' ? (
@@ -647,7 +611,6 @@ export function GooseOverlay() {
         <div className="goose-flip" style={{ transform: `scaleX(${-s.facing})` }}>
           <GooseSvg walking={s.walking} honking={s.honking} golden={s.golden} flipped={flipped} fast={s.fast} season={s.season} />
           {s.carrying && <span className={`goose-carry ${s.carrying.kind}`}>{s.carrying.kind === 'note' ? '✉' : s.carrying.kind === 'postcard' ? '📮' : '🖼'}</span>}
-          {s.stolen && !s.realPointer && <span className="goose-stolen-cursor" />}
         </div>
       </div>
       {s.bubble && (

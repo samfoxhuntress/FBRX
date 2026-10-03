@@ -207,17 +207,7 @@ export class AgentRuntime {
     return c;
   }
 
-  private systemPrompt(toolCount: number, offline: boolean, conversationId?: string): string {
-    const lumbergh = conversationId && this.d.fun?.enabled() && this.d.fun.persona.get(conversationId) === 'lumbergh';
-    const base = this.basePrompt(toolCount, offline);
-    if (!lumbergh) return base;
-    return `${base}
-
-## Persona for this conversation (an easter egg the user asked for)
-Answer like a 1990s middle manager who adores corporate jargon: synergy, circle back, leverage, bandwidth, paradigm shift, action items, take this offline, TPS reports, move the needle, low-hanging fruit, going forward. Keep the actual help correct and complete, but wrap it in so much jargon that it is almost, but not quite, unintelligible. Stay friendly and family-friendly. Always end your reply with exactly: That would be great.`;
-  }
-
-  private basePrompt(toolCount: number, offline: boolean): string {
+  private systemPrompt(toolCount: number, offline: boolean): string {
     const s = this.d.settings.get();
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const date = new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
@@ -336,7 +326,7 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
           parameters: t.inputSchema,
         }));
         const messages: ProviderMessage[] = [
-          { role: 'system', content: this.systemPrompt(tools.length, this.d.store.isOffline(conversationId), conversationId) },
+          { role: 'system', content: this.systemPrompt(tools.length, this.d.store.isOffline(conversationId)) },
           ...this.history(conversationId, provider.historyBudgetChars),
         ];
 
@@ -396,13 +386,6 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
           const note = `_The answer reached the length limit and was cut off. Raise **Longest answer** in Settings → Agent, or say "continue"._`;
           content = `${content}${content ? '\n\n' : ''}${note}`;
           this.emit({ type: 'message.delta', runId, conversationId, messageId, delta: `\n\n${note}` });
-        }
-
-        // Corporate-speak mode always signs off the same way, even when the model forgets.
-        if (!calls.length && this.d.fun?.enabled() && this.d.fun.persona.get(conversationId) === 'lumbergh' && !/that would be great\.?\s*$/i.test(content)) {
-          const tail = `${content.trim() ? '\n\n' : ''}That would be great.`;
-          content += tail;
-          this.emit({ type: 'message.delta', runId, conversationId, messageId, delta: tail });
         }
 
         const records: ToolCallRecord[] = calls.map((c) => ({

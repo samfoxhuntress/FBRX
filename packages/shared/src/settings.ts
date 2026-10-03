@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { Tier } from './license';
 import { DEFAULT_LOCAL_API_PORT, DEFAULT_RUNTIME_PORT, UPDATE_CHANNELS } from './constants';
 import { ALERT_CHANNELS } from './ext';
 
@@ -144,27 +145,25 @@ export const SettingsSchema = z.object({
     density: z.enum(['compact', 'comfortable', 'spacious']),
     fontScale: z.number().min(0.85).max(1.3),
     texture: z.enum(TEXTURES),
-    textureStrength: z.enum(['subtle', 'medium', 'bold']),
+    /** How strong the texture is, 0–100 %. Older versions saved subtle / medium / bold. */
+    textureStrength: z.preprocess((v) => (typeof v === 'string' ? (({ subtle: 35, medium: 50, bold: 100 }) as Record<string, number>)[v] ?? v : v), z.number().min(0).max(100)),
     radius: z.enum(['sharp', 'rounded', 'soft']),
     reduceMotion: z.boolean(),
     splash: z.boolean(),
     splashSound: z.boolean(),
-    /** Show expert screens (disks and partitions, Hyper-V lab, network adapters, registry-level fixes). */
-    advancedMode: z.boolean(),
     /** Easter eggs, jokes and the Silly Goose. An organization can turn them off. */
     easterEggs: z.boolean(),
     /** The Silly Goose drops by now and then on its own. */
     gooseVisits: z.boolean(),
     /** What the goose wears: dressed for the season where you are (auto), or a season you pick. */
     gooseSeason: z.enum(['auto', 'winter', 'spring', 'summer', 'fall']),
-    /** Fun extras stay hidden until someone enters 418 as a license key (see funEnabled). */
-    funUnlocked: z.boolean(),
     /** Visual effects: full (glass, glows, animation), light (shown as "Lite": flat and quick) or auto (Lite on small PCs). */
     effects: z.enum(['auto', 'full', 'light']),
   }),
   /**
-   * Slash macros: type /trigger in the chat, the Terminal, FBRX/1 or the clipboard editor and it expands. The text may
-   * contain {date}, {time}, {datetime}, {name}, {callme}, {host}, {clipboard} and {cursor}.
+   * Quick snippets (stored as `macros` for compatibility): type /trigger in the chat, the Terminal, FBRX/1 or the
+   * clipboard editor and it pastes. The text may contain {date}, {time}, {datetime}, {name}, {callme}, {host},
+   * {clipboard} and {cursor}. Macros in the app's sense are keyboard shortcuts (spotlight.hotkey, clipboard.hotkey).
    */
   macros: z
     .array(
@@ -180,6 +179,10 @@ export const SettingsSchema = z.object({
   clipboard: z.object({
     /** Keep a history of copied text while FBRX runs (in memory only; never written to disk). */
     history: z.boolean(),
+    /** The macro (global keyboard shortcut) that opens the clipboard history anywhere; empty turns it off. */
+    hotkey: z.string().max(60),
+    /** Paste the copy you pick straight into the app you were in (otherwise it is only put on the clipboard). */
+    autoPaste: z.boolean(),
     /** Saved transform pipelines for the clipboard processor. */
     macros: z
       .array(
@@ -343,16 +346,14 @@ export const DEFAULT_SETTINGS: Settings = {
     density: 'comfortable',
     fontScale: 1,
     texture: 'theme',
-    textureStrength: 'medium',
+    textureStrength: 50,
     radius: 'rounded',
     reduceMotion: false,
     splash: true,
     splashSound: true,
-    advancedMode: false,
     easterEggs: true,
     gooseVisits: false,
     gooseSeason: 'auto',
-    funUnlocked: false,
     effects: 'auto',
   },
   macros: [
@@ -362,6 +363,8 @@ export const DEFAULT_SETTINGS: Settings = {
   ],
   clipboard: {
     history: false,
+    hotkey: 'Control+Alt+Z',
+    autoPaste: true,
     macros: [
       { id: 'c-clean', name: 'Clean up pasted text', steps: [{ op: 'straightQuotes' }, { op: 'collapseSpaces' }, { op: 'trimLines' }, { op: 'removeBlank' }] },
       { id: 'c-ps', name: 'Lines → PowerShell array', steps: [{ op: 'trimLines' }, { op: 'removeBlank' }, { op: 'dedupe' }, { op: 'wrapLines', a: "'", b: "'" }, { op: 'join', a: ', ' }, { op: 'wrap', a: '@(', b: ')' }] },
@@ -434,9 +437,9 @@ export const DEFAULT_SETTINGS: Settings = {
 /** Settings paths that can never be changed remotely or by the renderer (identity-bearing). */
 export const PROTECTED_SETTING_PATHS: readonly string[] = [];
 
-/** Fun extras are on only when they are switched on and someone has unlocked them with 418. */
-export function funEnabled(s: Pick<Settings, 'appearance'> | null | undefined): boolean {
-  return !!s && s.appearance.easterEggs && s.appearance.funUnlocked;
+/** Fun extras come with FBRX Endpoint Ultra, while they are switched on (an organization can turn them off). */
+export function funEnabled(s: Pick<Settings, 'appearance'> | null | undefined, tier: Tier | null | undefined): boolean {
+  return !!s && tier === 'ultra' && s.appearance.easterEggs;
 }
 
 /** What to call the user: their chosen form of address, else their first name, else null. */

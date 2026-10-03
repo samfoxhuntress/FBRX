@@ -14,7 +14,7 @@ interface Example {
   input?: string;
   extra?: string;
 }
-/** `advanced`: developer and network tools, shown in Advanced mode only. `examples` fill the tool with a sample. */
+/** `advanced`: developer and network tools, in Endpoint Ultra only. `examples` fill the tool with a sample. */
 type Tool = { id: string; name: string; hint: string; advanced?: boolean; examples?: Example[] };
 
 const jwtSample = () => {
@@ -736,7 +736,7 @@ const PORTS: Array<[number | string, string, string, ('ok' | 'care' | 'risk')?]>
   [8291, 'Winbox', 'MikroTik management', 'care'],
   [8443, 'HTTPS alt', 'UniFi controller and other admin pages'],
   [9100, 'JetDirect', 'Raw printing'],
-  [47800, 'FBRX Mesh', 'FBRX OS computers and phones talking to each other (encrypted)'],
+  [47800, 'FBRX Mesh', 'FBRX computers and phones talking to each other (encrypted)'],
   [51820, 'WireGuard', 'VPN (UDP)'],
 ];
 
@@ -823,7 +823,7 @@ export function ToolboxPage({ advanced, easterEggs }: { advanced: boolean; easte
     setSeed((s) => ({ ex, n: s.n + 1 }));
   };
   return (
-    <Page title="Toolbox" description={advanced ? 'Handy utilities that run entirely on this computer.' : 'Handy utilities that run entirely on this computer. Advanced mode adds developer and network tools.'}>
+    <Page title="Toolbox" description={advanced ? 'Handy utilities that run entirely on this computer.' : 'Handy utilities that run entirely on this computer. Endpoint Ultra adds developer and network tools.'}>
       <div className="chips recommended">
         <span className="fx-muted" style={{ fontSize: 12.5, alignSelf: 'center' }}>Try:</span>
         {RECOMMENDED.filter((r) => (advanced || !r.advanced) && (easterEggs || !r.fun)).map((r) => (

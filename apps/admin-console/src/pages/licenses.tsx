@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ALL_FEATURES, EDITIONS, EDITION_FEATURES, FEATURES, type Edition } from '@fbrx/shared';
+import { ALL_FEATURES, EDITIONS, EDITION_FEATURES, FEATURES, TIER_NAMES, tierFor, type Edition, type Tier } from '@fbrx/shared';
 import { Button, Callout, Card, CopyText, Empty, Field, Input, Modal, Page, Select, Status, Table, formatDate, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
@@ -9,6 +9,8 @@ interface License {
   tenantId: string;
   customer: string;
   edition: string;
+  tier: Tier;
+  commandUrl: string | null;
   seats: number;
   features: string[];
   issuedAt: string;
@@ -33,7 +35,7 @@ export function LicensesPage() {
   return (
     <Page
       title="Licenses"
-      description="Sell FBRX OS: each customer is a tenant with a signed license (edition, seats, features, expiry). Licenses are verified offline by the app using your public key and delivered automatically to enrolled devices."
+      description="Each customer is a tenant with a signed license (product, edition, seats, features, expiry). Computers run FBRX Endpoint Basic until a license turns on Endpoint Ultra; a key that joins the tenant enrolls the computer here on its own. Licenses are verified offline by the app using your public key and delivered automatically to enrolled devices."
       actions={
         manage && app.tenantId ? (
           <Button variant="primary" icon="plus" onClick={() => setIssuing(true)}>
@@ -59,6 +61,7 @@ export function LicensesPage() {
           empty={<Empty title="No licenses issued" />}
           columns={[
             { key: 'c', header: 'Customer', render: (l) => (<div><div className="fx-cell-title">{l.customer}</div><div className="fx-cell-sub">{tenants.find((t) => t.id === l.tenantId)?.name ?? l.tenantId}</div></div>) },
+            { key: 'p', header: 'Product', render: (l) => (<div><div className="fx-cell-title">{TIER_NAMES[l.tier]}</div>{l.commandUrl && <div className="fx-cell-sub">Joins this tenant</div>}</div>) },
             { key: 'e', header: 'Edition', render: (l) => <span className="fx-badge accent">{l.edition}</span> },
             { key: 's', header: 'Seats', className: 'num', render: (l) => l.seats || 'unlimited' },
             { key: 'st', header: 'Status', render: state },
@@ -95,7 +98,7 @@ export function LicensesPage() {
           }
         >
           <div className="fx-form">
-            <Field label="License key" help="Customers without a control plane can paste this into FBRX OS → Settings → License">
+            <Field label="License key" help={show.commandUrl ? 'Paste into FBRX Endpoint → Settings → License: the computer turns on its product and joins this tenant.' : 'Paste into FBRX Endpoint → Settings → License (works without FBRX Command too).'}>
               <CopyText value={show.key} />
             </Field>
             <Field label="Features">
@@ -110,7 +113,7 @@ export function LicensesPage() {
 }
 
 function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () => void }) {
-  const [f, setF] = useState({ edition: 'enterprise' as Edition, seats: '25', expires: '', customer: '', maxMajorVersion: '' });
+  const [f, setF] = useState({ edition: 'enterprise' as Edition, tier: 'auto' as Tier | 'auto', joinTenant: true, seats: '25', expires: '', customer: '', maxMajorVersion: '' });
   const [extra, setExtra] = useState<string[]>([]);
   const { busy, run } = useAction();
   const base = EDITION_FEATURES[f.edition];
@@ -130,6 +133,8 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
                 () =>
                   api('POST', '/v1/admin/licenses', {
                     edition: f.edition,
+                    tier: f.tier === 'auto' ? undefined : f.tier,
+                    joinTenant: f.joinTenant,
                     seats: Number(f.seats || 0),
                     features: extra,
                     expiresAt: f.expires ? new Date(f.expires).toISOString() : null,
@@ -146,6 +151,21 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
       }
     >
       <div className="fx-form">
+        <Field label="Product on the computers" help="What FBRX Endpoint turns into when the key is activated (or pushed by this tenant)">
+          <Select
+            value={f.tier}
+            onChange={(e) => setF({ ...f, tier: e.target.value as Tier | 'auto' })}
+            options={[
+              { value: 'auto', label: `By edition (${TIER_NAMES[tierFor(f.edition)]})` },
+              { value: 'ultra', label: TIER_NAMES.ultra },
+              { value: 'basic', label: TIER_NAMES.basic },
+            ]}
+          />
+        </Field>
+        <label className="fx-toggle">
+          <input type="checkbox" checked={f.joinTenant} onChange={(e) => setF({ ...f, joinTenant: e.target.checked })} />
+          Computers that activate this key join this tenant automatically (one enrollment per seat)
+        </label>
         <div className="fx-row">
           <Field label="Edition">
             <Select value={f.edition} onChange={(e) => setF({ ...f, edition: e.target.value as Edition })} options={[...EDITIONS]} />
@@ -176,7 +196,7 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
             {ALL_FEATURES.every((x) => base.includes(x)) && <span className="fx-muted">Enterprise includes every feature.</span>}
           </div>
         </Field>
-        {!base.includes('fleet') && !extra.includes('fleet') && (
+        {!f.joinTenant && !base.includes('fleet') && !extra.includes('fleet') && (
           <Callout tone="warning" title="No fleet management">
             Without “{FEATURES.fleet}”, new workstations cannot enroll in this organization. Use the license as an offline key, or add the feature.
           </Callout>

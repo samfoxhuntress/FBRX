@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MeshDevice, MeshJob, MeshPermissions } from '@fbrx/shared';
 import { funEnabled } from '@fbrx/shared';
+import { useTier } from '../edition';
 import { Button, Callout, Card, Empty, Field, Grid, Icons, Input, Modal, Page, Select, Status, TextArea, Toggle, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
@@ -232,7 +233,7 @@ export function MeshPage() {
   const s = status.data;
   const incoming = settings.data?.settings.mesh.incoming ?? 'ask';
   // Easter egg: three pings in a row to the same computer (or to yourself) and the two start pointing fingers.
-  const fun = funEnabled(settings.data?.settings);
+  const fun = funEnabled(settings.data?.settings, useTier());
   const [pointing, setPointing] = useState<{ left: string; right: string } | null>(null);
   const triple = useTriplePing((key) => {
     if (!fun || !s) return;
@@ -314,7 +315,7 @@ export function MeshPage() {
           </div>
           {!s.enabled && (
             <Callout tone="info" title="Turn the mesh on to pair devices">
-              FBRX listens on port {s.port} on your local network. Only devices you pair can do anything; Windows may ask once whether to allow FBRX OS through the firewall (choose private networks).
+              FBRX listens on port {s.port} on your local network. Only devices you pair can do anything; Windows may ask once whether to allow FBRX through the firewall (choose private networks).
             </Callout>
           )}
         </Card>

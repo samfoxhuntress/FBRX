@@ -25,13 +25,16 @@ interface Bridge {
   openMain?(route: string): void;
   copyText?(text: string): Promise<void>;
   /** The Silly Goose overlay window (Electron only). */
-  goose?(action: 'summon' | 'leave' | 'interactive' | 'capture', on?: boolean): Promise<unknown> | void;
-  /** Where the goose's beak is while it holds the pointer (moves the real pointer on Windows). */
-  gooseDrag?(x: number, y: number): void;
+  goose?(action: 'summon' | 'leave' | 'interactive', on?: boolean): Promise<unknown> | void;
+  /** The pointer's position (the click-through overlay can't see it), honks and shoos, for the goose. */
   onGoose?(cb: (e: { type: 'cursor'; x: number; y: number } | { type: 'honk' } | { type: 'shoo' }) => void): () => void;
   /** Clipboard history, kept in memory by the desktop app (Electron only). */
   clip?(action: 'list' | 'read' | 'remove' | 'pin' | 'clear', id?: number, on?: boolean): Promise<unknown>;
   onClips?(cb: (entries: unknown) => void): () => void;
+  /** The clipboard history window (Ctrl+Alt+Z): open or close it, turn the history on, or paste a pick. */
+  clipPicker?(action: 'show' | 'hide' | 'enable' | 'paste', text?: string): Promise<unknown>;
+  /** "shown" each time the clipboard history window opens. */
+  onClipPicker?(cb: (what: string) => void): () => void;
   /** Code lab: runs JavaScript in a hidden, network-blocked window (Electron only). */
   runCode?(code: string, inputs: string[]): Promise<unknown>;
   stopCode?(): Promise<unknown>;

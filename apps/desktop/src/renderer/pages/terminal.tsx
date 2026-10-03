@@ -330,7 +330,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
         tab === 'commands'
           ? `Run ${shellName} commands. Each command starts fresh in the folder shown; type “cd folder” to move, or start with ? to ask for a command. Commands are recorded in the audit log.`
           : tab === 'fbrx1'
-            ? 'FBRX/1 manages FBRX OS itself, like the command line of a switch or firewall: show, request, configure and commit.'
+            ? 'FBRX/1 manages FBRX itself, like the command line of a switch or firewall: show, request, configure and commit.'
             : tab === 'code'
               ? 'Write code with Fabrix beside you. Sandboxed: JavaScript runs with no network or file access, PowerShell and batch only in Windows Sandbox, everything else is explained, not run.'
             : 'Command lines of switches, firewalls, access points and servers, over SSH or Telnet, with the maker\'s guide alongside.'
@@ -418,7 +418,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
                               title="Save as a snippet"
                               onClick={() => void call('snippets.save', { title: b.command.slice(0, 70), language: IS_WIN ? 'powershell' : 'shell', content: b.command, tags: ['terminal'] }).then(() => toast.success('Saved to Snippets'))}
                             />
-                            <AskButton iconOnly label="Explain this output" prompt={`I ran this command in the FBRX OS terminal (${b.shell})${b.code ? ` and it failed (exit code ${b.code})` : ''}. Explain the output in plain language${b.code ? ', what went wrong and how to fix it' : ' and anything I should act on'}.\n\nCommand: ${b.command}`} context={b.out.map((o) => o.text).join('').slice(-8000)} />
+                            <AskButton iconOnly label="Explain this output" prompt={`I ran this command in the FBRX terminal (${b.shell})${b.code ? ` and it failed (exit code ${b.code})` : ''}. Explain the output in plain language${b.code ? ', what went wrong and how to fix it' : ' and anything I should act on'}.\n\nCommand: ${b.command}`} context={b.out.map((o) => o.text).join('').slice(-8000)} />
                           </>
                         )}
                       </>
@@ -443,7 +443,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
                 className="mono term-box"
                 rows={Math.min(6, Math.max(1, cmd.split('\n').length))}
                 value={cmd}
-                placeholder={`${shellName} command (Shift+Enter for a new line, ? to ask, / for macros)`}
+                placeholder={`${shellName} command (Shift+Enter for a new line, ? to ask, / for snippets)`}
                 aria-label="Command"
                 autoFocus
                 onChange={(e) => setCmd(e.target.value)}

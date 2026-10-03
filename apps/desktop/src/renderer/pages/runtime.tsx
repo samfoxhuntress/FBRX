@@ -142,7 +142,7 @@ export function RuntimePage() {
         </Card>
       </Grid>
       {ai?.providers.some((p) => p.id === 'ollama' && p.enabled) && <OllamaModels defaultProvider={ai.defaultProvider} defaultModel={ai.defaultModel || (ai.providers.find((p) => p.id === 'ollama')?.defaultModel ?? '')} onUse={(m) => void useModel('ollama', m, m)} locked={isLocked(locked, 'ai.defaultProvider')} busy={busy === 'use'} />}
-      <Card title="Model catalog" subtitle="Open-weight models tested with FBRX OS tool calling. Downloads resume if interrupted and are checksummed.">
+      <Card title="Model catalog" subtitle="Open-weight models tested with FBRX tool calling. Downloads resume if interrupted and are checksummed.">
         <div className="choice-grid">
           {(catalog.data ?? []).map((m) => {
             const dl = downloads[m.id];

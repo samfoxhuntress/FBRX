@@ -34,6 +34,9 @@ const COLORS: Record<string, [string, string]> = {
   father: ['#9a6cf0', '#3d1f7a'],
   wookiee: ['#a9784c', '#4e3018'],
   mirror: ['#d14b8f', '#5a1f73'],
+  synergy: ['#5fb0c9', '#1f5d73'],
+  wingman: ['#3fcf9a', '#0f5b48'],
+  topwing: ['#f2c14e', '#8a5a00'],
 };
 
 /** The picture on each badge, drawn in a 64 × 64 box. */
@@ -273,6 +276,37 @@ function Glyph({ id }: { id: string }): ReactNode {
           <text x="32" y="50" textAnchor="middle" fontSize="7" fontWeight="800" fill="#fff">YOU?</text>
         </g>
       );
+    case 'synergy':
+      return (
+        <g>
+          <rect x="13" y="14" width="38" height="28" rx="3" fill="#fff" stroke="#2c4a57" strokeWidth="1.3" />
+          <path d="M18 36 L26 29 L32 33 L45 20" stroke="#e0262b" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M40 19 L46 19 L46 25" stroke="#e0262b" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M31 42 L27 52 M33 42 L37 52" stroke="#2c4a57" strokeWidth="1.6" strokeLinecap="round" />
+          <text x="32" y="22" textAnchor="middle" fontSize="5" fontWeight="800" fill="#2c4a57">Q3</text>
+        </g>
+      );
+    case 'wingman':
+      return (
+        <g>
+          <circle cx="32" cy="33" r="18" fill="#0d2a22" stroke="#9ff0c8" strokeWidth="1.4" />
+          <circle cx="32" cy="33" r="11" fill="none" stroke="#3fcf9a" strokeWidth="0.9" opacity="0.7" />
+          <path d="M32 15 V51 M14 33 H50" stroke="#3fcf9a" strokeWidth="0.7" opacity="0.6" />
+          <path d="M32 33 L45 21 A18 18 0 0 1 50 33 Z" fill="#3fcf9a" opacity="0.45" />
+          <circle cx="41" cy="27" r="2" fill="#d9fff0" />
+          <circle cx="24" cy="39" r="1.5" fill="#d9fff0" opacity="0.7" />
+        </g>
+      );
+    case 'topwing':
+      return (
+        <g>
+          <path d="M32 26 Q22 22 10 23 Q14 27 20 28 Q14 29 12 31 Q20 32 26 31 Q22 33 20 35 Q27 35 32 32 Z" fill="#ffe08a" stroke="#8a5a00" strokeWidth="1" />
+          <path d="M32 26 Q42 22 54 23 Q50 27 44 28 Q50 29 52 31 Q44 32 38 31 Q42 33 44 35 Q37 35 32 32 Z" fill="#ffe08a" stroke="#8a5a00" strokeWidth="1" />
+          <circle cx="32" cy="30" r="5.5" fill="#f2c14e" stroke="#8a5a00" strokeWidth="1.2" />
+          <path d="M32 27 l1 2 2 .2 -1.6 1.3 .6 2 -2 -1.1 -2 1.1 .6 -2 -1.6 -1.3 2 -.2z" fill="#8a5a00" />
+          <path d="M24 44 h16" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" opacity="0.8" />
+        </g>
+      );
     case 'golden':
       return (
         <g>
@@ -337,7 +371,7 @@ export function TrophyCase({ enabled, onEnable }: { enabled: boolean; onEnable: 
           Easter eggs are switched off, so nothing new can be found. Badges you already found stay here.
         </Callout>
       )}
-      <Card title="Trophy case" subtitle="Every easter egg in FBRX OS has a badge. Greyed-out ones are still out there; each has a hint.">
+      <Card title="Trophy case" subtitle="Every easter egg in FBRX has a badge. Greyed-out ones are still out there; each has a hint.">
         <div className="trophy-head">
           <div className={`trophy-golden${golden ? ' found' : ''}`}>
             <TrophyBadge id="golden" found={!!golden} size={88} />

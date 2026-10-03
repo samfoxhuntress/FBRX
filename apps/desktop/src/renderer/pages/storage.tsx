@@ -312,7 +312,7 @@ export function StoragePage({ advanced }: { advanced: boolean }) {
           {!IS_WINDOWS && <Callout tone="info">Drive maintenance (optimize, check, partitions, BitLocker) is available on Windows.</Callout>}
           {IS_WINDOWS && !advanced && (
             <Callout tone="info" actions={<Button size="sm" onClick={() => navigate('settings/appearance')}>Settings</Button>}>
-              Turn on Advanced mode to see physical disks, partitions, health and drive maintenance.
+              Endpoint Ultra shows physical disks, partitions, health and drive maintenance.
             </Callout>
           )}
         </>

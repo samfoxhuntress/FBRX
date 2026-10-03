@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentEvent, ApprovalRequest, ChatMessage, ProviderStatus, ToolCallRecord } from '@fbrx/shared';
-import { NATURAL_PREFIX, addressAs } from '@fbrx/shared';
+import { NATURAL_PREFIX, addressAs, funEnabled } from '@fbrx/shared';
 import { Button, Callout, Card, Icons, Modal, Select, Status, TextArea, timeAgo, useAction, useConfirm, type IconName, FbrxMark } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
@@ -14,6 +14,8 @@ import { acknowledgement } from '../voice/acknowledge';
 import { startThinkingSound, stopThinkingSound } from '../voice/thinking-sound';
 import { useVoiceChat } from '../voice/use-voice-chat';
 import { ModelDownload } from './settings-voice';
+import { summonGoose } from '../fun';
+import { useTier } from '../edition';
 
 const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'activity', title: 'Check my PC', prompt: 'Give me a quick health check of this computer: performance right now, storage, security status and any recent errors. Tell me what (if anything) needs attention.' },
@@ -142,6 +144,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
   const convs = useCore('ai.conversations.list', undefined, []);
   const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed']);
   const settings = useCore('settings.get', undefined, ['settings.changed']);
+  const tier = useTier();
   const [selected, setSelected] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState<{ messageId: string; text: string } | null>(null);
@@ -355,6 +358,8 @@ export function AgentPage({ agentName }: { agentName: string }) {
       const r = await call('ai.chat', { conversationId: selected ?? undefined, message, providerId: providerId || undefined, model: model || undefined, offline: selected ? undefined : offline });
       // A fast run may already have finished before this reply arrived.
       if (!activeRunDone.current.has(r.runId)) setActiveRun(r);
+      // Your wingman shows up in person, too.
+      if (/^talk\s+to\s+me,?\s+goose\W*$/i.test(message) && funEnabled(settings.data?.settings, tier)) summonGoose();
       if (!selected) {
         setSelected(r.conversationId);
         convs.reload();
@@ -504,7 +509,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
           <TextArea
             ref={composerRef}
             value={input}
-            placeholder={activeRun ? `${agentName} is working…` : `Ask ${agentName} to do something — Enter to send, Shift+Enter for a new line, / for macros`}
+            placeholder={activeRun ? `${agentName} is working…` : `Ask ${agentName} to do something — Enter to send, Shift+Enter for a new line, / for snippets`}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (slash.onKeyDown(e)) return;

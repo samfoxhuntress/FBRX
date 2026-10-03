@@ -19,7 +19,7 @@ const KIND_ICON: Record<SpotlightItem['kind'], IconName> = {
   snippet: 'code',
   recent: 'history',
 };
-const KIND_LABEL: Partial<Record<SpotlightItem['kind'], string>> = { app: 'Apps', file: 'Files', page: 'FBRX OS', command: 'Settings & commands', note: 'Notes', task: 'Tasks', snippet: 'Snippets', recent: 'Recent' };
+const KIND_LABEL: Partial<Record<SpotlightItem['kind'], string>> = { app: 'Apps', file: 'Files', page: 'FBRX', command: 'Settings & commands', note: 'Notes', task: 'Tasks', snippet: 'Snippets', recent: 'Recent' };
 
 /** The Spotlight launcher (its own small window, opened with the global hotkey). */
 export function SpotlightView({ agentName, fun }: { agentName: string; fun: boolean }) {
@@ -51,11 +51,7 @@ export function SpotlightView({ agentName, fun }: { agentName: string; fun: bool
     setAnswer(null);
     setConfirmItem(null);
     setMessage(null);
-    if (fun && NOTHING_IS_IMPOSSIBLE.test(q)) {
-      void call('settings.update', { patch: { appearance: { advancedMode: true } } })
-        .then(() => setMessage(LUKE_1_37))
-        .catch(() => undefined);
-    }
+    if (fun && NOTHING_IS_IMPOSSIBLE.test(q)) setMessage(LUKE_1_37);
     return () => {
       alive = false;
       clearTimeout(t);

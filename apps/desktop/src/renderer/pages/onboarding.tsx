@@ -50,7 +50,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <FbrxMark className="fx-brand-mark" size={34} />
           <div>
-            <div className="fx-brand-name">FBRX OS</div>
+            <div className="fx-brand-name">FBRX Endpoint</div>
             <div className="fx-brand-sub">Fabrics Operating System</div>
           </div>
         </div>
@@ -63,7 +63,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
           {step === 'welcome' && (
             <div className="fx-form">
               <h1>Welcome to your workstation's operating layer</h1>
-              <p className="fx-secondary">FBRX OS gives you a private AI agent that can work with your files, apps and systems — governed by clear rules, audited end to end, and backed up so you can move to any computer.</p>
+              <p className="fx-secondary">FBRX gives you a private AI agent that can work with your files, apps and systems — governed by clear rules, audited end to end, and backed up so you can move to any computer.</p>
               <ProfileFields name={profile.name} callMe={profile.callMe} onChange={setProfile} autoFocus />
               <Field label="Name this workstation">
                 <Input value={name} onChange={(e) => setName(e.target.value)} />
@@ -85,7 +85,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
                   Continue
                 </Button>
               </div>
-              <p className="fx-muted" style={{ fontSize: 13, margin: 0 }}>Moving from another computer? Restore its snapshot and FBRX OS picks up exactly where it left off.</p>
+              <p className="fx-muted" style={{ fontSize: 13, margin: 0 }}>Moving from another computer? Restore its snapshot and FBRX picks up exactly where it left off.</p>
             </div>
           )}
           {step === 'vault' && (
@@ -165,7 +165,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
           {step === 'done' && (
             <div className="fx-form">
               <h1>You're set</h1>
-              <Callout tone="good">FBRX OS is running. Try asking the agent to summarize this workstation's health, or connect your first app under Connections.</Callout>
+              <Callout tone="good">FBRX is running. Try asking the agent to summarize this workstation's health, or connect your first app under Connections.</Callout>
               <p className="fx-secondary">Tip: create a snapshot under Backup & restore before you change computers — it brings everything with you.</p>
               <div className="fx-actions" style={{ justifyContent: 'flex-end' }}>
                 <Button
@@ -179,7 +179,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
                     })
                   }
                 >
-                  Open FBRX OS
+                  Open FBRX Endpoint
                 </Button>
               </div>
             </div>

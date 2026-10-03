@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
   LICENSE_FILE_NAME,
+  decodeLicenseUnverified,
   PRODUCT_NAME,
   ProvisioningFileSchema,
   addressAs,
@@ -224,7 +225,7 @@ export class Kernel {
       allowedRoots: () => this.policy.allowedRoots(),
       halt: () => this.aiHalt(),
       fun: {
-        enabled: () => funEnabled(this.settings.get()),
+        enabled: () => funEnabled(this.settings.get(), this.license.status().tier),
         trophy: (id) => void this.trophies.unlock(id),
         persona: {
           get: (c) => this.meta.get<string>(`agent.persona.${c}`),
@@ -310,7 +311,7 @@ export class Kernel {
       workspace: this.workspace,
       webSearch: () => this.settings.get().spotlight.webSearch,
       fileSearch: () => this.settings.get().spotlight.fileSearch,
-      easterEggs: () => funEnabled(this.settings.get()),
+      easterEggs: () => funEnabled(this.settings.get(), this.license.status().tier),
     });
     this.vendors = new VendorDb({
       builtinFile: this.platform.vendorDbFile ?? null,
@@ -319,7 +320,7 @@ export class Kernel {
       internet: () => this.internetAllowed(),
     });
     this.net = new NetDiag({ db: this.db, events: this.events, vendors: this.vendors, internet: () => this.internetAllowed() });
-    this.trophies = new Trophies({ meta: this.meta, events: this.events, enabled: () => funEnabled(this.settings.get()) });
+    this.trophies = new Trophies({ meta: this.meta, events: this.events, enabled: () => funEnabled(this.settings.get(), this.license.status().tier) });
     this.migrator = new Migrator({
       events: this.events,
       log: L('migrate'),
@@ -709,7 +710,10 @@ export class Kernel {
     this.applyLicenseFile();
     // Look for new versions in the FBRX repository (the desktop app only; servers and tests don't).
     if (this.platform.shell === 'desktop') this.release.start();
-    void this.applyProvisioning().catch((err) => this.log.error('Provisioning failed', { error: errorMessage(err) }));
+    // A provisioning file (IT deployment) goes first; a license that names an FBRX Command tenant joins after it.
+    void this.applyProvisioning()
+      .catch((err) => this.log.error('Provisioning failed', { error: errorMessage(err) }))
+      .then(() => this.joinLicenseTenant('license'));
     this.audit.prune(365);
   }
 
@@ -743,6 +747,40 @@ export class Kernel {
     if (this.fleet.enrolled) {
       await this.fleet.stop();
       this.fleet.start();
+    }
+    // A license that names an FBRX Command tenant waits for the vault before it can join.
+    void this.joinLicenseTenant('license');
+  }
+
+  /**
+   * A license key that names an FBRX Command tenant joins this computer to it: once per license, and never while it
+   * already belongs to a tenant. Leaving the tenant afterwards is respected (it does not join again by itself).
+   */
+  joinLicenseTenant(actor: string): Promise<{ joined: boolean; message: string | null }> {
+    // One attempt at a time: start-up, a vault unlock and an activation can all ask at once.
+    this.joining ??= this.joinLicenseTenantOnce(actor).finally(() => (this.joining = null));
+    return this.joining;
+  }
+
+  private joining: Promise<{ joined: boolean; message: string | null }> | null = null;
+
+  private async joinLicenseTenantOnce(actor: string): Promise<{ joined: boolean; message: string | null }> {
+    const st = this.license.status();
+    const key = this.meta.get<string>('license.local');
+    const claims = st.state === 'valid' && st.source === 'local' && key ? decodeLicenseUnverified(key) : null;
+    const command = claims?.command;
+    if (!claims || !command) return { joined: false, message: null };
+    if (this.fleet.enrolled) return { joined: false, message: null };
+    if (this.meta.get<string>('license.joinedTenantFor') === claims.lid) return { joined: false, message: null };
+    if (!this.vault.isUnlocked) return { joined: false, message: 'This computer joins your organization (FBRX Command) as soon as the vault is unlocked.' };
+    try {
+      const f = await this.fleet.enroll(command.url, command.enrollmentToken, undefined, actor);
+      this.meta.set('license.joinedTenantFor', claims.lid);
+      this.audit.append({ category: 'license', action: 'tenant.joined', actor, target: command.url, outcome: 'success', details: { licenseId: claims.lid, tenant: f.tenantName } });
+      return { joined: true, message: `Joined ${f.tenantName ?? 'your organization'} on FBRX Command.` };
+    } catch (err) {
+      this.log.warn('Could not join the FBRX Command tenant from the license', { error: errorMessage(err) });
+      return { joined: false, message: `The license is active, but joining FBRX Command failed: ${errorMessage(err)}. It tries again at the next start.` };
     }
   }
 

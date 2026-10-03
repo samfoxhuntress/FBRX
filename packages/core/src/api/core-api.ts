@@ -274,7 +274,12 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     },
 
     'license.status': () => k.license.status(),
-    'license.activate': (p) => k.license.activate(z.object({ key: z.string() }).parse(p).key),
+    'license.activate': async (p, ctx) => {
+      const status = k.license.activate(z.object({ key: z.string() }).parse(p).key);
+      // A key from an FBRX Command tenant joins this computer to it.
+      const join = await k.joinLicenseTenant(ctx.actor);
+      return join.message ? { ...k.license.status(), message: join.message } : status;
+    },
     'license.remove': () => k.license.remove(),
 
     'updates.status': () => k.updateStatus(),

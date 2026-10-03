@@ -17,7 +17,7 @@ export const TROPHIES: TrophyInfo[] = [
   { id: 'shoo', name: 'Shoo!', hint: 'Even geese have limits.', how: 'Clicked the goose three times until it gave up and went home.' },
   { id: 'konami', name: 'Cheat Code', hint: 'Up, up, down, down…', how: 'Typed the classic cheat code: ↑ ↑ ↓ ↓ ← → ← → B A.' },
   { id: 'loom', name: 'Master Weaver', hint: 'The logo likes attention.', how: 'Clicked the FBRX logo seven times in a row.' },
-  { id: 'goggles', name: 'Safety First', hint: 'Advanced mode has a lab with a dress code.', how: 'Opened The Lab in the Library (safety goggles sold separately).' },
+  { id: 'goggles', name: 'Safety First', hint: 'The Library has a lab with a dress code.', how: 'Opened The Lab in the Library (safety goggles sold separately).' },
   { id: 'stories', name: 'Storyteller', hint: 'Ask the Library for a story.', how: 'Searched the Library for "tell me a story" and found Story time.' },
   { id: 'matrix', name: 'Digital Rain', hint: 'Some say the Terminal is made of falling green letters.', how: 'Typed matrix in the Terminal and watched the code rain.' },
   { id: 'sandwich', name: 'Sandwich Artist', hint: 'Ask the Terminal nicely. With authority.', how: 'Typed sudo make me a sandwich.' },
@@ -25,7 +25,7 @@ export const TROPHIES: TrophyInfo[] = [
   { id: 'edge', name: 'On the Edge', hint: 'Keep flipping.', how: 'Flipped a coin in the Decision maker and it landed on its edge.' },
   { id: 'nat20', name: 'Natural 20', hint: 'Roll for initiative.', how: 'Rolled a 20 on the Decision maker\'s d20.' },
   { id: 'jigowatts', name: 'Time Traveler', hint: 'Impatient with the speed test?', how: 'Clicked the speed test eight times and hit 88 miles per hour.' },
-  { id: 'stapler', name: 'My Stapler', hint: 'Fabrix knows where the office supplies went.', how: 'Asked Fabrix where your stapler is.' },
+  { id: 'stapler', name: 'My Stapler', hint: 'Ask Fabrix if anyone has seen your stapler.', how: 'Asked Fabrix where your stapler is, and met the manager.' },
   { id: 'loose', name: 'Loose Screw', hint: 'One dashboard panel rattles.', how: 'Clicked the loose dashboard panel until it fell off.' },
   { id: 'flaps', name: 'Flap Happy', hint: 'The board on the dashboard is touchy.', how: 'Ran your mouse across twenty split-flap letters.' },
   { id: 'chicken', name: 'Nobody Calls Me Chicken', hint: 'Choose a braver name for yourself in Settings. Or a less brave one.', how: 'Asked FBRX to call you "chicken". Bawk.' },
@@ -35,6 +35,9 @@ export const TROPHIES: TrophyInfo[] = [
   { id: 'father', name: 'Plot Twist', hint: 'Say no to your furry co-pilot. Loudly. With extra o\'s.', how: 'Said "Nooo" and learned a family secret.' },
   { id: 'mirror', name: "Who's Who?", hint: 'On the Mesh page, ping a computer three times in a row. No other computer? Ping yourself (your own address).', how: 'Two computers pinged each other and started pointing fingers.' },
   { id: 'wookiee', name: 'Growl Whisperer', hint: 'Keep your furry co-pilot talking.', how: 'Kept a conversation going in growls for five messages.' },
+  { id: 'synergy', name: 'Synergy Achieved', hint: 'Once the manager starts talking, let him keep going.', how: 'Sat through five answers of pure corporate jargon. That would be great.' },
+  { id: 'wingman', name: 'Back-Seat Radar', hint: 'Ask the goose to talk to you, the way a hotshot pilot asks his radar officer.', how: 'Said "Talk to me, Goose" and your wingman got on the radio.' },
+  { id: 'topwing', name: 'Wingman for Life', hint: 'Keep your wingman on the radio.', how: 'Kept the radio chatter going for five messages.' },
 ];
 
 /** Unlocked by itself once every other trophy is found. */

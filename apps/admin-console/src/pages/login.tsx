@@ -9,8 +9,8 @@ function Centered({ children }: { children: React.ReactNode }) {
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 18 }}>
           <FbrxMark className="fx-brand-mark" size={34} />
           <div>
-            <div className="fx-brand-name">FBRX OS</div>
-            <div className="fx-brand-sub">Admin console</div>
+            <div className="fx-brand-name">FBRX Command</div>
+            <div className="fx-brand-sub">Tenant controller for FBRX Endpoint</div>
           </div>
         </div>
         {children}
@@ -45,7 +45,7 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
   };
   return (
     <Centered>
-      <Card title="Sign in" subtitle="Manage your FBRX OS workstations">
+      <Card title="Sign in" subtitle="Manage your FBRX Endpoint computers">
         <form className="fx-form" onSubmit={submit}>
           {error && <Callout tone="critical">{error}</Callout>}
           <Field label="Email">
@@ -89,7 +89,7 @@ export function SetupPage({ onDone }: { onDone: () => void }) {
   };
   return (
     <Centered>
-      <Card title="Set up your control plane" subtitle="Create the platform administrator account">
+      <Card title="Set up FBRX Command" subtitle="Create the platform administrator account">
         <form className="fx-form" onSubmit={submit}>
           <Callout tone="info">The one-time setup token is printed in the control plane's log on first start (or set FBRX_CP_SETUP_TOKEN).</Callout>
           {error && <Callout tone="critical">{error}</Callout>}

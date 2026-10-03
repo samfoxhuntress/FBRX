@@ -8,7 +8,7 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 
 ## Look and feel
 
-**Settings → Appearance** is the theme studio:
+**Settings → Appearance** is the theme studio in FBRX Endpoint Ultra (Endpoint Basic has the plain light and dark look, with the layout and behavior options below):
 
 | Option | Choices |
 | --- | --- |
@@ -17,11 +17,11 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 | Accent color | Any color; text on buttons switches between dark and light ink automatically |
 | Density | Compact, comfortable, spacious |
 | Corners | Sharp, rounded, soft |
-| Texture | The theme's own (weave for Fabrics, palms for Tropical, a neon grid for Neon Grid, grain for Ember, dots for Midnight, carbon fiber for Graphite, waves for Ocean, linen for Forest…), or pick none, weave (a large basket weave), linen, grain, grid (glowing lines in the accent color), dots, carbon fiber, waves or palms; subtle, medium or bold. Drawn as sharp SVG patterns in the theme's ink on the sidebar, the top bar and the page behind the cards (never behind text in cards) |
+| Texture | The theme's own (weave for Fabrics, palms for Tropical, a neon grid for Neon Grid, grain for Ember, dots for Midnight, carbon fiber for Graphite, waves for Ocean, linen for Forest…), or pick none, weave (a small basket weave), linen, grain, grid (glowing lines in the accent color), dots, carbon fiber, waves or palms. A **Strength** slider sets how much it shows, from 0 to 100% in steps of 5 (new installs start at a soft 50%; even 100% stays quieter than the old *bold*). Drawn as sharp SVG patterns in the theme's ink on the sidebar, the top bar and the page behind the cards (never behind text in cards) |
 | Text and interface size | 85–130 % |
 | Motion and start-up | Reduce motion; start-up animation (the FBRX logo stitched in) and start-up sound (from the FBRX intro, on by default, with a Listen button) |
 | Effects | Auto, Full or Lite. Lite turns off frosted glass, glows and decorative animation; Auto picks Lite on computers with four or fewer processor threads or 4 GB of memory |
-| Fun extras | Hidden until unlocked (see [EASTER_EGGS.md](EASTER_EGGS.md), spoilers). Then: easter eggs and jokes, the Silly Goose's occasional visits, a *Release the goose* button and the **Trophy case**. An organization can lock fun extras off |
+| Fun extras | Endpoint Ultra (see [EASTER_EGGS.md](EASTER_EGGS.md), spoilers): easter eggs and jokes, the Silly Goose's occasional visits, a *Release the goose* button and the **Trophy case**. An organization can lock fun extras off |
 
 Chart series and status colors stay on the validated design-system palette in every theme, so charts remain
 readable for color-blind users. Organizations can lock any appearance setting from the admin console.
@@ -39,7 +39,7 @@ section to open its pages (one at a time; the section of the page you are on ope
 | **Workbench** | Files, Task Manager, Clipboard, Copy & migrate, Toolbox, Library |
 | **Orbit** | Mesh & phone, AI models, AI coordination, Connections, Tools & plugins |
 | **Shield** | Approvals, Credentials, Governance, Backup & restore |
-| **Lab** | Terminal, Virtual lab (Advanced mode) |
+| **Lab** | Terminal, Virtual lab (Endpoint Ultra) |
 | **Control** | Organization, Settings |
 
 **Collapse** at the bottom folds the sidebar down to the section icons (remembered on this computer); click an icon
@@ -47,17 +47,28 @@ and its pages slide out beside it. Counts (unread alerts, waiting approvals) sho
 
 ### Version names
 
-FBRX OS is in alpha: versions read **FBRX OS Alpha 1.8.1**. Each minor version also gets a codename from cloth,
+FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.8.2** (or Basic). Each minor version also gets a codename from cloth,
 fiber to fabric, shown in **Settings → Logs & about**: 1.8 *Spindle*, then *Bobbin*, *Shuttle*, *Heddle*, and 2.0
 *Loom* (later *Warp*, *Weft*, *Selvedge*, *Tapestry*).
 
-### Basic and Advanced mode
+### FBRX Endpoint Basic and Ultra
 
-**Basic** shows everyday tools. **Advanced** adds the expert ones, each marked with an **Advanced** tag wherever it
-appears: the Terminal and the virtual lab (in an *Advanced* section of the sidebar), disks and partitions, Defender
-settings, network adapter configuration, scanning a custom subnet, the bug catcher's event log view, and the
-developer tools in the Toolbox (JSON, Base64, URL, hashes, UUIDs, timestamps, regex, JWT, subnet calculator). Switch
-with the **Advanced** switch in the top bar or the *Experience* card at the top of **Settings**.
+The desktop app comes as two products, decided by the license (there is no switch to flip):
+
+| | **FBRX Endpoint Basic** | **FBRX Endpoint Ultra** |
+| --- | --- | --- |
+| How you get it | Out of the box, no license key | A license key (Settings → License → *Upgrade to Ultra*), or the FBRX Command tenant this computer belongs to |
+| Everyday tools | FBRX Glass, Fabrix (local models and your own cloud AI keys), alerts, tasks, notes, projects, snippets, storage, security, updates, bug catcher, Network Center, files, Task Manager, clipboard (with Ctrl+Alt+Z history), Copy & migrate, Toolbox, Library, AI models, approvals, credentials, backup & restore | Everything in Basic |
+| Expert tool sets | — | Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, network adapters, custom scan ranges, device consoles, the developer tools in the Toolbox, The Lab in the Library, the Local API |
+| Connect | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance |
+| Look | Light, dark or follow the computer: plain, no theme colors, gradients or textures | The theme studio: eleven themes, accent colors, gradients and textures (with a strength slider) |
+| Fun | — | Easter eggs, the Silly Goose and the trophy case |
+
+Ultra features are marked with an **Ultra** tag. In Basic, an Ultra page opens a short card saying what it does and
+how to get it. The edition shows beside the name in the sidebar, at the top of **Settings**, in the window title and
+under **Settings → Logs & about**. Licenses: Community runs Basic; Pro and Enterprise run Ultra; a license can also
+say which one outright (see [LICENSING.md](LICENSING.md)). Developers can try Basic in a development build with
+`FBRX_EDITION=basic`.
 
 ### Your name
 
@@ -122,22 +133,47 @@ for you to read (it is not added to the conversation the model sees as text) and
 | **Snippets** | Reusable commands and text; press Enter in Spotlight to copy one |
 | **Files** | Places and drives, folder search, previews (text and images), a plain-text editor |
 | **Task Manager** | Three tabs. **Processes**: live list by CPU or memory with search, details and End task (core Windows processes are protected); *What is this?* on any process, and *What's using my PC?* / *Anything suspicious?* in the Fabrix panel beside it. **Performance**: live processor, memory and network graphs, every core, uptime, battery and temperature. **Event Viewer**: see below |
-| **Clipboard** | A copy-and-paste processor. Paste text (or type `/` for macros and snippets), add steps — trim, remove blank or duplicate lines, sort, straighten quotes, strip HTML or terminal colors, change case (UPPER, Title, camelCase, snake_case…), find and replace (plain or regular expression), keep or drop matching lines, extract emails, web addresses, IP or MAC addresses and numbers, join or split, wrap each line, number lines, JSON format/minify, CSV or Excel cells → Markdown table, Base64 and URL encode/decode — and the result updates as you go. **Save as macro** keeps the steps; ▶ next to a saved macro runs it straight on the clipboard (copy, click, paste). Optional **History** keeps the last 50 things you copied while FBRX runs (see Security) |
+| **Clipboard** | A copy-and-paste processor. Paste text (or type `/` for snippets), add steps — trim, remove blank or duplicate lines, sort, straighten quotes, strip HTML or terminal colors, change case (UPPER, Title, camelCase, snake_case…), find and replace (plain or regular expression), keep or drop matching lines, extract emails, web addresses, IP or MAC addresses and numbers, join or split, wrap each line, number lines, JSON format/minify, CSV or Excel cells → Markdown table, Base64 and URL encode/decode — and the result updates as you go. **Save as transform** keeps the steps; ▶ next to a saved transform runs it straight on the clipboard (copy, click, paste). Optional **History** keeps the last 50 things you copied while FBRX runs (see Security), and **Ctrl+Alt+Z** opens it anywhere (see Macros below) |
 | **Copy & migrate** | Copy, back up, mirror or move folders between drives, computers and network shares with **Robocopy** (Windows), **rsync** (Mac and Linux) or FBRX's own copier. Pick the folders, the tool and what to do (copy; new and changed only; mirror; move), skip clutter, retries, files at once, files and folders to leave out; the exact command is shown before it runs. **Preview** lists what would happen without changing anything; mirror and move ask first. Live output, counts and a summary, with *Explain this result*. Recipes: back up Documents, mirror to a NAS, copy a USB stick, move a project, and **Move my user folders to a new PC** (Desktop, Documents, Pictures, Music, Videos and Downloads, one after another). Guard rails refuse mirroring onto a drive root or a system or home folder, copying a folder into itself, and moving a whole drive or home folder away |
-| **Terminal** (advanced) | **What if?** next to Run has Fabrix explain what the command in the box would do — what it reads, changes, deletes or downloads, whether it needs admin rights, and a verdict — without running it. Runs commands with streaming output in **PowerShell 7** when it is installed, otherwise **Windows PowerShell 5.1**, or Command Prompt (picker in the header). A **reference panel** puts ready-made commands (network, system, disks, processes, repair, security, power, printing; admin-only ones marked), your snippets, the code in your notes, and each project's snippets and notes one click away; ▶ runs one (commands that change something ask first). Save any command you ran as a snippet. Start a line with `?` to ask Fabrix for a command. Every command is in the audit log. The **Code** tab is the code lab (below), the **Device consoles** tab holds SSH and Telnet sessions (see Network Center), and **FBRX/1** is the management console for FBRX itself (below) |
-| **Toolbox** | Passwords, QR codes (guest Wi-Fi codes phones join by scanning, links, text), text tools, compare text, sizes and numbers (why a 1 TB drive shows 931 GB; decimal, hex, binary), decision maker, colors. Advanced: JSON, Base64, URL, hashes, UUIDs, timestamps, regex, JWT, subnet calculator, MAC vendor lookup, port reference (with risky ports flagged) and the command library. Every tool has *Try* examples, and the top row recommends common jobs — all offline |
-| **Library** | 61 short how-tos (Windows basics, files, Wi-Fi, security, speed, devices, troubleshooting) with buttons that open the right Windows setting or ask Fabrix. In Advanced mode, **The Lab** adds power-user how-tos (install USBs, dual boot, a malware lab, device consoles, blue screen dumps, repairs, verifying downloads) and official download pages for Windows, Linux, security distributions and power tools, plus your computer maker's driver page. Safety goggles recommended (sold separately) |
+| **Terminal** (Ultra) | **What if?** next to Run has Fabrix explain what the command in the box would do — what it reads, changes, deletes or downloads, whether it needs admin rights, and a verdict — without running it. Runs commands with streaming output in **PowerShell 7** when it is installed, otherwise **Windows PowerShell 5.1**, or Command Prompt (picker in the header). A **reference panel** puts ready-made commands (network, system, disks, processes, repair, security, power, printing; admin-only ones marked), your snippets, the code in your notes, and each project's snippets and notes one click away; ▶ runs one (commands that change something ask first). Save any command you ran as a snippet. Start a line with `?` to ask Fabrix for a command. Every command is in the audit log. The **Code** tab is the code lab (below), the **Device consoles** tab holds SSH and Telnet sessions (see Network Center), and **FBRX/1** is the management console for FBRX itself (below) |
+| **Toolbox** | Passwords, QR codes (guest Wi-Fi codes phones join by scanning, links, text), text tools, compare text, sizes and numbers (why a 1 TB drive shows 931 GB; decimal, hex, binary), decision maker, colors. Ultra: JSON, Base64, URL, hashes, UUIDs, timestamps, regex, JWT, subnet calculator, MAC vendor lookup, port reference (with risky ports flagged) and the command library. Every tool has *Try* examples, and the top row recommends common jobs — all offline |
+| **Library** | 61 short how-tos (Windows basics, files, Wi-Fi, security, speed, devices, troubleshooting) with buttons that open the right Windows setting or ask Fabrix. In Endpoint Ultra, **The Lab** adds power-user how-tos (install USBs, dual boot, a malware lab, device consoles, blue screen dumps, repairs, verifying downloads) and official download pages for Windows, Linux, security distributions and power tools, plus your computer maker's driver page. Safety goggles recommended (sold separately) |
 
-### Macros and the / menu
+### Snippets and the / menu
 
-Type **/** in the Fabrix chat, the Terminal, FBRX/1, the Clipboard editor or any Fabrix side panel and your macros
-pop up; ↑ ↓ and Enter insert one. **/snip** lists your saved snippets (keep typing to search: `/snip dns`), **/clip**
-pastes the clipboard, **/date**, **/time** and **/now** insert the date and time, and **/macros** opens the editor.
-Program your own in **Settings → Macros**: the word you type, a description, where it works (everywhere, chat only, or
-Terminal and FBRX/1 only) and the text it types, with placeholders `{date}`, `{time}`, `{datetime}`, `{isodate}`,
-`{name}`, `{callme}`, `{host}`, `{clipboard}` and `{cursor}` (where the cursor lands). Three come built in: `/sig`
-(sign-off with your name), `/stamp` (date and time) and `/flushdns` (terminal). The same page lists your clipboard
-macros and the clipboard history switch.
+A **snippet** is text you paste often. Type **/** in the Fabrix chat, the Terminal, FBRX/1, the Clipboard editor or any
+Fabrix side panel and your quick snippets pop up; ↑ ↓ and Enter paste one. **/snip** lists the snippet library from
+**Studio → Snippets** (keep typing to search: `/snip dns`), **/clip** pastes the clipboard, **/date**, **/time** and
+**/now** insert the date and time, **/snippets** opens the editor and **/macros** the keyboard shortcuts. Program your
+own in **Settings → Snippets**: the word you type, a description, where it works (everywhere, chat only, or Terminal
+and FBRX/1 only) and the text it pastes, with placeholders `{date}`, `{time}`, `{datetime}`, `{isodate}`, `{name}`,
+`{callme}`, `{host}`, `{clipboard}` and `{cursor}` (where the cursor lands). Three come built in: `/sig` (sign-off with
+your name), `/stamp` (date and time) and `/flushdns` (terminal). The same page lists your clipboard transforms.
+
+### Macros: keyboard shortcuts
+
+A **macro** is a quick key that works anywhere, even while FBRX is in the background. **Settings → Macros** lists them;
+click one and press new keys to change it, or turn it off:
+
+| Macro | Default | What it does |
+| --- | --- | --- |
+| Clipboard history | **Ctrl+Alt+Z** | Opens your recent copies near the pointer, like Windows' Win+V |
+| Spotlight | **Alt+Space** | Search apps, files, settings and quick answers (Ctrl+K inside FBRX) |
+
+**The clipboard history** shows what you copied while FBRX was running, newest first:
+
+| Key | Does |
+| --- | --- |
+| **W / S** or **↑ / ↓** | Move up and down the list |
+| **Tab** / **~** | Slide right and left through ways to paste the chosen copy: *As copied*, *Clean*, *One line*, *Comma list*, *UPPERCASE*, *lowercase*, *Title Case*, *Quoted string*, then your saved clipboard transforms (formats that would not change it are skipped; a preview shows the result) |
+| Type anything else | Search your copies (while searching, W and S type letters; the arrows still move) |
+| **Enter** | Paste it into the app you were in (Windows; on a Mac it goes on the clipboard and you press ⌘V). Double-click works too |
+| **Delete** · **Ctrl+P** | Remove it · pin it (pinned copies stay when you clear the history) |
+| **Esc** | Clear the search, or close |
+
+The history is off until you turn it on (the first Ctrl+Alt+Z offers it, or **Settings → Macros**), lives in memory
+only and skips copies that password managers mark as secret. *Paste right away* can be turned off so a pick only goes
+on the clipboard.
 
 ### Code lab
 
@@ -255,8 +291,8 @@ Quiet hours hold back desktop and e-mail alerts that are not critical; a cooldow
 
 | Page | What it does |
 | --- | --- |
-| **Storage** | Drives with health and BitLocker state; clean temporary files; empty the Recycle Bin; "what is using space?" analyzer. Advanced: physical disks with wear and temperature, partitions, optimize / check / rename / extend |
-| **Security** | Microsoft Defender status, quick/full/folder scans, definitions update, threat history and removal; firewall profiles; listening ports (exposed vs local); what starts with Windows and unsigned programs running from user folders; file check (SHA-256, signature, VirusTotal with your key); **link check** (look-alike domains, redirects without running page code, domain age, certificate, VirusTotal); Windows Sandbox for unknown links and files. Advanced: Defender settings and exclusions |
+| **Storage** | Drives with health and BitLocker state; clean temporary files; empty the Recycle Bin; "what is using space?" analyzer. Ultra: physical disks with wear and temperature, partitions, optimize / check / rename / extend |
+| **Security** | Microsoft Defender status, quick/full/folder scans, definitions update, threat history and removal; firewall profiles; listening ports (exposed vs local); what starts with Windows and unsigned programs running from user folders; file check (SHA-256, signature, VirusTotal with your key); **link check** (look-alike domains, redirects without running page code, domain age, certificate, VirusTotal); Windows Sandbox for unknown links and files. Ultra: Defender settings and exclusions |
 | **Updates** | App updates through winget (one or all, with live output), pending Windows updates, third-party drivers oldest first, installed updates |
 | **Bug catcher** | Errors from the event log grouped by source, app crashes, blue screens, unexpected shutdowns, problem devices and stopped services — with one-click repairs (SFC, DISM, network reset, Windows Update reset, Explorer restart, icon cache, print queue, Store cache, clock resync, battery and energy reports) and "explain with Fabrix" |
 | **Virtual lab** (advanced) | **Room for a VM**: live processor, memory and disk gauges and which VM sizes fit right now (keeping 2 GB and a core for Windows). **My VMs**: cards with state, resources, network (isolate / internet / unplug), console, shut down, save, power off, named checkpoints, revert and delete (optionally keeping the disk). **New safe VM**: templates for Kali Linux, REMnux, FLARE-VM, Parrot Security, Ubuntu, a Windows 11 evaluation machine or your own disc, each with its official download page, a fit check and a setup guide from Fabrix; Generation 2, secure boot, a TPM for Windows guests and a first checkpoint. **Windows Sandbox**: launch it with a link or a read-only shared folder, networking on or off. **Readiness**: edition, firmware virtualization, memory, processors and account, plus turning on Hyper-V, Windows Sandbox, the Virtual Machine Platform and WSL. *Plan a lab* asks Fabrix to design one for this PC |
@@ -273,7 +309,7 @@ internet, the destination; names, makers and locations), **device discovery** (p
 UPnP, port fingerprints and MAC vendors identify PCs, phones, printers, TVs, cameras, smart-home devices and NAS),
 saved scans with comparison and CSV export, a **speedometer** speed test (download, upload, latency and jitter, with history), Wi-Fi (signal, channel, band, congestion by
 channel), Bluetooth devices with battery, printers (test page, queue, default, clear, restart spooler), DNS
-comparison, port checks and device consoles. Advanced: adapter configuration (DHCP, static, secondary addresses).
+comparison, port checks and device consoles (Ultra). Ultra: adapter configuration (DHCP, static, secondary addresses).
 
 Makers come from the **IEEE MAC address registry** that ships with FBRX OS (MA-L, MA-M and MA-S blocks, about 54,000
 entries, the most specific block wins; randomized phone and laptop addresses are recognized as such). *Update from
@@ -308,7 +344,7 @@ login outside FBRX.
   peers or remote commands); connections and disconnections are in the audit log.
 
 Device scans start from a chosen **network adapter**, and the subnet is filled in from it (limited to /22–/30, at most
-1022 addresses, so a scan takes about a minute). Advanced mode lets you type a different subnet.
+1022 addresses, so a scan takes about a minute). Endpoint Ultra lets you type a different subnet.
 
 A new device found by a scan raises the *Unknown device joined my network* alert when that rule is on.
 

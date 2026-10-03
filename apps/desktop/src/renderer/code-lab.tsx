@@ -159,7 +159,7 @@ export function CodeLabPanel() {
   const runCode = async () => {
     if (!doc) return;
     if (lang.runs === 'here') {
-      if (!bridge.runCode) return toast.info('Running code needs the FBRX OS desktop app');
+      if (!bridge.runCode) return toast.info('Running code needs the FBRX desktop app');
       setRunning(true);
       setOut(null);
       try {
@@ -410,7 +410,7 @@ export function CodeLabPanel() {
             codeActions={codeActions}
             onAsk={(t) => void ai.ask(t, `${t}\n\n(This is about the ${lang.name} file ${doc?.name ?? ''} in my code lab, attached below. When you change code, give it in a fenced code block with the language.)`, context())}
             empty={`Ask anything about ${doc?.name ?? 'your code'}: how it works, why it fails, how to add a feature. Select lines first to ask about just those.`}
-            placeholder="Ask about this code… (/ for macros)"
+            placeholder="Ask about this code… (/ for snippets)"
             actions={
               <>
                 <Button size="sm" disabled={!doc?.content.trim() || ai.busy} onClick={() => askAi('Explain this code', `Explain this ${lang.name} code for someone learning: first what it does, then walk through it section by section.`)}>

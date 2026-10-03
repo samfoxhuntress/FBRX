@@ -262,9 +262,9 @@ export function VoiceSettings() {
             label="Voice"
             help={
               bridge.platform === 'darwin'
-                ? 'More voices: System Settings → Accessibility → Spoken Content → System voice → Manage Voices. Premium voices (for example Jamie, a British man) sound best. Restart FBRX OS to see new ones.'
+                ? 'More voices: System Settings → Accessibility → Spoken Content → System voice → Manage Voices. Premium voices (for example Jamie, a British man) sound best. Restart FBRX to see new ones.'
                 : bridge.platform === 'win32'
-                  ? 'More voices: Settings → Time & language → Speech → Add voices, for example English (United Kingdom) for George and Hazel. Restart FBRX OS to see new ones.'
+                  ? 'More voices: Settings → Time & language → Speech → Add voices, for example English (United Kingdom) for George and Hazel. Restart FBRX to see new ones.'
                   : undefined
             }
           >

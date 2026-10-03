@@ -19,12 +19,12 @@ export function VaultPage() {
     if (
       await confirm({
         title: 'Delete every saved credential and start over?',
-        body: 'Your API keys, passwords and tokens in this vault are deleted, along with FBRX’s own keys (paired phones and computers need pairing again). FBRX OS restarts to finish. This cannot be undone.',
+        body: 'Your API keys, passwords and tokens in this vault are deleted, along with FBRX’s own keys (paired phones and computers need pairing again). FBRX restarts to finish. This cannot be undone.',
         danger: true,
         confirmLabel: 'Delete and start over',
       })
     )
-      await run('reset', () => call('vault.reset', { confirm: 'DELETE' }), 'Starting over: FBRX OS restarts');
+      await run('reset', () => call('vault.reset', { confirm: 'DELETE' }), 'Starting over: FBRX restarts');
   };
 
   useEffect(() => {
@@ -72,7 +72,7 @@ export function VaultPage() {
               checked={!!s?.passwordOnStart}
               disabled={s?.state !== 'unlocked'}
               onChange={(v) => setAskOnStart(v)}
-              label="Ask for it every time FBRX OS starts"
+              label="Ask for it every time FBRX starts"
             />
             <span className="fx-muted" style={{ fontSize: 12 }}>
               Off: credentials unlock by themselves on this computer and nothing asks for a password. On: they stay locked after every start until you type the passphrase.
@@ -84,7 +84,7 @@ export function VaultPage() {
             icon="lock"
             disabled={s?.state !== 'unlocked'}
             onClick={async () => {
-              if (await confirm({ title: 'Lock the vault?', body: s?.hasRecovery ? 'Tools and connections that need credentials stop working until you unlock with the passphrase or restart FBRX OS.' : 'You have no recovery passphrase, so the vault stays locked until FBRX OS restarts.', confirmLabel: 'Lock' })) await run('l', () => call('vault.lock'));
+              if (await confirm({ title: 'Lock the vault?', body: s?.hasRecovery ? 'Tools and connections that need credentials stop working until you unlock with the passphrase or restart FBRX.' : 'You have no recovery passphrase, so the vault stays locked until FBRX restarts.', confirmLabel: 'Lock' })) await run('l', () => call('vault.lock'));
             }}
           >
             Lock now

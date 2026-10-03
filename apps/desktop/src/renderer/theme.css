@@ -509,6 +509,8 @@
 :root[data-preset='paper'] { --glow: #d9b98c; }
 :root[data-preset='paper'][data-theme='dark'] { --glow: #5c3e1f; }
 :root[data-theme='light'] { --glow-strength: 0.55; }
+/* Endpoint Basic: plain light and dark, no glows (gradients and textures come with Ultra). */
+:root[data-edition='basic'][data-theme] { --glow-strength: 0; }
 
 :root:not([data-preset='contrast']) .fx-sidebar {
   /* A soft wash of the theme's glow at the top, and only a whisper of texture that fades out behind the menu. */
@@ -724,6 +726,17 @@
   padding: 6px 8px;
   font-size: 12px;
   border-top: 1px solid var(--border);
+}
+.tex-strength {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.tex-strength input[type='range'] {
+  flex: 1;
+  min-width: 0;
 }
 
 /* ------------------------------------------------------------------------------ Neon Grid extras */
@@ -1315,7 +1328,6 @@
     box-shadow 0.15s ease;
 }
 /* Top-right pills: the same lit-orange shape as the Ask button, much quieter. */
-:root:not([data-preset='contrast']) .fx-topbar .mode-pill,
 :root:not([data-preset='contrast']) .fx-topbar .model-pill {
   background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 15%, var(--surface-1)) 0%, color-mix(in srgb, var(--accent) 6%, var(--surface-1)) 100%);
   border-color: color-mix(in srgb, var(--accent) 28%, transparent);
@@ -1324,12 +1336,6 @@
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 3px 10px -6px color-mix(in srgb, var(--accent) 55%, transparent);
 }
-:root:not([data-preset='contrast']) .fx-topbar .mode-pill.on {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 34%, var(--surface-1)) 0%, color-mix(in srgb, var(--accent) 18%, var(--surface-1)) 100%);
-  border-color: color-mix(in srgb, var(--accent) 50%, transparent);
-  color: var(--text-primary);
-}
-:root:not([data-preset='contrast']) .fx-topbar .mode-pill:not(:disabled):hover,
 :root:not([data-preset='contrast']) .fx-topbar .model-pill:hover {
   filter: brightness(1.06);
   border-color: color-mix(in srgb, var(--accent) 45%, transparent);
