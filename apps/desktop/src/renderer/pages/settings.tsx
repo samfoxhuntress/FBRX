@@ -43,6 +43,7 @@ const sectionFromRoute = (): SectionId | null => (SECTIONS.some((x) => x.id === 
 
 export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   const ultra = useTier() === 'ultra';
+  const funUnlocked = useCore('settings.get', undefined, ['settings.changed']).data?.settings.appearance.funUnlocked ?? false;
   const sections = SECTIONS.filter((x) => ultra || !x.ultra);
   const [picked, setTab] = useState<SectionId>(() => sectionFromRoute() ?? 'general');
   const tab = sections.some((x) => x.id === picked) ? picked : 'general';
@@ -67,10 +68,10 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
             return (
               <div key={x.id}>
                 {header && <div className="settings-nav-group">{header}</div>}
-                <button className={`settings-nav-item${tab === x.id ? ' active' : ''}`} aria-current={tab === x.id ? 'page' : undefined} onClick={() => setTab(x.id)}>
+                <button className={`settings-nav-item${tab === x.id ? ' active' : ''}${x.id === 'trophies' && !funUnlocked ? ' locked' : ''}`} aria-current={tab === x.id ? 'page' : undefined} onClick={() => setTab(x.id)}>
                   <Ico size={15} />
                   <span>{x.label}</span>
-                  {x.ultra && <AdvancedTag />}
+                  {x.id === 'trophies' && !funUnlocked ? <Icons.lock size={12} className="settings-nav-lock" /> : x.ultra && <AdvancedTag />}
                 </button>
               </div>
             );
@@ -110,7 +111,7 @@ function EditionCard() {
         </div>
         <div className="fx-muted" style={{ fontSize: 12.5 }}>
           {ultra
-            ? 'Everything is on: expert tool sets, Mesh, AI coordination, connections and plugins, every theme, and the easter eggs.'
+            ? 'Everything is on: expert tool sets, Mesh, AI coordination, connections and plugins, and every theme.'
             : 'The everyday tools and the agent, with a simple light or dark look. A license key turns on Endpoint Ultra.'}
           {by && <> · {by}</>}
         </div>
@@ -294,7 +295,7 @@ function Appearance() {
           </div>
         </Card>
       </Grid>
-      {ultra && <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and the Silly Goose. Nothing here touches your files or settings.">
+      {ultra && a.funUnlocked && <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and the Silly Goose. Nothing here touches your files or settings.">
         <div className="fx-form">
           <Toggle checked={a.easterEggs} disabled={L('appearance.easterEggs')} onChange={(v) => void patch({ appearance: { easterEggs: v } })} label="Easter eggs and jokes" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -330,7 +331,30 @@ function Appearance() {
 function Trophies() {
   const { s, patch } = useSettings();
   if (!s) return null;
+  if (!s.appearance.funUnlocked) return <LockedCase />;
   return <TrophyCase enabled={s.appearance.easterEggs} onEnable={() => void patch({ appearance: { easterEggs: true } })} />;
+}
+
+/** Before 418: a locked display case with the badges' outlines behind the glass, and a hint. */
+function LockedCase() {
+  return (
+    <Card title="Trophy case" subtitle="Locked">
+      <div className="locked-case">
+        <div className="locked-case-glass" aria-hidden>
+          {Array.from({ length: 12 }, (_, i) => (
+            <span key={i} className="locked-case-slot" />
+          ))}
+        </div>
+        <div className="locked-case-lock">
+          <Icons.lock size={22} />
+          <div>
+            <b>This case is locked.</b>
+            <span>The key is short and stout.</span>
+          </div>
+        </div>
+      </div>
+    </Card>
+  );
 }
 
 const RESOURCE_HELP = {
@@ -574,23 +598,21 @@ function License() {
   if (!l || !s) return null;
   const ultra = l.tier === 'ultra';
   const activate = () => {
-    // 418: not a license at all, just a teapot. In Ultra it switches the easter eggs back on.
+    // 418: not a license at all, just a teapot. It unlocks the easter eggs, which live in Endpoint Ultra.
     if (key === '418') {
       setKey('');
-      if (!ultra) {
-        toast.info('418 I\'m a teapot', 'Short and stout. The easter eggs live in Endpoint Ultra, though.');
+      if (s.appearance.funUnlocked && s.appearance.easterEggs) {
+        toast.info('Still a teapot', ultra ? 'Short and stout, and already unlocked.' : 'Short and stout, and already unlocked. They come out with Endpoint Ultra.');
         return;
       }
-      if (s.appearance.easterEggs) {
-        toast.info('Still a teapot', 'Short and stout, and the easter eggs are already on.');
-        return;
-      }
-      void patch({ appearance: { easterEggs: true } }).then(() =>
+      void patch({ appearance: { funUnlocked: true, easterEggs: true } }).then(() =>
         toast.custom({
           title: '418 I\'m a teapot',
-          body: 'Short and stout, and the easter eggs, the Silly Goose and the Trophy case are back on. Have fun.',
+          body: ultra
+            ? 'Short and stout, and now unlocked: easter eggs, the Silly Goose and the Trophy case. Have fun.'
+            : 'Short and stout, and now unlocked. The easter eggs come out as soon as Endpoint Ultra is on.',
           icon: <TrophyBadge id="teapot" found size={36} />,
-          action: { label: 'Open the trophy case', onClick: () => navigate('settings/trophies') },
+          ...(ultra ? { action: { label: 'Open the trophy case', onClick: () => navigate('settings/trophies') } } : {}),
         }),
       );
       return;
@@ -600,7 +622,7 @@ function License() {
       () =>
         call('license.activate', { key }).then((r) => {
           setKey('');
-          toast.success(r.tier === 'ultra' ? 'Welcome to Endpoint Ultra' : 'License activated', r.message ?? (r.tier === 'ultra' ? 'Every tool, theme and easter egg is on.' : undefined));
+          toast.success(r.tier === 'ultra' ? 'Welcome to Endpoint Ultra' : 'License activated', r.message ?? (r.tier === 'ultra' ? 'Every tool and theme is on.' : undefined));
         }),
     );
   };

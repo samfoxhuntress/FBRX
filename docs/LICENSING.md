@@ -12,7 +12,8 @@ The desktop app is **FBRX Endpoint**, in two products:
   the user's own cloud AI key), with a plain light or dark look.
 * **FBRX Endpoint Ultra** — what a license turns on: expert tool sets (Terminal, FBRX/1, virtual lab, disks and
   partitions, Defender settings, adapters, device consoles, developer tools, the Local API), Mesh and AI coordination,
-  connections, tools and plugins, governance, the theme studio with its gradients and textures, and the easter eggs.
+  connections, tools and plugins, governance, the theme studio with its gradients and textures, and the easter eggs
+  (which still need their secret key).
 
 Which one a license runs is its **tier**: Community runs Basic, Pro and Enterprise run Ultra, and a license can name
 its tier outright (`tier: "basic"` or `"ultra"`), so a tenant decides what its users get. The tier and the features

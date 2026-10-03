@@ -25,6 +25,9 @@ describe('trophy case', () => {
     const { kernel, cleanup } = await makeKernel();
     try {
       expect(kernel.license.status().tier).toBe('ultra');
+      // Ultra alone is not enough: they stay hidden until someone enters 418.
+      expect(await kernel.call('fun.unlock', { id: 'loom' }, USER)).toEqual({ unlocked: false, golden: false });
+      kernel.settings.update({ appearance: { funUnlocked: true } });
       const events: any[] = [];
       kernel.events.on('fun.trophy', (e) => events.push(e));
       expect(await kernel.call('fun.unlock', { id: 'loom' }, USER)).toEqual({ unlocked: true, golden: false });
@@ -38,7 +41,7 @@ describe('trophy case', () => {
 
       const { kernel: k2, cleanup: c2 } = await makeKernel();
       try {
-        k2.settings.update({ appearance: { easterEggs: false } });
+        k2.settings.update({ appearance: { easterEggs: false, funUnlocked: true } });
         expect(await k2.call('fun.unlock', { id: 'loom' }, USER)).toEqual({ unlocked: false, golden: false });
       } finally {
         await c2();
@@ -82,6 +85,7 @@ describe('the stapler', () => {
     const { kernel, cleanup } = await makeKernel();
     const llm = await mockOpenAI(() => ({ text: 'Your disk has 120 GB free.' }));
     try {
+      kernel.settings.update({ appearance: { funUnlocked: true } });
       kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
       const events: AgentEvent[] = [];
       kernel.events.on('agent', (e) => events.push(e));
@@ -221,7 +225,7 @@ describe('chat eggs', () => {
     expect(chatEgg('roger', 'wingman:4')!.trophies).toEqual(['topwing']);
     // The stapler still finds the manager, even mid-flight.
     expect(chatEgg('Has anyone seen my stapler?', persona)).toMatchObject({ persona: 'jargon:0', trophies: ['stapler'] });
-    for (const q of ['Wheels down', 'return to base', 'land the plane', 'normal mode']) expect(chatEgg(q, persona)).toMatchObject({ persona: null, trophies: [] });
+    for (const q of ["That's a copy", 'that’s a copy.', 'That is a copy!', 'Wheels down', 'return to base', 'land the plane', 'normal mode']) expect(chatEgg(q, persona)).toMatchObject({ persona: null, trophies: [] });
   });
 
   it('turns Wookiee on "Chewie, we\'re home" until "Laugh it up, fuzzball", with the father line on Nooo', () => {
@@ -241,7 +245,7 @@ describe('chat eggs', () => {
     expect(chatEgg('Laugh it up, fuzzball', persona, r)).toMatchObject({ persona: null, trophies: ['fuzzball'] });
   });
 
-  it('stays out of the way in Endpoint Basic and wakes up with an Ultra license', async () => {
+  it('stays out of the way in Endpoint Basic, and in Ultra until 418 unlocks it', async () => {
     const keys = generateSigningKeyPair();
     const { kernel, cleanup } = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem] });
     const llm = await mockOpenAI(() => ({ text: 'Plain answer.' }));
@@ -254,10 +258,14 @@ describe('chat eggs', () => {
       expect(llm.requests).toHaveLength(1);
       const key = signLicense({ v: 1, lid: 'lic_u', tenantId: 't', customer: 'Acme', edition: 'pro', seats: 1, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null }, keys.privateKeyPem);
       expect(await kernel.call('license.activate', { key }, USER)).toMatchObject({ state: 'valid', tier: 'ultra' });
+      await kernel.call('ai.chat', { message: "Chewie, we're home" }, USER);
+      await waitFor(() => events.filter((e) => e.type === 'run.completed').length >= 2);
+      expect(llm.requests).toHaveLength(2);
+      kernel.settings.update({ appearance: { funUnlocked: true } });
       const r = (await kernel.call('ai.chat', { message: "Chewie, we're home" }, USER)) as any;
       expect(kernel.conversations.get(r.conversationId).messages.at(-1)!.content).toMatch(/^Rrrrrrr-ghghghghgh!/);
       expect(kernel.trophies.has('chewie')).toBe(true);
-      expect(llm.requests).toHaveLength(1);
+      expect(llm.requests).toHaveLength(2);
     } finally {
       await llm.close();
       await cleanup();

@@ -1,14 +1,16 @@
 # Easter eggs (spoilers)
 
-## Where they live: Endpoint Ultra
+## Unlocking them: Endpoint Ultra and 418
 
-The easter eggs, the Silly Goose and the trophy case come with **FBRX Endpoint Ultra**, along with the other Ultra
-features, as soon as a license key turns it on (or the FBRX Command tenant this computer belongs to). Endpoint Basic
-has none of them. **Settings → Appearance → Fun extras** has a switch to turn them off; an organization can turn them
-off and lock the setting from FBRX Command (`appearance.easterEggs`). None of them changes files or settings.
+The easter eggs, the Silly Goose and the trophy case live in **FBRX Endpoint Ultra** (Endpoint Basic has none of
+them), and even there they stay hidden until someone enters **418** as a license key (**Settings → License**). It is
+not a license: it is HTTP status 418, *I'm a teapot*. The locked trophy case in Settings drops the only hint: "The
+key is short and stout." Entered on Endpoint Basic, 418 is remembered, and the easter eggs come out as soon as Ultra
+is turned on.
 
-The old secret key still answers: enter **418** as a license key and it says *I'm a teapot*, short and stout (HTTP
-status 418). In Ultra it also switches the easter eggs back on if they were turned off.
+Once unlocked, **Settings → Appearance → Fun extras** appears, with a switch to turn them off again. An organization
+can turn them off and lock the setting from FBRX Command (`appearance.easterEggs`). None of them changes files or
+settings.
 
 ## The trophy case
 
@@ -102,7 +104,7 @@ another trophy; "I quit", "normal mode" or "no more jargon" work too. New conver
 Say "Talk to me, Goose" to Fabrix and your wingman gets on the radio from the back seat (and the Silly Goose flies in
 on your screen). For the rest of that conversation every answer is radio chatter: bogeys that turn out to be clouds,
 volleyball at 1600 hours, a very firm "no" from the tower. Random, and mostly unrelated to what you said. Say "wheels
-down", "return to base", "land the plane" or "normal mode" to land. Two trophies: one for getting him on the radio,
+down", "That's a copy", "return to base", "land the plane" or "normal mode" to land. Two trophies: one for getting him on the radio,
 one for keeping him there for five messages. The Library's Story time has a matching how-to, *How to be a great
 wingman*.
 

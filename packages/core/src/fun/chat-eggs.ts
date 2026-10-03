@@ -5,8 +5,8 @@
  * - "Have you seen my stapler?" (also "Where is my stapler?", "Has anyone seen my stapler?"): the stapler's
  *   whereabouts, then nothing but corporate jargon, each answer ending in "That would be great.", until
  *   "PC load letter" (or "better"), "I quit", "normal mode" or "no more jargon".
- * - "Talk to me, Goose": your wingman answers in radio chatter from the back seat until "wheels down",
- *   "return to base", "land the plane" or "normal mode".
+ * - "Talk to me, Goose": your wingman answers in radio chatter from the back seat until "That's a copy",
+ *   "wheels down", "return to base", "land the plane" or "normal mode".
  * - Telling your furry co-pilot you're home: every answer is growls until "Laugh it up, fuzzball". "Nooo" gets a
  *   family secret.
  */
@@ -155,7 +155,7 @@ export function chatEgg(raw: string, persona: PersonaValue, rand: Rand = Math.ra
   // On the radio with your wingman.
   if (/^talk\s+to\s+me,?\s+goose\W*$/i.test(text)) {
     return {
-      reply: `📻 *static crackles* Wingman on the radio, goggles on, radar warm. You lead, I'll follow. Say "wheels down" when you want to land. Over.`,
+      reply: `📻 *static crackles* Wingman on the radio, goggles on, radar warm. You lead, I'll follow. Say "That's a copy" when you want to land. Over.`,
       persona: 'wingman:0',
       trophies: ['wingman'],
     };
@@ -172,7 +172,7 @@ export function chatEgg(raw: string, persona: PersonaValue, rand: Rand = Math.ra
     if (!stapler) return { reply: wookieeReply(rand), persona: `wookiee:${n}`, trophies: n >= 5 ? ['wookiee'] : [] };
   }
   if (wingman) {
-    if (/^(wheels\s+down|return(ing)?\s+to\s+base|rtb|land\s+(the|this)\s+plane|normal\s+mode|over\s+and\s+out)\b/i.test(text)) {
+    if (/^(that'?s\s+a\s+copy|that\s+is\s+a\s+copy|wheels\s+down|return(ing)?\s+to\s+base|rtb|land\s+(the|this)\s+plane|normal\s+mode|over\s+and\s+out)\b/i.test(text)) {
       return { reply: '📻 Wheels down, canopy up. Nice flying, partner. Back to plain English: what do you need?', persona: null, trophies: [] };
     }
     const n = count(persona!);

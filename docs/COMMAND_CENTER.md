@@ -62,7 +62,7 @@ The desktop app comes as two products, decided by the license (there is no switc
 | Expert tool sets | — | Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, network adapters, custom scan ranges, device consoles, the developer tools in the Toolbox, The Lab in the Library, the Local API |
 | Connect | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance |
 | Look | Light, dark or follow the computer: plain, no theme colors, gradients or textures | The theme studio: eleven themes, accent colors, gradients and textures (with a strength slider) |
-| Fun | — | Easter eggs, the Silly Goose and the trophy case |
+| Fun | — | Easter eggs, the Silly Goose and the trophy case, once unlocked with the secret key (see EASTER_EGGS.md, spoilers) |
 
 Ultra features are marked with an **Ultra** tag. In Basic, an Ultra page opens a short card saying what it does and
 how to get it. The edition shows beside the name in the sidebar, at the top of **Settings**, in the window title and

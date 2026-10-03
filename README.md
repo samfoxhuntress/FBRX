@@ -7,7 +7,7 @@
 
 # FBRX OS — Fabrics Operating System
 
-> **Alpha 1.8.2 "Spindle".** FBRX is in alpha testing. Installed copies check this repository's
+> **Alpha 1.8.3 "Spindle".** FBRX is in alpha testing. Installed copies check this repository's
 > [`release.json`](release.json) and offer new versions in the app.
 
 FBRX OS is the platform behind two products:

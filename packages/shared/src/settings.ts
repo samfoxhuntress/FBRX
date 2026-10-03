@@ -157,6 +157,8 @@ export const SettingsSchema = z.object({
     gooseVisits: z.boolean(),
     /** What the goose wears: dressed for the season where you are (auto), or a season you pick. */
     gooseSeason: z.enum(['auto', 'winter', 'spring', 'summer', 'fall']),
+    /** Fun extras stay hidden until someone enters 418 as a license key, Ultra or not (see funEnabled). */
+    funUnlocked: z.boolean(),
     /** Visual effects: full (glass, glows, animation), light (shown as "Lite": flat and quick) or auto (Lite on small PCs). */
     effects: z.enum(['auto', 'full', 'light']),
   }),
@@ -354,6 +356,7 @@ export const DEFAULT_SETTINGS: Settings = {
     easterEggs: true,
     gooseVisits: false,
     gooseSeason: 'auto',
+    funUnlocked: false,
     effects: 'auto',
   },
   macros: [
@@ -437,9 +440,12 @@ export const DEFAULT_SETTINGS: Settings = {
 /** Settings paths that can never be changed remotely or by the renderer (identity-bearing). */
 export const PROTECTED_SETTING_PATHS: readonly string[] = [];
 
-/** Fun extras come with FBRX Endpoint Ultra, while they are switched on (an organization can turn them off). */
+/**
+ * Fun extras live in FBRX Endpoint Ultra, stay hidden until someone enters 418 as a license key, and can be switched
+ * off again (an organization can lock them off).
+ */
 export function funEnabled(s: Pick<Settings, 'appearance'> | null | undefined, tier: Tier | null | undefined): boolean {
-  return !!s && tier === 'ultra' && s.appearance.easterEggs;
+  return !!s && tier === 'ultra' && s.appearance.funUnlocked && s.appearance.easterEggs;
 }
 
 /** What to call the user: their chosen form of address, else their first name, else null. */
