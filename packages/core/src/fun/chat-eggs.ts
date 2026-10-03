@@ -77,7 +77,7 @@ const JARGON = [
 const JARGON_ACTION = ['*sips from a company coffee mug*', '*leans on your cubicle wall*', '*adjusts suspenders*', '*nods slowly for a long time*', '*points at a whiteboard covered in arrows*', '*walks away mid-sentence, then comes back*'];
 const STAPLER = [
   "I believe we moved your stapler down to storage. The basement. Next to the box of old fax toner.",
-  "It's likely downstairs in storage, filed under 'misc. office assets'.",
+  "Your stapler? It's likely downstairs in storage, filed under 'misc. office assets'.",
   "We had to reallocate your stapler to a more strategic initiative. It's in the basement now.",
 ];
 

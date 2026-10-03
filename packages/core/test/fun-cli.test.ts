@@ -173,6 +173,8 @@ describe('AI coordination link test', () => {
 
 describe('chat eggs', () => {
   it('turns on jargon mode for the stapler sayings, with random answers unrelated to the question', () => {
+    // Every answer says where the stapler went, whichever one comes up.
+    for (const r of [0, 0.4, 0.99]) expect(chatEgg('Where is my stapler?', null, () => r)!.reply).toMatch(/^[^\n]*stapler[\s\S]*That would be great\.$/);
     for (const q of ['Have you seen my stapler?', 'Where is my stapler?', 'Has anyone seen my stapler?', "Where's my stapler?", 'where’s my stapler', 'Has anybody seen my red stapler', 'stapler', 'Stapler?']) {
       expect(chatEgg(q, null)).toMatchObject({ persona: 'jargon:0', trophies: ['stapler'] });
     }
