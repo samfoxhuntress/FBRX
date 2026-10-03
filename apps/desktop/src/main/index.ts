@@ -1,6 +1,7 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, screen, shell, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type Rectangle } from 'electron';
-import { existsSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, protocol, screen, session, shell, systemPreferences, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type Rectangle } from 'electron';
+import { createReadStream, existsSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+import { Readable } from 'node:stream';
 import { userInfo } from 'node:os';
 import { Kernel, toCoreError } from '@fbrx/core';
 import { PRODUCT_NAME, funEnabled } from '@fbrx/shared';
@@ -53,6 +54,54 @@ if (!primary) {
 }
 app.setAppUserModelId('com.fbrx.os');
 
+// Voice input: the speech engine (ONNX Runtime) and the downloaded Whisper models are served to the app's own pages
+// from fbrx-voice://ort/… and fbrx-voice://models/…, never from the internet.
+protocol.registerSchemesAsPrivileged([{ scheme: 'fbrx-voice', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
+
+const VOICE_TYPES: Record<string, string> = { '.wasm': 'application/wasm', '.mjs': 'text/javascript', '.js': 'text/javascript', '.json': 'application/json', '.txt': 'text/plain' };
+
+function voiceFile(url: URL): string | null {
+  const rel = url.pathname.replace(/^\/+/, '');
+  if (url.host === 'ort') {
+    const name = basename(rel);
+    if (!/^ort-wasm[\w.-]*\.(wasm|mjs)$/.test(name)) return null;
+    const file = join(app.getAppPath(), 'dist', 'ort', name);
+    return existsSync(file) ? file : null;
+  }
+  if (url.host === 'models') return kernel?.voice.resolveFile(rel) ?? null;
+  return null;
+}
+
+function serveVoice() {
+  protocol.handle('fbrx-voice', (req) => {
+    const headers = { 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' };
+    let file: string | null = null;
+    try {
+      file = voiceFile(new URL(req.url));
+    } catch {
+      file = null;
+    }
+    if (!file) return new Response('Not found', { status: 404, headers });
+    const ext = file.slice(file.lastIndexOf('.'));
+    return new Response(Readable.toWeb(createReadStream(file)) as ReadableStream, { headers: { ...headers, 'Content-Type': VOICE_TYPES[ext] ?? 'application/octet-stream' } });
+  });
+}
+
+/** The app's own pages may use the microphone (audio only) and the clipboard; other permissions are refused. */
+const ALLOWED_PERMISSIONS = new Set(['media', 'clipboard-read', 'clipboard-sanitized-write', 'notifications', 'fullscreen']);
+function guardPermissions() {
+  const ownPage = (url: string) => (rendererUrl ? url.startsWith(rendererUrl) : url.startsWith('file://'));
+  session.defaultSession.setPermissionRequestHandler((wc, permission, cb, details) => {
+    if (!ownPage(details.requestingUrl || wc.getURL()) || !ALLOWED_PERMISSIONS.has(permission)) return cb(false);
+    if (permission === 'media') {
+      const types = (details as { mediaTypes?: string[] }).mediaTypes ?? [];
+      return cb(types.length > 0 && types.every((t) => t === 'audio'));
+    }
+    cb(true);
+  });
+  session.defaultSession.setPermissionCheckHandler((_wc, permission, origin) => ALLOWED_PERMISSIONS.has(permission) && ownPage(origin || 'file://'));
+}
+
 function asset(name: string) {
   const candidates = [join(app.getAppPath(), 'dist', 'assets', name), join(process.resourcesPath ?? '', name)];
   return candidates.find((p) => existsSync(p)) ?? candidates[0];
@@ -86,6 +135,8 @@ function createWindow() {
     show: false,
     backgroundColor: '#0d0d0d',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    // The window buttons sit in the sidebar's top strip, above the FBRX logo (see data-platform="darwin" in the CSS).
+    ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 18, y: 18 } } : {}),
     icon: asset('icon.png'),
     webPreferences: {
       preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
@@ -366,6 +417,14 @@ function registerIpc() {
     return runJavaScript(code, answers);
   });
   ipcMain.handle('fbrx:code-stop', (e) => trusted(e) && (stopJavaScript(), true));
+  // Voice: the operating system's microphone permission (asks on macOS the first time; reports it on Windows).
+  ipcMain.handle('fbrx:mic-access', async (e) => {
+    if (!trusted(e)) return { granted: false, status: 'denied' };
+    if (process.platform !== 'darwin' && process.platform !== 'win32') return { granted: true, status: 'granted' };
+    let status = systemPreferences.getMediaAccessStatus('microphone');
+    if (status === 'not-determined' && process.platform === 'darwin') status = (await systemPreferences.askForMediaAccess('microphone')) ? 'granted' : 'denied';
+    return { granted: status === 'granted' || status === 'not-determined', status };
+  });
   ipcMain.handle('fbrx:goose', (e, action: string, on?: boolean) => {
     if (!trusted(e)) return false;
     if (action === 'summon') summonGoose();
@@ -457,6 +516,8 @@ async function boot() {
 app.whenReady().then(async () => {
   if (!primary) return;
   registerIpc();
+  serveVoice();
+  guardPermissions();
   appMenu();
   try {
     await boot();

@@ -3,6 +3,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { ModelInfo } from '@fbrx/shared';
 import { parseNdjson } from './sse';
+import { ThinkSplitter } from './think';
 import { ProviderHttpError, readErrorBody, type ChatProvider, type ChatRequest, type ProviderChunk, type ProviderMessage } from './types';
 
 /** Ollama native API (`/api/chat`), including tool calling. */
@@ -16,7 +17,7 @@ export class OllamaProvider implements ChatProvider {
     private readonly defaultModel?: string,
     historyBudgetChars = 60_000,
     /** Processor threads for the model and how long Ollama keeps it loaded (see resourcePlan). */
-    private readonly limits: { numThread?: number; keepAlive?: string } = {},
+    private readonly limits: { numThread?: number; keepAlive?: string; numCtx?: number } = {},
   ) {
     this.historyBudgetChars = historyBudgetChars;
   }
@@ -86,6 +87,7 @@ export class OllamaProvider implements ChatProvider {
           ...(req.temperature !== undefined ? { temperature: req.temperature } : {}),
           ...(req.maxTokens ? { num_predict: req.maxTokens } : {}),
           ...(this.limits.numThread ? { num_thread: this.limits.numThread } : {}),
+          ...(this.limits.numCtx ? { num_ctx: this.limits.numCtx } : {}),
         },
         ...(this.limits.keepAlive ? { keep_alive: this.limits.keepAlive } : {}),
       }),
@@ -102,11 +104,13 @@ export class OllamaProvider implements ChatProvider {
     let n = 0;
     let sawTools = false;
     let reason: string | undefined;
+    const think = new ThinkSplitter();
     for await (const raw of parseNdjson(res.body)) {
       const chunk = raw as any;
       if (chunk.error) throw new Error(chunk.error);
       const msg = chunk.message;
-      if (msg?.content) yield { type: 'text', delta: msg.content };
+      if (typeof msg?.thinking === 'string' && msg.thinking) yield { type: 'thinking', delta: msg.thinking };
+      if (msg?.content) yield* think.push(msg.content);
       for (const tc of msg?.tool_calls ?? []) {
         sawTools = true;
         yield { type: 'tool_call', call: { id: `call_${Date.now()}_${n++}`, name: tc.function?.name, arguments: tc.function?.arguments ?? {} } };
@@ -116,6 +120,7 @@ export class OllamaProvider implements ChatProvider {
         yield { type: 'usage', inputTokens: chunk.prompt_eval_count ?? 0, outputTokens: chunk.eval_count ?? 0 };
       }
     }
+    yield* think.flush();
     yield { type: 'done', finishReason: sawTools ? 'tool_calls' : reason === 'length' ? 'length' : 'stop' };
   }
 }

@@ -36,7 +36,7 @@ selling it to other companies, each in its own tenant.
 
 | Need | Where it lives |
 | --- | --- |
-| A local AI agent that works offline | Bundled llama.cpp runtime + model catalog (Local AI page). Cloud providers (Claude, OpenAI-compatible, Ollama) are optional and can be blocked by policy. |
+| A local AI agent that works offline | Bundled llama.cpp runtime + model catalog (Local AI page). Cloud providers (Claude, OpenAI-compatible, Ollama) are optional and can be blocked by policy. Talk to it and hear it answer (on-device Whisper speech recognition, the computer's own voices at the speed you pick), watch what it is doing and thinking while it works, and set its work budget (steps per task, answer length, context size). |
 | Agents and services that govern it | Policy engine, guardian (dangerous-command and prompt-injection detection, optional model review), human approvals, rate limits, secret redaction, tamper-evident audit log, service watchdog. |
 | Back up, redeploy, carry on as if nothing happened | Encrypted `.fbrxsnap` snapshots (manual, scheduled or remote) restored in **migrate** mode — same identity, same fleet enrollment, same vault. See [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md). |
 | Deploy to other Macs and PCs | Signed `.dmg`/`.zip` and NSIS `.exe` installers, zero-touch provisioning files, golden template snapshots, auto-updates by channel, pin and staged rollout. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). |

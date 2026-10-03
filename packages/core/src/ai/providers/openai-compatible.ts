@@ -1,5 +1,6 @@
 import type { ModelInfo, ProviderType } from '@fbrx/shared';
 import { parseSse } from './sse';
+import { ThinkSplitter } from './think';
 import {
   ProviderHttpError,
   readErrorBody,
@@ -110,6 +111,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
     if (!res.ok || !res.body) throw new ProviderHttpError(res.status, await readErrorBody(res));
 
     const calls = new Map<number, { id: string; name: string; args: string }>();
+    const think = new ThinkSplitter();
     let finish: string | null = null;
     for await (const ev of parseSse(res.body)) {
       if (ev.data === '[DONE]') break;
@@ -126,7 +128,10 @@ export class OpenAICompatibleProvider implements ChatProvider {
       const choice = chunk.choices?.[0];
       if (!choice) continue;
       const delta = choice.delta ?? {};
-      if (typeof delta.content === 'string' && delta.content) yield { type: 'text', delta: delta.content };
+      // llama.cpp, vLLM and DeepSeek send reasoning as reasoning_content; OpenRouter and others as reasoning.
+      const reasoning = typeof delta.reasoning_content === 'string' ? delta.reasoning_content : typeof delta.reasoning === 'string' ? delta.reasoning : '';
+      if (reasoning) yield { type: 'thinking', delta: reasoning };
+      if (typeof delta.content === 'string' && delta.content) yield* think.push(delta.content);
       for (const tc of delta.tool_calls ?? []) {
         const idx = tc.index ?? 0;
         const cur = calls.get(idx) ?? { id: '', name: '', args: '' };
@@ -137,6 +142,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
       }
       if (choice.finish_reason) finish = choice.finish_reason;
     }
+    yield* think.flush();
     const toolCalls: ProviderToolCall[] = [];
     for (const [idx, c] of [...calls.entries()].sort((a, b) => a[0] - b[0])) {
       let args: unknown = {};

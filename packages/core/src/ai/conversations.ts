@@ -27,6 +27,7 @@ interface MsgRow {
   provider_id: string | null;
   model: string | null;
   provider_data: string | null;
+  thinking: string | null;
   created_at: string;
 }
 
@@ -100,8 +101,8 @@ export class ConversationStore {
     this.db.tx(() => {
       const seq = Number(this.db.get<{ s: number }>('SELECT COALESCE(MAX(seq), 0) + 1 AS s FROM messages WHERE conversation_id = ?', conversationId)?.s ?? 1);
       this.db.run(
-        `INSERT INTO messages (id, conversation_id, seq, role, content, tool_calls, tool_call_id, tool_name, provider_id, model, provider_data, created_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO messages (id, conversation_id, seq, role, content, tool_calls, tool_call_id, tool_name, provider_id, model, provider_data, created_at, thinking)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         id,
         conversationId,
         seq,
@@ -114,6 +115,7 @@ export class ConversationStore {
         msg.model ?? null,
         msg.providerData ? JSON.stringify(msg.providerData) : null,
         now,
+        msg.thinking ?? null,
       );
       this.db.run(
         'UPDATE conversations SET updated_at = ?, provider_id = COALESCE(?, provider_id), model = COALESCE(?, model) WHERE id = ?',
@@ -170,5 +172,6 @@ function toMessage(r: MsgRow): StoredMessage {
     model: r.model ?? undefined,
     createdAt: r.created_at,
     providerData: r.provider_data ? JSON.parse(r.provider_data) : null,
+    ...(r.thinking ? { thinking: r.thinking } : {}),
   };
 }

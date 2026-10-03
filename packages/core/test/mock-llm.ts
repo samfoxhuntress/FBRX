@@ -35,7 +35,7 @@ async function listen(handler: (req: IncomingMessage, res: ServerResponse, body:
  * OpenAI-compatible chat server (what llama.cpp's llama-server, LM Studio and vLLM expose).
  * `script(body)` decides each turn: a tool call or a final text answer.
  */
-export async function mockOpenAI(script: (body: any, turn: number) => { tool?: { name: string; args: unknown }; text?: string }): Promise<MockLlm> {
+export async function mockOpenAI(script: (body: any, turn: number) => { tool?: { name: string; args: unknown }; text?: string; reasoning?: string }): Promise<MockLlm> {
   let turn = 0;
   const { server, url, requests } = await listen((req, res, body) => {
     if (req.url?.endsWith('/models')) {
@@ -44,6 +44,8 @@ export async function mockOpenAI(script: (body: any, turn: number) => { tool?: {
     }
     const step = script(body, turn++);
     const events: Array<{ data: unknown }> = [];
+    // Reasoning models (llama.cpp, DeepSeek, vLLM) stream their thinking as reasoning_content first.
+    if (step.reasoning) for (const word of step.reasoning.split(/(?<= )/)) events.push({ data: { choices: [{ index: 0, delta: { reasoning_content: word } }] } });
     if (step.tool) {
       const args = JSON.stringify(step.tool.args);
       const half = Math.floor(args.length / 2);

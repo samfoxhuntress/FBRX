@@ -39,6 +39,8 @@ export type FinishReason = 'stop' | 'tool_calls' | 'length' | 'refusal' | 'error
 
 export type ProviderChunk =
   | { type: 'text'; delta: string }
+  /** What the model is thinking (a summary on some providers); shown to the user, never sent back as text. */
+  | { type: 'thinking'; delta: string }
   | { type: 'tool_call'; call: ProviderToolCall }
   | { type: 'usage'; inputTokens: number; outputTokens: number }
   | { type: 'done'; finishReason: FinishReason; providerData?: ProviderData; servedModel?: string; message?: string };

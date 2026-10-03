@@ -414,7 +414,6 @@ function TopBar({
   const model = defaultModel || p?.defaultModel || null;
   return (
     <>
-      {bridge.platform === 'darwin' && <span style={{ width: 60 }} />}
       <button className="topbar-search" onClick={() => bridge.showSpotlight?.()} title="Spotlight: search apps, files, settings and more from anywhere">
         <Icons.search size={15} />
         <span>Search apps, files, settings, or ask {agentName}…</span>

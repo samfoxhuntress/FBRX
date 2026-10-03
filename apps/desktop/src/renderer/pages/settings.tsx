@@ -10,6 +10,7 @@ import { summonGoose } from '../fun';
 import { TrophyBadge, TrophyCase } from '../trophies';
 import { AskButton, EmergencyStop, ProfileFields, saveProfile } from '../widgets';
 import { MacroSettings } from './settings-macros';
+import { VoiceSettings } from './settings-voice';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -19,11 +20,12 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'agent' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
+type SectionId = 'general' | 'appearance' | 'agent' | 'voice' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; advanced?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
   { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
+  { id: 'voice', label: 'Voice', icon: 'mic', group: 'You' },
   { id: 'macros', label: 'Macros', icon: 'zap', group: 'You' },
   { id: 'spotlight', label: 'Spotlight', icon: 'search', group: 'You' },
   { id: 'trophies', label: 'Trophy case', icon: 'trophy', group: 'You' },
@@ -73,6 +75,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'general' && <General onRerunSetup={onRerunSetup} />}
           {tab === 'appearance' && <Appearance />}
           {tab === 'agent' && <AgentSettings />}
+          {tab === 'voice' && <VoiceSettings />}
           {tab === 'macros' && <MacroSettings />}
           {tab === 'spotlight' && <SpotlightSettings />}
           {tab === 'trophies' && <Trophies />}
@@ -377,6 +380,9 @@ function AgentSettings() {
           </Field>
         </div>
       </Card>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <WorkBudget />
+      </div>
       <Card title="Models and permissions">
         <div className="fx-form">
           <p className="fx-muted" style={{ margin: 0 }}>Choose which AI model {s.ai.agentName} uses in AI models, and what it may do without asking in Governance.</p>
@@ -392,6 +398,93 @@ function AgentSettings() {
         </Card>
       </div>
     </Grid>
+  );
+}
+
+const ANSWER_LENGTHS = [
+  { value: '0', label: 'Automatic (the model decides)' },
+  { value: '2048', label: 'Short (2,000 tokens, about 1,500 words)' },
+  { value: '8192', label: 'Standard (8,000 tokens)' },
+  { value: '16384', label: 'Long (16,000 tokens)' },
+  { value: '32768', label: 'Very long (32,000 tokens)' },
+  { value: '65536', label: 'Huge (64,000 tokens)' },
+];
+const CONTEXTS = [4096, 8192, 16384, 32768, 65536, 131072];
+const ctxLabel = (n: number) => `${n / 1024}K tokens${n === 8192 ? ' (default)' : ''}`;
+// Rough extra memory for the conversation itself (the KV cache of a typical 7–8B model).
+const ctxMemory = (n: number) => (n <= 8192 ? 'about 1 GB extra memory' : n <= 16384 ? 'about 2 GB' : n <= 32768 ? 'about 4 GB' : n <= 65536 ? 'about 8 GB' : 'about 16 GB');
+
+/** How much the agent may do in one task: steps, answer length and how much of the conversation a local model keeps in mind. */
+function WorkBudget() {
+  const { s, locked, patch } = useSettings();
+  const pol = useCore('governance.policy', undefined, ['policy.changed']);
+  const providers = useCore('ai.providers', undefined, ['settings.changed']);
+  const [steps, setSteps] = useState<number | null>(null);
+  const { run } = useAction();
+  if (!s) return null;
+  const L = (p: string) => isLocked(locked, p);
+  const managedPolicy = pol.data?.source === 'managed';
+  const maxSteps = pol.data?.policy.ai.maxStepsPerRun ?? 30;
+  const shownSteps = steps ?? maxSteps;
+  const saveSteps = (n: number) => {
+    if (!pol.data || n === maxSteps) return;
+    const next = structuredClone(pol.data.policy);
+    next.ai.maxStepsPerRun = n;
+    next.ai.maxToolCallsPerRun = Math.max(next.ai.maxToolCallsPerRun, n * 3);
+    void run('steps', () => call('governance.updatePolicy', { policy: next }), `${s.ai.agentName} may now take up to ${n} steps per task`).then(() => setSteps(null));
+  };
+  const hasOllama = (providers.data ?? []).some((p) => p.type === 'ollama' && p.enabled);
+  return (
+    <Card title="Work budget" subtitle={`How much ${s.ai.agentName} may do before it stops to check in. Raise these for big jobs; lower them to keep answers quick and the computer light.`}>
+      <div className="budget-grid">
+        <Field
+          label={
+            <>
+              Steps per task <span className="budget-value">{shownSteps}</span> {managedPolicy && <Locked show />}
+            </>
+          }
+          help={`A step is one round of thinking and using tools. When ${s.ai.agentName} runs out, it says so and you can tell it to continue.`}
+        >
+          <input
+            type="range"
+            min={5}
+            max={100}
+            step={1}
+            value={shownSteps}
+            disabled={managedPolicy || !pol.data}
+            aria-label="Steps per task"
+            onChange={(e) => setSteps(Number(e.target.value))}
+            onPointerUp={() => steps !== null && saveSteps(steps)}
+            onKeyUp={() => steps !== null && saveSteps(steps)}
+          />
+        </Field>
+        <Field label={<>Longest answer <Locked show={L('ai.maxOutputTokens')} /></>} help="The most the model may write in one reply. Long code or reports need more; a token is about three quarters of a word.">
+          <Select value={String(s.ai.maxOutputTokens)} disabled={L('ai.maxOutputTokens')} onChange={(e) => void patch({ ai: { maxOutputTokens: Number(e.target.value) } })} options={ANSWER_LENGTHS} />
+        </Field>
+        <Field
+          label={<>Memory of the built-in model <Locked show={L('runtime.contextSize')} /></>}
+          help={`How much of the conversation (including tool results) the built-in model keeps in mind. More lets it work on bigger tasks but uses ${ctxMemory(s.runtime.contextSize)}. The model reloads to apply it.`}
+        >
+          <Select
+            value={String(s.runtime.contextSize)}
+            disabled={L('runtime.contextSize')}
+            onChange={(e) => void patch({ runtime: { contextSize: Number(e.target.value) } })}
+            options={[...new Set([...CONTEXTS, s.runtime.contextSize])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: ctxLabel(n) }))}
+          />
+        </Field>
+        {hasOllama && (
+          <Field label={<>Memory of Ollama models <Locked show={L('ai.ollamaContext')} /></>} help="Ollama's own setting is often 4K, which a long task fills quickly. 32K suits most tool-using work on a 16 GB computer.">
+            <Select
+              value={String(s.ai.ollamaContext)}
+              disabled={L('ai.ollamaContext')}
+              onChange={(e) => void patch({ ai: { ollamaContext: Number(e.target.value) } })}
+              options={[{ value: '0', label: "Ollama's setting" }, ...CONTEXTS.map((n) => ({ value: String(n), label: `${n / 1024}K tokens` }))]}
+            />
+          </Field>
+        )}
+        <Toggle checked={s.ai.showThinking} disabled={L('ai.showThinking')} onChange={(v) => void patch({ ai: { showThinking: v } })} label={`Show what ${s.ai.agentName} is thinking and doing while it works`} />
+      </div>
+    </Card>
   );
 }
 

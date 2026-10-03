@@ -3,6 +3,7 @@ import {
   addressAs,
   newId,
   type AgentEvent,
+  type AgentPhase,
   type InvocationOrigin,
   type TokenUsage,
   type ToolCallRecord,
@@ -61,6 +62,14 @@ function hash8(s: string): string {
   let h = 2166136261;
   for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 16777619);
   return (h >>> 0).toString(16).padStart(8, '0');
+}
+
+/** A short description of a tool call for the activity panel: the tool's title and its main argument. */
+export function describeCall(spec: Pick<ToolSpec, 'title'>, args: unknown): string {
+  const a = args && typeof args === 'object' ? (args as Record<string, unknown>) : {};
+  const key = ['path', 'url', 'host', 'query', 'command', 'name', 'id', 'title', 'target'].find((k) => typeof a[k] === 'string' && (a[k] as string).trim());
+  const value = key ? String(a[key]).replace(/\s+/g, ' ').trim() : '';
+  return value ? `${spec.title}: ${value.length > 80 ? `${value.slice(0, 79)}…` : value}` : spec.title;
 }
 
 const UNTRUSTED_PREFIX =
@@ -310,9 +319,14 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
     this.d.store.append(conversationId, { role: 'user', content: text });
     this.emit({ type: 'run.started', runId, conversationId, providerId: config.id, model });
     this.d.log.info('Agent run started', { runId, provider: config.id, model, origin: p.origin });
+    const maxSteps = policy.ai.maxStepsPerRun;
+    const maxTokens = this.d.settings.get().ai.maxOutputTokens || undefined;
+    // What the agent is doing right now, for the activity panel while it works.
+    const progress = (phase: AgentPhase, detail: string) => this.emit({ type: 'run.progress', runId, conversationId, step: steps, maxSteps, phase, detail, usage: { ...usage } });
+    let stoppedAtLimit = false;
 
     try {
-      while (steps < policy.ai.maxStepsPerRun) {
+      while (steps < maxSteps) {
         steps++;
         const tools = this.availableTools();
         const byWire = new Map(tools.map((t) => [toWireName(t.name), t]));
@@ -326,16 +340,25 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
           ...this.history(conversationId, provider.historyBudgetChars),
         ];
 
+        progress(steps === 1 ? 'model' : 'reading', steps === 1 ? (config.type === 'local-runtime' ? `Asking ${model} (the first answer can take a moment while the model loads)` : `Asking ${model}`) : 'Reading the results and deciding what to do next');
         const messageId = newId('msg');
         let content = '';
+        let thinking = '';
+        let pendingThinking = '';
+        let phase: AgentPhase | null = null;
         // Text is sent to the windows in small batches (about 15 a second) instead of token by token, so a fast
         // local model doesn't flood the app with re-renders.
         let pending = '';
         let lastFlush = 0;
         const flush = () => {
-          if (!pending) return;
-          this.emit({ type: 'message.delta', runId, conversationId, messageId, delta: pending });
-          pending = '';
+          if (pendingThinking) {
+            this.emit({ type: 'thinking.delta', runId, conversationId, messageId, delta: pendingThinking });
+            pendingThinking = '';
+          }
+          if (pending) {
+            this.emit({ type: 'message.delta', runId, conversationId, messageId, delta: pending });
+            pending = '';
+          }
           lastFlush = Date.now();
         };
         const calls: ProviderToolCall[] = [];
@@ -345,11 +368,18 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
           messages,
           tools: toolCallsUsed < policy.ai.maxToolCallsPerRun ? wireTools : [],
           temperature: this.d.settings.get().ai.temperature,
+          maxTokens,
           signal,
         })) {
           if (chunk.type === 'text') {
+            if (phase !== 'writing' && chunk.delta.trim()) progress((phase = 'writing'), 'Writing the answer');
             content += chunk.delta;
             pending += chunk.delta;
+            if (Date.now() - lastFlush >= 66) flush();
+          } else if (chunk.type === 'thinking') {
+            if (phase !== 'thinking') progress((phase = 'thinking'), steps === 1 ? 'Working out how to approach this' : 'Working out the next move');
+            thinking += chunk.delta;
+            pendingThinking += chunk.delta;
             if (Date.now() - lastFlush >= 66) flush();
           } else if (chunk.type === 'tool_call') calls.push(chunk.call);
           else if (chunk.type === 'usage') {
@@ -362,6 +392,10 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
         if (finish.finishReason === 'refusal' || (finish.finishReason === 'length' && finish.message)) {
           content = `${content}${content ? '\n\n' : ''}_${finish.message}_`;
           calls.length = 0;
+        } else if (finish.finishReason === 'length' && !calls.length) {
+          const note = `_The answer reached the length limit and was cut off. Raise **Longest answer** in Settings → Agent, or say "continue"._`;
+          content = `${content}${content ? '\n\n' : ''}${note}`;
+          this.emit({ type: 'message.delta', runId, conversationId, messageId, delta: `\n\n${note}` });
         }
 
         // Corporate-speak mode always signs off the same way, even when the model forgets.
@@ -385,12 +419,14 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
           providerId: config.id,
           model: finish.servedModel ?? model,
           providerData: finish.providerData ?? null,
+          thinking: thinking.trim() ? thinking.slice(0, 100_000) : undefined,
         });
         const { providerData: _replay, ...visible } = assistant;
         this.emit({ type: 'message.completed', runId, conversationId, message: visible });
         finalAnswer = content;
 
         if (!calls.length) break;
+        if (steps >= maxSteps) stoppedAtLimit = true;
         unanswered = records.map((r) => ({ id: r.id, name: r.name }));
 
         for (let i = 0; i < calls.length; i++) {
@@ -403,6 +439,7 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
           let output: string;
           if (signal.aborted) throw signal.reason ?? new CoreError('CANCELLED', 'Canceled');
           const spec = byWire.get(call.name);
+          progress('tool', spec ? describeCall(spec, call.arguments) : call.name);
           if (!spec) {
             output = `Error: unknown tool "${call.name}". Use only the tools provided.`;
             update({ status: 'failed', error: 'Unknown tool', output });
@@ -422,7 +459,10 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
               call.arguments,
               { origin: p.origin === 'user' ? 'agent' : p.origin, actor: `agent:${p.actor}`, runId, signal },
               {
-                onAwaitingApproval: ({ findings }) => update({ status: 'awaiting-approval', findings }),
+                onAwaitingApproval: ({ findings }) => {
+                  progress('approval', `Waiting for you to approve: ${spec.title}`);
+                  update({ status: 'awaiting-approval', findings });
+                },
                 onRunning: () => update({ status: 'running' }),
               },
             );
@@ -442,6 +482,14 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
         this.d.store.updateToolCalls(messageId, records);
       }
 
+      if (stoppedAtLimit) {
+        // The run used every step it was allowed while still working: say so instead of stopping silently.
+        const note = `I've used all ${maxSteps} steps one task may take and stopped before finishing. Say **continue** and I'll pick up where I left off, or raise **Steps per task** in Settings → Agent.`;
+        const msg = this.d.store.append(conversationId, { role: 'assistant', content: note, providerId: config.id, model });
+        const { providerData: _p, ...shown } = msg;
+        this.emit({ type: 'message.completed', runId, conversationId, message: shown });
+        finalAnswer = note;
+      }
       this.emit({ type: 'run.completed', runId, conversationId, steps, usage });
       this.d.audit.append({
         category: 'agent',

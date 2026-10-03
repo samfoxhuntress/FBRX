@@ -169,21 +169,28 @@ export function EmergencyStop({ compact = false }: { compact?: boolean }) {
       </div>
     );
   }
+  const title = 'Stops every AI action right now and keeps the AI stopped until you resume it';
+  if (compact) {
+    return (
+      <>
+        <button className="estop-pill" disabled={busy} onClick={() => void stop()} title={title}>
+          <Icons.octagonStop size={15} />
+          <span>Emergency stop</span>
+        </button>
+        {dialog}
+      </>
+    );
+  }
   return (
-    <div className={`estop${compact ? ' compact' : ''}`}>
-      <button className="estop-button" disabled={busy} onClick={() => void stop()} title="Stops every AI action right now and keeps the AI stopped until you resume it">
-        <span className="estop-cap" aria-hidden>
-          STOP
-        </span>
+    <div className="estop">
+      <button className="estop-button" disabled={busy} onClick={() => void stop()} title={title} aria-label="Emergency stop">
+        <Icons.octagonStop size={26} />
+        <span>Stop</span>
       </button>
-      {compact ? (
-        <span className="estop-label">Emergency stop</span>
-      ) : (
-        <div className="estop-text">
-          <b>Emergency stop</b>
-          <span>Cancels everything {agent} and connected AI apps are doing, denies waiting approvals and stops the local model. It stays stopped until you resume.</span>
-        </div>
-      )}
+      <div className="estop-text">
+        <b>Emergency stop</b>
+        <span>Cancels everything {agent} and connected AI apps are doing, denies waiting approvals and stops the local model. It stays stopped until you resume.</span>
+      </div>
       {dialog}
     </div>
   );

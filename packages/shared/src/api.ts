@@ -153,6 +153,8 @@ export interface ChatMessage {
   createdAt: string;
   providerId?: string;
   model?: string;
+  /** What the model said it was thinking before this answer (a summary, when the provider shares one). */
+  thinking?: string;
 }
 
 export interface ConversationSummary {
@@ -177,9 +179,14 @@ export interface TokenUsage {
   outputTokens: number;
 }
 
+export type AgentPhase = 'model' | 'thinking' | 'writing' | 'tool' | 'approval' | 'reading';
+
 export type AgentEvent =
   | { type: 'run.started'; runId: string; conversationId: string; providerId: string; model: string }
   | { type: 'message.delta'; runId: string; conversationId: string; messageId: string; delta: string }
+  | { type: 'thinking.delta'; runId: string; conversationId: string; messageId: string; delta: string }
+  /** What the agent is doing right now (shown while it works). */
+  | { type: 'run.progress'; runId: string; conversationId: string; step: number; maxSteps: number; phase: AgentPhase; detail: string; usage: TokenUsage }
   | { type: 'message.completed'; runId: string; conversationId: string; message: ChatMessage }
   | { type: 'tool.updated'; runId: string; conversationId: string; messageId: string; call: ToolCallRecord }
   | { type: 'run.completed'; runId: string; conversationId: string; steps: number; usage: TokenUsage }

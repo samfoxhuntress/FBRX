@@ -95,6 +95,31 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   process details before they are sent, the emergency stop refuses them, and they are reserved for the person at
   the computer.
 
+## Voice and the agent's thinking
+
+* **Speech to text** runs on the computer with Whisper (transformers.js and ONNX Runtime in WebAssembly, in a Web
+  Worker of the app window). The worker is set never to fetch models itself (`allowRemoteModels` off, no browser
+  cache): it reads them from FBRX's private `fbrx-voice:` scheme, which serves only the ONNX Runtime files bundled
+  with the app and the files of an installed speech model, with path traversal refused. Recordings stay in memory and
+  are dropped once written down; nothing is saved or sent anywhere.
+* **Speech models** are downloaded only when the person at the computer asks (`voice.install`, `voice.remove` and
+  `voice.cancel` are reserved for them; `voice.models` is read-only) and only while internet access is allowed by
+  policy. They come from the named Whisper repositories on Hugging Face over HTTPS into the `voice` folder of the data
+  directory, are written to `.part` files first and marked complete only when every file arrived.
+  `FBRX_VOICE_MODEL_BASE` points downloads at an internal mirror instead.
+* **The microphone** is the only device permission the app window may get, and only for audio from FBRX's own page
+  (camera, screen capture, geolocation, MIDI and the rest are refused for every page). macOS asks once, with the
+  reason shown in the system prompt; the signed app carries the `audio-input` entitlement. The content security
+  policy allows WebAssembly compilation (`wasm-unsafe-eval`) and the `fbrx-voice:` scheme, and nothing else new.
+* **Spoken replies** use the voices installed on the operating system. A voice the list marks *online* belongs to a
+  speech service that receives the text it reads.
+* **Thinking** that a model shares (Claude's summarized thinking, `reasoning_content` from llama.cpp or vLLM,
+  OpenRouter's `reasoning`, Ollama's `thinking`, or a leading `<think>` block) is stored with the message and shown
+  to the person, but never added to the conversation as text. (Claude's own signed thinking blocks go back to Claude
+  unchanged, as its API requires; they never go to another model.) Thinking can be hidden in Settings →
+  Agent (`ai.showThinking`). The work budget's step limit is part of the policy (`ai.maxStepsPerRun`), so an
+  organization can fix it; the answer length and context sizes are ordinary settings an organization can lock.
+
 ## Audit and tamper evidence
 
 Every tool decision, approval, configuration change, vault access, plugin event, backup and remote command is

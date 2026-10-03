@@ -1,7 +1,7 @@
 /**
  * Story time: how-tos nobody needed, unlocked by searching the Library for "tell me a story". Each one winks at a
- * film or game, with a riddle-like hint at the end and never the title: guessing is the fun. Family friendly, and a
- * few even point at a real FBRX feature.
+ * film, book or game with a riddle-like hint at the end, in our own words: never a title, a character's name, a
+ * trademark or a famous line. Guessing is the fun. Family friendly, and a few even point at a real FBRX feature.
  */
 export interface Story {
   id: string;
@@ -19,15 +19,15 @@ export const STORY_TRIGGER = /^(tell me a (bed ?time )?story|tell me a tale|stor
 export const STORIES: Story[] = [
   {
     id: 'fly',
-    t: 'How to fly with style',
-    s: 'Technically falling. Stylishly.',
+    t: 'How to fly (sort of)',
+    s: 'Gravity is more of a suggestion.',
     steps: [
       'Climb onto something tall. A bed is fine. A bunk bed is ambitious.',
       'Point at the horizon with great confidence. Announce your destination loudly.',
       'Bounce off a ball, ride a toy car down a ramp and loop once around the ceiling fan.',
-      'Land on your feet. If someone says that was not flying, agree: it was falling, with style.',
+      'Land on your feet. If anyone says that was not really flying, smile and agree that it was very stylish falling.',
     ],
-    ref: 'Inspired by a certain space ranger and his cowboy friend.',
+    ref: 'Inspired by a very confident toy astronaut and his cowboy friend.',
   },
   {
     id: 'swim',
@@ -35,17 +35,17 @@ export const STORIES: Story[] = [
     s: 'A technique borrowed from a very optimistic fish.',
     steps: [
       'Look at the progress bar. Notice it has not moved.',
-      'Just keep swimming. Just keep swimming.',
-      'Forget what you were waiting for. Remember again. Keep swimming.',
+      'Keep going. Then keep going a little more.',
+      'Forget what you were waiting for. Remember again. Keep going.',
       'Still stuck? Open the Network Center and run a speed test. The fish would want you to.',
     ],
-    ref: 'Inspired by a forgetful blue tang.',
+    ref: 'Inspired by a cheerful little fish with a very short memory.',
     go: 'speed',
   },
   {
     id: 'home',
-    t: 'How to phone home',
-    s: 'Long distance, very long distance.',
+    t: 'How to call home from very far away',
+    s: 'Long distance. Very long distance.',
     steps: [
       'Point one glowing finger at the sky.',
       'Build a communicator from a toy keyboard and an umbrella. Ask a grown-up before borrowing the umbrella.',
@@ -57,106 +57,106 @@ export const STORIES: Story[] = [
   {
     id: 'towel',
     t: 'How not to panic',
-    s: 'Printed in large, friendly letters on the cover.',
+    s: 'Best read with a cup of tea nearby.',
     steps: [
-      'Locate your towel. A hoopy person always knows where their towel is.',
-      'Breathe. Remember the answer is 42. The question is still loading.',
-      'Make a nice cup of tea. If the computer tries to make it instead, it will be almost, but not quite, entirely unlike tea.',
+      'Find your towel. Every seasoned space traveler knows exactly where theirs is.',
+      'Breathe. The answer is a surprisingly small number; the question is still loading.',
+      'Make a cup of tea yourself. Computers are terrible at tea.',
     ],
-    ref: 'Inspired by a very useful guide for galactic hitchhikers.',
+    ref: 'Inspired by a very useful guidebook for hitchhiking across the galaxy.',
   },
   {
     id: '1985',
-    t: 'How to get back to 1985',
-    s: 'Roads? Where we\'re going, we don\'t need roads.',
+    t: 'How to get back to the eighties',
+    s: 'Bring a very fast car and a spare lightning bolt.',
     steps: [
-      'Find a stainless-steel sports car with gull-wing doors. Install a flux capacitor (it\'s what makes time travel possible).',
-      'Generate 1.21 jigowatts. A clock tower struck by lightning works in a pinch.',
+      'Find a shiny stainless-steel car whose doors open upward.',
+      'Collect an absurd amount of electricity. A lightning bolt at exactly the right moment helps.',
       'Reach exactly 88 miles per hour.',
       'Tip: the speed test in the Network Center seems to know something about this. Impatient people find out first.',
     ],
-    ref: 'Inspired by a teenager, a scientist and a very fast car.',
+    ref: 'Inspired by a teenager, an inventor and a very fast car.',
     go: 'speed',
   },
   {
     id: 'snowman',
     t: 'How to build a snowman',
-    s: 'Do you want to? It doesn\'t have to be a snowman.',
+    s: 'Best built with a sibling.',
     steps: [
-      'Knock on a closed door. Ask nicely. Wait several years.',
-      'Roll three snowballs: big, medium, small. Add a carrot. Add a warm hug (he likes those).',
-      'Let it go. Then go to Storage and let go of a few gigabytes of temporary files too.',
+      'Knock on your sibling\'s door and ask nicely. Be patient: it can take years.',
+      'Roll three snowballs: big, medium, small. Add a carrot nose and stick arms. This one likes warm hugs, oddly.',
+      'Then go to Storage and clear out a few gigabytes of temporary files: fresh snow for your drive.',
     ],
-    ref: 'Inspired by two royal sisters and a cheerful snowman.',
+    ref: 'Inspired by two royal sisters and a snowman who dreams of summer.',
     go: 'storage',
   },
   {
     id: 'heels',
     t: 'How to get home in three clicks',
-    s: 'There\'s no place like 127.0.0.1.',
+    s: 'Home is 127.0.0.1.',
     steps: [
       'Put on your sparkliest shoes.',
       'Click your heels together three times.',
-      'Say "There\'s no place like home." For computers it is 127.0.0.1, which is also home.',
-      'Follow the yellow brick road if that doesn\'t work. Watch out for flying monkeys and pop-up ads.',
+      'Say that there is no place like home. For computers home is 127.0.0.1, so you are already there.',
+      'If that doesn\'t work, follow the yellow road. Watch out for flying monkeys and pop-up ads.',
     ],
-    ref: 'Inspired by a girl from Kansas and her little dog.',
+    ref: 'Inspired by a girl from Kansas and her little dog (a very old book).',
   },
   {
     id: 'force',
-    t: 'How to fix a printer with the Force',
-    s: 'These aren\'t the drivers you\'re looking for.',
+    t: 'How to fix a printer with a mind trick',
+    s: 'Calm minds print faster.',
     steps: [
-      'Close your eyes. Reach out with your feelings toward the printer.',
+      'Close your eyes and breathe slowly, like a wise old mentor in a desert.',
       'Wave your hand gently. Say: "You will print my document."',
-      'If it still says "paper jam", it may be strong with the dark side. Open the Network Center\'s Printers tab instead. Use the Settings, Luke.',
+      'If it still says "paper jam", printers are stubborn. Open the Network Center\'s Printers tab instead.',
     ],
-    ref: 'Inspired by a galaxy far, far away.',
+    ref: 'Inspired by a farm kid from a desert planet and a wise old teacher.',
     go: 'printers',
   },
   {
     id: 'ghosts',
     t: 'How to deal with a haunted computer',
-    s: 'Something strange in your neighborhood?',
+    s: 'Strange noises after midnight?',
     steps: [
       'Listen for strange noises. Fans count.',
-      'Do not cross the streams. (Do not plug the power strip into itself, either.)',
-      'Who you gonna call? Fabrix. Open the Bug catcher and let it look for the ghost.',
+      'Never point two vacuum cleaners at each other. (And never plug a power strip into itself.)',
+      'When in doubt, call in the professionals: open the Bug catcher and let Fabrix look for the ghost.',
     ],
-    ref: 'Inspired by four scientists with proton packs.',
+    ref: 'Inspired by four scientists with homemade ghost-catching gear.',
     go: 'bugs',
   },
   {
     id: 'walk',
     t: 'How to take a very long walk to return some jewelry',
-    s: 'One does not simply walk there.',
+    s: 'Long walks need good snacks.',
     steps: [
-      'Pack light: a cloak, rope, and second breakfast. Also elevenses.',
-      'Bring a loyal friend who carries the pans and says encouraging things.',
-      'Do not put it on. Not even to try it. Especially not to try it.',
-      'When it gets hard, remember: even the smallest person can change the course of the future.',
+      'Pack light: a cloak, some rope and more breakfasts than seem reasonable.',
+      'Bring a loyal friend who carries the pots and pans and says encouraging things.',
+      'Do not try the jewelry on. Not even once. Especially not once.',
+      'When it gets hard, remember that small folks can change big things.',
     ],
-    ref: 'Inspired by a hobbit and his gardener.',
+    ref: 'Inspired by a small traveler with very hairy feet and his faithful gardener.',
   },
   {
     id: 'capes',
     t: 'How to design a superhero outfit',
-    s: 'Darling, listen carefully.',
+    s: 'Fashion first. Function always.',
     steps: [
       'Choose a fabric that is bulletproof, machine washable and fashionable.',
       'Pick a bold color. Red is classic.',
-      'No capes! (They catch on things. Jet turbines. Elevator doors. Revolving doors.)',
+      'Skip the cape. Capes catch on things: jet engines, elevator doors, revolving doors.',
     ],
-    ref: 'Inspired by a tiny, brilliant costume designer.',
+    ref: 'Inspired by a tiny, brilliant designer who dresses heroes.',
   },
   {
     id: 'worries',
     t: 'How to stop worrying about your computer',
-    s: 'It means no worries, for the rest of your days.',
+    s: 'Two friends, zero worries.',
     steps: [
       'Find a meerkat and a warthog with a good attitude.',
-      'Sing loudly. Eat bugs (optional, discouraged).',
-      'Turn on scheduled backups in Backup & restore. Then it really is a problem-free philosophy.',
+      'Sing loudly. Snacks are optional.',
+      'Turn on scheduled backups in Backup & restore. Then you really can stop worrying.',
     ],
     ref: 'Inspired by a lion cub and his two carefree friends.',
     go: 'backup',
@@ -176,7 +176,7 @@ export const STORIES: Story[] = [
   {
     id: 'castle',
     t: 'How to find what you are looking for',
-    s: 'Thank you! But your file is in another folder.',
+    s: 'Wrong castle again?',
     steps: [
       'Jump on the first thing that looks suspicious. Mushrooms are fine.',
       'Go down every green pipe. Look behind the waterfall.',
@@ -187,7 +187,7 @@ export const STORIES: Story[] = [
   {
     id: 'groundhog',
     t: 'How to fix the same problem every single day',
-    s: 'Okay campers, rise and shine!',
+    s: 'Same alarm. Same song. Same day.',
     steps: [
       'Wake up. Hear the same song on the radio. Find the same error message.',
       'Learn something new each day: the piano, ice sculpture, reading the event log.',
@@ -199,12 +199,12 @@ export const STORIES: Story[] = [
   {
     id: 'dragon',
     t: 'How to befriend a dragon',
-    s: 'Everything we know about them is wrong.',
+    s: 'Dragons are misunderstood.',
     steps: [
       'Put down the shield. Slowly. Look away and hold out your hand.',
-      'Offer a fish. Not eel. Never eel.',
-      'Scratch under the chin. If it falls over purring, congratulations, you have a dragon.',
+      'Offer a fish. Not an eel. Never an eel.',
+      'Scratch under the chin. If it flops over happily, congratulations, you have a dragon.',
     ],
-    ref: 'Inspired by a Viking and his night-black dragon.',
+    ref: 'Inspired by a young inventor and a dragon who lost half a tail fin.',
   },
 ];

@@ -260,6 +260,11 @@ export const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 3,
+    name: 'message-thinking',
+    up: `ALTER TABLE messages ADD COLUMN thinking TEXT;`,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -1,13 +1,17 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentEvent, ApprovalRequest, ChatMessage, ProviderStatus, ToolCallRecord } from '@fbrx/shared';
 import { addressAs } from '@fbrx/shared';
-import { Button, Callout, Card, Icons, Select, Status, TextArea, timeAgo, useAction, useConfirm, type IconName, FbrxMark } from '@fbrx/ui';
+import { Button, Callout, Card, Icons, Modal, Select, Status, TextArea, timeAgo, useAction, useConfirm, type IconName, FbrxMark } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
 import { Markdown } from '../markdown';
 import { navigate, routeArg } from '../app';
 import { EmergencyStop, ModelPicker } from '../widgets';
 import { useSlashMenu } from '../slash-menu';
+import { ActivityPanel, ThinkingNote, reduceActivity, type Activity } from '../agent-activity';
+import { StreamReader, say, speakable, stopSpeaking } from '../voice/voice';
+import { useVoiceChat } from '../voice/use-voice-chat';
+import { ModelDownload } from './settings-voice';
 
 const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'activity', title: 'Check my PC', prompt: 'Give me a quick health check of this computer: performance right now, storage, security status and any recent errors. Tell me what (if anything) needs attention.' },
@@ -19,7 +23,7 @@ const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
 ];
 
 /** Copy, edit and run-again under a message (shown on hover). */
-function MessageActions({ text, onRerun, onEdit }: { text: string; onRerun?: () => void; onEdit?: () => void }) {
+function MessageActions({ text, onRerun, onEdit, onSpeak }: { text: string; onRerun?: () => void; onEdit?: () => void; onSpeak?: () => void }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="msg-actions">
@@ -43,6 +47,11 @@ function MessageActions({ text, onRerun, onEdit }: { text: string; onRerun?: () 
       {onRerun && (
         <button className="msg-action" title="Send it again" onClick={onRerun}>
           <Icons.refresh size={13} /> Run again
+        </button>
+      )}
+      {onSpeak && (
+        <button className="msg-action" title="Read it aloud" onClick={onSpeak}>
+          <Icons.speaker size={13} /> Read aloud
         </button>
       )}
     </div>
@@ -152,6 +161,30 @@ export function AgentPage({ agentName }: { agentName: string }) {
   const sending = useRef(false);
   const activeRunDone = useRef(new Set<string>());
   const { confirm, dialog } = useConfirm();
+  const [activity, setActivity] = useState<Activity | null>(null);
+  const s = settings.data?.settings;
+  const showThinking = s?.ai.showThinking ?? true;
+  // Voice: replies read aloud as they stream in, and the microphone / hands-free conversation in the composer.
+  const voiceRef = useRef(s?.voice);
+  voiceRef.current = s?.voice;
+  const reader = useRef(new StreamReader(() => voiceRef.current ?? { voiceName: '', wpm: 210, pitch: 1 }));
+  const streamText = useRef<{ id: string; text: string }>({ id: '', text: '' });
+  const speakRef = useRef(false);
+  const voice = useVoiceChat({
+    settings: s,
+    onText: (text, send_) => {
+      if (send_ && !runRef.current) void send(text);
+      else setInput((cur) => (cur.trim() ? `${cur.trimEnd()} ${text}` : text));
+    },
+  });
+  speakRef.current = !!s?.voice.readReplies || voice.handsFree;
+  const replyFinishedRef = useRef(voice.replyFinished);
+  replyFinishedRef.current = voice.replyFinished;
+  const toggleReadAloud = () => {
+    if (!s) return;
+    if (s.voice.readReplies) stopSpeaking();
+    void call('settings.update', { patch: { voice: { readReplies: !s.voice.readReplies } } });
+  };
 
   useEffect(() => {
     if (settings.data && !providerId) setProviderId(settings.data.settings.ai.defaultProvider);
@@ -199,16 +232,28 @@ export function AgentPage({ agentName }: { agentName: string }) {
           if (e.type === 'run.completed' || e.type === 'run.failed') convs.reload();
           return;
         }
+        setActivity((a) => reduceActivity(a, e));
         switch (e.type) {
           case 'run.started':
             setActiveRun({ runId: e.runId, conversationId: e.conversationId });
             break;
           case 'message.delta':
             setStreaming((s) => (s && s.messageId === e.messageId ? { ...s, text: s.text + e.delta } : { messageId: e.messageId, text: e.delta }));
+            if (streamText.current.id !== e.messageId) {
+              streamText.current = { id: e.messageId, text: '' };
+              reader.current.reset();
+            }
+            streamText.current.text += e.delta;
+            if (speakRef.current) reader.current.update(streamText.current.text);
             break;
           case 'message.completed':
             setStreaming(null);
             setMessages((m) => [...m.filter((x) => x.id !== e.message.id), e.message]);
+            if (speakRef.current && e.message.role === 'assistant') {
+              if (streamText.current.id !== e.message.id) reader.current.reset();
+              reader.current.finish(e.message.content);
+            }
+            streamText.current = { id: '', text: '' };
             break;
           case 'tool.updated':
             setMessages((m) => m.map((x) => (x.id === e.messageId ? { ...x, toolCalls: (x.toolCalls ?? []).map((c) => (c.id === e.call.id ? e.call : c)) } : x)));
@@ -219,6 +264,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
             setActiveRun(null);
             setStreaming(null);
             convs.reload();
+            if (e.type === 'run.completed') replyFinishedRef.current();
             break;
           case 'run.failed':
             activeRunDone.current.add(e.runId);
@@ -359,13 +405,14 @@ export function AgentPage({ agentName }: { agentName: string }) {
               </div>
             ) : (
               <div key={m.id} className="msg">
+                {showThinking && m.thinking && <ThinkingNote text={m.thinking} agentName={agentName} />}
                 {m.content && <Markdown text={m.content} />}
                 {(m.toolCalls ?? []).map((c) => (
                   <ToolCard key={c.id} c={c} approval={approvals.find((a) => a.runId === activeRun?.runId && a.tool === c.name)} />
                 ))}
                 <div className="msg-meta">
                   {m.model && <span>{m.model}</span>}
-                  {m.content && <MessageActions text={m.content} />}
+                  {m.content && <MessageActions text={m.content} onSpeak={() => (stopSpeaking(), s && say(speakable(m.content), s.voice))} />}
                 </div>
               </div>
             ),
@@ -375,7 +422,12 @@ export function AgentPage({ agentName }: { agentName: string }) {
               <Markdown text={streaming.text} />
             </div>
           )}
-          {activeRun && !streaming && (
+          {activeRun && activity && (
+            <div className="msg">
+              <ActivityPanel activity={activity} agentName={agentName} showThinking={showThinking} />
+            </div>
+          )}
+          {activeRun && !activity && !streaming && (
             <div className="msg">
               <span className="typing" aria-label="Agent is working">
                 <span />
@@ -394,6 +446,30 @@ export function AgentPage({ agentName }: { agentName: string }) {
         </div>
         <div className="composer">
           {slash.menu}
+          {voice.error && (
+            <div className="voice-error">
+              <Icons.mic size={14} />
+              <span>{voice.error}</span>
+              <button aria-label="Dismiss" onClick={() => voice.setError(null)}>
+                <Icons.x size={13} />
+              </button>
+            </div>
+          )}
+          {voice.state !== 'idle' && (
+            <div className={`voice-live ${voice.state}`}>
+              <span className="voice-live-dot" style={{ transform: `scale(${1 + voice.level * 1.6})` }} />
+              {voice.state === 'listening'
+                ? voice.handsFree
+                  ? 'Listening… just talk; I stop when you pause.'
+                  : 'Listening… click the microphone (or pause) when you are done.'
+                : 'Writing down what you said…'}
+              {voice.state === 'listening' && (
+                <button className="voice-live-cancel" onClick={voice.cancel}>
+                  Cancel
+                </button>
+              )}
+            </div>
+          )}
           <TextArea
             ref={composerRef}
             value={input}
@@ -410,64 +486,120 @@ export function AgentPage({ agentName }: { agentName: string }) {
             aria-label="Message"
           />
           <div className="composer-bar">
-            <div className="seg" role="group" aria-label="Internet access for this chat">
-              <button className={offline ? 'on' : ''} onClick={() => void toggleOffline(true)} title={`Offline: ${agentName} asks before using the internet in this chat`}>
-                <Icons.offline size={14} /> Offline
-              </button>
-              <button className={!offline ? 'on' : ''} onClick={() => void toggleOffline(false)} title={`Online: ${agentName} may use internet tools in this chat`}>
-                <Icons.globe size={14} /> Online
-              </button>
-            </div>
-            <div style={{ width: 190 }}>
-              <Select
-                aria-label="AI provider"
-                value={providerId}
-                onChange={(e) => {
-                  setProviderId(e.target.value);
-                  setModel('');
-                }}
-                options={usable.map((p) => ({ value: p.id, label: `${p.name}${p.available ? '' : ' (unavailable)'}` }))}
-              />
-            </div>
-            {currentProvider && currentProvider.type !== 'local-runtime' && (
-              <div style={{ width: 260 }}>
-                <ModelPicker
-                  providerId={currentProvider.id}
-                  value={model}
-                  onChange={setModel}
-                  defaultLabel={`Default: ${(currentProvider.id === settings.data?.settings.ai.defaultProvider && settings.data.settings.ai.defaultModel) || currentProvider.defaultModel || 'automatic'}`}
+            <div className="composer-opts">
+              <div className="seg" role="group" aria-label="Internet access for this chat">
+                <button className={offline ? 'on' : ''} onClick={() => void toggleOffline(true)} title={`Offline: ${agentName} asks before using the internet in this chat`}>
+                  <Icons.offline size={14} /> Offline
+                </button>
+                <button className={!offline ? 'on' : ''} onClick={() => void toggleOffline(false)} title={`Online: ${agentName} may use internet tools in this chat`}>
+                  <Icons.globe size={14} /> Online
+                </button>
+              </div>
+              <div className="composer-provider">
+                <Select
+                  aria-label="AI provider"
+                  value={providerId}
+                  onChange={(e) => {
+                    setProviderId(e.target.value);
+                    setModel('');
+                  }}
+                  options={usable.map((p) => ({ value: p.id, label: `${p.name}${p.available ? '' : ' (unavailable)'}` }))}
                 />
               </div>
-            )}
-            {currentProvider && !currentProvider.available && <span className="fx-muted" style={{ fontSize: 12 }}>{currentProvider.message}</span>}
-            <span className="fx-spacer" />
-            {selected && !activeRun && (
-              <Button
-                size="sm"
-                variant="ghost"
-                icon="trash"
-                aria-label="Delete conversation"
-                onClick={async () => {
-                  if (await confirm({ title: 'Delete this conversation?', danger: true, confirmLabel: 'Delete' })) {
-                    await call('ai.conversations.delete', { id: selected });
-                    void loadConversation(null);
-                    convs.reload();
-                  }
-                }}
-              />
-            )}
-            {activeRun ? (
-              <Button icon="stop" onClick={() => void call('ai.cancel', { runId: activeRun.runId })}>
-                Stop
-              </Button>
-            ) : (
-              <Button variant="primary" icon="send" disabled={!input.trim()} onClick={() => void send()}>
-                Send
-              </Button>
-            )}
+              {currentProvider && currentProvider.type !== 'local-runtime' && (
+                <div className="composer-model">
+                  <ModelPicker
+                    providerId={currentProvider.id}
+                    value={model}
+                    onChange={setModel}
+                    defaultLabel={`Default: ${(currentProvider.id === settings.data?.settings.ai.defaultProvider && settings.data.settings.ai.defaultModel) || currentProvider.defaultModel || 'automatic'}`}
+                  />
+                </div>
+              )}
+              {currentProvider && !currentProvider.available && <span className="fx-muted" style={{ fontSize: 12 }}>{currentProvider.message}</span>}
+            </div>
+            <div className="composer-actions">
+              {selected && !activeRun && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon="trash"
+                  aria-label="Delete conversation"
+                  onClick={async () => {
+                    if (await confirm({ title: 'Delete this conversation?', danger: true, confirmLabel: 'Delete' })) {
+                      await call('ai.conversations.delete', { id: selected });
+                      void loadConversation(null);
+                      convs.reload();
+                    }
+                  }}
+                />
+              )}
+              <div className="voice-buttons" role="group" aria-label="Voice">
+                <button
+                  className={`voice-btn${s?.voice.readReplies || voice.handsFree ? ' on' : ''}`}
+                  title={s?.voice.readReplies ? 'Replies are read aloud (click to stop)' : 'Read replies aloud'}
+                  aria-pressed={!!s?.voice.readReplies}
+                  onClick={toggleReadAloud}
+                >
+                  {s?.voice.readReplies || voice.handsFree ? <Icons.speaker size={16} /> : <Icons.speakerOff size={16} />}
+                </button>
+                <button className={`voice-btn${voice.handsFree ? ' on live' : ''}`} title={voice.handsFree ? 'Hands-free conversation is on (click to end)' : 'Hands-free conversation: talk, listen, repeat'} aria-pressed={voice.handsFree} onClick={voice.toggleHandsFree}>
+                  <Icons.headset size={16} />
+                </button>
+                <button
+                  className={`voice-btn mic${voice.state === 'listening' ? ' on live' : ''}`}
+                  title={voice.state === 'listening' ? 'Stop and write it down' : `Talk to ${agentName}`}
+                  aria-label={voice.state === 'listening' ? 'Stop listening' : 'Speak'}
+                  disabled={voice.state === 'transcribing'}
+                  onClick={voice.toggle}
+                >
+                  <Icons.mic size={17} />
+                </button>
+              </div>
+              {activeRun ? (
+                <Button
+                  icon="stop"
+                  onClick={() => {
+                    stopSpeaking();
+                    void call('ai.cancel', { runId: activeRun.runId });
+                  }}
+                >
+                  Stop
+                </Button>
+              ) : (
+                <Button variant="primary" icon="send" disabled={!input.trim()} onClick={() => void send()}>
+                  Send
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </Card>
+      {voice.needsModel && (
+        <Modal
+          title="Voice needs a one-time download"
+          description={`${agentName} turns speech into text on this computer with Whisper (${voice.needsModel.name.toLowerCase()}, ${voice.needsModel.sizeMB} MB). It is downloaded once and nothing you say leaves the computer.`}
+          onClose={() => voice.setNeedsModel(null)}
+          footer={
+            <>
+              <Button variant="ghost" onClick={() => navigate('settings/voice')}>
+                Voice settings
+              </Button>
+              <Button onClick={() => voice.setNeedsModel(null)}>Close</Button>
+            </>
+          }
+        >
+          <div className="voice-setup">
+            <ModelDownload
+              model={voice.needsModel}
+              onDone={() => {
+                voice.setNeedsModel(null);
+                void voice.start();
+              }}
+            />
+          </div>
+        </Modal>
+      )}
       {dialog}
     </div>
   );

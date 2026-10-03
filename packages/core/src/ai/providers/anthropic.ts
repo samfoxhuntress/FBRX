@@ -10,6 +10,8 @@ const FALLBACK_DEFAULT = /^claude-(opus-5(-5)?|fable-5-1|sonnet-5-5)$/;
 /** Models where sampling parameters (temperature) were removed and return a 400. */
 const NO_SAMPLING = /^claude-(opus-(4-[78]|5)|sonnet-5|fable|mythos)/;
 /** Models that accept `output_config.effort`. */
+/** Models with adaptive thinking (older ones would need a fixed thinking budget, so they are left as they are). */
+const ADAPTIVE = /^claude-(opus-(4-[6-9]|5)|sonnet-(4-6|5)|fable|mythos)/;
 const SUPPORTS_EFFORT = /^claude-(opus-(4-[5-9]|5)|sonnet-(4-6|5)|fable|mythos)/;
 
 export interface AnthropicProviderOptions {
@@ -22,7 +24,7 @@ export interface AnthropicProviderOptions {
 /**
  * Claude via the official Anthropic SDK (streaming Messages API + client tools).
  *
- * - Thinking is left at each model's default (adaptive on current models); thinking blocks are replayed
+ * - Adaptive thinking with a summarized display on models that support it (shown live in the app); thinking blocks are replayed
  *   unchanged on later turns, and history is append-only, so preserved-thinking checks pass.
  * - `fallbacks: "default"` is enabled for models that support it, so a policy decline is retried server-side
  *   on Anthropic's recommended fallback model instead of failing the agent run.
@@ -118,6 +120,8 @@ export class AnthropicProvider implements ChatProvider {
       cache_control: { type: 'ephemeral' },
       ...(system ? { system } : {}),
       ...(tools.length ? { tools } : {}),
+      // Summarized thinking is shown live while the agent works (the default display is "omitted": empty text).
+      ...(ADAPTIVE.test(model) ? { thinking: { type: 'adaptive' as const, display: 'summarized' as const } } : {}),
       ...(SUPPORTS_EFFORT.test(model) ? { output_config: { effort: 'high' as const } } : {}),
       ...(req.temperature !== undefined && !NO_SAMPLING.test(model) ? { temperature: req.temperature } : {}),
       ...(FALLBACK_DEFAULT.test(model) ? { betas: ['server-side-fallback-2026-07-01'], fallbacks: 'default' as const } : {}),
@@ -132,6 +136,8 @@ export class AnthropicProvider implements ChatProvider {
           if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
             emittedText = true;
             yield { type: 'text', delta: event.delta.text };
+          } else if (event.type === 'content_block_delta' && event.delta.type === 'thinking_delta' && event.delta.thinking) {
+            yield { type: 'thinking', delta: event.delta.thinking };
           }
         }
         message = await stream.finalMessage();

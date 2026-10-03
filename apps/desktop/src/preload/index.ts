@@ -40,6 +40,7 @@ const api = {
   },
   runCode: (code: string, inputs: string[]) => ipcRenderer.invoke('fbrx:code-run', code, inputs) as Promise<unknown>,
   stopCode: () => ipcRenderer.invoke('fbrx:code-stop') as Promise<unknown>,
+  micAccess: () => ipcRenderer.invoke('fbrx:mic-access') as Promise<{ granted: boolean; status: string }>,
   platform: process.platform,
 };
 

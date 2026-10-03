@@ -12,6 +12,21 @@ export const AI_RESOURCES = ['light', 'balanced', 'full'] as const;
 export type AiResources = (typeof AI_RESOURCES)[number];
 export const DEFAULT_MESH_PORT = 47800;
 
+/**
+ * Speech recognition models (Whisper, run on this computer). Downloaded once from Hugging Face into the data folder;
+ * the .en models only understand English but are faster and more accurate at it.
+ */
+export const VOICE_MODELS = [
+  { id: 'whisper-tiny.en', repo: 'Xenova/whisper-tiny.en', name: 'Fastest', sizeMB: 41, english: true, note: 'Quick on any computer; misses more words' },
+  { id: 'whisper-base.en', repo: 'Xenova/whisper-base.en', name: 'Recommended', sizeMB: 78, english: true, note: 'A good balance of speed and accuracy' },
+  { id: 'whisper-small.en', repo: 'Xenova/whisper-small.en', name: 'Most accurate', sizeMB: 249, english: true, note: 'Best results; a second or two slower' },
+  { id: 'whisper-base', repo: 'Xenova/whisper-base', name: 'Many languages', sizeMB: 78, english: false, note: 'Understands about 100 languages' },
+] as const;
+export type VoiceModelId = (typeof VOICE_MODELS)[number]['id'];
+export const VOICE_MODEL_IDS = VOICE_MODELS.map((m) => m.id) as [VoiceModelId, ...VoiceModelId[]];
+/** Speaking speed, in words per minute. 180 is an ordinary conversational pace; FBRX starts a little brisker. */
+export const VOICE_WPM = { min: 120, max: 360, default: 210 } as const;
+
 export const PROVIDER_TYPES = ['local-runtime', 'ollama', 'openai-compatible', 'openai', 'anthropic'] as const;
 export type ProviderType = (typeof PROVIDER_TYPES)[number];
 
@@ -54,6 +69,29 @@ export const SettingsSchema = z.object({
      * (half, below-normal priority) or full (all but one core). Applies to the built-in runtime and to Ollama.
      */
     resources: z.enum(AI_RESOURCES),
+    /** Longest answer the model may write in one go, in tokens (0 = the provider's own limit). */
+    maxOutputTokens: z.number().int().min(0).max(128000),
+    /** Context window for Ollama models, in tokens (0 = Ollama's own setting). The built-in runtime uses runtime.contextSize. */
+    ollamaContext: z.number().int().min(0).max(262144),
+    /** Show what the agent is thinking and doing while it works. */
+    showThinking: z.boolean(),
+  }),
+  voice: z.object({
+    /** Speech recognition model (see VOICE_MODELS). */
+    sttModel: z.enum(VOICE_MODEL_IDS),
+    /** Microphone device id; empty = the system default. */
+    micId: z.string().max(300),
+    /** System voice used to read replies aloud; empty = the system default. */
+    voiceName: z.string().max(300),
+    /** Speaking speed in words per minute. */
+    wpm: z.number().int().min(VOICE_WPM.min).max(VOICE_WPM.max),
+    pitch: z.number().min(0.5).max(1.5),
+    /** Read the agent's replies aloud. */
+    readReplies: z.boolean(),
+    /** Send what you said as soon as it is written down (otherwise it waits in the box for you to check). */
+    autoSend: z.boolean(),
+    /** Hands-free: listen again after each spoken reply, until you stop. */
+    handsFree: z.boolean(),
   }),
   appearance: z.object({
     preset: z.enum(THEME_PRESETS),
@@ -233,6 +271,19 @@ export const DEFAULT_SETTINGS: Settings = {
     agentName: 'Fabrix',
     newChatsOffline: true,
     resources: 'balanced',
+    maxOutputTokens: 0,
+    ollamaContext: 0,
+    showThinking: true,
+  },
+  voice: {
+    sttModel: 'whisper-base.en',
+    micId: '',
+    voiceName: '',
+    wpm: VOICE_WPM.default,
+    pitch: 1,
+    readReplies: false,
+    autoSend: true,
+    handsFree: false,
   },
   appearance: {
     preset: 'fabrics',

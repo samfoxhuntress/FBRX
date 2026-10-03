@@ -82,8 +82,11 @@ export class ProviderManager {
         };
       }
       case 'ollama': {
-        const plan = resourcePlan(this.d.settings.get().ai.resources);
-        return new OllamaProvider(cfg.id, cfg.baseUrl ?? 'http://127.0.0.1:11434', cfg.defaultModel, undefined, { numThread: plan.threads, keepAlive: plan.keepAlive });
+        const ai = this.d.settings.get().ai;
+        const plan = resourcePlan(ai.resources);
+        // With a chosen context window, keep the history that is sent within it (about 2.5 characters per token).
+        const budget = ai.ollamaContext ? Math.max(4000, Math.floor(ai.ollamaContext * 2.5)) : undefined;
+        return new OllamaProvider(cfg.id, cfg.baseUrl ?? 'http://127.0.0.1:11434', cfg.defaultModel, budget, { numThread: plan.threads, keepAlive: plan.keepAlive, numCtx: ai.ollamaContext || undefined });
       }
       case 'anthropic':
         return new AnthropicProvider({ id: cfg.id, baseUrl: cfg.baseUrl, apiKey: this.apiKey(cfg), defaultModel: cfg.defaultModel });

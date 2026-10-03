@@ -29,10 +29,11 @@ const COLORS: Record<string, [string, string]> = {
   golden: ['#ffd95a', '#b8860b'],
   chicken: ['#ffe9a8', '#c9962b'],
   pcload: ['#d7dde4', '#6c7682'],
-  chewie: ['#c08a5a', '#6b4423'],
+  chewie: ['#7fb7e8', '#2a4f7a'],
   fuzzball: ['#d9a46c', '#7a4f26'],
-  father: ['#ef5350', '#5a0f0f'],
+  father: ['#9a6cf0', '#3d1f7a'],
   wookiee: ['#a9784c', '#4e3018'],
+  mirror: ['#d14b8f', '#5a1f73'],
 };
 
 /** The picture on each badge, drawn in a 64 × 64 box. */
@@ -157,10 +158,10 @@ function Glyph({ id }: { id: string }): ReactNode {
     case 'jigowatts':
       return (
         <g>
-          <rect x="16" y="14" width="32" height="36" rx="4" fill="#1d2433" stroke="#9fb4d6" strokeWidth="1.2" />
-          <path d="M24 22 L32 32 M40 22 L32 32 M32 32 V44" stroke="#bfe3ff" strokeWidth="3" strokeLinecap="round" />
-          <circle cx="32" cy="32" r="3" fill="#fff" />
-          <path d="M34 18 l-4 6 h4 l-3 6" stroke="#ffd34d" strokeWidth="1.6" fill="none" strokeLinejoin="round" />
+          <circle cx="32" cy="33" r="16" fill="#1d2433" stroke="#9fb4d6" strokeWidth="1.4" />
+          <path d="M32 21 V33 L40 37" stroke="#bfe3ff" strokeWidth="2.6" strokeLinecap="round" fill="none" />
+          <circle cx="32" cy="33" r="2" fill="#fff" />
+          <path d="M44 12 l-6 9 h5 l-4 8" stroke="#ffd34d" strokeWidth="2" fill="none" strokeLinejoin="round" strokeLinecap="round" />
         </g>
       );
     case 'stapler':
@@ -218,11 +219,10 @@ function Glyph({ id }: { id: string }): ReactNode {
     case 'chewie':
       return (
         <g>
-          <path d="M20 14 L44 50" stroke="#3e2a14" strokeWidth="6" strokeLinecap="round" />
-          {[0, 1, 2, 3, 4].map((i) => (
-            <rect key={i} x={22.5 + i * 4.4} y={17 + i * 6.6} width="4.5" height="5" rx="1" fill="#c9c9c9" stroke="#555" strokeWidth="0.6" transform={`rotate(-34 ${24.7 + i * 4.4} ${19.5 + i * 6.6})`} />
-          ))}
-          <path d="M40 18 l4 -6 2 7 6 1 -5 4" fill="#ffd34d" />
+          <path d="M32 10 Q42 18 42 34 L38 42 H26 L22 34 Q22 18 32 10 Z" fill="#eef2f6" stroke="#5b4a3a" strokeWidth="1.3" />
+          <circle cx="32" cy="27" r="4" fill="#6fb3ff" stroke="#5b4a3a" strokeWidth="1.1" />
+          <path d="M22 34 L15 43 L24 41 Z M42 34 L49 43 L40 41 Z" fill="#c08a5a" stroke="#5b4a3a" strokeWidth="1" />
+          <path d="M28 43 Q32 54 36 43 Z" fill="#ffb347" />
         </g>
       );
     case 'fuzzball':
@@ -241,10 +241,9 @@ function Glyph({ id }: { id: string }): ReactNode {
     case 'father':
       return (
         <g>
-          <path d="M18 40 Q18 16 32 15 Q46 16 46 40 L50 47 H14 Z" fill="#1d1d1f" stroke="#555" strokeWidth="1" />
-          <path d="M24 30 h7 v5 h-7z M33 30 h7 v5 h-7z" fill="#5a0f0f" />
-          <path d="M28 39 h8 l2 7 h-12z" fill="#3a3a3c" />
-          <path d="M29.5 41 v4 M32 41 v4 M34.5 41 v4" stroke="#888" strokeWidth="0.8" />
+          <path d="M18 22 Q32 12 44 22 Q52 30 42 36 Q32 42 24 36 Q16 30 26 26 Q34 22 38 30" stroke="#fff" strokeWidth="3.4" fill="none" strokeLinecap="round" />
+          <path d="M36 27 L39 32 L33 33 Z" fill="#fff" />
+          <text x="32" y="52" textAnchor="middle" fontSize="11" fontWeight="900" fill="#fff">?!</text>
         </g>
       );
     case 'wookiee':
@@ -256,6 +255,22 @@ function Glyph({ id }: { id: string }): ReactNode {
           <circle cx="37" cy="31" r="2" fill="#1b1b1b" />
           <path d="M28 40 q4 3 8 0" stroke="#3a1d0b" strokeWidth="1.6" fill="none" strokeLinecap="round" />
           <path d="M30 35 h4 l-2 2z" fill="#2a1508" />
+        </g>
+      );
+    case 'mirror':
+      return (
+        <g>
+          {[13, 35].map((x, i) => (
+            <g key={x}>
+              <rect x={x} y="20" width="16" height="12" rx="1.5" fill="#1d2433" stroke="#e8eef6" strokeWidth="1.2" />
+              <rect x={x + 6} y="32" width="4" height="4" fill="#e8eef6" />
+              <rect x={x + 3} y="36" width="10" height="2" rx="1" fill="#e8eef6" />
+              <circle cx={x + 5.5} cy="25" r="1" fill="#6fb3ff" />
+              <circle cx={x + 10.5} cy="25" r="1" fill="#6fb3ff" />
+              <path d={i ? 'M35 30 L28 33' : 'M29 30 L36 33'} stroke="#ffd34d" strokeWidth="1.8" strokeLinecap="round" />
+            </g>
+          ))}
+          <text x="32" y="50" textAnchor="middle" fontSize="7" fontWeight="800" fill="#fff">YOU?</text>
         </g>
       );
     case 'golden':

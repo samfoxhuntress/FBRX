@@ -44,6 +44,8 @@ mac:
     - target: zip
       arch: [arm64, x64]
   hardenedRuntime: true
+  extendInfo:
+    NSMicrophoneUsageDescription: FBRX OS listens when you press the microphone button so you can talk to Fabrix. Speech is turned into text on this Mac.
   gatekeeperAssess: false
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist

@@ -1,8 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MeshDevice, MeshJob, MeshPermissions } from '@fbrx/shared';
+import { funEnabled } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Icons, Input, Modal, Page, Select, Status, TextArea, Toggle, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
+import { PointingComputers, useTriplePing } from '../mesh-egg';
 
 const PERMS: Array<{ key: keyof MeshPermissions; label: string; help: string }> = [
   { key: 'status', label: 'See status', help: 'Health, performance and service status of this computer' },
@@ -96,7 +98,7 @@ function Join({ onClose }: { onClose: () => void }) {
   );
 }
 
-function DeviceCard({ d }: { d: MeshDevice }) {
+function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => void }) {
   const { run, busy } = useAction();
   const { confirm, dialog } = useConfirm();
   const [ask, setAsk] = useState(false);
@@ -143,7 +145,14 @@ function DeviceCard({ d }: { d: MeshDevice }) {
               </Button>
             </>
           )}
-          <Button size="sm" variant="ghost" onClick={() => void run('n', () => call('mesh.action', { id: d.id, action: 'notify', text: 'Hello from your computer' }), 'Sent')}>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => {
+              onPing?.(d);
+              void run('n', () => call('mesh.action', { id: d.id, action: 'notify', text: 'Hello from your computer' }), 'Sent');
+            }}
+          >
             Send a ping
           </Button>
           {d.kind === 'mobile' && (
@@ -219,8 +228,18 @@ export function MeshPage() {
   const [text, setText] = useState('');
   const [name, setName] = useState<string | null>(null);
   const { run, busy } = useAction();
+  const toast = useToast();
   const s = status.data;
   const incoming = settings.data?.settings.mesh.incoming ?? 'ask';
+  // Easter egg: three pings in a row to the same computer (or to yourself) and the two start pointing fingers.
+  const fun = funEnabled(settings.data?.settings);
+  const [pointing, setPointing] = useState<{ left: string; right: string } | null>(null);
+  const triple = useTriplePing((key) => {
+    if (!fun || !s) return;
+    const peer = s.devices.find((x) => x.id === key);
+    setPointing({ left: s.self.name, right: peer?.name ?? s.self.name });
+  });
+  const closePointing = useCallback(() => setPointing(null), []);
   return (
     <Page
       title="Mesh & phone"
@@ -261,9 +280,22 @@ export function MeshPage() {
               </div>
             </Field>
             <Field label="Reachable at">
-              <div className="mono" style={{ fontSize: 13, paddingTop: 8 }}>
-                {s.self.addresses.map((a) => `${a}:${s.port}`).join(', ') || 'No network'}
-              </div>
+              {fun && s.self.addresses.length ? (
+                <button
+                  className="link-btn mono mesh-self-ping"
+                  title="Ping this computer"
+                  onClick={() => {
+                    toast.info(`Reply from ${s.self.addresses[0]}: time<1ms`, 'This computer answers itself. Very reliable.');
+                    triple('self');
+                  }}
+                >
+                  {s.self.addresses.map((a) => `${a}:${s.port}`).join(', ')}
+                </button>
+              ) : (
+                <div className="mono" style={{ fontSize: 13, paddingTop: 8 }}>
+                  {s.self.addresses.map((a) => `${a}:${s.port}`).join(', ') || 'No network'}
+                </div>
+              )}
             </Field>
             <Field label="When another computer asks this computer's agent">
               <Select
@@ -290,7 +322,7 @@ export function MeshPage() {
       {s && s.devices.length > 0 ? (
         <Grid cols={2}>
           {s.devices.map((d) => (
-            <DeviceCard key={d.id} d={d} />
+            <DeviceCard key={d.id} d={d} onPing={(x) => triple(x.id)} />
           ))}
         </Grid>
       ) : (
@@ -336,6 +368,7 @@ export function MeshPage() {
       )}
       {pairing && <Pairing onClose={() => setPairing(false)} />}
       {joining && <Join onClose={() => setJoining(false)} />}
+      {pointing && <PointingComputers left={pointing.left} right={pointing.right} onClose={closePointing} />}
     </Page>
   );
 }

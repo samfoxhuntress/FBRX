@@ -40,6 +40,7 @@ import { WorkspaceStore } from './workspace/workspace-store';
 import { SystemMonitor } from './system/system-monitor';
 import { Migrator } from './system/migrate';
 import { CodeLab } from './system/codelab';
+import { VoiceModels } from './ai/voice-models';
 import { FileBrowser, TerminalSessions } from './system/files';
 import { Spotlight } from './spotlight/spotlight';
 import { AlertEngine } from './alerts/alert-engine';
@@ -134,6 +135,7 @@ export class Kernel {
   readonly trophies: Trophies;
   readonly migrator: Migrator;
   readonly codelab: CodeLab;
+  readonly voice: VoiceModels;
   readonly cli: Fbrx1Cli;
   readonly mesh: MeshService;
   readonly aicoord: AiCoordination;
@@ -321,6 +323,7 @@ export class Kernel {
       audit: (action, outcome, details) => this.audit.append({ category: 'files', action, actor: 'user', outcome, details }),
     });
     this.codelab = new CodeLab(join(this.paths.root, 'codelab'));
+    this.voice = new VoiceModels({ dir: join(this.paths.root, 'voice'), events: this.events, log: L('voice'), internet: () => this.internetAllowed() });
     // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
     this.cli = new Fbrx1Cli({
       call: (method, params) => this.call(method, params ?? {}, { origin: 'user', actor: 'fbrx1' }),

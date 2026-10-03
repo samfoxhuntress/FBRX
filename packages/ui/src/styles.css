@@ -196,6 +196,8 @@ pre,
   flex: none;
   display: block;
   color: var(--text-primary);
+  /* The rest of the row moves the window (frameless title bars); the logo itself is a button. */
+  -webkit-app-region: no-drag;
 }
 .fx-brand-name {
   font-weight: 650;

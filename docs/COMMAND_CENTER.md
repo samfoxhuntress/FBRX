@@ -48,6 +48,28 @@ threat, a listening port, a startup item, a link or file check, a network device
 speed results, app / Windows / driver updates, a file's contents, terminal output, the event log and FBRX's own logs,
 the dashboard health check and your tasks for the day. Long content is trimmed to keep requests fast on local models.
 
+### Talk to Fabrix
+
+Press the **microphone** next to Send and speak; when you pause (or click it again) what you said is written into the
+box and sent. The **speaker** button reads replies aloud as they stream in, the **headset** starts a hands-free
+conversation (listen, answer out loud, listen again, until a quiet moment), and every answer has **Read aloud**.
+
+Speech becomes text on this computer with Whisper, so nothing you say leaves it. **Settings → Voice** picks the
+speech model (downloaded once: *Fastest* 41 MB, *Recommended* 78 MB, *Most accurate* 249 MB, all English, or *Many
+languages* 78 MB), the microphone (with a test that shows what it heard) and whether to send right away. Fabrix's
+voice comes from the voices installed on the computer (Windows Settings → Time & language → Speech, or System Settings
+→ Accessibility → Spoken Content on a Mac): pick one, set the speed in words per minute (120 to 360, 210 by default,
+a natural speaking pace) and the pitch, and press **Hear it**.
+
+### Watch Fabrix work
+
+While Fabrix works, the conversation shows what it is doing right now (asking the model, thinking, the tool it is
+using and on what, waiting for your approval, writing the answer), the step it is on out of how many it may take,
+the time so far and the tokens used, a list of the finished steps, and its thinking as it streams in, for models that
+share it (recent Claude models, and local models with a reasoning mode such as DeepSeek R1, Qwen 3 or gpt-oss, through llama.cpp,
+Ollama, vLLM or OpenRouter). The thinking stays folded under each answer as **How Fabrix thought about it**. It is
+for you to read (it is not added to the conversation the model sees as text) and can be turned off in **Settings → Agent → Work budget**.
+
 ## Everyday
 
 | Page | What it does |
@@ -151,8 +173,8 @@ change goes through the same checks and audit log as the rest of FBRX.
 
 ### Emergency stop
 
-The big red **Emergency stop** (Settings → Agent, the bottom of the conversation list on the agent page, the tray
-menu, or `request ai stop` in FBRX/1) halts every AI action at once: running chats are canceled, tools waiting for
+The red **Emergency stop** button (Settings → Agent, the slim pill at the bottom of the conversation list on the agent
+page, the tray menu, or `request ai stop` in FBRX/1) halts every AI action at once: running chats are canceled, tools waiting for
 approval are denied, the local model is stopped, and the agent and AI apps connected over the Local API are refused
 until someone resumes. A red **AI on emergency stop** pill with **Resume** stays in the top bar meanwhile. Only the
 person at the computer can resume (Resume, the tray menu or `request ai resume`); both are in the audit log. You can
@@ -310,6 +332,18 @@ would not fit in memory, loads only when a chat needs it (or at start-up when it
 unloaded after 20 idle minutes (**Unload the local model when idle**: 5 minutes to never). Answers stream into the
 window in small batches rather than token by token, and the system monitor samples every 10 seconds instead of 2
 while the window is hidden.
+
+## Work budget
+
+**Settings → Agent → Work budget** sets how much one task may do:
+
+| Setting | What it does | Default |
+| --- | --- | --- |
+| Steps per task | One step is a round of thinking and tool use. Fabrix says when it used them all; say *continue* to go on. Saved to the policy (raises tool calls per task to three per step), so an organization can fix it. | 30 |
+| Longest answer | The most the model may write in one reply. A cut-off answer says so and points here. | Automatic (64K tokens for Claude, the server's own limit for other models) |
+| Memory of the built-in model | The built-in runtime's context window, 4K to 128K tokens, with the memory it needs. | 8K |
+| Memory of Ollama models | Ollama's context window (`num_ctx`); Ollama's own setting is often 4K. | Ollama's setting |
+| Show what Fabrix is thinking and doing | The live activity panel and thinking notes. | On |
 
 ## AI models
 

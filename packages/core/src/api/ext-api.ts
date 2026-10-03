@@ -3,6 +3,7 @@ import { z } from 'zod';
 import {
   ALERT_CHANNELS,
   EVENT_LEVELS,
+  VOICE_MODEL_IDS,
   LAB_FEATURES,
   MESH_ACTIONS,
   MIGRATE_ENGINES,
@@ -422,6 +423,21 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'codelab.sandbox': async (p) => {
       await k.codelab.sandbox(CodeName.parse(p).name, k.paths.tmp);
       k.audit.append({ category: 'security', action: 'codelab.sandbox', actor: 'user', outcome: 'success', details: { name: CodeName.parse(p).name } });
+      return { ok: true };
+    },
+
+    // ------------------------------------------------------------------------------------------ voice
+    'voice.models': () => k.voice.list(),
+    'voice.install': (p) => {
+      k.voice.install(z.object({ model: z.enum(VOICE_MODEL_IDS) }).parse(p).model);
+      return { ok: true };
+    },
+    'voice.remove': (p) => {
+      k.voice.remove(z.object({ model: z.enum(VOICE_MODEL_IDS) }).parse(p).model);
+      return { ok: true };
+    },
+    'voice.cancel': () => {
+      k.voice.cancel();
       return { ok: true };
     },
 

@@ -60,5 +60,14 @@ for (const f of readdirSync(mobileSrc)) copyFileSync(join(mobileSrc, f), join(mo
 copyFileSync(join(root, 'node_modules/tweetnacl/nacl-fast.min.js'), join(mobileOut, 'nacl.min.js'));
 copyFileSync(join(app, 'build', 'icon.png'), join(mobileOut, 'icon.png'));
 
+// Voice input's speech engine (ONNX Runtime for WebAssembly), served to the app from fbrx-voice://ort/ so nothing
+// is fetched from a CDN. It must be the exact build the bundled transformers.js expects.
+const ortOut = join(app, 'dist/ort');
+mkdirSync(ortOut, { recursive: true });
+for (const f of ['ort-wasm-simd-threaded.asyncify.mjs', 'ort-wasm-simd-threaded.asyncify.wasm']) copyFileSync(join(root, 'node_modules/onnxruntime-web/dist', f), join(ortOut, f));
+
 execFileSync(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build', '--config', join(app, 'vite.config.ts')], { stdio: 'inherit', cwd: app });
+// Vite also emits ONNX Runtime's wasm next to the worker; the worker loads it from fbrx-voice://ort/ instead.
+const assets = join(app, 'dist/renderer/assets');
+for (const f of readdirSync(assets)) if (/^ort-wasm.*\.wasm$/.test(f)) rmSync(join(assets, f));
 console.log(`Built FBRX OS desktop ${pkg.version}`);

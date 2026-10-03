@@ -4,10 +4,11 @@
  *
  * - "Where's my stapler?" (or just "stapler"): an instant answer, then middle-manager jargon ending in "That would
  *   be great." until "PC load letter" (or "better"), "I quit", "normal mode" or "no more jargon".
- * - "Chewie, we're home": every answer is Wookiee until "Laugh it up, fuzzball". "Nooo" gets the famous reply.
+ * - Telling your furry co-pilot you're home: every answer is growls until "Laugh it up, fuzzball". "Nooo" gets a
+ *   family secret.
  */
 
-/** Stored per conversation: `lumbergh`, or `wookiee:<messages so far>`. */
+/** Stored per conversation: `lumbergh` (the jargon manager), or `wookiee:<messages so far>` (the growling co-pilot). */
 export type PersonaValue = string | null;
 
 export interface ChatEgg {
@@ -28,12 +29,12 @@ const WOOKIEE = [
   'RWWWAAARRGH!',
 ];
 
-/** A Wookiee answer: two or three growls with a stage direction now and then. */
+/** A co-pilot answer: two or three growls with a stage direction now and then. */
 export function wookieeReply(rand: () => number = Math.random): string {
   const pick = () => WOOKIEE[Math.floor(rand() * WOOKIEE.length)];
   const parts = [pick(), pick()];
   if (rand() < 0.5) parts.push(pick());
-  const action = ['*shrugs*', '*waves a furry arm at the screen*', '*adjusts bandolier*', '*pats you on the head*', '*points at the hyperdrive*'][Math.floor(rand() * 5)];
+  const action = ['*shrugs*', '*waves a furry arm at the screen*', '*adjusts bandolier*', '*pats you on the head*', '*points at the engine light*'][Math.floor(rand() * 5)];
   return rand() < 0.45 ? `${parts.join(' ')} ${action}` : parts.join(' ');
 }
 
@@ -53,7 +54,7 @@ export function chatEgg(raw: string, persona: PersonaValue, rand: () => number =
     }
     const count = Number(persona!.split(':')[1] ?? 0) + 1;
     if (/^no{3,}[!.]*$/i.test(text)) return { reply: 'No, I am your father.', persona: `wookiee:${count}`, trophies: ['father'] };
-    // A stapler question still gets its answer, Wookiee or not.
+    // A stapler question still gets its answer, growls or not.
     if (!/\bstapler\b/i.test(text)) return { reply: wookieeReply(rand), persona: `wookiee:${count}`, trophies: count >= 5 ? ['wookiee'] : [] };
   }
 

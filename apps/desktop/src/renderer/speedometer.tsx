@@ -44,7 +44,7 @@ export interface SpeedometerProps {
   unit: string;
   /** Small line under the unit (the test phase, or a remark). */
   label?: string;
-  /** Lightning and a blue glow (for 1.21 jigowatts). */
+  /** Lightning and a blue glow (for 1.21 gigawatts). */
   flux?: boolean;
   /** Scale labels; defaults to the Mbps marks. */
   marks?: string[];

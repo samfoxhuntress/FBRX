@@ -145,8 +145,8 @@ export const DEFAULT_POLICY: Policy = {
   ai: {
     allowCloudProviders: true,
     allowedProviders: [],
-    maxStepsPerRun: 12,
-    maxToolCallsPerRun: 40,
+    maxStepsPerRun: 30,
+    maxToolCallsPerRun: 80,
     guardianModelReview: false,
   },
   data: {
