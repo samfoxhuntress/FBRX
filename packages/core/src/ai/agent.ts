@@ -224,8 +224,8 @@ Answer like a 1990s middle manager who adores corporate jargon: synergy, circle 
     return [
       s.ai.systemPrompt.trim(),
       '',
-      `Your name is ${s.ai.agentName}. Introduce yourself by that name when it is natural.`,
-      ...(addressAs(s) ? [`You are working with ${s.profile.name.trim() || addressAs(s)}. Address them as "${addressAs(s)}" (a greeting, a closing line); don't overdo it.`] : []),
+      `Your name is ${s.ai.agentName}. Mention it only when asked who you are; do not introduce yourself or open replies with your name. Start each reply with the answer itself.`,
+      ...(addressAs(s) ? [`You are working with ${s.profile.name.trim() || addressAs(s)}. When you use their name, call them "${addressAs(s)}", and use it rarely: a greeting in the first reply of a conversation or a closing line after a big job, not in every reply.`] : []),
       '',
       '## Environment',
       `- Date: ${date} (time zone ${tz}); call time.now for the exact time`,

@@ -278,6 +278,200 @@ pre,
 .fx-nav-item .fx-adv-tag {
   margin-left: auto;
 }
+/* Sections that open to their pages (desktop app). */
+.fx-shell {
+  transition: grid-template-columns 0.18s ease;
+}
+.fx-shell.grouped {
+  grid-template-columns: 248px 1fr;
+}
+.fx-shell.collapsed {
+  grid-template-columns: 72px 1fr;
+}
+.fx-shell.collapsed .fx-brand {
+  justify-content: center;
+  padding: 16px 0 12px;
+}
+.fx-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 6px 10px 12px;
+}
+.fx-group-head {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 7px 8px;
+  border: 0;
+  border-radius: var(--radius);
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  position: relative;
+}
+.fx-group-head:hover {
+  background: var(--surface-2);
+}
+.fx-group-icon {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+.fx-group.here .fx-group-icon {
+  background: var(--accent-wash);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
+}
+.fx-group-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.fx-group-name {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: var(--text-primary);
+}
+.fx-group-hint {
+  font-size: 11px;
+  color: var(--text-muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.fx-group-head .fx-nav-count {
+  margin-left: 0;
+}
+.fx-group-chev {
+  flex: none;
+  opacity: 0.5;
+  transform: rotate(-90deg);
+  transition: transform 0.15s ease;
+}
+.fx-group.open .fx-group-chev {
+  transform: none;
+}
+.fx-group-items {
+  margin: 2px 0 8px 25px;
+  padding-left: 10px;
+  border-left: 1px solid var(--border);
+  animation: fx-drop 0.14s ease-out;
+}
+.fx-group-items .fx-nav-item {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+@keyframes fx-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fx-groups.collapsed {
+  align-items: center;
+  padding: 6px 0 12px;
+  gap: 4px;
+}
+.fx-groups.collapsed .fx-group-head {
+  width: 50px;
+  justify-content: center;
+  padding: 6px;
+}
+.fx-groups.collapsed .fx-group-head[aria-expanded='true'] .fx-group-icon {
+  border-color: var(--accent);
+}
+.fx-groups.collapsed .fx-nav-count {
+  position: absolute;
+  top: 0;
+  right: 0;
+  min-width: 16px;
+  padding: 0 4px;
+  font-size: 10px;
+}
+.fx-flyout {
+  position: fixed;
+  left: 78px;
+  z-index: 60;
+  min-width: 236px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-pop);
+  animation: fx-slide 0.14s ease-out;
+}
+@keyframes fx-slide {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.fx-flyout-head {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 10px 8px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid var(--border);
+}
+.fx-flyout-head b {
+  font-size: 13.5px;
+}
+.fx-flyout-head span {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+.fx-collapse {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 10px 8px;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+.fx-collapse:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.fx-shell.collapsed .fx-collapse {
+  margin: 0 auto 10px;
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-shell,
+  .fx-group-chev {
+    transition: none;
+  }
+  .fx-group-items,
+  .fx-flyout {
+    animation: none;
+  }
+}
 .fx-sidebar-foot {
   border-top: 1px solid var(--border);
   padding: 10px 12px;

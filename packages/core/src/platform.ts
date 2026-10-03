@@ -16,6 +16,18 @@ export interface KeychainAdapter {
   unprotect(blob: string): Promise<Buffer>;
 }
 
+/**
+ * A keychain an earlier version protected the vault key with and this one no longer uses (the Mac Keychain, which
+ * asks for the Mac password whenever an updated app opens it). Read only when the person asks to bring the key over.
+ */
+export interface MovedKeychain {
+  /** The keychain_kind stored with keys it can open. */
+  readonly kind: string;
+  /** For people: "the Mac Keychain". */
+  readonly label: string;
+  unprotect(blob: string): Promise<Buffer>;
+}
+
 export interface UpdateFeedConfig {
   feedUrl: string | null;
   channel: UpdateChannel;
@@ -43,6 +55,8 @@ export interface PlatformAdapter {
   appVersion: string;
   devMode: boolean;
   keychain: KeychainAdapter;
+  /** Where an earlier version kept the vault key, when that changed (see MovedKeychain). */
+  movedKeychain?: MovedKeychain | null;
   /** Directory with bundled resources (e.g. the local model runtime). */
   resourcesDir: string | null;
   /** Absolute path to plugin-worker.mjs. */

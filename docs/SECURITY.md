@@ -43,8 +43,21 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
 
 ## Credentials
 
-* Vault secrets are AES-256-GCM encrypted under a data key protected by the OS keychain (macOS Keychain / Windows
-  DPAPI) and optionally a recovery passphrase (scrypt). See [ARCHITECTURE.md](ARCHITECTURE.md#vault-credentials).
+* Vault secrets are AES-256-GCM encrypted under a data key that is protected on this computer (Windows DPAPI; the
+  Linux secret service; on macOS a key file only the user can read, see below) and optionally by a recovery
+  passphrase (scrypt). See [ARCHITECTURE.md](ARCHITECTURE.md#vault-credentials).
+* **macOS does not use the Keychain.** Electron's safeStorage keeps its key in the login Keychain, and macOS asks for
+  the Mac password whenever an updated, re-signed app opens that item, which for an app that is not notarized is
+  every update. Since 1.8.1 FBRX keeps the vault key in `keychain.key` (mode 0600) in the data folder and starts
+  Chromium with its mock keychain, so nothing asks for a password. A key that 1.8.0 or earlier left in the Keychain
+  is read once, only when the person presses **Bring them over** (`vault.importMoved`, reserved for the person at
+  the computer): FBRX asks the `security` tool for the "FBRX OS Safe Storage" item (macOS may ask for the Mac
+  password then), decrypts the old wrapping itself (Chromium's OSCrypt format) and re-protects the key with the
+  key file. **Start over** (`vault.reset`) deletes every credential and restarts.
+* **Ask for the password at every start** (`vault.passwordOnStart`): the data key is then kept only under the
+  vault passphrase and the computer-bound copy is deleted, so the vault stays locked after every start until the
+  passphrase is entered (FBRX asks when it opens). Services that need credentials wait for the unlock instead of
+  failing.
 * The model never sees secret values. Connectors and plugins reference secrets by name; the redactor removes any
   secret value from tool output, logs and the conversation.
 * Organization credentials are created in the console, encrypted at rest with the control plane's master key,
@@ -111,8 +124,16 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   (camera, screen capture, geolocation, MIDI and the rest are refused for every page). macOS asks once, with the
   reason shown in the system prompt; the signed app carries the `audio-input` entitlement. The content security
   policy allows WebAssembly compilation (`wasm-unsafe-eval`) and the `fbrx-voice:` scheme, and nothing else new.
-* **Spoken replies** use the voices installed on the operating system. A voice the list marks *online* belongs to a
-  speech service that receives the text it reads.
+* **Spoken replies** use the voices installed on the operating system, or the **natural voices**: the Kokoro-82M
+  model (Apache-2.0) and its voice files, downloaded on request from `onnx-community/Kokoro-82M-v1.0-ONNX` like the
+  speech models and run in a second worker. Text becomes phonemes with a bundled copy of the CMU Pronouncing
+  Dictionary and HeadTTS's letter-to-sound rules (MIT); no GPL phonemizer (eSpeak) is included. A system voice the
+  list marks *online* belongs to a speech service that receives the text it reads. See
+  [THIRD_PARTY.md](THIRD_PARTY.md).
+* The speech workers use several processor threads, which needs `SharedArrayBuffer`: the app enables it with
+  Chromium's `SharedArrayBuffer` feature switch. Its windows only show FBRX's own pages (the code lab's JavaScript
+  runner is a separate, network-blocked window), so the cross-site timing concern behind cross-origin isolation does
+  not arise.
 * **Thinking** that a model shares (Claude's summarized thinking, `reasoning_content` from llama.cpp or vLLM,
   OpenRouter's `reasoning`, Ollama's `thinking`, or a leading `<think>` block) is stored with the message and shown
   to the person, but never added to the conversation as text. (Claude's own signed thinking blocks go back to Claude
@@ -138,6 +159,15 @@ builds. A customer running their own control plane cannot mint licenses your bui
   publisher named in `electron-builder.yml`.
 * Update feeds are served per device by your control plane over authenticated HTTPS; files carry SHA-512 checksums
   verified by electron-updater.
+* **New versions offered from the repository.** The desktop app reads `release.json` from the public FBRX repository
+  (`raw.githubusercontent.com/samfoxhuntress/FBRX/HEAD/release.json`) a minute and a half after it starts and every
+  six hours, only while internet access is allowed and **Check for new versions automatically** is on. A newer
+  version raises one alert; nothing is installed unless the person chooses **Update now** (`release.install`,
+  reserved for them). That downloads the zip named in the manifest (only from github.com or codeload.github.com),
+  checks it holds that version, copies it over the folder FBRX was installed from (recorded by the setup wizard in
+  `install-source.json`; `.fbrx-keys`, `.fbrx-setup`, `node_modules` and `.git` are never touched) and opens the
+  setup wizard there in its own window, which builds, installs and reopens the app as a manual update would.
+  `FBRX_RELEASE_MANIFEST` points the check at another manifest (an internal mirror, or tests).
 * Plugin packages pushed from the console are verified against their SHA-256 before installation.
 * The local runtime downloads llama.cpp from the official `ggml-org/llama.cpp` GitHub releases and models with
   SHA-256 verification where the catalog lists a checksum.

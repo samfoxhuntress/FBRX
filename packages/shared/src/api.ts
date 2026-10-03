@@ -10,6 +10,7 @@ import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
 import type { ExtEvents, ExtMethods } from './ext';
 import type { Settings } from './settings';
 import type { UpdateChannel } from './constants';
+import type { ReleaseCheck } from './release';
 
 export type DeepPartial<T> = T extends (infer U)[] ? U[] : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
 
@@ -27,12 +28,26 @@ export interface ServiceStatus {
   critical: boolean;
 }
 
+/**
+ * Why the vault is locked: "password" = it asks for the vault password at every start (by choice); "moved" = the key
+ * is still protected by a keychain FBRX no longer uses (the Mac Keychain before 1.8.1) and can be brought over;
+ * "keychain" = this computer's keychain could not open it (use the recovery passphrase); "manual" = locked by hand.
+ */
+export type VaultLockReason = 'password' | 'moved' | 'keychain' | 'manual';
+
 export interface VaultStatus {
   state: 'uninitialized' | 'locked' | 'unlocked';
   keychain: 'available' | 'unavailable';
+  /** What protects the key on this computer: the operating system's keychain or FBRX's own key file. */
+  keychainKind: 'os' | 'file' | 'env' | 'memory';
   secretCount: number;
   managedCount: number;
   hasRecovery: boolean;
+  lockReason: VaultLockReason | null;
+  /** The vault asks for its password every time FBRX OS starts. */
+  passwordOnStart: boolean;
+  /** Name of the old keychain the key can be brought over from (when lockReason is "moved"). */
+  movedFrom: string | null;
 }
 
 export const SECRET_KINDS = ['api-key', 'password', 'token', 'certificate', 'connection-string', 'note', 'other'] as const;
@@ -459,6 +474,12 @@ export interface CoreMethods extends ExtMethods {
   'vault.reveal': (p: { name: string }) => { name: string; value: string };
   'vault.delete': (p: { name: string }) => { deleted: boolean };
   'vault.changeRecovery': (p: { current: string; next: string }) => VaultStatus;
+  /** Brings the key over from the keychain an earlier version used (the Mac Keychain). */
+  'vault.importMoved': () => VaultStatus;
+  /** Ask for the vault password at every start (on), or unlock silently on this computer again (off). */
+  'vault.passwordOnStart': (p: { enabled: boolean; passphrase: string }) => VaultStatus;
+  /** Deletes every saved credential and starts a new, empty vault (FBRX OS restarts). */
+  'vault.reset': (p: { confirm: 'DELETE' }) => VaultStatus;
 
   'ai.providers': () => ProviderStatus[];
   'ai.models': (p: { providerId: string }) => ModelInfo[];
@@ -529,6 +550,13 @@ export interface CoreMethods extends ExtMethods {
   'updates.check': () => UpdateStatus;
   'updates.install': () => UpdateStatus;
 
+  /** New versions published in the FBRX repository (release.json), offered to the person. */
+  'release.status': () => ReleaseCheck;
+  'release.check': () => ReleaseCheck;
+  'release.skip': (p: { version: string }) => ReleaseCheck;
+  /** Downloads the new version into the folder FBRX was installed from and starts its installer. */
+  'release.install': () => ReleaseCheck;
+
   'localapi.info': (p: { revealToken?: boolean }) => LocalApiInfo;
   'localapi.rotateToken': () => LocalApiInfo;
 }
@@ -554,6 +582,7 @@ export interface CoreEvents extends ExtEvents {
   'fleet.changed': FleetStatus;
   'license.changed': LicenseStatus;
   'updates.changed': UpdateStatus;
+  'release.changed': ReleaseCheck;
   notification: NotificationEvent;
 }
 export type CoreEventName = keyof CoreEvents;

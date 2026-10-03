@@ -144,32 +144,90 @@ interface Note {
   x: number;
   y: number;
   text: string;
-  kind: 'note' | 'portrait';
+  kind: 'note' | 'portrait' | 'postcard';
 }
 
-/** The goose, drawn facing left. It wears safety goggles (a visual upgrade on the classic), and once every trophy is
- * found it carries a golden egg with a #1 ribbon on its back. `flipped` keeps the ribbon's text readable. */
-function GooseSvg({ walking, honking, golden = false, flipped = false, fast = false }: { walking: boolean; honking: boolean; golden?: boolean; flipped?: boolean; fast?: boolean }) {
+export type Season = 'winter' | 'spring' | 'summer' | 'fall';
+
+/**
+ * The season where you are: from the month, flipped for the southern hemisphere (guessed from the time zone, so a
+ * goose in Sydney wears his scarf in July).
+ */
+export function seasonNow(d = new Date(), tz = Intl.DateTimeFormat().resolvedOptions().timeZone): Season {
+  const m = d.getMonth();
+  const north: Season = m === 11 || m <= 1 ? 'winter' : m <= 4 ? 'spring' : m <= 7 ? 'summer' : 'fall';
+  const south = /^(Australia|Antarctica|Pacific\/(Auckland|Chatham|Fiji|Noumea|Tongatapu|Apia)|America\/(Argentina|Santiago|Sao_Paulo|Montevideo|Asuncion|Punta_Arenas)|Africa\/(Johannesburg|Maputo|Harare|Windhoek|Gaborone|Maseru|Mbabane|Lusaka))/.test(tz);
+  return south ? ({ winter: 'summer', summer: 'winter', spring: 'fall', fall: 'spring' } as const)[north] : north;
+}
+
+/** A knitted scarf around the bottom of the neck, its two ends trailing behind. */
+function Scarf({ season }: { season: 'winter' | 'fall' }) {
+  const [main, stripe] = season === 'winter' ? ['#c62828', '#f5f5f5'] : ['#d9822b', '#7a4a1e'];
   return (
-    <svg width={GOOSE_W} height={GOOSE_H} viewBox="0 0 92 84" className={`goose-svg${walking ? ' walking' : ''}${fast ? ' fast' : ''}`} aria-hidden>
+    <g className="goose-scarf">
+      <g className="goose-scarf-tails">
+        <path d="M33 41 L42 52 L38.5 54.5 L30.5 43 Z" fill={main} />
+        <path d="M34.8 43.5 L37.5 47 M37.2 46.6 L40 50.2" stroke={stripe} strokeWidth="1.6" />
+        <path d="M38.5 54.5 l-0.6 2.2 M40 53.4 l0.4 2.3 M41.4 52.2 l1.2 1.9" stroke={main} strokeWidth="0.9" strokeLinecap="round" />
+        <path d="M32 42 L45 46 L44 49.6 L30.8 45 Z" fill={main} opacity="0.92" />
+      </g>
+      <path d="M23.5 38.5 Q30 43.5 36.2 38.6" stroke={main} strokeWidth="5.6" strokeLinecap="round" fill="none" />
+      <path d="M25.2 38.8 l1.6 2.4 M29 40.4 l0.9 2.3 M32.8 40.2 l0.4 2.4" stroke={stripe} strokeWidth="1.3" strokeLinecap="round" />
+    </g>
+  );
+}
+
+/** Little snow boots with a fluffy cuff, drawn over a foot. */
+function Boot({ x, dark }: { x: number; dark?: boolean }) {
+  return (
+    <g>
+      <path d={`M${x - 3.2} 69 h6.8 v6.6 q0 3.2 -3 3.2 h-8.6 q-2.4 0 -2.4 -2.2 q0 -2.3 3 -2.6 h4.2 z`} fill={dark ? '#24493f' : '#2f5d50'} />
+      <rect x={x - 3.8} y={67.2} width={8} height={3.4} rx={1.7} fill="#efe7d4" />
+    </g>
+  );
+}
+
+/** A small leaf that blew onto his back. */
+function Leaf() {
+  return (
+    <g transform="translate(62 35) rotate(24)">
+      <path d="M0 0 q4 -6 8 0 q-4 6 -8 0 z" fill="#c8551d" />
+      <path d="M-1.5 0 h9" stroke="#8a3a12" strokeWidth="0.6" />
+    </g>
+  );
+}
+
+/** The goose, drawn facing left. Flight goggles pushed up on his head with a tuft of feathers sticking up behind
+ * the strap; dressed for the season; once every trophy is found he carries a golden egg with a #1 ribbon on his
+ * back. `flipped` keeps the ribbon's text readable. */
+function GooseSvg({ walking, honking, golden = false, flipped = false, fast = false, season = null }: { walking: boolean; honking: boolean; golden?: boolean; flipped?: boolean; fast?: boolean; season?: Season | null }) {
+  const winter = season === 'winter';
+  return (
+    <svg width={GOOSE_W} height={GOOSE_H} viewBox="0 0 92 84" overflow="visible" className={`goose-svg${walking ? ' walking' : ''}${fast ? ' fast' : ''}`} aria-hidden>
       <defs>
         <radialGradient id="goose-gold" cx="35%" cy="30%" r="75%">
           <stop offset="0" stopColor="#fff3b0" />
           <stop offset="0.45" stopColor="#ffd34d" />
           <stop offset="1" stopColor="#b8860b" />
         </radialGradient>
+        <radialGradient id="goose-lens" cx="35%" cy="30%" r="80%">
+          <stop offset="0" stopColor="#e6f7ff" />
+          <stop offset="0.6" stopColor="#8fcbe8" />
+          <stop offset="1" stopColor="#4a86a8" />
+        </radialGradient>
       </defs>
       <g className="goose-leg goose-leg-a">
         <path d="M44 62 L44 76" stroke="#f08c00" strokeWidth="3.5" strokeLinecap="round" />
-        <path d="M44 76 L36 79 L46 80 Z" fill="#f08c00" />
+        {winter ? <Boot x={44} /> : <path d="M44 76 L36 79 L46 80 Z" fill="#f08c00" />}
       </g>
       <g className="goose-leg goose-leg-b">
         <path d="M54 62 L54 76" stroke="#e07b00" strokeWidth="3.5" strokeLinecap="round" />
-        <path d="M54 76 L46 79 L56 80 Z" fill="#e07b00" />
+        {winter ? <Boot x={54} dark /> : <path d="M54 76 L46 79 L56 80 Z" fill="#e07b00" />}
       </g>
       <ellipse cx="50" cy="50" rx="27" ry="16" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="1.5" />
       <path d="M72 44 Q84 40 80 52 Q76 50 72 52 Z" fill="#ececE4" stroke="#cfcfc6" strokeWidth="1.2" />
       <path d="M44 48 Q52 40 62 46" stroke="#d9d9d0" strokeWidth="2" fill="none" />
+      {season === 'fall' && <Leaf />}
       {golden && (
         <g className="goose-golden">
           <ellipse cx="57" cy="27.5" rx="6.8" ry="8.6" fill="url(#goose-gold)" stroke="#a87a00" strokeWidth="1" transform="rotate(12 57 27.5)" />
@@ -185,18 +243,112 @@ function GooseSvg({ walking, honking, golden = false, flipped = false, fast = fa
       <g className="goose-neck">
         <path d="M30 46 Q22 30 26 14" stroke="#f7f7f2" strokeWidth="10" strokeLinecap="round" fill="none" />
         <path d="M30 46 Q22 30 26 14" stroke="#cfcfc6" strokeWidth="11.5" strokeLinecap="round" fill="none" opacity="0.35" />
+        {(season === 'winter' || season === 'fall') && <Scarf season={season} />}
         <circle cx="27" cy="13" r="8.5" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="1.2" />
-        {/* Safety goggles, seen from the side: one lens over the eye and a strap around the back of the head. */}
-        <path d="M26.5 9.6 Q31.5 8.2 35.3 11.6" stroke="#6b4a1f" strokeWidth="2.4" strokeLinecap="round" fill="none" />
-        <circle cx="23.6" cy="11" r="3.7" fill="#bfe8ff" fillOpacity="0.85" stroke="#2f2f2f" strokeWidth="1.6" />
-        <circle cx="23.4" cy="11.2" r="1.5" fill="#1b1b1b" />
-        <path d="M21.6 9.4 l1.4 -1" stroke="#ffffff" strokeWidth="1" strokeLinecap="round" />
+        {/* Feathers sticking up behind the goggle strap, like hair under pushed-up goggles. */}
+        <g className="goose-tuft">
+          <path d="M28.2 5.6 Q26.8 -0.6 30.4 -3.4 Q30.2 1.4 30.9 5.4 Z" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="0.8" strokeLinejoin="round" />
+          <path d="M30.6 6 Q31.4 0.4 35.6 -1.4 Q33.6 2.6 33.2 6.6 Z" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="0.8" strokeLinejoin="round" />
+          <path d="M32.9 7.4 Q35.6 3.6 38.6 3.4 Q36.4 6 35.2 8.6 Z" fill="#f2f2ec" stroke="#cfcfc6" strokeWidth="0.8" strokeLinejoin="round" />
+        </g>
+        {/* Flight goggles pushed up on the head: a leather strap round the back, two brass-rimmed lenses on top. */}
+        <path d="M19.6 8.6 Q27 3.8 35.6 9.4" stroke="#6b4a1f" strokeWidth="2.8" strokeLinecap="round" fill="none" />
+        <path d="M20.4 8 Q27 3.6 34.8 8.6" stroke="#8a6230" strokeWidth="0.8" strokeLinecap="round" fill="none" />
+        <circle cx="27.4" cy="3.6" r="3.2" fill="url(#goose-lens)" stroke="#b8862b" strokeWidth="1.5" />
+        <path d="M22.6 4.8 h1.6" stroke="#6b4a1f" strokeWidth="1.4" strokeLinecap="round" />
+        <circle cx="21.2" cy="5.4" r="3.5" fill="url(#goose-lens)" stroke="#c9952f" strokeWidth="1.6" />
+        <path d="M19.6 3.9 l1.3 -0.8" stroke="#ffffff" strokeWidth="1" strokeLinecap="round" />
+        {/* His eye, now that the goggles are up. */}
+        <circle cx="23.4" cy="11.6" r="1.7" fill="#1b1b1b" />
+        <circle cx="22.9" cy="11" r="0.55" fill="#ffffff" />
         <g className={honking ? 'goose-beak open' : 'goose-beak'}>
           <path d="M19 12 L6 14 L19 16 Z" fill="#f08c00" />
           <path className="goose-jaw" d="M19 15 L8 16.5 L19 18 Z" fill="#d97800" />
         </g>
       </g>
     </svg>
+  );
+}
+
+/** A butterfly that keeps the goose company in spring. */
+function Butterfly() {
+  return (
+    <svg className="goose-butterfly" width="22" height="18" viewBox="0 0 22 18" aria-hidden>
+      <g className="goose-butterfly-wings">
+        <path d="M11 9 Q4 0 1.5 4 Q0 9 11 9 Z M11 9 Q3 16 5 16.5 Q9 17 11 9 Z" fill="#f6a5c0" stroke="#b3416b" strokeWidth="0.7" />
+        <path d="M11 9 Q18 0 20.5 4 Q22 9 11 9 Z M11 9 Q19 16 17 16.5 Q13 17 11 9 Z" fill="#f9c74f" stroke="#b07d12" strokeWidth="0.7" />
+      </g>
+      <path d="M11 4.5 v9" stroke="#3b2a1a" strokeWidth="1.2" strokeLinecap="round" />
+    </svg>
+  );
+}
+
+/** A beach umbrella he plants beside him in summer to sit in the shade for a moment. */
+function BeachUmbrella() {
+  return (
+    <svg className="goose-umbrella" width="96" height="104" viewBox="0 0 96 104" aria-hidden>
+      <path d="M50 30 L44 100" stroke="#8a6a46" strokeWidth="3" strokeLinecap="round" />
+      <path d="M6 34 Q48 -10 92 34 Z" fill="#ffffff" />
+      <path d="M6 34 Q14 14 30 7 Q30 22 22 34 Z M49 2 Q58 6 64 12 Q60 26 62 34 L44 34 Q46 16 49 2 Z M78 16 Q88 24 92 34 L76 34 Q80 24 78 16 Z" fill="#e63946" />
+      <path d="M6 34 Q48 -10 92 34" stroke="#c22f3a" strokeWidth="1.5" fill="none" />
+      <ellipse cx="44" cy="101" rx="16" ry="3" fill="#000" opacity="0.15" />
+    </svg>
+  );
+}
+
+/** A postcard from the beach, starring the goose. */
+function Postcard({ golden }: { golden: boolean }) {
+  return (
+    <>
+      <span className="goose-postcard-art">
+        <svg width="190" height="104" viewBox="0 0 190 104" aria-hidden>
+          <defs>
+            <linearGradient id="pc-sky" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stopColor="#7cc6f0" />
+              <stop offset="1" stopColor="#d6f0ff" />
+            </linearGradient>
+          </defs>
+          <rect width="190" height="104" fill="url(#pc-sky)" />
+          <circle cx="160" cy="22" r="13" fill="#ffd34d" />
+          <path d="M0 56 Q48 50 95 56 T190 54 V74 H0 Z" fill="#2a9fd6" />
+          <path d="M0 60 q12 -3 24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0" stroke="#e6f7ff" strokeWidth="1.5" fill="none" />
+          <path d="M0 72 Q95 62 190 72 V104 H0 Z" fill="#f2d49b" />
+          <g transform="translate(118 28) scale(0.55)">
+            <path d="M50 30 L44 100" stroke="#8a6a46" strokeWidth="4" strokeLinecap="round" />
+            <path d="M6 34 Q48 -10 92 34 Z" fill="#fff" />
+            <path d="M6 34 Q14 14 30 7 Q30 22 22 34 Z M49 2 Q58 6 64 12 Q60 26 62 34 L44 34 Q46 16 49 2 Z M78 16 Q88 24 92 34 L76 34 Q80 24 78 16 Z" fill="#e63946" />
+          </g>
+        </svg>
+        <span className="goose-postcard-goose">
+          <GooseSvg walking={false} honking={false} golden={golden} season="summer" />
+        </span>
+      </span>
+      <span className="goose-postcard-text">
+        <b>Greetings from the beach!</b>
+        <span>Wish you were here. The Wi-Fi is terrible. — G</span>
+      </span>
+      <span className="goose-postcard-stamp" aria-hidden>
+        🪶
+      </span>
+    </>
+  );
+}
+
+/** The goose as he is dressed right now, for the Fun extras settings. */
+export function GoosePreview({ season, postcard }: { season: Season; postcard?: boolean }) {
+  return (
+    <div className={`goose-preview season-${season}`}>
+      <div className="goose-preview-stage">
+        {season === 'summer' && <BeachUmbrella />}
+        {season === 'spring' && <Butterfly />}
+        <GooseSvg walking={false} honking={false} season={season} />
+      </div>
+      {postcard && season === 'summer' && (
+        <div className="goose-postcard static">
+          <Postcard golden={false} />
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -234,6 +386,9 @@ export function GooseOverlay() {
     interactive: false,
     leaving: false,
     golden: false,
+    season: seasonNow() as Season,
+    /** Summer: sitting in the shade of his beach umbrella. */
+    umbrella: false,
   });
   const ids = useRef(1);
 
@@ -246,6 +401,12 @@ export function GooseOverlay() {
     unlockTrophy('goose');
     void call('fun.trophies')
       .then((t) => (s.golden = !!t.unlocked.golden))
+      .catch(() => undefined);
+    void call('settings.get')
+      .then((r) => {
+        const pick = r.settings.appearance.gooseSeason;
+        if (pick !== 'auto') s.season = pick;
+      })
       .catch(() => undefined);
     // Enter from a random side.
     const fromLeft = Math.random() < 0.5;
@@ -288,6 +449,12 @@ export function GooseOverlay() {
         s.mode = 'fetch-out';
         s.tx = s.x < W() / 2 ? -GOOSE_W * 1.2 : W() + GOOSE_W * 1.2;
         s.ty = 140 + Math.random() * (H() - 300);
+      } else if (s.season === 'summer' && Math.random() < 0.55) {
+        // Summer: plant the beach umbrella and enjoy the shade for a moment.
+        s.mode = 'pause';
+        s.umbrella = true;
+        s.until = Date.now() + 4200;
+        say(Math.random() < 0.5 ? 'ahh. ☀' : 'beach day.', 1700);
       } else {
         s.mode = 'pause';
         s.until = Date.now() + 1400;
@@ -352,7 +519,10 @@ export function GooseOverlay() {
         bridge.gooseDrag?.(b.x, b.y);
       }
       if (s.mode === 'pause') {
-        if (Date.now() > s.until) pick();
+        if (Date.now() > s.until) {
+          s.umbrella = false;
+          pick();
+        }
       } else if (dist < (s.mode === 'chase' ? 14 : 6)) {
         if (s.mode === 'chase') {
           // Caught the pointer: take it for a short walk.
@@ -384,8 +554,9 @@ export function GooseOverlay() {
           s.until = Date.now() + 1200;
         } else if (s.mode === 'fetch-out') {
           // Off screen: come back with a note or a portrait.
-          const portrait = Math.random() < 0.3;
-          s.carrying = { id: ids.current++, x: 0, y: 0, text: portrait ? '' : NOTES[Math.floor(Math.random() * NOTES.length)], kind: portrait ? 'portrait' : 'note' };
+          const r = Math.random();
+          const kind: Note['kind'] = s.season === 'summer' && r < 0.4 ? 'postcard' : r < 0.3 ? 'portrait' : 'note';
+          s.carrying = { id: ids.current++, x: 0, y: 0, text: kind === 'note' ? NOTES[Math.floor(Math.random() * NOTES.length)] : '', kind };
           s.mode = 'carry';
           s.tx = W() * (0.2 + Math.random() * 0.6);
           s.ty = H() * (0.25 + Math.random() * 0.5);
@@ -409,7 +580,7 @@ export function GooseOverlay() {
 
     const hit = (x: number, y: number) => {
       if (x >= s.x && x <= s.x + GOOSE_W && y >= s.y && y <= s.y + GOOSE_H) return true;
-      return s.notes.some((n) => x >= n.x && x <= n.x + (n.kind === 'portrait' ? 150 : 170) && y >= n.y && y <= n.y + (n.kind === 'portrait' ? 170 : 140));
+      return s.notes.some((n) => x >= n.x && x <= n.x + (n.kind === 'portrait' ? 150 : n.kind === 'postcard' ? 220 : 170) && y >= n.y && y <= n.y + (n.kind === 'portrait' ? 170 : n.kind === 'postcard' ? 190 : 140));
     };
     const off = bridge.onGoose?.((e) => {
       if (e.type === 'cursor') {
@@ -452,14 +623,16 @@ export function GooseOverlay() {
   return (
     <div className={`goose-stage${s.stolen && !s.realPointer ? ' stolen' : ''}`}>
       {s.prints.map((p) => (
-        <span key={p.id} className="goose-print" style={{ left: p.x, top: p.y, transform: `rotate(${p.a}deg)` }} />
+        <span key={p.id} className={`goose-print${s.season === 'winter' ? ' snow' : ''}`} style={{ left: p.x, top: p.y, transform: `rotate(${p.a}deg)` }} />
       ))}
       {s.notes.map((n) => (
-        <button key={n.id} className={n.kind === 'portrait' ? 'goose-portrait' : 'goose-note'} style={{ left: n.x, top: n.y }} onClick={() => (s.notes = s.notes.filter((x) => x.id !== n.id))} title="Click to put it away">
-          {n.kind === 'portrait' ? (
+        <button key={n.id} className={`goose-${n.kind}`} style={{ left: n.x, top: n.y }} onClick={() => (s.notes = s.notes.filter((x) => x.id !== n.id))} title="Click to put it away">
+          {n.kind === 'postcard' ? (
+            <Postcard golden={s.golden} />
+          ) : n.kind === 'portrait' ? (
             <>
               <span className="goose-portrait-art">
-                <GooseSvg walking={false} honking={false} golden={s.golden} />
+                <GooseSvg walking={false} honking={false} golden={s.golden} season={s.season} />
               </span>
               <span className="goose-portrait-label">{s.golden ? 'Portrait of the #1 Goose · gold leaf on canvas' : 'Portrait of a Goose · oil on canvas'}</span>
             </>
@@ -469,9 +642,11 @@ export function GooseOverlay() {
         </button>
       ))}
       <div className="goose" style={{ transform: `translate3d(${s.x}px, ${s.y}px, 0)` }} onClick={clickGoose}>
+        {s.umbrella && <BeachUmbrella />}
+        {s.season === 'spring' && <Butterfly />}
         <div className="goose-flip" style={{ transform: `scaleX(${-s.facing})` }}>
-          <GooseSvg walking={s.walking} honking={s.honking} golden={s.golden} flipped={flipped} fast={s.fast} />
-          {s.carrying && <span className={s.carrying.kind === 'portrait' ? 'goose-carry portrait' : 'goose-carry'}>{s.carrying.kind === 'note' ? '✉' : '🖼'}</span>}
+          <GooseSvg walking={s.walking} honking={s.honking} golden={s.golden} flipped={flipped} fast={s.fast} season={s.season} />
+          {s.carrying && <span className={`goose-carry ${s.carrying.kind}`}>{s.carrying.kind === 'note' ? '✉' : s.carrying.kind === 'postcard' ? '📮' : '🖼'}</span>}
           {s.stolen && !s.realPointer && <span className="goose-stolen-cursor" />}
         </div>
       </div>

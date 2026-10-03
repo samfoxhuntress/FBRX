@@ -7,6 +7,9 @@
 
 # FBRX OS — Fabrics Operating System
 
+> **Alpha 1.8.1 "Spindle".** FBRX OS is in alpha testing. Installed copies check this repository's
+> [`release.json`](release.json) and offer new versions in the app.
+
 FBRX OS is a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is governed
 end to end, an everyday **command center** (dashboard, tasks, notes, Spotlight, alerts, PC care, Network Center with SSH /
 Telnet device consoles and maker guides, your phone), plus a **control plane** and **admin console** for running it across a fleet of workstations — or
@@ -91,8 +94,9 @@ The installer asks for your name or company (it goes on your license), then does
 5. installs it in Applications (Mac) or for your user with Start menu and desktop shortcuts (Windows),
 6. issues you an Enterprise license that activates automatically, and opens the app.
 
-To update later, download the new version into the same place and run the installer again; your data, settings and
-keys are kept, and a running FBRX OS is closed for you. Options: `--yes` (no questions), `--name "Acme Ltd"`,
+To update later, choose **Update now** when FBRX OS offers a new version (Settings → Updates), or download the new
+version into the same place and run the installer again; your data, settings and keys are kept, and a running FBRX OS
+is closed for you. Options: `--yes` (no questions), `--name "Acme Ltd"`,
 `--no-launch`, `--allow-downgrade`. The full log is in `.fbrx-setup/setup.log`.
 
 ### Sending FBRX OS to someone else (Windows)

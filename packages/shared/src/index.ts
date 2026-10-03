@@ -12,3 +12,4 @@ export * from './ext';
 export * from './devices';
 export * from './fun';
 export * from './text-tools';
+export * from './release';

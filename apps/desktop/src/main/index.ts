@@ -56,9 +56,15 @@ app.setAppUserModelId('com.fbrx.os');
 
 // Voice input: the speech engine (ONNX Runtime) and the downloaded Whisper models are served to the app's own pages
 // from fbrx-voice://ort/… and fbrx-voice://models/…, never from the internet.
+// macOS: never touch the Keychain (see chooseKeychain): Chromium would otherwise open "FBRX OS Safe Storage" for its
+// own cookie encryption, and an updated, re-signed app makes macOS ask for the Mac password every time.
+if (process.platform === 'darwin') app.commandLine.appendSwitch('use-mock-keychain');
+// Shared memory lets the on-device speech engines (Whisper, the natural voices) use several processor threads. The
+// app's windows only show FBRX's own pages.
+app.commandLine.appendSwitch('enable-features', 'SharedArrayBuffer');
 protocol.registerSchemesAsPrivileged([{ scheme: 'fbrx-voice', privileges: { standard: true, secure: true, supportFetchAPI: true, corsEnabled: true, stream: true } }]);
 
-const VOICE_TYPES: Record<string, string> = { '.wasm': 'application/wasm', '.mjs': 'text/javascript', '.js': 'text/javascript', '.json': 'application/json', '.txt': 'text/plain' };
+const VOICE_TYPES: Record<string, string> = { '.wasm': 'application/wasm', '.mjs': 'text/javascript', '.js': 'text/javascript', '.json': 'application/json', '.txt': 'text/plain', '.gz': 'application/gzip' };
 
 function voiceFile(url: URL): string | null {
   const rel = url.pathname.replace(/^\/+/, '');
@@ -69,6 +75,12 @@ function voiceFile(url: URL): string | null {
     return existsSync(file) ? file : null;
   }
   if (url.host === 'models') return kernel?.voice.resolveFile(rel) ?? null;
+  if (url.host === 'assets') {
+    const name = basename(rel);
+    if (!/^[\w-]+\.txt\.gz$/.test(name)) return null;
+    const file = join(app.getAppPath(), 'dist', 'voice-assets', name);
+    return existsSync(file) ? file : null;
+  }
   return null;
 }
 
@@ -424,6 +436,13 @@ function registerIpc() {
     let status = systemPreferences.getMediaAccessStatus('microphone');
     if (status === 'not-determined' && process.platform === 'darwin') status = (await systemPreferences.askForMediaAccess('microphone')) ? 'granted' : 'denied';
     return { granted: status === 'granted' || status === 'not-determined', status };
+  });
+  // Voice: the operating system's page for adding voices (fixed addresses only).
+  ipcMain.handle('fbrx:voice-settings', (e) => {
+    if (!trusted(e)) return false;
+    const url = process.platform === 'win32' ? 'ms-settings:speech' : process.platform === 'darwin' ? 'x-apple.systempreferences:com.apple.preference.universalaccess?SpokenContent' : null;
+    if (url) void shell.openExternal(url);
+    return !!url;
   });
   ipcMain.handle('fbrx:goose', (e, action: string, on?: boolean) => {
     if (!trusted(e)) return false;

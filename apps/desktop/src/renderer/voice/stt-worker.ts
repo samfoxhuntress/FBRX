@@ -14,8 +14,8 @@ env.useWasmCache = false;
 const wasm = env.backends.onnx.wasm;
 if (wasm) {
   wasm.wasmPaths = { mjs: 'fbrx-voice://ort/ort-wasm-simd-threaded.asyncify.mjs', wasm: 'fbrx-voice://ort/ort-wasm-simd-threaded.asyncify.wasm' };
-  // No shared memory without cross-origin isolation: one thread, which is plenty for short sentences.
-  wasm.numThreads = 1;
+  // A few threads when the app allows shared memory (main/index.ts), leaving a core free for everything else.
+  wasm.numThreads = typeof SharedArrayBuffer !== 'undefined' ? Math.min(4, Math.max(1, (navigator.hardwareConcurrency || 2) - 1)) : 1;
 }
 
 type Asr = (audio: Float32Array, options?: Record<string, unknown>) => Promise<{ text: string } | Array<{ text: string }>>;

@@ -1,62 +1,11 @@
 import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { deflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { unzip } from '../src/util/unzip';
+import { makeZip } from './helpers';
 import { pickRelease, selectRuntimeAsset } from '../src/ai/runtime/runtime-installer';
 
-function crc32(buf: Buffer) {
-  let c = -1;
-  for (const b of buf) {
-    c ^= b;
-    for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1;
-  }
-  return (c ^ -1) >>> 0;
-}
-
-/** Builds a zip with deflated entries (mode stored in external attributes). */
-function makeZip(entries: Array<{ name: string; data: string; mode?: number }>): Buffer {
-  const locals: Buffer[] = [];
-  const centrals: Buffer[] = [];
-  let offset = 0;
-  for (const e of entries) {
-    const raw = Buffer.from(e.data);
-    const comp = deflateRawSync(raw);
-    const name = Buffer.from(e.name);
-    const lh = Buffer.alloc(30);
-    lh.writeUInt32LE(0x04034b50, 0);
-    lh.writeUInt16LE(20, 4);
-    lh.writeUInt16LE(8, 8);
-    lh.writeUInt32LE(crc32(raw), 14);
-    lh.writeUInt32LE(comp.length, 18);
-    lh.writeUInt32LE(raw.length, 22);
-    lh.writeUInt16LE(name.length, 26);
-    const local = Buffer.concat([lh, name, comp]);
-    const ch = Buffer.alloc(46);
-    ch.writeUInt32LE(0x02014b50, 0);
-    ch.writeUInt16LE(0x0314, 4);
-    ch.writeUInt16LE(20, 6);
-    ch.writeUInt16LE(8, 10);
-    ch.writeUInt32LE(crc32(raw), 16);
-    ch.writeUInt32LE(comp.length, 20);
-    ch.writeUInt32LE(raw.length, 24);
-    ch.writeUInt16LE(name.length, 28);
-    ch.writeUInt32LE(((e.mode ?? 0o644) << 16) >>> 0, 38);
-    ch.writeUInt32LE(offset, 42);
-    centrals.push(Buffer.concat([ch, name]));
-    locals.push(local);
-    offset += local.length;
-  }
-  const cd = Buffer.concat(centrals);
-  const end = Buffer.alloc(22);
-  end.writeUInt32LE(0x06054b50, 0);
-  end.writeUInt16LE(entries.length, 8);
-  end.writeUInt16LE(entries.length, 10);
-  end.writeUInt32LE(cd.length, 12);
-  end.writeUInt32LE(offset, 16);
-  return Buffer.concat([...locals, cd, end]);
-}
 
 describe('runtime installer', () => {
   it('extracts zip archives and preserves executable bits', () => {

@@ -2,7 +2,9 @@ import { useState } from 'react';
 import { Button, Callout, Card, Empty, Grid, Page, Spinner, StatTile, Status, Tabs, useAction, useToast, Table } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { newReqId, useCore } from '../hooks';
-import { IS_WINDOWS } from '../app';
+import { IS_WINDOWS, navigate } from '../app';
+import { useRelease } from '../release';
+import { displayVersion } from '@fbrx/shared';
 import { AskButton } from '../widgets';
 
 type Tab = 'apps' | 'windows' | 'drivers' | 'history';
@@ -161,18 +163,38 @@ function History() {
 
 export function UpdatesPage() {
   const [tab, setTab] = useState<Tab>('apps');
-  const fbrx = useCore('updates.status', undefined, ['updates.changed']);
+  const fbrx = useRelease().data;
+  const fbrxTile = (
+    <StatTile
+      label="FBRX OS"
+      value={fbrx ? displayVersion(fbrx.currentVersion) : '…'}
+      foot={
+        fbrx?.state === 'available' && fbrx.latest ? (
+          <Button size="sm" variant="primary" icon="download" onClick={() => navigate('settings/updates')}>
+            {fbrx.latest.version} available
+          </Button>
+        ) : fbrx?.state === 'current' ? (
+          'Up to date'
+        ) : (
+          <Button size="sm" onClick={() => navigate('settings/updates')}>
+            Check for a new version
+          </Button>
+        )
+      }
+    />
+  );
   if (!IS_WINDOWS) {
     return (
       <Page title="Updates" description="Keep your apps, drivers and Windows itself up to date.">
-        <Callout tone="info">App, driver and Windows updates are managed here on Windows. FBRX OS itself updates from your organization's control plane.</Callout>
+        <Grid cols={3}>{fbrxTile}</Grid>
+        <Callout tone="info">App, driver and Windows updates are managed here on Windows.</Callout>
       </Page>
     );
   }
   return (
     <Page title="Updates" description="Keep your apps, drivers and Windows itself up to date in one place.">
       <Grid cols={3}>
-        <StatTile label="FBRX OS" value={fbrx.data ? `v${fbrx.data.currentVersion}` : '…'} foot={fbrx.data?.availableVersion ? <Status tone="info">{fbrx.data.availableVersion} available</Status> : fbrx.data?.message ?? 'Up to date'} />
+        {fbrxTile}
       </Grid>
       <Tabs
         tabs={[

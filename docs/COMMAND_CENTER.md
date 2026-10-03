@@ -26,6 +26,31 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 Chart series and status colors stay on the validated design-system palette in every theme, so charts remain
 readable for color-blind users. Organizations can lock any appearance setting from the admin console.
 
+### The sidebar
+
+The sidebar is grouped into sections, each with an FBRX name, an icon and a line saying what is inside. Click a
+section to open its pages (one at a time; the section of the page you are on opens by itself):
+
+| Section | Pages |
+| --- | --- |
+| **Bridge** | FBRX Glass, Fabrix, Alerts |
+| **Studio** | Tasks, Notes, Projects, Snippets |
+| **Pit Stop** | Storage, Security, Updates, Bug catcher, Network Center |
+| **Workbench** | Files, Task Manager, Clipboard, Copy & migrate, Toolbox, Library |
+| **Orbit** | Mesh & phone, AI models, AI coordination, Connections, Tools & plugins |
+| **Shield** | Approvals, Credentials, Governance, Backup & restore |
+| **Lab** | Terminal, Virtual lab (Advanced mode) |
+| **Control** | Organization, Settings |
+
+**Collapse** at the bottom folds the sidebar down to the section icons (remembered on this computer); click an icon
+and its pages slide out beside it. Counts (unread alerts, waiting approvals) show on the section too.
+
+### Version names
+
+FBRX OS is in alpha: versions read **FBRX OS Alpha 1.8.1**. Each minor version also gets a codename from cloth,
+fiber to fabric, shown in **Settings → Logs & about**: 1.8 *Spindle*, then *Bobbin*, *Shuttle*, *Heddle*, and 2.0
+*Loom* (later *Warp*, *Weft*, *Selvedge*, *Tapestry*).
+
 ### Basic and Advanced mode
 
 **Basic** shows everyday tools. **Advanced** adds the expert ones, each marked with an **Advanced** tag wherever it
@@ -57,9 +82,24 @@ conversation (listen, answer out loud, listen again, until a quiet moment), and 
 Speech becomes text on this computer with Whisper, so nothing you say leaves it. **Settings → Voice** picks the
 speech model (downloaded once: *Fastest* 41 MB, *Recommended* 78 MB, *Most accurate* 249 MB, all English, or *Many
 languages* 78 MB), the microphone (with a test that shows what it heard) and whether to send right away. Fabrix's
-voice comes from the voices installed on the computer (Windows Settings → Time & language → Speech, or System Settings
-→ Accessibility → Spoken Content on a Mac): pick one, set the speed in words per minute (120 to 360, 210 by default,
-a natural speaking pace) and the pitch, and press **Hear it**.
+voice is one of the **natural voices** or one of the computer's own:
+
+* **Natural voices** are lifelike voices made on this computer by the Kokoro model (one download of about 107 MB,
+  then they work offline): British voices George (an older gentleman: *the butler*), Fable, Lewis, Daniel, Emma,
+  Isabella, Alice and Lily, and American voices such as Heart, Bella, Michael and Fenrir. The presets **The butler**,
+  **The assistant** and **The storyteller** pick a voice and a speed in one click; the play button on each voice lets
+  you hear it. How quickly they are made depends on the processor; on a slow computer there can be a short pause
+  between sentences.
+* **Voices on this computer** come from Windows (Settings → Time & language → Speech; add *English (United Kingdom)*
+  for George and Hazel) or macOS (System Settings → Accessibility → Spoken Content → Manage Voices; the Premium voices
+  such as Jamie sound best). **Get more voices** opens that page; restart FBRX OS to see new ones.
+
+Set the speed in words per minute (120 to 360, 210 by default, a natural speaking pace) and, for the computer's own
+voices, the pitch, and press **Hear it**.
+
+When you speak to Fabrix it says it heard you ("Got it. Let me look into that." — a butler voice says "Very good.
+Allow me a moment to look into it.") and plays a soft thinking sound, a low hum with quiet data blips, until the
+answer starts. Both can be turned off in Settings → Voice.
 
 ### Watch Fabrix work
 
@@ -332,6 +372,19 @@ would not fit in memory, loads only when a chat needs it (or at start-up when it
 unloaded after 20 idle minutes (**Unload the local model when idle**: 5 minutes to never). Answers stream into the
 window in small batches rather than token by token, and the system monitor samples every 10 seconds instead of 2
 while the window is hidden.
+
+## New versions
+
+FBRX OS looks for new versions in its online repository a minute and a half after it starts and every six hours
+(**Settings → Updates → New versions**, where *Check now* and the automatic check live). When there is one, an alert
+says so, an **Update to 1.x.y** pill appears in the top bar, and the dialog shows what is new. Updating is always your
+choice:
+
+* **Update now** downloads the new version into the folder FBRX was installed from and starts the installer there in
+  its own window (Terminal on a Mac: press Return). FBRX closes, updates and opens again; your data, settings,
+  license and signing keys stay. Installs made before 1.8.1 don't know their folder yet: **Download** gets the new
+  zip; unzip it over your FBRX folder and run the installer once, and from then on Update now works.
+* **Later** keeps the pill; **Skip this version** stops the reminders for that version.
 
 ## Work budget
 

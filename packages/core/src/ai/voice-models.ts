@@ -2,15 +2,16 @@ import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmS
 import { dirname, join, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
-import { VOICE_MODELS, type VoiceModelId, type VoiceModelStatus } from '@fbrx/shared';
+import { NATURAL_VOICES, NATURAL_VOICE_PACK, VOICE_MODELS, type VoiceDownloadId, type VoiceModelStatus } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
 
 /**
- * Speech recognition models for voice input (Whisper, quantized, run by the desktop app on this computer). They are
- * downloaded once from Hugging Face into `<data>/voice/<repo>/…` and read from there; nothing you say leaves the
- * computer. `FBRX_VOICE_MODEL_BASE` points downloads at a mirror (an internal server, or tests).
+ * Voice models, run by the desktop app on this computer: Whisper for speech recognition, and the natural voices
+ * (Kokoro) for speaking. They are downloaded once from Hugging Face into `<data>/voice/<repo>/…` and read from there;
+ * nothing you say or hear leaves the computer. `FBRX_VOICE_MODEL_BASE` points downloads at a mirror (an internal
+ * server, or tests).
  */
 
 export const VOICE_FILES = [
@@ -23,6 +24,9 @@ export const VOICE_FILES = [
   'onnx/decoder_model_merged_quantized.onnx',
 ] as const;
 
+/** The natural voices: the model, its tokenizer and one small style file per voice. */
+export const NATURAL_VOICE_FILES = ['config.json', 'tokenizer.json', 'tokenizer_config.json', 'onnx/model_quantized.onnx', ...NATURAL_VOICES.map((v) => `voices/${v.id}.bin`)];
+
 const MARKER = '.fbrx-complete.json';
 
 export interface VoiceModelsDeps {
@@ -33,7 +37,7 @@ export interface VoiceModelsDeps {
 }
 
 export class VoiceModels {
-  private job: { model: VoiceModelId; controller: AbortController } | null = null;
+  private job: { model: VoiceDownloadId; controller: AbortController } | null = null;
 
   constructor(private readonly d: VoiceModelsDeps) {}
 
@@ -41,23 +45,27 @@ export class VoiceModels {
     return this.d.dir;
   }
 
-  private spec(id: VoiceModelId) {
+  private spec(id: VoiceDownloadId): { repo: string; name: string; note: string; sizeMB: number; english: boolean; kind: 'listen' | 'speak'; files: readonly string[] } {
+    if (id === NATURAL_VOICE_PACK.id) return { ...NATURAL_VOICE_PACK, english: true, kind: 'speak', files: NATURAL_VOICE_FILES };
     const m = VOICE_MODELS.find((x) => x.id === id);
     if (!m) throw new CoreError('INVALID_ARGUMENT', `Unknown voice model ${id}`);
-    return m;
+    return { ...m, kind: 'listen', files: VOICE_FILES };
   }
 
-  private folder(id: VoiceModelId): string {
+  private folder(id: VoiceDownloadId): string {
     return join(this.d.dir, ...this.spec(id).repo.split('/'));
   }
 
-  installed(id: VoiceModelId): boolean {
+  installed(id: VoiceDownloadId): boolean {
     const f = this.folder(id);
-    return existsSync(join(f, MARKER)) && VOICE_FILES.every((x) => existsSync(join(f, x)));
+    return existsSync(join(f, MARKER)) && this.spec(id).files.every((x) => existsSync(join(f, x)));
   }
 
   list(): VoiceModelStatus[] {
-    return VOICE_MODELS.map((m) => ({ id: m.id, name: m.name, note: m.note, sizeMB: m.sizeMB, english: m.english, installed: this.installed(m.id), downloading: this.job?.model === m.id }));
+    return [...VOICE_MODELS.map((m) => m.id), NATURAL_VOICE_PACK.id].map((id) => {
+      const m = this.spec(id);
+      return { id, kind: m.kind, name: m.name, note: m.note, sizeMB: m.sizeMB, english: m.english, installed: this.installed(id), downloading: this.job?.model === id };
+    });
   }
 
   /** A file inside the voice folder for the app's model protocol, or null for anything outside it. */
@@ -68,7 +76,7 @@ export class VoiceModels {
   }
 
   /** Starts a download in the background; progress and the outcome arrive as voice.download events. */
-  install(id: VoiceModelId): void {
+  install(id: VoiceDownloadId): void {
     const m = this.spec(id);
     if (this.installed(id)) return;
     if (this.job) throw new CoreError('CONFLICT', 'Another voice model is downloading. Wait for it to finish or cancel it.');
@@ -84,7 +92,7 @@ export class VoiceModels {
       try {
         mkdirSync(folder, { recursive: true });
         const base = (process.env.FBRX_VOICE_MODEL_BASE || 'https://huggingface.co').replace(/\/+$/, '');
-        for (const file of VOICE_FILES) {
+        for (const file of m.files) {
           const target = join(folder, ...file.split('/'));
           if (existsSync(target)) continue;
           mkdirSync(dirname(target), { recursive: true });
@@ -102,7 +110,7 @@ export class VoiceModels {
           await pipeline(counter, createWriteStream(part), { signal: controller.signal });
           renameSync(part, target);
         }
-        writeFileSync(join(folder, MARKER), JSON.stringify({ model: id, repo: m.repo, files: VOICE_FILES, at: new Date().toISOString() }));
+        writeFileSync(join(folder, MARKER), JSON.stringify({ model: id, repo: m.repo, files: m.files, at: new Date().toISOString() }));
         this.d.log.info('Voice model installed', { model: id });
         emit(received || total, true, null);
       } catch (err) {
@@ -119,7 +127,7 @@ export class VoiceModels {
     this.job?.controller.abort();
   }
 
-  remove(id: VoiceModelId): void {
+  remove(id: VoiceDownloadId): void {
     if (this.job?.model === id) this.job.controller.abort();
     rmSync(this.folder(id), { recursive: true, force: true });
   }

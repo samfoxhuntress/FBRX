@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   ALERT_CHANNELS,
   EVENT_LEVELS,
-  VOICE_MODEL_IDS,
+  VOICE_DOWNLOAD_IDS,
   LAB_FEATURES,
   MESH_ACTIONS,
   MIGRATE_ENGINES,
@@ -429,11 +429,11 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     // ------------------------------------------------------------------------------------------ voice
     'voice.models': () => k.voice.list(),
     'voice.install': (p) => {
-      k.voice.install(z.object({ model: z.enum(VOICE_MODEL_IDS) }).parse(p).model);
+      k.voice.install(z.object({ model: z.enum(VOICE_DOWNLOAD_IDS) }).parse(p).model);
       return { ok: true };
     },
     'voice.remove': (p) => {
-      k.voice.remove(z.object({ model: z.enum(VOICE_MODEL_IDS) }).parse(p).model);
+      k.voice.remove(z.object({ model: z.enum(VOICE_DOWNLOAD_IDS) }).parse(p).model);
       return { ok: true };
     },
     'voice.cancel': () => {

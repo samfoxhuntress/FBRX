@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { SystemLive, SystemStatus } from '@fbrx/shared';
-import { TROPHIES } from '@fbrx/shared';
+import { TROPHIES, displayVersion } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Grid, Icons, KeyValue, LineChart, Meter, StatTile, Status, formatBytes, formatDuration, timeAgo, useAction, type IconName } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
@@ -51,7 +51,8 @@ function healthScore(o: { status: SystemStatus; critical: number; unread: number
   };
   const failing = o.status.services.filter((s) => s.state === 'failed').length;
   if (failing) hit(Math.min(30, failing * 15), `${failing} service${failing > 1 ? 's' : ''} failing`);
-  if (o.status.vault.state === 'locked') hit(15, 'vault locked');
+  // Locked on purpose (password at start, or by hand) is not a problem.
+  if (o.status.vault.state === 'locked' && o.status.vault.lockReason !== 'password' && o.status.vault.lockReason !== 'manual') hit(15, 'vault locked');
   if (o.critical) hit(Math.min(25, o.critical * 10), `${o.critical} critical alert${o.critical > 1 ? 's' : ''}`);
   if (o.fullestDiskPct > 95) hit(15, 'a drive is almost full');
   else if (o.fullestDiskPct > 88) hit(7, 'a drive is getting full');
@@ -239,7 +240,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
             }}
           />
           <div className="glass-sub">
-            {`${status.deviceName} · ${status.product} ${status.version} · up ${formatDuration(cur?.uptime ?? status.uptimeSeconds)}`}
+            {`${status.deviceName} · ${status.product} ${displayVersion(status.version)} · up ${formatDuration(cur?.uptime ?? status.uptimeSeconds)}`}
             {quip && <span className="quip">{quip}</span>}
           </div>
         </div>
@@ -276,8 +277,16 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
       </div>
 
       {status.vault.state === 'locked' && (
-        <Callout tone="warning" title="Your vault is locked" actions={<Button size="sm" onClick={() => navigate('vault')}>Unlock</Button>}>
-          This machine's keychain could not unlock your credentials (for example after copying the data folder). Enter your recovery passphrase to unlock.
+        <Callout
+          tone={status.vault.lockReason === 'keychain' ? 'warning' : 'info'}
+          title={status.vault.lockReason === 'moved' ? 'Bring your saved credentials over' : 'Your saved credentials are locked'}
+          actions={<Button size="sm" onClick={() => navigate('vault')}>{status.vault.lockReason === 'moved' ? 'Bring them over' : 'Unlock'}</Button>}
+        >
+          {status.vault.lockReason === 'moved'
+            ? `They are still in ${status.vault.movedFrom}, which FBRX no longer uses (it kept asking for your Mac password). One click brings them over.`
+            : status.vault.lockReason === 'keychain'
+              ? "This computer could not open your credentials (for example after copying the data folder). Enter your recovery passphrase to unlock."
+              : 'Enter your vault passphrase to use them.'}
         </Callout>
       )}
       {providers.data && !aiReady && (

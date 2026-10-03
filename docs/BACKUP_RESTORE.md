@@ -78,8 +78,9 @@ restores it as a clone before enrolling (see [DEPLOYMENT.md](DEPLOYMENT.md#4-rol
 
 ## If the OS keychain is lost
 
-Normally the vault's data key is protected by the macOS Keychain or Windows DPAPI, which is tied to the user
-account. If the account is rebuilt or the keychain reset, FBRX OS starts with the vault **locked**. Unlock it
+Normally the vault's data key is protected by Windows DPAPI (tied to the user account) or, on a Mac, by a key file
+in the data folder that only your user can read. If the account is rebuilt or the key lost, FBRX OS starts with the
+vault **locked**. Unlock it
 with the **recovery passphrase** (set it in **Vault → Recovery**; strongly recommended) — or restore a snapshot,
 which carries the key itself.
 

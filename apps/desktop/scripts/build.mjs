@@ -65,6 +65,11 @@ copyFileSync(join(app, 'build', 'icon.png'), join(mobileOut, 'icon.png'));
 const ortOut = join(app, 'dist/ort');
 mkdirSync(ortOut, { recursive: true });
 for (const f of ['ort-wasm-simd-threaded.asyncify.mjs', 'ort-wasm-simd-threaded.asyncify.wasm']) copyFileSync(join(root, 'node_modules/onnxruntime-web/dist', f), join(ortOut, f));
+// The natural voices' pronunciation dictionary (CMU dictionary in Kokoro phonemes, from HeadTTS), served from
+// fbrx-voice://assets/.
+const voiceAssets = join(app, 'dist/voice-assets');
+mkdirSync(voiceAssets, { recursive: true });
+copyFileSync(join(app, 'src/renderer/voice/kokoro/en-us.txt.gz'), join(voiceAssets, 'en-us.txt.gz'));
 
 execFileSync(process.execPath, [join(root, 'node_modules/vite/bin/vite.js'), 'build', '--config', join(app, 'vite.config.ts')], { stdio: 'inherit', cwd: app });
 // Vite also emits ONNX Runtime's wasm next to the worker; the worker loads it from fbrx-voice://ort/ instead.

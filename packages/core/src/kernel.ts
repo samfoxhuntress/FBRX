@@ -70,6 +70,8 @@ import { LocalApiServer } from './localapi/local-api';
 import { ServiceManager } from './services/service-manager';
 import { buildCoreApi, isReadOnly, isUserOnly, scrubParams, type CallContext } from './api/core-api';
 import { buildExtApi } from './api/ext-api';
+import { installConsoleGuard } from './windows/hide-consoles';
+import { ReleaseChecker } from './updates/release-check';
 
 export interface KernelOptions {
   dataDir: string;
@@ -136,6 +138,7 @@ export class Kernel {
   readonly migrator: Migrator;
   readonly codelab: CodeLab;
   readonly voice: VoiceModels;
+  readonly release: ReleaseChecker;
   readonly cli: Fbrx1Cli;
   readonly mesh: MeshService;
   readonly aicoord: AiCoordination;
@@ -173,7 +176,7 @@ export class Kernel {
     const L = (s: string) => this.log.child(s);
     this.settings = new SettingsService(this.db, this.events);
     this.audit = new AuditLog(this.db, this.meta, this.events);
-    this.vault = new Vault(this.db, this.platform.keychain, L('vault'), this.events);
+    this.vault = new Vault(this.db, this.platform.keychain, L('vault'), this.events, this.platform.movedKeychain ?? null);
     this.policy = new PolicyEngine(
       this.db,
       () => ({ ...this.platform.specialDirs(), workspace: this.paths.workspace, data: this.paths.root }),
@@ -324,6 +327,16 @@ export class Kernel {
     });
     this.codelab = new CodeLab(join(this.paths.root, 'codelab'));
     this.voice = new VoiceModels({ dir: join(this.paths.root, 'voice'), events: this.events, log: L('voice'), internet: () => this.internetAllowed() });
+    this.release = new ReleaseChecker({
+      appVersion: this.platform.appVersion,
+      dataRoot: this.paths.root,
+      settings: () => this.settings.get(),
+      skip: (version) => this.settings.update({ updates: { skipVersion: version } }),
+      events: this.events,
+      log: L('release'),
+      internet: () => this.internetAllowed(),
+      notify: (title, body, version) => this.alerts.fire('update_available', title, body, { key: version }),
+    });
     // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
     this.cli = new Fbrx1Cli({
       call: (method, params) => this.call(method, params ?? {}, { origin: 'user', actor: 'fbrx1' }),
@@ -419,6 +432,8 @@ export class Kernel {
   }
 
   static async create(opts: KernelOptions): Promise<Kernel> {
+    // Before anything starts a process: no console windows flashing up on Windows.
+    installConsoleGuard();
     return new Kernel(opts);
   }
 
@@ -519,7 +534,13 @@ export class Kernel {
         this.redactor.setSecrets(this.vault.valuesForRedaction());
       },
       stop: () => undefined,
-      health: async () => (this.vault.isUnlocked ? { state: 'running' } : { state: 'degraded', message: 'Locked: enter the recovery passphrase to unlock' }),
+      health: async () => {
+        if (this.vault.isUnlocked) return { state: 'running' };
+        const v = this.vault.status();
+        // Locked on purpose until the person enters the vault password: not a problem worth an alert.
+        if (v.lockReason === 'password' || v.lockReason === 'manual') return { state: 'running', message: 'Locked until you enter the vault password' };
+        return { state: 'degraded', message: v.lockReason === 'moved' ? `Saved credentials are still in ${v.movedFrom}: open the Vault page to bring them over` : 'Locked: enter the recovery passphrase on the Vault page' };
+      },
     });
     s.register({
       name: 'governance',
@@ -686,6 +707,8 @@ export class Kernel {
     this.started = true;
     this.log.info(`${PRODUCT_NAME} ${this.platform.appVersion} started`, { dataDir: this.paths.root, shell: this.platform.shell });
     this.applyLicenseFile();
+    // Look for new versions in the FBRX repository (the desktop app only; servers and tests don't).
+    if (this.platform.shell === 'desktop') this.release.start();
     void this.applyProvisioning().catch((err) => this.log.error('Provisioning failed', { error: errorMessage(err) }));
     this.audit.prune(365);
   }
@@ -697,6 +720,7 @@ export class Kernel {
       return;
     }
     this.started = false;
+    this.release.stop();
     this.terminal.killAll();
     this.consoles.closeAll();
     this.migrator.cancelAll();

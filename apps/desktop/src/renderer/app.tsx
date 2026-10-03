@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import type { SystemStatus } from '@fbrx/shared';
-import { addressAs, funEnabled } from '@fbrx/shared';
-import { AdvancedTag, Button, Callout, FBRX_MARK, Icons, Shell, Spinner, Status, useToast, type NavItem } from '@fbrx/ui';
+import { addressAs, displayVersion, funEnabled } from '@fbrx/shared';
+import { AdvancedTag, Button, Callout, FBRX_MARK, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
 import { isLocked, useConsoleSessions, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
@@ -10,6 +10,8 @@ import { GooseOverlay, summonGoose, unlockTrophy, useKonami } from './fun';
 import { TrophyBadge } from './trophies';
 import { DashboardPage } from './pages/dashboard';
 import { Onboarding } from './pages/onboarding';
+import { VaultStartPrompt } from './vault-lock';
+import { UpdatePill } from './release';
 import { SpotlightView } from './pages/spotlight';
 
 // Pages load when first opened, so the app starts with only what the first screen needs.
@@ -152,6 +154,21 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const { data: trophies } = useCore('fun.trophies', undefined, ['fun.trophy']);
   const { data: alertCounts } = useCore('alerts.counts', undefined, ['alerts.changed'], 60_000);
   const [forceOnboarding, setForceOnboarding] = useState(false);
+  const [collapsed, setCollapsedState] = useState(() => {
+    try {
+      return localStorage.getItem('fbrx.sidebar') === 'icons';
+    } catch {
+      return false;
+    }
+  });
+  const setCollapsed = (v: boolean) => {
+    setCollapsedState(v);
+    try {
+      localStorage.setItem('fbrx.sidebar', v ? 'icons' : 'full');
+    } catch {
+      /* remembered for this session only */
+    }
+  };
   // First start of this window: show the start-up animation and play the start-up sound once.
   const [firstStart] = useState(() => !sessionStorage.getItem('fbrx.splashShown'));
   const startupSound = settings?.settings.appearance.splashSound;
@@ -272,6 +289,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System' },
     { id: 'settings', label: 'Settings', icon: 'settings', section: 'System' },
   ];
+  const groups: NavGroup[] = SECTIONS.map((g) => ({ ...g, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
   const setAdvanced = (on: boolean) => void call('settings.update', { patch: { appearance: { advancedMode: on } } }).then(() => toast.info(on ? 'Advanced mode on' : 'Basic mode', on ? 'Expert tools are now in the sidebar under Advanced, marked with an Advanced tag.' : 'Expert tools are hidden.'));
   const advancedLocked = isLocked(settings.locked, 'appearance.advancedMode');
 
@@ -350,12 +368,15 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         onBrandClick={onBrandClick}
         brandClassName={weaving ? 'weaving' : undefined}
         nav={nav}
+        groups={groups}
+        collapsed={collapsed}
+        onCollapsedChange={setCollapsed}
         active={route}
         onNavigate={(id) => navigate(id)}
         topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} advanced={advanced} advancedLocked={advancedLocked} onAdvanced={setAdvanced} defaultProvider={s.ai.defaultProvider} defaultModel={s.ai.defaultModel} />}
         footer={
           <span>
-            v{status.version} · {status.license.edition}
+            {displayVersion(status.version)} · {status.license.edition}
             {status.devMode ? ' · dev' : ''}
             {advanced ? ' · advanced' : ''}
             {fun && trophies && Object.keys(trophies.unlocked).length > 0 && (
@@ -379,6 +400,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
           {page}
         </Suspense>
       </Shell>
+      <VaultStartPrompt />
     </AgentNameContext.Provider>
   );
 }
@@ -420,7 +442,9 @@ function TopBar({
         {spotlightKey && <kbd className="kbd">{spotlightKey.replace('CommandOrControl', 'Ctrl')}</kbd>}
       </button>
       {status.vault.state === 'locked' ? (
-        <Status tone="warning">Vault locked</Status>
+        <button className="status-link" onClick={() => navigate('vault')} title="Open the vault to unlock">
+          <Status tone={status.vault.lockReason === 'keychain' ? 'warning' : 'neutral'}>Credentials locked</Status>
+        </button>
       ) : failing.length ? (
         <Status tone="critical">{failing.length} service(s) failing</Status>
       ) : (
@@ -437,6 +461,7 @@ function TopBar({
         </span>
       )}
       <span className="fx-spacer" />
+      <UpdatePill />
       {status.aiHalt && <EmergencyStop compact />}
       {openConsoles > 0 && route !== 'terminal' && (
         <button className="model-pill console-pill" onClick={() => navigate('terminal/console')} title="Device consoles that are connected">
@@ -474,6 +499,21 @@ function TopBar({
     </>
   );
 }
+
+/**
+ * The sidebar's sections, each with an FBRX name, an icon and plain words for what is inside. Pick a section to open
+ * it; collapsed to icons, its pages slide out beside it.
+ */
+const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; icon: IconName }> = [
+  { id: 'bridge', section: 'Command', label: 'Bridge', hint: 'Glass, agent, alerts', icon: 'compass' },
+  { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Tasks, notes, projects', icon: 'layers' },
+  { id: 'pitstop', section: 'PC care', label: 'Pit Stop', hint: 'Storage, security, repairs', icon: 'wrench' },
+  { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', icon: 'toolbox' },
+  { id: 'orbit', section: 'Connect', label: 'Orbit', hint: 'Phone, mesh, AI models', icon: 'orbit' },
+  { id: 'shield', section: 'Protect', label: 'Shield', hint: 'Approvals, keys, backups', icon: 'shield' },
+  { id: 'lab', section: 'Advanced', label: 'Lab', hint: 'Terminal, virtual lab', icon: 'flask' },
+  { id: 'control', section: 'System', label: 'Control', hint: 'Organization, settings', icon: 'settings' },
+];
 
 /** Shown for an Advanced-mode page while in Basic mode. */
 function AdvancedOnly({ title, onEnable, locked }: { title: string; onEnable: () => void; locked: boolean }) {

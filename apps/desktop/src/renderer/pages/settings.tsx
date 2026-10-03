@@ -1,16 +1,17 @@
 import { useEffect, useState } from 'react';
 import type { DeepPartial, Settings, Texture } from '@fbrx/shared';
-import { UPDATE_CHANNELS, funEnabled } from '@fbrx/shared';
+import { UPDATE_CHANNELS, displayVersion, funEnabled } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { navigate, routeArg } from '../app';
 import { PRESETS, TEXTURE_NAMES, playStartupSound, resolvedMode, resolvedTexture, textureImage, themeAccent } from '../theme';
-import { summonGoose } from '../fun';
+import { GoosePreview, seasonNow, summonGoose } from '../fun';
 import { TrophyBadge, TrophyCase } from '../trophies';
 import { AskButton, EmergencyStop, ProfileFields, saveProfile } from '../widgets';
 import { MacroSettings } from './settings-macros';
 import { VoiceSettings } from './settings-voice';
+import { AboutVersion, ReleasePanel } from '../release';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -291,6 +292,18 @@ function Appearance() {
               Trophy case
             </Button>
           </div>
+          <div className="goose-wardrobe">
+            <Field label="The goose's wardrobe" help="Flight goggles all year. Scarf and boots in winter, a scarf in the fall, a butterfly for company in spring, and a beach umbrella (and postcards) in summer. By season follows where you are.">
+              <div className="seg" role="group" aria-label="The goose's wardrobe">
+                {(['auto', 'winter', 'spring', 'summer', 'fall'] as const).map((x) => (
+                  <button key={x} className={a.gooseSeason === x ? 'on' : ''} disabled={!a.easterEggs} onClick={() => void patch({ appearance: { gooseSeason: x } })}>
+                    {x === 'auto' ? `By season (${seasonNow()})` : x[0].toUpperCase() + x.slice(1)}
+                  </button>
+                ))}
+              </div>
+            </Field>
+            <GoosePreview season={a.gooseSeason === 'auto' ? seasonNow() : a.gooseSeason} />
+          </div>
           <p className="fx-muted" style={{ margin: 0, fontSize: 12.5 }}>
             The goose waddles across your screen for about a minute and a half, honks, tracks a little mud, borrows your mouse pointer and leaves notes. Clicks go straight through it to your apps. Click the goose three times, or choose Shoo the goose in the tray menu, to send it home. Other surprises are hidden around the app; every one you find earns a badge in the Trophy case.
           </p>
@@ -523,9 +536,14 @@ function Updates() {
   const { s, locked, patch } = useSettings();
   const { run, busy } = useAction();
   if (!u || !s) return null;
+  const release = <ReleasePanel checkRepo={s.updates.checkRepo} locked={isLocked(locked, 'updates.checkRepo')} onToggle={(v) => void patch({ updates: { checkRepo: v } })} />;
+  // Updates pushed by an organization's update server, when this computer has one.
+  if (u.state === 'unsupported') return release;
   return (
+    <>
+    {release}
     <Grid cols={2}>
-      <Card title="Software updates">
+      <Card title="Updates from your organization">
         <div className="fx-form">
           <KeyValue
             items={[
@@ -537,7 +555,7 @@ function Updates() {
           />
           {u.message && <Callout tone={u.state === 'error' ? 'critical' : 'info'}>{u.message}</Callout>}
           <div className="fx-actions">
-            <Button icon="refresh" loading={busy === 'c'} disabled={u.state === 'unsupported'} onClick={() => void run('c', () => call('updates.check'))}>
+            <Button icon="refresh" loading={busy === 'c'} onClick={() => void run('c', () => call('updates.check'))}>
               Check now
             </Button>
             {u.state === 'downloaded' && (
@@ -558,6 +576,7 @@ function Updates() {
         </div>
       </Card>
     </Grid>
+    </>
   );
 }
 
@@ -684,9 +703,10 @@ function Logs() {
   return (
     <>
       <Card title="About FBRX OS">
+        {status.data && <AboutVersion version={status.data.version} />}
         <KeyValue
           items={[
-            ['Version', status.data?.version],
+            ['Version', status.data ? displayVersion(status.data.version) : '…'],
             ['Shell', status.data?.shell],
             ['Data folder', <span className="mono">{status.data?.dataDir}</span>],
             ['Build', info ? (info.packaged ? 'Release' : 'Development') : '—'],

@@ -1,9 +1,9 @@
 import { randomBytes } from 'node:crypto';
 import { KDF_STRONG, b64u, fromB64u, openBytes, openString, scryptKey, sealString, type KdfParams } from '@fbrx/shared/node';
-import { SECRET_KINDS, type ManagedSecret, type SecretKind, type SecretMeta, type VaultStatus } from '@fbrx/shared';
+import { SECRET_KINDS, type ManagedSecret, type SecretKind, type SecretMeta, type VaultLockReason, type VaultStatus } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Db } from '../storage/db';
-import type { KeychainAdapter } from '../platform';
+import type { KeychainAdapter, MovedKeychain } from '../platform';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
 
@@ -19,6 +19,7 @@ interface KeyRow {
   recovery_salt: string | null;
   recovery_params: string | null;
   key_check: string;
+  password_on_start?: number;
 }
 
 interface SecretRow {
@@ -40,13 +41,16 @@ interface SecretRow {
  *
  * A random 256-bit data-encryption key (DEK) encrypts every secret (AES-256-GCM, secret name bound as AAD).
  * The DEK itself is stored wrapped twice:
- *   1. by the OS keychain (macOS Keychain / Windows DPAPI via Electron safeStorage) → unlocks silently on this machine;
+ *   1. by this computer's keychain (Windows DPAPI or the Linux secret service via Electron safeStorage; on macOS and
+ *      elsewhere a key file only this user can read) → unlocks silently on this machine;
  *   2. optionally by a recovery passphrase (scrypt) → unlocks the vault on any machine.
+ * With "password on start", only (2) is kept: the vault stays locked after every start until the passphrase is given.
  * Snapshots additionally carry the DEK wrapped by the snapshot passphrase, which is how a restore on a new
  * workstation brings every credential back without re-entry.
  */
 export class Vault {
   private dek: Buffer | null = null;
+  private lockReason: VaultLockReason | null = null;
   private listeners = new Set<() => void>();
 
   constructor(
@@ -54,6 +58,7 @@ export class Vault {
     private readonly keychain: KeychainAdapter,
     private readonly log: Logger,
     private readonly events?: EventBus,
+    private readonly moved: MovedKeychain | null = null,
   ) {}
 
   /** Called at boot. Creates the vault on first run; otherwise tries to unlock via the keychain. */
@@ -63,19 +68,33 @@ export class Vault {
       await this.create();
       return;
     }
-    if (row.dek_keychain && this.keychain.available()) {
+    this.lockReason = null;
+    if (row.password_on_start) {
+      this.lockReason = 'password';
+      this.log.info('Vault is waiting for its password');
+    } else if (row.dek_keychain && this.isMoved(row)) {
+      // Never touch the old keychain on our own: on macOS that is exactly what made the system ask for a password.
+      this.lockReason = 'moved';
+      this.log.warn(`Vault key is still protected by ${this.moved!.label}; waiting for the person to bring it over`);
+    } else if (row.dek_keychain && this.keychain.available()) {
       try {
         const dek = await this.keychain.unprotect(row.dek_keychain);
         this.assertKey(dek, row);
         this.dek = dek;
         this.log.info('Vault unlocked with keychain', { keychain: this.keychain.kind });
       } catch {
+        this.lockReason = 'keychain';
         this.log.warn('Vault key could not be unwrapped by this machine keychain; recovery passphrase required');
       }
     } else {
+      this.lockReason = 'keychain';
       this.log.warn('Vault is locked: no keychain-wrapped key for this machine');
     }
     this.changed();
+  }
+
+  private isMoved(row: KeyRow): boolean {
+    return !!this.moved && row.keychain_kind === this.moved.kind && row.keychain_kind !== this.keychain.kind;
   }
 
   private async create(): Promise<void> {
@@ -113,12 +132,17 @@ export class Vault {
     const counts = this.db.get<{ n: number; m: number }>(
       'SELECT COUNT(*) AS n, COALESCE(SUM(managed), 0) AS m FROM secrets WHERE internal = 0',
     );
+    const lockReason = !row || this.dek ? null : (this.lockReason ?? 'keychain');
     return {
       state: !row ? 'uninitialized' : this.dek ? 'unlocked' : 'locked',
       keychain: this.keychain.available() ? 'available' : 'unavailable',
+      keychainKind: this.keychain.kind,
       secretCount: Number(counts?.n ?? 0),
       managedCount: Number(counts?.m ?? 0),
       hasRecovery: !!row?.dek_recovery,
+      lockReason,
+      passwordOnStart: !!row?.password_on_start,
+      movedFrom: lockReason === 'moved' ? this.moved!.label : null,
     };
   }
 
@@ -153,7 +177,7 @@ export class Vault {
     }
   }
 
-  /** Unlocks with the recovery passphrase and re-binds the key to this machine's keychain. */
+  /** Unlocks with the recovery passphrase and re-binds the key to this machine's keychain (unless it asks on start). */
   async unlockWithRecovery(passphrase: string): Promise<void> {
     const row = this.keyRow();
     if (!row) throw new CoreError('NOT_FOUND', 'Vault is not initialized');
@@ -166,11 +190,65 @@ export class Vault {
       dek = openBytes(kek, row.dek_recovery, 'vault-recovery');
       this.assertKey(dek, row);
     } catch {
-      throw new CoreError('UNAUTHENTICATED', 'Recovery passphrase is incorrect');
+      throw new CoreError('UNAUTHENTICATED', row.password_on_start ? 'That password is not right' : 'Recovery passphrase is incorrect');
+    }
+    if (!row.password_on_start) await this.bindKeychain(dek);
+    this.dek = dek;
+    this.lockReason = null;
+    this.changed();
+  }
+
+  /** Brings the key over from the keychain an earlier version used, then protects it the current way. */
+  async importMoved(): Promise<void> {
+    const row = this.keyRow();
+    if (!row?.dek_keychain || !this.isMoved(row)) throw new CoreError('CONFLICT', 'There is nothing to bring over');
+    let dek: Buffer;
+    try {
+      dek = await this.moved!.unprotect(row.dek_keychain);
+      this.assertKey(dek, row);
+    } catch (e) {
+      this.log.warn('Could not bring the vault key over', { error: (e as Error).message });
+      throw new CoreError('UNAUTHENTICATED', `${this.moved!.label[0].toUpperCase()}${this.moved!.label.slice(1)} did not hand over the key. ${(e as Error).message}`.trim());
     }
     await this.bindKeychain(dek);
     this.dek = dek;
+    this.lockReason = null;
+    this.log.info('Vault key brought over', { from: this.moved!.kind, to: this.keychain.kind });
     this.changed();
+  }
+
+  /**
+   * On: the key is kept only under the passphrase (set now if there is none), so every start asks for it.
+   * Off: the key is bound to this computer again and unlocks silently.
+   */
+  async setPasswordOnStart(enabled: boolean, passphrase: string): Promise<void> {
+    const dek = this.requireKey();
+    const row = this.keyRow()!;
+    if (row.dek_recovery) {
+      if (!(await this.verifyRecoveryPassphrase(passphrase))) throw new CoreError('UNAUTHENTICATED', 'That password is not right');
+    } else if (enabled) {
+      await this.setRecoveryPassphrase(passphrase);
+    } else {
+      throw new CoreError('CONFLICT', 'No vault password is set');
+    }
+    if (enabled) {
+      this.db.run('UPDATE vault_keys SET password_on_start = 1, dek_keychain = NULL, updated_at = ? WHERE id = ?', new Date().toISOString(), 'primary');
+    } else {
+      this.db.run('UPDATE vault_keys SET password_on_start = 0, updated_at = ? WHERE id = ?', new Date().toISOString(), 'primary');
+      await this.bindKeychain(dek);
+    }
+    this.changed();
+  }
+
+  /** Deletes every credential (FBRX's own included) and starts a new, empty vault. */
+  async reset(): Promise<void> {
+    this.dek?.fill(0);
+    this.dek = null;
+    this.db.run('DELETE FROM secrets');
+    this.db.run('DELETE FROM vault_keys');
+    this.lockReason = null;
+    this.log.warn('Vault reset: every saved credential was deleted');
+    await this.create();
   }
 
   /** Installs a DEK recovered from a snapshot and binds it to this machine. */
@@ -197,6 +275,7 @@ export class Vault {
   lock(): void {
     this.dek?.fill(0);
     this.dek = null;
+    this.lockReason = this.keyRow()?.password_on_start ? 'password' : 'manual';
     this.changed();
   }
 
@@ -206,7 +285,7 @@ export class Vault {
   }
 
   private requireKey(): Buffer {
-    if (!this.dek) throw new CoreError('LOCKED', 'The vault is locked. Unlock it with your recovery passphrase.');
+    if (!this.dek) throw new CoreError('LOCKED', 'Saved credentials are locked. Unlock them on the Vault page.');
     return this.dek;
   }
 

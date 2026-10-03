@@ -1,0 +1,20 @@
+{
+  "product": "FBRX OS",
+  "stage": "Alpha",
+  "version": "1.8.1",
+  "codename": "Spindle",
+  "released": "2026-10-03",
+  "importance": "recommended",
+  "summary": "A new sidebar, updates offered in the app, downloadable voices with a spoken hello, and fixes for the Mac Keychain prompt, flashing command windows and jumping cursors.",
+  "notes": [
+    "Sidebar sections (Bridge, Studio, Pit Stop, Workbench, Orbit, Shield, Lab, Control) open to their pages and fold down to icons.",
+    "FBRX OS checks for new versions and offers them; Update now downloads the new version and runs the installer for you.",
+    "Voice: Fabrix says it heard you, plays a soft thinking sound while it works, and you can download more natural voices, British butler included.",
+    "The Silly Goose wears flight goggles up on his head and dresses for the season.",
+    "Mac: no more 'FBRX OS Safe Storage' password prompts. Optionally ask for a vault password at every start.",
+    "Windows: no more command windows flashing up while Fabrix works.",
+    "Typing in a pop-up no longer jumps to the first box; numbered and nested lists in answers show correctly."
+  ],
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/heads/claude/fbrx-os-enterprise-app-bs7s2j.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX"
+}

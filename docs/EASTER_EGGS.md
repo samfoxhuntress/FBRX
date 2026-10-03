@@ -47,7 +47,8 @@ ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `
 
 ## The Silly Goose
 
-A nod to the classic mischievous desktop pet, with one visual upgrade: safety goggles. A goose waddles across the screen
+A nod to the classic mischievous desktop pet, with one visual upgrade: brass-rimmed flight goggles, pushed up on his
+head, with a tuft of feathers sticking up behind the strap. A goose waddles across the screen
 FBRX OS is on for about a minute and a half, then leaves by itself. It eases into and out of its walks, waddles in
 step with its feet and turns around with a little pivot. While it is around it:
 
@@ -58,6 +59,16 @@ step with its feet and turns around with a little pivot. While it is around it:
   lets go (about two seconds; it always lets go). On other systems it runs off with a drawn pointer instead,
 - runs off the edge of the screen and comes back dragging a sticky note ("I ate your Wi-Fi password. It was
   delicious.") or a framed *Portrait of a Goose, oil on canvas*. Click a note to put it away.
+
+He dresses for the season where you are (the southern hemisphere is worked out from your time zone), or the one you
+pick under *The goose's wardrobe* in Settings → Appearance → Fun extras, which shows him in it:
+
+| Season | What changes |
+| --- | --- |
+| Winter | A red striped scarf whose ends flap as he walks, green snow boots with fluffy cuffs, and snowy footprints instead of mud |
+| Fall | An orange scarf, and a leaf that blew onto his back |
+| Spring | Nothing on him; a butterfly keeps him company |
+| Summer | Now and then he plants a beach umbrella and enjoys the shade ("ahh. ☀"), and his trips off screen sometimes come back with a postcard of himself at the beach ("Wish you were here. The Wi-Fi is terrible. — G") |
 
 It lives in a transparent, always-on-top window: clicks go straight through it to your apps, except on the goose and
 its notes. Click the goose and it flees; click it three times and it leaves ("Fine. FINE."). The tray menu has

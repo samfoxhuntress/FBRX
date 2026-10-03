@@ -322,6 +322,17 @@ async function installApp(artifact) {
   return { path: artifact, note: 'runs from the build folder on Linux', wasRunning };
 }
 
+/** Tells the app which folder it was installed from, so it can offer to update itself from a newer download. */
+function rememberSource() {
+  try {
+    const dir = dataRoot();
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, 'install-source.json'), JSON.stringify({ root: ROOT, version, installedAt: new Date().toISOString() }, null, 2));
+  } catch (err) {
+    log(`could not record the install folder: ${err.message}`);
+  }
+}
+
 /** Signs an Enterprise license key with your signing key. `expires` is YYYY-MM-DD or undefined (no expiry). */
 async function issueKey(customer, expires) {
   const args = ['--import', 'tsx', join(ROOT, 'scripts', 'issue-license.ts'), '--customer', customer, '--edition', 'enterprise'];
@@ -480,6 +491,7 @@ async function main() {
   await step('Creating your license signing keys', createKeys);
   const { artifact } = await step(`Building ${PRODUCT} for this ${platformName}`, buildApp);
   const installed = await step(`Installing ${PRODUCT}`, () => installApp(artifact));
+  rememberSource();
   await step('Licensing this computer', () => issueLicense(name));
   await step(launch ? `Opening ${PRODUCT}` : `Ready to open`, async () => {
     if (!launch) return { note: 'skipped (--no-launch)' };

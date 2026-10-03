@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentEvent, ApprovalRequest, ChatMessage, ProviderStatus, ToolCallRecord } from '@fbrx/shared';
-import { addressAs } from '@fbrx/shared';
+import { NATURAL_PREFIX, addressAs } from '@fbrx/shared';
 import { Button, Callout, Card, Icons, Modal, Select, Status, TextArea, timeAgo, useAction, useConfirm, type IconName, FbrxMark } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
@@ -9,7 +9,9 @@ import { navigate, routeArg } from '../app';
 import { EmergencyStop, ModelPicker } from '../widgets';
 import { useSlashMenu } from '../slash-menu';
 import { ActivityPanel, ThinkingNote, reduceActivity, type Activity } from '../agent-activity';
-import { StreamReader, say, speakable, stopSpeaking } from '../voice/voice';
+import { StreamReader, prefetchSpeech, say, speakable, stopSpeaking, warmNaturalVoice } from '../voice/voice';
+import { acknowledgement } from '../voice/acknowledge';
+import { startThinkingSound, stopThinkingSound } from '../voice/thinking-sound';
 import { useVoiceChat } from '../voice/use-voice-chat';
 import { ModelDownload } from './settings-voice';
 
@@ -170,13 +172,40 @@ export function AgentPage({ agentName }: { agentName: string }) {
   const reader = useRef(new StreamReader(() => voiceRef.current ?? { voiceName: '', wpm: 210, pitch: 1 }));
   const streamText = useRef<{ id: string; text: string }>({ id: '', text: '' });
   const speakRef = useRef(false);
+  // A spoken message gets a spoken "I heard you", then a soft thinking sound until the answer starts.
+  const thinkingWanted = useRef(false);
+  const stopThinking = () => {
+    thinkingWanted.current = false;
+    stopThinkingSound();
+  };
+  const nextAck = useRef<string | null>(null);
+  const acknowledge = () => {
+    const v = voiceRef.current;
+    if (!v) return;
+    thinkingWanted.current = v.thinkingSound;
+    if (v.acknowledge) say(nextAck.current ?? acknowledgement(v.voiceName, addressAs(settings.data?.settings) || null), v);
+    nextAck.current = null;
+    // The soft thinking sound starts straight away (quietly, under the "I heard you") and stops when the answer does.
+    setTimeout(() => thinkingWanted.current && (sending.current || runRef.current) && startThinkingSound(), 300);
+  };
   const voice = useVoiceChat({
     settings: s,
     onText: (text, send_) => {
-      if (send_ && !runRef.current) void send(text);
-      else setInput((cur) => (cur.trim() ? `${cur.trimEnd()} ${text}` : text));
+      if (send_ && !runRef.current) {
+        acknowledge();
+        void send(text);
+      } else setInput((cur) => (cur.trim() ? `${cur.trimEnd()} ${text}` : text));
     },
   });
+  useEffect(() => () => stopThinkingSound(), []);
+  // While you talk, prepare what it will say when you stop, so a natural voice answers without a pause.
+  useEffect(() => {
+    const v = voiceRef.current;
+    if (voice.state !== 'listening' || !v?.acknowledge) return;
+    if (v.voiceName.startsWith(NATURAL_PREFIX)) warmNaturalVoice();
+    nextAck.current = acknowledgement(v.voiceName, addressAs(settings.data?.settings) || null);
+    prefetchSpeech(nextAck.current, v);
+  }, [voice.state]); // eslint-disable-line react-hooks/exhaustive-deps
   speakRef.current = !!s?.voice.readReplies || voice.handsFree;
   const replyFinishedRef = useRef(voice.replyFinished);
   replyFinishedRef.current = voice.replyFinished;
@@ -233,6 +262,8 @@ export function AgentPage({ agentName }: { agentName: string }) {
           return;
         }
         setActivity((a) => reduceActivity(a, e));
+        // The thinking sound stops when the answer starts, when it needs your approval, or when it ends.
+        if (e.type === 'message.delta' || (e.type === 'run.progress' && (e.phase === 'writing' || e.phase === 'approval')) || e.type === 'run.completed' || e.type === 'run.failed' || e.type === 'run.cancelled') stopThinking();
         switch (e.type) {
           case 'run.started':
             setActiveRun({ runId: e.runId, conversationId: e.conversationId });
@@ -561,6 +592,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
                   icon="stop"
                   onClick={() => {
                     stopSpeaking();
+                    stopThinking();
                     void call('ai.cancel', { runId: activeRun.runId });
                   }}
                 >

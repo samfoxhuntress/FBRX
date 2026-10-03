@@ -265,6 +265,11 @@ export const MIGRATIONS: Migration[] = [
     name: 'message-thinking',
     up: `ALTER TABLE messages ADD COLUMN thinking TEXT;`,
   },
+  {
+    version: 4,
+    name: 'vault-password-on-start',
+    up: `ALTER TABLE vault_keys ADD COLUMN password_on_start INTEGER NOT NULL DEFAULT 0;`,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

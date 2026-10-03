@@ -1,5 +1,5 @@
 import type { TrophyState } from './fun';
-import type { VoiceModelId } from './settings';
+import type { VoiceDownloadId } from './settings';
 /**
  * Contracts for the FBRX OS command-center modules: workspace (notes, tasks, projects, snippets), live system
  * information, Spotlight, alerts, PC care (storage, security, updates, troubleshooting, Hyper-V lab), the
@@ -348,7 +348,9 @@ export const CODE_LANGUAGES = ['powershell', 'python', 'javascript', 'typescript
 export type CodeLanguage = (typeof CODE_LANGUAGES)[number];
 
 export interface VoiceModelStatus {
-  id: VoiceModelId;
+  id: VoiceDownloadId;
+  /** Speech recognition (listen) or the natural voices (speak). */
+  kind: 'listen' | 'speak';
   name: string;
   note: string;
   sizeMB: number;
@@ -917,8 +919,8 @@ export interface ExtMethods {
   /** Speech recognition models and whether they are on this computer. */
   'voice.models': () => VoiceModelStatus[];
   /** Downloads a model (progress arrives as voice.download events). */
-  'voice.install': (p: { model: VoiceModelId }) => Ok;
-  'voice.remove': (p: { model: VoiceModelId }) => Ok;
+  'voice.install': (p: { model: VoiceDownloadId }) => Ok;
+  'voice.remove': (p: { model: VoiceDownloadId }) => Ok;
   'voice.cancel': () => Ok;
 
   'migrate.engines': () => MigrateEngineInfo[];
@@ -1000,7 +1002,7 @@ export interface ExtEvents {
   'net.event': NetEvent;
   'migrate.event': MigrateEvent;
   'ai.quick': { reqId: string; delta: string };
-  'voice.download': { model: VoiceModelId; received: number; total: number; done: boolean; error: string | null };
+  'voice.download': { model: VoiceDownloadId; received: number; total: number; done: boolean; error: string | null };
   'winupdates.event': { reqId: string; line: string };
   'mesh.changed': MeshStatus;
   'mesh.message': MeshMessage;

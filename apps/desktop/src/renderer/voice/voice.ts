@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
-import { VOICE_MODELS, type Settings, type VoiceModelId } from '@fbrx/shared';
+import { NATURAL_PREFIX, VOICE_MODELS, type Settings, type VoiceModelId } from '@fbrx/shared';
 import { bridge } from '../client';
 
 /**
- * Voice: listening (the microphone → Whisper on this computer → text) and speaking (the system's voices, at the
- * chosen words per minute). Nothing is sent anywhere to be transcribed.
+ * Voice: listening (the microphone → Whisper on this computer → text) and speaking (the system's voices, or the
+ * natural voices made on this computer by Kokoro, at the chosen words per minute). Nothing is sent anywhere.
  */
 
 // ------------------------------------------------------------------------------------------------ listening
@@ -289,8 +289,16 @@ export function isSpeaking(): boolean {
 
 /** Adds sentences to what is being said (they are spoken in order). */
 export function say(text: string, s: VoiceSettings): void {
+  if (s.voiceName.startsWith(NATURAL_PREFIX)) {
+    natural.say(text, s.voiceName.slice(NATURAL_PREFIX.length), naturalSpeed(s.wpm), s);
+    return;
+  }
+  systemSay(text, s);
+}
+
+function systemSay(text: string, s: VoiceSettings): void {
   if (!speechSupported()) return;
-  const voice = pickVoice(s.voiceName);
+  const voice = pickVoice(s.voiceName.startsWith(NATURAL_PREFIX) ? '' : s.voiceName);
   for (const line of sentences(text)) {
     const u = new SpeechSynthesisUtterance(line);
     if (voice) {
@@ -312,10 +320,179 @@ export function say(text: string, s: VoiceSettings): void {
 }
 
 export function stopSpeaking(): void {
-  if (!speechSupported()) return;
-  queue = [];
-  speechSynthesis.cancel();
+  natural.stop();
+  if (speechSupported()) {
+    queue = [];
+    speechSynthesis.cancel();
+  }
   setSpeaking(false);
+}
+
+// ------------------------------------------------------------------------------------------- natural voices
+
+/** About how many words a minute the natural voices say at speed 1. */
+const NATURAL_WPM = 138;
+const naturalSpeed = (wpm: number) => Math.max(0.6, Math.min(2, wpm / NATURAL_WPM));
+
+/**
+ * Speaks with the natural voices: sentences are made into audio in the TTS worker one ahead of the one playing, so
+ * there is no gap between them. If the voices are not downloaded (or anything fails), the system voice takes over.
+ */
+class NaturalVoice {
+  private worker: Worker | null = null;
+  private idle: ReturnType<typeof setTimeout> | null = null;
+  private seq = 1;
+  private waiting = new Map<number, { resolve: (a: { audio: Float32Array; sampleRate: number }) => void; reject: (e: Error) => void }>();
+  private lines: string[] = [];
+  private gen = 0;
+  private running = false;
+  private ctx: AudioContext | null = null;
+  private source: AudioBufferSourceNode | null = null;
+  private fallback: VoiceSettings | null = null;
+  /** For tests and the settings page: the last sentence's synthesis time. */
+  lastMs = 0;
+
+  private getWorker(): Worker {
+    if (this.idle) clearTimeout(this.idle);
+    this.idle = setTimeout(() => {
+      this.worker?.terminate();
+      this.worker = null;
+    }, 10 * 60_000);
+    if (this.worker) return this.worker;
+    const w = new Worker(new URL('./tts-worker.ts', import.meta.url), { type: 'module' });
+    w.onmessage = (e: MessageEvent) => {
+      const m = e.data as { type: string; id?: number; audio?: Float32Array; sampleRate?: number; message?: string; ms?: number };
+      if (m.id === undefined) return;
+      const p = this.waiting.get(m.id);
+      this.waiting.delete(m.id);
+      if (m.type === 'audio') {
+        this.lastMs = m.ms ?? 0;
+        p?.resolve({ audio: m.audio!, sampleRate: m.sampleRate! });
+      } else p?.reject(new Error(m.message || 'The natural voice failed'));
+    };
+    w.onerror = (e) => {
+      for (const p of this.waiting.values()) p.reject(new Error(e.message || 'The natural voice stopped'));
+      this.waiting.clear();
+      w.terminate();
+      if (this.worker === w) this.worker = null;
+    };
+    this.worker = w;
+    return w;
+  }
+
+  /** Loads the model ahead of time. */
+  warm(): void {
+    this.getWorker().postMessage({ type: 'load' });
+  }
+
+  /** Sentences made ahead of time (see prefetch), by voice, speed and text. */
+  private ready = new Map<string, Promise<{ audio: Float32Array; sampleRate: number }>>();
+
+  /** Makes a sentence now so it can be said without waiting later (the "I heard you" while you are still talking). */
+  prefetch(text: string, voice: string, speed: number): void {
+    for (const line of sentences(text)) {
+      const key = `${voice}|${speed}|${line}`;
+      if (this.ready.has(key)) continue;
+      const p = this.synth(line, voice, speed, false);
+      p.catch(() => this.ready.delete(key));
+      this.ready.set(key, p);
+      while (this.ready.size > 6) this.ready.delete(this.ready.keys().next().value!);
+    }
+  }
+
+  synth(text: string, voice: string, speed: number, useReady = true): Promise<{ audio: Float32Array; sampleRate: number }> {
+    const key = `${voice}|${speed}|${text}`;
+    const made = useReady ? this.ready.get(key) : undefined;
+    if (made) {
+      this.ready.delete(key);
+      return made;
+    }
+    const id = this.seq++;
+    return new Promise((resolve, reject) => {
+      this.waiting.set(id, { resolve, reject });
+      this.getWorker().postMessage({ type: 'speak', id, text, voice, speed });
+    });
+  }
+
+  say(text: string, voice: string, speed: number, s: VoiceSettings): void {
+    const add = sentences(text);
+    if (!add.length) return;
+    this.fallback = s;
+    this.lines.push(...add);
+    setSpeaking(true);
+    if (!this.running) void this.pump(voice, speed);
+  }
+
+  private async pump(voice: string, speed: number): Promise<void> {
+    this.running = true;
+    const gen = this.gen;
+    try {
+      let next = this.lines.length ? this.synth(this.lines.shift()!, voice, speed) : null;
+      while (next && gen === this.gen) {
+        const clip = await next;
+        if (gen !== this.gen) break;
+        // Make the following sentence while this one plays.
+        next = this.lines.length ? this.synth(this.lines.shift()!, voice, speed) : null;
+        await this.play(clip);
+        // Sentences that arrived while this one played.
+        if (!next && this.lines.length && gen === this.gen) next = this.synth(this.lines.shift()!, voice, speed);
+      }
+    } catch (err) {
+      console.warn('Natural voice failed; using the system voice', err);
+      const rest = this.lines.splice(0);
+      if (gen === this.gen && this.fallback && rest.length) systemSay(rest.join(' '), { ...this.fallback, voiceName: '' });
+    } finally {
+      this.running = false;
+      if (gen === this.gen && !this.lines.length && !queue.length) setSpeaking(false);
+    }
+  }
+
+  private play(clip: { audio: Float32Array; sampleRate: number }): Promise<void> {
+    this.ctx ??= new AudioContext();
+    const ctx = this.ctx;
+    if (ctx.state === 'suspended') void ctx.resume();
+    const buf = ctx.createBuffer(1, clip.audio.length, clip.sampleRate);
+    buf.copyToChannel(clip.audio as Float32Array<ArrayBuffer>, 0);
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.connect(ctx.destination);
+    this.source = src;
+    return new Promise((resolve) => {
+      src.onended = () => {
+        if (this.source === src) this.source = null;
+        resolve();
+      };
+      src.start();
+    });
+  }
+
+  stop(): void {
+    this.gen++;
+    this.lines = [];
+    try {
+      this.source?.stop();
+    } catch {
+      /* already ended */
+    }
+    this.source = null;
+  }
+}
+
+const natural = new NaturalVoice();
+
+/** Prepares what will be said next with a natural voice, so it starts without a pause (system voices need nothing). */
+export function prefetchSpeech(text: string, s: VoiceSettings): void {
+  if (s.voiceName.startsWith(NATURAL_PREFIX)) natural.prefetch(text, s.voiceName.slice(NATURAL_PREFIX.length), naturalSpeed(s.wpm));
+}
+
+/** Loads the natural voice model ahead of time (when one is chosen), so the first reply doesn't wait. */
+export function warmNaturalVoice(): void {
+  natural.warm();
+}
+
+/** Makes one sentence with a natural voice and says how long that took (for the settings page). */
+export function naturalSample(text: string, voice: string, wpm: number) {
+  return natural.synth(text, voice, naturalSpeed(wpm));
 }
 
 /**
@@ -348,3 +525,12 @@ export class StreamReader {
     this.spoken = 0;
   }
 }
+
+// For FBRX's end-to-end tests: make a sentence with a natural voice and write it down again with Whisper.
+(globalThis as { __fbrxVoiceCheck?: unknown }).__fbrxVoiceCheck = async (text: string, voice: string, wpm: number, model: VoiceModelId) => {
+  const started = performance.now();
+  const clip = await naturalSample(text, voice, wpm);
+  const ms = performance.now() - started;
+  const heard = await transcribe(await resample(clip.audio as Float32Array<ArrayBuffer>, clip.sampleRate, 16_000), model);
+  return { heard, seconds: clip.audio.length / clip.sampleRate, ms };
+};

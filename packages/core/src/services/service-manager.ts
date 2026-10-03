@@ -87,6 +87,13 @@ export class ServiceManager {
       e.startedAt = new Date().toISOString();
       this.set(e, 'running');
     } catch (err) {
+      // Services that need saved credentials wait for the vault (it may be locked on purpose until its password is
+      // entered); they start when it is unlocked.
+      if ((err as { code?: string }).code === 'LOCKED') {
+        this.set(e, 'stopped', 'Waiting for the vault to be unlocked');
+        this.log.info(`Service ${e.def.name} waits for the vault to be unlocked`);
+        return;
+      }
       this.set(e, 'failed', errorMessage(err));
       this.log.error(`Service ${e.def.name} failed to start`, { error: errorMessage(err) });
       if (e.def.critical) throw err;

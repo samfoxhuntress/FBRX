@@ -1,6 +1,7 @@
 import { app, Notification, safeStorage, shell } from 'electron';
+import { execFile } from 'node:child_process';
 import { join } from 'node:path';
-import { FileKeychain, defaultSpecialDirs, type KeychainAdapter, type PlatformAdapter, type UpdateController } from '@fbrx/core';
+import { FileKeychain, defaultSpecialDirs, openMacSafeStorage, type KeychainAdapter, type MovedKeychain, type PlatformAdapter, type UpdateController } from '@fbrx/core';
 import type { NotificationEvent } from '@fbrx/shared';
 
 declare const __FBRX_LICENSE_PUBKEYS__: string[];
@@ -20,9 +21,36 @@ export class ElectronKeychain implements KeychainAdapter {
 }
 
 export function chooseKeychain(dataDir: string): KeychainAdapter {
+  const file = new FileKeychain(join(dataDir, 'keychain.key'));
+  // macOS: the Keychain asks for the Mac password whenever an updated (re-signed) FBRX opens its item, which happens
+  // after every update of an app that is not notarized. FBRX keeps its key in a file only this user can read instead
+  // (and the app runs with Chromium's mock keychain, so nothing else touches the Keychain either). For a password,
+  // turn on "Ask for the vault password when FBRX OS starts".
+  if (process.platform === 'darwin') return file;
   const os = new ElectronKeychain();
   // Linux desktops without a secret service fall back to a 0600 key file (documented in SECURITY.md).
-  return os.available() ? os : new FileKeychain(join(dataDir, 'keychain.key'));
+  return os.available() ? os : file;
+}
+
+/**
+ * Vault keys that FBRX 1.8.0 and earlier protected with the Mac Keychain (Electron safeStorage). Read with the
+ * `security` tool only when the person asks to bring them over: macOS may ask once for the Mac login password.
+ */
+export function macMovedKeychain(): MovedKeychain | null {
+  if (process.platform !== 'darwin') return null;
+  return {
+    kind: 'os',
+    label: 'the Mac Keychain',
+    unprotect: async (blob) => {
+      const password = await new Promise<string>((resolve, reject) =>
+        execFile('/usr/bin/security', ['find-generic-password', '-w', '-s', `${app.getName()} Safe Storage`], { timeout: 120_000 }, (err, out) =>
+          err ? reject(new Error(/could not be found/i.test(String(err.message)) ? 'Its item is not in the Keychain.' : 'macOS did not allow it (the request was denied or canceled).')) : resolve(out.trim()),
+        ),
+      );
+      // The vault stored base64(safeStorage.encryptString(base64(key))).
+      return Buffer.from(openMacSafeStorage(password, Buffer.from(blob, 'base64')), 'base64');
+    },
+  };
 }
 
 export function createElectronPlatform(o: {
@@ -40,6 +68,7 @@ export function createElectronPlatform(o: {
     appVersion: app.getVersion(),
     devMode: !app.isPackaged || process.env.FBRX_DEV_MODE === '1',
     keychain: chooseKeychain(o.dataDir),
+    movedKeychain: macMovedKeychain(),
     resourcesDir: resources,
     pluginWorkerPath: join(workerDir, 'plugin-worker.mjs'),
     licensePublicKeys: keys,

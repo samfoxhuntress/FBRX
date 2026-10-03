@@ -17,6 +17,9 @@ const USER_ONLY = new Set<string>([
   'vault.initialize',
   'vault.changeRecovery',
   'vault.unlock',
+  'vault.importMoved',
+  'vault.passwordOnStart',
+  'vault.reset',
   'backup.restore',
   'fleet.enroll',
   'fleet.unenroll',
@@ -32,6 +35,8 @@ const USER_ONLY = new Set<string>([
   'settings.update',
   'approvals.resolve',
   'updates.install',
+  'release.skip',
+  'release.install',
   ...EXT_USER_ONLY,
 ]);
 
@@ -109,6 +114,23 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       }
       validatePassphrase(next);
       await k.vault.setRecoveryPassphrase(next);
+      return k.vault.status();
+    },
+    'vault.importMoved': async () => {
+      await k.vault.importMoved();
+      await k.onVaultUnlocked();
+      return k.vault.status();
+    },
+    'vault.passwordOnStart': async (p) => {
+      const { enabled, passphrase } = z.object({ enabled: z.boolean(), passphrase: z.string() }).parse(p);
+      await k.vault.setPasswordOnStart(enabled, passphrase);
+      return k.vault.status();
+    },
+    'vault.reset': async (p) => {
+      z.object({ confirm: z.literal('DELETE') }).parse(p);
+      await k.vault.reset();
+      // FBRX's own keys (Local API, mesh) were deleted with everything else; a restart recreates them cleanly.
+      k.platform.requestRestart('vault-reset');
       return k.vault.status();
     },
 
@@ -258,6 +280,10 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'updates.status': () => k.updateStatus(),
     'updates.check': async () => (k.platform.updates ? k.platform.updates.check() : k.updateStatus()),
     'updates.install': async () => (k.platform.updates ? k.platform.updates.install({ restartNow: true }) : k.updateStatus()),
+    'release.status': () => k.release.status(),
+    'release.check': () => k.release.check(),
+    'release.skip': (p) => k.release.skip(z.object({ version: z.string().max(40) }).parse(p).version),
+    'release.install': () => k.release.install(),
 
     'localapi.info': (p) => k.localApi.info(!!p?.revealToken),
     'localapi.rotateToken': async () => {

@@ -16,6 +16,16 @@ export interface NavItem {
   tag?: string;
 }
 
+/** A sidebar section: a name with its icon that opens to the pages inside it. */
+export interface NavGroup {
+  id: string;
+  label: string;
+  /** What is inside, in plain words ("Tasks, notes and projects"). */
+  hint: string;
+  icon: IconName;
+  items: NavItem[];
+}
+
 /** Marks a feature that only shows in Advanced mode. */
 export function AdvancedTag({ label = 'Advanced', title = 'Shown in Advanced mode' }: { label?: string; title?: string }) {
   return (
@@ -40,6 +50,11 @@ export function Shell(props: {
   onBrandClick?: () => void;
   brandClassName?: string;
   nav: NavItem[];
+  /** Sections that open to their pages; replaces the flat `nav` list when given. */
+  groups?: NavGroup[];
+  /** Sidebar shows icons only (with groups). */
+  collapsed?: boolean;
+  onCollapsedChange?: (collapsed: boolean) => void;
   active: string;
   onNavigate: (id: string) => void;
   topbar?: ReactNode;
@@ -47,41 +62,153 @@ export function Shell(props: {
   children: ReactNode;
 }) {
   let lastSection: string | undefined;
+  const collapsed = !!props.groups && !!props.collapsed;
   return (
-    <div className="fx-shell">
+    <div className={cx('fx-shell', props.groups && 'grouped', collapsed && 'collapsed')}>
       <aside className="fx-sidebar">
         <div className="fx-brand">
           <FbrxMark className={cx('fx-brand-mark', props.brandClassName)} onClick={props.onBrandClick} />
-          <div>
-            <div className="fx-brand-name">FBRX OS</div>
-            <div className="fx-brand-sub">{props.brandSub ?? 'Fabrics Operating System'}</div>
-          </div>
+          {!collapsed && (
+            <div>
+              <div className="fx-brand-name">FBRX OS</div>
+              <div className="fx-brand-sub">{props.brandSub ?? 'Fabrics Operating System'}</div>
+            </div>
+          )}
         </div>
-        <nav className="fx-nav" aria-label="Main">
-          {props.nav.map((item) => {
-            const Ico = Icons[item.icon];
-            const header = item.section && item.section !== lastSection ? item.section : null;
-            lastSection = item.section ?? lastSection;
-            return (
-              <div key={item.id}>
-                {header && <div className="fx-nav-section">{header}</div>}
-                <button className={cx('fx-nav-item', props.active === item.id && 'active')} onClick={() => props.onNavigate(item.id)} aria-current={props.active === item.id ? 'page' : undefined}>
-                  <Ico />
-                  <span>{item.label}</span>
-                  {item.tag && <span className="fx-adv-tag">{item.tag}</span>}
-                  {!!item.count && <span className="fx-nav-count">{item.count}</span>}
-                </button>
-              </div>
-            );
-          })}
-        </nav>
-        {props.footer && <div className="fx-sidebar-foot">{props.footer}</div>}
+        {props.groups ? (
+          <GroupedNav groups={props.groups} active={props.active} onNavigate={props.onNavigate} collapsed={collapsed} />
+        ) : (
+          <nav className="fx-nav" aria-label="Main">
+            {props.nav.map((item) => {
+              const header = item.section && item.section !== lastSection ? item.section : null;
+              lastSection = item.section ?? lastSection;
+              return (
+                <div key={item.id}>
+                  {header && <div className="fx-nav-section">{header}</div>}
+                  <NavButton item={item} active={props.active === item.id} onClick={() => props.onNavigate(item.id)} />
+                </div>
+              );
+            })}
+          </nav>
+        )}
+        {props.groups && props.onCollapsedChange && (
+          <button className="fx-collapse" onClick={() => props.onCollapsedChange!(!collapsed)} title={collapsed ? 'Show the full sidebar' : 'Shrink the sidebar to icons'} aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}>
+            {collapsed ? <Icons.chevronRight size={16} /> : <Icons.chevronLeft size={16} />}
+            {!collapsed && <span>Collapse</span>}
+          </button>
+        )}
+        {props.footer && !collapsed && <div className="fx-sidebar-foot">{props.footer}</div>}
       </aside>
       <main className="fx-main">
         {props.topbar && <div className="fx-topbar">{props.topbar}</div>}
         <div className="fx-content">{props.children}</div>
       </main>
     </div>
+  );
+}
+
+function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
+  const Ico = Icons[item.icon];
+  return (
+    <button className={cx('fx-nav-item', active && 'active')} onClick={onClick} aria-current={active ? 'page' : undefined}>
+      <Ico />
+      <span>{item.label}</span>
+      {item.tag && <span className="fx-adv-tag">{item.tag}</span>}
+      {!!item.count && <span className="fx-nav-count">{item.count}</span>}
+    </button>
+  );
+}
+
+/**
+ * Sections that open to their pages. Expanded, a section opens in place (one at a time; the one holding the page
+ * on screen opens by itself). Collapsed to icons, a section's pages slide out next to it.
+ */
+function GroupedNav({ groups, active, onNavigate, collapsed }: { groups: NavGroup[]; active: string; onNavigate: (id: string) => void; collapsed: boolean }) {
+  const current = groups.find((g) => g.items.some((i) => i.id === active))?.id ?? null;
+  const [open, setOpen] = useState<string | null>(current);
+  const [flyout, setFlyout] = useState<{ id: string; top: number } | null>(null);
+  const flyRef = useRef<HTMLDivElement>(null);
+  // Follow the page on screen when it changes from elsewhere (a link, Spotlight, a notification).
+  useEffect(() => {
+    if (current) setOpen(current);
+  }, [current]);
+  useEffect(() => {
+    if (!flyout) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === 'Escape' : !flyRef.current?.contains(e.target as Node) && !(e.target as HTMLElement).closest?.('.fx-group-head')) setFlyout(null);
+    };
+    window.addEventListener('mousedown', close);
+    window.addEventListener('keydown', close);
+    return () => {
+      window.removeEventListener('mousedown', close);
+      window.removeEventListener('keydown', close);
+    };
+  }, [flyout]);
+  useEffect(() => {
+    if (!collapsed) setFlyout(null);
+  }, [collapsed]);
+  return (
+    <nav className={cx('fx-nav', 'fx-groups', collapsed && 'collapsed')} aria-label="Main">
+      {groups.map((g) => {
+        const Ico = Icons[g.icon];
+        const isOpen = !collapsed && open === g.id;
+        const count = g.items.reduce((n, i) => n + (i.count ?? 0), 0);
+        const flying = collapsed && flyout?.id === g.id;
+        return (
+          <div key={g.id} className={cx('fx-group', isOpen && 'open', current === g.id && 'here')}>
+            <button
+              className="fx-group-head"
+              aria-expanded={collapsed ? flying : isOpen}
+              title={collapsed ? `${g.label}: ${g.hint}` : undefined}
+              onClick={(e) => {
+                if (collapsed) {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  setFlyout(flying ? null : { id: g.id, top: r.top });
+                } else setOpen(isOpen ? null : g.id);
+              }}
+            >
+              <span className="fx-group-icon">
+                <Ico size={18} />
+              </span>
+              {!collapsed && (
+                <span className="fx-group-text">
+                  <span className="fx-group-name">{g.label}</span>
+                  <span className="fx-group-hint">{g.hint}</span>
+                </span>
+              )}
+              {count > 0 && <span className="fx-nav-count">{count}</span>}
+              {!collapsed && <Icons.chevronDown size={14} className="fx-group-chev" />}
+            </button>
+            {isOpen && (
+              <div className="fx-group-items">
+                {g.items.map((item) => (
+                  <NavButton key={item.id} item={item} active={active === item.id} onClick={() => onNavigate(item.id)} />
+                ))}
+              </div>
+            )}
+            {flying && (
+              <div className="fx-flyout" ref={flyRef} role="menu" style={{ top: Math.min(flyout.top, window.innerHeight - 60 - g.items.length * 36) }}>
+                <div className="fx-flyout-head">
+                  <b>{g.label}</b>
+                  <span>{g.hint}</span>
+                </div>
+                {g.items.map((item) => (
+                  <NavButton
+                    key={item.id}
+                    item={item}
+                    active={active === item.id}
+                    onClick={() => {
+                      setFlyout(null);
+                      onNavigate(item.id);
+                    }}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </nav>
   );
 }
 
@@ -354,12 +481,17 @@ export function Table<T>({ columns, rows, rowKey, onRowClick, empty }: { columns
 export function Modal({ title, description, children, footer, onClose, wide }: { title: ReactNode; description?: ReactNode; children: ReactNode; footer?: ReactNode; onClose: () => void; wide?: boolean }) {
   const id = useId();
   const ref = useRef<HTMLDivElement>(null);
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
+  // Focus the first field once, when the dialog opens. (Callers often pass a new onClose on every render, e.g. while
+  // typing; refocusing then would yank the cursor back to the first box.)
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const el = ref.current;
+    if (el && !el.contains(document.activeElement)) el.querySelector<HTMLElement>('input, textarea, select, button')?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && closeRef.current();
     window.addEventListener('keydown', onKey);
-    ref.current?.querySelector<HTMLElement>('input, textarea, select, button')?.focus();
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, []);
   return (
     <div className="fx-overlay" onMouseDown={(e) => e.target === e.currentTarget && onClose()}>
       <div className={cx('fx-modal', wide && 'wide')} role="dialog" aria-modal="true" aria-labelledby={id} ref={ref}>

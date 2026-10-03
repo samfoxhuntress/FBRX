@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { DeepPartial, Settings, VoiceModelId, VoiceModelStatus } from '@fbrx/shared';
+import { NATURAL_PREFIX, NATURAL_VOICES, NATURAL_VOICE_PACK } from '@fbrx/shared';
 import { VOICE_WPM, addressAs } from '@fbrx/shared';
-import { Button, Callout, Card, Field, Select, Status, Toggle, useAction, useToast } from '@fbrx/ui';
+import { Button, Callout, Card, Field, Icons, Select, Status, Toggle, useAction, useToast } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
 import { isLocked, useCore } from '../hooks';
-import { isNoise, record, say, speechSupported, stopSpeaking, transcribe, useVoices, type Recording } from '../voice/voice';
+import { isNoise, record, say, speechSupported, stopSpeaking, transcribe, useVoices, warmNaturalVoice, type Recording } from '../voice/voice';
 
 /** Settings → Voice: talking to the agent (speech recognition on this computer) and how it talks back. */
 
@@ -141,15 +142,26 @@ export function VoiceSettings() {
   const name = addressAs(settings) || 'there';
   const sample = `Hi ${name}, I'm ${settings.ai.agentName}. This is how I sound at ${shownWpm} words per minute. Ask me anything, out loud.`;
   const chosen = (models.data ?? []).find((m) => m.id === v.sttModel);
+  const listenModels = (models.data ?? []).filter((m) => m.kind === 'listen');
+  const pack = (models.data ?? []).find((m) => m.id === NATURAL_VOICE_PACK.id);
+  const naturalId = v.voiceName.startsWith(NATURAL_PREFIX) ? v.voiceName.slice(NATURAL_PREFIX.length) : null;
+  const hear = (voiceName: string, rate = shownWpm) => {
+    stopSpeaking();
+    say(sample, { voiceName, wpm: rate, pitch: shownPitch });
+  };
+  const pickNatural = (id: string, rate?: number) => {
+    warmNaturalVoice();
+    void patch({ voice: { voiceName: `${NATURAL_PREFIX}${id}`, ...(rate ? { wpm: rate } : {}) } }).then(() => hear(`${NATURAL_PREFIX}${id}`, rate));
+  };
 
   return (
     <>
       <Card title={`Talk to ${settings.ai.agentName}`} subtitle="Press the microphone next to Send and speak. What you say is turned into text on this computer by Whisper; nothing is sent anywhere to be transcribed.">
         <div className="voice-models">
-          {(models.data ?? []).map((m) => (
+          {listenModels.map((m) => (
             <div key={m.id} className={`voice-model${v.sttModel === m.id ? ' active' : ''}`}>
               <label className="voice-model-pick">
-                <input type="radio" name="stt" checked={v.sttModel === m.id} disabled={L('voice.sttModel')} onChange={() => void patch({ voice: { sttModel: m.id } })} />
+                <input type="radio" name="stt" checked={v.sttModel === m.id} disabled={L('voice.sttModel')} onChange={() => void patch({ voice: { sttModel: m.id as VoiceModelId } })} />
                 <span>
                   <b>{m.name}</b> <span className="fx-muted">· {m.sizeMB} MB{m.english ? ' · English' : ''}</span>
                   <span className="voice-model-note">{m.note}</span>
@@ -176,21 +188,89 @@ export function VoiceSettings() {
           {chosen?.installed ? <MicTest model={v.sttModel} micId={v.micId} /> : <p className="fx-muted voice-hint">Download the chosen model above to try the microphone.</p>}
           <Toggle checked={v.autoSend} disabled={L('voice.autoSend')} onChange={(x) => void patch({ voice: { autoSend: x } })} label="Send what I said right away (otherwise it waits in the box so you can check it)" />
           <Toggle checked={v.handsFree} disabled={L('voice.handsFree')} onChange={(x) => void patch({ voice: { handsFree: x, ...(x ? { readReplies: true, autoSend: true } : {}) } })} label="Hands-free conversation: after each spoken reply, listen again (stops after a quiet moment)" />
+          <Toggle checked={v.acknowledge} disabled={L('voice.acknowledge')} onChange={(x) => void patch({ voice: { acknowledge: x } })} label={`When you speak, ${settings.ai.agentName} says it heard you before it starts working`} />
+          <Toggle checked={v.thinkingSound} disabled={L('voice.thinkingSound')} onChange={(x) => void patch({ voice: { thinkingSound: x } })} label="Play a soft thinking sound while it works on what you said" />
           <p className="fx-muted voice-hint">
             Prefer your system's dictation? It works in every FBRX text box: press <kbd>Win</kbd>+<kbd>H</kbd> on Windows, or the microphone key (or <kbd>Fn</kbd> twice) on a Mac.
           </p>
         </div>
       </Card>
 
-      <Card title={`${settings.ai.agentName}'s voice`} subtitle="Uses the voices installed on this computer. Add more in Windows Settings → Time & language → Speech, or System Settings → Accessibility → Spoken Content on a Mac.">
+      <Card
+        title={`${settings.ai.agentName}'s voice`}
+        subtitle="Natural voices are made on this computer and sound the most lifelike. Your computer's own voices work too, and you can add more of them."
+      >
+        <div className="voice-section-head">
+          <b>Natural voices</b>
+          {pack && !pack.installed && <span className="fx-muted">One download ({pack.sizeMB} MB), then they work offline.</span>}
+          {pack && (
+            <span className="voice-section-act">
+              <ModelDownload model={pack} onDone={() => (void models.reload(), pickNatural('bm_george', 185))} />
+              {pack.installed && (
+                <Button size="sm" variant="ghost" icon="trash" aria-label="Remove the natural voices" onClick={() => void run('rm', () => call('voice.remove', { model: pack.id }).then(() => models.reload()), 'Removed')} />
+              )}
+            </span>
+          )}
+        </div>
+        {pack?.installed ? (
+          <>
+            <div className="voice-presets">
+              <button className={`voice-preset${naturalId === 'bm_george' ? ' on' : ''}`} disabled={L('voice.voiceName')} onClick={() => pickNatural('bm_george', 185)}>
+                <Icons.bowtie size={14} /> The butler <span>George · British · unhurried</span>
+              </button>
+              <button className={`voice-preset${naturalId === 'af_heart' ? ' on' : ''}`} disabled={L('voice.voiceName')} onClick={() => pickNatural('af_heart', 210)}>
+                <Icons.sparkles size={14} /> The assistant <span>Heart · American · warm</span>
+              </button>
+              <button className={`voice-preset${naturalId === 'bm_fable' ? ' on' : ''}`} disabled={L('voice.voiceName')} onClick={() => pickNatural('bm_fable', 175)}>
+                <Icons.book size={14} /> The storyteller <span>Fable · British · warm</span>
+              </button>
+            </div>
+            <div className="natural-voices">
+              {NATURAL_VOICES.map((nv) => (
+                <div key={nv.id} className={`natural-voice${naturalId === nv.id ? ' on' : ''}`}>
+                  <button className="natural-voice-pick" disabled={L('voice.voiceName')} onClick={() => pickNatural(nv.id)} aria-pressed={naturalId === nv.id}>
+                    <b>{nv.name}</b>
+                    <span className="fx-muted">
+                      {nv.accent} {nv.who}
+                    </span>
+                    <span className="natural-voice-note">{nv.note}</span>
+                  </button>
+                  <button className="natural-voice-play" title={`Hear ${nv.name}`} aria-label={`Hear ${nv.name}`} onClick={() => (warmNaturalVoice(), hear(`${NATURAL_PREFIX}${nv.id}`))}>
+                    <Icons.play size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="fx-muted voice-hint">Includes George, an older British gentleman (the butler), Fable, Lewis and Daniel, Emma and Isabella, and American voices such as Heart and Michael.</p>
+        )}
+
+        <div className="voice-section-head">
+          <b>Voices on this computer</b>
+          <span className="voice-section-act">
+            <Button size="sm" variant="ghost" icon="external" onClick={() => void (window.fbrx as unknown as { openVoiceSettings?: () => Promise<boolean> } | undefined)?.openVoiceSettings?.()}>
+              Get more voices
+            </Button>
+          </span>
+        </div>
         {!speechSupported() || !voices.length ? (
           <Callout tone="info">{bridge.platform === 'linux' ? 'No system voices were found. Install speech-dispatcher with a voice (for example espeak-ng) to hear replies.' : 'Loading the voices on this computer…'}</Callout>
         ) : null}
         <div className="voice-form">
-          <Field label="Voice">
+          <Field
+            label="Voice"
+            help={
+              bridge.platform === 'darwin'
+                ? 'More voices: System Settings → Accessibility → Spoken Content → System voice → Manage Voices. Premium voices (for example Jamie, a British man) sound best. Restart FBRX OS to see new ones.'
+                : bridge.platform === 'win32'
+                  ? 'More voices: Settings → Time & language → Speech → Add voices, for example English (United Kingdom) for George and Hazel. Restart FBRX OS to see new ones.'
+                  : undefined
+            }
+          >
             <div style={{ display: 'flex', gap: 8 }}>
-              <Select value={v.voiceName} disabled={L('voice.voiceName')} onChange={(e) => void patch({ voice: { voiceName: e.target.value } })} options={voiceOptions} />
-              <Button icon="speaker" onClick={() => (stopSpeaking(), say(sample, { voiceName: v.voiceName, wpm: shownWpm, pitch: shownPitch }))}>
+              <Select value={naturalId ? '' : v.voiceName} disabled={L('voice.voiceName')} onChange={(e) => void patch({ voice: { voiceName: e.target.value } })} options={naturalId ? [{ value: '', label: 'Using a natural voice (pick one here to switch)' }, ...voiceOptions.slice(1)] : voiceOptions} />
+              <Button icon="speaker" onClick={() => hear(v.voiceName)}>
                 Hear it
               </Button>
             </div>
@@ -223,14 +303,14 @@ export function VoiceSettings() {
               <span>{VOICE_WPM.max}</span>
             </div>
           </Field>
-          <Field label={`Pitch · ${shownPitch.toFixed(2)}`}>
+          <Field label={`Pitch · ${shownPitch.toFixed(2)}`} help={naturalId ? 'Natural voices keep their own pitch.' : undefined}>
             <input
               type="range"
               min={0.5}
               max={1.5}
               step={0.05}
               value={shownPitch}
-              disabled={L('voice.pitch')}
+              disabled={L('voice.pitch') || !!naturalId}
               aria-label="Pitch"
               onChange={(e) => setPitch(Number(e.target.value))}
               onPointerUp={() => pitch !== null && void patch({ voice: { pitch } }).then(() => setPitch(null))}

@@ -24,6 +24,46 @@ export const VOICE_MODELS = [
 ] as const;
 export type VoiceModelId = (typeof VOICE_MODELS)[number]['id'];
 export const VOICE_MODEL_IDS = VOICE_MODELS.map((m) => m.id) as [VoiceModelId, ...VoiceModelId[]];
+/**
+ * Natural voices: the Kokoro speech model (Apache-2.0) with its English voices, run on this computer and downloaded
+ * once. In settings a natural voice is saved as "natural:<id>" in voice.voiceName.
+ */
+export const NATURAL_VOICE_PACK = {
+  id: 'natural-voices',
+  repo: 'onnx-community/Kokoro-82M-v1.0-ONNX',
+  name: 'Natural voices',
+  sizeMB: 107,
+  note: 'Lifelike voices made on this computer, British and American',
+} as const;
+export const NATURAL_PREFIX = 'natural:';
+export const NATURAL_VOICES = [
+  { id: 'bm_george', name: 'George', accent: 'British', who: 'man', note: 'An older British gentleman: the butler' },
+  { id: 'bm_fable', name: 'Fable', accent: 'British', who: 'man', note: 'A warm storyteller' },
+  { id: 'bm_lewis', name: 'Lewis', accent: 'British', who: 'man', note: 'Deep and unhurried' },
+  { id: 'bm_daniel', name: 'Daniel', accent: 'British', who: 'man', note: 'Crisp and clear' },
+  { id: 'bf_emma', name: 'Emma', accent: 'British', who: 'woman', note: 'Polished and friendly' },
+  { id: 'bf_isabella', name: 'Isabella', accent: 'British', who: 'woman', note: 'Bright and lively' },
+  { id: 'bf_alice', name: 'Alice', accent: 'British', who: 'woman', note: 'Calm and even' },
+  { id: 'bf_lily', name: 'Lily', accent: 'British', who: 'woman', note: 'Soft-spoken' },
+  { id: 'af_heart', name: 'Heart', accent: 'American', who: 'woman', note: 'Warm and natural' },
+  { id: 'af_bella', name: 'Bella', accent: 'American', who: 'woman', note: 'Expressive' },
+  { id: 'af_nicole', name: 'Nicole', accent: 'American', who: 'woman', note: 'Hushed, close to the microphone' },
+  { id: 'af_sarah', name: 'Sarah', accent: 'American', who: 'woman', note: 'Clear and steady' },
+  { id: 'af_aoede', name: 'Aoede', accent: 'American', who: 'woman', note: 'Gentle' },
+  { id: 'af_kore', name: 'Kore', accent: 'American', who: 'woman', note: 'Confident' },
+  { id: 'af_sky', name: 'Sky', accent: 'American', who: 'woman', note: 'Light and quick' },
+  { id: 'am_michael', name: 'Michael', accent: 'American', who: 'man', note: 'Friendly and relaxed' },
+  { id: 'am_fenrir', name: 'Fenrir', accent: 'American', who: 'man', note: 'Deep and strong' },
+  { id: 'am_puck', name: 'Puck', accent: 'American', who: 'man', note: 'Playful' },
+  { id: 'am_adam', name: 'Adam', accent: 'American', who: 'man', note: 'Plain and direct' },
+  { id: 'am_eric', name: 'Eric', accent: 'American', who: 'man', note: 'Businesslike' },
+  { id: 'am_liam', name: 'Liam', accent: 'American', who: 'man', note: 'Young and easygoing' },
+  { id: 'am_onyx', name: 'Onyx', accent: 'American', who: 'man', note: 'Low and smooth' },
+] as const;
+export type NaturalVoiceId = (typeof NATURAL_VOICES)[number]['id'];
+export type VoiceDownloadId = VoiceModelId | typeof NATURAL_VOICE_PACK.id;
+export const VOICE_DOWNLOAD_IDS = [...VOICE_MODEL_IDS, NATURAL_VOICE_PACK.id] as [VoiceDownloadId, ...VoiceDownloadId[]];
+
 /** Speaking speed, in words per minute. 180 is an ordinary conversational pace; FBRX starts a little brisker. */
 export const VOICE_WPM = { min: 120, max: 360, default: 210 } as const;
 
@@ -81,7 +121,7 @@ export const SettingsSchema = z.object({
     sttModel: z.enum(VOICE_MODEL_IDS),
     /** Microphone device id; empty = the system default. */
     micId: z.string().max(300),
-    /** System voice used to read replies aloud; empty = the system default. */
+    /** Voice used to read replies aloud: a system voice's name, "natural:<id>" for a natural voice, or empty for the system default. */
     voiceName: z.string().max(300),
     /** Speaking speed in words per minute. */
     wpm: z.number().int().min(VOICE_WPM.min).max(VOICE_WPM.max),
@@ -92,6 +132,10 @@ export const SettingsSchema = z.object({
     autoSend: z.boolean(),
     /** Hands-free: listen again after each spoken reply, until you stop. */
     handsFree: z.boolean(),
+    /** Say a short "I heard you, looking into it" after a spoken message. */
+    acknowledge: z.boolean(),
+    /** A soft sound while the agent works on a spoken message. */
+    thinkingSound: z.boolean(),
   }),
   appearance: z.object({
     preset: z.enum(THEME_PRESETS),
@@ -111,6 +155,8 @@ export const SettingsSchema = z.object({
     easterEggs: z.boolean(),
     /** The Silly Goose drops by now and then on its own. */
     gooseVisits: z.boolean(),
+    /** What the goose wears: dressed for the season where you are (auto), or a season you pick. */
+    gooseSeason: z.enum(['auto', 'winter', 'spring', 'summer', 'fall']),
     /** Fun extras stay hidden until someone enters 418 as a license key (see funEnabled). */
     funUnlocked: z.boolean(),
     /** Visual effects: full (glass, glows, animation), light (shown as "Lite": flat and quick) or auto (Lite on small PCs). */
@@ -220,6 +266,10 @@ export const SettingsSchema = z.object({
     channel: z.enum(UPDATE_CHANNELS),
     autoDownload: z.boolean(),
     autoInstall: z.boolean(),
+    /** Look for new versions in the FBRX repository and offer them. */
+    checkRepo: z.boolean(),
+    /** A version the person chose to skip (no more reminders for it). */
+    skipVersion: z.string().max(40),
   }),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
@@ -284,6 +334,8 @@ export const DEFAULT_SETTINGS: Settings = {
     readReplies: false,
     autoSend: true,
     handsFree: false,
+    acknowledge: true,
+    thinkingSound: true,
   },
   appearance: {
     preset: 'fabrics',
@@ -299,6 +351,7 @@ export const DEFAULT_SETTINGS: Settings = {
     advancedMode: false,
     easterEggs: true,
     gooseVisits: false,
+    gooseSeason: 'auto',
     funUnlocked: false,
     effects: 'auto',
   },
@@ -373,6 +426,8 @@ export const DEFAULT_SETTINGS: Settings = {
     channel: 'stable',
     autoDownload: true,
     autoInstall: false,
+    checkRepo: true,
+    skipVersion: '',
   },
 };
 
