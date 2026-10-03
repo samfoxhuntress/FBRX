@@ -20,7 +20,7 @@ FBRX OS is the platform behind two products:
   plugins, the theme studio and the easter eggs.
 * **FBRX Command** — the team tenant controller (control plane and console) for running FBRX Endpoint across a fleet
   with RMM-level tooling, or selling it to other companies, each in its own tenant. A license key from FBRX Command
-  joins the computer to the tenant on its own.
+  joins the computer to the tenant on its own, and staff sign in to it with Google Workspace or Microsoft 365.
 
 ```
  ┌──────────────────────────── Workstation (macOS / Windows) ────────────────────────────┐

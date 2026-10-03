@@ -298,4 +298,30 @@ export const CP_MIGRATIONS: Migration[] = [
       CREATE INDEX cp_audit_tenant ON audit_log (tenant_id, seq);
     `,
   },
+  {
+    version: 2,
+    name: 'sso',
+    up: `
+      CREATE TABLE sso_connections (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        provider TEXT NOT NULL,
+        name TEXT NOT NULL,
+        issuer TEXT NOT NULL,
+        client_id TEXT NOT NULL,
+        client_secret_enc TEXT NOT NULL,
+        domains TEXT NOT NULL DEFAULT '[]',
+        auto_provision INTEGER NOT NULL DEFAULT 0,
+        default_role TEXT NOT NULL DEFAULT 'viewer',
+        require_sso INTEGER NOT NULL DEFAULT 0,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        created_by TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX cp_sso_tenant ON sso_connections (tenant_id);
+      ALTER TABLE users ADD COLUMN sso_connection_id TEXT;
+      ALTER TABLE users ADD COLUMN sso_subject TEXT;
+    `,
+  },
 ];

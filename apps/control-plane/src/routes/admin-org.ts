@@ -162,9 +162,13 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.post('/v1/admin/users', async (req) => {
     const p = requirePerm(req, 'users.manage');
-    const body = z.object({ email: z.string().email(), name: z.string().min(1).max(120), role: z.enum(ROLES), password: PasswordSchema }).parse(req.body);
+    const body = z.object({ email: z.string().email(), name: z.string().min(1).max(120), role: z.enum(ROLES), password: PasswordSchema.optional() }).parse(req.body);
     if (!assignableRoles(p.role).includes(body.role)) throw forbidden(`You cannot assign the ${body.role} role`);
     const tenantId = body.role === 'superadmin' ? null : requireTenant(req);
+    // Without a password the person signs in with the organization's Google / Microsoft single sign-on.
+    if (!body.password && !(tenantId && ctx.db.get('SELECT 1 FROM sso_connections WHERE tenant_id = ? AND enabled = 1', tenantId))) {
+      throw badRequest('Set an initial password, or set up Google or Microsoft sign-in for this organization first');
+    }
     if (ctx.db.get('SELECT 1 FROM users WHERE email = ?', body.email)) throw conflict('A user with that email already exists');
     const id = ids.user();
     const now = new Date().toISOString();
@@ -174,12 +178,12 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
       tenantId,
       body.email,
       body.name,
-      await hashPassword(body.password),
+      body.password ? await hashPassword(body.password) : '',
       body.role,
       now,
       now,
     );
-    ctx.audit.record(actorOf(req), 'user.created', { type: 'user', id, tenantId }, { email: body.email, role: body.role });
+    ctx.audit.record(actorOf(req), 'user.created', { type: 'user', id, tenantId }, { email: body.email, role: body.role, signIn: body.password ? 'password' : 'sso' });
     return userView(ctx.db.get('SELECT * FROM users WHERE id = ?', id));
   });
 

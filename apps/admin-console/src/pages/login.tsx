@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Button, Callout, Card, Field, Input, FbrxMark } from '@fbrx/ui';
 import { api, session } from '../api';
 
@@ -19,6 +19,9 @@ function Centered({ children }: { children: React.ReactNode }) {
   );
 }
 
+type SsoProvider = 'google' | 'microsoft' | 'oidc';
+const SSO_LABELS: Record<SsoProvider, string> = { google: 'Sign in with Google', microsoft: 'Sign in with Microsoft', oidc: 'Sign in with single sign-on' };
+
 export function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -26,6 +29,40 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
   const [mfa, setMfa] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [sso, setSso] = useState<Record<SsoProvider, boolean> | null>(null);
+
+  // Back from Google / Microsoft: trade the one-time code for a session (or show why it did not work).
+  useEffect(() => {
+    const q = new URLSearchParams(location.search);
+    const code = q.get('sso');
+    const problem = q.get('sso_error');
+    if (code || problem) history.replaceState(null, '', location.pathname + location.hash);
+    if (problem) setError(problem);
+    if (code) {
+      setBusy(true);
+      void api<{ token: string }>('POST', '/v1/auth/sso/exchange', { code })
+        .then((r) => {
+          session.token = r.token;
+          onLogin();
+        })
+        .catch((err: Error) => setError(err.message))
+        .finally(() => setBusy(false));
+    }
+    void api<Record<SsoProvider, boolean>>('GET', '/v1/auth/sso/options').then(setSso, () => setSso(null));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  const startSso = async (provider: SsoProvider) => {
+    setError(null);
+    setBusy(true);
+    try {
+      const r = await api<{ url: string }>('POST', '/v1/auth/sso/start', { provider, email: email.includes('@') ? email : undefined });
+      location.href = r.url;
+    } catch (err) {
+      setError((err as Error).message);
+      setBusy(false);
+    }
+  };
+  const providers = (['google', 'microsoft', 'oidc'] as const).filter((p) => sso?.[p]);
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true);
@@ -63,6 +100,23 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
             {mfa ? 'Verify' : 'Sign in'}
           </Button>
         </form>
+        {providers.length > 0 && !mfa && (
+          <div style={{ display: 'grid', gap: 8, marginTop: 14 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--text-muted)', fontSize: 12 }}>
+              <span style={{ flex: 1, borderTop: '1px solid var(--border)' }} />
+              or
+              <span style={{ flex: 1, borderTop: '1px solid var(--border)' }} />
+            </div>
+            {providers.map((p) => (
+              <Button key={p} icon="key" disabled={busy} onClick={() => void startSso(p)}>
+                {SSO_LABELS[p]}
+              </Button>
+            ))}
+            <div className="fx-muted" style={{ fontSize: 12 }}>
+              Signing in with your school or work account. If your organization has more than one, enter your email above first.
+            </div>
+          </div>
+        )}
       </Card>
     </Centered>
   );

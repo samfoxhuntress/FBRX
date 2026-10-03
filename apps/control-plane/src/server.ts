@@ -23,6 +23,7 @@ import { updateRoutes } from './routes/updates';
 import { adminOrgRoutes } from './routes/admin-org';
 import { adminFleetRoutes } from './routes/admin-fleet';
 import { adminAssetRoutes } from './routes/admin-assets';
+import { ssoRoutes } from './routes/sso';
 import { slugify } from './routes/util';
 
 function readVersion(): string {
@@ -102,6 +103,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
 
   app.get('/healthz', { logLevel: 'warn' }, async () => ({ ok: true, version }));
   await authRoutes(app, ctx);
+  await ssoRoutes(app, ctx);
   await deviceRoutes(app, ctx);
   await updateRoutes(app, ctx);
   await app.register(async (scoped) => adminOrgRoutes(scoped, ctx));

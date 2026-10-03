@@ -9,6 +9,8 @@ export const PERMISSIONS = {
   'licenses.manage': ['superadmin'],
   'licenses.read': ['superadmin', 'owner', 'admin'],
   'users.manage': ['superadmin', 'owner', 'admin'],
+  /** Single sign-on connections can sign people in as anyone in the organization, so only owners set them up. */
+  'sso.manage': ['superadmin', 'owner'],
   'apikeys.manage': ['superadmin', 'owner', 'admin'],
   'devices.read': ['superadmin', 'owner', 'admin', 'operator', 'viewer'],
   'devices.manage': ['superadmin', 'owner', 'admin', 'operator'],

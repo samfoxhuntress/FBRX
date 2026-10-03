@@ -144,6 +144,21 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   Agent (`ai.showThinking`). The work budget's step limit is part of the policy (`ai.maxStepsPerRun`), so an
   organization can fix it; the answer length and context sizes are ordinary settings an organization can lock.
 
+## Single sign-on to FBRX Command
+
+* Standard OpenID Connect authorization code flow with **PKCE**, `state` and `nonce`; nothing about the sign-in
+  travels in the browser except a one-time code (one use, one minute) that the console trades for its session.
+* The ID token's signature is checked against the provider's published keys, along with its issuer, audience
+  (the organization's own client ID) and expiry. Google sign-ins must have a verified address from the
+  organization's Workspace (`hd`); Microsoft connections are pinned to one Entra directory (never `common`).
+* The email domain must be one the connection lists. A connection signs people only into **its own organization**,
+  never the platform operator or anyone in another organization, so an organization's identity provider cannot be
+  used to reach someone else's.
+* Client secrets are encrypted at rest with the master key and never returned by the API. Only owners (and the
+  platform operator) can add or change connections, and every change, sign-in and refusal is in the audit log.
+* *Require single sign-on* turns off passwords for everyone in the organization except owners, who keep password +
+  TOTP as the way back in. Accounts created for single sign-on have no password at all.
+
 ## Audit and tamper evidence
 
 Every tool decision, approval, configuration change, vault access, plugin event, backup and remote command is

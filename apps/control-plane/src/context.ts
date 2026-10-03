@@ -64,4 +64,5 @@ export const ids = {
   pkg: () => newId('pkg'),
   webhook: () => newId('whk'),
   event: () => newId('evt'),
+  sso: () => newId('sso'),
 };

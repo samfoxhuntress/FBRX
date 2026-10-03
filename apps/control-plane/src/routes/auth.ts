@@ -7,6 +7,7 @@ import { actorOf, adminAuth, issueSession } from '../auth';
 import { badRequest, forbidden, unauthorized } from '../errors';
 import { PERMISSIONS, can, type Permission } from '../rbac';
 import { slugify } from './util';
+import { passwordBlockedBySso } from './sso';
 
 export const PasswordSchema = z.string().min(12, 'Passwords must be at least 12 characters').max(200);
 
@@ -19,6 +20,10 @@ export function userView(u: any) {
     tenantId: u.tenant_id,
     status: u.status,
     mfaEnabled: !!u.mfa_enabled,
+    /** Signs in with Google / Microsoft (has used single sign-on). */
+    sso: !!u.sso_subject,
+    /** Has a password (accounts made for single sign-on may not). */
+    hasPassword: !!u.password_hash,
     lastLoginAt: u.last_login_at,
     createdAt: u.created_at,
   };
@@ -69,6 +74,11 @@ export async function authRoutes(app: FastifyInstance, ctx: AppContext) {
     };
     if (!u || u.status !== 'active') throw fail('unknown or disabled user');
     if (u.locked_until && u.locked_until > new Date().toISOString()) throw unauthorized('Account temporarily locked after repeated failures. Try again later.');
+    // Organizations can require Google / Microsoft sign-in; accounts made for it have no password at all.
+    if (passwordBlockedBySso(ctx, u) || !u.password_hash) {
+      ctx.audit.record({ type: 'user', id: u.id, label: u.email, tenantId: u.tenant_id, ip: req.ip }, 'auth.login.failed', {}, { reason: 'single sign-on required' });
+      throw unauthorized('Your organization signs in with Google or Microsoft. Use the button below.');
+    }
     if (!(await verifyPassword(body.password, u.password_hash))) {
       const fails = Number(u.failed_logins) + 1;
       ctx.db.run(

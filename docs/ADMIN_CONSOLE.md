@@ -39,8 +39,48 @@ seconds; offline devices pick them up when they reconnect. Device detail and the
 | Privileged commands (agent run, plugin install/uninstall, update install, back up, lock vault, restart app) | ✔ | ✔ | ✔ | | |
 | Profiles, policy, credentials, enrollment, plugins, backups, webhooks, audit | ✔ | ✔ | ✔ | | |
 | Users and API keys | ✔ | ✔ | ✔ | | |
+| Set up sign in with Google or Microsoft | ✔ | ✔ | | | |
 | Read licenses | ✔ | ✔ | ✔ | | |
 | Tenants, releases, issuing licenses | ✔ | | | | |
+
+## Sign in with Google or Microsoft
+
+Staff can sign in to FBRX Command with their school or work account instead of a separate password. Each
+organization (tenant) adds its own connection under **Users & API keys → Sign in with Google or Microsoft**; only
+its owners (and the platform operator) can. The form walks through the provider side and shows the **redirect
+address** to paste there: `https://<FBRX Command address>/v1/auth/sso/callback`, so `FBRX_CP_PUBLIC_URL` must be the
+real https:// address people use.
+
+**Google Workspace** (about five minutes, with a Workspace admin account)
+
+1. Google Cloud console → pick or create a project → **APIs & Services → OAuth consent screen**: *Internal*, app
+   name *FBRX Command*.
+2. **Credentials → Create credentials → OAuth client ID → Web application**; add the redirect address under
+   *Authorized redirect URIs*.
+3. Paste the **Client ID** and **Client secret** into FBRX Command, with your Workspace domain (`school.org`).
+
+**Microsoft 365** (about five minutes, in the Microsoft Entra admin center)
+
+1. **App registrations → New registration**: *FBRX Command*, *Accounts in this organizational directory only*,
+   Redirect URI type *Web* with the redirect address.
+2. Copy the **Application (client) ID** and the **Directory (tenant) ID**.
+3. **Certificates & secrets → New client secret**, copy its **Value** (note the expiry date and renew it in time).
+4. Paste them into FBRX Command with your email domain. Optional: *Token configuration → Add optional claim → ID →
+   email* (without it, the sign-in name is used).
+
+Then decide:
+
+* **Invite only** (default): add people under *Users* with their email and no password; they use the button.
+  Or **let new people in on their first sign-in** with a role you choose (viewer, operator or admin).
+* **Require single sign-on**: passwords stop working for everyone in the organization except owners, who keep
+  password + two-step codes as the way back in if the provider has a problem.
+* **Test sign-in** opens the provider in a new tab to check the setup.
+
+On the sign-in page the **Sign in with Google / Microsoft** buttons appear once any organization has a connection.
+If several organizations use the same provider, people type their email first so FBRX Command picks the right one.
+A connection only ever signs people into its own organization: someone who belongs to another organization, and the
+platform operator, are never signed in through it. Google and Microsoft handle passwords and two-step verification
+for these sign-ins.
 
 `superadmin` is the platform operator (you) and is not bound to a tenant — use the tenant switcher in the top bar.
 Everyone else belongs to exactly one tenant and only ever sees that tenant's data. Users can only grant roles at or
