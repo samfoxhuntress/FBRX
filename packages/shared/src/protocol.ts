@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { PLATFORMS } from './constants';
 import { PolicySchema } from './policy';
 import type { DeviceCommand } from './commands';
+import { AUDIENCES, type DeviceEdition } from './editions';
 
 /** Hardware/OS facts a device reports at enrollment and in heartbeats. */
 export const DeviceFactsSchema = z.object({
@@ -22,6 +23,8 @@ export const EnrollRequestSchema = z.object({
   device: DeviceFactsSchema,
   /** Present when a restored snapshot re-attaches to an existing identity. */
   previousDeviceId: z.string().optional(),
+  /** "student" makes this a student computer even on a staff token (a computer can be narrowed, never widened). */
+  audience: z.enum(AUDIENCES).optional(),
 });
 export type EnrollRequest = z.infer<typeof EnrollRequestSchema>;
 
@@ -97,6 +100,8 @@ export interface DeviceConfig {
   secrets: ManagedSecret[];
   updateChannel: string;
   pinnedVersion: string | null;
+  /** Organization kind, who uses the computer, its edition, help desk and automatic updates (FBRX Command 1.9+). */
+  edition?: DeviceEdition;
 }
 
 export const CommandResultSchema = z.object({
@@ -120,7 +125,9 @@ export type ServerToDeviceMessage =
   | { type: 'hello'; serverTime: string; configVersion: number }
   | { type: 'command'; command: DeviceCommand }
   | { type: 'config.changed'; version: number }
-  | { type: 'ping'; at: string };
+  | { type: 'ping'; at: string }
+  /** A help desk ticket this computer asked or receives changed (new ticket, reply, status). */
+  | { type: 'helpdesk.changed'; ticketId: string; number: number; reason: 'created' | 'message' | 'updated'; subject: string };
 
 export type DeviceToServerMessage =
   | { type: 'heartbeat'; heartbeat: Heartbeat }
@@ -137,5 +144,7 @@ export const ProvisioningFileSchema = z.object({
   /** Optional golden snapshot to restore before enrolling (cloned, never migrated). */
   templateSnapshotUrl: z.string().url().optional(),
   templateSnapshotPassphrase: z.string().optional(),
+  /** "student" sets the computer up as a student computer (FBRX OS Education). */
+  audience: z.enum(AUDIENCES).optional(),
 });
 export type ProvisioningFile = z.infer<typeof ProvisioningFileSchema>;

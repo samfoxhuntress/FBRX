@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import type { SystemStatus, Tier } from '@fbrx/shared';
+import type { PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
 import { TIER_NAMES, addressAs, displayVersion, funEnabled } from '@fbrx/shared';
 import { Button, FBRX_MARK, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
@@ -14,10 +14,12 @@ import { VaultStartPrompt } from './vault-lock';
 import { UpdatePill } from './release';
 import { SpotlightView } from './pages/spotlight';
 import { ClipPicker } from './pages/clip-picker';
-import { TierContext, UltraOnly, useLicenseTier } from './edition';
+import { LearnerContext, TierContext, UltraOnly, useLicenseTier } from './edition';
+import { PresenterPill, usePresenter } from './presenter';
 
 // Pages load when first opened, so the app starts with only what the first screen needs.
 const AgentPage = lazy(() => import('./pages/agent').then((m) => ({ default: m.AgentPage })));
+const HelpdeskPage = lazy(() => import('./pages/helpdesk').then((m) => ({ default: m.HelpdeskPage })));
 const ApprovalsPage = lazy(() => import('./pages/approvals').then((m) => ({ default: m.ApprovalsPage })));
 const ToolsPage = lazy(() => import('./pages/tools').then((m) => ({ default: m.ToolsPage })));
 const ConnectionsPage = lazy(() => import('./pages/connections').then((m) => ({ default: m.ConnectionsPage })));
@@ -52,6 +54,7 @@ export type Route =
   | 'home'
   | 'agent'
   | 'alerts'
+  | 'helpdesk'
   | 'tasks'
   | 'notes'
   | 'projects'
@@ -158,6 +161,10 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const { data: status } = useCore('system.status', undefined, ['service.changed', 'vault.changed', 'fleet.changed', 'license.changed', 'approval.requested', 'approval.resolved', 'runtime.changed', 'ai.halted'], 15_000);
   const { data: trophies } = useCore('fun.trophies', undefined, ['fun.trophy']);
   const { data: alertCounts } = useCore('alerts.counts', undefined, ['alerts.changed'], 60_000);
+  // The Help desk tab's number: new tickets in the queue on a receiver, tickets waiting on you everywhere else.
+  const hd = useCore('helpdesk.status', undefined, ['fleet.changed']).data;
+  const hdList = useCore('helpdesk.tickets', { scope: hd?.receiver ? 'queue' : 'mine', state: 'open' }, ['helpdesk.changed', 'fleet.changed'], 300_000).data;
+  const helpdeskCount = hd?.available ? (hdList ?? []).filter((t) => (hd.receiver ? t.status === 'open' : t.status === 'waiting')).length : 0;
   const [forceOnboarding, setForceOnboarding] = useState(false);
   const [collapsed, setCollapsedState] = useState(() => {
     try {
@@ -195,7 +202,22 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, []);
-  useEffect(() => onEvent('notification', (n) => toast[n.level === 'error' ? 'error' : n.level === 'warning' ? 'warning' : n.level === 'success' ? 'success' : 'info'](n.title, n.body)), [toast]);
+  const presenter = usePresenter();
+  const presenting = useRef(presenter);
+  presenting.current = presenter;
+  useEffect(
+    () =>
+      onEvent('notification', (n) => {
+        // Presenting: no pop-ups with private text on the projector; the alert inbox still has them.
+        const p = presenting.current;
+        if (p?.active && p.hideNotifications) {
+          if (n.level === 'error') toast.error('FBRX needs your attention', 'Open Alerts when you have finished presenting.');
+          return;
+        }
+        toast[n.level === 'error' ? 'error' : n.level === 'warning' ? 'warning' : n.level === 'success' ? 'success' : 'info'](n.title, n.body);
+      }),
+    [toast],
+  );
   // A badge for the trophy case, with a way to go and look at it.
   useEffect(
     () =>
@@ -213,7 +235,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const ultra = tier === 'ultra';
   const fun = funEnabled(settings?.settings, tier);
   useEffect(() => {
-    if (status) document.title = TIER_NAMES[tier];
+    if (status) document.title = status.edition?.productName ?? TIER_NAMES[tier];
   }, [status, tier]);
   useKonami(
     fun,
@@ -260,11 +282,15 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   }
   const agentName = s.ai.agentName;
   const enrolled = status.fleet.state !== 'unenrolled';
+  // FBRX OS Education (a student computer): a short list of friendly pages.
+  const learner = !!status.edition?.learner;
 
   const all: Array<NavItem & { ultra?: boolean }> = [
     { id: 'home', label: 'FBRX Glass', icon: 'dashboard', section: 'Command' },
     { id: 'agent', label: agentName, icon: 'sparkles', section: 'Command' },
     { id: 'alerts', label: 'Alerts', icon: 'bell', count: alertCounts?.unread, section: 'Command' },
+    // Once the computer belongs to an organization: tickets to IT (and, on receivers, everyone's tickets).
+    ...(enrolled ? [{ id: 'helpdesk', label: learner ? 'Get help' : 'Help desk', icon: 'lifebuoy' as IconName, count: helpdeskCount || undefined, section: 'Command' }] : []),
     { id: 'tasks', label: 'Tasks', icon: 'tasks', section: 'Workspace' },
     { id: 'notes', label: 'Notes', icon: 'note', section: 'Workspace' },
     { id: 'projects', label: 'Projects', icon: 'layers', section: 'Workspace' },
@@ -272,12 +298,12 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'storage', label: 'Storage', icon: 'drive', section: 'PC care' },
     { id: 'security', label: 'Security', icon: 'shield', section: 'PC care' },
     { id: 'updates', label: 'Updates', icon: 'download', section: 'PC care' },
-    { id: 'bugs', label: 'Bug catcher', icon: 'bug', section: 'PC care' },
+    { id: 'bugs', label: 'Bug catcher', icon: 'bug', section: 'PC care', ultra: true },
     { id: 'network', label: 'Network Center', icon: 'network', section: 'PC care' },
     { id: 'files', label: 'Files', icon: 'folder', section: 'Utilities' },
-    { id: 'processes', label: 'Task Manager', icon: 'activity', section: 'Utilities' },
+    { id: 'processes', label: 'Task Manager', icon: 'activity', section: 'Utilities', ultra: true },
     { id: 'clipboard', label: 'Clipboard', icon: 'clipboard', section: 'Utilities' },
-    { id: 'migrate', label: 'Copy & migrate', icon: 'copy', section: 'Utilities' },
+    { id: 'migrate', label: 'Copy & migrate', icon: 'copy', section: 'Utilities', ultra: true },
     { id: 'toolbox', label: 'Toolbox', icon: 'toolbox', section: 'Utilities' },
     { id: 'library', label: 'Library', icon: 'book', section: 'Utilities' },
     { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect', ultra: true },
@@ -295,15 +321,22 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System', ultra: !enrolled },
     { id: 'settings', label: 'Settings', icon: 'settings', section: 'System' },
   ];
-  // Endpoint Basic: the everyday tools and the agent. Ultra adds the rest.
-  const nav = all.filter((i) => ultra || !i.ultra).map(({ ultra: _u, ...i }) => i);
-  const groups: NavGroup[] = SECTIONS.map(({ basicHint, ...g }) => ({ ...g, hint: !ultra && basicHint ? basicHint : g.hint, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
+  // Endpoint Basic: the everyday tools and the agent. Ultra adds the rest. Student computers keep only LEARNER_PAGES.
+  const nav = all
+    .filter((i) => (learner ? LEARNER_PAGES.has(i.id) : ultra || !i.ultra))
+    .map(({ ultra: _u, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
+  const groups: NavGroup[] = SECTIONS.map(({ basicHint, learnerHint, ...g }) => ({ ...g, hint: learner && learnerHint ? learnerHint : !ultra && basicHint ? basicHint : g.hint, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
   const ultraOnly = (title: string, what: string) => <UltraOnly title={title} what={what} />;
 
   const page = (() => {
+    if (learner && route !== 'home' && !LEARNER_PAGES.has(route)) {
+      return <UltraOnly title="That page" what="Student computers keep things simple. Ask your teacher or the IT team if you need something that is not here." learner />;
+    }
     switch (route) {
       case 'agent':
         return <AgentPage agentName={agentName} />;
+      case 'helpdesk':
+        return enrolled ? <HelpdeskPage learner={learner} /> : ultraOnly('The help desk', 'Join your organization’s FBRX Command and a Help desk tab appears here for sending problems to IT.');
       case 'alerts':
         return <AlertsPage />;
       case 'tasks':
@@ -321,7 +354,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'updates':
         return <UpdatesPage />;
       case 'bugs':
-        return <BugsPage agentName={agentName} advanced={ultra} />;
+        return ultra ? <BugsPage agentName={agentName} advanced={ultra} /> : ultraOnly('The bug catcher', 'Crash and error logs from Windows and your apps, explained by the agent. In Basic, ask the agent what went wrong, or send it to your IT team from Help desk.');
       case 'lab':
         return ultra ? <LabPage /> : ultraOnly('The virtual lab', 'Test machines in Hyper-V or Windows Sandbox, with capacity gauges and one-click starts.');
       case 'network':
@@ -329,9 +362,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'files':
         return <FilesPage />;
       case 'processes':
-        return <ProcessesPage />;
+        return ultra ? <ProcessesPage /> : ultraOnly('Task Manager', 'Running programs, live performance graphs and the event viewer, with the agent to explain them.');
       case 'migrate':
-        return <MigratePage />;
+        return ultra ? <MigratePage /> : ultraOnly('Copy & migrate', 'Copy whole folders or move to a new computer with Robocopy or rsync, verified and resumable.');
       case 'clipboard':
         return <ClipboardPage />;
       case 'terminal':
@@ -369,13 +402,20 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
 
   return (
     <TierContext.Provider value={tier}>
+    <LearnerContext.Provider value={learner}>
     <AgentNameContext.Provider value={agentName}>
       {showSplash && <Splash tier={tier} />}
       <Shell
         brandName={
-          <>
-            FBRX Endpoint <span className={`tier-badge ${tier}`}>{ultra ? 'Ultra' : 'Basic'}</span>
-          </>
+          learner ? (
+            <>
+              FBRX OS <span className="tier-badge student">Education</span>
+            </>
+          ) : (
+            <>
+              FBRX Endpoint <span className={`tier-badge ${tier}`}>{ultra ? 'Ultra' : 'Basic'}</span>
+            </>
+          )
         }
         brandSub={status.deviceName}
         onBrandClick={onBrandClick}
@@ -386,7 +426,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         onCollapsedChange={setCollapsed}
         active={route}
         onNavigate={(id) => navigate(id)}
-        topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} defaultProvider={s.ai.defaultProvider} defaultModel={s.ai.defaultModel} />}
+        topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} defaultProvider={s.ai.defaultProvider} defaultModel={s.ai.defaultModel} presenter={presenter} learner={learner} />}
         footer={
           <span>
             <span title={TIER_NAMES[tier]}>{displayVersion(status.version)}</span>
@@ -414,6 +454,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       </Shell>
       <VaultStartPrompt />
     </AgentNameContext.Provider>
+    </LearnerContext.Provider>
     </TierContext.Provider>
   );
 }
@@ -426,6 +467,8 @@ function TopBar({
   spotlightKey,
   defaultProvider,
   defaultModel,
+  presenter,
+  learner,
 }: {
   route: Route;
   status: SystemStatus;
@@ -434,6 +477,8 @@ function TopBar({
   spotlightKey: string | null;
   defaultProvider: string;
   defaultModel: string;
+  presenter: PresenterStatus | null;
+  learner: boolean;
 }) {
   const failing = status.services.filter((s) => s.state === 'failed');
   const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed'], 60_000);
@@ -468,6 +513,7 @@ function TopBar({
         </span>
       )}
       <span className="fx-spacer" />
+      <PresenterPill status={presenter} />
       <UpdatePill />
       {status.aiHalt && <EmergencyStop compact />}
       {openConsoles > 0 && route !== 'terminal' && (
@@ -482,10 +528,12 @@ function TopBar({
           {status.pendingApprovals} approval{status.pendingApprovals > 1 ? 's' : ''} waiting
         </Button>
       )}
-      <button className="model-pill" onClick={() => navigate('runtime')} title={p ? `${p.name}: ${p.available ? 'ready' : (p.message ?? 'not available')}. Click to choose a model.` : 'Choose a model'}>
-        <span className={`dot ${p?.available ? 'ok' : 'bad'}`} aria-hidden />
-        {model ? <span className="mono">{model}</span> : <span>{p?.name ?? 'Choose a model'}</span>}
-      </button>
+      {!learner && (
+        <button className="model-pill" onClick={() => navigate('runtime')} title={p ? `${p.name}: ${p.available ? 'ready' : (p.message ?? 'not available')}. Click to choose a model.` : 'Choose a model'}>
+          <span className={`dot ${p?.available ? 'ok' : 'bad'}`} aria-hidden />
+          {model ? <span className="mono">{model}</span> : <span>{p?.name ?? 'Choose a model'}</span>}
+        </button>
+      )}
       {/* The one general "Ask" button in the app; pages only add buttons that ask about something specific. */}
       {route !== 'agent' && (
         <Button size="sm" variant="primary" icon="sparkles" onClick={() => navigate('agent')}>
@@ -500,14 +548,17 @@ function TopBar({
  * The sidebar's sections, each with an FBRX name, an icon and plain words for what is inside. Pick a section to open
  * it; collapsed to icons, its pages slide out beside it.
  */
-const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; basicHint?: string; icon: IconName }> = [
-  { id: 'bridge', section: 'Command', label: 'Bridge', hint: 'Glass, agent, alerts', icon: 'compass' },
-  { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Tasks, notes, projects', icon: 'layers' },
+/** What a student computer (FBRX OS Education) shows. */
+const LEARNER_PAGES = new Set(['home', 'agent', 'helpdesk', 'tasks', 'notes', 'toolbox', 'library', 'settings']);
+
+const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; basicHint?: string; learnerHint?: string; icon: IconName }> = [
+  { id: 'bridge', section: 'Command', label: 'Bridge', hint: 'Glass, agent, alerts', learnerHint: 'Home, helper, get help', icon: 'compass' },
+  { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Tasks, notes, projects', learnerHint: 'Notes and to-dos', icon: 'layers' },
   { id: 'pitstop', section: 'PC care', label: 'Pit Stop', hint: 'Storage, security, repairs', icon: 'wrench' },
-  { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', icon: 'toolbox' },
+  { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', learnerHint: 'Tools and stories', icon: 'toolbox' },
   { id: 'orbit', section: 'Connect', label: 'Orbit', hint: 'Phone, mesh, AI models', basicHint: 'AI models', icon: 'orbit' },
   { id: 'shield', section: 'Protect', label: 'Shield', hint: 'Approvals, keys, backups', icon: 'shield' },
   { id: 'lab', section: 'Advanced', label: 'Lab', hint: 'Terminal, virtual lab', icon: 'flask' },
-  { id: 'control', section: 'System', label: 'Control', hint: 'Organization, settings', basicHint: 'Settings, license', icon: 'settings' },
+  { id: 'control', section: 'System', label: 'Control', hint: 'Organization, settings', basicHint: 'Settings, license', learnerHint: 'Settings', icon: 'settings' },
 ];
 

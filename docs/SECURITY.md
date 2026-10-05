@@ -159,6 +159,43 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
 * *Require single sign-on* turns off passwords for everyone in the organization except owners, who keep password +
   TOTP as the way back in. Accounts created for single sign-on have no password at all.
 
+## Network environments (UniFi)
+
+* The UniFi API key is stored in the vault as an internal secret (`fbrx.netenv.<id>`): never listed, never readable by
+  the agent, the Local API or remote commands, and redacted from tool output.
+* Consoles with a self-signed certificate are trusted by SHA-256 fingerprint after the person compares it. Every later
+  connection uses a TLS socket that checks the fingerprint at `secureConnect`, **before** the request (and its key) is
+  written; a different certificate stops the connection and marks the environment with an error.
+* Only Endpoint Ultra can use environments (checked in the core, not just the UI). Reading is a `read` tool; restarting a
+  device is `execute` and making guest codes `write`, so they go through policy and approvals. Saving, removing,
+  restarting and making codes from the API are reserved for the person at the computer.
+
+## Presenter-safe mode
+
+While it is on, the core drops desktop notifications (an `error` one becomes a content-free "needs your attention"),
+the renderer suppresses toasts and blurs elements marked private, the clipboard history window masks entries, and the
+goose cannot appear. It hides things from an audience; it is not access control.
+
+## Help desk
+
+* Tickets go from a computer to FBRX Command over its device credential and are stored per organization. A computer can
+  read its own tickets; only computers an admin marked as **receivers** can read the queue or change status and
+  priority (enforced by FBRX Command). Admins need `helpdesk.read` / `helpdesk.manage`.
+* The optional computer summary holds the device name, OS, app version, uptime, CPU and memory use, free space, IP,
+  gateway and DNS, and failing FBRX services; no files, chats or credentials. People can untick it.
+* Creating, replying to and updating tickets are reserved for the person at the computer; the agent's
+  `helpdesk.send_ticket` is a `write` tool that waits for approval. A computer can open at most 20 tickets an hour.
+
+## Student computers (FBRX OS Education)
+
+* The audience comes from FBRX Command (token, group or device). A computer may ask to be a student computer when it
+  enrolls, never a staff one; student settings (easter eggs, mesh, local API, AI provider and prompt) are locked.
+* On student computers the agent gets no tools, and the tool gate refuses every tool call with origin `agent`, so a
+  model cannot reach tools by naming one.
+* Safety concerns (self-harm, being hurt) are recognized locally. The student gets a caring answer with 911, 988 and the
+  Childhelp hotline; FBRX Command gets a `Student safety` device alert with the computer name and the category only.
+  The message is not transmitted. Alerts queue while offline and are delivered on reconnect.
+
 ## Audit and tamper evidence
 
 Every tool decision, approval, configuration change, vault access, plugin event, backup and remote command is
@@ -179,8 +216,10 @@ tenant, and a deliberate *Disconnect* is respected.
 
 ## Supply chain and updates
 
-* Desktop builds are code-signed (and notarized on macOS) in CI; Windows updates are only applied when signed by the
-  publisher named in `electron-builder.yml`.
+* Desktop builds are code-signed (and notarized on macOS) in CI, on Windows with Azure Trusted Signing or a certificate
+  (DEPLOYMENT.md → Signing). A **signed** Windows copy installs an update only when Windows reports a valid
+  Authenticode signature from the same publisher (subject CN) as itself; an unsigned copy (built from source) relies on
+  the SHA-512 in the authenticated feed, as before, and accepts the first signed update.
 * Update feeds are served per device by your control plane over authenticated HTTPS; files carry SHA-512 checksums
   verified by electron-updater.
 * **New versions offered from the repository.** The desktop app reads `release.json` from the public FBRX repository
@@ -191,7 +230,11 @@ tenant, and a deliberate *Disconnect* is respected.
   checks it holds that version, copies it over the folder FBRX was installed from (recorded by the setup wizard in
   `install-source.json`; `.fbrx-keys`, `.fbrx-setup`, `node_modules` and `.git` are never touched) and opens the
   setup wizard there in its own window, which builds, installs and reopens the app as a manual update would.
-  `FBRX_RELEASE_MANIFEST` points the check at another manifest (an internal mirror, or tests).
+  `FBRX_RELEASE_MANIFEST` points the check at another manifest (an internal mirror, or tests). With **Install new
+  versions by itself** (or an organization's *Install automatically*) the same steps run without asking, once per
+  version, only when the computer has been idle for five minutes, nobody is presenting and the agent is idle. FBRX
+  Command's **Update now** (`update.install`, a privileged command) does the same from the repository, or installs the
+  release Command serves.
 * Plugin packages pushed from the console are verified against their SHA-256 before installation.
 * The local runtime downloads llama.cpp from the official `ggml-org/llama.cpp` GitHub releases and models with
   SHA-256 verification where the catalog lists a checksum.

@@ -106,7 +106,7 @@ const PHASE: Record<NonNullable<ReleaseCheck['installing']>['phase'], string> = 
 };
 
 /** Settings → Updates. */
-export function ReleasePanel({ checkRepo, locked, onToggle }: { checkRepo: boolean; locked: boolean; onToggle: (v: boolean) => void }) {
+export function ReleasePanel({ checkRepo, locked, onToggle, autoInstall }: { checkRepo: boolean; locked: boolean; onToggle: (v: boolean) => void; autoInstall?: { on: boolean; locked: boolean; onChange: (v: boolean) => void } }) {
   const r = useRelease().data;
   const { run, busy } = useAction();
   const [open, setOpen] = useState(false);
@@ -136,6 +136,14 @@ export function ReleasePanel({ checkRepo, locked, onToggle }: { checkRepo: boole
           )}
         </div>
         <Toggle checked={checkRepo} disabled={locked} onChange={onToggle} label="Check for new versions automatically (every few hours)" />
+        {autoInstall && (
+          <Toggle
+            checked={autoInstall.on}
+            disabled={autoInstall.locked || !checkRepo}
+            onChange={autoInstall.onChange}
+            label={autoInstall.locked ? 'Install new versions by itself (set by your organization)' : 'Install new versions by itself, when nobody is using the computer'}
+          />
+        )}
       </div>
       {open && <ReleaseDialog release={r} onClose={() => setOpen(false)} />}
     </Card>

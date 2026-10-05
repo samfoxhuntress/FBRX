@@ -109,6 +109,16 @@ export function MacroSettings() {
             </div>
             <KeyRecorder value={settings.spotlight.enabled ? settings.spotlight.hotkey : ''} allowOff onChange={(v) => void patch(v ? { spotlight: { enabled: true, hotkey: v } } : { spotlight: { enabled: false } }, v ? `Spotlight: ${keyLabel(v)}` : 'Spotlight shortcut off')} />
           </div>
+          <div className="macro-key">
+            <div className="macro-key-what">
+              <Icons.presentation size={16} />
+              <div>
+                <b>Presenter-safe mode</b>
+                <span>On and off before you share your screen or plug into the projector (Settings → Presenting).</span>
+              </div>
+            </div>
+            <KeyRecorder value={settings.presenter.hotkey} allowOff disabled={locked('presenter.hotkey')} onChange={(v) => void patch({ presenter: { hotkey: v } }, v ? `Presenter-safe mode: ${keyLabel(v)}` : 'Presenter-safe mode shortcut off')} />
+          </div>
         </div>
       </Card>
 

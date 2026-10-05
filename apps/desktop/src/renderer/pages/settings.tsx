@@ -13,7 +13,7 @@ import { KeyRecorder, MacroSettings } from './settings-macros';
 import { SnippetSettings } from './settings-snippets';
 import { VoiceSettings } from './settings-voice';
 import { AboutVersion, ReleasePanel } from '../release';
-import { UltraHint, useTier } from '../edition';
+import { UltraHint, useLearner, useTier } from '../edition';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -23,10 +23,11 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'agent' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
-const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean }> = [
+type SectionId = 'general' | 'appearance' | 'presenting' | 'agent' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
+const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
+  { id: 'presenting', label: 'Presenting', icon: 'presentation', group: 'You' },
   { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
   { id: 'voice', label: 'Voice', icon: 'mic', group: 'You' },
   { id: 'snippets', label: 'Snippets', icon: 'code', group: 'You' },
@@ -36,15 +37,19 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: str
   { id: 'updates', label: 'Updates', icon: 'download', group: 'This computer' },
   { id: 'license', label: 'License', icon: 'key', group: 'This computer' },
   { id: 'api', label: 'Local API', icon: 'link', group: 'For experts', ultra: true },
-  { id: 'logs', label: 'Logs & about', icon: 'book', group: 'For experts' },
+  { id: 'logs', label: 'Logs & about', icon: 'book', group: 'For experts', basicLabel: 'About' },
 ];
+
+/** Student computers: who they are, how it looks and sounds, presenting, and About. */
+const LEARNER_SECTIONS = new Set<SectionId>(['general', 'appearance', 'presenting', 'voice', 'logs']);
 
 const sectionFromRoute = (): SectionId | null => (SECTIONS.some((x) => x.id === routeArg()) ? (routeArg() as SectionId) : null);
 
 export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   const ultra = useTier() === 'ultra';
   const funUnlocked = useCore('settings.get', undefined, ['settings.changed']).data?.settings.appearance.funUnlocked ?? false;
-  const sections = SECTIONS.filter((x) => ultra || !x.ultra);
+  const learner = useLearner();
+  const sections = SECTIONS.filter((x) => (learner ? LEARNER_SECTIONS.has(x.id) : ultra || !x.ultra));
   const [picked, setTab] = useState<SectionId>(() => sectionFromRoute() ?? 'general');
   const tab = sections.some((x) => x.id === picked) ? picked : 'general';
   // A link to a section (such as "See it" on a trophy) while Settings is already open.
@@ -64,13 +69,14 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
         <nav className="settings-nav" aria-label="Settings sections">
           {sections.map((x) => {
             const Ico = Icons[x.icon];
-            const header = x.group !== group ? (group = x.group) : null;
+            const g = !ultra && x.group === 'For experts' ? 'Help' : x.group;
+            const header = g !== group ? (group = g) : null;
             return (
               <div key={x.id}>
                 {header && <div className="settings-nav-group">{header}</div>}
                 <button className={`settings-nav-item${tab === x.id ? ' active' : ''}${x.id === 'trophies' && !funUnlocked ? ' locked' : ''}`} aria-current={tab === x.id ? 'page' : undefined} onClick={() => setTab(x.id)}>
                   <Ico size={15} />
-                  <span>{x.label}</span>
+                  <span>{!ultra && x.basicLabel ? x.basicLabel : x.label}</span>
                   {x.id === 'trophies' && !funUnlocked ? <Icons.lock size={12} className="settings-nav-lock" /> : x.ultra && <AdvancedTag />}
                 </button>
               </div>
@@ -80,6 +86,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
         <div className="settings-body">
           {tab === 'general' && <General onRerunSetup={onRerunSetup} />}
           {tab === 'appearance' && <Appearance />}
+          {tab === 'presenting' && <PresentingSettings />}
           {tab === 'agent' && <AgentSettings />}
           {tab === 'voice' && <VoiceSettings />}
           {tab === 'snippets' && <SnippetSettings />}
@@ -100,7 +107,22 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
 function EditionCard() {
   const { data: l } = useCore('license.status', undefined, ['license.changed']);
   const { data: fleet } = useCore('fleet.status', undefined, ['fleet.changed']);
+  const ed = useCore('edition.status', undefined, ['license.changed', 'fleet.changed']).data;
   if (!l) return null;
+  if (ed?.learner) {
+    return (
+      <div className="mode-card edition-card basic">
+        <div>
+          <div className="mode-card-title">
+            {ed.productName} <span className="tier-badge student">Student</span>
+          </div>
+          <div className="fx-muted" style={{ fontSize: 12.5 }}>
+            A computer set up by {fleet?.tenantName ?? 'your school'} for learning. Your school chooses its tools and keeps it safe.
+          </div>
+        </div>
+      </div>
+    );
+  }
   const ultra = l.tier === 'ultra';
   const by = l.source === 'managed' ? `Set by ${fleet?.tenantName ?? 'your organization'} (FBRX Command)` : l.source === 'development' ? 'Development build' : l.customer ? `Licensed to ${l.customer}` : null;
   return (
@@ -108,6 +130,7 @@ function EditionCard() {
       <div>
         <div className="mode-card-title">
           {TIER_NAMES[l.tier]} <span className={`tier-badge ${l.tier}`}>{ultra ? 'Ultra' : 'Basic'}</span>
+          {ed?.vertical === 'education' && <span className="tier-badge student" style={{ marginLeft: 6 }}>Education</span>}
         </div>
         <div className="fx-muted" style={{ fontSize: 12.5 }}>
           {ultra
@@ -116,7 +139,7 @@ function EditionCard() {
           {by && <> · {by}</>}
         </div>
       </div>
-      {!ultra && (
+      {!ultra && l.source !== 'managed' && (
         <Button variant="primary" icon="key" onClick={() => navigate('settings/license')}>
           Upgrade to Ultra
         </Button>
@@ -138,6 +161,8 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
   const [profile, setProfile] = useState<{ name: string; callMe: string } | null>(null);
   const toast = useToast();
   const tier = useTier();
+  const learner = useLearner();
+  const enrolled = useCore('fleet.status', undefined, ['fleet.changed']).data?.state !== 'unenrolled';
   if (!s) return null;
   const L = (p: string) => isLocked(locked, p);
   const prof = profile ?? s.profile;
@@ -170,15 +195,17 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
           </Field>
           <Toggle checked={s.general.launchAtLogin} disabled={L('general.launchAtLogin')} onChange={(v) => void patch({ general: { launchAtLogin: v } })} label="Start FBRX when I sign in" />
           <Toggle checked={s.general.minimizeToTray} disabled={L('general.minimizeToTray')} onChange={(v) => void patch({ general: { minimizeToTray: v } })} label="Keep running in the tray when the window is closed" />
-          <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organization's control plane" />
+          {(tier === 'ultra' || enrolled) && <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organization's control plane" />}
         </div>
       </Card>
-      <Card title={`${s.ai.agentName}'s behavior`}>
+      {!learner && <Card title={`${s.ai.agentName}'s behavior`}>
         <div className="fx-form">
-          <Field label={<>Creativity (temperature): {s.ai.temperature} <Locked show={L('ai.temperature')} /></>} help="Lower is more precise. Ignored by models that manage this themselves.">
-            <input type="range" min={0} max={1} step={0.05} disabled={L('ai.temperature')} value={s.ai.temperature} onChange={(e) => void patch({ ai: { temperature: Number(e.target.value) } })} />
-          </Field>
-          <Field label={<>Agent instructions <Locked show={L('ai.systemPrompt')} /></>} help="Standing instructions included in every conversation">
+          {tier === 'ultra' && (
+            <Field label={<>Creativity (temperature): {s.ai.temperature} <Locked show={L('ai.temperature')} /></>} help="Lower is more precise. Ignored by models that manage this themselves.">
+              <input type="range" min={0} max={1} step={0.05} disabled={L('ai.temperature')} value={s.ai.temperature} onChange={(e) => void patch({ ai: { temperature: Number(e.target.value) } })} />
+            </Field>
+          )}
+          <Field label={<>Agent instructions <Locked show={L('ai.systemPrompt')} /></>} help={tier === 'ultra' ? 'Standing instructions included in every conversation' : 'Included in every conversation. Add anything it should always know, such as "I teach 4th grade; keep answers short."'}>
             <TextArea rows={8} disabled={L('ai.systemPrompt')} defaultValue={s.ai.systemPrompt} onBlur={(e) => e.target.value !== s.ai.systemPrompt && void patch({ ai: { systemPrompt: e.target.value } })} />
           </Field>
           <div>
@@ -187,7 +214,7 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
             </Button>
           </div>
         </div>
-      </Card>
+      </Card>}
     </Grid>
   );
 }
@@ -357,6 +384,53 @@ function LockedCase() {
   );
 }
 
+/** Presenter-safe mode: for when the screen is on a projector, a TV or shared in a meeting. In every edition. */
+function PresentingSettings() {
+  const { s, locked, patch } = useSettings();
+  const st = useCore('presenter.status', undefined, ['presenter.changed', 'settings.changed']).data;
+  const { run, busy } = useAction();
+  if (!s) return null;
+  const p = s.presenter;
+  const L = (k: string) => isLocked(locked, `presenter.${k}`);
+  const active = !!st?.active;
+  return (
+    <Grid cols={2}>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Card title="Presenter-safe mode" subtitle="For when your screen is on a projector, a classroom TV or shared in a meeting. Nothing private pops up while it is on.">
+          <div className="fx-form">
+            <div className="fx-actions">
+              <Status tone={active ? 'good' : 'neutral'}>{active ? (st?.reason === 'display' ? 'On: a second screen or projector is connected' : 'On') : st?.externalDisplay && p.auto ? 'Off until the second screen is unplugged' : 'Off'}</Status>
+              <span className="fx-spacer" />
+              <Button variant={active ? undefined : 'primary'} icon="presentation" loading={busy === 'p'} onClick={() => void run('p', () => call('presenter.set', { on: !active }))}>
+                {active ? 'Turn off' : 'Turn on now'}
+              </Button>
+            </div>
+            <Toggle checked={p.auto} disabled={L('auto')} onChange={(v) => void patch({ presenter: { auto: v } })} label="Turn on by itself while a projector or second screen is connected" />
+            <Field label={<>Shortcut <Locked show={L('hotkey')} /></>} help="Works anywhere, even while FBRX is in the background. Also in the tray menu, and the top bar shows Presenting while it is on.">
+              <KeyRecorder value={p.hotkey} allowOff disabled={L('hotkey')} onChange={(v) => void patch({ presenter: { hotkey: v } })} />
+            </Field>
+          </div>
+        </Card>
+      </div>
+      <Card title="While presenting">
+        <div className="fx-form">
+          <Toggle checked={p.hideNotifications} disabled={L('hideNotifications')} onChange={(v) => void patch({ presenter: { hideNotifications: v } })} label="Keep notifications quiet (urgent ones only say that something needs a look)" />
+          <Toggle checked={p.maskClipboard} disabled={L('maskClipboard')} onChange={(v) => void patch({ presenter: { maskClipboard: v } })} label="Show clipboard history as dots" />
+          <Toggle checked={p.blurPrivate} disabled={L('blurPrivate')} onChange={(v) => void patch({ presenter: { blurPrivate: v } })} label="Blur chat history, alerts, credentials and help desk tickets" />
+          <p className="fx-muted" style={{ margin: 0, fontSize: 12.5 }}>The Silly Goose stays home and approvals wait quietly in the top bar.</p>
+        </div>
+      </Card>
+      <Card title="Good to know">
+        <ul className="fx-muted" style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>
+          <li>Turn it on before you share your screen in a video call; FBRX cannot tell when a call app is sharing.</li>
+          <li>Mirrored displays can look like one screen to the computer, so the automatic switch may not notice them. The shortcut always works.</li>
+          <li>Your organization can turn the automatic switch on for every staff computer.</li>
+        </ul>
+      </Card>
+    </Grid>
+  );
+}
+
 const RESOURCE_HELP = {
   light: 'A quarter of the processor at the lowest priority: slower answers, and the PC stays smooth while it thinks.',
   balanced: 'Half the processor at below-normal priority: good answers without the PC stuttering. Recommended.',
@@ -366,6 +440,7 @@ const RESOURCE_HELP = {
 function AgentSettings() {
   const { s, locked, patch } = useSettings();
   const [name, setName] = useState<string | null>(null);
+  const ultra = useTier() === 'ultra';
   if (!s) return null;
   const L = (p: string) => isLocked(locked, p);
   return (
@@ -393,7 +468,7 @@ function AgentSettings() {
               ))}
             </div>
           </Field>
-          <Field label={<>Unload the local model when idle <Locked show={L('runtime.idleStopMinutes')} /></>} help="Gives its memory back to the computer; it loads again with the next question (a few seconds).">
+          {ultra && <Field label={<>Unload the local model when idle <Locked show={L('runtime.idleStopMinutes')} /></>} help="Gives its memory back to the computer; it loads again with the next question (a few seconds).">
             <Select
               value={String(s.runtime.idleStopMinutes)}
               disabled={L('runtime.idleStopMinutes')}
@@ -405,18 +480,20 @@ function AgentSettings() {
                 { value: '0', label: 'Never (keep it loaded)' },
               ]}
             />
-          </Field>
+          </Field>}
         </div>
       </Card>
-      <div style={{ gridColumn: '1 / -1' }}>
-        <WorkBudget />
-      </div>
-      <Card title="Models and permissions">
+      {ultra && (
+        <div style={{ gridColumn: '1 / -1' }}>
+          <WorkBudget />
+        </div>
+      )}
+      <Card title={ultra ? 'Models and permissions' : 'AI model'}>
         <div className="fx-form">
-          <p className="fx-muted" style={{ margin: 0 }}>Choose which AI model {s.ai.agentName} uses in AI models, and what it may do without asking in Governance.</p>
+          <p className="fx-muted" style={{ margin: 0 }}>{ultra ? <>Choose which AI model {s.ai.agentName} uses in AI models, and what it may do without asking in Governance.</> : <>Choose which AI model {s.ai.agentName} uses. {s.ai.agentName} always asks before it changes anything on this computer.</>}</p>
           <div className="fx-actions">
             <Button onClick={() => (location.hash = '#/runtime')}>AI models</Button>
-            <Button onClick={() => (location.hash = '#/governance')}>Governance</Button>
+            {ultra && <Button onClick={() => (location.hash = '#/governance')}>Governance</Button>}
           </div>
         </div>
       </Card>
@@ -543,9 +620,17 @@ function SpotlightSettings() {
 function Updates() {
   const { data: u } = useCore('updates.status', undefined, ['updates.changed']);
   const { s, locked, patch } = useSettings();
+  const ultra = useTier() === 'ultra';
   const { run, busy } = useAction();
   if (!u || !s) return null;
-  const release = <ReleasePanel checkRepo={s.updates.checkRepo} locked={isLocked(locked, 'updates.checkRepo')} onToggle={(v) => void patch({ updates: { checkRepo: v } })} />;
+  const release = (
+    <ReleasePanel
+      checkRepo={s.updates.checkRepo}
+      locked={isLocked(locked, 'updates.checkRepo')}
+      onToggle={(v) => void patch({ updates: { checkRepo: v } })}
+      autoInstall={{ on: s.updates.autoInstall, locked: isLocked(locked, 'updates.autoInstall'), onChange: (v) => void patch({ updates: { autoInstall: v } }) }}
+    />
+  );
   // Updates pushed by an organization's update server, when this computer has one.
   if (u.state === 'unsupported') return release;
   return (
@@ -577,9 +662,9 @@ function Updates() {
       </Card>
       <Card title="Preferences" subtitle="Your organization decides which version this device runs">
         <div className="fx-form">
-          <Field label="Channel">
+          {ultra && <Field label="Channel">
             <Select value={s.updates.channel} disabled={isLocked(locked, 'updates.channel')} onChange={(e) => void patch({ updates: { channel: e.target.value as Settings['updates']['channel'] } })} options={[...UPDATE_CHANNELS]} />
-          </Field>
+          </Field>}
           <Toggle checked={s.updates.autoDownload} disabled={isLocked(locked, 'updates.autoDownload')} onChange={(v) => void patch({ updates: { autoDownload: v } })} label="Download updates automatically" />
           <Toggle checked={s.updates.autoInstall} disabled={isLocked(locked, 'updates.autoInstall')} onChange={(v) => void patch({ updates: { autoInstall: v } })} label="Install automatically (restarts the app)" />
         </div>
@@ -716,8 +801,7 @@ curl -N "${i.url}/v1/events?token=$FBRX_TOKEN"`}</pre>
 }
 
 function Logs() {
-  const [level, setLevel] = useState<'debug' | 'info' | 'warn' | 'error'>('info');
-  const logs = useCore('logs.tail', { lines: 300, level }, [], 5000);
+  const ultra = useTier() === 'ultra';
   const status = useCore('system.status');
   const [info, setInfo] = useState<{ version: string; dataDir: string; packaged: boolean } | null>(null);
   if (!info && bridge.appInfo) void bridge.appInfo().then((x) => x && setInfo(x));
@@ -728,29 +812,41 @@ function Logs() {
         <KeyValue
           items={[
             ['Version', status.data ? displayVersion(status.data.version) : '…'],
-            ['Shell', status.data?.shell],
-            ['Data folder', <span className="mono">{status.data?.dataDir}</span>],
-            ['Build', info ? (info.packaged ? 'Release' : 'Development') : '—'],
+            ...(ultra
+              ? ([
+                  ['Shell', status.data?.shell],
+                  ['Data folder', <span className="mono">{status.data?.dataDir}</span>],
+                  ['Build', info ? (info.packaged ? 'Release' : 'Development') : '—'],
+                ] as Array<[string, ReactNode]>)
+              : []),
             ['Started', formatDate(status.data?.startedAt)],
           ]}
         />
         <p className="fx-muted" style={{ margin: '10px 0 0', fontSize: 12.5, fontStyle: 'italic' }}>Woven from thread, coffee and one very determined goose.</p>
       </Card>
-      <Card
-        title="Logs"
-        actions={
-          <>
-            <AskButton label="Analyze these logs" prompt="These are the recent FBRX log lines from my PC. Tell me whether anything is wrong, what the warnings and errors mean, and what to do about them." context={(logs.data ?? []).slice(-150).map((l) => `${l.ts} ${l.level} [${l.scope}] ${l.message}${l.data ? ` ${JSON.stringify(l.data)}` : ''}`).join('\n')} />
-            <div style={{ width: 140 }}>
-              <Select value={level} onChange={(e) => setLevel(e.target.value as typeof level)} options={['debug', 'info', 'warn', 'error']} />
-            </div>
-          </>
-        }
-      >
-        <pre className="fx-code" style={{ maxHeight: 460 }}>
-          {(logs.data ?? []).map((l) => `${l.ts.slice(11, 19)} ${l.level.toUpperCase().padEnd(5)} [${l.scope}] ${l.message}${l.data ? ` ${JSON.stringify(l.data)}` : ''}`).join('\n') || 'No log lines'}
-        </pre>
-      </Card>
+      {ultra && <LogTail />}
     </>
+  );
+}
+
+function LogTail() {
+  const [level, setLevel] = useState<'debug' | 'info' | 'warn' | 'error'>('info');
+  const logs = useCore('logs.tail', { lines: 300, level }, [], 5000);
+  return (
+    <Card
+      title="Logs"
+      actions={
+        <>
+          <AskButton label="Analyze these logs" prompt="These are the recent FBRX log lines from my PC. Tell me whether anything is wrong, what the warnings and errors mean, and what to do about them." context={(logs.data ?? []).slice(-150).map((l) => `${l.ts} ${l.level} [${l.scope}] ${l.message}${l.data ? ` ${JSON.stringify(l.data)}` : ''}`).join('\n')} />
+          <div style={{ width: 140 }}>
+            <Select value={level} onChange={(e) => setLevel(e.target.value as typeof level)} options={['debug', 'info', 'warn', 'error']} />
+          </div>
+        </>
+      }
+    >
+      <pre className="fx-code" style={{ maxHeight: 460 }}>
+        {(logs.data ?? []).map((l) => `${l.ts.slice(11, 19)} ${l.level.toUpperCase().padEnd(5)} [${l.scope}] ${l.message}${l.data ? ` ${JSON.stringify(l.data)}` : ''}`).join('\n') || 'No log lines'}
+      </pre>
+    </Card>
   );
 }

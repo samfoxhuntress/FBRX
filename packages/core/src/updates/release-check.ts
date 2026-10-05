@@ -52,6 +52,8 @@ export interface ReleaseCheckerDeps {
   notify: (title: string, body: string, version: string) => Promise<unknown>;
   /** Starts the installer in the install folder (tests replace it). */
   launchInstaller?: (root: string) => string;
+  /** A good moment to install by itself (nobody presenting, the agent idle, the computer not in use). */
+  quiet?: () => boolean;
 }
 
 export class ReleaseChecker {
@@ -83,6 +85,8 @@ export class ReleaseChecker {
   stop(): void {
     if (this.timer) clearTimeout(this.timer);
     this.timer = null;
+    if (this.autoTimer) clearTimeout(this.autoTimer);
+    this.autoTimer = null;
   }
 
   status(): ReleaseCheck {
@@ -111,7 +115,8 @@ export class ReleaseChecker {
       const newer = compareSemver(latest.version, this.d.appVersion) > 0;
       this.set({ state: newer ? 'available' : 'current', latest, checkedAt: new Date().toISOString(), message: null });
       this.d.log.info('Checked for a new version', { current: this.d.appVersion, latest: latest.version });
-      if (newer && this.d.settings().updates.skipVersion !== latest.version && this.readState().notified !== latest.version) {
+      if (newer) this.maybeAutoInstall();
+      if (newer && !this.d.settings().updates.autoInstall && this.d.settings().updates.skipVersion !== latest.version && this.readState().notified !== latest.version) {
         this.writeState({ notified: latest.version });
         await this.d.notify(
           `FBRX OS ${latest.stage} ${latest.version} is available`,
@@ -125,6 +130,37 @@ export class ReleaseChecker {
       this.d.log.warn('Could not check for a new version', { error: message });
     }
     return this.status();
+  }
+
+  private readonly autoTried = new Set<string>();
+  private autoTimer: NodeJS.Timeout | null = null;
+
+  /**
+   * "Install automatically" (Settings → Updates, or the organization's FBRX Command): installs a newer version from the
+   * repository by itself, once per version, waiting for a quiet moment so it never interrupts a lesson.
+   */
+  private maybeAutoInstall(): void {
+    const s = this.d.settings().updates;
+    const latest = this.state.latest;
+    if (!s.autoInstall || !latest || this.state.state !== 'available' || s.skipVersion === latest.version || !this.installRoot()) return;
+    if (this.autoTried.has(latest.version) || (this.state.installing && this.state.installing.phase !== 'failed')) return;
+    if (this.d.quiet && !this.d.quiet()) {
+      if (!this.autoTimer) {
+        this.autoTimer = setTimeout(() => {
+          this.autoTimer = null;
+          this.maybeAutoInstall();
+        }, 10 * 60_000);
+        this.autoTimer.unref?.();
+      }
+      return;
+    }
+    this.autoTried.add(latest.version);
+    this.d.log.info('Installing the new version automatically', { version: latest.version });
+    try {
+      this.install();
+    } catch (e) {
+      this.d.log.warn('Automatic update could not start', { error: (e as Error).message });
+    }
   }
 
   skip(version: string): ReleaseCheck {

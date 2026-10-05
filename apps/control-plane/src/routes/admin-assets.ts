@@ -6,7 +6,7 @@ import type { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import * as tar from 'tar';
 import { z } from 'zod';
-import { ALL_FEATURES, EDITIONS, TIERS, UPDATE_CHANNELS, compareSemver, decodeLicenseUnverified, isValidSemver, newId, tierFor, type Edition, type LicensePayload } from '@fbrx/shared';
+import { ALL_FEATURES, EDITIONS, TIERS, UPDATE_CHANNELS, VERTICALS, compareSemver, decodeLicenseUnverified, isValidSemver, newId, tierFor, type Edition, type LicensePayload } from '@fbrx/shared';
 import { openString, randomToken, sealString, sha256Hex, signLicense } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
@@ -197,6 +197,8 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
       tier: tierFor(l.edition as Edition, claims?.tier),
       /** The FBRX Command address devices join when the key is pasted in. */
       commandUrl: claims?.command?.url ?? null,
+      /** An Education (or Home) license. */
+      vertical: claims?.vertical ?? 'business',
       seats: Number(l.seats),
       features: parseJson<string[]>(l.features, []),
       issuedAt: l.issued_at,
@@ -229,6 +231,8 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
           /** Computers that activate the key join this tenant on their own (FBRX Command). */
           joinTenant: z.boolean().optional(),
           groupId: z.string().nullable().optional(),
+          /** An Education license makes the organization a school: staff computers start in classroom mode, student computers become possible. */
+          vertical: z.enum(VERTICALS).optional(),
         })
         .parse(req.body);
       if (body.groupId && !ctx.db.get('SELECT 1 FROM groups WHERE id = ? AND tenant_id = ?', body.groupId, tenantId)) throw badRequest('Unknown group');
@@ -267,10 +271,11 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
         maxMajorVersion: body.maxMajorVersion ?? null,
         ...(body.tier ? { tier: body.tier } : {}),
         ...(command ? { command } : {}),
+        ...(body.vertical && body.vertical !== 'business' ? { vertical: body.vertical } : {}),
       };
       const key = signLicense(payload, ctx.keys.licensePrivatePem);
       ctx.db.run(
-        'INSERT INTO licenses (id, tenant_id, customer, edition, seats, features, issued_at, expires_at, max_major_version, key_text, created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+        'INSERT INTO licenses (id, tenant_id, customer, edition, seats, features, issued_at, expires_at, max_major_version, key_text, created_by, vertical) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
         id,
         tenantId,
         payload.customer,
@@ -282,7 +287,10 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
         payload.maxMajorVersion,
         key,
         p.label,
+        body.vertical ?? null,
       );
+      // The license decides what kind of organization this is.
+      if (body.vertical && body.vertical !== tenant.vertical) ctx.db.run('UPDATE tenants SET vertical = ?, updated_at = ? WHERE id = ?', body.vertical, new Date().toISOString(), tenantId);
       ctx.bumpConfig(tenantId);
       ctx.audit.record(actorOf(req), 'license.issued', { type: 'license', id, tenantId }, { edition: body.edition, seats: body.seats, expiresAt: body.expiresAt, tier: tierFor(body.edition, body.tier), joinsTenant: !!command });
       ctx.webhooks.emit(tenantId, 'license.issued', { licenseId: id, edition: body.edition, seats: body.seats, expiresAt: payload.expiresAt });

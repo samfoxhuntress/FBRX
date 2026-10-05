@@ -23,6 +23,9 @@ export const PERMISSIONS = {
   'snapshots.manage': ['superadmin', 'owner', 'admin'],
   'webhooks.manage': ['superadmin', 'owner', 'admin'],
   'audit.read': ['superadmin', 'owner', 'admin'],
+  /** Help desk tickets: everyone can read them; operators and up answer them. */
+  'helpdesk.read': ['superadmin', 'owner', 'admin', 'operator', 'viewer'],
+  'helpdesk.manage': ['superadmin', 'owner', 'admin', 'operator'],
 } as const satisfies Record<string, readonly Role[]>;
 export type Permission = keyof typeof PERMISSIONS;
 

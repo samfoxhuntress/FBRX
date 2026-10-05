@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { DEFAULT_POLICY, UPDATE_CHANNELS } from '@fbrx/shared';
+import { AUDIENCES, AUDIENCE_NAMES, DEFAULT_POLICY, UPDATE_CHANNELS } from '@fbrx/shared';
 import {
   Button,
   Callout,
@@ -18,6 +18,7 @@ import {
   StatTile,
   Table,
   Tabs,
+  Toggle,
   TextArea,
   formatBytes,
   formatDate,
@@ -317,6 +318,8 @@ function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
   const [settings, setSettings] = useState(JSON.stringify(d.settingsOverride, null, 2));
   const [locked, setLocked] = useState(d.lockedOverride.join('\n'));
   const [policy, setPolicy] = useState(d.policyOverride ? JSON.stringify(d.policyOverride, null, 2) : '');
+  const [audience, setAudience] = useState<string>(d.audience ?? '');
+  const [receiver, setReceiver] = useState(!!d.helpdeskReceiver);
   const [valid, setValid] = useState({ s: true, p: true });
   const { busy, run } = useAction();
   const canConfig = app.can('config.manage');
@@ -337,6 +340,8 @@ function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
                 settingsOverride: settings.trim() ? JSON.parse(settings) : {},
                 lockedOverride: locked.split(/[\n,]/).map((x) => x.trim()).filter(Boolean),
                 policyOverride: policy.trim() ? JSON.parse(policy) : null,
+                audience: audience || null,
+                helpdeskReceiver: receiver,
               }
             : {}),
         }).then(onSaved),
@@ -366,6 +371,10 @@ function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
               <Select disabled={!canConfig} value={pinned} onChange={(e) => setPinned(e.target.value)} options={[{ value: '', label: 'Not pinned' }, ...releases.filter((r) => r.published).map((r) => ({ value: r.version, label: r.version }))]} />
             </Field>
           </div>
+          <Field label="Used by" help="Student computers run FBRX OS Education (Education organizations)">
+            <Select disabled={!canConfig} value={audience} onChange={(e) => setAudience(e.target.value)} options={[{ value: '', label: 'Its group (or the organization default)' }, ...AUDIENCES.map((a) => ({ value: a, label: AUDIENCE_NAMES[a] }))]} />
+          </Field>
+          <Toggle checked={receiver} disabled={!canConfig} onChange={setReceiver} label="Receives help desk tickets (the IT computer)" />
         </div>
       </Card>
       <Card title="Overrides" subtitle="Applied on top of the tenant and group profiles, for this device only">

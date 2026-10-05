@@ -2,7 +2,7 @@ import { createReadStream, existsSync, openSync, readSync, closeSync, rmSync } f
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { Readable } from 'node:stream';
-import { CommandResultSchema, DeviceEventSchema, EnrollRequestSchema, PROTOCOL_VERSION, featuresFor, type DeviceToServerMessage, type Edition, type EnrollResponse, type HeartbeatResponse } from '@fbrx/shared';
+import { CommandResultSchema, DeviceEventSchema, EnrollRequestSchema, PROTOCOL_VERSION, VERTICALS, featuresFor, resolveAudience, type Audience, type DeviceToServerMessage, type Edition, type EnrollResponse, type HeartbeatResponse, type Vertical } from '@fbrx/shared';
 import { randomToken, sha256Hex } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
@@ -66,10 +66,16 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
     const deviceId = ids.device();
     const deviceToken = randomToken('fbrx_dev');
     const f = body.device;
+    // Who uses the computer: the token's audience (or its group's); a computer may narrow itself to a student computer.
+    const vertical = (VERTICALS as readonly string[]).includes(tenant.vertical) ? (tenant.vertical as Vertical) : 'business';
+    const groupAudience = t.group_id ? ctx.db.get<{ audience: Audience | null }>('SELECT audience FROM groups WHERE id = ?', t.group_id)?.audience : null;
+    const assigned = (t.audience as Audience | null) ?? groupAudience ?? null;
+    const audience = resolveAudience(vertical, assigned, body.audience);
+    const storeAudience = t.audience || (body.audience && audience !== resolveAudience(vertical, assigned)) ? audience : null;
     ctx.db.tx(() => {
       ctx.db.run(
-        `INSERT INTO devices (id, tenant_id, group_id, name, hostname, platform, arch, os_version, app_version, machine_id, token_hash, enrolled_at, enrolled_via, last_seen_at, last_ip, updated_at)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO devices (id, tenant_id, group_id, name, hostname, platform, arch, os_version, app_version, machine_id, token_hash, enrolled_at, enrolled_via, last_seen_at, last_ip, updated_at, audience)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         deviceId,
         t.tenant_id,
         t.group_id,
@@ -86,6 +92,7 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
         now,
         req.ip,
         now,
+        storeAudience,
       );
       ctx.db.run('UPDATE enrollment_tokens SET uses = uses + 1 WHERE id = ?', t.id);
     });
@@ -94,7 +101,7 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
       { type: 'device', id: deviceId, label: `device:${f.name || f.hostname}`, tenantId: t.tenant_id, ip: req.ip },
       'device.enrolled',
       { type: 'device', id: deviceId },
-      { hostname: f.hostname, platform: f.platform, appVersion: f.appVersion, token: t.label, group: group?.name, previousDeviceId: body.previousDeviceId },
+      { hostname: f.hostname, platform: f.platform, appVersion: f.appVersion, token: t.label, group: group?.name, audience, previousDeviceId: body.previousDeviceId },
     );
     ctx.webhooks.emit(t.tenant_id, 'device.enrolled', { deviceId, name: f.name, hostname: f.hostname, platform: f.platform, appVersion: f.appVersion });
     ctx.realtime.emitAdmin({ type: 'device.online', deviceId, tenantId: t.tenant_id });

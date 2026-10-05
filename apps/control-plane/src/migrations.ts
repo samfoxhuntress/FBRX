@@ -324,4 +324,58 @@ export const CP_MIGRATIONS: Migration[] = [
       ALTER TABLE users ADD COLUMN sso_subject TEXT;
     `,
   },
+  {
+    version: 3,
+    name: 'helpdesk',
+    up: `
+      CREATE TABLE tickets (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        number INTEGER NOT NULL,
+        device_id TEXT REFERENCES devices(id) ON DELETE SET NULL,
+        requester_name TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        category TEXT NOT NULL DEFAULT 'other',
+        priority TEXT NOT NULL DEFAULT 'normal',
+        status TEXT NOT NULL DEFAULT 'open',
+        assignee_device_id TEXT,
+        assignee_name TEXT,
+        diagnostics TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        resolved_at TEXT,
+        UNIQUE (tenant_id, number)
+      );
+      CREATE INDEX cp_tickets_tenant ON tickets (tenant_id, status, updated_at);
+      CREATE INDEX cp_tickets_device ON tickets (device_id, updated_at);
+      CREATE TABLE ticket_messages (
+        id TEXT PRIMARY KEY,
+        ticket_id TEXT NOT NULL REFERENCES tickets(id) ON DELETE CASCADE,
+        tenant_id TEXT NOT NULL,
+        author_kind TEXT NOT NULL,
+        author_name TEXT NOT NULL,
+        author_device_id TEXT,
+        author_user_id TEXT,
+        body TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX cp_ticket_messages ON ticket_messages (ticket_id, created_at);
+      ALTER TABLE devices ADD COLUMN helpdesk_receiver INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE tenants ADD COLUMN helpdesk_enabled INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
+  {
+    version: 4,
+    name: 'audiences-and-updates',
+    up: `
+      ALTER TABLE tenants ADD COLUMN vertical TEXT NOT NULL DEFAULT 'business';
+      ALTER TABLE tenants ADD COLUMN auto_update TEXT NOT NULL DEFAULT 'notify';
+      ALTER TABLE groups ADD COLUMN audience TEXT;
+      ALTER TABLE groups ADD COLUMN tier TEXT;
+      ALTER TABLE groups ADD COLUMN auto_update TEXT;
+      ALTER TABLE enrollment_tokens ADD COLUMN audience TEXT;
+      ALTER TABLE devices ADD COLUMN audience TEXT;
+      ALTER TABLE licenses ADD COLUMN vertical TEXT;
+    `,
+  },
 ];

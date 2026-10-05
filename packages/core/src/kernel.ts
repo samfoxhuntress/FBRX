@@ -9,9 +9,18 @@ import {
   ProvisioningFileSchema,
   addressAs,
   funEnabled,
+  TIER_NAMES,
   type DeviceCommand,
   type Heartbeat,
   type NotificationEvent,
+  type PresenterStatus,
+  type Audience,
+  type DeviceEdition,
+  type EditionStatus,
+  type Vertical,
+  VERTICAL_AUDIENCES,
+  isLearner,
+  productNameFor,
   type SystemStatus,
   type UpdateStatus,
 } from '@fbrx/shared';
@@ -51,6 +60,10 @@ import { Fbrx1Cli } from './cli/fbrx1';
 import { VendorDb } from './network/vendors';
 import { DeviceConsoles } from './network/device-console';
 import { deviceConsoleTools } from './tools/builtin/device-console-tools';
+import { netEnvTools } from './tools/builtin/netenv-tools';
+import { helpdeskTools } from './tools/builtin/helpdesk-tools';
+import { NetEnvironments } from './network/environments';
+import { Helpdesk } from './fleet/helpdesk';
 import { MeshService } from './mesh/mesh-service';
 import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
 import { AiCoordination } from './aicoord/aicoord';
@@ -133,6 +146,8 @@ export class Kernel {
   readonly spotlight: Spotlight;
   readonly alerts: AlertEngine;
   readonly net: NetDiag;
+  readonly netenv: NetEnvironments;
+  readonly helpdesk: Helpdesk;
   readonly vendors: VendorDb;
   readonly consoles: DeviceConsoles;
   readonly trophies: Trophies;
@@ -197,6 +212,7 @@ export class Kernel {
       license: this.license,
       limiter: this.limiter,
       log: L('gate'),
+      agentToolsBlocked: () => (this.edition().learner ? 'The learning helper on student computers does not use tools' : null),
     });
     this.conversations = new ConversationStore(this.db);
     this.models = new ModelManager(this.db, this.paths.models, () => this.settings.get().runtime.modelId, L('models'), this.events);
@@ -224,6 +240,11 @@ export class Kernel {
       workspace: this.paths.workspace,
       allowedRoots: () => this.policy.allowedRoots(),
       halt: () => this.aiHalt(),
+      learner: () => {
+        const e = this.edition();
+        return e.learner ? { vertical: e.vertical } : null;
+      },
+      onConcern: (category) => this.reportConcern(category),
       fun: {
         enabled: () => funEnabled(this.settings.get(), this.license.status().tier),
         trophy: (id) => void this.trophies.unlock(id),
@@ -290,6 +311,15 @@ export class Kernel {
       facts: () => deviceFacts(this.platform.appVersion, this.deviceName()),
       heartbeatStatus: () => this.heartbeatStatus(),
       executeCommand: (cmd) => this.executeRemoteCommand(cmd),
+      onMessage: (msg) => this.helpdesk.onPush(msg),
+    });
+    this.helpdesk = new Helpdesk({
+      fleet: this.fleet,
+      events: this.events,
+      log: L('helpdesk'),
+      requesterName: () => this.settings.get().profile.name || this.deviceName(),
+      diagnostics: () => this.ticketDiagnostics(),
+      notify: (title, body) => this.notify({ title, body, level: 'info', source: 'helpdesk' }),
     });
     this.localApi = new LocalApiServer({
       call: (m, p, ctx) => this.call(m, p, ctx),
@@ -320,6 +350,7 @@ export class Kernel {
       internet: () => this.internetAllowed(),
     });
     this.net = new NetDiag({ db: this.db, events: this.events, vendors: this.vendors, internet: () => this.internetAllowed() });
+    this.netenv = new NetEnvironments({ meta: this.meta, vault: this.vault, events: this.events, log: L('netenv'), unavailable: () => this.ultraOnly('Network environments') });
     this.trophies = new Trophies({ meta: this.meta, events: this.events, enabled: () => funEnabled(this.settings.get(), this.license.status().tier) });
     this.migrator = new Migrator({
       events: this.events,
@@ -337,6 +368,7 @@ export class Kernel {
       log: L('release'),
       internet: () => this.internetAllowed(),
       notify: (title, body, version) => this.alerts.fire('update_available', title, body, { key: version }),
+      quiet: () => !this.presenterStatus().active && this.agent.activeCount === 0 && this.idleSeconds() >= 300,
     });
     // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
     this.cli = new Fbrx1Cli({
@@ -446,15 +478,67 @@ export class Kernel {
     this.events.emit('notification', n);
   }
 
+  // ------------------------------------------------------------------------------- presenter-safe mode
+
+  private externalDisplay = false;
+  /** Turned off by hand while the automatic switch had it on; cleared when the extra screen goes away. */
+  private presenterSnoozed = false;
+  private lastPresenter = '';
+
+  presenterStatus(): PresenterStatus {
+    const p = this.settings.get().presenter;
+    const auto = p.auto && this.externalDisplay && !this.presenterSnoozed;
+    const active = p.enabled || auto;
+    return { active, reason: p.enabled ? 'manual' : auto ? 'display' : null, externalDisplay: this.externalDisplay, hideNotifications: p.hideNotifications, maskClipboard: p.maskClipboard, blurPrivate: p.blurPrivate };
+  }
+
+  /** Emits presenter.changed when what presenter-safe mode does has changed. */
+  private presenterChanged() {
+    const st = this.presenterStatus();
+    const key = JSON.stringify(st);
+    if (key === this.lastPresenter) return;
+    this.lastPresenter = key;
+    this.events.emit('presenter.changed', st);
+  }
+
+  /** The desktop shell reports whether a second screen or projector is connected. */
+  setExternalDisplay(on: boolean): void {
+    if (on === this.externalDisplay) return;
+    this.externalDisplay = on;
+    if (!on) this.presenterSnoozed = false;
+    this.presenterChanged();
+  }
+
+  async setPresenting(on: boolean, actor: string): Promise<PresenterStatus> {
+    const was = this.presenterStatus();
+    if (on) {
+      this.presenterSnoozed = false;
+      if (!was.active) await this.settings.update({ presenter: { enabled: true } });
+    } else {
+      if (this.settings.get().presenter.enabled) await this.settings.update({ presenter: { enabled: false } });
+      if (was.reason === 'display' || (this.settings.get().presenter.auto && this.externalDisplay)) this.presenterSnoozed = true;
+    }
+    this.audit.append({ category: 'settings', action: on ? 'presenter.on' : 'presenter.off', actor, outcome: 'success' });
+    this.presenterChanged();
+    return this.presenterStatus();
+  }
+
   private wire() {
     this.disposers.push(
       this.events.on('notification', (n) => {
         try {
+          // Presenting: nothing private pops up on the projector. Urgent ones still say that something needs a look.
+          const p = this.presenterStatus();
+          if (p.active && p.hideNotifications) {
+            if (n.level === 'error') this.platform.notify({ ...n, title: 'FBRX needs your attention', body: 'Open FBRX when you have finished presenting.' });
+            return;
+          }
           this.platform.notify(n);
         } catch {
           /* headless */
         }
       }),
+      this.events.on('settings.changed', () => this.presenterChanged()),
     );
     this.disposers.push(this.vault.onChange(() => this.redactor.setSecrets(this.vault.valuesForRedaction())));
     // Licensed features (plugins, connectors, …) start or stop as soon as a license is activated, pushed or revoked.
@@ -571,6 +655,8 @@ export class Kernel {
           ...fbrxTools({ status: () => this.status(), recentAudit: (n) => this.audit.query({ limit: n }) }),
           ...workspaceTools(this.workspace),
           ...deviceConsoleTools(this.consoles),
+          ...netEnvTools(this.netenv, () => this.ultraOnly('Network environments')),
+          ...helpdeskTools(this.helpdesk, () => (this.fleet.enrolled ? null : 'This computer is not part of an organization, so there is no help desk to send to')),
           ...pcTools({ monitor: this.monitor, net: this.net, alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined) }),
         ]);
       },
@@ -880,6 +966,7 @@ export class Kernel {
       services: this.services.list(),
       vault: this.vault.status(),
       license: this.license.status(),
+      edition: this.edition(),
       fleet: this.fleet.status(),
       runtime: this.runtime.status(),
       pendingApprovals: this.approvals.size,
@@ -934,8 +1021,7 @@ export class Kernel {
       case 'update.check':
         return this.platform.updates ? this.platform.updates.check() : this.updateStatus();
       case 'update.install':
-        if (!this.platform.updates) throw new Error('This installation cannot self-update');
-        return this.platform.updates.install({ restartNow: !!p.restartNow });
+        return this.installUpdate({ restartNow: !!p.restartNow, source: p.source ?? 'auto' });
       case 'backup.create': {
         const info = await this.backup.create({ label: p.label, actor: 'control-plane' });
         let uploaded: string | null = null;
@@ -1011,6 +1097,95 @@ export class Kernel {
   }
 
   // ------------------------------------------------------------------------------- command center
+
+  /** What this computer is: Endpoint Basic or Ultra, or FBRX OS Education on a student computer. */
+  edition(): EditionStatus {
+    const lic = this.license.status();
+    const ed = this.meta.get<DeviceEdition>('fleet.edition');
+    const vertical: Vertical = ed?.vertical ?? lic.vertical ?? 'business';
+    const audience: Audience = ed?.audience ?? VERTICAL_AUDIENCES[vertical][0];
+    return { tier: lic.tier, vertical, audience, learner: isLearner(audience), productName: productNameFor(lic.tier, vertical, audience) };
+  }
+
+  /**
+   * A message on a student computer sounded like a child may be in danger. The school is told which computer, when and
+   * what kind of concern, so a caring adult can check in; the message itself stays on the computer.
+   */
+  private reportConcern(category: 'self-harm' | 'harmed') {
+    const what = category === 'self-harm' ? 'may be thinking about hurting themselves' : 'may be being hurt by someone';
+    this.audit.append({ category: 'agent', action: 'learner.concern', actor: 'learning-helper', outcome: 'info', details: { category } });
+    if (this.fleet.enrolled) {
+      this.fleet.reportEvent({ kind: 'alert', severity: 'critical', message: `Student safety: the student using ${this.deviceName()} ${what}. Please have a caring adult check in.`, data: { concern: category, device: this.deviceName() }, at: new Date().toISOString() });
+    }
+  }
+
+  /** What IT sees about this computer on a help desk ticket (only when the person leaves "attach details" on). */
+  private async ticketDiagnostics(): Promise<Record<string, unknown>> {
+    const s = await this.status();
+    const hb = await this.heartbeatStatus();
+    let net: { ip: string | null; gateway: string | null; dns: string[] } | null = null;
+    try {
+      const c = await this.net.context();
+      net = { ip: c.ip, gateway: c.gateway, dns: c.dns.slice(0, 3) };
+    } catch {
+      net = null;
+    }
+    return {
+      computer: s.deviceName,
+      system: `${osPlatform()} ${osArch()}`,
+      appVersion: s.version,
+      edition: this.edition().productName,
+      uptimeHours: Math.round(hb.uptimeSeconds / 360) / 10,
+      cpuLoadPct: hb.cpuLoad,
+      memoryUsedPct: hb.memUsedPct,
+      memoryGb: Math.round(hb.memTotalMb / 102.4) / 10,
+      diskFreeGb: hb.diskFreeGb,
+      network: net,
+      problems: hb.services.filter((x) => x.state === 'failed' || x.state === 'degraded').map((x) => `${x.name}: ${x.state}`),
+      errors24h: hb.errors24h,
+    };
+  }
+
+  private idleProbe: (() => number) | null = null;
+
+  /** The desktop shell says how long nobody has touched the computer (seconds). */
+  setIdleProbe(probe: () => number): void {
+    this.idleProbe = probe;
+  }
+
+  idleSeconds(): number {
+    try {
+      return this.idleProbe ? this.idleProbe() : Number.POSITIVE_INFINITY;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * "Update now" from FBRX Command: installs the newest version from wherever this computer gets them. Computers with a
+   * release feed from FBRX Command use it; computers installed from the GitHub repository download and run the installer.
+   */
+  private async installUpdate(p: { restartNow: boolean; source: 'auto' | 'command' | 'repository' }): Promise<unknown> {
+    const feed = this.platform.updates;
+    if (p.source !== 'repository' && feed && feed.status().feedUrl) {
+      const st = await feed.check();
+      if (p.source === 'command' || ['available', 'downloading', 'downloaded'].includes(st.state)) return feed.install({ restartNow: p.restartNow });
+    }
+    if (p.source !== 'command' && this.release.installRoot()) {
+      const st = await this.release.check();
+      if (st.state === 'current') return { state: 'current', message: `Already on the newest version (${st.currentVersion})` };
+      if (st.state !== 'available') throw new Error(st.message ?? 'Could not read the release list in the repository');
+      this.audit.append({ category: 'updates', action: 'repository.install', actor: 'control-plane', target: st.latest?.version ?? null, outcome: 'info' });
+      return this.release.install();
+    }
+    if (feed) return feed.install({ restartNow: p.restartNow });
+    throw new Error('This computer has no way to update itself: it was not installed from the repository and has no update feed');
+  }
+
+  /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Basic), or null. */
+  ultraOnly(what: string): string | null {
+    return this.license.status().tier === 'ultra' ? null : `${what} come with ${TIER_NAMES.ultra}`;
+  }
 
   /** False when the organization's network policy blocks every internet host. */
   internetAllowed(): boolean {
@@ -1175,7 +1350,7 @@ export class Kernel {
       this.platform.requestRestart('provisioning');
       return;
     }
-    await this.fleet.enroll(prov.serverUrl, prov.enrollmentToken, prov.deviceName, 'provisioning');
+    await this.fleet.enroll(prov.serverUrl, prov.enrollmentToken, prov.deviceName, 'provisioning', prov.audience);
     try {
       renameSync(file, `${file}.applied`);
     } catch {

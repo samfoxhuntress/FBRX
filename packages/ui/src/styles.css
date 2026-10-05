@@ -1282,3 +1282,31 @@ pre,
   clip: rect(0 0 0 0);
   white-space: nowrap;
 }
+
+/* Help desk */
+.hd-layout { display: grid; grid-template-columns: minmax(260px, 360px) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 900px) { .hd-layout { grid-template-columns: minmax(0, 1fr); } }
+.hd-list { max-height: calc(100vh - 260px); overflow: auto; }
+.hd-row { display: block; width: 100%; font: inherit; text-align: left; padding: 11px 14px; border: 0; border-bottom: 1px solid var(--border); background: none; color: inherit; cursor: pointer; }
+.hd-row:hover { background: var(--surface-2); }
+.hd-row.active { background: color-mix(in srgb, var(--accent) 12%, transparent); }
+.hd-row-top { display: flex; gap: 8px; align-items: baseline; min-width: 0; }
+.hd-num { color: var(--text-muted); font-variant-numeric: tabular-nums; font-size: 12.5px; }
+.hd-subject { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex: 1; min-width: 0; }
+.hd-prio { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.05em; padding: 1px 6px; border-radius: 6px; }
+.hd-prio.high { color: var(--warning); border: 1px solid color-mix(in srgb, var(--warning) 50%, transparent); }
+.hd-prio.urgent { color: var(--critical); border: 1px solid color-mix(in srgb, var(--critical) 50%, transparent); }
+.hd-row-sub { display: flex; gap: 8px; align-items: center; margin-top: 4px; font-size: 12px; color: var(--text-muted); }
+.hd-thread { display: flex; flex-direction: column; gap: 10px; max-height: 46vh; overflow: auto; padding-right: 4px; }
+.hd-msg { max-width: 85%; padding: 9px 12px; border-radius: 12px; background: var(--surface-2); border: 1px solid var(--border); }
+.hd-msg.helpdesk { align-self: flex-start; }
+.hd-msg.requester { align-self: flex-end; background: color-mix(in srgb, var(--accent) 10%, var(--surface-2)); }
+.hd-msg-head { font-size: 12px; color: var(--text-muted); margin-bottom: 3px; }
+.hd-msg-head b { color: var(--text-primary); font-weight: 600; }
+.hd-msg-body { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; }
+.hd-note { align-self: center; font-size: 11.5px; color: var(--text-muted); }
+.hd-diag { margin-top: 10px; font-size: 12.5px; }
+.hd-diag summary { cursor: pointer; color: var(--text-muted); }
+.hd-empty { min-height: 200px; display: grid; place-items: center; }
+.hd-console { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 1100px) { .hd-console { grid-template-columns: minmax(0, 1fr); } }

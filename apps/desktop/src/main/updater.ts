@@ -1,9 +1,45 @@
+import { execFile } from 'node:child_process';
 import { app } from 'electron';
 import electronUpdater from 'electron-updater';
 import type { UpdateController, UpdateFeedConfig } from '@fbrx/core';
 import type { UpdateStatus } from '@fbrx/shared';
 
 const { autoUpdater } = electronUpdater;
+
+/** Windows' verdict on a file's Authenticode signature (status 0 = valid), or null when it cannot be read. */
+function authenticode(file: string): Promise<{ status: number; subject: string | null } | null> {
+  const literal = file.replace(/'/g, "''");
+  const script = `Get-AuthenticodeSignature -LiteralPath '${literal}' | Select-Object @{n='Status';e={[int]$_.Status}}, @{n='Subject';e={$_.SignerCertificate.Subject}} | ConvertTo-Json -Compress`;
+  return new Promise((resolve) => {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-InputFormat', 'None', '-Command', script], { windowsHide: true, timeout: 20_000 }, (err, out) => {
+      if (err) return resolve(null);
+      try {
+        const j = JSON.parse(out) as { Status: number; Subject?: string | null };
+        resolve({ status: Number(j.Status), subject: j.Subject ?? null });
+      } catch {
+        resolve(null);
+      }
+    });
+  });
+}
+
+export const commonName = (dn: string | null | undefined): string | null => dn?.match(/(?:^|,\s*)CN=("?)([^",]+)\1/)?.[2]?.trim() ?? null;
+
+/**
+ * Which Windows updates get installed. electron-updater compares an update's signature with the publisher name
+ * written into the build, which would refuse every update the day builds go from unsigned to signed. Instead:
+ * a signed copy of FBRX only accepts updates validly signed by the same publisher as itself; an unsigned copy
+ * (built from source, or before signing was set up) relies on the checksum in the update feed, as it always has.
+ */
+export async function verifyWindowsUpdate(file: string): Promise<string | null> {
+  const [self, update] = await Promise.all([authenticode(process.execPath), authenticode(file)]);
+  if (!self || self.status !== 0) return null;
+  if (!update) return 'Windows could not check the signature of the update';
+  if (update.status !== 0) return 'The update is not signed by the publisher of this copy of FBRX';
+  const mine = commonName(self.subject);
+  const theirs = commonName(update.subject);
+  return mine && mine === theirs ? null : `The update is signed by ${theirs ?? 'someone else'}, not ${mine ?? 'the publisher of this copy'}`;
+}
 
 /**
  * electron-updater driven by the FBRX control plane. The feed URL and device credentials are injected once
@@ -25,6 +61,7 @@ export class ElectronUpdateController implements UpdateController {
       message: app.isPackaged ? 'Enroll with a control plane to receive managed updates' : 'Updates are disabled in development builds',
     };
     autoUpdater.logger = null;
+    if (process.platform === 'win32') (autoUpdater as unknown as { verifyUpdateCodeSignature: (names: string[], file: string) => Promise<string | null> }).verifyUpdateCodeSignature = (_names, file) => verifyWindowsUpdate(file);
     autoUpdater.autoDownload = false;
     autoUpdater.autoInstallOnAppQuit = true;
     autoUpdater.on('checking-for-update', () => this.set({ state: 'checking', message: null }));

@@ -10,6 +10,7 @@ interface License {
   customer: string;
   edition: string;
   tier: Tier;
+  vertical?: 'business' | 'education' | 'home';
   commandUrl: string | null;
   seats: number;
   features: string[];
@@ -61,7 +62,7 @@ export function LicensesPage() {
           empty={<Empty title="No licenses issued" />}
           columns={[
             { key: 'c', header: 'Customer', render: (l) => (<div><div className="fx-cell-title">{l.customer}</div><div className="fx-cell-sub">{tenants.find((t) => t.id === l.tenantId)?.name ?? l.tenantId}</div></div>) },
-            { key: 'p', header: 'Product', render: (l) => (<div><div className="fx-cell-title">{TIER_NAMES[l.tier]}</div>{l.commandUrl && <div className="fx-cell-sub">Joins this tenant</div>}</div>) },
+            { key: 'p', header: 'Product', render: (l) => (<div><div className="fx-cell-title">{TIER_NAMES[l.tier]}{l.vertical && l.vertical !== 'business' ? <span className="fx-badge accent" style={{ marginLeft: 6 }}>{l.vertical === 'education' ? 'Education' : 'Home'}</span> : null}</div>{l.commandUrl && <div className="fx-cell-sub">Joins this tenant</div>}</div>) },
             { key: 'e', header: 'Edition', render: (l) => <span className="fx-badge accent">{l.edition}</span> },
             { key: 's', header: 'Seats', className: 'num', render: (l) => l.seats || 'unlimited' },
             { key: 'st', header: 'Status', render: state },
@@ -113,7 +114,7 @@ export function LicensesPage() {
 }
 
 function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () => void }) {
-  const [f, setF] = useState({ edition: 'enterprise' as Edition, tier: 'auto' as Tier | 'auto', joinTenant: true, seats: '25', expires: '', customer: '', maxMajorVersion: '' });
+  const [f, setF] = useState({ edition: 'enterprise' as Edition, tier: 'auto' as Tier | 'auto', joinTenant: true, seats: '25', expires: '', customer: '', maxMajorVersion: '', vertical: 'business' as 'business' | 'education' | 'home' });
   const [extra, setExtra] = useState<string[]>([]);
   const { busy, run } = useAction();
   const base = EDITION_FEATURES[f.edition];
@@ -135,6 +136,7 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
                     edition: f.edition,
                     tier: f.tier === 'auto' ? undefined : f.tier,
                     joinTenant: f.joinTenant,
+                    vertical: f.vertical === 'business' ? undefined : f.vertical,
                     seats: Number(f.seats || 0),
                     features: extra,
                     expiresAt: f.expires ? new Date(f.expires).toISOString() : null,
@@ -159,6 +161,17 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
               { value: 'auto', label: `By edition (${TIER_NAMES[tierFor(f.edition)]})` },
               { value: 'ultra', label: TIER_NAMES.ultra },
               { value: 'basic', label: TIER_NAMES.basic },
+            ]}
+          />
+        </Field>
+        <Field label="Kind of license" help="Education makes the tenant a school: staff computers start in classroom mode and student computers (FBRX OS Education) become possible.">
+          <Select
+            value={f.vertical}
+            onChange={(e) => setF({ ...f, vertical: e.target.value as typeof f.vertical })}
+            options={[
+              { value: 'business', label: 'Business' },
+              { value: 'education', label: 'Education (schools)' },
+              { value: 'home', label: 'Home (families, preview)' },
             ]}
           />
         </Field>

@@ -196,6 +196,21 @@ export const SettingsSchema = z.object({
       )
       .max(100),
   }),
+  /**
+   * Presenter-safe mode, for when the screen is on a projector or shared in a meeting: notifications stay quiet,
+   * clipboard history is masked, private lists (chats, alerts, credentials, tickets) are blurred, and the goose stays home.
+   */
+  presenter: z.object({
+    /** Turned on by hand (Settings, the tray, the top bar or its shortcut). */
+    enabled: z.boolean(),
+    /** Turns on by itself while a second screen or projector is connected. */
+    auto: z.boolean(),
+    hideNotifications: z.boolean(),
+    maskClipboard: z.boolean(),
+    blurPrivate: z.boolean(),
+    /** The macro (global keyboard shortcut) that switches it on and off; empty turns it off. */
+    hotkey: z.string().max(60),
+  }),
   /** Who uses this computer: shown on FBRX Glass and used by the agent. */
   profile: z.object({
     name: z.string().max(60),
@@ -372,6 +387,14 @@ export const DEFAULT_SETTINGS: Settings = {
       { id: 'c-clean', name: 'Clean up pasted text', steps: [{ op: 'straightQuotes' }, { op: 'collapseSpaces' }, { op: 'trimLines' }, { op: 'removeBlank' }] },
       { id: 'c-ps', name: 'Lines → PowerShell array', steps: [{ op: 'trimLines' }, { op: 'removeBlank' }, { op: 'dedupe' }, { op: 'wrapLines', a: "'", b: "'" }, { op: 'join', a: ', ' }, { op: 'wrap', a: '@(', b: ')' }] },
     ],
+  },
+  presenter: {
+    enabled: false,
+    auto: false,
+    hideNotifications: true,
+    maskClipboard: true,
+    blurPrivate: true,
+    hotkey: 'Control+Alt+P',
   },
   profile: {
     name: '',

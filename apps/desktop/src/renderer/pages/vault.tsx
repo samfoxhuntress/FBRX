@@ -91,7 +91,7 @@ export function VaultPage() {
           </Button>
         </Card>
       </Grid>
-      <Card flush>
+      <Card flush className="private">
         <Table
           rows={list.data ?? []}
           rowKey={(x) => x.name}

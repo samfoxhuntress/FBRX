@@ -1,5 +1,6 @@
 # FBRX OS desktop packaging (macOS + Windows, Linux for labs).
-# Signing: set CSC_LINK/CSC_KEY_PASSWORD (mac + win) and APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID for notarization.
+# Signing (docs/DEPLOYMENT.md): CSC_LINK/CSC_KEY_PASSWORD + APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID on macOS;
+# on Windows, Azure Trusted Signing (-c.win.azureSignOptions.*, set by the Release workflow) or CSC_LINK with a .pfx.
 appId: com.fbrx.os
 productName: FBRX OS
 copyright: Copyright © 2026 FBRX

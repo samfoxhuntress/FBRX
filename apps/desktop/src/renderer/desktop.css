@@ -4662,3 +4662,38 @@ html.goose-mode #root {
   position: relative;
   animation: none;
 }
+
+/* Network Center → Environments: guest Wi-Fi codes */
+.voucher-grid { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.voucher { padding: 4px 10px; border-radius: 8px; background: var(--surface-2, rgba(127, 127, 127, 0.12)); border: 1px solid var(--border); font-size: 13.5px; letter-spacing: 0.06em; user-select: all; }
+
+/* Presenter-safe mode: private lists are blurred while the screen may be on a projector. */
+html[data-presenting='blur'] .private {
+  filter: blur(7px);
+  user-select: none;
+  transition: filter 0.2s ease;
+}
+html[data-presenting='blur'] .private::selection {
+  background: transparent;
+}
+.presenter-pill {
+  gap: 6px;
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+}
+.presenter-pill svg:last-child {
+  opacity: 0.6;
+}
+.cp-masked {
+  letter-spacing: 0.15em;
+  color: var(--text-muted, var(--muted));
+}
+.cp-presenting {
+  font-size: 11px;
+  padding: 1px 8px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--accent) 45%, transparent);
+  color: var(--accent);
+}
+
+.tier-badge.student { background: color-mix(in srgb, #3aa0ff 18%, transparent); color: #3aa0ff; border-color: color-mix(in srgb, #3aa0ff 40%, transparent); }

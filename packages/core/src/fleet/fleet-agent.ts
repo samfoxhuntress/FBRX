@@ -21,6 +21,7 @@ import {
   type Policy,
   type ServerToDeviceMessage,
   type DeviceToServerMessage,
+  type Audience,
 } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { AuditLog } from '../audit/audit-log';
@@ -52,9 +53,22 @@ export interface FleetDeps {
   facts: () => DeviceFacts;
   heartbeatStatus: () => Promise<Heartbeat['status']>;
   executeCommand: (cmd: DeviceCommand) => Promise<unknown>;
+  /** Live notices from FBRX Command other than commands and configuration (help desk tickets). */
+  onMessage?: (msg: ServerToDeviceMessage) => void;
 }
 
 class UnauthorizedError extends Error {}
+
+/** The message in an FBRX Command error reply ({ error: { message } }), or its text. */
+async function serverMessage(res: Response): Promise<string> {
+  const text = await res.text().catch(() => '');
+  try {
+    const j = JSON.parse(text) as { error?: { message?: string }; message?: string };
+    return j.error?.message ?? j.message ?? text;
+  } catch {
+    return text || `HTTP ${res.status}`;
+  }
+}
 
 /**
  * The device side of fleet management. Enrolls with a control plane, keeps a WebSocket open for real-time
@@ -132,14 +146,29 @@ export class FleetAgent {
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
-    if (res.status === 401 || res.status === 403) throw new UnauthorizedError(`Control plane rejected this device (HTTP ${res.status})`);
-    if (!res.ok) throw new Error(`Control plane error ${res.status}: ${(await res.text()).slice(0, 300)}`);
+    if (res.status === 401) throw new UnauthorizedError(`Control plane rejected this device (HTTP ${res.status})`);
+    if (res.status === 403 && path !== '/v1/device/config' && !path.startsWith('/v1/device/heartbeat')) throw new CoreError('FORBIDDEN', await serverMessage(res));
+    if (res.status === 403) throw new UnauthorizedError(`Control plane rejected this device (HTTP ${res.status})`);
+    if (res.status === 404 && path.startsWith('/v1/device/helpdesk')) throw new CoreError('NOT_FOUND', await serverMessage(res));
+    if (!res.ok) throw new Error(`Control plane error ${res.status}: ${(await serverMessage(res)).slice(0, 300)}`);
     return (await res.json()) as T;
+  }
+
+  /** A call to FBRX Command for a feature (help desk…), with errors a person can read. */
+  async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    if (!this.enrolled) throw new CoreError('UNAVAILABLE', 'This computer is not part of an organization');
+    try {
+      return await this.http<T>(method, path, body);
+    } catch (err) {
+      if (err instanceof CoreError) throw err;
+      if (err instanceof UnauthorizedError) throw new CoreError('UNAUTHENTICATED', err.message);
+      throw new CoreError('UNAVAILABLE', `FBRX Command could not be reached: ${errorMessage(err)}`);
+    }
   }
 
   // ------------------------------------------------------------------------------------ enrollment
 
-  async enroll(serverUrl: string, token: string, deviceName: string | undefined, actor: string): Promise<FleetStatus> {
+  async enroll(serverUrl: string, token: string, deviceName: string | undefined, actor: string, audience?: Audience): Promise<FleetStatus> {
     let base: URL;
     try {
       base = new URL(serverUrl);
@@ -156,7 +185,7 @@ export class FleetAgent {
     const res = await fetch(new URL('/v1/enroll', base).toString(), {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ token, protocolVersion: PROTOCOL_VERSION, device: facts, previousDeviceId: this.d.meta.get('fleet.previousDeviceId') ?? undefined }),
+      body: JSON.stringify({ token, protocolVersion: PROTOCOL_VERSION, device: facts, previousDeviceId: this.d.meta.get('fleet.previousDeviceId') ?? undefined, ...(audience ? { audience } : {}) }),
       signal: AbortSignal.timeout(20_000),
     });
     const body = (await res.json().catch(() => ({}))) as EnrollResponse & { error?: { message?: string } };
@@ -233,6 +262,8 @@ export class FleetAgent {
     } catch (err) {
       this.d.log.error('Managed policy rejected', { error: errorMessage(err) });
     }
+    // Who uses this computer and what it may be (FBRX Command 1.9+), before the license so the edition applies at once.
+    m.set('fleet.edition', cfg.edition ?? null);
     this.d.license.applyManaged(cfg.license);
     let secrets = { added: 0, updated: 0, removed: 0 };
     if (this.d.vault.isUnlocked) secrets = this.d.vault.applyManaged(cfg.secrets ?? []);
@@ -342,6 +373,7 @@ export class FleetAgent {
         opened = true;
         this.setState('online');
         void this.sendHeartbeat();
+        this.flushEvents();
         const seconds = this.d.meta.get<number>('fleet.heartbeatSeconds') ?? this.d.settings.get().fleet.heartbeatSeconds;
         if (this.heartbeatTimer) clearInterval(this.heartbeatTimer);
         this.heartbeatTimer = setInterval(() => void this.sendHeartbeat(), Math.max(10, seconds) * 1000);
@@ -393,6 +425,9 @@ export class FleetAgent {
       case 'ping':
         this.send({ type: 'pong', at: new Date().toISOString() });
         break;
+      case 'helpdesk.changed':
+        this.d.onMessage?.(msg);
+        break;
     }
   }
 
@@ -421,8 +456,17 @@ export class FleetAgent {
   }
 
   /** Emits an event (alert/audit/state) to the control plane. */
+  /** Events that could not be sent while offline; delivered when the connection is back. */
+  private pendingEvents: DeviceEvent[] = [];
+
   reportEvent(event: DeviceEvent) {
-    this.send({ type: 'event', event });
+    if (!this.send({ type: 'event', event })) this.pendingEvents = [...this.pendingEvents, event].slice(-50);
+  }
+
+  private flushEvents() {
+    const queued = this.pendingEvents;
+    this.pendingEvents = [];
+    for (const e of queued) this.reportEvent(e);
   }
 
   // -------------------------------------------------------------------------------------- commands

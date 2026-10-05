@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { CommandPayloadSchemas, DEFAULT_SETTINGS, PolicySchema, SettingsSchema, UPDATE_CHANNELS, deepMerge, isCommandType, isValidSemver, leafPaths, type ProvisioningFile } from '@fbrx/shared';
+import { AUDIENCES, AUTO_UPDATE_MODES, CommandPayloadSchemas, DEFAULT_SETTINGS, PolicySchema, SettingsSchema, TIERS, UPDATE_CHANNELS, deepMerge, isCommandType, isValidSemver, leafPaths, type ProvisioningFile } from '@fbrx/shared';
 import { randomToken, sha256Hex } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
@@ -125,6 +125,9 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
     profileId: g.profile_id,
     updateChannel: g.update_channel,
     pinnedVersion: g.pinned_version,
+    audience: g.audience ?? null,
+    tier: g.tier ?? null,
+    autoUpdate: g.auto_update ?? null,
     deviceCount: Number(ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM devices WHERE group_id = ? AND status = 'active'", g.id)?.n ?? 0),
   });
   const GroupInput = z.object({
@@ -133,6 +136,11 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
     profileId: z.string().nullable().optional(),
     updateChannel: z.enum(UPDATE_CHANNELS).nullable().optional(),
     pinnedVersion: z.string().refine(isValidSemver, 'Invalid version').nullable().optional(),
+    /** Who uses the group's computers (Education: staff or student). */
+    audience: z.enum(AUDIENCES).nullable().optional(),
+    /** Hold the group to Endpoint Basic, or null for what the license gives. */
+    tier: z.enum(TIERS).nullable().optional(),
+    autoUpdate: z.enum(AUTO_UPDATE_MODES).nullable().optional(),
   });
   app.get('/v1/admin/groups', async (req) => {
     requirePerm(req, 'devices.read');
@@ -148,7 +156,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
       id = ids.group();
       if (ctx.db.get('SELECT 1 FROM groups WHERE tenant_id = ? AND name = ?', tenantId, body.name!)) throw conflict('A group with that name exists');
       ctx.db.run(
-        'INSERT INTO groups (id, tenant_id, name, description, profile_id, update_channel, pinned_version, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
+        'INSERT INTO groups (id, tenant_id, name, description, profile_id, update_channel, pinned_version, audience, tier, auto_update, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
         id,
         tenantId,
         body.name!,
@@ -156,18 +164,24 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
         body.profileId ?? null,
         body.updateChannel ?? null,
         body.pinnedVersion ?? null,
+        body.audience ?? null,
+        body.tier ?? null,
+        body.autoUpdate ?? null,
         now,
         now,
       );
     } else {
       const g = own(req, 'groups', id);
       ctx.db.run(
-        'UPDATE groups SET name = ?, description = ?, profile_id = ?, update_channel = ?, pinned_version = ?, updated_at = ? WHERE id = ?',
+        'UPDATE groups SET name = ?, description = ?, profile_id = ?, update_channel = ?, pinned_version = ?, audience = ?, tier = ?, auto_update = ?, updated_at = ? WHERE id = ?',
         body.name ?? g.name,
         body.description ?? g.description,
         body.profileId !== undefined ? body.profileId : g.profile_id,
         body.updateChannel !== undefined ? body.updateChannel : g.update_channel,
         body.pinnedVersion !== undefined ? body.pinnedVersion : g.pinned_version,
+        body.audience !== undefined ? body.audience : g.audience,
+        body.tier !== undefined ? body.tier : g.tier,
+        body.autoUpdate !== undefined ? body.autoUpdate : g.auto_update,
         now,
         id,
       );
@@ -197,6 +211,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
     maxUses: t.max_uses,
     uses: Number(t.uses),
     templateSnapshotId: t.template_snapshot_id,
+    audience: t.audience ?? null,
     expiresAt: t.expires_at,
     createdAt: t.created_at,
     revokedAt: t.revoked_at,
@@ -217,6 +232,8 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
         templateSnapshotId: z.string().nullable().optional(),
         templatePassphrase: z.string().optional(),
         deviceName: z.string().max(120).optional(),
+        /** Computers that join with this token are used by… (Education: "student" makes FBRX OS Education). */
+        audience: z.enum(AUDIENCES).nullable().optional(),
       })
       .parse(req.body);
     if (body.groupId && !ctx.db.get('SELECT 1 FROM groups WHERE id = ? AND tenant_id = ?', body.groupId, tenantId)) throw badRequest('Unknown group');
@@ -226,7 +243,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
     const id = ids.enrollment();
     const expiresAt = body.expiresInDays ? new Date(Date.now() + body.expiresInDays * 86400_000).toISOString() : null;
     ctx.db.run(
-      'INSERT INTO enrollment_tokens (id, tenant_id, group_id, label, prefix, token_hash, max_uses, template_snapshot_id, expires_at, created_by, created_at) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
+      'INSERT INTO enrollment_tokens (id, tenant_id, group_id, label, prefix, token_hash, max_uses, template_snapshot_id, expires_at, created_by, created_at, audience) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
       id,
       tenantId,
       body.groupId ?? null,
@@ -238,6 +255,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
       expiresAt,
       p.id,
       new Date().toISOString(),
+      body.audience ?? null,
     );
     if (body.templateSnapshotId) ctx.db.run('UPDATE snapshots SET is_template = 1 WHERE id = ?', body.templateSnapshotId);
     const provisioning: ProvisioningFile = {
@@ -245,6 +263,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
       serverUrl: ctx.config.publicUrl,
       enrollmentToken: token,
       ...(body.deviceName ? { deviceName: body.deviceName } : {}),
+      ...(body.audience ? { audience: body.audience } : {}),
       ...(body.templateSnapshotId
         ? {
             templateSnapshotUrl: signTemplateUrl(ctx, body.templateSnapshotId, expiresAt ? new Date(expiresAt).getTime() : Date.now() + 365 * 86400_000),
@@ -325,16 +344,20 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
         policyOverride: z.unknown().nullable().optional(),
         updateChannel: z.enum(UPDATE_CHANNELS).nullable().optional(),
         pinnedVersion: z.string().refine(isValidSemver, 'Invalid version').nullable().optional(),
+        /** Who uses this computer (null = its group's or the organization's default). */
+        audience: z.enum(AUDIENCES).nullable().optional(),
+        /** This computer receives the organization's help desk tickets. */
+        helpdeskReceiver: z.boolean().optional(),
       })
       .parse(req.body);
-    const configFields = ['groupId', 'settingsOverride', 'lockedOverride', 'policyOverride', 'updateChannel', 'pinnedVersion'];
+    const configFields = ['groupId', 'settingsOverride', 'lockedOverride', 'policyOverride', 'updateChannel', 'pinnedVersion', 'audience', 'helpdeskReceiver'];
     if (configFields.some((f) => f in body) && !can(req.principal!.role, 'config.manage')) throw forbidden('Changing device configuration requires an admin');
     if (body.groupId && !ctx.db.get('SELECT 1 FROM groups WHERE id = ? AND tenant_id = ?', body.groupId, d.tenant_id)) throw badRequest('Unknown group');
     if (body.settingsOverride || body.lockedOverride) validateSettingsPatch(body.settingsOverride ?? {}, body.lockedOverride ?? []);
     const policy = body.policyOverride === undefined ? undefined : body.policyOverride === null ? null : PolicySchema.parse(body.policyOverride);
     ctx.db.run(
       `UPDATE devices SET name = ?, group_id = ?, tags = ?, notes = ?, status = ?, settings_override = ?, locked_override = ?, policy_override = ?,
-         update_channel = ?, pinned_version = ?, updated_at = ? WHERE id = ?`,
+         update_channel = ?, pinned_version = ?, audience = ?, helpdesk_receiver = ?, updated_at = ? WHERE id = ?`,
       body.name ?? d.name,
       body.groupId !== undefined ? body.groupId : d.group_id,
       body.tags ? JSON.stringify(body.tags) : d.tags,
@@ -345,6 +368,8 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
       policy === undefined ? d.policy_override : policy ? JSON.stringify(policy) : null,
       body.updateChannel !== undefined ? body.updateChannel : d.update_channel,
       body.pinnedVersion !== undefined ? body.pinnedVersion : d.pinned_version,
+      body.audience !== undefined ? body.audience : (d.audience ?? null),
+      body.helpdeskReceiver !== undefined ? (body.helpdeskReceiver ? 1 : 0) : Number(d.helpdesk_receiver ?? 0),
       new Date().toISOString(),
       d.id,
     );

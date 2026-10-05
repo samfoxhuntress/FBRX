@@ -11,6 +11,13 @@ import { navigate } from './app';
  */
 export const TierContext = createContext<Tier>('basic');
 
+/** A student computer (FBRX OS Education): the short, friendly set of pages. */
+export const LearnerContext = createContext(false);
+
+export function useLearner(): boolean {
+  return useContext(LearnerContext);
+}
+
 /** The edition this computer runs, inside the main window. */
 export function useTier(): Tier {
   return useContext(TierContext);
@@ -24,7 +31,29 @@ export function useLicenseTier(): Tier | undefined {
 export const ULTRA = TIER_NAMES.ultra;
 
 /** Where an Ultra page would be, in Basic: what it does and how to get it. */
-export function UltraOnly({ title, what }: { title: string; what: string }) {
+export function UltraOnly({ title, what, learner }: { title: string; what: string; learner?: boolean }) {
+  if (learner) {
+    return (
+      <div className="ultra-only">
+        <Card>
+          <div className="ultra-only-body">
+            <span className="ultra-only-icon" aria-hidden>
+              <Icons.school size={22} />
+            </span>
+            <div>
+              <h2>{title} is not on student computers</h2>
+              <p className="fx-muted">{what}</p>
+              <div className="fx-actions">
+                <Button variant="primary" icon="dashboard" onClick={() => navigate('home')}>
+                  Back home
+                </Button>
+              </div>
+            </div>
+          </div>
+        </Card>
+      </div>
+    );
+  }
   return (
     <div className="ultra-only">
       <Card>

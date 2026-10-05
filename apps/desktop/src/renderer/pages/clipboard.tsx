@@ -308,7 +308,7 @@ export function ClipboardPage() {
         ) : !entries.length ? (
           <Empty title={histQ ? 'Nothing matches' : 'Nothing copied yet'}>{histQ ? 'Try another word.' : 'Copy some text anywhere and it shows up here.'}</Empty>
         ) : (
-          <div className="clip-history">
+          <div className="clip-history private">
             {entries.map((e) => (
               <div key={e.id} className={`clip-hist${e.pinned ? ' pinned' : ''}`}>
                 <pre className="clip-hist-text">{e.text.length > 600 ? `${e.text.slice(0, 600)}…` : e.text}</pre>

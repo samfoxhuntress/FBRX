@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { EXT_USER_ONLY, SECRET_KINDS, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { AUDIENCES, EXT_USER_ONLY, SECRET_KINDS, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -263,8 +263,8 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
 
     'fleet.status': () => k.fleet.status(),
     'fleet.enroll': (p, ctx) => {
-      const q = z.object({ serverUrl: z.string(), token: z.string(), deviceName: z.string().optional() }).parse(p);
-      return k.fleet.enroll(q.serverUrl, q.token, q.deviceName, ctx.actor);
+      const q = z.object({ serverUrl: z.string(), token: z.string(), deviceName: z.string().optional(), audience: z.enum(AUDIENCES).optional() }).parse(p);
+      return k.fleet.enroll(q.serverUrl, q.token, q.deviceName, ctx.actor, q.audience);
     },
     'fleet.unenroll': (_p, ctx) => k.fleet.unenroll(ctx.actor),
     'fleet.sync': async () => {

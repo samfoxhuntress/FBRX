@@ -6,6 +6,12 @@ import {
   VOICE_DOWNLOAD_IDS,
   LAB_FEATURES,
   MESH_ACTIONS,
+  NETENV_DEVICE_ACTIONS,
+  NETENV_KINDS,
+  HELPDESK_SCOPES,
+  TICKET_CATEGORIES,
+  TICKET_PRIORITIES,
+  TICKET_STATUSES,
   MIGRATE_ENGINES,
   MIGRATE_MODES,
   PRINTER_ACTIONS,
@@ -356,6 +362,72 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'net.vendorInfo': () => k.vendors.info(),
     'net.vendorUpdate': () => k.vendors.update(),
     'net.macLookup': (p) => k.vendors.lookup(z.object({ mac: z.string().min(1).max(64) }).parse(p).mac),
+    'helpdesk.status': () => k.helpdesk.status(),
+    'helpdesk.tickets': (p) => {
+      const x = z.object({ scope: z.enum(HELPDESK_SCOPES), state: z.enum(['open', 'closed', 'all']).default('open') }).parse(p);
+      return k.helpdesk.list(x.scope, x.state);
+    },
+    'helpdesk.ticket': (p) => k.helpdesk.get(Id.parse(p).id),
+    'helpdesk.create': (p) =>
+      k.helpdesk.create(
+        z
+          .object({
+            subject: z.string().trim().min(3).max(200),
+            body: z.string().trim().min(1).max(10_000),
+            category: z.enum(TICKET_CATEGORIES).optional(),
+            priority: z.enum(TICKET_PRIORITIES).optional(),
+            attachDiagnostics: z.boolean().optional(),
+          })
+          .parse(p),
+      ),
+    'helpdesk.reply': (p) => {
+      const x = z.object({ id: z.string().min(1), body: z.string().trim().min(1).max(10_000) }).parse(p);
+      return k.helpdesk.reply(x.id, x.body);
+    },
+    'helpdesk.update': (p) => {
+      const { id, ...change } = z.object({ id: z.string().min(1), status: z.enum(TICKET_STATUSES).optional(), priority: z.enum(TICKET_PRIORITIES).optional(), assignToMe: z.boolean().optional() }).parse(p);
+      return k.helpdesk.update(id, change);
+    },
+    'edition.status': () => k.edition(),
+    'presenter.status': () => k.presenterStatus(),
+    'presenter.set': (p, ctx) => k.setPresenting(z.object({ on: z.boolean() }).parse(p).on, ctx.actor),
+    'netenv.list': () => k.netenv.list(),
+    'netenv.probe': (p) => k.netenv.probe(z.object({ url: z.string().min(1).max(300), apiKey: z.string().max(400).optional(), id: z.string().max(80).optional(), fingerprint: z.string().max(200).nullable().optional() }).parse(p)),
+    'netenv.save': (p) =>
+      k.netenv.save(
+        z
+          .object({
+            id: z.string().max(80).optional(),
+            kind: z.enum(NETENV_KINDS),
+            name: z.string().min(1).max(80),
+            url: z.string().min(1).max(300),
+            apiKey: z.string().max(400).optional(),
+            fingerprint: z.string().max(200).nullable().optional(),
+            defaultSiteId: z.string().max(120).nullable().optional(),
+          })
+          .parse(p),
+      ),
+    'netenv.remove': (p) => k.netenv.remove(Id.parse(p).id),
+    'netenv.overview': (p) => {
+      const x = z.object({ id: z.string().min(1), siteId: z.string().max(120).optional() }).parse(p);
+      return k.netenv.overview(x.id, x.siteId);
+    },
+    'netenv.deviceStats': (p) => {
+      const x = z.object({ id: z.string().min(1), deviceId: z.string().min(1).max(120), siteId: z.string().max(120).optional() }).parse(p);
+      return k.netenv.deviceStats(x.id, x.deviceId, x.siteId);
+    },
+    'netenv.deviceAction': (p) => {
+      const x = z.object({ id: z.string().min(1), deviceId: z.string().min(1).max(120), action: z.enum(NETENV_DEVICE_ACTIONS), siteId: z.string().max(120).optional() }).parse(p);
+      return k.netenv.deviceAction(x.id, x.deviceId, x.action, x.siteId);
+    },
+    'netenv.vouchers': (p) => {
+      const x = z.object({ id: z.string().min(1), siteId: z.string().max(120).optional() }).parse(p);
+      return k.netenv.vouchers(x.id, x.siteId);
+    },
+    'netenv.createVouchers': (p) => {
+      const x = z.object({ id: z.string().min(1), name: z.string().max(60), count: z.number().int().min(1).max(50).optional(), timeLimitMinutes: z.number().int().min(10).max(525600), guestLimit: z.number().int().min(1).max(20).optional(), siteId: z.string().max(120).optional() }).parse(p);
+      return k.netenv.createVouchers(x.id, x);
+    },
 
     // ------------------------------------------------------------------------------- fun and safety
     'fun.trophies': () => k.trophies.state(),

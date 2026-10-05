@@ -65,4 +65,6 @@ export const ids = {
   webhook: () => newId('whk'),
   event: () => newId('evt'),
   sso: () => newId('sso'),
+  ticket: () => newId('tkt'),
+  ticketMessage: () => newId('tkm'),
 };

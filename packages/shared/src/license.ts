@@ -66,6 +66,8 @@ export const LicensePayloadSchema = z.object({
   tier: z.enum(TIERS).optional(),
   /** Optional: the FBRX Command tenant to join on activation. */
   command: LicenseCommandSchema.optional(),
+  /** Optional: an Education (or Home) license; staff computers start in classroom mode (see editions.ts). */
+  vertical: z.enum(['business', 'education', 'home']).optional(),
 });
 export type LicensePayload = z.infer<typeof LicensePayloadSchema>;
 
@@ -86,6 +88,8 @@ export interface LicenseStatus {
   source: 'none' | 'local' | 'managed' | 'development';
   /** The FBRX Command address this license joins, if it names one. */
   commandUrl: string | null;
+  /** Education or Home licenses (null = business). */
+  vertical: 'business' | 'education' | 'home' | null;
 }
 
 export function featuresFor(payload: Pick<LicensePayload, 'edition' | 'features'> & { command?: LicenseCommand }): string[] {

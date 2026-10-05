@@ -1,5 +1,8 @@
 import type { TrophyState } from './fun';
 import type { VoiceDownloadId } from './settings';
+import type { HelpdeskScope, HelpdeskStatus, TicketCategory, TicketDetail, TicketPriority, TicketStatus, TicketSummary } from './helpdesk';
+import type { EditionStatus } from './editions';
+import type { NetEnvDeviceAction, NetEnvDeviceStats, NetEnvDevice, NetEnvInput, NetEnvironment, NetEnvOverview, NetEnvProbe, NetEnvVoucher } from './netenv';
 /**
  * Contracts for the FBRX OS command-center modules: workspace (notes, tasks, projects, snippets), live system
  * information, Spotlight, alerts, PC care (storage, security, updates, troubleshooting, Hyper-V lab), the
@@ -77,6 +80,20 @@ export interface Snippet {
   updatedAt: string;
 }
 export type SnippetInput = Partial<Omit<Snippet, 'createdAt' | 'updatedAt'>> & { title: string };
+
+// ------------------------------------------------------------------------------------- presenter-safe mode
+
+export interface PresenterStatus {
+  /** Presenter-safe mode is on right now. */
+  active: boolean;
+  /** Why: turned on by hand, or by itself because a second screen or projector is connected. */
+  reason: 'manual' | 'display' | null;
+  /** A second screen or projector is connected. */
+  externalDisplay: boolean;
+  hideNotifications: boolean;
+  maskClipboard: boolean;
+  blurPrivate: boolean;
+}
 
 // ------------------------------------------------------------------------------------- system & files
 
@@ -941,6 +958,28 @@ export interface ExtMethods {
   'net.vendorInfo': () => VendorDbInfo;
   'net.vendorUpdate': () => VendorDbInfo;
   'net.macLookup': (p: { mac: string }) => MacLookup;
+  // Help desk (a computer in an organization): tickets to IT through FBRX Command.
+  'helpdesk.status': () => HelpdeskStatus;
+  'helpdesk.tickets': (p: { scope: HelpdeskScope; state?: 'open' | 'closed' | 'all' }) => TicketSummary[];
+  'helpdesk.ticket': (p: { id: string }) => TicketDetail;
+  'helpdesk.create': (p: { subject: string; body: string; category?: TicketCategory; priority?: TicketPriority; attachDiagnostics?: boolean }) => TicketDetail;
+  'helpdesk.reply': (p: { id: string; body: string }) => TicketDetail;
+  'helpdesk.update': (p: { id: string; status?: TicketStatus; priority?: TicketPriority; assignToMe?: boolean }) => TicketDetail;
+  /** What this computer is: its edition, organization kind and who uses it. */
+  'edition.status': () => EditionStatus;
+  'presenter.status': () => PresenterStatus;
+  /** Turn presenter-safe mode on or off now (off also snoozes the automatic switch until the screen is unplugged). */
+  'presenter.set': (p: { on: boolean }) => PresenterStatus;
+  // Network environments (Endpoint Ultra): the UniFi console that runs the whole network.
+  'netenv.list': () => NetEnvironment[];
+  'netenv.probe': (p: { url: string; apiKey?: string; id?: string; fingerprint?: string | null }) => NetEnvProbe;
+  'netenv.save': (p: NetEnvInput) => NetEnvironment;
+  'netenv.remove': (p: { id: string }) => Deleted;
+  'netenv.overview': (p: { id: string; siteId?: string }) => NetEnvOverview;
+  'netenv.deviceStats': (p: { id: string; deviceId: string; siteId?: string }) => NetEnvDeviceStats & { device: NetEnvDevice | null };
+  'netenv.deviceAction': (p: { id: string; deviceId: string; action: NetEnvDeviceAction; siteId?: string }) => Ok;
+  'netenv.vouchers': (p: { id: string; siteId?: string }) => NetEnvVoucher[];
+  'netenv.createVouchers': (p: { id: string; name: string; count?: number; timeLimitMinutes: number; guestLimit?: number; siteId?: string }) => NetEnvVoucher[];
 
   'console.connect': (p: ConsoleConnectInput) => ConsoleConnectResult;
   'console.write': (p: { id: string; data: string }) => Ok;
@@ -1000,6 +1039,9 @@ export interface ExtEvents {
   /** Unread counts after any inbox change (new, read, deleted). */
   'alerts.changed': { unread: number; critical: number };
   'net.event': NetEvent;
+  'netenv.changed': NetEnvironment[];
+  'presenter.changed': PresenterStatus;
+  'helpdesk.changed': { ticketId: string; number: number; reason: 'created' | 'message' | 'updated'; subject: string };
   'migrate.event': MigrateEvent;
   'ai.quick': { reqId: string; delta: string };
   'voice.download': { model: VoiceDownloadId; received: number; total: number; done: boolean; error: string | null };
@@ -1054,6 +1096,14 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'net.exportCsv',
   'net.ssh',
   'net.vendorUpdate',
+  'helpdesk.create',
+  'helpdesk.reply',
+  'helpdesk.update',
+  'netenv.probe',
+  'netenv.save',
+  'netenv.remove',
+  'netenv.deviceAction',
+  'netenv.createVouchers',
   'console.connect',
   'console.write',
   'console.resize',

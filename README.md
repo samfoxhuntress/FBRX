@@ -7,7 +7,7 @@
 
 # FBRX OS — Fabrics Operating System
 
-> **Alpha 1.8.3 "Spindle".** FBRX is in alpha testing. Installed copies check this repository's
+> **Alpha 1.9.0 "Bobbin".** FBRX is in alpha testing. Installed copies check this repository's
 > [`release.json`](release.json) and offer new versions in the app.
 
 FBRX OS is the platform behind two products:
@@ -15,12 +15,18 @@ FBRX OS is the platform behind two products:
 * **FBRX Endpoint** — a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is
   governed end to end and an everyday **command center** (dashboard, tasks, notes, Spotlight, a Ctrl+Alt+Z clipboard
   history, alerts, PC care, Network Center, your phone). **Endpoint Basic** runs without a license key: the everyday
-  tools and the agent, in a plain light or dark look. A license key turns on **Endpoint Ultra**: expert tool sets
-  (Terminal, FBRX/1, virtual lab, device consoles, disks and partitions…), Mesh and AI coordination, connections and
-  plugins, the theme studio and the easter eggs.
+  tools and the agent, in a plain light or dark look. A license key turns on **Endpoint Ultra**: IT and developer tool
+  sets (Terminal, FBRX/1, Task Manager, virtual lab, device consoles, UniFi network environments…), Mesh and AI
+  coordination, connections and plugins, the theme studio and the easter eggs. Every edition has presenter-safe mode,
+  and computers in an organization get a **Help desk** tab.
+* **FBRX OS Education** — what a student computer at a school runs: a short set of friendly pages and a safe learning
+  helper with no tools. (FBRX OS Home, for children's computers, comes later.)
 * **FBRX Command** — the team tenant controller (control plane and console) for running FBRX Endpoint across a fleet
   with RMM-level tooling, or selling it to other companies, each in its own tenant. A license key from FBRX Command
-  joins the computer to the tenant on its own, and staff sign in to it with Google Workspace or Microsoft 365.
+  joins the computer to the tenant on its own, and staff sign in to it with Google Workspace or Microsoft 365. It routes
+  help desk tickets to IT, pushes updates, makes Mac profiles and Intune scripts for device managers, and with an
+  Education license runs a school: staff on Basic in classroom mode, IT on Ultra, students on FBRX OS Education
+  ([docs/EDUCATION.md](docs/EDUCATION.md)).
 
 ```
  ┌──────────────────────────── Workstation (macOS / Windows) ────────────────────────────┐
@@ -51,10 +57,11 @@ FBRX OS is the platform behind two products:
 | Back up, redeploy, carry on as if nothing happened | Encrypted `.fbrxsnap` snapshots (manual, scheduled or remote) restored in **migrate** mode — same identity, same fleet enrollment, same vault. See [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md). |
 | Deploy to other Macs and PCs | Signed `.dmg`/`.zip` and NSIS `.exe` installers, zero-touch provisioning files, golden template snapshots, auto-updates by channel, pin and staged rollout. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). |
 | Sell it | Endpoint Basic and Ultra, tenants per customer, editions (Community / Pro / Enterprise), offline-verifiable Ed25519 license keys that can join their FBRX Command tenant by themselves, seats, expiry, version caps. See [docs/LICENSING.md](docs/LICENSING.md). |
-| FBRX Command (admin console), credentials management, real-time backend | Fleet dashboard, device detail and live commands, managed settings/policy with locks, secrets pushed into device vaults, users/roles/MFA/API keys, releases, packages, snapshots, webhooks, audit. See [docs/ADMIN_CONSOLE.md](docs/ADMIN_CONSOLE.md). |
+| FBRX Command (admin console), credentials management, real-time backend | Fleet dashboard, device detail and live commands, managed settings/policy with locks, secrets pushed into device vaults, users/roles/MFA/API keys, a help desk, releases and automatic updates, packages, snapshots, webhooks, audit. See [docs/ADMIN_CONSOLE.md](docs/ADMIN_CONSOLE.md). |
+| Run it at a school | Education licenses, staff and student computers, FBRX OS Education with a safe learning helper, presenter-safe mode for projectors, help desk to IT, Google / Microsoft sign-in, Mac and Windows device-manager files. See [docs/EDUCATION.md](docs/EDUCATION.md). |
 | Build in other tools and connect to other apps | Plugin SDK (sandboxed workers), REST / MCP / webhook / FBRX-peer connectors, Local API for scripts and other apps. See [docs/PLUGINS.md](docs/PLUGINS.md). |
 | An everyday command center | FBRX Glass (the live dashboard), tasks / notes / projects / snippets, Spotlight (Alt+Space), files, Task Manager with an AI-assisted Event Viewer, a Clipboard processor with a Ctrl+Alt+Z clipboard history (W/S to move, Tab/~ for paste formats, type to search), snippets in a `/` menu, keyboard-shortcut macros, Copy & migrate (Robocopy / rsync), terminal with a sandboxed code lab and *What if?*, the FBRX/1 management console, toolbox, library, alerts to desktop / phone / Slack / Teams / e-mail / your admin console, an AI emergency stop, and a theme studio with eleven looks. See [docs/COMMAND_CENTER.md](docs/COMMAND_CENTER.md). |
-| PC care for Windows | Storage clean-up and disk health, Microsoft Defender and firewall, link and file checks, Windows Sandbox, winget / Windows Update / drivers, a bug catcher with one-click repairs, a Hyper-V lab, and a Network Center (trace route, device discovery, speed, Wi-Fi, Bluetooth, printers). |
+| PC care for Windows | Storage clean-up and disk health, Microsoft Defender and firewall, link and file checks, Windows Sandbox, winget / Windows Update / drivers, a bug catcher with one-click repairs, a Hyper-V lab, and a Network Center (trace route, device discovery, speed, Wi-Fi, Bluetooth, printers, and in Ultra your UniFi console: every gateway, switch, access point and client, restarts and guest Wi-Fi codes). |
 | Your other devices and AI apps | An encrypted mesh with your other FBRX computers and the FBRX Mobile phone app (per-device permissions, one-time pairing codes); one-click MCP connection for Claude Desktop, Claude Code, Cursor, Windsurf and VS Code. See [docs/MESH.md](docs/MESH.md). |
 
 ## Repository layout
@@ -75,7 +82,7 @@ plugins/example-toolkit/   Reference plugin
 scripts/            Release, licensing, plugin and runtime tooling; local fleet demo
 deploy/             Docker compose + Caddy for the control plane, provisioning example
 docs/               Architecture, deployment, backup/restore, plugins, security, licensing, admin console,
-                    command center, mesh
+                    command center, mesh, education
 ```
 
 ## Install on your own laptop

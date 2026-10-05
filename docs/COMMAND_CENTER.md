@@ -47,8 +47,8 @@ and its pages slide out beside it. Counts (unread alerts, waiting approvals) sho
 
 ### Version names
 
-FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.8.2** (or Basic). Each minor version also gets a codename from cloth,
-fiber to fabric, shown in **Settings → Logs & about**: 1.8 *Spindle*, then *Bobbin*, *Shuttle*, *Heddle*, and 2.0
+FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.9.0** (or Basic). Each minor version also gets a codename from cloth,
+fiber to fabric, shown in **Settings → Logs & about**: 1.8 *Spindle*, 1.9 *Bobbin*, then *Shuttle*, *Heddle*, and 2.0
 *Loom* (later *Warp*, *Weft*, *Selvedge*, *Tapestry*).
 
 ### FBRX Endpoint Basic and Ultra
@@ -58,14 +58,16 @@ The desktop app comes as two products, decided by the license (there is no switc
 | | **FBRX Endpoint Basic** | **FBRX Endpoint Ultra** |
 | --- | --- | --- |
 | How you get it | Out of the box, no license key | A license key (Settings → License → *Upgrade to Ultra*), or the FBRX Command tenant this computer belongs to |
-| Everyday tools | FBRX Glass, Fabrix (local models and your own cloud AI keys), alerts, tasks, notes, projects, snippets, storage, security, updates, bug catcher, Network Center, files, Task Manager, clipboard (with Ctrl+Alt+Z history), Copy & migrate, Toolbox, Library, AI models, approvals, credentials, backup & restore | Everything in Basic |
-| Expert tool sets | — | Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, network adapters, custom scan ranges, device consoles, the developer tools in the Toolbox, The Lab in the Library, the Local API |
+| Everyday tools | FBRX Glass, Fabrix (local models and your own cloud AI keys), alerts, tasks, notes, projects, snippets, storage, security, updates, Network Center (overview, speed, Wi-Fi, Bluetooth, printers), files, clipboard (with Ctrl+Alt+Z history), Toolbox, Library, AI models, approvals, credentials, backup & restore, presenter-safe mode, and the Help desk tab in an organization | Everything in Basic |
+| IT and expert tool sets | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools, adapters and **network environments (UniFi)**, device consoles, the developer tools in the Toolbox, The Lab in the Library, the agent's work budget, logs, update channels, the Local API |
 | Connect | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance |
 | Look | Light, dark or follow the computer: plain, no theme colors, gradients or textures | The theme studio: eleven themes, accent colors, gradients and textures (with a strength slider) |
 | Fun | — | Easter eggs, the Silly Goose and the trophy case, once unlocked with the secret key (see EASTER_EGGS.md, spoilers) |
 
-Ultra features are marked with an **Ultra** tag. In Basic, an Ultra page opens a short card saying what it does and
-how to get it. The edition shows beside the name in the sidebar, at the top of **Settings**, in the window title and
+Basic keeps its settings short: no temperature slider, work budget, model unloading, logs or update channel, just the
+choices most people make. Ultra features are marked with an **Ultra** tag. In Basic, an Ultra page opens a short card
+saying what it does and how to get it. An organization can hold a group of computers to Basic in FBRX Command (for
+example teachers on Basic and IT on Ultra), and student computers run **FBRX OS Education** (see EDUCATION.md). The edition shows beside the name in the sidebar, at the top of **Settings**, in the window title and
 under **Settings → Logs & about**. Licenses: Community runs Basic; Pro and Enterprise run Ultra; a license can also
 say which one outright (see [LICENSING.md](LICENSING.md)). Developers can try Basic in a development build with
 `FBRX_EDITION=basic`.
@@ -316,6 +318,24 @@ entries, the most specific block wins; randomized phone and laptop addresses are
 the IEEE* in Toolbox → MAC vendor lookup downloads the current lists (falling back to the daily published JSON copy
 when the IEEE site refuses the download).
 
+### Network environments (Ultra): your UniFi console
+
+**Network Center → Environments** attaches the UniFi console that runs a school's or office's network (Dream Machine,
+Cloud Gateway, Cloud Key or UniFi OS Server with UniFi Network 9 or newer):
+
+1. In UniFi Network, **Settings → Control Plane → Integrations → Create API key**. Copy it; UniFi shows it once.
+2. In FBRX, **Attach a UniFi console**: the console's local address (for example `https://192.168.1.1`) and the key.
+3. **Test connection**. UniFi consoles make their own certificate, so FBRX shows its SHA-256 fingerprint; compare it
+   with your browser's certificate details for the same address and **Trust it**. From then on FBRX checks the
+   fingerprint before sending anything, and refuses the connection if the certificate changes.
+
+You then see every gateway, switch and access point (state, address, model, firmware and pending updates, clients per
+device), every client (name, address, MAC, Wi-Fi or wired, which access point or switch it is on, since when), and per
+device its uptime, CPU, memory and uplink traffic. **Restart** a device, and make **Guest Wi-Fi codes** (vouchers for a
+hotspot guest network) for visitors, substitutes or parent night. The key is kept in the vault; the agent can read the
+network (*which access points are offline? where is the Room 12 TV connected?*), and asks before it restarts anything
+or makes codes. Endpoint Basic does not show environments.
+
 ### Device consoles (advanced)
 
 A device with SSH (22, or 4118 for WatchGuard) or Telnet (23) open gets a **Connect** button. The console opens in
@@ -347,6 +367,39 @@ Device scans start from a chosen **network adapter**, and the subnet is filled i
 1022 addresses, so a scan takes about a minute). Endpoint Ultra lets you type a different subnet.
 
 A new device found by a scan raises the *Unknown device joined my network* alert when that rule is on.
+
+## Presenter-safe mode
+
+For when your screen is on a projector, a classroom TV or shared in a meeting, in every edition (**Settings →
+Presenting**). While it is on:
+
+* notifications stay quiet (an urgent one only says that something needs a look), in the app and from the system;
+* the clipboard history shows dots instead of your copies (they still paste);
+* chat history, alerts, credentials and help desk tickets are blurred;
+* the Silly Goose stays home and approvals wait in the top bar.
+
+Turn it on with **Ctrl+Alt+P** (a macro you can change), the tray menu, or **Turn on now**; the top bar says
+**Presenting** while it is on (click it to turn it off). **Turn on by itself while a projector or second screen is
+connected** does what it says (mirrored displays can look like one screen, so the shortcut is the sure way); turning it
+off by hand then keeps it off until the extra screen is unplugged. Education organizations turn the automatic switch
+on for staff computers.
+
+## Help desk
+
+Once a computer belongs to an organization (FBRX Command), a **Help desk** tab appears in the sidebar. **New ticket**
+sends a problem to IT: a short subject, what it is about (this computer, Wi-Fi, printer, projector or sound, sign-in,
+an app), the details, *urgent* when a class or meeting cannot go on, and (unless you untick it) a short summary of the
+computer: name, system, free space, memory, network address and any failing FBRX services. **My tickets** and
+**History** show where each one stands and the conversation; you are told when IT answers, and can reply, say *It's
+fixed*, or open it again. The agent can write a ticket for you too (you approve it before it goes).
+
+Computers marked as **receivers** in FBRX Command (Devices → a device → *Receives help desk tickets*) get a **Queue**
+tab: every open ticket, newest and most urgent first, delivered within a second of being sent. Take a ticket, answer,
+change its status and priority. Admins can answer from FBRX Command's Help desk page as well.
+
+Tickets travel through FBRX Command rather than the mesh: Command keeps every ticket and its conversation (so nothing
+is lost while the IT computer is off or at home), works across networks, and pushes each change instantly over the
+encrypted connection every computer already keeps with it. The mesh stays for one person's own devices.
 
 ## Mesh and FBRX Mobile
 
@@ -421,6 +474,11 @@ choice:
   license and signing keys stay. Installs made before 1.8.1 don't know their folder yet: **Download** gets the new
   zip; unzip it over your FBRX folder and run the installer once, and from then on Update now works.
 * **Later** keeps the pill; **Skip this version** stops the reminders for that version.
+* **Install new versions by itself** (or your organization's *Install automatically*) installs a new version without
+  asking, waiting until nobody is using the computer, nobody is presenting and the agent is idle. FBRX Command can also
+  send **Update now** to every computer at once (see ADMIN_CONSOLE.md).
+
+Windows copies signed by a publisher only install updates signed by the same publisher (see DEPLOYMENT.md → Signing).
 
 ## Work budget
 

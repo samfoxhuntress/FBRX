@@ -1,8 +1,10 @@
 import { useState } from 'react';
-import { compareSemver } from '@fbrx/shared';
+import { AUDIENCES, AUDIENCE_NAMES, compareSemver, macProfile, windowsScript, type Audience } from '@fbrx/shared';
 import { Button, Callout, Card, CopyText, Empty, Field, Input, Modal, Page, Select, Status, Table, formatDate, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { api, saveBlob } from '../api';
-import { useQuery } from '../state';
+import { useApp, useQuery } from '../state';
+
+const uuid = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`).toUpperCase();
 
 interface Token {
   id: string;
@@ -15,6 +17,7 @@ interface Token {
   createdAt: string;
   revokedAt: string | null;
   templateSnapshotId: string | null;
+  audience: Audience | null;
 }
 interface Created extends Token {
   token: string;
@@ -29,6 +32,8 @@ interface Release {
 }
 
 export function EnrollmentPage() {
+  const app = useApp();
+  const organization = app.me.tenants.find((t) => t.id === app.tenantId)?.name ?? 'Your organization';
   const tokens = useQuery<Token[]>('/v1/admin/enrollment-tokens');
   const groups = useQuery<Array<{ id: string; name: string }>>('/v1/admin/groups').data ?? [];
   const snapshots = useQuery<Array<{ id: string; deviceName: string; label: string | null; createdAt: string }>>('/v1/admin/snapshots').data ?? [];
@@ -38,6 +43,7 @@ export function EnrollmentPage() {
   const { confirm, dialog } = useConfirm();
   const { run } = useAction();
   const latest = releases.filter((r) => r.published && r.channel === 'stable').sort((a, b) => compareSemver(b.version, a.version))[0];
+  const latestWin = latest?.files.find((f) => f.platform === 'win32' && f.fileName.endsWith('.exe'))?.fileName ?? null;
 
   const state = (t: Token) => {
     if (t.revokedAt) return <Status tone="neutral">Revoked</Status>;
@@ -49,7 +55,7 @@ export function EnrollmentPage() {
   return (
     <Page
       title="Deploy & enroll"
-      description="Create an enrollment token, then install FBRX OS on any Mac or Windows machine. Drop the provisioning file next to the installer (or into the app's data folder) for zero-touch enrollment, or paste the token in Settings → Fleet."
+      description="Create an enrollment token, then install FBRX OS on any Mac or Windows computer. A device manager can do it for you (Mac profile, Windows script), or drop the provisioning file next to the installer, or paste the token in FBRX → Organization."
       actions={
         <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
           New enrollment token
@@ -81,7 +87,7 @@ export function EnrollmentPage() {
           columns={[
             { key: 'l', header: 'Label', render: (t) => (<div><div className="fx-cell-title">{t.label}</div><div className="fx-cell-sub mono">{t.prefix}…</div></div>) },
             { key: 's', header: 'Status', render: state },
-            { key: 'g', header: 'Group', render: (t) => groups.find((g) => g.id === t.groupId)?.name ?? '—' },
+            { key: 'g', header: 'Group', render: (t) => (<>{groups.find((g) => g.id === t.groupId)?.name ?? '—'}{t.audience === 'student' && <span className="fx-badge accent" style={{ marginLeft: 6 }}>Students</span>}</>) },
             { key: 'u', header: 'Uses', className: 'num', render: (t) => `${t.uses}${t.maxUses !== null ? ` / ${t.maxUses}` : ''}` },
             { key: 'tpl', header: 'Template', render: (t) => (t.templateSnapshotId ? <span className="fx-badge accent">golden image</span> : '—') },
             { key: 'e', header: 'Expires', render: (t) => (t.expiresAt ? formatDate(t.expiresAt) : 'never') },
@@ -129,7 +135,31 @@ export function EnrollmentPage() {
           footer={
             <>
               <Button icon="download" onClick={() => saveBlob(new Blob([JSON.stringify(created.provisioning, null, 2)], { type: 'application/json' }), 'fbrx-provision.json')}>
-                Download fbrx-provision.json
+                fbrx-provision.json
+              </Button>
+              <Button
+                icon="download"
+                title="A configuration profile for Jamf, Mosyle, Kandji, Intune or another Mac device manager"
+                onClick={() =>
+                  saveBlob(
+                    new Blob([macProfile({ organization, label: created.label, serverUrl: String(created.provisioning.serverUrl), enrollmentToken: created.token, audience: created.audience, uuids: [uuid(), uuid()] })], { type: 'application/x-apple-aspen-config' }),
+                    `FBRX-${created.label.replace(/[^\w-]+/g, '-')}.mobileconfig`,
+                  )
+                }
+              >
+                Mac profile
+              </Button>
+              <Button
+                icon="download"
+                title="A PowerShell script for Intune (Win32 app) or another Windows device manager"
+                onClick={() =>
+                  saveBlob(
+                    new Blob([windowsScript({ organization, label: created.label, serverUrl: String(created.provisioning.serverUrl), enrollmentToken: created.token, audience: created.audience, installerUrl: latestWin ? `${location.origin}/v1/downloads/${latest!.id}/${encodeURIComponent(latestWin)}?et=${created.token}` : null })], { type: 'text/plain' }),
+                    'Install-FBRX.ps1',
+                  )
+                }
+              >
+                Windows script
               </Button>
               <Button variant="primary" onClick={() => setCreated(null)}>
                 Done
@@ -152,10 +182,12 @@ export function EnrollmentPage() {
                 </div>
               </Field>
             )}
-            <Callout tone="info" title="Three ways to enroll a machine">
+            <Callout tone="info" title="Ways to enroll a computer">
               <ol style={{ margin: '6px 0 0', paddingLeft: 18 }}>
-                <li>Zero-touch: deploy <code>fbrx-provision.json</code> with the installer (MDM/Intune/Jamf) into the FBRX OS data folder; the app enrolls on first launch.</li>
-                <li>Manual: open FBRX OS → Fleet, paste the server URL and token.</li>
+                <li>Mac device manager (Jamf, Mosyle, Kandji, Intune…): upload the <b>Mac profile</b>; FBRX joins on its next start.</li>
+                <li>Intune on Windows: package the <b>Windows script</b> with the installer as a Win32 app; it installs for all users and joins.</li>
+                <li>No device manager: put <code>fbrx-provision.json</code> next to the installer, or in <code>/Library/Application Support/FBRX OS</code> (Mac) or <code>%ProgramData%\FBRX OS</code> (Windows).</li>
+                <li>By hand: open FBRX → Organization, paste the address and token{created.audience === 'student' ? '' : ' (tick "student computer" for student laptops)'}.</li>
                 <li>Headless/servers: <code>fbrx-headless enroll {location.origin} &lt;token&gt;</code></li>
               </ol>
             </Callout>
@@ -171,7 +203,7 @@ export function EnrollmentPage() {
 }
 
 function CreateTokenModal({ groups, snapshots, onClose, onCreated }: { groups: Array<{ id: string; name: string }>; snapshots: Array<{ id: string; deviceName: string; label: string | null; createdAt: string }>; onClose: () => void; onCreated: (c: Created) => void }) {
-  const [f, setF] = useState({ label: '', groupId: '', maxUses: '25', expiresInDays: '30', templateSnapshotId: '', templatePassphrase: '', deviceName: '' });
+  const [f, setF] = useState({ label: '', groupId: '', maxUses: '25', expiresInDays: '30', templateSnapshotId: '', templatePassphrase: '', deviceName: '', audience: '' as Audience | '' });
   const { busy, run } = useAction();
   const create = async () => {
     const r = await run('create', () =>
@@ -181,6 +213,7 @@ function CreateTokenModal({ groups, snapshots, onClose, onCreated }: { groups: A
         maxUses: f.maxUses ? Number(f.maxUses) : null,
         expiresInDays: f.expiresInDays ? Number(f.expiresInDays) : null,
         templateSnapshotId: f.templateSnapshotId || null,
+        audience: f.audience || null,
         templatePassphrase: f.templatePassphrase || undefined,
         deviceName: f.deviceName || undefined,
       }),
@@ -206,6 +239,9 @@ function CreateTokenModal({ groups, snapshots, onClose, onCreated }: { groups: A
         </Field>
         <Field label="Group" help="New devices join this group automatically">
           <Select value={f.groupId} onChange={(e) => setF({ ...f, groupId: e.target.value })} options={[{ value: '', label: 'No group' }, ...groups.map((g) => ({ value: g.id, label: g.name }))]} />
+        </Field>
+        <Field label="Computers are used by" help="Student makes them FBRX OS Education (Education organizations), whatever the group says">
+          <Select value={f.audience} onChange={(e) => setF({ ...f, audience: e.target.value as Audience | '' })} options={[{ value: '', label: 'Their group (or the organization default)' }, ...AUDIENCES.map((a) => ({ value: a, label: AUDIENCE_NAMES[a] }))]} />
         </Field>
         <div className="fx-row">
           <Field label="Max uses">

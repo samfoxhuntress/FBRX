@@ -19,6 +19,12 @@ Which one a license runs is its **tier**: Community runs Basic, Pro and Enterpri
 its tier outright (`tier: "basic"` or `"ultra"`), so a tenant decides what its users get. The tier and the features
 below are separate: features gate services in the runtime, the tier decides the product the user sees.
 
+**Education licenses.** A license can also say what kind of organization it is for: `vertical: "education"` (or
+`"home"`, a preview). Issued from FBRX Command (*Kind of license: Education*) or with
+`npm run license:issue -- … --vertical education`, it makes the tenant a school: staff computers start in classroom
+mode, groups can hold teachers to Basic, and student computers run **FBRX OS Education**, whatever the tier (see
+[EDUCATION.md](EDUCATION.md)). A standalone computer that activates an Education key starts in classroom mode too.
+
 **FBRX Command** is the team tenant controller (fleet management with RMM-style tooling: configuration and policy,
 remote commands, credentials, packages, updates, backups, audit). A license issued there can carry the tenant's
 address: when a computer running Endpoint Basic activates that key it **joins the tenant by itself** and receives the

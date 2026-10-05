@@ -8,7 +8,13 @@
 #   FBRX_LICENSE_PUBLIC_KEY      PEM from `npm run keys:generate` (embedded so installs verify licenses offline)
 #   MAC_CSC_LINK, MAC_CSC_KEY_PASSWORD           base64 .p12 "Developer ID Application" certificate + password
 #   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID   notarization (required for Gatekeeper on macOS)
-#   WIN_CSC_LINK, WIN_CSC_KEY_PASSWORD           base64 .pfx code-signing certificate + password
+#   Windows, either:
+#     Azure Trusted Signing (recommended): AZURE_TENANT_ID, AZURE_CLIENT_ID, AZURE_CLIENT_SECRET (an app registration
+#       with the "Trusted Signing Certificate Profile Signer" role), AZURE_SIGNING_ENDPOINT (e.g.
+#       https://eus.codesigning.azure.net/), AZURE_SIGNING_ACCOUNT, AZURE_CERT_PROFILE
+#     or a certificate file: WIN_CSC_LINK, WIN_CSC_KEY_PASSWORD (base64 .pfx + password)
+#   WIN_PUBLISHER_NAME                           the certificate's subject name (CN), exactly as issued; updates are
+#                                                only installed when they are signed by this name
 #   FBRX_CP_URL, FBRX_CP_API_KEY                 control plane URL + superadmin API key for auto-publishing
 name: Release
 
@@ -95,11 +101,41 @@ jobs:
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
+          WIN_PUBLISHER_NAME: ${{ secrets.WIN_PUBLISHER_NAME }}
         run: |
-          EXTRA=""
-          if [[ -z "$CSC_LINK" ]]; then export CSC_IDENTITY_AUTO_DISCOVERY=false; echo "::warning::No signing certificate configured; building unsigned ${{ matrix.name }} packages."; fi
-          if [[ "${{ matrix.platform }}" == "darwin" && -n "$APPLE_ID" && -n "$CSC_LINK" ]]; then EXTRA="-c.mac.notarize=true"; fi
-          npm run ${{ matrix.package }} -w @fbrx/desktop -- $EXTRA
+          EXTRA=()
+          SIGNED=""
+          if [[ "${{ matrix.platform }}" == "win32" ]]; then
+            if [[ -n "$WIN_PUBLISHER_NAME" ]]; then EXTRA+=("-c.win.signtoolOptions.publisherName=$WIN_PUBLISHER_NAME"); fi
+            if [[ -n "$AZURE_CLIENT_ID" && -n "$AZURE_SIGNING_ACCOUNT" && -n "$AZURE_CERT_PROFILE" ]]; then
+              if [[ -z "$WIN_PUBLISHER_NAME" ]]; then echo "::error::Set WIN_PUBLISHER_NAME to the subject name on your Trusted Signing certificate."; exit 1; fi
+              unset CSC_LINK CSC_KEY_PASSWORD
+              EXTRA=(
+                "-c.win.azureSignOptions.publisherName=$WIN_PUBLISHER_NAME"
+                "-c.win.azureSignOptions.endpoint=${AZURE_SIGNING_ENDPOINT:-https://eus.codesigning.azure.net/}"
+                "-c.win.azureSignOptions.codeSigningAccountName=$AZURE_SIGNING_ACCOUNT"
+                "-c.win.azureSignOptions.certificateProfileName=$AZURE_CERT_PROFILE"
+              )
+              SIGNED="Azure Trusted Signing"
+            elif [[ -n "$CSC_LINK" ]]; then SIGNED="certificate file"; fi
+          else
+            if [[ -n "$CSC_LINK" ]]; then SIGNED="Developer ID certificate"; fi
+            if [[ -n "$CSC_LINK" && -n "$APPLE_ID" ]]; then EXTRA+=("-c.mac.notarize=true"); SIGNED="$SIGNED + notarization"; fi
+          fi
+          if [[ -z "$SIGNED" ]]; then
+            unset CSC_LINK CSC_KEY_PASSWORD
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            echo "::warning::No signing configured; building unsigned ${{ matrix.name }} packages (Gatekeeper and SmartScreen will warn)."
+          else
+            echo "Signing ${{ matrix.name }} packages with: $SIGNED"
+          fi
+          npm run ${{ matrix.package }} -w @fbrx/desktop -- "${EXTRA[@]}"
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.platform }}
@@ -108,6 +144,7 @@ jobs:
             apps/desktop/release/${{ needs.meta.outputs.version }}/*.zip
             apps/desktop/release/${{ needs.meta.outputs.version }}/*.exe
             apps/desktop/release/${{ needs.meta.outputs.version }}/*.blockmap
+            apps/desktop/release/${{ needs.meta.outputs.version }}/latest*.yml
           if-no-files-found: error
 
   control-plane-image:

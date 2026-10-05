@@ -87,6 +87,7 @@ export function licenseStatusFrom(
     message: null,
     source: 'none',
     commandUrl: null,
+    vertical: null,
   };
   if (!key) return base;
   const v = verifyLicense(key, publicKeysPem);
@@ -100,6 +101,7 @@ export function licenseStatusFrom(
     expiresAt: p.expiresAt,
     source,
     commandUrl: p.command?.url ?? null,
+    vertical: p.vertical ?? null,
   };
   if (v.expired) return { ...base, ...info, state: 'expired', message: 'License has expired; running with Community features' };
   if (p.maxMajorVersion !== null && appMajorVersion > p.maxMajorVersion) {

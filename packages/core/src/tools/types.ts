@@ -31,6 +31,8 @@ export interface ToolSpec {
   inputSchema: Record<string, unknown>;
   /** License feature required to use the tool. */
   feature?: Feature;
+  /** While this returns a reason, the tool is hidden from the agent and refused (e.g. it needs Endpoint Ultra). */
+  unavailable?: () => string | null;
   timeoutMs?: number;
   resources?(input: any): ToolResources | Promise<ToolResources>;
   run(input: any, ctx: ToolExecContext): Promise<ToolOutcome>;

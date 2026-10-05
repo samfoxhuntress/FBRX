@@ -10,16 +10,17 @@ paste the key into FBRX Endpoint Basic and it joins the tenant (see [LICENSING.m
 | Section | Page | What it is for |
 | --- | --- | --- |
 | Fleet | **Overview** | Online/offline/alerting devices, agent runs, tool calls, policy denials and errors over 24 h, version and platform mix, recent alerts |
-| | **Devices** | Search and filter the fleet; select devices for bulk commands (sync, update, back up, restart service, notify, …) |
-| | Device detail | Live health and services, metrics charts, installed plugins, versions, audit chain head; run any command and watch its result; move to a group; set update channel or pin; per-device overrides; its backups; retire |
-| | **Alerts & events** | Service failures, circuit breaks, policy denials and other device events; acknowledge them |
-| Configuration | **Profiles & groups** | Profiles hold managed settings, governance policy and *locks* (paths users cannot change). Groups attach a profile, an update channel and a pinned version to a set of devices; the tenant default profile applies to everyone |
-| | **Deploy & enroll** | Download the latest installers; create enrollment tokens (group, usage limit, expiry, template snapshot) and the matching `fbrx-provision.json` |
+| | **Devices** | Search and filter the fleet (student computers and help desk receivers are marked); select devices for bulk commands (sync, update, back up, restart service, notify, …); **Update everyone now** |
+| | Device detail | Live health and services, metrics charts, installed plugins, versions, audit chain head; run any command and watch its result; move to a group; set update channel or pin; who uses it (staff or student); whether it receives help desk tickets; per-device overrides; its backups; retire |
+| | **Alerts & events** | Service failures, circuit breaks, policy denials, student safety alerts and other device events; acknowledge them |
+| | **Help desk** | Every ticket sent from the organization's computers, its conversation and the computer's details; answer, take, change status and priority; which computers receive tickets |
+| Configuration | **Profiles & groups** | Organization defaults: kind of organization (Business, Education, Home preview), *New versions* (install automatically, tell people, off), the help desk on or off, default profile and channel. **Set up for a school** (Education). Profiles hold managed settings, governance policy and *locks* (paths users cannot change). Groups attach a profile, who uses the computers (staff or student), the edition (hold to Basic), *New versions*, an update channel and a pinned version |
+| | **Deploy & enroll** | Download the latest installers; create enrollment tokens (group, who uses the computers, usage limit, expiry, template snapshot); download the matching `fbrx-provision.json`, a **Mac profile** (.mobileconfig for Jamf, Mosyle, Kandji, Intune…) and a **Windows script** (Intune Win32 app) |
 | | **Credentials** | Organization secrets scoped to the tenant, a group or a single device; pushed into device vaults as read-only managed secrets; rotate or delete centrally |
 | | **Plugins** | Upload plugin packages (manifest and permissions shown), deploy to devices or groups |
 | | **Backups** | Snapshots uploaded by devices; download, mark as an enrollment template, delete |
 | Platform | **Releases** | Upload installers (or let CI do it), publish to `stable`/`beta`/`dev`, staged rollout percentage |
-| | **Licenses** | Issue and revoke signed licenses per tenant: the product (Endpoint Basic or Ultra), seats and expiry, and whether computers that activate the key join the tenant automatically; copy keys for offline activation |
+| | **Licenses** | Issue and revoke signed licenses per tenant: the product (Endpoint Basic or Ultra), the kind (Business or Education), seats and expiry, and whether computers that activate the key join the tenant automatically; copy keys for offline activation |
 | | **Tenants** | (superadmin) Create customers/business units, suspend them, set their default channel |
 | Access | **Users & API keys** | Invite users with a role, reset access, create API keys for automation |
 | | **Webhooks** | Signed outgoing webhooks for fleet events |
@@ -28,6 +29,20 @@ paste the key into FBRX Endpoint Basic and it joins the tenant (see [LICENSING.m
 
 Changes to profiles, groups, credentials and licenses are pushed to online devices over their WebSocket within
 seconds; offline devices pick them up when they reconnect. Device detail and the overview update live.
+
+### Help desk routing
+
+A computer sends a ticket to FBRX Command over its authenticated device connection; FBRX Command stores it, numbers it
+(#1, #2, … per organization), and pushes it at once to every **receiver** computer and to open consoles. Replies and
+status changes travel the same way back to the computer that asked. Receivers that are off get the queue when they
+next connect. The `ticket.created` and `ticket.updated` webhooks hand tickets to another system if you have one.
+
+### Automatic updates
+
+*New versions* (organization or group): **Install automatically** sets each computer's update settings so it installs
+new versions by itself when nobody is using it, from FBRX Command's published releases (electron-updater) or from the
+GitHub repository it was installed from; **Tell people** offers them; **Off** stops the checks. **Devices → Update
+everyone now** sends `update.install` to every active computer (online ones start at once).
 
 ## Roles
 
@@ -40,6 +55,8 @@ seconds; offline devices pick them up when they reconnect. Device detail and the
 | Profiles, policy, credentials, enrollment, plugins, backups, webhooks, audit | ✔ | ✔ | ✔ | | |
 | Users and API keys | ✔ | ✔ | ✔ | | |
 | Set up sign in with Google or Microsoft | ✔ | ✔ | | | |
+| Read help desk tickets | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Answer help desk tickets | ✔ | ✔ | ✔ | ✔ | |
 | Read licenses | ✔ | ✔ | ✔ | | |
 | Tenants, releases, issuing licenses | ✔ | | | | |
 

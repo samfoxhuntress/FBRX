@@ -1,4 +1,22 @@
-import { deepMerge, type DeviceConfig, type Policy } from '@fbrx/shared';
+import {
+  AUDIENCES,
+  AUTO_UPDATE_MODES,
+  EDUCATION_STAFF_DEFAULTS,
+  LEARNER_DEFAULTS,
+  LEARNER_LOCKED,
+  TIERS,
+  VERTICALS,
+  deepMerge,
+  isLearner,
+  resolveAudience,
+  type Audience,
+  type AutoUpdateMode,
+  type DeviceConfig,
+  type DeviceEdition,
+  type Policy,
+  type Tier,
+  type Vertical,
+} from '@fbrx/shared';
 import { openString, type Db } from '@fbrx/shared/node';
 
 interface ProfileRow {
@@ -20,8 +38,17 @@ export function resolveDeviceConfig(db: Db, master: Buffer, deviceId: string): D
   const profile = (id: string | null | undefined) => (id ? db.get<ProfileRow>('SELECT id, settings, locked, policy FROM profiles WHERE id = ?', id) : undefined);
   const layers = [profile(t.default_profile_id), profile(g?.profile_id)].filter(Boolean) as ProfileRow[];
 
-  let settings: Record<string, unknown> = {};
-  const locked = new Set<string>();
+  const edition = deviceEdition(db, d, t, g);
+  // Classroom defaults come first, so the organization's own profiles can change them.
+  let settings: Record<string, unknown> = isLearner(edition.audience)
+    ? structuredClone(LEARNER_DEFAULTS) as Record<string, unknown>
+    : edition.vertical === 'education'
+      ? structuredClone(EDUCATION_STAFF_DEFAULTS) as Record<string, unknown>
+      : {};
+  const locked = new Set<string>(isLearner(edition.audience) ? LEARNER_LOCKED : []);
+  // Automatic updates, as the organization (or group) decided: from FBRX Command's releases or the repository.
+  settings = deepMerge(settings, { updates: AUTO_UPDATE_SETTINGS[edition.autoUpdate] });
+  if (edition.autoUpdate !== 'notify') for (const l of ['updates.autoInstall', 'updates.checkRepo']) locked.add(l);
   let policy: Policy | null = null;
   for (const p of layers) {
     settings = deepMerge(settings, JSON.parse(p.settings));
@@ -68,5 +95,28 @@ export function resolveDeviceConfig(db: Db, master: Buffer, deviceId: string): D
     secrets,
     updateChannel: d.update_channel ?? g?.update_channel ?? t.update_channel ?? 'stable',
     pinnedVersion: d.pinned_version ?? g?.pinned_version ?? null,
+    edition,
+  };
+}
+
+const AUTO_UPDATE_SETTINGS: Record<AutoUpdateMode, Record<string, boolean>> = {
+  off: { autoDownload: false, autoInstall: false, checkRepo: false },
+  notify: { checkRepo: true },
+  install: { autoDownload: true, autoInstall: true, checkRepo: true },
+};
+
+const oneOf = <T extends string>(list: readonly T[], v: unknown): T | null => (typeof v === 'string' && (list as readonly string[]).includes(v) ? (v as T) : null);
+
+/** Who uses the computer and what it may be: the device's own setting, else its group's, else the organization's. */
+export function deviceEdition(db: Db, d: any, t: any, g: any): DeviceEdition {
+  const vertical = oneOf<Vertical>(VERTICALS, t.vertical) ?? 'business';
+  const assigned = oneOf<Audience>(AUDIENCES, d.audience) ?? oneOf<Audience>(AUDIENCES, g?.audience);
+  const receivers = Number(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM devices WHERE tenant_id = ? AND helpdesk_receiver = 1 AND status = 'active'", t.id)?.n ?? 0);
+  return {
+    vertical,
+    audience: resolveAudience(vertical, assigned),
+    tier: oneOf<Tier>(TIERS, g?.tier),
+    helpdesk: { enabled: Number(t.helpdesk_enabled ?? 1) === 1, receiver: Number(d.helpdesk_receiver ?? 0) === 1 && receivers > 0 },
+    autoUpdate: oneOf<AutoUpdateMode>(AUTO_UPDATE_MODES, g?.auto_update) ?? oneOf<AutoUpdateMode>(AUTO_UPDATE_MODES, t.auto_update) ?? 'notify',
   };
 }

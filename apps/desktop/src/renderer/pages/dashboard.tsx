@@ -8,7 +8,7 @@ import { navigate } from '../app';
 import { dashboardQuip, unlockTrophy } from '../fun';
 import { AskButton, NamePrompt } from '../widgets';
 import { SplitFlapBoard } from '../splitflap';
-import { useTier } from '../edition';
+import { useLearner, useTier } from '../edition';
 
 function serviceTone(state: string) {
   return state === 'running' ? 'good' : state === 'failed' ? 'critical' : state === 'degraded' ? 'warning' : 'neutral';
@@ -30,6 +30,14 @@ export function useLive(): SystemLive[] {
 }
 
 const rate = (b: number) => `${formatBytes(b)}/s`;
+
+/** On student computers (FBRX OS Education). */
+const LEARNER_TIPS = [
+  'Ask Fabrix to explain something from class in simpler words, or to quiz you on it.',
+  'Stuck with the computer? Get help sends a message to the IT team.',
+  'Make a to-do list for your homework in Tasks.',
+  'Notes keeps your ideas in one place.',
+];
 
 const ULTRA_TIPS = [
   'Terminal → FBRX/1 manages FBRX like a switch: try "show system status".',
@@ -108,7 +116,9 @@ function Insight({ icon, title, value, foot, onClick, className, children }: { i
  * and falls, showing what was behind it. "Screw it back on" puts it back.
  */
 function LooseTip({ fun }: { fun: boolean }) {
-  const TIPS = useTier() === 'ultra' ? [...ALL_TIPS, ...ULTRA_TIPS] : ALL_TIPS;
+  const learner = useLearner();
+  const tier = useTier();
+  const TIPS = learner ? LEARNER_TIPS : tier === 'ultra' ? [...ALL_TIPS, ...ULTRA_TIPS] : ALL_TIPS;
   const [tip, setTip] = useState(() => Math.floor(Math.random() * TIPS.length));
   const [clicks, setClicks] = useState(0);
   const [rattle, setRattle] = useState(0);
@@ -245,7 +255,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
             }}
           />
           <div className="glass-sub">
-            {`${status.deviceName} · ${TIER_NAMES[status.license.tier]} ${displayVersion(status.version)} · up ${formatDuration(cur?.uptime ?? status.uptimeSeconds)}`}
+            {`${status.deviceName} · ${status.edition?.productName ?? TIER_NAMES[status.license.tier]} ${displayVersion(status.version)} · up ${formatDuration(cur?.uptime ?? status.uptimeSeconds)}`}
             {quip && <span className="quip">{quip}</span>}
           </div>
         </div>

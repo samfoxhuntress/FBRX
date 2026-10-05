@@ -21,6 +21,9 @@ export interface DeviceSummary {
   notes: string;
   updateChannel: string | null;
   pinnedVersion: string | null;
+  /** Who uses it (null = its group's or the organization's default). */
+  audience: 'staff' | 'student' | 'parent' | 'child' | null;
+  helpdeskReceiver: boolean;
   settingsOverride: Record<string, unknown>;
   lockedOverride: string[];
   policyOverride: unknown;

@@ -11,6 +11,7 @@ import type { ExtEvents, ExtMethods } from './ext';
 import type { Settings } from './settings';
 import type { UpdateChannel } from './constants';
 import type { ReleaseCheck } from './release';
+import type { EditionStatus } from './editions';
 
 export type DeepPartial<T> = T extends (infer U)[] ? U[] : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
 
@@ -432,6 +433,8 @@ export interface SystemStatus {
   services: ServiceStatus[];
   vault: VaultStatus;
   license: LicenseStatus;
+  /** Endpoint Basic or Ultra, or FBRX OS Education on a student computer; the organization kind and who uses it. */
+  edition: EditionStatus;
   fleet: FleetStatus;
   runtime: RuntimeStatus;
   pendingApprovals: number;
@@ -538,7 +541,8 @@ export interface CoreMethods extends ExtMethods {
   'backup.delete': (p: { file: string }) => { deleted: boolean };
 
   'fleet.status': () => FleetStatus;
-  'fleet.enroll': (p: { serverUrl: string; token: string; deviceName?: string }) => FleetStatus;
+  /** audience "student" makes this a student computer (FBRX OS Education), whatever the token says. */
+  'fleet.enroll': (p: { serverUrl: string; token: string; deviceName?: string; audience?: 'staff' | 'student' | 'parent' | 'child' }) => FleetStatus;
   'fleet.unenroll': () => FleetStatus;
   'fleet.sync': () => FleetStatus;
 

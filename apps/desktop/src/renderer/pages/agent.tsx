@@ -15,7 +15,7 @@ import { startThinkingSound, stopThinkingSound } from '../voice/thinking-sound';
 import { useVoiceChat } from '../voice/use-voice-chat';
 import { ModelDownload } from './settings-voice';
 import { summonGoose } from '../fun';
-import { useTier } from '../edition';
+import { useLearner, useTier } from '../edition';
 
 const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'activity', title: 'Check my PC', prompt: 'Give me a quick health check of this computer: performance right now, storage, security status and any recent errors. Tell me what (if anything) needs attention.' },
@@ -145,6 +145,8 @@ export function AgentPage({ agentName }: { agentName: string }) {
   const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed']);
   const settings = useCore('settings.get', undefined, ['settings.changed']);
   const tier = useTier();
+  // Student computers: just the conversation (the school picks the model; the helper has no internet tools).
+  const learner = useLearner();
   const [selected, setSelected] = useState<string | null>(null);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState<{ messageId: string; text: string } | null>(null);
@@ -381,7 +383,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
   return (
     <div className="agent">
       <Card className="agent-list" title="Conversations" actions={<Button size="sm" icon="plus" onClick={() => void loadConversation(null)} aria-label="New conversation" />} flush>
-        <div className="agent-list-items">
+        <div className="agent-list-items private">
           {(convs.data ?? []).map((c) => (
             <button key={c.id} className={`agent-conv${selected === c.id ? ' active' : ''}`} onClick={() => void loadConversation(c.id)}>
               <div className="agent-conv-title">{c.title}</div>
@@ -392,9 +394,11 @@ export function AgentPage({ agentName }: { agentName: string }) {
           ))}
           {!convs.data?.length && <div className="fx-muted" style={{ padding: 12, fontSize: 13 }}>No conversations yet.</div>}
         </div>
-        <div className="agent-list-foot">
-          <EmergencyStop compact />
-        </div>
+        {!learner && (
+          <div className="agent-list-foot">
+            <EmergencyStop compact />
+          </div>
+        )}
       </Card>
       <Card className="agent-main" flush>
         <div className="agent-thread" ref={thread} aria-live="polite">
@@ -509,7 +513,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
           <TextArea
             ref={composerRef}
             value={input}
-            placeholder={activeRun ? `${agentName} is working…` : `Ask ${agentName} to do something — Enter to send, Shift+Enter for a new line, / for snippets`}
+            placeholder={activeRun ? `${agentName} is working…` : learner ? `Ask ${agentName} a question — Enter to send` : `Ask ${agentName} to do something — Enter to send, Shift+Enter for a new line, / for snippets`}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (slash.onKeyDown(e)) return;
@@ -522,7 +526,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
             aria-label="Message"
           />
           <div className="composer-bar">
-            <div className="composer-opts">
+            {learner ? <div className="composer-opts" /> : <div className="composer-opts">
               <div className="seg" role="group" aria-label="Internet access for this chat">
                 <button className={offline ? 'on' : ''} onClick={() => void toggleOffline(true)} title={`Offline: ${agentName} asks before using the internet in this chat`}>
                   <Icons.offline size={14} /> Offline
@@ -553,7 +557,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
                 </div>
               )}
               {currentProvider && !currentProvider.available && <span className="fx-muted" style={{ fontSize: 12 }}>{currentProvider.message}</span>}
-            </div>
+            </div>}
             <div className="composer-actions">
               {selected && !activeRun && (
                 <Button

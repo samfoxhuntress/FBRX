@@ -1,10 +1,11 @@
 import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, protocol, screen, session, shell, systemPreferences, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
-import { createReadStream, existsSync } from 'node:fs';
+import { execFileSync } from 'node:child_process';
+import { createReadStream, existsSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { userInfo } from 'node:os';
 import { Kernel, toCoreError } from '@fbrx/core';
-import { PRODUCT_NAME, TIER_NAMES, funEnabled } from '@fbrx/shared';
+import { MANAGED_PREFERENCES_DOMAIN, PRODUCT_NAME, TIER_NAMES, funEnabled, provisioningFromPreferences } from '@fbrx/shared';
 import { createElectronPlatform, openExternalSafe } from './platform';
 import { ElectronUpdateController } from './updater';
 import { ClipHistory } from './clip-history';
@@ -28,6 +29,7 @@ let spotlight: BrowserWindow | null = null;
 let spotlightKey: string | null = null;
 let picker: BrowserWindow | null = null;
 let pickerKey: string | null = null;
+let presenterKey: string | null = null;
 /** Whether FBRX's own window had the focus when the clipboard history opened (macOS gives the focus back otherwise). */
 let pickerFromMain = false;
 const pasteKeys = new PasteKeys();
@@ -125,8 +127,30 @@ function asset(name: string) {
 }
 
 /** Locations an IT department can drop fbrx-provision.json for zero-touch enrollment. */
+/**
+ * A Mac managed by a device manager: the configuration profile from FBRX Command sets managed preferences
+ * (com.fbrx.os). They become a provisioning file in the data folder, so FBRX joins the organization on first start.
+ */
+function managedPreferencesFile(): string | null {
+  if (process.platform !== 'darwin') return null;
+  const files = [join('/Library/Managed Preferences', userInfo().username, `${MANAGED_PREFERENCES_DOMAIN}.plist`), join('/Library/Managed Preferences', `${MANAGED_PREFERENCES_DOMAIN}.plist`)];
+  const found = files.find((f) => existsSync(f));
+  if (!found) return null;
+  try {
+    const prefs = JSON.parse(execFileSync('/usr/bin/plutil', ['-convert', 'json', '-o', '-', found], { encoding: 'utf8', timeout: 10_000 })) as Record<string, unknown>;
+    const prov = provisioningFromPreferences(prefs);
+    if (!prov) return null;
+    const out = join(dataDir, 'managed-provision.json');
+    writeFileSync(out, JSON.stringify(prov, null, 2), { mode: 0o600 });
+    return out;
+  } catch {
+    return null;
+  }
+}
+
 function provisioningLocations(): string[] {
-  const out = [join(dirname(process.execPath), 'fbrx-provision.json'), join(process.resourcesPath ?? '', 'provisioning', 'fbrx-provision.json')];
+  const managed = managedPreferencesFile();
+  const out = [...(managed ? [managed] : []), join(dirname(process.execPath), 'fbrx-provision.json'), join(process.resourcesPath ?? '', 'provisioning', 'fbrx-provision.json')];
   if (process.platform === 'darwin') out.push('/Library/Application Support/FBRX OS/fbrx-provision.json');
   if (process.platform === 'win32' && process.env.ProgramData) out.push(join(process.env.ProgramData, 'FBRX OS', 'fbrx-provision.json'));
   const arg = process.argv.find((a) => a.startsWith('--provision='));
@@ -268,6 +292,21 @@ function bindMacroKeys() {
   const s = kernel?.settings.get();
   spotlightKey = bindKey(spotlightKey, s?.spotlight.enabled ? s.spotlight.hotkey : null, showSpotlight, 'Spotlight');
   pickerKey = bindKey(pickerKey, s?.clipboard.hotkey || null, showClipPicker, 'Clipboard history');
+  presenterKey = bindKey(presenterKey, s?.presenter.hotkey || null, togglePresenting, 'Presenter-safe mode');
+}
+
+/** Presenter-safe mode on or off (its shortcut, the tray). */
+function togglePresenting() {
+  if (!kernel) return;
+  void kernel.setPresenting(!kernel.presenterStatus().active, actor);
+}
+
+/** Presenter-safe mode can turn on by itself while a second screen or projector is connected. */
+function watchDisplays() {
+  const report = () => kernel?.setExternalDisplay(screen.getAllDisplays().length > 1);
+  screen.on('display-added', report);
+  screen.on('display-removed', report);
+  report();
 }
 
 /**
@@ -337,7 +376,7 @@ const funAllowed = () => funEnabled(kernel?.settings.get(), kernel?.license.stat
  * pass through it to the apps below, except over the goose and its notes; the goose leaves by itself.
  */
 function summonGoose() {
-  if (!funAllowed()) return;
+  if (!funAllowed() || kernel?.presenterStatus().active) return;
   if (goose) {
     goose.webContents.send('fbrx:goose', { type: 'honk' });
     return;
@@ -411,6 +450,7 @@ function trayMenu() {
     kernel.aiHalt()
       ? { label: 'Resume the AI (on emergency stop)', click: () => void kernel?.resumeAi(actor) }
       : { label: 'Emergency stop: halt the AI', click: () => void kernel?.hardStop(`${actor} (tray)`) },
+    { label: 'Presenter-safe mode', type: 'checkbox', checked: kernel.presenterStatus().active, click: () => togglePresenting() },
     ...(funAllowed() ? [goose ? { label: 'Shoo the goose', click: () => goose?.webContents.send('fbrx:goose', { type: 'shoo' }) } : { label: 'Release the goose', click: () => summonGoose() }] : []),
     { type: 'separator' },
     { label: 'Quit', click: () => ((quitting = true), app.quit()) },
@@ -566,6 +606,8 @@ async function boot() {
     },
   });
   kernel = await Kernel.create({ dataDir, platform, provisioningFiles: provisioningLocations() });
+  // Automatic updates wait until nobody is using the computer.
+  kernel.setIdleProbe(() => powerMonitor.getSystemIdleTime());
   kernel.events.onAny((name, payload) => {
     win?.webContents.send('fbrx:event', name, payload);
     if (name === 'settings.changed') {
@@ -575,14 +617,23 @@ async function boot() {
       trayMenu();
     }
     if (name === 'license.changed' && !funAllowed()) goose?.close();
+    if (name === 'presenter.changed') {
+      const p = payload as { active: boolean };
+      // Presenting: the goose goes home and the clipboard history masks what it shows.
+      if (p.active) goose?.close();
+      picker?.webContents.send('fbrx:event', name, payload);
+      trayMenu();
+    }
     if (name === 'approval.requested' || name === 'approval.resolved' || name === 'fleet.changed' || name === 'vault.changed' || name === 'ai.halted' || name === 'license.changed') trayMenu();
   });
   kernel.events.on('approval.requested', (r) => {
-    if (!win?.isFocused()) {
+    const p = kernel?.presenterStatus();
+    if (!win?.isFocused() && !(p?.active && p.hideNotifications)) {
       platform.notify({ title: 'Approval needed', body: `${r.toolTitle}: ${r.reason}`.slice(0, 200), level: 'warning', source: 'governance' });
     }
   });
   await kernel.start();
+  watchDisplays();
   clips.setEnabled(kernel.settings.get().clipboard.history);
   const general = kernel.settings.get().general;
   if (app.isPackaged) app.setLoginItemSettings({ openAtLogin: general.launchAtLogin, args: ['--hidden'] });
@@ -597,7 +648,7 @@ async function boot() {
   // every two hours; and once on April Fools' Day.
   setInterval(() => {
     const a = kernel?.settings.get().appearance;
-    if (funAllowed() && a?.gooseVisits && !goose && powerMonitor.getSystemIdleTime() < 120 && Math.random() < 1 / 12) summonGoose();
+    if (funAllowed() && a?.gooseVisits && !goose && !kernel?.presenterStatus().active && powerMonitor.getSystemIdleTime() < 120 && Math.random() < 1 / 12) summonGoose();
   }, 10 * 60_000).unref();
   const today = new Date();
   if (today.getMonth() === 3 && today.getDate() === 1) setTimeout(summonGoose, 90_000).unref();

@@ -1,4 +1,4 @@
-import { ALL_FEATURES, FEATURES, parseSemver, type Feature, type LicenseStatus } from '@fbrx/shared';
+import { ALL_FEATURES, FEATURES, isLearner, parseSemver, type DeviceEdition, type Feature, type LicenseStatus } from '@fbrx/shared';
 import { licenseStatusFrom, verifyLicense } from '@fbrx/shared/node';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
@@ -39,8 +39,16 @@ export class LicenseService {
         message: 'Development build: all features unlocked',
       };
     }
+    // FBRX Command can hold a group to Endpoint Basic, and student computers always run the learner edition on Basic.
+    const ed = this.meta.get<DeviceEdition>('fleet.edition');
+    if (ed && status.tier === 'ultra' && (ed.tier === 'basic' || isLearner(ed.audience))) status = { ...status, tier: 'basic' };
     this.cached = status;
     return status;
+  }
+
+  /** Re-reads the license and edition (after FBRX Command changed what this computer is). */
+  refresh(): LicenseStatus {
+    return this.changed();
   }
 
   has(feature: Feature): boolean {

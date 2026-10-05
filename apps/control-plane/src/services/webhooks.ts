@@ -13,6 +13,8 @@ export const CP_WEBHOOK_EVENTS = [
   'snapshot.uploaded',
   'license.issued',
   'release.published',
+  'ticket.created',
+  'ticket.updated',
 ] as const;
 export type CpWebhookEvent = (typeof CP_WEBHOOK_EVENTS)[number];
 

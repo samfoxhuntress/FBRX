@@ -30,6 +30,8 @@ export function deviceView(ctx: AppContext, d: any) {
     notes: d.notes,
     updateChannel: d.update_channel,
     pinnedVersion: d.pinned_version,
+    audience: d.audience ?? null,
+    helpdeskReceiver: Number(d.helpdesk_receiver ?? 0) === 1,
     settingsOverride: parseJson<Record<string, unknown>>(d.settings_override, {}),
     lockedOverride: parseJson<string[]>(d.locked_override, []),
     policyOverride: parseJson<unknown>(d.policy_override, null),

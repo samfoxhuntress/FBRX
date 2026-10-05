@@ -72,7 +72,7 @@ export function AlertsPage() {
       {tab === 'inbox' &&
         (inbox.data?.length ? (
           <Card flush>
-            <div className="fx-list">
+            <div className="fx-list private">
               {inbox.data.map((a) => (
                 <div key={a.id} className="fx-list-item" style={{ alignItems: 'flex-start', opacity: a.read ? 0.75 : 1 }}>
                   <Status tone={a.severity === 'critical' ? 'critical' : a.severity === 'warning' ? 'warning' : 'info'}>{a.severity}</Status>

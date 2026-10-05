@@ -8,7 +8,8 @@ export const CommandPayloadSchemas = {
   ping: z.object({}).default({}),
   'config.sync': z.object({}).default({}),
   'update.check': z.object({}).default({}),
-  'update.install': z.object({ restartNow: z.boolean().default(false) }).default({ restartNow: false }),
+  /** source: the release FBRX Command serves, the GitHub repository the computer was installed from, or whichever has one (auto). */
+  'update.install': z.object({ restartNow: z.boolean().default(false), source: z.enum(['auto', 'command', 'repository']).default('auto') }).default({ restartNow: false, source: 'auto' }),
   'backup.create': z
     .object({
       label: z.string().max(120).optional(),
@@ -34,7 +35,7 @@ export const COMMAND_DESCRIPTIONS: Record<CommandType, string> = {
   ping: 'Round-trip connectivity check',
   'config.sync': 'Pull the latest managed configuration, policy, secrets and license',
   'update.check': 'Check the update feed for a newer version',
-  'update.install': 'Download and install the assigned version',
+  'update.install': 'Download and install the newest assigned version (from FBRX Command or the repository)',
   'backup.create': 'Create an encrypted snapshot (optionally uploaded to the control plane)',
   'plugin.install': 'Install a plugin package from the control plane',
   'plugin.setEnabled': 'Enable or disable a plugin',

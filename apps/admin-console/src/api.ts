@@ -95,7 +95,8 @@ export type LiveEvent =
   | { type: 'device.updated'; deviceId: string; tenantId: string; summary: any }
   | { type: 'command.updated'; tenantId: string; command: any }
   | { type: 'device.event'; tenantId: string; event: any }
-  | { type: 'audit'; tenantId: string | null; entry: any };
+  | { type: 'audit'; tenantId: string | null; entry: any }
+  | { type: 'ticket.updated'; tenantId: string; ticket: any };
 
 /** Live admin event stream with automatic reconnect. */
 export function connectLive(onEvent: (e: LiveEvent) => void, onState: (connected: boolean) => void): () => void {

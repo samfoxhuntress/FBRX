@@ -4,7 +4,7 @@
  * Enterprise run Endpoint Ultra (or pick one with --tier).
  *
  *   npm run license:issue -- --customer "Acme Ltd" [--edition enterprise|pro|community] [--seats 25]
- *                            [--tier basic|ultra] [--expires 2027-12-31] [--max-major 2]
+ *                            [--tier basic|ultra] [--vertical education|home] [--expires 2027-12-31] [--max-major 2]
  *                            [--feature fleet --feature plugins] [--key .fbrx-keys/license-signing.pem]
  *                            [--command-url https://command.example.com --enroll-token fbrx_enr_…]
  *
@@ -43,6 +43,8 @@ if (expiresAt && Number.isNaN(expiresAt.getTime())) fail('--expires must be a da
 const maxMajor = opt('--max-major');
 const tier = opt('--tier') as Tier | undefined;
 if (tier && !TIERS.includes(tier)) fail(`--tier must be one of ${TIERS.join(', ')}`);
+const vertical = opt('--vertical') as 'education' | 'home' | undefined;
+if (vertical && !['education', 'home'].includes(vertical)) fail('--vertical must be education or home');
 const commandUrl = opt('--command-url');
 const enrollToken = opt('--enroll-token');
 if (!!commandUrl !== !!enrollToken) fail('--command-url and --enroll-token go together');
@@ -72,13 +74,14 @@ const payload: LicensePayload = {
   expiresAt: expiresAt ? expiresAt.toISOString() : null,
   maxMajorVersion: maxMajor ? Number(maxMajor) : null,
   ...(tier ? { tier } : {}),
+  ...(vertical ? { vertical } : {}),
   ...(commandUrl && enrollToken ? { command: { url: commandUrl, enrollmentToken: enrollToken } } : {}),
 };
 const key = signLicense(payload, privateKeyPem!);
 const check = verifyLicense(key, [publicKeyFromPrivate(privateKeyPem!)]);
 if (!check.ok) fail(`Signed key failed verification: ${check.error}`);
 
-console.log(`\n${TIER_NAMES[tierFor(edition, tier)]} · ${customer} · ${edition} · ${seats || 'unlimited'} seat(s) · ${payload.expiresAt ? `expires ${expires}` : 'perpetual'}`);
+console.log(`\n${TIER_NAMES[tierFor(edition, tier)]}${vertical ? ` (${vertical})` : ''} · ${customer} · ${edition} · ${seats || 'unlimited'} seat(s) · ${payload.expiresAt ? `expires ${expires}` : 'perpetual'}`);
 if (commandUrl) console.log(`Joins the FBRX Command tenant at ${commandUrl}`);
 console.log(`Features: ${featuresFor(payload).join(', ')}\n`);
 console.log(key);

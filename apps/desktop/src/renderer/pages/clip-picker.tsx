@@ -18,6 +18,10 @@ const shortcut = (accel: string) => accel.replace(/CommandOrControl|Control/g, '
 
 export function ClipPicker() {
   const settings = useCore('settings.get', undefined, ['settings.changed']).data?.settings;
+  const presenter = useCore('presenter.status', undefined, ['presenter.changed']);
+  // Presenter-safe mode: copies show as dots (they still paste, and search still finds them).
+  const masked = !!presenter.data?.active && presenter.data.maskClipboard;
+  const mask = (t: string) => `•••••••• ${t.length} character${t.length === 1 ? '' : 's'}${t.includes('\n') ? `, ${t.split('\n').length} lines` : ''}`;
   const [state, setState] = useState<{ enabled: boolean; entries: ClipEntry[] } | null>(null);
   const [q, setQ] = useState('');
   const [searching, setSearching] = useState(false);
@@ -42,6 +46,7 @@ export function ClipPicker() {
       setNote(null);
       search.current?.blur();
       refresh();
+      presenter.reload();
     });
     return () => {
       offClips?.();
@@ -150,6 +155,7 @@ export function ClipPicker() {
         <Icons.clipboard size={16} />
         <span className="cp-title">Clipboard history</span>
         {hotkey && <kbd className="kbd">{hotkey}</kbd>}
+        {masked && <span className="cp-presenting" title="Presenter-safe mode is on">Presenting</span>}
         <span className="fx-spacer" />
         <button className="cp-close" onClick={close} aria-label="Close">
           <Icons.x size={14} />
@@ -201,7 +207,7 @@ export function ClipPicker() {
                 onClick={() => setSel(i)}
                 onDoubleClick={() => void paste(e === current && format ? format.text : e.text)}
               >
-                <span className="cp-text">{e.text.length > 400 ? `${e.text.slice(0, 400)}…` : e.text}</span>
+                <span className={`cp-text${masked ? ' cp-masked' : ''}`}>{masked ? mask(e.text) : e.text.length > 400 ? `${e.text.slice(0, 400)}…` : e.text}</span>
                 <span className="cp-meta">
                   {e.pinned && <Icons.bookmark size={11} />} {timeAgo(e.at)}
                   {e.text.includes('\n') ? ` · ${e.text.split('\n').length} lines` : ''}
@@ -222,7 +228,7 @@ export function ClipPicker() {
                 </div>
                 <kbd className="kbd" title="Next format">Tab</kbd>
               </div>
-              {format && format.id !== 'original' && <pre className="cp-preview">{format.text.length > 500 ? `${format.text.slice(0, 500)}…` : format.text}</pre>}
+              {format && format.id !== 'original' && !masked && <pre className="cp-preview">{format.text.length > 500 ? `${format.text.slice(0, 500)}…` : format.text}</pre>}
             </div>
           )}
         </>

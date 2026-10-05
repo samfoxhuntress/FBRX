@@ -139,14 +139,65 @@ Without `--for` it copies the plain installer there (for updates; the recipient'
 **Unsigned installers** show *Windows protected your PC*; recipients click **More info → Run anyway**. A code-signing
 certificate (see Signing) removes the warning.
 
-### Signing
+### Signing: becoming a verified publisher
 
-| Platform | What you need | Environment / secrets |
+Windows and macOS warn about apps from publishers they cannot identify. Each has its own process. Both are
+wired into the Release workflow; add the secrets below and the next tagged build is signed.
+
+#### Windows: "Unknown publisher" and SmartScreen
+
+Windows shows the publisher's name (instead of *Unknown publisher*) when the installer and app carry an
+Authenticode signature from a certificate authority Microsoft trusts. Two ways to get one:
+
+**Azure Trusted Signing (recommended; Microsoft's own signing service, newer Azure pages may call it Artifact
+Signing).** No hardware token, about the price of a coffee a month on the Basic plan, and it signs straight from CI.
+
+1. In the Azure portal, create a **Trusted Signing account** in a region near you. Note its endpoint, e.g.
+   `https://eus.codesigning.azure.net/` for East US.
+2. Under the account, request **Identity validation → Public**. Microsoft verifies the organization (legal name,
+   address, registration or tax number) or, where offered, an individual developer. Allow a few days.
+3. Once approved, create a **certificate profile** of type *Public Trust* tied to that identity.
+4. In **Microsoft Entra ID → App registrations**, register an app (e.g. "FBRX signing"), create a **client secret**,
+   then on the Trusted Signing account grant that app the **Trusted Signing Certificate Profile Signer** role.
+5. Add GitHub secrets: `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SIGNING_ENDPOINT`,
+   `AZURE_SIGNING_ACCOUNT` (account name), `AZURE_CERT_PROFILE` (profile name) and `WIN_PUBLISHER_NAME`: the subject
+   name exactly as it appears on the certificate (the validated legal name).
+
+**A code-signing certificate from a CA** (DigiCert, Sectigo, SSL.com and others). Since 2023 new certificates
+come on a hardware token or a cloud key vault, not a plain `.pfx`, so CI signing needs the CA's cloud signing service.
+If you do have a `.pfx`, set `WIN_CSC_LINK` (base64) and `WIN_CSC_KEY_PASSWORD`, plus `WIN_PUBLISHER_NAME`.
+
+**SmartScreen reputation.** Even a signed installer can show *Windows protected your PC* while the certificate is
+new: SmartScreen trusts publishers as their downloads build a clean history, which takes a few weeks and some installs.
+Installers pushed by Intune or another device manager are not downloaded through a browser, so they skip the prompt
+entirely (see *Installing with a device manager* below).
+
+**Updates and the publisher name.** A signed copy of FBRX only installs updates signed by the same publisher as
+itself; an unsigned copy (built from source, or installed before you signed) accepts the first signed update. Keep the
+same publisher name when you renew or change certificates.
+
+#### macOS: Gatekeeper ("cannot be opened because the developer cannot be verified")
+
+1. Join the **Apple Developer Program** ($99 a year). An organization account needs a D-U-N-S number (free from
+   Dun & Bradstreet); an individual account uses your own name as the publisher.
+2. In **Certificates, Identifiers & Profiles**, create a **Developer ID Application** certificate (Keychain Access →
+   Certificate Assistant → Request a Certificate from a Certificate Authority makes the CSR). Install it, export it
+   with its private key as a `.p12`, and add `MAC_CSC_LINK` (`base64 -i cert.p12`) and `MAC_CSC_KEY_PASSWORD`.
+3. Create an **app-specific password** for your Apple Account and add `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD` and
+   `APPLE_TEAM_ID` (Membership details). With these, the workflow notarizes the app and staples the ticket, so it
+   opens offline too.
+4. Check a build with `spctl -a -vvv -t install "/Applications/FBRX OS.app"`: it should say
+   `source=Notarized Developer ID`.
+
+| Platform | Secrets | What the workflow does |
 | --- | --- | --- |
-| macOS | Apple Developer ID Application certificate (.p12), App Store Connect app-specific password | `CSC_LINK`, `CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID`; notarization is enabled with `-c.mac.notarize=true` |
-| Windows | OV/EV code-signing certificate (.pfx), or Azure Trusted Signing | `CSC_LINK`, `CSC_KEY_PASSWORD`; set `win.signtoolOptions.publisherName` in `electron-builder.yml` to the certificate subject — electron-updater refuses updates signed by a different publisher |
+| macOS | `MAC_CSC_LINK`, `MAC_CSC_KEY_PASSWORD`, `APPLE_ID`, `APPLE_APP_SPECIFIC_PASSWORD`, `APPLE_TEAM_ID` | signs with your Developer ID, hardened runtime, notarizes (`-c.mac.notarize=true`) |
+| Windows (Azure) | `AZURE_TENANT_ID`, `AZURE_CLIENT_ID`, `AZURE_CLIENT_SECRET`, `AZURE_SIGNING_ENDPOINT`, `AZURE_SIGNING_ACCOUNT`, `AZURE_CERT_PROFILE`, `WIN_PUBLISHER_NAME` | signs the app and installer with Trusted Signing (`win.azureSignOptions`) |
+| Windows (.pfx) | `WIN_CSC_LINK`, `WIN_CSC_KEY_PASSWORD`, `WIN_PUBLISHER_NAME` | signs with signtool |
 
-Unsigned builds work for testing, but macOS Gatekeeper and Windows SmartScreen will warn users.
+Without these, builds are unsigned (Mac builds are ad-hoc signed so they run on the Mac that built them). Copies
+built with the *Install FBRX OS* script on the computer that runs them are not flagged, because nothing was
+downloaded; it is installers you send to other people that need signing.
 
 ### Release workflow
 
@@ -183,6 +234,22 @@ Manual equivalent: `FBRX_CP_URL=… FBRX_CP_API_KEY=… npm run release:publish 
    **Fleet** with the server URL and token.
 
 Headless machines: `fbrx-headless enroll https://fleet.example.com fbrx_enr_… --name LAB-01`.
+
+### Installing with a device manager
+
+FBRX Command makes the files: **Deploy & enroll → New enrollment token**, then in the dialog:
+
+* **Mac profile** (`.mobileconfig`): a configuration profile that sets FBRX's managed preferences (domain
+  `com.fbrx.os`: `ServerURL`, `EnrollmentToken`, `Audience`). Upload it with the FBRX installer to Jamf, Mosyle, Kandji,
+  Intune or another Mac manager. FBRX reads `/Library/Managed Preferences/com.fbrx.os.plist` when it starts and joins.
+* **Windows script** (`Install-FBRX.ps1`): for Intune, package it with `FBRX-OS-Setup-<version>.exe` as a Win32 app
+  (`IntuneWinAppUtil`), install command `powershell.exe -ExecutionPolicy Bypass -NoProfile -File Install-FBRX.ps1`,
+  detection rule *file `%ProgramFiles%\FBRX OS\FBRX OS.exe` exists*. It writes
+  `%ProgramData%\FBRX OS\fbrx-provision.json` and installs for all users (`/S /allusers`).
+* Without a device manager the provisioning file works next to the installer, in `/Library/Application Support/FBRX OS`
+  (Mac) or `%ProgramData%\FBRX OS` (Windows).
+
+A token's *used by* (or `"audience": "student"` in the provisioning file) makes the computers student computers.
 
 ## 5. Operating the fleet
 

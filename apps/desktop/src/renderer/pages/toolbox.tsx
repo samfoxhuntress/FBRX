@@ -8,6 +8,7 @@ import { useCore } from '../hooks';
 import { AskButton } from '../widgets';
 import { COMMAND_GROUPS } from '../command-library';
 import { unlockTrophy } from '../fun';
+import { UltraHint } from '../edition';
 
 interface Example {
   label: string;
@@ -823,7 +824,7 @@ export function ToolboxPage({ advanced, easterEggs }: { advanced: boolean; easte
     setSeed((s) => ({ ex, n: s.n + 1 }));
   };
   return (
-    <Page title="Toolbox" description={advanced ? 'Handy utilities that run entirely on this computer.' : 'Handy utilities that run entirely on this computer. Endpoint Ultra adds developer and network tools.'}>
+    <Page title="Toolbox" description={advanced ? 'Handy utilities that run entirely on this computer.' : 'Quick helpers for everyday jobs. Nothing you type here leaves this computer.'}>
       <div className="chips recommended">
         <span className="fx-muted" style={{ fontSize: 12.5, alignSelf: 'center' }}>Try:</span>
         {RECOMMENDED.filter((r) => (advanced || !r.advanced) && (easterEggs || !r.fun)).map((r) => (
@@ -843,6 +844,11 @@ export function ToolboxPage({ advanced, easterEggs }: { advanced: boolean; easte
               <div className="agent-conv-sub">{t.hint}</div>
             </button>
           ))}
+          {!advanced && (
+            <div style={{ padding: '10px 12px' }}>
+              <UltraHint>Developer and network tools (JSON, hashes, subnets, ports) come with Endpoint Ultra.</UltraHint>
+            </div>
+          )}
         </Card>
         <Card
           title={tool.name}

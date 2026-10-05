@@ -43,6 +43,8 @@ export class ToolGate {
       license: LicenseService;
       limiter: RateLimiter;
       log: Logger;
+      /** Why AI agents may not use any tool on this computer (a student computer), or null. */
+      agentToolsBlocked?: () => string | null;
     },
   ) {}
 
@@ -63,8 +65,12 @@ export class ToolGate {
     };
 
     if (!tool) return deny(`Unknown tool "${name}"`);
+    const blocked = ctx.origin === 'agent' ? this.d.agentToolsBlocked?.() : null;
+    if (blocked) return deny(blocked);
     if (tool.feature && !this.d.license.has(tool.feature)) return deny(`Tool requires the "${tool.feature}" license feature`);
     if (!this.d.registry.isEnabled(name)) return deny('Tool is disabled on this workstation');
+    const unavailable = tool.unavailable?.();
+    if (unavailable) return deny(unavailable);
 
     const validated = validateInput(tool.inputSchema, rawInput);
     if (!validated.ok) {

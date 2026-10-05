@@ -19,6 +19,7 @@ import { WebhooksPage } from './pages/webhooks';
 import { AuditPage } from './pages/audit';
 import { EventsPage } from './pages/events';
 import { AccountPage } from './pages/account';
+import { HelpdeskPage } from './pages/helpdesk';
 
 export function App() {
   const [phase, setPhase] = useState<'loading' | 'setup' | 'login' | 'ready'>('loading');
@@ -91,6 +92,7 @@ function Console() {
     { id: 'overview', label: 'Overview', icon: 'dashboard', section: 'Fleet' },
     { id: 'devices', label: 'Devices', icon: 'laptop', section: 'Fleet' },
     { id: 'events', label: 'Alerts & events', icon: 'activity', section: 'Fleet' },
+    ...(app.can('helpdesk.read') ? [{ id: 'helpdesk', label: 'Help desk', icon: 'lifebuoy', section: 'Fleet' } as NavItem] : []),
     ...(app.can('config.manage') ? [{ id: 'config', label: 'Profiles & groups', icon: 'settings', section: 'Configuration' } as NavItem] : []),
     ...(app.can('enrollment.manage') ? [{ id: 'enrollment', label: 'Deploy & enroll', icon: 'download', section: 'Configuration' } as NavItem] : []),
     ...(app.can('secrets.manage') ? [{ id: 'secrets', label: 'Credentials', icon: 'key', section: 'Configuration' } as NavItem] : []),
@@ -104,7 +106,7 @@ function Console() {
     ...(app.can('audit.read') ? [{ id: 'audit', label: 'Audit log', icon: 'history', section: 'Access' } as NavItem] : []),
   ];
   const activeNav = route.page === 'device' ? 'devices' : route.page;
-  const needsTenant = !app.tenantId && !['overview', 'tenants', 'releases', 'account', 'audit', 'licenses', 'devices', 'events'].includes(route.page);
+  const needsTenant = !app.tenantId && !['overview', 'tenants', 'releases', 'account', 'audit', 'licenses', 'devices', 'events', 'helpdesk'].includes(route.page);
 
   const page = (() => {
     if (needsTenant) return <div className="fx-page"><h1>Select a tenant</h1><p className="fx-secondary">Choose an organization in the top bar to manage its configuration.</p></div>;
@@ -115,6 +117,8 @@ function Console() {
         return <DeviceDetailPage id={route.id!} />;
       case 'events':
         return <EventsPage />;
+      case 'helpdesk':
+        return <HelpdeskPage />;
       case 'config':
         return <ConfigPage />;
       case 'enrollment':

@@ -7,6 +7,7 @@ import {
   type InvocationOrigin,
   type TokenUsage,
   type ToolCallRecord,
+  type Vertical,
 } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { AuditLog } from '../audit/audit-log';
@@ -23,6 +24,7 @@ import type { ConversationStore, StoredMessage } from './conversations';
 import type { ProviderManager } from './provider-manager';
 import type { ProviderMessage, ProviderTool, ProviderToolCall } from './providers/types';
 import { chatEgg, type ChatEgg } from '../fun/chat-eggs';
+import { learnerConcern, learnerPrompt, type LearnerConcern } from './learner';
 
 export interface ChatParams {
   conversationId?: string;
@@ -99,6 +101,10 @@ export class AgentRuntime {
       allowedRoots: () => string[];
       /** Emergency stop in force (no new runs). */
       halt?: () => { at: string; by: string } | null;
+      /** A student (or child) computer: the learning helper, with no tools. */
+      learner?: () => { vertical: Vertical } | null;
+      /** A message on a student computer sounded like a child may be in danger (the text is never passed on). */
+      onConcern?: (category: LearnerConcern['category'], conversationId: string) => void;
       /** Easter eggs (Settings → Appearance → Fun extras). */
       fun?: {
         enabled: () => boolean;
@@ -118,7 +124,16 @@ export class AgentRuntime {
     if (!text) throw new CoreError('INVALID_ARGUMENT', 'Message is empty');
     if (text.length > 100_000) throw new CoreError('INVALID_ARGUMENT', 'Message is too long');
     if (this.d.halt?.()) throw new CoreError('UNAVAILABLE', `${this.d.settings.get().ai.agentName} is on emergency stop. Resume it in Settings → Agent or on the ${this.d.settings.get().ai.agentName} page.`);
-    const egg = this.easterEgg(text, p.conversationId);
+    const learner = this.d.learner?.() ?? null;
+    if (learner) {
+      const concern = learnerConcern(text, learner.vertical);
+      if (concern) {
+        const run = this.cannedRun(p, text, { reply: concern.reply, trophies: [] }, 'learning helper');
+        this.d.onConcern?.(concern.category, run.conversationId);
+        return run;
+      }
+    }
+    const egg = learner ? null : this.easterEgg(text, p.conversationId);
     if (egg) return this.cannedRun(p, text, egg);
     // Resolve the provider first so configuration errors surface synchronously to the caller.
     const resolved = this.d.providers.resolve(p.providerId, p.model);
@@ -167,7 +182,7 @@ export class AgentRuntime {
   }
 
   /** A reply that needs no model: stored and streamed like a normal run. */
-  private cannedRun(p: ChatParams, text: string, egg: ChatEgg): { runId: string; conversationId: string; done: Promise<RunResult> } {
+  private cannedRun(p: ChatParams, text: string, egg: Pick<ChatEgg, 'reply' | 'trophies'> & { persona?: ChatEgg['persona'] }, model = 'easter egg'): { runId: string; conversationId: string; done: Promise<RunResult> } {
     let conversationId = p.conversationId;
     if (conversationId) {
       if (!this.d.store.exists(conversationId)) throw new CoreError('NOT_FOUND', 'Conversation not found');
@@ -180,7 +195,7 @@ export class AgentRuntime {
     if (egg.persona !== undefined) this.d.fun!.persona.set(convId, egg.persona);
     for (const t of egg.trophies) this.d.fun!.trophy(t);
     this.d.store.append(convId, { role: 'user', content: text });
-    this.emit({ type: 'run.started', runId, conversationId: convId, providerId: 'fbrx', model: 'easter egg' });
+    this.emit({ type: 'run.started', runId, conversationId: convId, providerId: 'fbrx', model });
     const assistant = this.d.store.append(convId, { id: newId('msg'), role: 'assistant', content: reply });
     const { providerData: _replay, ...visible } = assistant;
     this.emit({ type: 'message.completed', runId, conversationId: convId, message: visible });
@@ -194,10 +209,13 @@ export class AgentRuntime {
   }
 
   private availableTools(): ToolSpec[] {
+    // The learning helper on student computers only talks.
+    if (this.d.learner?.()) return [];
     return this.d.registry
       .list()
       .filter((t) => this.d.registry.isEnabled(t.name))
       .filter((t) => !t.feature || this.d.license.has(t.feature))
+      .filter((t) => !t.unavailable?.())
       .filter((t) => this.d.policy.staticAction(t).action !== 'deny');
   }
 
@@ -209,6 +227,8 @@ export class AgentRuntime {
 
   private systemPrompt(toolCount: number, offline: boolean): string {
     const s = this.d.settings.get();
+    const learner = this.d.learner?.();
+    if (learner) return learnerPrompt(s.ai.agentName, learner.vertical, s.profile.callMe.trim() || s.profile.name.trim().split(/\s+/)[0] || '');
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const date = new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
     return [

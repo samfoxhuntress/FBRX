@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { UPDATE_CHANNELS, compareSemver } from '@fbrx/shared';
+import { AUTO_UPDATE_MODES, UPDATE_CHANNELS, VERTICALS, compareSemver } from '@fbrx/shared';
 import { hashPassword, randomToken, sha256Hex } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
@@ -75,6 +75,11 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     status: z.enum(['active', 'suspended']).optional(),
     updateChannel: z.enum(UPDATE_CHANNELS).optional(),
     defaultProfileId: z.string().nullable().optional(),
+    /** Business, Education (schools) or Home (families). */
+    vertical: z.enum(VERTICALS).optional(),
+    /** How the organization's computers install new versions (groups may differ). */
+    autoUpdate: z.enum(AUTO_UPDATE_MODES).optional(),
+    helpdeskEnabled: z.boolean().optional(),
   });
   const tenantView = (t: any) => ({
     id: t.id,
@@ -85,6 +90,9 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     notes: t.notes,
     updateChannel: t.update_channel,
     defaultProfileId: t.default_profile_id,
+    vertical: t.vertical ?? 'business',
+    autoUpdate: t.auto_update ?? 'notify',
+    helpdeskEnabled: Number(t.helpdesk_enabled ?? 1) === 1,
     configVersion: Number(t.config_version),
     createdAt: t.created_at,
     deviceCount: Number(ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM devices WHERE tenant_id = ? AND status = 'active'", t.id)?.n ?? 0),
@@ -105,13 +113,15 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     let slug = slugify(body.name);
     if (ctx.db.get('SELECT 1 FROM tenants WHERE slug = ?', slug)) slug = `${slug}-${id.slice(-4)}`;
     ctx.db.run(
-      'INSERT INTO tenants (id, name, slug, contact_email, notes, update_channel, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
+      'INSERT INTO tenants (id, name, slug, contact_email, notes, update_channel, vertical, auto_update, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
       id,
       body.name,
       slug,
       body.contactEmail ?? null,
       body.notes ?? '',
       body.updateChannel ?? 'stable',
+      body.vertical ?? 'business',
+      body.autoUpdate ?? 'notify',
       now,
       now,
     );
@@ -132,17 +142,20 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!t) throw notFound();
     if (body.defaultProfileId && !ctx.db.get('SELECT 1 FROM profiles WHERE id = ? AND tenant_id = ?', body.defaultProfileId, id)) throw badRequest('Unknown profile');
     ctx.db.run(
-      'UPDATE tenants SET name = ?, contact_email = ?, notes = ?, status = ?, update_channel = ?, default_profile_id = ?, updated_at = ? WHERE id = ?',
+      'UPDATE tenants SET name = ?, contact_email = ?, notes = ?, status = ?, update_channel = ?, default_profile_id = ?, vertical = ?, auto_update = ?, helpdesk_enabled = ?, updated_at = ? WHERE id = ?',
       body.name ?? t.name,
       body.contactEmail !== undefined ? body.contactEmail : t.contact_email,
       body.notes ?? t.notes,
       body.status ?? t.status,
       body.updateChannel ?? t.update_channel,
       body.defaultProfileId !== undefined ? body.defaultProfileId : t.default_profile_id,
+      body.vertical ?? t.vertical ?? 'business',
+      body.autoUpdate ?? t.auto_update ?? 'notify',
+      body.helpdeskEnabled === undefined ? Number(t.helpdesk_enabled ?? 1) : body.helpdeskEnabled ? 1 : 0,
       new Date().toISOString(),
       id,
     );
-    if (body.defaultProfileId !== undefined || body.updateChannel) ctx.bumpConfig(id);
+    if (body.defaultProfileId !== undefined || body.updateChannel || body.vertical || body.autoUpdate || body.helpdeskEnabled !== undefined) ctx.bumpConfig(id);
     if (body.status === 'suspended') for (const d of ctx.db.all<{ id: string }>('SELECT id FROM devices WHERE tenant_id = ?', id)) ctx.realtime.disconnectDevice(d.id, 'tenant suspended');
     ctx.audit.record(actorOf(req), 'tenant.updated', { type: 'tenant', id, tenantId: id }, body);
     return tenantView(ctx.db.get('SELECT * FROM tenants WHERE id = ?', id));

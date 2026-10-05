@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { SnapshotHeader, SystemStatus } from '@fbrx/shared';
-import { Button, Callout, Card, Field, Input, Status, formatBytes, useAction, FbrxMark } from '@fbrx/ui';
+import { Button, Callout, Card, Field, Input, Status, Toggle, formatBytes, useAction, FbrxMark } from '@fbrx/ui';
 import { call, pickFile } from '../client';
 import { useCore } from '../hooks';
 import { RestoreModal } from './backup';
@@ -16,7 +16,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
   const [pass, setPass] = useState({ a: '', b: '' });
   const [ai, setAi] = useState<'local' | 'ollama' | 'anthropic' | 'skip'>('local');
   const [apiKey, setApiKey] = useState('');
-  const [org, setOrg] = useState({ serverUrl: '', token: '' });
+  const [org, setOrg] = useState({ serverUrl: '', token: '', student: false });
   const [restore, setRestore] = useState<{ file: string; header: SnapshotHeader } | null>(null);
   const catalog = useCore('runtime.catalog');
   const providers = useCore('ai.providers');
@@ -145,18 +145,19 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
           {step === 'org' && (
             <div className="fx-form">
               <h1>Connect to your organization</h1>
-              <p className="fx-secondary">Optional. If your IT team runs an FBRX control plane, connect so they can manage updates, policies, backups and licensing for this machine.</p>
-              <Field label="Control plane URL">
+              <p className="fx-secondary">Optional. If your school or company runs FBRX Command, connect so IT can manage updates, settings and backups, and answer your help desk tickets.</p>
+              <Field label="FBRX Command address">
                 <Input value={org.serverUrl} onChange={(e) => setOrg({ ...org, serverUrl: e.target.value })} placeholder="https://fbrx.yourcompany.com" />
               </Field>
               <Field label="Enrollment token">
                 <Input value={org.token} onChange={(e) => setOrg({ ...org, token: e.target.value.trim() })} placeholder="fbrx_enr_…" />
               </Field>
+              <Toggle checked={!!org.student} onChange={(v) => setOrg({ ...org, student: v })} label="This is a student computer (FBRX OS Education)" />
               <div className="fx-actions" style={{ justifyContent: 'flex-end' }}>
                 <Button variant="ghost" onClick={next}>
                   Use standalone
                 </Button>
-                <Button variant="primary" loading={busy === 'o'} disabled={!org.serverUrl || !org.token} onClick={() => void run('o', () => call('fleet.enroll', { serverUrl: org.serverUrl, token: org.token }).then(next))}>
+                <Button variant="primary" loading={busy === 'o'} disabled={!org.serverUrl || !org.token} onClick={() => void run('o', () => call('fleet.enroll', { serverUrl: org.serverUrl, token: org.token, ...(org.student ? { audience: 'student' as const } : {}) }).then(next))}>
                   Connect
                 </Button>
               </div>
