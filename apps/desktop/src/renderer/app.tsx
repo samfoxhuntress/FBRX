@@ -14,7 +14,7 @@ import { VaultStartPrompt } from './vault-lock';
 import { UpdatePill } from './release';
 import { SpotlightView } from './pages/spotlight';
 import { ClipPicker } from './pages/clip-picker';
-import { LearnerContext, TierContext, UltraOnly, useLicenseTier } from './edition';
+import { LearnerContext, TierContext, UltraOnly, VerticalContext, useLicenseTier } from './edition';
 import { PresenterPill, usePresenter } from './presenter';
 
 // Pages load when first opened, so the app starts with only what the first screen needs.
@@ -282,8 +282,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   }
   const agentName = s.ai.agentName;
   const enrolled = status.fleet.state !== 'unenrolled';
-  // FBRX OS Education (a student computer): a short list of friendly pages.
+  // FBRX OS Education or Home (a student's or child's computer): a short list of friendly pages.
   const learner = !!status.edition?.learner;
+  const vertical = status.edition?.vertical ?? 'business';
 
   const all: Array<NavItem & { ultra?: boolean }> = [
     { id: 'home', label: 'FBRX Glass', icon: 'dashboard', section: 'Command' },
@@ -330,7 +331,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
 
   const page = (() => {
     if (learner && route !== 'home' && !LEARNER_PAGES.has(route)) {
-      return <UltraOnly title="That page" what="Student computers keep things simple. Ask your teacher or the IT team if you need something that is not here." learner />;
+      return <UltraOnly title="That page" what={vertical === 'home' ? 'This computer keeps things simple. Ask a parent if you need something that is not here.' : 'Student computers keep things simple. Ask your teacher or the IT team if you need something that is not here.'} learner />;
     }
     switch (route) {
       case 'agent':
@@ -354,7 +355,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'updates':
         return <UpdatesPage />;
       case 'bugs':
-        return ultra ? <BugsPage agentName={agentName} advanced={ultra} /> : ultraOnly('The bug catcher', 'Crash and error logs from Windows and your apps, explained by the agent. In Basic, ask the agent what went wrong, or send it to your IT team from Help desk.');
+        return ultra ? <BugsPage agentName={agentName} advanced={ultra} /> : ultraOnly('The bug catcher', 'Crash and error logs from Windows and your apps, explained by the agent. In Basic, ask the agent what went wrong, or send it to your organization from Help desk.');
       case 'lab':
         return ultra ? <LabPage /> : ultraOnly('The virtual lab', 'Test machines in Hyper-V or Windows Sandbox, with capacity gauges and one-click starts.');
       case 'network':
@@ -403,13 +404,14 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   return (
     <TierContext.Provider value={tier}>
     <LearnerContext.Provider value={learner}>
+    <VerticalContext.Provider value={vertical}>
     <AgentNameContext.Provider value={agentName}>
       {showSplash && <Splash tier={tier} />}
       <Shell
         brandName={
           learner ? (
             <>
-              FBRX OS <span className="tier-badge student">Education</span>
+              FBRX OS <span className="tier-badge student">{vertical === 'home' ? 'Home' : 'Education'}</span>
             </>
           ) : (
             <>
@@ -454,6 +456,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       </Shell>
       <VaultStartPrompt />
     </AgentNameContext.Provider>
+    </VerticalContext.Provider>
     </LearnerContext.Provider>
     </TierContext.Provider>
   );
@@ -548,7 +551,7 @@ function TopBar({
  * The sidebar's sections, each with an FBRX name, an icon and plain words for what is inside. Pick a section to open
  * it; collapsed to icons, its pages slide out beside it.
  */
-/** What a student computer (FBRX OS Education) shows. */
+/** What a student's or child's computer (FBRX OS Education or Home) shows. */
 const LEARNER_PAGES = new Set(['home', 'agent', 'helpdesk', 'tasks', 'notes', 'toolbox', 'library', 'settings']);
 
 const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; basicHint?: string; learnerHint?: string; icon: IconName }> = [

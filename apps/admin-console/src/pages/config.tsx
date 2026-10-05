@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { AUDIENCE_NAMES, AUTO_UPDATE_MODES, AUTO_UPDATE_NAMES, DEFAULT_POLICY, UPDATE_CHANNELS, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_NAMES, type Audience, type AutoUpdateMode, type Vertical } from '@fbrx/shared';
+import { AUDIENCE_NAMES, AUTO_UPDATE_MODES, isLearner, AUTO_UPDATE_NAMES, DEFAULT_POLICY, UPDATE_CHANNELS, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_NAMES, type Audience, type AutoUpdateMode, type Vertical } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Input, JsonEditor, Modal, Page, Select, Table, TextArea, Toggle, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
+import { QUICK_SETUP_TITLE, QuickSetup, quickSetupDone } from './quick-setup';
 
 interface Profile {
   id: string;
@@ -39,7 +40,7 @@ interface Tenant {
 const VERTICAL_HELP: Record<Vertical, string> = {
   business: 'Staff computers run FBRX Endpoint Basic or Ultra.',
   education: 'Staff computers start in classroom mode (presenter-safe with a projector, chats offline first, no jokes), and student computers run FBRX OS Education.',
-  home: 'Coming later: parents run FBRX Endpoint, children run FBRX OS Home with the same protections as students.',
+  home: "Parents' computers run FBRX Endpoint and get the children's requests for help; children's computers run FBRX OS Home with the same protections as students.",
 };
 
 const EXAMPLE_SETTINGS = {
@@ -57,6 +58,7 @@ export function ConfigPage() {
   const tenant = tenants.data?.find((t) => t.id === app.tenantId);
   const [editProfile, setEditProfile] = useState<Partial<Profile> | null>(null);
   const [editGroup, setEditGroup] = useState<Partial<Group> | null>(null);
+  const [quickShown, setQuickShown] = useState<string | null>(null);
   const { confirm, dialog } = useConfirm();
   const { busy, run } = useAction();
   const profileName = (id: string | null) => profiles.data?.find((p) => p.id === id)?.name ?? '—';
@@ -66,31 +68,37 @@ export function ConfigPage() {
       title="Profiles & groups"
       description="Profiles bundle settings, locked settings and a governance policy. They apply tenant-wide (default profile) and per group; devices can add overrides. Changes reach online devices within seconds."
     >
-      {tenant && <SchoolSetup tenant={tenant} groups={groups.data ?? []} onDone={() => (groups.reload(), tenants.reload())} />}
+      {tenant && groups.data && (!quickSetupDone(tenant.vertical, groups.data.map((g) => g.name)) || quickShown === tenant.id) && (
+        <Card title={QUICK_SETUP_TITLE[tenant.vertical]} subtitle={`The usual groups for ${tenant.vertical === 'business' ? 'a company' : tenant.vertical === 'education' ? 'a school' : 'a family'}, each with an enrollment token. Existing groups with the same names are reused.`}>
+          <QuickSetup key={`${tenant.id}-${tenant.vertical}`} tenantId={tenant.id} vertical={tenant.vertical} onDone={() => (setQuickShown(tenant.id), groups.reload())} />
+        </Card>
+      )}
       {tenant && (
-        <Card title="Organization defaults">
-          <div className="fx-row">
-            <Field label="Kind of organization" help={VERTICAL_HELP[tenant.vertical]}>
-              <Select value={tenant.vertical} onChange={(e) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { vertical: e.target.value }).then(tenants.reload), 'Organization updated')} options={VERTICALS.map((v) => ({ value: v, label: VERTICAL_NAMES[v] }))} />
-            </Field>
-            <Field label="New versions" help="Install automatically: computers update themselves when nobody is using them (from FBRX Command's releases or the GitHub repository). Groups can differ.">
-              <Select value={tenant.autoUpdate} onChange={(e) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { autoUpdate: e.target.value }).then(tenants.reload), 'Update policy changed')} options={AUTO_UPDATE_MODES.map((m) => ({ value: m, label: AUTO_UPDATE_NAMES[m] }))} />
-            </Field>
-            <Field label="Help desk" help="Computers get a Help desk tab for sending tickets to IT">
-              <Toggle checked={tenant.helpdeskEnabled} onChange={(v) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { helpdeskEnabled: v }).then(tenants.reload), v ? 'Help desk on' : 'Help desk off')} label={tenant.helpdeskEnabled ? 'On' : 'Off'} />
-            </Field>
-          </div>
-          <div className="fx-row">
-            <Field label="Default profile" help="Applies to every device before group and device layers">
-              <Select
-                value={tenant.defaultProfileId ?? ''}
-                onChange={(e) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { defaultProfileId: e.target.value || null }).then(tenants.reload), 'Default profile updated')}
-                options={[{ value: '', label: 'None' }, ...(profiles.data ?? []).map((p) => ({ value: p.id, label: p.name }))]}
-              />
-            </Field>
-            <Field label="Default update channel">
-              <Select value={tenant.updateChannel} onChange={(e) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { updateChannel: e.target.value }).then(tenants.reload), 'Update channel changed')} options={[...UPDATE_CHANNELS]} />
-            </Field>
+        <Card title={tenant.vertical === 'home' ? 'Family defaults' : tenant.vertical === 'education' ? 'School defaults' : 'Organization defaults'}>
+          <div className="fx-form">
+            <div className="fx-row">
+              <Field label="Kind" help={VERTICAL_HELP[tenant.vertical]}>
+                <Select value={tenant.vertical} onChange={(e) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { vertical: e.target.value }).then(() => (tenants.reload(), app.refreshMe())), 'Kind changed')} options={VERTICALS.map((v) => ({ value: v, label: VERTICAL_NAMES[v] }))} />
+              </Field>
+              <Field label="New versions" help="Install automatically: computers update themselves when nobody is using them (from FBRX Command's releases or the GitHub repository). Groups can differ.">
+                <Select value={tenant.autoUpdate} onChange={(e) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { autoUpdate: e.target.value }).then(tenants.reload), 'Update policy changed')} options={AUTO_UPDATE_MODES.map((m) => ({ value: m, label: AUTO_UPDATE_NAMES[m] }))} />
+              </Field>
+              <Field label="Help desk" help={tenant.vertical === 'home' ? 'Computers get a Help desk tab for asking a parent for help' : 'Computers get a Help desk tab for sending tickets to IT'}>
+                <Toggle checked={tenant.helpdeskEnabled} onChange={(v) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { helpdeskEnabled: v }).then(tenants.reload), v ? 'Help desk on' : 'Help desk off')} label={tenant.helpdeskEnabled ? 'On' : 'Off'} />
+              </Field>
+            </div>
+            <div className="fx-row">
+              <Field label="Default profile" help="Applies to every device before group and device layers">
+                <Select
+                  value={tenant.defaultProfileId ?? ''}
+                  onChange={(e) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { defaultProfileId: e.target.value || null }).then(tenants.reload), 'Default profile updated')}
+                  options={[{ value: '', label: 'None' }, ...(profiles.data ?? []).map((p) => ({ value: p.id, label: p.name }))]}
+                />
+              </Field>
+              <Field label="Default update channel">
+                <Select value={tenant.updateChannel} onChange={(e) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { updateChannel: e.target.value }).then(tenants.reload), 'Update channel changed')} options={[...UPDATE_CHANNELS]} />
+              </Field>
+            </div>
           </div>
         </Card>
       )}
@@ -119,8 +127,8 @@ export function ConfigPage() {
               { key: 'n', header: 'Group', render: (g) => <div className="fx-cell-title">{g.name}</div> },
               { key: 'd', header: 'Devices', className: 'num', render: (g) => g.deviceCount },
               { key: 'p', header: 'Profile', render: (g) => profileName(g.profileId) },
-              { key: 'a', header: 'Used by', render: (g) => (g.audience ? <span className={`fx-badge${g.audience === 'student' ? ' accent' : ''}`}>{AUDIENCE_NAMES[g.audience]}</span> : <span className="fx-muted">inherit</span>) },
-              { key: 't', header: 'Edition', render: (g) => (g.audience === 'student' ? 'FBRX OS Education' : g.tier === 'basic' ? 'Basic' : <span className="fx-muted">license</span>) },
+              { key: 'a', header: 'Used by', render: (g) => (g.audience ? <span className={`fx-badge${isLearner(g.audience) ? ' accent' : ''}`}>{AUDIENCE_NAMES[g.audience]}</span> : <span className="fx-muted">inherit</span>) },
+              { key: 't', header: 'Edition', render: (g) => (g.audience === 'student' ? 'FBRX OS Education' : g.audience === 'child' ? 'FBRX OS Home' : g.tier === 'basic' ? 'Basic' : <span className="fx-muted">license</span>) },
               { key: 'c', header: 'Channel', render: (g) => g.pinnedVersion ? <span className="fx-badge">pinned {g.pinnedVersion}</span> : g.updateChannel ?? <span className="fx-muted">inherit</span> },
             ]}
           />
@@ -274,11 +282,11 @@ function GroupEditor({ group, vertical, profiles, versions, onClose, onSaved, on
           <Select value={f.profileId} onChange={(e) => setF({ ...f, profileId: e.target.value })} options={[{ value: '', label: 'Organization default only' }, ...profiles.map((p) => ({ value: p.id, label: p.name }))]} />
         </Field>
         <div className="fx-row">
-          <Field label="Used by" help={vertical === 'education' ? 'Student computers run FBRX OS Education' : undefined}>
+          <Field label="Used by" help={vertical === 'education' ? 'Student computers run FBRX OS Education' : vertical === 'home' ? "Children's computers run FBRX OS Home" : undefined}>
             <Select value={f.audience} onChange={(e) => setF({ ...f, audience: e.target.value as Audience | '' })} options={[{ value: '', label: 'Organization default' }, ...VERTICAL_AUDIENCES[vertical].map((a) => ({ value: a, label: AUDIENCE_NAMES[a] }))]} />
           </Field>
-          <Field label="Edition" help="Hold the group to Endpoint Basic, e.g. teachers on Basic and IT on Ultra">
-            <Select value={f.tier} disabled={f.audience === 'student' || f.audience === 'child'} onChange={(e) => setF({ ...f, tier: e.target.value as 'basic' | '' })} options={[{ value: '', label: 'What the license gives' }, { value: 'basic', label: 'Endpoint Basic' }]} />
+          <Field label="Edition" help={vertical === 'home' ? "Hold parents' computers to Endpoint Basic if they don't need the IT tools" : 'Hold the group to Endpoint Basic, e.g. teachers on Basic and IT on Ultra'}>
+            <Select value={f.tier} disabled={isLearner((f.audience || null) as Audience | null)} onChange={(e) => setF({ ...f, tier: e.target.value as 'basic' | '' })} options={[{ value: '', label: 'What the license gives' }, { value: 'basic', label: 'Endpoint Basic' }]} />
           </Field>
           <Field label="New versions">
             <Select value={f.autoUpdate} onChange={(e) => setF({ ...f, autoUpdate: e.target.value as AutoUpdateMode | '' })} options={[{ value: '', label: 'Organization default' }, ...AUTO_UPDATE_MODES.map((m) => ({ value: m, label: AUTO_UPDATE_NAMES[m] }))]} />
@@ -294,54 +302,5 @@ function GroupEditor({ group, vertical, profiles, versions, onClose, onSaved, on
         </div>
       </div>
     </Modal>
-  );
-}
-
-/**
- * One click for a school: Teachers (Endpoint Basic, classroom mode), IT (Endpoint Ultra) and Students (FBRX OS
- * Education) groups, each with its own enrollment token.
- */
-function SchoolSetup({ tenant, groups, onDone }: { tenant: Tenant; groups: Group[]; onDone: () => void }) {
-  const { run, busy } = useAction();
-  const [tokens, setTokens] = useState<Array<{ label: string; token: string }> | null>(null);
-  if (tenant.vertical !== 'education' || (groups.some((g) => g.audience === 'student') && !tokens)) return null;
-  const setUp = () =>
-    run(
-      'school',
-      async () => {
-        const plan = [
-          { name: 'Teachers', description: 'Staff computers: Endpoint Basic in classroom mode', audience: 'staff', tier: 'basic' },
-          { name: 'IT', description: 'IT and administrators: Endpoint Ultra; receives help desk tickets', audience: 'staff', tier: null },
-          { name: 'Students', description: 'Student computers: FBRX OS Education', audience: 'student', tier: null },
-        ];
-        const made: Array<{ label: string; token: string }> = [];
-        for (const g of plan) {
-          const existing = groups.find((x) => x.name === g.name);
-          const group = existing ?? (await api<Group>('POST', '/v1/admin/groups', g));
-          const t = await api<{ token: string }>('POST', '/v1/admin/enrollment-tokens', { label: `${g.name} computers`, groupId: group.id, audience: g.audience });
-          made.push({ label: g.name, token: t.token });
-        }
-        setTokens(made);
-        onDone();
-      },
-      'School groups ready',
-    );
-  return (
-    <Card title="Set up for a school" subtitle="Creates Teachers, IT and Students groups with an enrollment token each. Install FBRX on each computer with its group's token.">
-      {tokens ? (
-        <div className="fx-form">
-          <Callout tone="good" title="Copy these tokens now">They are shown once. Deploy & enroll makes more, and can build installer files and device-manager profiles from them.</Callout>
-          {tokens.map((t) => (
-            <Field key={t.label} label={`${t.label} computers`}>
-              <Input readOnly value={t.token} onFocus={(e) => e.target.select()} />
-            </Field>
-          ))}
-        </div>
-      ) : (
-        <Button variant="primary" icon="plus" loading={busy === 'school'} onClick={() => void setUp()}>
-          Create school groups and tokens
-        </Button>
-      )}
-    </Card>
   );
 }

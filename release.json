@@ -1,18 +1,17 @@
 {
   "product": "FBRX OS",
   "stage": "Alpha",
-  "version": "1.9.0",
+  "version": "1.9.1",
   "codename": "Bobbin",
   "released": "2026-10-05",
-  "importance": "recommended",
-  "summary": "Ready for school: a help desk that routes tickets to IT, FBRX OS Education for student computers, presenter-safe mode, UniFi network environments in Ultra, and updates FBRX Command can push.",
+  "importance": "optional",
+  "summary": "FBRX Command for work, school or home: pick the kind of tenant at setup, set up its groups in one click, and run children's computers on FBRX OS Home.",
   "notes": [
-    "Help desk: once a computer belongs to an organization, a Help desk tab sends problems to IT through FBRX Command, live, to the computers chosen as receivers.",
-    "FBRX OS Education: student computers get a simple set of pages and a safe learning helper with no tools. Education licenses put staff computers in classroom mode.",
-    "Presenter-safe mode in every edition: quiet notifications, masked clipboard history and blurred private lists while you present (Ctrl+Alt+P, or on by itself with a projector).",
-    "Endpoint Ultra: attach your UniFi console in Network Center → Environments to see and manage the whole network, with guest Wi-Fi codes.",
-    "Endpoint Basic is simpler: IT tools such as Task Manager, Copy & migrate and the bug catcher move to Ultra.",
-    "FBRX Command can install updates on every computer by itself or on demand, and makes Mac profiles and Intune scripts for device managers."
+    "FBRX Command asks what it will run before setup, and for every new tenant: Work, School or Home. The wording, groups and defaults follow the choice.",
+    "One-click setup for every kind: Staff and IT (Work), Teachers, IT and Students (School), Parents and Children (Home), each with its own enrollment token and provisioning file.",
+    "FBRX OS Home: children's computers get the simple pages and the safe learning helper, which now speaks of a parent instead of a teacher.",
+    "At home, a child's \"Get help\" goes straight to every parent's computer, with no setup.",
+    "Joining a computer: \"This computer is for a student or a child\" makes it FBRX OS Education at a school or FBRX OS Home in a family."
   ],
   "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/heads/claude/fbrx-os-enterprise-app-bs7s2j.zip",
   "page": "https://github.com/samfoxhuntress/FBRX"

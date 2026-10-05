@@ -1108,14 +1108,15 @@ export class Kernel {
   }
 
   /**
-   * A message on a student computer sounded like a child may be in danger. The school is told which computer, when and
-   * what kind of concern, so a caring adult can check in; the message itself stays on the computer.
+   * A message on a student's or child's computer sounded like they may be in danger. The school (or family) is told
+   * which computer, when and what kind of concern, so a caring adult can check in; the message stays on the computer.
    */
   private reportConcern(category: 'self-harm' | 'harmed') {
     const what = category === 'self-harm' ? 'may be thinking about hurting themselves' : 'may be being hurt by someone';
+    const who = this.edition().vertical === 'home' ? 'child' : 'student';
     this.audit.append({ category: 'agent', action: 'learner.concern', actor: 'learning-helper', outcome: 'info', details: { category } });
     if (this.fleet.enrolled) {
-      this.fleet.reportEvent({ kind: 'alert', severity: 'critical', message: `Student safety: the student using ${this.deviceName()} ${what}. Please have a caring adult check in.`, data: { concern: category, device: this.deviceName() }, at: new Date().toISOString() });
+      this.fleet.reportEvent({ kind: 'alert', severity: 'critical', message: `${who === 'child' ? 'Child' : 'Student'} safety: the ${who} using ${this.deviceName()} ${what}. Please have a caring adult check in.`, data: { concern: category, device: this.deviceName() }, at: new Date().toISOString() });
     }
   }
 

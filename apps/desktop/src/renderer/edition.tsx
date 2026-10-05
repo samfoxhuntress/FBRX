@@ -1,5 +1,5 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import { TIER_NAMES, type Tier } from '@fbrx/shared';
+import { TIER_NAMES, type Tier, type Vertical } from '@fbrx/shared';
 import { Button, Card, Icons } from '@fbrx/ui';
 import { useCore } from './hooks';
 import { navigate } from './app';
@@ -11,11 +11,18 @@ import { navigate } from './app';
  */
 export const TierContext = createContext<Tier>('basic');
 
-/** A student computer (FBRX OS Education): the short, friendly set of pages. */
+/** A student or child computer (FBRX OS Education or FBRX OS Home): the short, friendly set of pages. */
 export const LearnerContext = createContext(false);
 
 export function useLearner(): boolean {
   return useContext(LearnerContext);
+}
+
+/** The kind of organization this computer belongs to (Work, School or Home), for how things are worded. */
+export const VerticalContext = createContext<Vertical>('business');
+
+export function useVertical(): Vertical {
+  return useContext(VerticalContext);
 }
 
 /** The edition this computer runs, inside the main window. */
@@ -41,7 +48,7 @@ export function UltraOnly({ title, what, learner }: { title: string; what: strin
               <Icons.school size={22} />
             </span>
             <div>
-              <h2>{title} is not on student computers</h2>
+              <h2>{title} is not on this computer</h2>
               <p className="fx-muted">{what}</p>
               <div className="fx-actions">
                 <Button variant="primary" icon="dashboard" onClick={() => navigate('home')}>

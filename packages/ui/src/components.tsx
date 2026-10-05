@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentProps, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { FbrxMark } from './brand';
-import { Icons, type IconName } from './icons';
+import { Icon, Icons, type IconName } from './icons';
 
 const cx = (...c: Array<string | false | null | undefined>) => c.filter(Boolean).join(' ');
 
@@ -306,6 +306,25 @@ export function Toggle({ checked, onChange, label, disabled, title }: { checked:
       <input type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       {label && <span>{label}</span>}
     </label>
+  );
+}
+
+/** A row of large radio cards: one choice that decides what follows (the kind of tenant, a plan…). */
+export function ChoiceCards<T extends string>({ value, onChange, options, label }: { value: T; onChange: (v: T) => void; options: Array<{ value: T; title: ReactNode; description?: ReactNode; detail?: ReactNode; icon?: IconName }>; label: string }) {
+  return (
+    <div className="fx-choices" role="radiogroup" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.value} type="button" role="radio" aria-checked={value === o.value} className={`fx-choice${value === o.value ? ' active' : ''}`} onClick={() => onChange(o.value)}>
+          <span className="fx-choice-head">
+            {o.icon && <Icon name={o.icon} size={18} />}
+            <b>{o.title}</b>
+            <span className="fx-choice-dot" aria-hidden="true" />
+          </span>
+          {o.description && <span className="fx-choice-desc">{o.description}</span>}
+          {o.detail && <span className="fx-choice-detail">{o.detail}</span>}
+        </button>
+      ))}
+    </div>
   );
 }
 

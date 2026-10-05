@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { AUDIENCES, AUDIENCE_NAMES, DEFAULT_POLICY, UPDATE_CHANNELS } from '@fbrx/shared';
+import { DEFAULT_POLICY, UPDATE_CHANNELS } from '@fbrx/shared';
 import {
   Button,
   Callout,
@@ -30,7 +30,7 @@ import {
 import { api, download } from '../api';
 import { useApp, useQuery } from '../state';
 import { CommandComposer } from './command-composer';
-import { CommandStatus, HealthStatus, OnlineStatus, PLATFORM_LABEL, ServiceState, SeverityStatus, type DeviceSummary } from './common';
+import { CommandStatus, HealthStatus, audienceHelp, audienceOptions, OnlineStatus, PLATFORM_LABEL, ServiceState, SeverityStatus, type DeviceSummary } from './common';
 
 interface Detail extends DeviceSummary {
   group: { id: string; name: string } | null;
@@ -371,10 +371,10 @@ function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
               <Select disabled={!canConfig} value={pinned} onChange={(e) => setPinned(e.target.value)} options={[{ value: '', label: 'Not pinned' }, ...releases.filter((r) => r.published).map((r) => ({ value: r.version, label: r.version }))]} />
             </Field>
           </div>
-          <Field label="Used by" help="Student computers run FBRX OS Education (Education organizations)">
-            <Select disabled={!canConfig} value={audience} onChange={(e) => setAudience(e.target.value)} options={[{ value: '', label: 'Its group (or the organization default)' }, ...AUDIENCES.map((a) => ({ value: a, label: AUDIENCE_NAMES[a] }))]} />
+          <Field label="Used by" help={audienceHelp(app.kind)}>
+            <Select disabled={!canConfig} value={audience} onChange={(e) => setAudience(e.target.value)} options={[{ value: '', label: 'Its group (or the organization default)' }, ...audienceOptions(app.kind)]} />
           </Field>
-          <Toggle checked={receiver} disabled={!canConfig} onChange={setReceiver} label="Receives help desk tickets (the IT computer)" />
+          <Toggle checked={receiver} disabled={!canConfig} onChange={setReceiver} label={app.kind === 'home' ? "Receives the family's requests for help (a parent's computer)" : 'Receives help desk tickets (the IT computer)'} />
         </div>
       </Card>
       <Card title="Overrides" subtitle="Applied on top of the tenant and group profiles, for this device only">

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareSemver, deepMerge, isPathLocked, satisfies, newId, decodeLicenseUnverified, type LicensePayload } from '../src';
+import { compareSemver, deepMerge, isPathLocked, satisfies, newId, decodeLicenseUnverified, parseVertical, productNameFor, resolveAudience, KIND_GROUPS, VERTICALS, VERTICAL_AUDIENCES, type LicensePayload } from '../src';
 import { generateSigningKeyPair, hashPassword, licenseStatusFrom, openString, sealString, signLicense, verifyLicense, verifyPassword } from '../src/node';
 import { randomBytes } from 'node:crypto';
 
@@ -87,5 +87,40 @@ describe('utilities', () => {
     const b = newId('x');
     expect(a < b || a.slice(0, 12) === b.slice(0, 12)).toBe(true);
     expect(a).toMatch(/^x_[0-9a-z]{22}$/);
+  });
+});
+
+describe('kinds of tenant (Work, School, Home)', () => {
+  it('reads the kind from its id or friendly name', () => {
+    expect(parseVertical('Work')).toBe('business');
+    expect(parseVertical(' school ')).toBe('education');
+    expect(parseVertical('family')).toBe('home');
+    expect(parseVertical('home')).toBe('home');
+    expect(parseVertical('')).toBeNull();
+    expect(parseVertical('castle')).toBeNull();
+  });
+
+  it('gives each computer an audience that fits the kind', () => {
+    expect(resolveAudience('home', null)).toBe('parent');
+    expect(resolveAudience('home', 'child')).toBe('child');
+    // A computer asking to be a student computer in a family becomes a child's computer, and the other way round.
+    expect(resolveAudience('home', 'parent', 'student')).toBe('child');
+    expect(resolveAudience('education', null, 'child')).toBe('student');
+    expect(resolveAudience('home', 'student')).toBe('child');
+    // Staff tokens in a family mean a parent; a learner token can never be widened.
+    expect(resolveAudience('home', 'staff')).toBe('parent');
+    expect(resolveAudience('education', 'student', 'staff')).toBe('student');
+    // Work has no learner computers.
+    expect(resolveAudience('business', null, 'student')).toBe('staff');
+    expect(productNameFor('ultra', 'home', 'child')).toBe('FBRX OS Home');
+    expect(productNameFor('ultra', 'home', 'parent')).toBe('FBRX Endpoint Ultra');
+  });
+
+  it('has quick-setup groups that fit each kind', () => {
+    for (const v of VERTICALS) {
+      expect(KIND_GROUPS[v].length).toBeGreaterThan(0);
+      for (const g of KIND_GROUPS[v]) expect(VERTICAL_AUDIENCES[v]).toContain(g.audience);
+    }
+    expect(KIND_GROUPS.home.map((g) => g.name)).toEqual(['Parents', 'Children']);
   });
 });

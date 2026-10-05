@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
-import { TICKET_CATEGORIES, TICKET_CATEGORY_NAMES, TICKET_PRIORITIES, TICKET_STATUSES, TICKET_STATUS_NAMES, type HelpdeskScope, type TicketDetail, type TicketStatus, type TicketSummary } from '@fbrx/shared';
+import { VERTICAL_INFO, TICKET_CATEGORIES, TICKET_CATEGORY_NAMES, TICKET_PRIORITIES, TICKET_STATUSES, TICKET_STATUS_NAMES, type HelpdeskScope, type TicketDetail, type TicketStatus, type TicketSummary } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Input, Modal, Page, Select, Status, Tabs, TextArea, Toggle, timeAgo, useAction } from '@fbrx/ui';
 import { call } from '../client';
 import { useCore } from '../hooks';
 import { routeArg } from '../app';
+import { useVertical } from '../edition';
 
 /**
  * Help desk (a computer in an organization): send a problem to IT, follow it, and, on computers the organization chose
@@ -22,11 +23,14 @@ export function HelpdeskPage({ learner }: { learner: boolean }) {
   const state = tab === 'history' ? 'closed' : 'open';
   const list = useCore('helpdesk.tickets', { scope, state }, ['helpdesk.changed', 'fleet.changed']);
   useEffect(() => setPicked(null), [tab]);
+  const vertical = useVertical();
+  const home = vertical === 'home';
+  const helpers = VERTICAL_INFO[vertical].helpers;
   const title = learner ? 'Get help' : 'Help desk';
 
   if (status.data && !status.data.available) {
     return (
-      <Page title={title} description="Send a problem to your IT team and follow it here.">
+      <Page title={title} description={`Send a problem to ${helpers} and follow it here.`}>
         <Card>
           <Empty title="No help desk yet">{status.data.message}</Empty>
         </Card>
@@ -40,10 +44,16 @@ export function HelpdeskPage({ learner }: { learner: boolean }) {
       title={title}
       description={
         receiver
-          ? `Tickets from ${status.data?.organization ?? 'your organization'} arrive here the moment they are sent.`
+          ? home
+            ? "Requests for help from the family's computers arrive here the moment they are sent."
+            : `Tickets from ${status.data?.organization ?? 'your organization'} arrive here the moment they are sent.`
           : learner
-            ? 'Something not working? Tell the IT team here and they will help.'
-            : `Send a problem to ${status.data?.organization ?? 'your organization'}'s IT team and follow it here. You will be told when they answer.`
+            ? home
+              ? 'Something not working, or need a hand? Ask a parent here.'
+              : 'Something not working? Tell the IT team here and they will help.'
+            : home
+              ? 'Ask for help with this computer and follow it here.'
+              : `Send a problem to ${status.data?.organization ?? 'your organization'}'s IT team and follow it here. You will be told when they answer.`
       }
       actions={
         <Button variant="primary" icon="plus" onClick={() => setAsking(true)}>
@@ -52,7 +62,7 @@ export function HelpdeskPage({ learner }: { learner: boolean }) {
       }
     >
       {status.data?.message && <Callout tone="warning">{status.data.message}</Callout>}
-      {status.data && status.data.receivers === 0 && !receiver && <Callout tone="info">Your IT team reads tickets in FBRX Command. Replies show up here.</Callout>}
+      {status.data && status.data.receivers === 0 && !receiver && <Callout tone="info">{home ? 'A parent reads these in FBRX Command. Replies show up here.' : 'Your IT team reads tickets in FBRX Command. Replies show up here.'}</Callout>}
       <Tabs
         tabs={[
           { id: 'mine', label: 'My tickets' },
@@ -66,7 +76,7 @@ export function HelpdeskPage({ learner }: { learner: boolean }) {
         <Card className="hd-list" flush>
           {list.error && <Callout tone="warning">{list.error}</Callout>}
           {!rows.length ? (
-            <Empty title={tab === 'queue' ? 'The queue is empty' : tab === 'history' ? 'No closed tickets yet' : 'No open tickets'}>{tab === 'mine' ? 'When something breaks, New ticket sends it to IT with a short summary of this computer.' : undefined}</Empty>
+            <Empty title={tab === 'queue' ? 'The queue is empty' : tab === 'history' ? 'No closed tickets yet' : 'No open tickets'}>{tab === 'mine' ? (home ? `When you need a hand, ${learner ? 'Ask for help' : 'New ticket'} sends it to a parent with a short summary of this computer.` : `When something breaks, ${learner ? 'Ask for help' : 'New ticket'} sends it to IT with a short summary of this computer.`) : undefined}</Empty>
           ) : (
             <div className="private">
               {rows.map((t) => (
@@ -80,6 +90,7 @@ export function HelpdeskPage({ learner }: { learner: boolean }) {
       {asking && (
         <NewTicket
           learner={learner}
+          home={home}
           onClose={() => setAsking(false)}
           onSent={(t) => {
             setTab('mine');
@@ -188,7 +199,7 @@ function TicketView({ id, receiver }: { id: string; receiver: boolean }) {
   );
 }
 
-function NewTicket({ learner, onClose, onSent }: { learner: boolean; onClose: () => void; onSent: (t: TicketDetail) => void }) {
+function NewTicket({ learner, home, onClose, onSent }: { learner: boolean; home: boolean; onClose: () => void; onSent: (t: TicketDetail) => void }) {
   const [subject, setSubject] = useState('');
   const [body, setBody] = useState('');
   const [category, setCategory] = useState<(typeof TICKET_CATEGORIES)[number]>('computer');
@@ -196,7 +207,7 @@ function NewTicket({ learner, onClose, onSent }: { learner: boolean; onClose: ()
   const [details, setDetails] = useState(true);
   const { run, busy } = useAction();
   const send = async () => {
-    const t = await run('s', () => call('helpdesk.create', { subject, body, category, priority: urgent ? 'urgent' : 'normal', attachDiagnostics: details }), 'Sent to IT');
+    const t = await run('s', () => call('helpdesk.create', { subject, body, category, priority: urgent ? 'urgent' : 'normal', attachDiagnostics: details }), home ? 'Sent to a parent' : 'Sent to IT');
     if (t) {
       onSent(t);
       onClose();
@@ -204,8 +215,8 @@ function NewTicket({ learner, onClose, onSent }: { learner: boolean; onClose: ()
   };
   return (
     <Modal
-      title={learner ? 'Ask IT for help' : 'Send a problem to IT'}
-      description="Say what is wrong and what you already tried. IT answers here."
+      title={home ? 'Ask a parent for help' : learner ? 'Ask IT for help' : 'Send a problem to IT'}
+      description={home ? 'Say what you need and what you already tried. The answer shows up here.' : 'Say what is wrong and what you already tried. IT answers here.'}
       onClose={onClose}
       footer={
         <>
@@ -227,7 +238,7 @@ function NewTicket({ learner, onClose, onSent }: { learner: boolean; onClose: ()
         <Field label="Details" help="What happened, since when, and what you already tried">
           <TextArea rows={5} value={body} maxLength={10000} onChange={(e) => setBody(e.target.value)} />
         </Field>
-        {!learner && <Toggle checked={urgent} onChange={setUrgent} label="Urgent: a class or meeting cannot go on" />}
+        {!learner && !home && <Toggle checked={urgent} onChange={setUrgent} label="Urgent: a class or meeting cannot go on" />}
         <Toggle checked={details} onChange={setDetails} label="Include a short summary of this computer (name, system, free space, network)" />
       </div>
     </Modal>

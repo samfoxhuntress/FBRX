@@ -3,8 +3,9 @@ import { TIER_NAMES, type Tier } from './license';
 /**
  * Who an FBRX organization is and who uses each of its computers.
  *
- * - **Vertical**: what kind of organization runs FBRX Command. *Education* (schools) turns on classroom defaults for
- *   staff and makes student computers possible; *Home* (families, coming later) does the same for parents and children.
+ * - **Vertical** (the *kind* of tenant): **Work** (`business`), **School** (`education`: classroom defaults for staff,
+ *   student computers possible) or **Home** (`home`: a family, with parents' and children's computers). Chosen when
+ *   FBRX Command is set up or a tenant is created, and changeable later.
  * - **Audience**: who uses a computer. Staff (and parents) get FBRX Endpoint Basic or Ultra. Students (and children)
  *   get **FBRX OS Education** (or Home): a narrowed, safe set of tools and a lightweight learning helper.
  *
@@ -13,7 +14,81 @@ import { TIER_NAMES, type Tier } from './license';
  */
 export const VERTICALS = ['business', 'education', 'home'] as const;
 export type Vertical = (typeof VERTICALS)[number];
-export const VERTICAL_NAMES: Record<Vertical, string> = { business: 'Business', education: 'Education', home: 'Home' };
+export const VERTICAL_NAMES: Record<Vertical, string> = { business: 'Work', education: 'School', home: 'Home' };
+
+/** How each kind of tenant is described and spoken about, in FBRX Command and on its computers. */
+export interface VerticalInfo {
+  /** What the tenant is called in sentences ("your company", "your school", "your family"). */
+  noun: string;
+  /** One line for the kind chooser. */
+  tagline: string;
+  /** What its computers get. */
+  computers: string;
+  /** Example name for the name field. */
+  example: string;
+  /** Who answers help desk tickets, as people say it ("the IT team", "your parents"). */
+  helpers: string;
+  /** Who uses the learner computers, if this kind has them ("student", "child"). */
+  learner: string | null;
+}
+
+export const VERTICAL_INFO: Record<Vertical, VerticalInfo> = {
+  business: {
+    noun: 'company',
+    tagline: 'A business, nonprofit or team: staff computers, IT tools and a help desk.',
+    computers: 'Staff on FBRX Endpoint Basic, IT on Endpoint Ultra.',
+    example: 'Harbor Lane Design',
+    helpers: 'the IT team',
+    learner: null,
+  },
+  education: {
+    noun: 'school',
+    tagline: 'A school or co-op: classroom mode for teachers, safe student computers, a help desk to IT.',
+    computers: 'Teachers on Basic in classroom mode, IT on Ultra, students on FBRX OS Education.',
+    example: 'Hillside Co-op',
+    helpers: 'the IT team',
+    learner: 'student',
+  },
+  home: {
+    noun: 'family',
+    tagline: "A family: parents' computers, safe computers for the kids, and help that goes to a parent.",
+    computers: 'Parents on FBRX Endpoint, children on FBRX OS Home with the learning helper.',
+    example: 'The Rivera family',
+    helpers: 'a parent',
+    learner: 'child',
+  },
+};
+
+/** Accepts the kind's id or its friendly name (work, school, family…), e.g. from FBRX_CP_ORGANIZATION_KIND. */
+export function parseVertical(raw: string | null | undefined): Vertical | null {
+  const v = String(raw ?? '').trim().toLowerCase();
+  if (v === 'business' || v === 'work' || v === 'company' || v === 'office') return 'business';
+  if (v === 'education' || v === 'school' || v === 'edu' || v === 'k12') return 'education';
+  if (v === 'home' || v === 'family' || v === 'household') return 'home';
+  return null;
+}
+
+/** The learner audience of a kind (students at a school, children at home), or null for Work. */
+export function learnerAudienceFor(vertical: Vertical): Audience | null {
+  return vertical === 'education' ? 'student' : vertical === 'home' ? 'child' : null;
+}
+
+/** The groups FBRX Command's quick setup creates for each kind, each with its own enrollment token. */
+export const KIND_GROUPS: Record<Vertical, Array<{ name: string; description: string; audience: Audience; tier: Tier | null }>> = {
+  business: [
+    { name: 'Staff', description: 'Staff computers: FBRX Endpoint Basic', audience: 'staff', tier: 'basic' },
+    { name: 'IT', description: 'IT and administrators: Endpoint Ultra; receives help desk tickets', audience: 'staff', tier: null },
+  ],
+  education: [
+    { name: 'Teachers', description: 'Staff computers: Endpoint Basic in classroom mode', audience: 'staff', tier: 'basic' },
+    { name: 'IT', description: 'IT and administrators: Endpoint Ultra; receives help desk tickets', audience: 'staff', tier: null },
+    { name: 'Students', description: 'Student computers: FBRX OS Education', audience: 'student', tier: null },
+  ],
+  home: [
+    { name: 'Parents', description: "Parents' computers: FBRX Endpoint; receive the children's requests for help", audience: 'parent', tier: null },
+    { name: 'Children', description: "Children's computers: FBRX OS Home with the learning helper", audience: 'child', tier: null },
+  ],
+};
 
 export const AUDIENCES = ['staff', 'student', 'parent', 'child'] as const;
 export type Audience = (typeof AUDIENCES)[number];
@@ -31,12 +106,16 @@ export function isLearner(audience: Audience | null | undefined): boolean {
   return audience === 'student' || audience === 'child';
 }
 
-/** The audience a computer ends up with: a token or group that says "student" always wins; anything may narrow to student. */
+/**
+ * The audience a computer ends up with: a token or group that says "student" (or "child") always wins, and any computer
+ * may narrow itself to the kind's learner computer ("student" asked in a family becomes "child", and the other way).
+ */
 export function resolveAudience(vertical: Vertical, assigned: Audience | null | undefined, requested?: Audience | null): Audience {
   const allowed = VERTICAL_AUDIENCES[vertical];
-  const base = assigned && allowed.includes(assigned) ? assigned : allowed[0];
+  const learner = learnerAudienceFor(vertical);
+  const base = assigned && allowed.includes(assigned) ? assigned : isLearner(assigned) && learner ? learner : allowed[0];
   if (isLearner(base)) return base;
-  if (requested && allowed.includes(requested) && isLearner(requested)) return requested;
+  if (requested && isLearner(requested) && learner) return learner;
   return base;
 }
 

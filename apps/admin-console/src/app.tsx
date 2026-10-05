@@ -1,3 +1,4 @@
+import { VERTICAL_NAMES } from '@fbrx/shared';
 import { useEffect, useState } from 'react';
 import { Button, Icons, Select, Shell, Spinner, type NavItem } from '@fbrx/ui';
 import { api, session, setUnauthorizedHandler } from './api';
@@ -169,7 +170,7 @@ function Console() {
                 aria-label="Tenant"
                 value={app.tenantId ?? ''}
                 onChange={(e) => app.setTenant(e.target.value || null)}
-                options={[{ value: '', label: 'All tenants (platform view)' }, ...app.me.tenants.map((t) => ({ value: t.id, label: t.name }))]}
+                options={[{ value: '', label: 'All tenants (platform view)' }, ...app.me.tenants.map((t) => ({ value: t.id, label: `${t.name} · ${VERTICAL_NAMES[t.vertical] ?? 'Work'}` }))]}
               />
             </div>
           ) : (

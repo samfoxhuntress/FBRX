@@ -18,16 +18,19 @@ network on UniFi, staff accounts in Google Workspace.
 The defaults come first; your own profiles in FBRX Command can change them for staff. Student computers keep their
 locks.
 
-## 1. Make the organization a school
+## 1. Make the tenant a school
 
-In FBRX Command, **Licenses → Issue license**: pick *Education (schools)* as the kind of license (the edition decides
-Ultra; groups can hold computers to Basic). Issuing it makes the tenant an Education organization; **Profiles & groups
-→ Organization defaults** shows *Kind of organization: Education* and lets you change it later. From the command line:
+Pick **School** when FBRX Command asks what it will run: on the first-run setup page, or in **Tenants → New tenant**
+for each further school. An existing tenant changes kind under **Profiles & groups → Organization defaults → Kind**.
+
+Then **Licenses → Issue license** with *School (Education)* as the kind of license (the edition decides Ultra; groups
+can hold computers to Basic). Issuing a license with a kind also sets the tenant's kind. From the command line:
 `npm run license:issue -- … --vertical education`.
 
 ## 2. Groups and tokens in one click
 
-**Profiles & groups → Set up for a school** creates three groups, each with an enrollment token:
+**Profiles & groups → Set up for a school** (or the step right after **New tenant**) creates three groups, each with
+an enrollment token and a provisioning file to download:
 
 * **Teachers**: staff, held to Endpoint Basic.
 * **IT**: staff, Endpoint Ultra (what the license gives).
@@ -47,8 +50,8 @@ what the license gives) and *New versions* (see below).
   as a Win32 app (install command and detection rule are at the top of the script); it installs for all users and
   joins.
 * **No device manager**: put `fbrx-provision.json` next to the installer, or install FBRX and paste the address and
-  token on its **Organization** page. Tick **This is a student computer** on student laptops: a computer can always make
-  itself a student computer when it joins, but only IT (in FBRX Command) can make a student computer a staff one.
+  token on its **Organization** page. Tick **This computer is for a student or a child** on student laptops: a computer can always
+  make itself a student computer when it joins, but only IT (in FBRX Command) can make a student computer a staff one.
 
 Installers from a published release are signed and notarized (DEPLOYMENT.md → Signing); installers pushed by a device
 manager also skip the browser download warnings.
@@ -104,8 +107,7 @@ point and client, lets you restart a device, and makes guest Wi-Fi codes for vis
 Schools have their own duties under student privacy law (FERPA and state student data privacy rules); review the
 settings above with whoever is responsible for them before rolling FBRX out to students.
 
-## FBRX OS Home (later)
+## Families
 
-The same design for families is planned: parents on FBRX Endpoint, children on **FBRX OS Home** with the learning
-helper and the same protections (a *Home* kind of organization with *Parent* and *Child* groups already exists in
-FBRX Command as a preview).
+The same design runs a family: pick **Home** instead of School, and children's computers run **FBRX OS Home** with
+the learning helper and the same protections. See [HOME.md](HOME.md).

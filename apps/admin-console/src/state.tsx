@@ -1,10 +1,11 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import type { Vertical } from '@fbrx/shared';
 import { api, connectLive, session, type LiveEvent } from './api';
 
 export interface Me {
   principal: { kind: string; role: string; tenantId: string | null };
   user: { id: string; email: string; name: string; role: string; tenantId: string | null; mfaEnabled: boolean };
-  tenants: Array<{ id: string; name: string; slug: string; status: string }>;
+  tenants: Array<{ id: string; name: string; slug: string; status: string; vertical: Vertical }>;
   permissions: string[];
   version: string;
 }
@@ -12,6 +13,8 @@ export interface Me {
 interface AppState {
   me: Me;
   tenantId: string | null;
+  /** The kind of the tenant being looked at (Work, School, Home), or null in the platform view. */
+  kind: Vertical | null;
   setTenant: (id: string | null) => void;
   can: (perm: string) => boolean;
   live: boolean;
@@ -42,6 +45,7 @@ export function AppStateProvider({ me: initial, children, onLogout }: { me: Me; 
   const value: AppState = {
     me,
     tenantId,
+    kind: me.tenants.find((t) => t.id === tenantId)?.vertical ?? null,
     setTenant: (id) => {
       session.tenant = id;
       setTenantId(id);

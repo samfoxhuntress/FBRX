@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AUDIENCES, AUTO_UPDATE_MODES, CommandPayloadSchemas, DEFAULT_SETTINGS, PolicySchema, SettingsSchema, TIERS, UPDATE_CHANNELS, deepMerge, isCommandType, isValidSemver, leafPaths, type ProvisioningFile } from '@fbrx/shared';
+import { AUDIENCES, AUTO_UPDATE_MODES, KIND_GROUPS, parseVertical, type Audience, CommandPayloadSchemas, DEFAULT_SETTINGS, PolicySchema, SettingsSchema, TIERS, UPDATE_CHANNELS, deepMerge, isCommandType, isValidSemver, leafPaths, type ProvisioningFile } from '@fbrx/shared';
 import { randomToken, sha256Hex } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
@@ -216,6 +216,87 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
     createdAt: t.created_at,
     revokedAt: t.revoked_at,
   });
+  /** A new enrollment token and the provisioning file that goes with it (the token is only ever returned here). */
+  const createToken = (
+    tenantId: string,
+    body: { label: string; groupId?: string | null; maxUses?: number | null; expiresInDays?: number | null; templateSnapshotId?: string | null; templatePassphrase?: string; deviceName?: string; audience?: Audience | null },
+    createdBy: string,
+  ) => {
+    const token = randomToken('fbrx_enr');
+    const id = ids.enrollment();
+    const expiresAt = body.expiresInDays ? new Date(Date.now() + body.expiresInDays * 86400_000).toISOString() : null;
+    ctx.db.run(
+      'INSERT INTO enrollment_tokens (id, tenant_id, group_id, label, prefix, token_hash, max_uses, template_snapshot_id, expires_at, created_by, created_at, audience) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+      id,
+      tenantId,
+      body.groupId ?? null,
+      body.label,
+      token.slice(0, 15),
+      sha256Hex(token),
+      body.maxUses ?? null,
+      body.templateSnapshotId ?? null,
+      expiresAt,
+      createdBy,
+      new Date().toISOString(),
+      body.audience ?? null,
+    );
+    if (body.templateSnapshotId) ctx.db.run('UPDATE snapshots SET is_template = 1 WHERE id = ?', body.templateSnapshotId);
+    const provisioning: ProvisioningFile = {
+      fbrxProvisioning: 1,
+      serverUrl: ctx.config.publicUrl,
+      enrollmentToken: token,
+      ...(body.deviceName ? { deviceName: body.deviceName } : {}),
+      ...(body.audience ? { audience: body.audience } : {}),
+      ...(body.templateSnapshotId
+        ? {
+            templateSnapshotUrl: signTemplateUrl(ctx, body.templateSnapshotId, expiresAt ? new Date(expiresAt).getTime() : Date.now() + 365 * 86400_000),
+            templateSnapshotPassphrase: body.templatePassphrase,
+          }
+        : {}),
+    };
+    return { id, token, provisioning };
+  };
+
+  /**
+   * Quick setup for the tenant's kind (Work, School or Home): its usual groups (Staff and IT; Teachers, IT and
+   * Students; Parents and Children), each with a fresh enrollment token. Groups that already exist are reused.
+   */
+  app.post('/v1/admin/tenants/:id/quick-setup', async (req) => {
+    const p = requirePerm(req, 'config.manage');
+    requirePerm(req, 'enrollment.manage');
+    const tenantId = (req.params as { id: string }).id;
+    assertTenantAccess(req, tenantId);
+    const t = ctx.db.get<{ vertical: string | null; name: string }>('SELECT vertical, name FROM tenants WHERE id = ?', tenantId);
+    if (!t) throw notFound('Unknown organization');
+    const vertical = parseVertical(t.vertical) ?? 'business';
+    const now = new Date().toISOString();
+    const made = ctx.db.tx(() =>
+      KIND_GROUPS[vertical].map((g) => {
+        let group = ctx.db.get<any>('SELECT * FROM groups WHERE tenant_id = ? AND name = ?', tenantId, g.name);
+        if (!group) {
+          const gid = ids.group();
+          ctx.db.run(
+            'INSERT INTO groups (id, tenant_id, name, description, audience, tier, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
+            gid,
+            tenantId,
+            g.name,
+            g.description,
+            g.audience,
+            g.tier,
+            now,
+            now,
+          );
+          group = ctx.db.get<any>('SELECT * FROM groups WHERE id = ?', gid);
+        }
+        const tok = createToken(tenantId, { label: `${g.name} computers`, groupId: group.id, audience: g.audience }, p.id);
+        return { group: groupView(group), audience: g.audience, token: tok.token, provisioning: tok.provisioning };
+      }),
+    );
+    ctx.bumpConfig(tenantId);
+    ctx.audit.record(actorOf(req), 'tenant.quick-setup', { type: 'tenant', id: tenantId, tenantId }, { kind: vertical, groups: made.map((m) => m.group.name) });
+    return { kind: vertical, groups: made };
+  });
+
   app.get('/v1/admin/enrollment-tokens', async (req) => {
     requirePerm(req, 'enrollment.manage');
     return ctx.db.all<any>('SELECT * FROM enrollment_tokens WHERE tenant_id = ? ORDER BY created_at DESC', requireTenant(req)).map(tokenView);
@@ -239,38 +320,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
     if (body.groupId && !ctx.db.get('SELECT 1 FROM groups WHERE id = ? AND tenant_id = ?', body.groupId, tenantId)) throw badRequest('Unknown group');
     if (body.templateSnapshotId && !ctx.db.get('SELECT 1 FROM snapshots WHERE id = ? AND tenant_id = ?', body.templateSnapshotId, tenantId)) throw badRequest('Unknown snapshot');
     if (body.templateSnapshotId && !body.templatePassphrase) throw badRequest('A template snapshot needs its passphrase so new machines can decrypt it');
-    const token = randomToken('fbrx_enr');
-    const id = ids.enrollment();
-    const expiresAt = body.expiresInDays ? new Date(Date.now() + body.expiresInDays * 86400_000).toISOString() : null;
-    ctx.db.run(
-      'INSERT INTO enrollment_tokens (id, tenant_id, group_id, label, prefix, token_hash, max_uses, template_snapshot_id, expires_at, created_by, created_at, audience) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
-      id,
-      tenantId,
-      body.groupId ?? null,
-      body.label,
-      token.slice(0, 15),
-      sha256Hex(token),
-      body.maxUses ?? null,
-      body.templateSnapshotId ?? null,
-      expiresAt,
-      p.id,
-      new Date().toISOString(),
-      body.audience ?? null,
-    );
-    if (body.templateSnapshotId) ctx.db.run('UPDATE snapshots SET is_template = 1 WHERE id = ?', body.templateSnapshotId);
-    const provisioning: ProvisioningFile = {
-      fbrxProvisioning: 1,
-      serverUrl: ctx.config.publicUrl,
-      enrollmentToken: token,
-      ...(body.deviceName ? { deviceName: body.deviceName } : {}),
-      ...(body.audience ? { audience: body.audience } : {}),
-      ...(body.templateSnapshotId
-        ? {
-            templateSnapshotUrl: signTemplateUrl(ctx, body.templateSnapshotId, expiresAt ? new Date(expiresAt).getTime() : Date.now() + 365 * 86400_000),
-            templateSnapshotPassphrase: body.templatePassphrase,
-          }
-        : {}),
-    };
+    const { id, token, provisioning } = createToken(tenantId, body, p.id);
     ctx.audit.record(actorOf(req), 'enrollment.created', { type: 'enrollment', id, tenantId }, { label: body.label, maxUses: body.maxUses, group: body.groupId, template: body.templateSnapshotId });
     return { ...tokenView(ctx.db.get('SELECT * FROM enrollment_tokens WHERE id = ?', id)), token, provisioning };
   });

@@ -22,4 +22,12 @@ describe('the learning helper on student computers', () => {
     expect(p).toContain("The student's name is Ava.");
     expect(p).toContain('You cannot open websites, files or apps');
   });
+
+  it('speaks of a child and a parent on FBRX OS Home', () => {
+    const p = learnerPrompt('Fabrix', 'home', 'Milo');
+    expect(p).toContain("child's computer at home");
+    expect(p).toContain("The child's name is Milo.");
+    expect(p).toContain('suggest asking a parent');
+    expect(p).not.toMatch(/teacher|counselor/);
+  });
 });

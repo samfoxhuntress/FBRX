@@ -5,23 +5,40 @@ to watch, configure, update and support every FBRX Endpoint computer in real tim
 commands, packages, credentials, updates, backups and audit). A license issued here can enroll computers by itself:
 paste the key into FBRX Endpoint Basic and it joins the tenant (see [LICENSING.md](LICENSING.md#joining-fbrx-command)). Development: `npm run dev:console` (proxies the API on :8787).
 
+## Work, School or Home
+
+Every tenant has a **kind**, picked before anything else, both at first-run setup and in **Tenants → New tenant**:
+
+| Kind | For | Computers | Quick setup makes | Help goes to |
+| --- | --- | --- | --- | --- |
+| **Work** | A business, nonprofit or team | Staff on FBRX Endpoint Basic, IT on Endpoint Ultra | **Staff** (held to Basic) and **IT** | The IT computer you mark as a receiver |
+| **School** | A school or co-op | Teachers on Basic in classroom mode, IT on Ultra, students on **FBRX OS Education** | **Teachers**, **IT** and **Students** | The IT computer you mark as a receiver |
+| **Home** | A family | Parents on FBRX Endpoint, children on **FBRX OS Home** | **Parents** and **Children** | Every parent's computer, automatically |
+
+The kind sets the wording in FBRX Command and on the computers, the groups **quick setup** makes (each with its own
+enrollment token, shown once with a provisioning file to download), who a computer can be used by, and the defaults
+for learner computers. One FBRX Command can run tenants of every kind side by side; the tenant switcher shows each
+one's kind. Change a tenant's kind later under **Profiles & groups → Organization defaults** or **Tenants**; issuing a
+license with a kind also sets it. Unattended installs can pick the first tenant's kind with `FBRX_CP_ORGANIZATION_KIND`
+(`work`, `school` or `home`; see DEPLOYMENT.md). Families: see [HOME.md](HOME.md). Schools: [EDUCATION.md](EDUCATION.md).
+
 ## Pages
 
 | Section | Page | What it is for |
 | --- | --- | --- |
 | Fleet | **Overview** | Online/offline/alerting devices, agent runs, tool calls, policy denials and errors over 24 h, version and platform mix, recent alerts |
-| | **Devices** | Search and filter the fleet (student computers and help desk receivers are marked); select devices for bulk commands (sync, update, back up, restart service, notify, …); **Update everyone now** |
-| | Device detail | Live health and services, metrics charts, installed plugins, versions, audit chain head; run any command and watch its result; move to a group; set update channel or pin; who uses it (staff or student); whether it receives help desk tickets; per-device overrides; its backups; retire |
-| | **Alerts & events** | Service failures, circuit breaks, policy denials, student safety alerts and other device events; acknowledge them |
+| | **Devices** | Search and filter the fleet (student and child computers and help desk receivers are marked); select devices for bulk commands (sync, update, back up, restart service, notify, …); **Update everyone now** |
+| | Device detail | Live health and services, metrics charts, installed plugins, versions, audit chain head; run any command and watch its result; move to a group; set update channel or pin; who uses it (staff or student; parent or child at home); whether it receives help desk tickets; per-device overrides; its backups; retire |
+| | **Alerts & events** | Service failures, circuit breaks, policy denials, student and child safety alerts and other device events; acknowledge them |
 | | **Help desk** | Every ticket sent from the organization's computers, its conversation and the computer's details; answer, take, change status and priority; which computers receive tickets |
-| Configuration | **Profiles & groups** | Organization defaults: kind of organization (Business, Education, Home preview), *New versions* (install automatically, tell people, off), the help desk on or off, default profile and channel. **Set up for a school** (Education). Profiles hold managed settings, governance policy and *locks* (paths users cannot change). Groups attach a profile, who uses the computers (staff or student), the edition (hold to Basic), *New versions*, an update channel and a pinned version |
+| Configuration | **Profiles & groups** | Organization defaults: the kind (Work, School, Home), *New versions* (install automatically, tell people, off), the help desk on or off, default profile and channel. **Quick setup** for the tenant's kind (Set up for work, for a school, for a family) until its groups exist. Profiles hold managed settings, governance policy and *locks* (paths users cannot change). Groups attach a profile, who uses the computers (staff or student; parent or child), the edition (hold to Basic), *New versions*, an update channel and a pinned version |
 | | **Deploy & enroll** | Download the latest installers; create enrollment tokens (group, who uses the computers, usage limit, expiry, template snapshot); download the matching `fbrx-provision.json`, a **Mac profile** (.mobileconfig for Jamf, Mosyle, Kandji, Intune…) and a **Windows script** (Intune Win32 app) |
 | | **Credentials** | Organization secrets scoped to the tenant, a group or a single device; pushed into device vaults as read-only managed secrets; rotate or delete centrally |
 | | **Plugins** | Upload plugin packages (manifest and permissions shown), deploy to devices or groups |
 | | **Backups** | Snapshots uploaded by devices; download, mark as an enrollment template, delete |
 | Platform | **Releases** | Upload installers (or let CI do it), publish to `stable`/`beta`/`dev`, staged rollout percentage |
-| | **Licenses** | Issue and revoke signed licenses per tenant: the product (Endpoint Basic or Ultra), the kind (Business or Education), seats and expiry, and whether computers that activate the key join the tenant automatically; copy keys for offline activation |
-| | **Tenants** | (superadmin) Create customers/business units, suspend them, set their default channel |
+| | **Licenses** | Issue and revoke signed licenses per tenant: the product (Endpoint Basic or Ultra), the kind (Work, School or Home, which also sets the tenant's kind), seats and expiry, and whether computers that activate the key join the tenant automatically; copy keys for offline activation |
+| | **Tenants** | (superadmin) Create tenants (pick Work, School or Home first, then run its quick setup), see each one's kind, change it, suspend them |
 | Access | **Users & API keys** | Invite users with a role, reset access, create API keys for automation |
 | | **Webhooks** | Signed outgoing webhooks for fleet events |
 | | **Audit log** | Every admin action and device enrollment, hash-chained and verifiable |

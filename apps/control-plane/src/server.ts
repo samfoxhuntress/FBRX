@@ -128,7 +128,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     const b = config.bootstrapAdmin;
     const now = new Date().toISOString();
     const tenantId = ids.tenant();
-    db.run('INSERT INTO tenants (id, name, slug, contact_email, created_at, updated_at) VALUES (?,?,?,?,?,?)', tenantId, b.organization, slugify(b.organization), b.email, now, now);
+    db.run('INSERT INTO tenants (id, name, slug, contact_email, vertical, created_at, updated_at) VALUES (?,?,?,?,?,?,?)', tenantId, b.organization, slugify(b.organization), b.email, b.kind, now, now);
     db.run(
       'INSERT INTO users (id, tenant_id, email, name, password_hash, role, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
       ids.user(),
@@ -140,7 +140,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
       now,
       now,
     );
-    app.log.info({ email: b.email }, 'Bootstrapped platform administrator from environment');
+    app.log.info({ email: b.email, kind: b.kind }, 'Bootstrapped platform administrator from environment');
   } else if (users === 0) {
     if (!config.setupToken) config.setupToken = randomBytes(12).toString('base64url');
     app.log.warn(`First-run setup required. Open the admin console and use setup token: ${config.setupToken}`);

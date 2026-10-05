@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { AUDIENCES, AUDIENCE_NAMES, compareSemver, macProfile, windowsScript, type Audience } from '@fbrx/shared';
+import { compareSemver, isLearner, macProfile, windowsScript, type Audience } from '@fbrx/shared';
 import { Button, Callout, Card, CopyText, Empty, Field, Input, Modal, Page, Select, Status, Table, formatDate, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { api, saveBlob } from '../api';
 import { useApp, useQuery } from '../state';
+import { LearnerBadge, audienceHelp, audienceOptions } from './common';
 
 const uuid = () => (globalThis.crypto?.randomUUID?.() ?? `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`).toUpperCase();
 
@@ -87,7 +88,7 @@ export function EnrollmentPage() {
           columns={[
             { key: 'l', header: 'Label', render: (t) => (<div><div className="fx-cell-title">{t.label}</div><div className="fx-cell-sub mono">{t.prefix}…</div></div>) },
             { key: 's', header: 'Status', render: state },
-            { key: 'g', header: 'Group', render: (t) => (<>{groups.find((g) => g.id === t.groupId)?.name ?? '—'}{t.audience === 'student' && <span className="fx-badge accent" style={{ marginLeft: 6 }}>Students</span>}</>) },
+            { key: 'g', header: 'Group', render: (t) => (<>{groups.find((g) => g.id === t.groupId)?.name ?? '—'}<LearnerBadge audience={t.audience} plural /></>) },
             { key: 'u', header: 'Uses', className: 'num', render: (t) => `${t.uses}${t.maxUses !== null ? ` / ${t.maxUses}` : ''}` },
             { key: 'tpl', header: 'Template', render: (t) => (t.templateSnapshotId ? <span className="fx-badge accent">golden image</span> : '—') },
             { key: 'e', header: 'Expires', render: (t) => (t.expiresAt ? formatDate(t.expiresAt) : 'never') },
@@ -187,7 +188,7 @@ export function EnrollmentPage() {
                 <li>Mac device manager (Jamf, Mosyle, Kandji, Intune…): upload the <b>Mac profile</b>; FBRX joins on its next start.</li>
                 <li>Intune on Windows: package the <b>Windows script</b> with the installer as a Win32 app; it installs for all users and joins.</li>
                 <li>No device manager: put <code>fbrx-provision.json</code> next to the installer, or in <code>/Library/Application Support/FBRX OS</code> (Mac) or <code>%ProgramData%\FBRX OS</code> (Windows).</li>
-                <li>By hand: open FBRX → Organization, paste the address and token{created.audience === 'student' ? '' : ' (tick "student computer" for student laptops)'}.</li>
+                <li>By hand: open FBRX → Organization, paste the address and token{isLearner(created.audience) ? '' : app.kind === 'home' ? ' (tick "for a child" on the children\'s computers)' : app.kind === 'business' ? '' : ' (tick "for a student" on student laptops)'}.</li>
                 <li>Headless/servers: <code>fbrx-headless enroll {location.origin} &lt;token&gt;</code></li>
               </ol>
             </Callout>
@@ -203,6 +204,7 @@ export function EnrollmentPage() {
 }
 
 function CreateTokenModal({ groups, snapshots, onClose, onCreated }: { groups: Array<{ id: string; name: string }>; snapshots: Array<{ id: string; deviceName: string; label: string | null; createdAt: string }>; onClose: () => void; onCreated: (c: Created) => void }) {
+  const kind = useApp().kind;
   const [f, setF] = useState({ label: '', groupId: '', maxUses: '25', expiresInDays: '30', templateSnapshotId: '', templatePassphrase: '', deviceName: '', audience: '' as Audience | '' });
   const { busy, run } = useAction();
   const create = async () => {
@@ -240,8 +242,8 @@ function CreateTokenModal({ groups, snapshots, onClose, onCreated }: { groups: A
         <Field label="Group" help="New devices join this group automatically">
           <Select value={f.groupId} onChange={(e) => setF({ ...f, groupId: e.target.value })} options={[{ value: '', label: 'No group' }, ...groups.map((g) => ({ value: g.id, label: g.name }))]} />
         </Field>
-        <Field label="Computers are used by" help="Student makes them FBRX OS Education (Education organizations), whatever the group says">
-          <Select value={f.audience} onChange={(e) => setF({ ...f, audience: e.target.value as Audience | '' })} options={[{ value: '', label: 'Their group (or the organization default)' }, ...AUDIENCES.map((a) => ({ value: a, label: AUDIENCE_NAMES[a] }))]} />
+        <Field label="Computers are used by" help={kind === 'business' ? undefined : `${audienceHelp(kind)}, whatever the group says`}>
+          <Select value={f.audience} onChange={(e) => setF({ ...f, audience: e.target.value as Audience | '' })} options={[{ value: '', label: 'Their group (or the organization default)' }, ...audienceOptions(kind)]} />
         </Field>
         <div className="fx-row">
           <Field label="Max uses">

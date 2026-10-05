@@ -66,6 +66,7 @@ Run it under systemd, launchd, NSSM or a PaaS.
 | `FBRX_CP_PORT` / `FBRX_CP_HOST` | `8787` / `0.0.0.0` | Listener |
 | `FBRX_CP_TRUST_PROXY` | off | Honor `X-Forwarded-*` from a reverse proxy |
 | `FBRX_CP_ADMIN_EMAIL` / `_PASSWORD` / `_NAME`, `FBRX_CP_ORGANIZATION` | — | Bootstrap the first superadmin and tenant on an empty database |
+| `FBRX_CP_ORGANIZATION_KIND` | `work` | Kind of that first tenant: `work`, `school` or `home` (the setup page asks instead when you set up in the browser) |
 | `FBRX_CP_SETUP_TOKEN` | random, printed | Without bootstrap variables, the console's first-run screen asks for this token |
 | `FBRX_CP_JWT_SECRET`, `FBRX_CP_MASTER_KEY`, `FBRX_LICENSE_PRIVATE_KEY` | generated into `keys/` | Supply from a secrets manager to keep key material out of the volume |
 | `FBRX_CP_SESSION_HOURS` | 12 | Admin session lifetime |

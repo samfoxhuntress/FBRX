@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { AUDIENCE_NAMES, VERTICAL_NAMES } from '@fbrx/shared';
 import { Button, Callout, Card, Field, Grid, Input, KeyValue, Page, Status, Toggle, formatDate, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { call } from '../client';
+import { useVertical } from '../edition';
 import { useCore } from '../hooks';
 
 export function FleetPage() {
@@ -10,15 +11,23 @@ export function FleetPage() {
   const [form, setForm] = useState({ serverUrl: '', token: '', deviceName: '', student: false });
   const { confirm, dialog } = useConfirm();
   const { run, busy } = useAction();
+  const vertical = useVertical();
   if (!f) return null;
   const enrolled = f.state !== 'unenrolled';
   return (
-    <Page title="Organization" description="Connect this computer to your organization's FBRX Command so IT can see its health, push settings and updates, back it up, and answer your help desk tickets.">
+    <Page
+      title={enrolled && vertical === 'home' ? 'Family' : 'Organization'}
+      description={
+        enrolled && vertical === 'home'
+          ? "This computer belongs to your family's FBRX Command: a parent can see its health, send settings and updates, back it up, and answer your requests for help."
+          : "Connect this computer to your company's, school's or family's FBRX Command so it can see its health, send settings and updates, back it up, and answer your requests for help."
+      }
+    >
       {!enrolled ? (
         <Grid cols={2}>
           <Card title="Connect to your organization">
             <div className="fx-form">
-              <Field label="FBRX Command address" help="From your IT team, e.g. https://command.yourschool.org">
+              <Field label="FBRX Command address" help="From whoever runs FBRX Command for you (IT, the school office or a parent), e.g. https://command.example.org">
                 <Input value={form.serverUrl} onChange={(e) => setForm({ ...form, serverUrl: e.target.value })} placeholder="https://" />
               </Field>
               <Field label="Enrollment token">
@@ -27,8 +36,8 @@ export function FleetPage() {
               <Field label="Device name (optional)">
                 <Input value={form.deviceName} onChange={(e) => setForm({ ...form, deviceName: e.target.value })} />
               </Field>
-              <Toggle checked={form.student} onChange={(v) => setForm({ ...form, student: v })} label="This is a student computer (FBRX OS Education)" />
-              {form.student && <p className="fx-muted" style={{ margin: 0, fontSize: 12.5 }}>Student computers get a simpler set of tools and a safe learning helper. Only IT can turn a student computer back into a staff one.</p>}
+              <Toggle checked={form.student} onChange={(v) => setForm({ ...form, student: v })} label="This computer is for a student or a child" />
+              {form.student && <p className="fx-muted" style={{ margin: 0, fontSize: 12.5 }}>It becomes FBRX OS Education (at a school) or FBRX OS Home (in a family): a simpler set of tools and a safe learning helper. Only FBRX Command can turn it back.</p>}
               <div>
                 <Button variant="primary" icon="globe" loading={busy === 'e'} disabled={!form.serverUrl || !form.token} onClick={() => void run('e', () => call('fleet.enroll', { serverUrl: form.serverUrl, token: form.token, deviceName: form.deviceName || undefined, ...(form.student ? { audience: 'student' as const } : {}) }), 'Connected to your organization')}>
                   Connect

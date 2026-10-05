@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { DeepPartial, Settings, Texture } from '@fbrx/shared';
-import { TIER_NAMES, UPDATE_CHANNELS, displayVersion, funEnabled } from '@fbrx/shared';
+import { AUDIENCE_NAMES, TIER_NAMES, UPDATE_CHANNELS, displayVersion, funEnabled } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
@@ -13,7 +13,7 @@ import { KeyRecorder, MacroSettings } from './settings-macros';
 import { SnippetSettings } from './settings-snippets';
 import { VoiceSettings } from './settings-voice';
 import { AboutVersion, ReleasePanel } from '../release';
-import { UltraHint, useLearner, useTier } from '../edition';
+import { UltraHint, useLearner, useTier, useVertical } from '../edition';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -49,6 +49,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   const ultra = useTier() === 'ultra';
   const funUnlocked = useCore('settings.get', undefined, ['settings.changed']).data?.settings.appearance.funUnlocked ?? false;
   const learner = useLearner();
+  const vertical = useVertical();
   const sections = SECTIONS.filter((x) => (learner ? LEARNER_SECTIONS.has(x.id) : ultra || !x.ultra));
   const [picked, setTab] = useState<SectionId>(() => sectionFromRoute() ?? 'general');
   const tab = sections.some((x) => x.id === picked) ? picked : 'general';
@@ -63,7 +64,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   }, []);
   let group = '';
   return (
-    <Page title="Settings" description="How FBRX looks and behaves on this computer. Settings your organization manages show a lock.">
+    <Page title="Settings" description={`How FBRX looks and behaves on this computer. Settings your ${vertical === 'home' ? 'family' : 'organization'} manages show a lock.`}>
       <EditionCard />
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Settings sections">
@@ -114,10 +115,12 @@ function EditionCard() {
       <div className="mode-card edition-card basic">
         <div>
           <div className="mode-card-title">
-            {ed.productName} <span className="tier-badge student">Student</span>
+            {ed.productName} <span className="tier-badge student">{AUDIENCE_NAMES[ed.audience]}</span>
           </div>
           <div className="fx-muted" style={{ fontSize: 12.5 }}>
-            A computer set up by {fleet?.tenantName ?? 'your school'} for learning. Your school chooses its tools and keeps it safe.
+            {ed.vertical === 'home'
+              ? `A computer set up by ${fleet?.tenantName ?? 'your family'} for learning and play. A parent chooses its tools and keeps it safe.`
+              : `A computer set up by ${fleet?.tenantName ?? 'your school'} for learning. Your school chooses its tools and keeps it safe.`}
           </div>
         </div>
       </div>
@@ -130,7 +133,7 @@ function EditionCard() {
       <div>
         <div className="mode-card-title">
           {TIER_NAMES[l.tier]} <span className={`tier-badge ${l.tier}`}>{ultra ? 'Ultra' : 'Basic'}</span>
-          {ed?.vertical === 'education' && <span className="tier-badge student" style={{ marginLeft: 6 }}>Education</span>}
+          {ed && ed.vertical !== 'business' && <span className="tier-badge student" style={{ marginLeft: 6 }}>{ed.vertical === 'home' ? 'Home' : 'Education'}</span>}
         </div>
         <div className="fx-muted" style={{ fontSize: 12.5 }}>
           {ultra

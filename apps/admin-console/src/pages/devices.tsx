@@ -1,10 +1,9 @@
 import { useMemo, useState } from 'react';
-import { AUDIENCE_NAMES } from '@fbrx/shared';
 import { Button, Card, Empty, Icons, Input, Page, Select, Table, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
 import { CommandComposer } from './command-composer';
-import { HealthStatus, OnlineStatus, PLATFORM_LABEL, type DeviceSummary } from './common';
+import { HealthStatus, LearnerBadge, OnlineStatus, PLATFORM_LABEL, type DeviceSummary } from './common';
 
 export function DevicesPage() {
   const app = useApp();
@@ -95,7 +94,7 @@ export function DevicesPage() {
               render: (d) => (
                 <div>
                   <div className="fx-cell-title">
-                    {d.name} {d.audience === 'student' && <span className="fx-badge accent">{AUDIENCE_NAMES.student}</span>} {d.helpdeskReceiver && <span title="Receives help desk tickets"><Icons.lifebuoy size={13} /></span>}
+                    {d.name} <LearnerBadge audience={d.audience} /> {d.helpdeskReceiver && <span title="Receives help desk tickets"><Icons.lifebuoy size={13} /></span>}
                   </div>
                   <div className="fx-cell-sub">{d.hostname}{d.tags.length ? ` · ${d.tags.join(', ')}` : ''}</div>
                 </div>

@@ -72,10 +72,12 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
     const assigned = (t.audience as Audience | null) ?? groupAudience ?? null;
     const audience = resolveAudience(vertical, assigned, body.audience);
     const storeAudience = t.audience || (body.audience && audience !== resolveAudience(vertical, assigned)) ? audience : null;
+    // In a family, a parent's computer gets the children's requests for help from the start (FBRX Command can change it).
+    const receiver = vertical === 'home' && audience === 'parent' ? 1 : 0;
     ctx.db.tx(() => {
       ctx.db.run(
-        `INSERT INTO devices (id, tenant_id, group_id, name, hostname, platform, arch, os_version, app_version, machine_id, token_hash, enrolled_at, enrolled_via, last_seen_at, last_ip, updated_at, audience)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO devices (id, tenant_id, group_id, name, hostname, platform, arch, os_version, app_version, machine_id, token_hash, enrolled_at, enrolled_via, last_seen_at, last_ip, updated_at, audience, helpdesk_receiver)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         deviceId,
         t.tenant_id,
         t.group_id,
@@ -93,6 +95,7 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
         req.ip,
         now,
         storeAudience,
+        receiver,
       );
       ctx.db.run('UPDATE enrollment_tokens SET uses = uses + 1 WHERE id = ?', t.id);
     });

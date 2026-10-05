@@ -8,7 +8,7 @@ import { navigate } from '../app';
 import { dashboardQuip, unlockTrophy } from '../fun';
 import { AskButton, NamePrompt } from '../widgets';
 import { SplitFlapBoard } from '../splitflap';
-import { useLearner, useTier } from '../edition';
+import { useLearner, useTier, useVertical } from '../edition';
 
 function serviceTone(state: string) {
   return state === 'running' ? 'good' : state === 'failed' ? 'critical' : state === 'degraded' ? 'warning' : 'neutral';
@@ -37,6 +37,14 @@ const LEARNER_TIPS = [
   'Stuck with the computer? Get help sends a message to the IT team.',
   'Make a to-do list for your homework in Tasks.',
   'Notes keeps your ideas in one place.',
+];
+
+/** On a child's computer (FBRX OS Home). */
+const HOME_LEARNER_TIPS = [
+  'Ask Fabrix to explain something in simpler words, or to quiz you on it.',
+  'Need a hand with the computer? Get help sends a message to a parent.',
+  'Make a list of your chores or homework in Tasks.',
+  'Notes keeps your ideas and stories in one place.',
 ];
 
 const ULTRA_TIPS = [
@@ -118,7 +126,8 @@ function Insight({ icon, title, value, foot, onClick, className, children }: { i
 function LooseTip({ fun }: { fun: boolean }) {
   const learner = useLearner();
   const tier = useTier();
-  const TIPS = learner ? LEARNER_TIPS : tier === 'ultra' ? [...ALL_TIPS, ...ULTRA_TIPS] : ALL_TIPS;
+  const vertical = useVertical();
+  const TIPS = learner ? (vertical === 'home' ? HOME_LEARNER_TIPS : LEARNER_TIPS) : tier === 'ultra' ? [...ALL_TIPS, ...ULTRA_TIPS] : ALL_TIPS;
   const [tip, setTip] = useState(() => Math.floor(Math.random() * TIPS.length));
   const [clicks, setClicks] = useState(0);
   const [rattle, setRattle] = useState(0);

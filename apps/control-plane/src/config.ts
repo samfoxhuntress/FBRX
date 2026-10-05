@@ -1,6 +1,6 @@
 import { resolve } from 'node:path';
 import { existsSync } from 'node:fs';
-import { DEFAULT_CONTROL_PLANE_PORT } from '@fbrx/shared';
+import { DEFAULT_CONTROL_PLANE_PORT, parseVertical, type Vertical } from '@fbrx/shared';
 
 export interface Config {
   host: string;
@@ -12,7 +12,7 @@ export interface Config {
   adminConsoleDir: string | null;
   /** One-time token required to create the first administrator (printed at startup if not set). */
   setupToken: string | null;
-  bootstrapAdmin: { email: string; password: string; name: string; organization: string } | null;
+  bootstrapAdmin: { email: string; password: string; name: string; organization: string; kind: Vertical } | null;
   sessionHours: number;
   heartbeatSeconds: number;
   snapshotRetentionPerDevice: number;
@@ -46,6 +46,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
             password: env.FBRX_CP_ADMIN_PASSWORD,
             name: env.FBRX_CP_ADMIN_NAME ?? 'Administrator',
             organization: env.FBRX_CP_ORGANIZATION ?? 'My Organization',
+            // work, school or home (or business, education)
+            kind: parseVertical(env.FBRX_CP_ORGANIZATION_KIND) ?? 'business',
           }
         : null,
     sessionHours: Number(env.FBRX_CP_SESSION_HOURS ?? 12),

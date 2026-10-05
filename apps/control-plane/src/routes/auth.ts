@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { generateTotpSecret, hashPassword, openString, otpauthUrl, safeEqual, sealString, verifyPassword, verifyTotp } from '@fbrx/shared/node';
+import { VERTICALS } from '@fbrx/shared';
 import type { AppContext } from '../context';
 import { ids } from '../context';
 import { actorOf, adminAuth, issueSession } from '../auth';
@@ -39,7 +40,15 @@ export async function authRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.post('/v1/setup', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
     const body = z
-      .object({ setupToken: z.string(), organization: z.string().min(1).max(120), name: z.string().min(1).max(120), email: z.string().email(), password: PasswordSchema })
+      .object({
+        setupToken: z.string(),
+        organization: z.string().min(1).max(120),
+        /** What FBRX Command runs: Work, School or Home (the first tenant's kind). */
+        kind: z.enum(VERTICALS).default('business'),
+        name: z.string().min(1).max(120),
+        email: z.string().email(),
+        password: PasswordSchema,
+      })
       .parse(req.body);
     if (Number(ctx.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM users')?.n ?? 0) > 0) throw forbidden('Setup has already been completed');
     if (!ctx.config.setupToken || !safeEqual(body.setupToken, ctx.config.setupToken)) throw unauthorized('Invalid setup token (see the server log)');
@@ -47,7 +56,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AppContext) {
     const tenantId = ids.tenant();
     const userId = ids.user();
     ctx.db.tx(() => {
-      ctx.db.run('INSERT INTO tenants (id, name, slug, contact_email, created_at, updated_at) VALUES (?,?,?,?,?,?)', tenantId, body.organization, slugify(body.organization), body.email, now, now);
+      ctx.db.run('INSERT INTO tenants (id, name, slug, contact_email, vertical, created_at, updated_at) VALUES (?,?,?,?,?,?,?)', tenantId, body.organization, slugify(body.organization), body.email, body.kind, now, now);
       ctx.db.run(
         'INSERT INTO users (id, tenant_id, email, name, password_hash, role, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
         userId,
@@ -61,7 +70,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AppContext) {
       );
     });
     ctx.db.run('UPDATE users SET password_hash = ? WHERE id = ?', await hashPassword(body.password), userId);
-    ctx.audit.record({ type: 'user', id: userId, label: body.email, tenantId: null, ip: req.ip }, 'setup.completed', { type: 'tenant', id: tenantId, tenantId }, { organization: body.organization });
+    ctx.audit.record({ type: 'user', id: userId, label: body.email, tenantId: null, ip: req.ip }, 'setup.completed', { type: 'tenant', id: tenantId, tenantId }, { organization: body.organization, kind: body.kind });
     return { ok: true, tenantId };
   });
 
@@ -111,8 +120,8 @@ export async function authRoutes(app: FastifyInstance, ctx: AppContext) {
     const permissions = (Object.keys(PERMISSIONS) as Permission[]).filter((perm) => can(p.role, perm));
     const tenants =
       p.role === 'superadmin'
-        ? ctx.db.all<any>('SELECT id, name, slug, status FROM tenants ORDER BY name')
-        : ctx.db.all<any>('SELECT id, name, slug, status FROM tenants WHERE id = ?', p.tenantId ?? '');
+        ? ctx.db.all<any>("SELECT id, name, slug, status, COALESCE(vertical, 'business') AS vertical FROM tenants ORDER BY name")
+        : ctx.db.all<any>("SELECT id, name, slug, status, COALESCE(vertical, 'business') AS vertical FROM tenants WHERE id = ?", p.tenantId ?? '');
     const user = p.kind === 'user' ? userView(ctx.db.get<any>('SELECT * FROM users WHERE id = ?', p.id)) : { id: p.id, email: p.label, name: p.label, role: p.role, tenantId: p.tenantId, mfaEnabled: false };
     return { principal: { kind: p.kind, role: p.role, tenantId: p.tenantId }, user, tenants, permissions, version: ctx.version };
   });

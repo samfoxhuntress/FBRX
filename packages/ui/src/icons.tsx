@@ -120,7 +120,9 @@ export const Icons = {
   ticket: make(['M3 7a2 2 0 0 0 2-2h14a2 2 0 0 0 2 2v3a2 2 0 0 0 0 4v3a2 2 0 0 0-2 2H5a2 2 0 0 0-2-2v-3a2 2 0 0 0 0-4z', 'M13 5v2', 'M13 11v2', 'M13 17v2']),
   lifebuoy: make(['M12 2a10 10 0 1 0 0 20 10 10 0 0 0 0-20z', 'M12 8a4 4 0 1 0 0 8 4 4 0 0 0 0-8z', 'M4.9 4.9l4.3 4.3', 'M14.8 14.8l4.3 4.3', 'M14.8 9.2l4.3-4.3', 'M4.9 19.1l4.3-4.3']),
   presentation: make(['M2 3h20', 'M3 3v11a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V3', 'M12 16v5', 'M8 21h8']),
-  school: make(['M2 10l10-5 10 5-10 5z', 'M6 12v5c3 2 9 2 12 0v-5', 'M22 10v6'])
+  school: make(['M2 10l10-5 10 5-10 5z', 'M6 12v5c3 2 9 2 12 0v-5', 'M22 10v6']),
+  briefcase: make(['M3 7h18v13H3z', 'M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2', 'M3 13h18']),
+  house: make(['M3 11l9-8 9 8', 'M5 9.5V21h14V9.5', 'M10 21v-6h4v6']),
 };
 
 export type IconName = keyof typeof Icons;

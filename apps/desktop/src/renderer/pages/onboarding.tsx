@@ -145,14 +145,15 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
           {step === 'org' && (
             <div className="fx-form">
               <h1>Connect to your organization</h1>
-              <p className="fx-secondary">Optional. If your school or company runs FBRX Command, connect so IT can manage updates, settings and backups, and answer your help desk tickets.</p>
+              <p className="fx-secondary">Optional. If your company, school or family runs FBRX Command, connect so it can look after updates, settings and backups, and answer your requests for help.</p>
               <Field label="FBRX Command address">
                 <Input value={org.serverUrl} onChange={(e) => setOrg({ ...org, serverUrl: e.target.value })} placeholder="https://fbrx.yourcompany.com" />
               </Field>
               <Field label="Enrollment token">
                 <Input value={org.token} onChange={(e) => setOrg({ ...org, token: e.target.value.trim() })} placeholder="fbrx_enr_…" />
               </Field>
-              <Toggle checked={!!org.student} onChange={(v) => setOrg({ ...org, student: v })} label="This is a student computer (FBRX OS Education)" />
+              <Toggle checked={!!org.student} onChange={(v) => setOrg({ ...org, student: v })} label="This computer is for a student or a child" />
+              {org.student && <p className="fx-muted" style={{ margin: 0, fontSize: 12.5 }}>It becomes FBRX OS Education (at a school) or FBRX OS Home (in a family): a simpler set of tools and a safe learning helper.</p>}
               <div className="fx-actions" style={{ justifyContent: 'flex-end' }}>
                 <Button variant="ghost" onClick={next}>
                   Use standalone

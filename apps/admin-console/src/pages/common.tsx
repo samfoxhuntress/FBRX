@@ -1,4 +1,5 @@
-import { Status, timeAgo } from '@fbrx/ui';
+import { AUDIENCES, AUDIENCE_NAMES, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_INFO, VERTICAL_NAMES, isLearner, type Audience, type Vertical } from '@fbrx/shared';
+import { ChoiceCards, Status, timeAgo, type IconName } from '@fbrx/ui';
 
 export interface DeviceSummary {
   id: string;
@@ -93,4 +94,41 @@ export function SeverityStatus({ severity }: { severity: string }) {
 export function ServiceState({ state, message }: { state: string; message?: string | null }) {
   const tone = state === 'running' ? 'good' : state === 'failed' ? 'critical' : state === 'degraded' ? 'warning' : 'neutral';
   return <Status tone={tone}>{message ? `${state} — ${message}` : state}</Status>;
+}
+
+export const KIND_ICONS: Record<Vertical, IconName> = { business: 'briefcase', education: 'school', home: 'house' };
+
+/** "Work", "School", "Home": the kind of tenant, as people pick it. */
+export function KindPicker({ value, onChange }: { value: Vertical; onChange: (v: Vertical) => void }) {
+  return (
+    <ChoiceCards
+      label="Kind of tenant"
+      value={value}
+      onChange={onChange}
+      options={VERTICALS.map((v) => ({ value: v, icon: KIND_ICONS[v], title: VERTICAL_NAMES[v], description: VERTICAL_INFO[v].tagline, detail: VERTICAL_INFO[v].computers }))}
+    />
+  );
+}
+
+/** Who can use a computer in this kind of tenant (every audience in the platform view). */
+export function audienceOptions(kind: Vertical | null): Array<{ value: Audience; label: string }> {
+  return (kind ? VERTICAL_AUDIENCES[kind] : AUDIENCES).map((a) => ({ value: a, label: AUDIENCE_NAMES[a] }));
+}
+
+export function audienceHelp(kind: Vertical | null): string | undefined {
+  if (kind === 'education') return 'Student computers run FBRX OS Education';
+  if (kind === 'home') return "Children's computers run FBRX OS Home";
+  if (kind === 'business') return undefined;
+  return 'Student computers run FBRX OS Education (School tenants), child computers FBRX OS Home (Home tenants)';
+}
+
+/** "Student" or "Child" next to a learner computer or token. */
+export function LearnerBadge({ audience, plural }: { audience: Audience | null | undefined; plural?: boolean }) {
+  if (!isLearner(audience)) return null;
+  const label = audience === 'child' ? (plural ? 'Children' : 'Child') : plural ? 'Students' : 'Student';
+  return (
+    <span className="fx-badge accent" style={{ marginLeft: 6 }}>
+      {label}
+    </span>
+  );
 }
