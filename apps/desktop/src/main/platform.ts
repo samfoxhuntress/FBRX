@@ -83,7 +83,13 @@ export function createElectronPlatform(o: {
     specialDirs: () => {
       const d = defaultSpecialDirs();
       try {
-        return { home: app.getPath('home'), documents: app.getPath('documents'), desktop: app.getPath('desktop'), downloads: app.getPath('downloads') };
+        const home = app.getPath('home');
+        // Without XDG user folders, Linux reports the home folder itself; use the usual folder inside it instead.
+        const pick = (name: 'documents' | 'desktop' | 'downloads') => {
+          const p = app.getPath(name);
+          return p && p !== home ? p : d[name];
+        };
+        return { home, documents: pick('documents'), desktop: pick('desktop'), downloads: pick('downloads') };
       } catch {
         return d;
       }

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { CalendarEvent, SystemLive, SystemStatus } from '@fbrx/shared';
+import type { CalendarEvent, ProtectionState, SystemLive, SystemStatus } from '@fbrx/shared';
 import { TIER_NAMES, TROPHIES, displayVersion } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Grid, Icons, KeyValue, LineChart, Meter, StatTile, Status, formatBytes, formatDuration, timeAgo, useAction, type IconName } from '@fbrx/ui';
 import { call, onEvent, openExternal } from '../client';
@@ -63,7 +63,7 @@ const ALL_TIPS = [
 ];
 
 /** A score out of 100 from what usually needs attention, with the reasons that cost points. */
-function healthScore(o: { status: SystemStatus; critical: number; unread: number; memPct: number; fullestDiskPct: number; aiReady: boolean }) {
+function healthScore(o: { status: SystemStatus; critical: number; unread: number; memPct: number; fullestDiskPct: number; aiReady: boolean; av: ProtectionState | null }) {
   const reasons: string[] = [];
   let score = 100;
   const hit = (n: number, why: string) => {
@@ -75,6 +75,8 @@ function healthScore(o: { status: SystemStatus; critical: number; unread: number
   // Locked on purpose (password at start, or by hand) is not a problem.
   if (o.status.vault.state === 'locked' && o.status.vault.lockReason !== 'password' && o.status.vault.lockReason !== 'manual') hit(15, 'vault locked');
   if (o.critical) hit(Math.min(25, o.critical * 10), `${o.critical} critical alert${o.critical > 1 ? 's' : ''}`);
+  if (o.av === 'at-risk') hit(20, 'antivirus at risk');
+  else if (o.av === 'attention') hit(6, 'antivirus needs attention');
   if (o.fullestDiskPct > 95) hit(15, 'a drive is almost full');
   else if (o.fullestDiskPct > 88) hit(7, 'a drive is getting full');
   if (o.memPct > 92) hit(8, 'memory is tight');
@@ -255,9 +257,10 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
   }, [Math.floor(Date.now() / 3_600_000)]); // eslint-disable-line react-hooks/exhaustive-deps
   const calendar = useCore('calendar.events', { from: new Date(Math.floor(Date.now() / 60_000) * 60_000).toISOString(), to: dayEnd }, ['calendar.changed'], 60_000);
   const agenda = (calendar.data ?? []).filter((e) => !e.allDay && !e.cancelled && e.showAs !== 'free');
+  const av = useCore('protection.status', undefined, ['protection.changed'], 300_000).data;
   const fullest = disks.reduce<(typeof disks)[number] | null>((m, d) => (!m || d.used / d.size > m.used / m.size ? d : m), null);
   const freeTotal = disks.reduce((n, d) => n + (d.size - d.used), 0);
-  const health = healthScore({ status, critical: counts.data?.critical ?? 0, unread: counts.data?.unread ?? 0, memPct, fullestDiskPct: fullest ? (fullest.used / fullest.size) * 100 : 0, aiReady: !!aiReady });
+  const health = healthScore({ status, critical: counts.data?.critical ?? 0, unread: counts.data?.unread ?? 0, memPct, fullestDiskPct: fullest ? (fullest.used / fullest.size) * 100 : 0, aiReady: !!aiReady, av: av?.state ?? null });
   const lastSpeed = speed.data?.[0];
   const found = TROPHIES.filter((x) => trophies.data?.unlocked[x.id]).length;
   const flapsDone = useRef(false);
@@ -329,7 +332,14 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
         <Insight icon="drive" title="Storage" value={`${formatBytes(freeTotal)} free`} foot={fullest ? `${fullest.mount} is ${Math.round((fullest.used / fullest.size) * 100)}% full` : 'Reading drives…'} onClick={() => navigate('storage')} />
         <LooseTip fun={easterEggs} />
         <Insight icon="sparkles" title={agentName} value={status.aiHalt ? 'Emergency stop' : aiReady ? (status.activeRuns ? 'Working…' : 'Ready') : 'Needs a model'} foot={`${status.stats.agentRuns24h} chats · ${status.stats.toolCalls24h} tool calls today`} onClick={() => navigate(aiReady ? 'agent' : 'runtime')} />
-        <Insight icon="archive" title="Protection" value={status.stats.lastBackupAt ? `Backed up ${timeAgo(status.stats.lastBackupAt)}` : 'No backup yet'} foot={`Vault ${status.vault.state} · ${status.stats.policyDenials24h} blocked today`} onClick={() => navigate('backup')} />
+        <Insight
+          icon="shield"
+          title="Protection"
+          value={av ? { protected: 'Protected', attention: 'Needs attention', 'at-risk': 'At risk', unknown: 'Unknown' }[av.state] : 'Checking…'}
+          foot={`${av ? `${av.active.name} · ` : ''}${status.stats.lastBackupAt ? `backed up ${timeAgo(status.stats.lastBackupAt)}` : 'no backup yet'}`}
+          className={av?.state === 'at-risk' ? 'insight-alert' : undefined}
+          onClick={() => navigate('shield')}
+        />
         <Insight icon="bell" title="Alerts" value={counts.data?.critical ? `${counts.data.critical} critical` : counts.data?.unread ? `${counts.data.unread} unread` : 'Quiet'} foot={status.pendingApprovals ? `${status.pendingApprovals} approval${status.pendingApprovals > 1 ? 's' : ''} waiting` : 'No approvals waiting'} onClick={() => navigate(status.pendingApprovals ? 'approvals' : 'alerts')} />
         {easterEggs ? (
           <Insight icon="trophy" title="Trophy case" value={`${found} of ${TROPHIES.length}`} foot={found === TROPHIES.length ? 'The goose is very proud' : 'Easter eggs found'} onClick={() => navigate('settings/trophies')} />

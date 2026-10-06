@@ -47,6 +47,10 @@ license with a kind also sets it. Unattended installs can pick the first tenant'
 | | **Audit log** | Every admin action and device enrollment, hash-chained and verifiable |
 | | Account (your name, top right) | Change your password (signs out your other sessions) and enable TOTP MFA |
 
+**Antivirus:** device detail shows each computer's antivirus and its state (the Health column flags *Antivirus at
+risk* and *Antivirus needs attention*). To choose it for a group, put `{ "protection": { "provider": "shield" } }` (or
+`defender`, `product:sophos`, `auto`…) in a profile's settings and lock `protection.provider`. See [SHIELD.md](SHIELD.md).
+
 **Calendars for everyone:** to let computers sign in to Outlook / Microsoft 365 calendars, put your Microsoft app
 (client) ID in a profile's settings, `{ "calendar": { "microsoft": { "clientId": "…", "tenant": "yourdomain" } } }`, and
 lock `calendar.microsoft` if people should not change it. See [CALENDAR.md](CALENDAR.md).

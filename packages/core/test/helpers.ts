@@ -46,6 +46,8 @@ export async function makeKernel(o: TestKernelOptions = {}): Promise<{ kernel: K
   kernel.settings.update({
     localApi: { enabled: o.localApiPort !== undefined, port: o.localApiPort ?? 47999 },
     runtime: { enabled: false },
+    // Tests never download the real threat feed.
+    protection: { shield: { updateSignatures: false } },
   });
   const policy: Policy = structuredClone(DEFAULT_POLICY);
   policy.filesystem.allowedRoots = [sandbox, '${WORKSPACE}'];

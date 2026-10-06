@@ -98,7 +98,7 @@ describe('control plane ⇄ device fleet', () => {
       dataDir: kernelDir,
       platform: createNodePlatform({ dataDir: kernelDir, devMode: false, keychain: new StaticKeyKeychain(randomBytes(32), 'memory'), licensePublicKeys: [publicKeyPem] }),
     });
-    kernel.settings.update({ localApi: { enabled: false }, runtime: { enabled: false } });
+    kernel.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, protection: { shield: { updateSignatures: false } } });
     await kernel.start();
     expect(kernel.license.status().edition).toBe('community');
 
@@ -253,7 +253,7 @@ describe('control plane ⇄ device fleet', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fbrx-dev-'));
     const k = await Kernel.create({ dataDir: dir, platform: createNodePlatform({ dataDir: dir, devMode: false, keychain: new StaticKeyKeychain(randomBytes(32), 'memory'), licensePublicKeys: [publicKeyPem] }) });
     try {
-      k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false } });
+      k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, protection: { shield: { updateSignatures: false } } });
       await k.start();
       expect(k.license.status().tier).toBe('basic');
       const st = (await k.call('license.activate', { key: lic.key }, USER)) as any;

@@ -57,11 +57,12 @@ describe('FBRX Command for a school', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fbrx-school-'));
     const k = await Kernel.create({ dataDir: dir, platform: createNodePlatform({ dataDir: dir, devMode: false, keychain: new StaticKeyKeychain(randomBytes(32), 'memory'), licensePublicKeys: [publicKeyPem] }) });
     kernels.push({ k, dir });
-    k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, profile: { name } });
+    k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, protection: { shield: { updateSignatures: false } }, profile: { name } });
     await k.start();
     // The background monitor and alert checks only add load here (PowerShell on Windows).
     k.alerts.stop();
     k.monitor.stop();
+    k.protection.stop();
     await k.call('fleet.enroll', { serverUrl: base, token: enrollToken, deviceName: name, ...(audience ? { audience } : {}) }, USER);
     await waitFor(() => k.fleet.status().state === 'online');
     return k;

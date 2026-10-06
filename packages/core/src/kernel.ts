@@ -63,6 +63,9 @@ import { deviceConsoleTools } from './tools/builtin/device-console-tools';
 import { netEnvTools } from './tools/builtin/netenv-tools';
 import { calendarTools } from './tools/builtin/calendar-tools';
 import { CalendarService } from './calendar/calendar-service';
+import { Shield } from './protection/shield';
+import { ProtectionService } from './protection/protection-service';
+import { shieldTools } from './tools/builtin/shield-tools';
 import { helpdeskTools } from './tools/builtin/helpdesk-tools';
 import { NetEnvironments } from './network/environments';
 import { Helpdesk } from './fleet/helpdesk';
@@ -151,6 +154,8 @@ export class Kernel {
   readonly net: NetDiag;
   readonly netenv: NetEnvironments;
   readonly calendar: CalendarService;
+  readonly shield: Shield;
+  readonly protection: ProtectionService;
   readonly helpdesk: Helpdesk;
   readonly vendors: VendorDb;
   readonly consoles: DeviceConsoles;
@@ -368,6 +373,40 @@ export class Kernel {
       internet: () => this.internetAllowed(),
       notify: (title, body) => this.notify({ title, body, level: 'info', source: 'calendar' }),
     });
+    this.shield = new Shield({
+      db: this.db,
+      meta: this.meta,
+      dir: join(this.paths.root, 'shield', 'quarantine'),
+      log: L('shield'),
+      settings: () => this.settings.get().protection.shield,
+      ultra: () => !this.ultraOnly('FBRX Shield extras'),
+      internet: () => this.internetAllowed(),
+      secret: (name) => {
+        try {
+          return this.vault.isUnlocked ? this.vault.get(name) : undefined;
+        } catch {
+          return undefined;
+        }
+      },
+      skip: () => [this.paths.root],
+      landing: () => {
+        const d = this.platform.specialDirs();
+        // Never the home folder itself (some systems report it as Downloads).
+        return [d.downloads, d.desktop].filter((x) => x && x !== d.home);
+      },
+      onDetection: (d) => this.protection.onDetection(d),
+    });
+    this.protection = new ProtectionService({
+      shield: this.shield,
+      meta: this.meta,
+      events: this.events,
+      log: L('protection'),
+      settings: () => this.settings.get().protection,
+      locked: () => this.settings.effective().locked,
+      setProvider: (provider) => void this.settings.update({ protection: { provider } }),
+      dirs: () => this.platform.specialDirs(),
+      alert: (rule, title, body, key) => void this.alerts.fire(rule, title, body, { key }).catch((err) => this.log.debug('Alert failed', { rule, error: errorMessage(err) })),
+    });
     this.trophies = new Trophies({ meta: this.meta, events: this.events, enabled: () => funEnabled(this.settings.get(), this.license.status().tier) });
     this.migrator = new Migrator({
       events: this.events,
@@ -557,6 +596,7 @@ export class Kernel {
       }),
       this.events.on('settings.changed', () => this.presenterChanged()),
       this.events.on('settings.changed', () => this.calendar.schedule()),
+      this.events.on('settings.changed', () => this.protection.applyWatch()),
     );
     this.disposers.push(this.vault.onChange(() => this.redactor.setSecrets(this.vault.valuesForRedaction())));
     // Licensed features (plugins, connectors, …) start or stop as soon as a license is activated, pushed or revoked.
@@ -675,6 +715,7 @@ export class Kernel {
           ...deviceConsoleTools(this.consoles),
           ...netEnvTools(this.netenv, () => this.ultraOnly('Network environments')),
           ...calendarTools(this.calendar),
+          ...shieldTools(this.protection, this.shield),
           ...helpdeskTools(this.helpdesk, () => (this.fleet.enrolled ? null : 'This computer is not part of an organization, so there is no help desk to send to')),
           ...pcTools({ monitor: this.monitor, net: this.net, alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined) }),
         ]);
@@ -773,6 +814,14 @@ export class Kernel {
         this.alerts.stop();
         this.monitor.stop();
       },
+    });
+    s.register({
+      name: 'protection',
+      title: 'Antivirus',
+      description: 'FBRX Shield download checks, threat database updates, scheduled scans and the antivirus status',
+      dependsOn: ['storage'],
+      start: () => this.protection.start(),
+      stop: () => this.protection.stop(),
     });
     s.register({
       name: 'calendar',
@@ -1034,6 +1083,7 @@ export class Kernel {
       plugins: this.plugins.list().map((p) => ({ id: p.id, version: p.version, enabled: p.enabled })),
       runtimeModel: this.runtime.status().modelId,
       auditHead: this.audit.headInfo(),
+      protection: this.protection.summary(),
     };
   }
 

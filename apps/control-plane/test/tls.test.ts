@@ -86,11 +86,12 @@ describe('FBRX Command with its own certificate', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fbrx-tls-pc-'));
     const k = await Kernel.create({ dataDir: dir, platform: createNodePlatform({ dataDir: dir, devMode: false, keychain: new StaticKeyKeychain(randomBytes(32), 'memory') }) });
     kernels.push({ k, dir });
-    k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, profile: { name } });
+    k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, protection: { shield: { updateSignatures: false } }, profile: { name } });
     await k.start();
     // The background monitor and alert checks only add load here (PowerShell on Windows).
     k.alerts.stop();
     k.monitor.stop();
+    k.protection.stop();
     return k;
   };
 

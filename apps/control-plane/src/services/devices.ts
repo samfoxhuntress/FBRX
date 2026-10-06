@@ -37,7 +37,7 @@ export function deviceView(ctx: AppContext, d: any) {
     policyOverride: parseJson<unknown>(d.policy_override, null),
     health: s
       ? {
-          state: failing.length ? 'critical' : degraded.length || s.vaultState !== 'unlocked' ? 'warning' : 'healthy',
+          state: failing.length || s.protection?.state === 'at-risk' ? 'critical' : degraded.length || s.vaultState !== 'unlocked' || s.protection?.state === 'attention' ? 'warning' : 'healthy',
           failingServices: failing,
           degradedServices: degraded,
           cpuLoad: s.cpuLoad,
@@ -58,6 +58,7 @@ export function deviceView(ctx: AppContext, d: any) {
           runtimeModel: s.runtimeModel,
           uptimeSeconds: s.uptimeSeconds,
           services: s.services,
+          protection: s.protection ?? null,
         }
       : null,
   };

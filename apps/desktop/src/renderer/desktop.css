@@ -5241,3 +5241,160 @@ html[data-presenting='blur'] .private::selection {
 .glass-agenda .cal-pill .fx-btn {
   margin: -3px -4px -3px 0;
 }
+
+/* FBRX Shield: the antivirus page */
+.shield-hero {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 18px 20px;
+  margin-bottom: 16px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  background: var(--surface-1);
+}
+.shield-hero.protected {
+  border-color: color-mix(in srgb, var(--good) 45%, var(--border));
+  background: linear-gradient(120deg, color-mix(in srgb, var(--good) 10%, var(--surface-1)), var(--surface-1) 60%);
+}
+.shield-hero.attention {
+  border-color: color-mix(in srgb, var(--warning) 50%, var(--border));
+  background: linear-gradient(120deg, color-mix(in srgb, var(--warning) 12%, var(--surface-1)), var(--surface-1) 60%);
+}
+.shield-hero.at-risk {
+  border-color: color-mix(in srgb, var(--critical) 55%, var(--border));
+  background: linear-gradient(120deg, color-mix(in srgb, var(--critical) 12%, var(--surface-1)), var(--surface-1) 60%);
+}
+.shield-badge {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 60px;
+  height: 60px;
+  border-radius: 18px;
+  color: var(--text-muted);
+  background: var(--surface-2);
+}
+.protected .shield-badge {
+  color: var(--good);
+  background: color-mix(in srgb, var(--good) 16%, var(--surface-1));
+}
+.attention .shield-badge {
+  color: var(--warning);
+  background: color-mix(in srgb, var(--warning) 16%, var(--surface-1));
+}
+.at-risk .shield-badge {
+  color: var(--critical);
+  background: color-mix(in srgb, var(--critical) 16%, var(--surface-1));
+}
+.shield-hero-text {
+  flex: 1;
+  min-width: 0;
+}
+.shield-hero-text h2 {
+  margin: 0;
+  font-size: 22px;
+}
+.shield-hero-text p {
+  margin: 2px 0 0;
+  color: var(--text-secondary);
+}
+.shield-problems {
+  margin: 8px 0 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  display: grid;
+  gap: 2px;
+}
+.shield-choice .fx-choices {
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+}
+.shield-choice.managed {
+  pointer-events: none;
+  opacity: 0.75;
+}
+.shield-note {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+.shield-progress {
+  display: grid;
+  gap: 6px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.shield-progress-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.shield-progress-bar {
+  height: 4px;
+  border-radius: 4px;
+  overflow: hidden;
+  background: var(--border);
+}
+.shield-progress-bar span {
+  display: block;
+  width: 35%;
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+  animation: shield-sweep 1.4s ease-in-out infinite;
+}
+@keyframes shield-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(300%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .shield-progress-bar span {
+    animation: none;
+    width: 100%;
+    opacity: 0.5;
+  }
+}
+.shield-current {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-muted);
+  font-size: 11px;
+}
+.shield-file {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  max-width: 460px;
+}
+.shield-file .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.shield-file small {
+  font-size: 12px;
+}
+.shield-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.shield-ultra {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: var(--radius-sm);
+  border: 1px dashed var(--border-strong);
+}
+.glass-tile.insight-alert {
+  border-color: color-mix(in srgb, var(--critical) 55%, var(--border));
+}

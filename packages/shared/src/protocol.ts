@@ -68,6 +68,17 @@ export const HeartbeatSchema = z.object({
     runtimeModel: z.string().nullable(),
     /** Head of the device's hash-chained audit log; anchoring it server-side makes local tampering evident. */
     auditHead: z.object({ seq: z.number().int(), hash: z.string() }),
+    /** The antivirus protecting the computer (FBRX 1.9.5+). */
+    protection: z
+      .object({
+        provider: z.enum(['shield', 'defender', 'product']),
+        name: z.string().max(120),
+        state: z.enum(['protected', 'attention', 'at-risk', 'unknown']),
+        realtime: z.boolean().nullable(),
+        threats: z.number().int(),
+      })
+      .nullable()
+      .optional(),
   }),
 });
 export type Heartbeat = z.infer<typeof HeartbeatSchema>;

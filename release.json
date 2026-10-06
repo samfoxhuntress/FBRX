@@ -1,18 +1,18 @@
 {
   "product": "FBRX OS",
   "stage": "Alpha",
-  "version": "1.9.4",
+  "version": "1.9.5",
   "codename": "Bobbin",
   "released": "2026-10-06",
   "importance": "recommended",
-  "summary": "Your Outlook / Microsoft 365 calendars and calendar links in FBRX: an agenda and a week view, meeting reminders, today on FBRX Glass, and Fabrix knows what is on.",
+  "summary": "FBRX Shield, FBRX's own antivirus, and the choice of what protects your computer: FBRX Shield, Microsoft Defender, or the antivirus you already have.",
   "notes": [
-    "New Calendar page (Studio): sign in to Outlook / Microsoft 365 in your browser, or paste a calendar link from Outlook.com, Google, Apple or your school.",
-    "Agenda and week views, Join buttons for online meetings, event details, and new events in your Outlook calendar.",
-    "Reminders before meetings (5 to 30 minutes, or never), and what is left today on FBRX Glass.",
-    "Fabrix can tell you what is on, find a free hour, and add an event (it asks first).",
-    "Plugins can read your calendar when they ask for the new calendar permission.",
-    "Organizations can set the Microsoft sign-in for every computer from FBRX Command."
+    "FBRX Shield is now FBRX's antivirus: it checks new downloads as they arrive, scans (quick, full or a folder), keeps a threat database of known malware up to date every day, and spots disguised programs, scripts that delete backups or turn off antivirus, risky files from the internet and documents with macros.",
+    "Malware goes into an encrypted quarantine straight away; suspicious files wait for you (quarantine, trust or delete), and Fabrix can explain any finding.",
+    "Choose what protects this computer: FBRX Shield, Microsoft Defender, or an antivirus already installed (Sophos, CrowdStrike, SentinelOne, ESET and more). FBRX shows its status everywhere and warns you when it is off or out of date.",
+    "The sidebar's Shield section is now Stronghold: FBRX Shield, approvals, credentials, governance and backups.",
+    "FBRX Command shows each computer's antivirus and can choose it for a group.",
+    "Endpoint Ultra adds scheduled scans and second engines (ClamAV, VirusTotal)."
   ],
   "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/heads/claude/fbrx-os-enterprise-app-bs7s2j.zip",
   "page": "https://github.com/samfoxhuntress/FBRX"

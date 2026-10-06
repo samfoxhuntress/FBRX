@@ -2,6 +2,7 @@ import { z } from 'zod';
 import type { Tier } from './license';
 import { DEFAULT_LOCAL_API_PORT, DEFAULT_RUNTIME_PORT, UPDATE_CHANNELS } from './constants';
 import { ALERT_CHANNELS } from './ext';
+import { PROTECTION_DEFAULT_FEED } from './protection';
 
 /** Built-in color themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
 export const THEME_PRESETS = ['fabrics', 'tropical', 'neon', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
@@ -310,6 +311,31 @@ export const SettingsSchema = z.object({
       readOnly: z.boolean(),
     }),
   }),
+  /** Antivirus: what protects this computer, and FBRX Shield's own settings. */
+  protection: z.object({
+    /** "auto", "shield" (FBRX Shield), "defender" (Microsoft Defender) or "product:<id>" (an antivirus found here). */
+    provider: z.string().max(80),
+    shield: z.object({
+      /** Check new files in Downloads and on the desktop as soon as they arrive. */
+      watchDownloads: z.boolean(),
+      /** Move malware into quarantine straight away (suspicious files are only reported). */
+      autoQuarantine: z.boolean(),
+      /** Report suspicious files (disguised programs, scripts that download and run code, macros from the internet…). */
+      heuristics: z.boolean(),
+      /** Keep the threat database (known-malware fingerprints) up to date. */
+      updateSignatures: z.boolean(),
+      /** Where the threat database comes from: a list of SHA-256 fingerprints, one per line. */
+      feedUrl: z.string().max(500),
+      /** Endpoint Ultra: a quick scan every day or week. */
+      schedule: z.enum(['off', 'daily', 'weekly']),
+      /** Endpoint Ultra: also scan with ClamAV when it is installed. */
+      useClamAV: z.boolean(),
+      /** Endpoint Ultra: ask VirusTotal about suspicious files (needs a VIRUSTOTAL_API_KEY in Credentials). */
+      useVirusTotal: z.boolean(),
+      /** Folders and files FBRX Shield skips. */
+      exclusions: z.array(z.string().max(1000)).max(200),
+    }),
+  }),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -481,6 +507,20 @@ export const DEFAULT_SETTINGS: Settings = {
     remindMinutes: 10,
     syncMinutes: 15,
     microsoft: { clientId: '', tenant: 'common', readOnly: false },
+  },
+  protection: {
+    provider: 'auto',
+    shield: {
+      watchDownloads: true,
+      autoQuarantine: true,
+      heuristics: true,
+      updateSignatures: true,
+      feedUrl: PROTECTION_DEFAULT_FEED,
+      schedule: 'off',
+      useClamAV: true,
+      useVirusTotal: false,
+      exclusions: [],
+    },
   },
 };
 

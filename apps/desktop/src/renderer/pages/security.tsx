@@ -3,7 +3,7 @@ import type { AuditItem, FileReport, LinkReport } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Grid, Input, KeyValue, Page, Select, Spinner, StatTile, Status, Tabs, Toggle, formatBytes, formatDate, timeAgo, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
 import { call, pickFile } from '../client';
 import { useAgentName, useCore } from '../hooks';
-import { IS_WINDOWS, navigate } from '../app';
+import { IS_WINDOWS, navigate, routeArg } from '../app';
 import { AskButton, askAgent } from '../widgets';
 
 type Tab = 'overview' | 'threats' | 'firewall' | 'audit' | 'check' | 'protection';
@@ -12,65 +12,59 @@ function WindowsOnly({ what }: { what: string }) {
   return <Callout tone="info">{what} is available on Windows.</Callout>;
 }
 
+const AV_LABEL = { protected: 'Protected', attention: 'Needs attention', 'at-risk': 'At risk', unknown: 'Unknown' } as const;
+const AV_TONE = { protected: 'good', attention: 'warning', 'at-risk': 'critical', unknown: 'neutral' } as const;
+
 function Overview({ go }: { go: (t: Tab) => void }) {
-  const def = useCore('security.defender');
+  const av = useCore('protection.status', undefined, ['protection.changed', 'settings.changed']);
   const fw = useCore('security.firewall');
-  const threats = useCore('security.threats');
-  const { run, busy } = useAction();
-  const toast = useToast();
   const agent = useAgentName();
-  if (!IS_WINDOWS) return <WindowsOnly what="Microsoft Defender and Windows Firewall status" />;
-  const d = def.data;
-  const active = (threats.data ?? []).filter((t) => t.active);
-  const fwOff = (fw.data ?? []).filter((p) => !p.enabled);
-  const scan = async (type: 'quick' | 'full') => {
-    toast.info(`${type === 'quick' ? 'Quick' : 'Full'} scan started`, type === 'full' ? 'A full scan can take an hour or more.' : 'This usually takes a few minutes.');
-    const r = await run(type, () => call('security.scan', { type }));
-    if (r) (r.threatsFound ? toast.error : toast.success)(r.threatsFound ? 'Threats found' : 'No threats found', r.output.slice(-200));
-    threats.reload();
-    def.reload();
-  };
+  const p = av.data;
+  const fwOff = IS_WINDOWS ? (fw.data ?? []).filter((x) => !x.enabled) : [];
+  const problems = [...(p?.problems ?? []), ...(fwOff.length ? [`Firewall is off for ${fwOff.map((x) => x.name).join(', ')} networks.`] : [])];
   return (
     <>
-      {def.error && <Callout tone="warning">{def.error}</Callout>}
+      {av.error && <Callout tone="warning">{av.error}</Callout>}
       <Grid cols={4}>
-        <StatTile label="Real-time protection" value={d ? (d.realtime ? 'On' : 'Off') : '…'} foot={d ? <Status tone={d.realtime ? 'good' : 'critical'}>{d.realtime ? 'Protected' : 'At risk'}</Status> : ''} />
-        <StatTile label="Virus definitions" value={d?.signatureAgeDays != null ? (d.signatureAgeDays === 0 ? 'Today' : `${d.signatureAgeDays} day(s) old`) : '…'} foot={d?.signatureVersion} />
-        <StatTile label="Firewall" value={fw.data ? (fwOff.length ? `${fwOff.length} profile(s) off` : 'On') : '…'} foot={fw.data ? <Status tone={fwOff.length ? 'critical' : 'good'}>{fwOff.length ? fwOff.map((p) => p.name).join(', ') : 'All profiles'}</Status> : ''} />
-        <StatTile label="Active threats" value={threats.data ? String(active.length) : '…'} foot={active.length ? <Status tone="critical">Action needed</Status> : <Status tone="good">None</Status>} />
+        <StatTile
+          label="Antivirus"
+          value={p ? p.active.name : '…'}
+          foot={
+            p ? (
+              <a href="#/shield" onClick={(e) => (e.preventDefault(), navigate('shield'))}>
+                <Status tone={AV_TONE[p.state]}>{AV_LABEL[p.state]}</Status>
+              </a>
+            ) : (
+              ''
+            )
+          }
+        />
+        <StatTile label={p?.active.kind === 'shield' ? 'Download checks' : 'Real-time protection'} value={p ? (p.realtime === null ? 'Unknown' : p.realtime ? 'On' : 'Off') : '…'} foot={p?.lastScan ? `Last scan ${timeAgo(p.lastScan)}` : 'No scan yet'} />
+        {IS_WINDOWS ? (
+          <StatTile label="Firewall" value={fw.data ? (fwOff.length ? `${fwOff.length} profile(s) off` : 'On') : '…'} foot={fw.data ? <Status tone={fwOff.length ? 'critical' : 'good'}>{fwOff.length ? fwOff.map((x) => x.name).join(', ') : 'All profiles'}</Status> : ''} />
+        ) : (
+          <StatTile label="Firewall" value="—" foot="Shown on Windows" />
+        )}
+        <StatTile label="Threats" value={p ? String(p.threats) : '…'} foot={p?.threats ? <Status tone="critical">Action needed</Status> : <Status tone="good">None</Status>} />
       </Grid>
-      <Card title="Scan" subtitle={d ? `Last quick scan ${d.lastQuickScan ? timeAgo(d.lastQuickScan) : 'never'} · last full scan ${d.lastFullScan ? timeAgo(d.lastFullScan) : 'never'}` : undefined}>
+      <Card title="Antivirus" subtitle={p ? `Protected by ${p.active.name}${p.choice === 'auto' ? ' (chosen automatically)' : ''}` : undefined}>
         <div className="fx-actions">
-          <Button variant="primary" icon="shield" loading={busy === 'quick'} onClick={() => void scan('quick')}>
-            Quick scan
+          <Button variant="primary" icon="shield" onClick={() => navigate('shield')}>
+            Open FBRX Shield
           </Button>
-          <Button loading={busy === 'full'} onClick={() => void scan('full')}>
-            Full scan
-          </Button>
-          <Button
-            loading={busy === 'custom'}
-            onClick={async () => {
-              const path = await pickFile({ kind: 'folder', title: 'Folder to scan' });
-              if (!path) return;
-              const r = await run('custom', () => call('security.scan', { type: 'custom', path }));
-              if (r) (r.threatsFound ? toast.error : toast.success)(r.threatsFound ? 'Threats found' : 'No threats found');
-            }}
-          >
-            Scan a folder…
-          </Button>
-          <Button loading={busy === 'sig'} onClick={() => void run('sig', () => call('security.updateSignatures')).then((r) => r && (r.ok ? toast.success('Definitions updated') : toast.warning('Update did not finish', r.output.slice(-200))))}>
-            Update definitions
-          </Button>
+          <span className="fx-muted">Scans, what was found, quarantine, and the choice of antivirus are in FBRX Shield.</span>
           <span className="fx-spacer" />
-          <Button variant="ghost" icon="external" onClick={() => void call('security.open', { page: 'home' })}>
-            Windows Security
-          </Button>
+          {IS_WINDOWS && (
+            <Button variant="ghost" icon="external" onClick={() => void call('security.open', { page: 'home' })}>
+              Windows Security
+            </Button>
+          )}
         </div>
       </Card>
-      {(active.length > 0 || fwOff.length > 0 || (d && !d.realtime)) && (
-        <Callout tone="critical" title="Your protection needs attention" actions={<Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent('Check my security status (Defender, firewall, threats) and tell me exactly what to do to fix any problem.')}`)}>Fix it with {agent}</Button>}>
-          {[d && !d.realtime && 'Real-time protection is off.', fwOff.length && `Firewall is off for ${fwOff.map((p) => p.name).join(', ')}.`, active.length && `${active.length} active threat(s).`].filter(Boolean).join(' ')}{' '}
-          {active.length > 0 && <a href="#" onClick={(e) => (e.preventDefault(), go('threats'))}>See threats</a>}
+      {problems.length > 0 && (
+        <Callout tone={p?.state === 'at-risk' || fwOff.length ? 'critical' : 'warning'} title="Your protection needs attention" actions={<Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent('Check my security status (antivirus, firewall, threats) and tell me exactly what to do to fix any problem.')}`)}>Fix it with {agent}</Button>}>
+          {problems.join(' ')}{' '}
+          {fwOff.length > 0 && <a href="#" onClick={(e) => (e.preventDefault(), go('firewall'))}>Firewall settings</a>}
         </Callout>
       )}
     </>
@@ -281,6 +275,17 @@ function Check() {
                   ['SHA-256', <span className="mono" style={{ fontSize: 11, wordBreak: 'break-all' }}>{file.sha256}</span>],
                   ['Signature', file.signature ? <Status tone={file.signature.status === 'Valid' ? 'good' : 'warning'}>{`${file.signature.status}${file.signature.signer ? ` · ${file.signature.signer}` : ''}`}</Status> : '—'],
                   [
+                    'FBRX Shield',
+                    file.shield ? (
+                      <span>
+                        <Status tone={file.shield.kind === 'suspicious' ? 'warning' : 'critical'}>{file.shield.name}</Status> <span className="fx-muted">{file.shield.reason}</span>{' '}
+                        <a href="#/shield" onClick={(e) => (e.preventDefault(), navigate('shield'))}>Decide in FBRX Shield</a>
+                      </span>
+                    ) : (
+                      <Status tone="good">Nothing found</Status>
+                    ),
+                  ],
+                  [
                     'VirusTotal',
                     !file.virustotal ? 'Not checked' : 'error' in file.virustotal ? file.virustotal.error : !file.virustotal.known ? 'Never seen before (be careful with unknown programs)' : (
                       <Status tone={file.virustotal.malicious ? 'critical' : file.virustotal.suspicious ? 'warning' : 'good'}>{`${file.virustotal.malicious} malicious · ${file.virustotal.suspicious} suspicious`}</Status>
@@ -394,18 +399,23 @@ function Protection() {
   );
 }
 
+const TABS: Tab[] = ['overview', 'threats', 'firewall', 'audit', 'check', 'protection'];
+
 export function SecurityPage({ advanced }: { advanced: boolean }) {
-  const [tab, setTab] = useState<Tab>('overview');
+  const [tab, setTab] = useState<Tab>(() => {
+    const arg = routeArg() as Tab | null;
+    return arg && TABS.includes(arg) ? arg : 'overview';
+  });
   const tabs: Array<{ id: Tab; label: ReactNode }> = [
     { id: 'overview', label: 'Overview' },
-    { id: 'threats', label: 'Threats' },
+    ...(IS_WINDOWS ? [{ id: 'threats' as const, label: 'Defender threats' }] : []),
     { id: 'firewall', label: 'Firewall & ports' },
     { id: 'audit', label: 'Startup & processes' },
     { id: 'check', label: 'Check a link or file' },
     ...(advanced ? [{ id: 'protection' as const, label: advancedLabel('Defender settings') }] : []),
   ];
   return (
-    <Page title="Security" description="Antivirus, firewall, what runs on this PC, and safe checks for suspicious links and files.">
+    <Page title="Security" description="Your antivirus at a glance, the firewall, what runs on this computer, and safe checks for suspicious links and files.">
       <Tabs tabs={tabs} active={tab} onChange={setTab} />
       {tab === 'overview' && <Overview go={setTab} />}
       {tab === 'threats' && <Threats />}

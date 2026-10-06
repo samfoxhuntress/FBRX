@@ -187,6 +187,19 @@ across updates) and computers **pin** it:
   device is `execute` and making guest codes `write`, so they go through policy and approvals. Saving, removing,
   restarting and making codes from the API are reserved for the person at the computer.
 
+## Antivirus and FBRX Shield
+
+* FBRX reads other antivirus products' state (Windows Security Center, or their files on a Mac or Linux) and only runs
+  command-line scanners it knows, with fixed arguments; it never changes another product's settings.
+* Quarantine moves a file into FBRX's data folder encrypted with AES-256-CTR under a random key per file (kept in
+  FBRX's database), so it cannot run; restoring checks it against its SHA-256 before trusting it.
+* FBRX Shield never scans FBRX's own data folder. Choosing the antivirus, starting scans and acting on findings are
+  reserved for the person at the computer (not the Local API, remote commands or mesh peers); the agent can read and
+  scan (report only), and quarantining is a `write` tool that goes through approvals.
+* The threat feed is fetched over HTTPS under the network policy; an abuse.ch key, if needed, is a vault secret.
+* FBRX Shield checks downloads and scans on demand; it does not block programs as they start, and it does not replace
+  Microsoft Defender on Windows. See [SHIELD.md](SHIELD.md).
+
 ## Calendar
 
 * Outlook / Microsoft 365 sign-in is authorization code with PKCE in the person's own browser, back to a one-time

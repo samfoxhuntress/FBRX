@@ -30,7 +30,7 @@ import {
 import { api, download } from '../api';
 import { useApp, useQuery } from '../state';
 import { CommandComposer } from './command-composer';
-import { CommandStatus, HealthStatus, audienceHelp, audienceOptions, OnlineStatus, PLATFORM_LABEL, ServiceState, SeverityStatus, type DeviceSummary } from './common';
+import { CommandStatus, HealthStatus, audienceHelp, audienceOptions, OnlineStatus, PLATFORM_LABEL, ProtectionCell, ServiceState, SeverityStatus, type DeviceSummary } from './common';
 
 interface Detail extends DeviceSummary {
   group: { id: string; name: string } | null;
@@ -128,6 +128,7 @@ export function DeviceDetailPage({ id }: { id: string }) {
                   ['Last seen', d.online ? 'Connected now' : formatDate(d.lastSeenAt)],
                   ['Last IP', d.lastIp],
                   ['Enrolled', formatDate(d.enrolledAt)],
+                  ['Antivirus', <ProtectionCell p={h?.protection} />],
                   ['Vault', h?.vaultState],
                   ['License', h ? `${h.licenseEdition} (${h.licenseState})` : null],
                   ['Local model', h?.runtimeModel ?? 'none'],

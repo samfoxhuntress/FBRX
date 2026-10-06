@@ -19,3 +19,10 @@ No GPL component is included: the eSpeak NG phonemizer that other Kokoro front e
 | Component | Used for | License | Where |
 | --- | --- | --- | --- |
 | [ical.js](https://github.com/kewisch/ical.js) | Reading calendar links (iCalendar): repeating events, time zones | MPL-2.0 | Bundled (npm `ical.js`, unmodified) |
+
+# Third-party data and components in FBRX Shield
+
+| Component | Used for | License | Where |
+| --- | --- | --- | --- |
+| [abuse.ch MalwareBazaar](https://bazaar.abuse.ch/) SHA-256 exports | The default threat database feed (fingerprints only, downloaded at run time) | CC0 | Downloaded; the feed address can be changed |
+| [ClamAV](https://www.clamav.net/) | Optional second engine (Endpoint Ultra) | GPL-2.0 | Not bundled: used only when installed separately, run as its own program |

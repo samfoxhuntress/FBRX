@@ -50,7 +50,21 @@ export interface DeviceSummary {
     runtimeModel: string | null;
     uptimeSeconds: number;
     services: Array<{ name: string; state: string; message?: string | null }>;
+    protection: { provider: string; name: string; state: 'protected' | 'attention' | 'at-risk' | 'unknown'; realtime: boolean | null; threats: number } | null;
   };
+}
+
+const PROTECTION_LABEL = { protected: 'Protected', attention: 'Needs attention', 'at-risk': 'At risk', unknown: 'Status unknown' } as const;
+const PROTECTION_TONE = { protected: 'good', attention: 'warning', 'at-risk': 'critical', unknown: 'neutral' } as const;
+
+/** The antivirus on a computer, as its last heartbeat reported it. */
+export function ProtectionCell({ p }: { p: NonNullable<DeviceSummary['health']>['protection'] | undefined }) {
+  if (!p) return <span className="fx-muted">Not reported</span>;
+  return (
+    <span>
+      {p.name} <Status tone={PROTECTION_TONE[p.state]}>{p.threats ? `${p.threats} threat${p.threats === 1 ? '' : 's'}` : PROTECTION_LABEL[p.state]}</Status>
+    </span>
+  );
 }
 
 export const PLATFORM_LABEL: Record<string, string> = { darwin: 'macOS', win32: 'Windows', linux: 'Linux' };
@@ -64,7 +78,8 @@ export function OnlineStatus({ d }: { d: Pick<DeviceSummary, 'online' | 'status'
 export function HealthStatus({ d }: { d: Pick<DeviceSummary, 'health'> }) {
   if (!d.health) return <Status tone="neutral">No data</Status>;
   if (d.health.state === 'critical') return <Status tone="critical">{d.health.failingServices.length} failing</Status>;
-  if (d.health.state === 'warning') return <Status tone="warning">{d.health.vaultState !== 'unlocked' ? 'Vault locked' : 'Degraded'}</Status>;
+  if (d.health.protection?.state === 'at-risk') return <Status tone="critical">Antivirus at risk</Status>;
+  if (d.health.state === 'warning') return <Status tone="warning">{d.health.vaultState !== 'unlocked' ? 'Vault locked' : d.health.protection?.state === 'attention' ? 'Antivirus needs attention' : 'Degraded'}</Status>;
   return <Status tone="good">Healthy</Status>;
 }
 

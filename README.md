@@ -7,14 +7,15 @@
 
 # FBRX OS — Fabrics Operating System
 
-> **Alpha 1.9.4 "Bobbin".** FBRX is in alpha testing. Installed copies check this repository's
+> **Alpha 1.9.5 "Bobbin".** FBRX is in alpha testing. Installed copies check this repository's
 > [`release.json`](release.json) and offer new versions in the app.
 
 FBRX OS is the platform behind two products:
 
 * **FBRX Endpoint** — a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is
   governed end to end and an everyday **command center** (dashboard, tasks, notes, Spotlight, a Ctrl+Alt+Z clipboard
-  history, calendars from Outlook / Microsoft 365 and calendar links, alerts, PC care, Network Center, your phone). **Endpoint Basic** runs without a license key: the everyday
+  history, calendars from Outlook / Microsoft 365 and calendar links, alerts, PC care, Network Center, your phone) and
+  **FBRX Shield**, FBRX's own antivirus, next to the choice of Microsoft Defender or an antivirus already installed. **Endpoint Basic** runs without a license key: the everyday
   tools and the agent, in a plain light or dark look. A license key turns on **Endpoint Ultra**: IT and developer tool
   sets (Terminal, FBRX/1, Task Manager, virtual lab, device consoles, UniFi network environments…), Mesh and AI
   coordination, connections and plugins, the theme studio and the easter eggs. Every edition has presenter-safe mode,
@@ -63,6 +64,7 @@ FBRX OS is the platform behind two products:
 | Run it for work, a school or a family | Pick Work, School or Home for each tenant and set up its groups in one click. Schools: staff and student computers, FBRX OS Education with a safe learning helper, presenter-safe mode for projectors, help desk to IT, Google / Microsoft sign-in, Mac and Windows device-manager files ([docs/EDUCATION.md](docs/EDUCATION.md)). Families: parents' and children's computers, FBRX OS Home, requests for help that go to a parent ([docs/HOME.md](docs/HOME.md)). |
 | Build in other tools and connect to other apps | Plugin SDK (sandboxed workers), REST / MCP / webhook / FBRX-peer connectors, Local API for scripts and other apps. See [docs/PLUGINS.md](docs/PLUGINS.md). |
 | An everyday command center | FBRX Glass (the live dashboard), a calendar for Outlook / Microsoft 365 and calendar links with meeting reminders ([docs/CALENDAR.md](docs/CALENDAR.md)), tasks / notes / projects / snippets, Spotlight (Alt+Space), files, Task Manager with an AI-assisted Event Viewer, a Clipboard processor with a Ctrl+Alt+Z clipboard history (W/S to move, Tab/~ for paste formats, type to search), snippets in a `/` menu, keyboard-shortcut macros, Copy & migrate (Robocopy / rsync), terminal with a sandboxed code lab and *What if?*, the FBRX/1 management console, toolbox, library, alerts to desktop / phone / Slack / Teams / e-mail / your admin console, an AI emergency stop, and a theme studio with eleven looks. See [docs/COMMAND_CENTER.md](docs/COMMAND_CENTER.md). |
+| Antivirus | FBRX Shield (download checks, scans, a daily threat database, FBRX's own rules for disguised programs and malicious scripts, quarantine), or Microsoft Defender, or the antivirus already installed (Sophos, CrowdStrike, SentinelOne, ESET…): one status everywhere and in FBRX Command. See [docs/SHIELD.md](docs/SHIELD.md). |
 | PC care for Windows | Storage clean-up and disk health, Microsoft Defender and firewall, link and file checks, Windows Sandbox, winget / Windows Update / drivers, a bug catcher with one-click repairs, a Hyper-V lab, and a Network Center (trace route, device discovery, speed, Wi-Fi, Bluetooth, printers, and in Ultra your UniFi console: every gateway, switch, access point and client, restarts and guest Wi-Fi codes). |
 | Your other devices and AI apps | An encrypted mesh with your other FBRX computers and the FBRX Mobile phone app (per-device permissions, one-time pairing codes); one-click MCP connection for Claude Desktop, Claude Code, Cursor, Windsurf and VS Code. See [docs/MESH.md](docs/MESH.md). |
 

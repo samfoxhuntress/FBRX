@@ -34,11 +34,11 @@ section to open its pages (one at a time; the section of the page you are on ope
 | Section | Pages |
 | --- | --- |
 | **Bridge** | FBRX Glass, Fabrix, Alerts |
-| **Studio** | Tasks, Notes, Projects, Snippets |
+| **Studio** | Calendar, Tasks, Notes, Projects, Snippets |
 | **Pit Stop** | Storage, Security, Updates, Bug catcher, Network Center |
 | **Workbench** | Files, Task Manager, Clipboard, Copy & migrate, Toolbox, Library |
 | **Orbit** | Mesh & phone, AI models, AI coordination, Connections, Tools & plugins |
-| **Shield** | Approvals, Credentials, Governance, Backup & restore |
+| **Stronghold** | FBRX Shield (antivirus), Approvals, Credentials, Governance, Backup & restore |
 | **Lab** | Terminal, Virtual lab (Endpoint Ultra) |
 | **Control** | Organization, Settings |
 
@@ -47,7 +47,7 @@ and its pages slide out beside it. Counts (unread alerts, waiting approvals) sho
 
 ### Version names
 
-FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.9.4** (or Basic). Each minor version also gets a codename from cloth,
+FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.9.5** (or Basic). Each minor version also gets a codename from cloth,
 fiber to fabric, shown in **Settings → Logs & about**: 1.8 *Spindle*, 1.9 *Bobbin*, then *Shuttle*, *Heddle*, and 2.0
 *Loom* (later *Warp*, *Weft*, *Selvedge*, *Tapestry*).
 
@@ -139,6 +139,7 @@ never deletes its chats: they go back to the main history. Only the person at th
 | --- | --- |
 | **FBRX Glass** | The dashboard, in frosted glass: a split-flap board that rotates through status messages, a health score out of 100 with what costs points, what is left on today's calendar (with *Join* when a meeting is about to start), insight tiles (your next task, internet speed, storage, Fabrix, backups and the vault, alerts and approvals, a tip), then live processor, memory, network and battery (sampled every 2 s), today's tasks, drives, recent alerts, this computer's hardware, and service health |
 | **Fabrix** | The agent. Six starter cards (check my PC, plan my day, free up space, slow internet, is this link safe, explain crashes). Each chat is **Offline** or **Online**: new chats start offline (Settings → Agent); the first internet tool in an offline chat asks you to put that chat online |
+| **FBRX Shield** | The antivirus: what protects this computer (FBRX Shield, Microsoft Defender or an antivirus already installed, such as Sophos), its status, scans with live progress, what was found, quarantine, and FBRX Shield's settings. See [SHIELD.md](SHIELD.md) |
 | **Calendar** | Outlook / Microsoft 365 accounts and calendar links (Outlook.com, Google, Apple, a school) as an agenda or a week, with *Join* for online meetings, reminders before meetings, new events in Outlook, and *Prepare my day*. See [CALENDAR.md](CALENDAR.md) |
 | **Tasks** | Board (drag between To do / In progress / Done) and list views, priorities, due dates, projects, quick add |
 | **Notes** | Markdown notes with preview, tags, pinning, projects and autosave |
@@ -457,6 +458,8 @@ Desktop app itself.
 | `device_console.send` | execute — asks by default, showing the exact command |
 | `calendar.agenda`, `calendar.free_time` (when a calendar is connected) | read |
 | `calendar.create_event` | write — adds to an Outlook calendar, never invites anyone |
+| `shield.status`, `shield.scan` (report only) | read |
+| `shield.quarantine` | write |
 
 ## Local AI without the stutter
 

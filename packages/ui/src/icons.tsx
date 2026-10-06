@@ -126,6 +126,7 @@ export const Icons = {
   more: make(['M5 12h.01', 'M12 12h.01', 'M19 12h.01']),
   calendar: make(['M3 5h18v16H3z', 'M3 10h18', 'M8 3v4', 'M16 3v4', 'M7.5 14h.01', 'M12 14h.01', 'M16.5 14h.01', 'M7.5 17.5h.01', 'M12 17.5h.01']),
   video: make(['M2 6h13v12H2z', 'M15 10l7-4v12l-7-4']),
+  castle: make(['M4 21V8h3V5h2v3h2V5h2v3h2V5h2v3h3v13', 'M3 21h18', 'M10 21v-4a2 2 0 0 1 4 0v4']),
 };
 
 export type IconName = keyof typeof Icons;

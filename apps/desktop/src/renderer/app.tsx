@@ -43,6 +43,7 @@ const AlertsPage = lazy(() => import('./pages/alerts').then((m) => ({ default: m
 const StoragePage = lazy(() => import('./pages/storage').then((m) => ({ default: m.StoragePage })));
 const NetworkPage = lazy(() => import('./pages/network').then((m) => ({ default: m.NetworkPage })));
 const SecurityPage = lazy(() => import('./pages/security').then((m) => ({ default: m.SecurityPage })));
+const ShieldPage = lazy(() => import('./pages/shield').then((m) => ({ default: m.ShieldPage })));
 const UpdatesPage = lazy(() => import('./pages/updates').then((m) => ({ default: m.UpdatesPage })));
 const BugsPage = lazy(() => import('./pages/bugs').then((m) => ({ default: m.BugsPage })));
 const LabPage = lazy(() => import('./pages/lab').then((m) => ({ default: m.LabPage })));
@@ -63,6 +64,7 @@ export type Route =
   | 'snippets'
   | 'storage'
   | 'security'
+  | 'shield'
   | 'updates'
   | 'bugs'
   | 'lab'
@@ -167,6 +169,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const hd = useCore('helpdesk.status', undefined, ['fleet.changed']).data;
   const hdList = useCore('helpdesk.tickets', { scope: hd?.receiver ? 'queue' : 'mine', state: 'open' }, ['helpdesk.changed', 'fleet.changed'], 300_000).data;
   const helpdeskCount = hd?.available ? (hdList ?? []).filter((t) => (hd.receiver ? t.status === 'open' : t.status === 'waiting')).length : 0;
+  // FBRX Shield's number: findings waiting for a decision.
+  const shieldCount = useCore('protection.status', undefined, ['protection.changed', 'shield.detected'], 300_000).data?.shield.open ?? 0;
   const [forceOnboarding, setForceOnboarding] = useState(false);
   const [collapsed, setCollapsedState] = useState(() => {
     try {
@@ -300,7 +304,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'projects', label: 'Projects', icon: 'layers', section: 'Workspace' },
     { id: 'snippets', label: 'Snippets', icon: 'code', section: 'Workspace' },
     { id: 'storage', label: 'Storage', icon: 'drive', section: 'PC care' },
-    { id: 'security', label: 'Security', icon: 'shield', section: 'PC care' },
+    { id: 'security', label: 'Security', icon: 'lock', section: 'PC care' },
     { id: 'updates', label: 'Updates', icon: 'download', section: 'PC care' },
     { id: 'bugs', label: 'Bug catcher', icon: 'bug', section: 'PC care', ultra: true },
     { id: 'network', label: 'Network Center', icon: 'network', section: 'PC care' },
@@ -315,6 +319,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'aicoord', label: 'AI coordination', icon: 'zap', section: 'Connect', ultra: true },
     { id: 'connections', label: 'Connections', icon: 'link', section: 'Connect', ultra: true },
     { id: 'tools', label: 'Tools & plugins', icon: 'wrench', section: 'Connect', ultra: true },
+    { id: 'shield', label: 'FBRX Shield', icon: 'shield', count: shieldCount || undefined, section: 'Protect' },
     { id: 'approvals', label: 'Approvals', icon: 'check', count: status.pendingApprovals, section: 'Protect' },
     { id: 'vault', label: 'Credentials', icon: 'key', section: 'Protect' },
     { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect', ultra: true },
@@ -355,6 +360,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return <SnippetsPage />;
       case 'storage':
         return <StoragePage advanced={ultra} />;
+      case 'shield':
+        return <ShieldPage agentName={agentName} ultra={ultra} />;
       case 'security':
         return <SecurityPage advanced={ultra} />;
       case 'updates':
@@ -565,7 +572,7 @@ const SECTIONS: Array<{ id: string; section: string; label: string; hint: string
   { id: 'pitstop', section: 'PC care', label: 'Pit Stop', hint: 'Storage, security, repairs', icon: 'wrench' },
   { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', learnerHint: 'Tools and stories', icon: 'toolbox' },
   { id: 'orbit', section: 'Connect', label: 'Orbit', hint: 'Phone, mesh, AI models', basicHint: 'AI models', icon: 'orbit' },
-  { id: 'shield', section: 'Protect', label: 'Shield', hint: 'Approvals, keys, backups', icon: 'shield' },
+  { id: 'stronghold', section: 'Protect', label: 'Stronghold', hint: 'Antivirus, approvals, keys, backups', icon: 'castle' },
   { id: 'lab', section: 'Advanced', label: 'Lab', hint: 'Terminal, virtual lab', icon: 'flask' },
   { id: 'control', section: 'System', label: 'Control', hint: 'Organization, settings', basicHint: 'Settings, license', learnerHint: 'Settings', icon: 'settings' },
 ];

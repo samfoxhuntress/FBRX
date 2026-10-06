@@ -313,6 +313,41 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX calendar_events_start ON calendar_events (start);
     `,
   },
+  {
+    version: 7,
+    name: 'shield',
+    up: `
+      CREATE TABLE shield_signatures (
+        sha256 TEXT PRIMARY KEY,
+        name TEXT,
+        source TEXT NOT NULL,
+        added_at TEXT NOT NULL
+      );
+      CREATE TABLE shield_allow (
+        sha256 TEXT PRIMARY KEY,
+        path TEXT,
+        at TEXT NOT NULL
+      );
+      CREATE TABLE shield_detections (
+        id TEXT PRIMARY KEY,
+        path TEXT NOT NULL,
+        sha256 TEXT,
+        size INTEGER,
+        kind TEXT NOT NULL,
+        name TEXT NOT NULL,
+        engine TEXT NOT NULL,
+        reason TEXT NOT NULL,
+        source TEXT NOT NULL,
+        at TEXT NOT NULL,
+        action TEXT NOT NULL,
+        action_at TEXT,
+        qfile TEXT,
+        qkey TEXT,
+        mode INTEGER
+      );
+      CREATE INDEX shield_detections_at ON shield_detections (at);
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

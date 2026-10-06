@@ -1,4 +1,5 @@
-import { join } from 'node:path';
+import { readFile } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import { z } from 'zod';
 import {
   ALERT_CHANNELS,
@@ -218,7 +219,11 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'security.ports': () => sec.listeningPorts(),
     'security.processAudit': () => sec.processAudit(),
     'security.startup': () => sec.startupAudit(),
-    'security.fileReport': (p, ctx) => sec.fileReport(guardPath(Path.parse(p).path, ctx), vt()),
+    'security.fileReport': async (p, ctx) => {
+      const file = guardPath(Path.parse(p).path, ctx);
+      const report = await sec.fileReport(file, vt());
+      return { ...report, shield: (await k.shield.check(file).catch(() => null))?.verdict ?? null };
+    },
     'security.linkCheck': (p) => {
       if (!k.internetAllowed()) throw new CoreError('POLICY_DENIED', 'Your organization blocks internet access from FBRX OS');
       return checkLink(z.object({ url: z.string().min(1).max(4096) }).parse(p).url, { virustotalKey: vt() });
@@ -428,6 +433,36 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       const x = z.object({ id: z.string().min(1), name: z.string().max(60), count: z.number().int().min(1).max(50).optional(), timeLimitMinutes: z.number().int().min(10).max(525600), guestLimit: z.number().int().min(1).max(20).optional(), siteId: z.string().max(120).optional() }).parse(p);
       return k.netenv.createVouchers(x.id, x);
     },
+
+    // ---------------------------------------------------------------------------------------- antivirus
+    'protection.status': (p) => k.protection.status(z.object({ refresh: z.boolean().optional() }).optional().parse(p)?.refresh ?? false),
+    'protection.setProvider': (p) => k.protection.setProvider(z.object({ provider: z.string().min(1).max(80) }).parse(p).provider),
+    'protection.scan': async (p, ctx) => {
+      const x = z.object({ type: z.enum(['quick', 'full', 'custom']), path: z.string().max(4096).optional(), engine: z.enum(['active', 'shield']).optional() }).parse(p);
+      await k.protection.status();
+      return k.protection.scan({ type: x.type, engine: x.engine, path: x.path ? guardPath(x.path, ctx) : undefined });
+    },
+    'protection.cancelScan': () => k.protection.cancel(),
+    'protection.job': () => k.protection.job(),
+    'shield.detections': (p) => k.shield.detections(z.object({ limit: z.number().int().min(1).max(2000).optional() }).optional().parse(p)?.limit),
+    'shield.act': async (p) => {
+      const x = z.object({ id: z.string().min(1).max(80), action: z.enum(['quarantine', 'restore', 'delete', 'allow']) }).parse(p);
+      const d = x.action === 'quarantine' ? await k.shield.quarantine(x.id) : x.action === 'restore' ? await k.shield.restore(x.id) : x.action === 'delete' ? await k.shield.remove(x.id) : k.shield.allow(x.id);
+      void k.protection.status(true).catch(() => undefined);
+      return d;
+    },
+    'shield.updateSignatures': async () => {
+      const r = await k.shield.updateSignatures();
+      void k.protection.status(true).catch(() => undefined);
+      return r;
+    },
+    'shield.importSignatures': async (p, ctx) => {
+      const file = guardPath(Path.parse(p).path, ctx);
+      const r = k.shield.importSignatures(await readFile(file, 'utf8'), basename(file));
+      void k.protection.status(true).catch(() => undefined);
+      return r;
+    },
+    'shield.check': (p, ctx) => k.shield.check(guardPath(Path.parse(p).path, ctx)),
 
     // ---------------------------------------------------------------------------------------- calendar
     'calendar.status': () => k.calendar.status(),

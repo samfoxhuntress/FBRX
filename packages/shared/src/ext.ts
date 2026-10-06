@@ -3,6 +3,7 @@ import type { VoiceDownloadId } from './settings';
 import type { HelpdeskScope, HelpdeskStatus, TicketCategory, TicketDetail, TicketPriority, TicketStatus, TicketSummary } from './helpdesk';
 import type { EditionStatus } from './editions';
 import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
+import type { ProtectionState, ProtectionStatus, ScanJob, ScanType, ShieldDetection, ShieldVerdict } from './protection';
 import type { NetEnvDeviceAction, NetEnvDeviceStats, NetEnvDevice, NetEnvInput, NetEnvironment, NetEnvOverview, NetEnvProbe, NetEnvVoucher } from './netenv';
 /**
  * Contracts for the FBRX OS command-center modules: workspace (notes, tasks, projects, snippets), live system
@@ -307,6 +308,8 @@ export interface FileReport {
   sha256: string;
   signature: { status: string; signer: string } | null;
   virustotal: { known: boolean; malicious: number; suspicious: number; harmless: number; link: string } | { error: string } | null;
+  /** What FBRX Shield thinks of it (null: nothing found). */
+  shield?: ShieldVerdict | null;
 }
 export interface LinkReport {
   input: string;
@@ -998,6 +1001,21 @@ export interface ExtMethods {
   'calendar.sync': (p?: { id?: string }) => CalendarStatus;
   'calendar.create': (p: NewCalendarEvent) => CalendarEvent;
   'calendar.delete': (p: { accountId: string; id: string }) => Deleted;
+  // Antivirus: what protects this computer, and FBRX Shield.
+  'protection.status': (p?: { refresh?: boolean }) => ProtectionStatus;
+  /** "auto", "shield", "defender" or "product:<id>". */
+  'protection.setProvider': (p: { provider: string }) => ProtectionStatus;
+  /** Starts a scan with the active antivirus, or with FBRX Shield for a second opinion. */
+  'protection.scan': (p: { type: ScanType; path?: string; engine?: 'active' | 'shield' }) => ScanJob;
+  'protection.cancelScan': () => Ok;
+  /** The scan running now, or the last one. */
+  'protection.job': () => ScanJob | null;
+  'shield.detections': (p?: { limit?: number }) => ShieldDetection[];
+  'shield.act': (p: { id: string; action: 'quarantine' | 'restore' | 'delete' | 'allow' }) => ShieldDetection;
+  'shield.updateSignatures': () => { added: number; total: number };
+  /** Adds fingerprints from a text file (one SHA-256 per line). */
+  'shield.importSignatures': (p: { path: string }) => { added: number; total: number };
+  'shield.check': (p: { path: string }) => { verdict: ShieldVerdict | null; sha256: string | null; detection: ShieldDetection | null };
 
   'console.connect': (p: ConsoleConnectInput) => ConsoleConnectResult;
   'console.write': (p: { id: string; data: string }) => Ok;
@@ -1059,6 +1077,9 @@ export interface ExtEvents {
   'net.event': NetEvent;
   'netenv.changed': NetEnvironment[];
   'calendar.changed': CalendarChange;
+  'protection.changed': { state: ProtectionState };
+  'protection.scan': ScanJob;
+  'shield.detected': ShieldDetection;
   'presenter.changed': PresenterStatus;
   'helpdesk.changed': { ticketId: string; number: number; reason: 'created' | 'message' | 'updated'; subject: string };
   'migrate.event': MigrateEvent;
@@ -1123,6 +1144,13 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'netenv.remove',
   'netenv.deviceAction',
   'netenv.createVouchers',
+  'protection.setProvider',
+  'protection.scan',
+  'protection.cancelScan',
+  'shield.act',
+  'shield.updateSignatures',
+  'shield.importSignatures',
+  'shield.check',
   'calendar.events',
   'calendar.addLink',
   'calendar.signIn',
