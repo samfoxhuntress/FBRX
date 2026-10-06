@@ -1,0 +1,25 @@
+{
+  "name": "@fbrx/virtual",
+  "version": "0.1.0",
+  "private": true,
+  "description": "FBRX Virtual: the hypervisor FBRX Server runs (KVM through libvirt), with server hardware and BIOS management",
+  "type": "module",
+  "main": "src/index.ts",
+  "scripts": {
+    "dev": "node --import tsx --watch src/main.ts",
+    "start": "node dist/server.mjs",
+    "build": "node build.mjs"
+  },
+  "dependencies": {
+    "@fastify/helmet": "^13.1.1",
+    "@fastify/rate-limit": "^11.2.0",
+    "@fastify/static": "^10.1.5",
+    "@fastify/websocket": "^11.3.1",
+    "@fbrx/shared": "1.0.0",
+    "fastify": "^5.12.5",
+    "fast-xml-parser": "^5.3.0",
+    "systeminformation": "^5.33.15",
+    "ws": "^8.18.3",
+    "zod": "^4.1.12"
+  }
+}

@@ -1,0 +1,59 @@
+#!/usr/bin/env bash
+# fbrx-server: everyday commands for FBRX Server (FBRX OS for servers, running FBRX Virtual).
+set -euo pipefail
+
+DATA=/var/lib/fbrx-virtual
+APP=/opt/fbrx-server
+ENV_FILE=/etc/fbrx-virtual/fbrx-virtual.env
+
+port() { (grep -E '^FBRX_V_PORT=' "$ENV_FILE" 2>/dev/null || echo FBRX_V_PORT=9443) | tail -1 | cut -d= -f2; }
+address() { ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit }}'; }
+url() { echo "https://$(address || hostname):$(port)"; }
+fingerprint() {
+  if [ -f "$DATA/tls/virtual.crt" ]; then openssl x509 -in "$DATA/tls/virtual.crt" -noout -fingerprint -sha256 | cut -d= -f2; else echo "not made yet"; fi
+}
+helper() {
+  set -a
+  # shellcheck disable=SC1090
+  . "$ENV_FILE"
+  set +a
+  "$APP/node/bin/node" --no-warnings "$APP/fbrx-virtual/cli.mjs" "$@"
+}
+need_root() { [ "$(id -u)" -eq 0 ] || { echo "Run this as root (sudo fbrx-server $1)." >&2; exit 1; }; }
+
+case "${1:-status}" in
+  status)
+    # shellcheck disable=SC1091
+    echo "FBRX Server $(. /etc/fbrx-server-release 2>/dev/null && echo "${VERSION:-}") · powered by FBRX OS"
+    echo "Console:      $(url)"
+    echo "Service:      $(systemctl is-active fbrx-virtual 2>/dev/null || true)"
+    echo "Hypervisor:   $(systemctl is-active libvirtd 2>/dev/null || true) (libvirt) · KVM $([ -e /dev/kvm ] && echo on || echo 'off: turn on Virtualization Technology in the BIOS')"
+    echo "IOMMU:        $([ -n "$(ls -A /sys/kernel/iommu_groups 2>/dev/null)" ] && echo on || echo 'off (needed to give PCI devices to virtual machines)')"
+    echo "Certificate:  $(fingerprint)"
+    if [ -s "$DATA/setup-code" ]; then echo "Setup code:   $(cat "$DATA/setup-code")"; fi
+    ;;
+  url) url ;;
+  fingerprint) fingerprint ;;
+  setup-code)
+    need_root setup-code
+    if [ -s "$DATA/setup-code" ]; then cat "$DATA/setup-code"; else echo "This server is already set up (fbrx-server users lists who can sign in)."; fi
+    ;;
+  logs) shift; exec journalctl -u fbrx-virtual "${@:--n 100}" ;;
+  restart) need_root restart; systemctl restart fbrx-virtual && echo "FBRX Virtual restarted: $(url)" ;;
+  users) need_root users; helper users ;;
+  reset-password) need_root reset-password; shift; helper reset-password "$@" ;;
+  create-admin) need_root create-admin; shift; helper create-admin "$@" ;;
+  help | -h | --help)
+    cat <<USAGE
+fbrx-server status          what runs, where to open the console, the certificate fingerprint
+fbrx-server url             the console's address
+fbrx-server setup-code      the first-time setup code (until someone sets the server up)
+fbrx-server logs [-f]       FBRX Virtual's log
+fbrx-server restart         restart FBRX Virtual (virtual machines keep running)
+fbrx-server users           who can sign in
+fbrx-server reset-password <user>   a new password for someone locked out
+fbrx-server create-admin [name]     another administrator
+USAGE
+    ;;
+  *) echo "Unknown command $1 (fbrx-server help)" >&2; exit 1 ;;
+esac

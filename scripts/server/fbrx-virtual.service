@@ -1,0 +1,26 @@
+[Unit]
+Description=FBRX Virtual (the hypervisor console of FBRX Server)
+Documentation=https://github.com/samfoxhuntress/fbrx/blob/main/docs/SERVER.md
+After=network-online.target libvirtd.service
+Wants=network-online.target libvirtd.service
+
+[Service]
+Type=simple
+EnvironmentFile=/etc/fbrx-virtual/fbrx-virtual.env
+ExecStart=/opt/fbrx-server/node/bin/node /opt/fbrx-server/fbrx-virtual/server.mjs
+WorkingDirectory=/opt/fbrx-server/fbrx-virtual
+Restart=on-failure
+RestartSec=3
+# Runs as root: it drives libvirt's system hypervisor, moves interrupts (/proc/irq) and hands PCI devices to virtual
+# machines. The rest of the system is kept out of its reach where that costs nothing.
+PrivateTmp=yes
+ProtectHome=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+UMask=0022
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

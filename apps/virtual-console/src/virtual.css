@@ -1,0 +1,95 @@
+/* FBRX Virtual console: pieces the shared UI kit does not have (the hardware map, the VM screen, BIOS lists). */
+
+.vt-pct { display: inline-flex; align-items: center; gap: 8px; min-width: 90px; position: relative; }
+.vt-pct-bar { position: absolute; left: 0; bottom: -3px; height: 3px; border-radius: 2px; background: var(--accent); opacity: 0.7; max-width: 100%; }
+
+.vt-screen { min-height: 420px; height: min(72vh, 820px); background: #0b0b0d; border-radius: 0 0 var(--radius) var(--radius); overflow: hidden; }
+.vt-screen:fullscreen { height: 100vh; border-radius: 0; }
+
+.vt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.vt-chip { border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer; }
+.vt-chip:hover:not(:disabled) { border-color: var(--border-strong); }
+.vt-chip.on { background: var(--accent-wash); border-color: var(--accent); color: var(--text-primary); }
+.vt-chip:disabled { opacity: 0.55; cursor: default; }
+
+.fx-page .fx-form > .fx-btn { justify-self: start; }
+
+.vt-list { margin: 0 0 12px; padding-left: 18px; display: grid; gap: 6px; }
+.vt-details { display: inline-block; max-width: 340px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; vertical-align: bottom; }
+
+/* ------------------------------------------------------------------------------ hardware map */
+
+.vt-board-wrap { background: var(--surface-1); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 18px; overflow-x: auto; }
+.vt-board { position: relative; display: grid; gap: 28px; min-width: 0; }
+.vt-wires { position: absolute; inset: 0; pointer-events: none; z-index: 0; overflow: visible; }
+.vt-wires.over { z-index: 2; }
+.vt-wire { fill: none; stroke-linecap: round; opacity: 0.28; transition: stroke-width 0.6s ease; }
+.vt-wire.in { stroke: var(--series-1); }
+.vt-wire.out { stroke: var(--series-2); }
+.vt-wire.live { opacity: 0.95; stroke-dasharray: 7 9; animation: vt-flow 1.5s linear infinite; }
+.vt-wire.out.live { animation-direction: reverse; }
+.vt-wire.irq { stroke: var(--warning); stroke-dasharray: 2 5; opacity: 0.9; }
+@keyframes vt-flow { to { stroke-dashoffset: -32; } }
+@media (prefers-reduced-motion: reduce) { .vt-wire.live { animation: none; } }
+
+.vt-column { display: grid; grid-template-rows: auto 1fr; gap: 64px; position: relative; z-index: 1; }
+.vt-socket { background: var(--surface-2); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 14px; display: grid; gap: 12px; box-shadow: var(--shadow); transition: border-color 0.15s, box-shadow 0.15s; }
+.vt-socket.over { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
+.vt-socket-head { display: flex; align-items: center; gap: 10px; }
+.vt-socket-head > div { flex: 1; min-width: 0; }
+.vt-socket-head .fx-cell-sub { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.vt-socket-port { justify-self: center; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: var(--text-muted); border: 1px dashed var(--border-strong); border-radius: 999px; padding: 2px 10px; }
+.vt-cores { display: grid; grid-template-columns: repeat(auto-fill, minmax(34px, 1fr)); gap: 5px; }
+.vt-core { position: relative; height: 30px; border-radius: 6px; display: grid; place-items: center; font-size: 11px; font-family: var(--mono); color: var(--text-secondary); border: 1px solid var(--border); background: color-mix(in oklab, var(--accent) calc(var(--heat, 0) * 55%), var(--surface-1)); transition: transform 0.12s, border-color 0.12s; }
+.vt-core.sel { border-color: var(--warning); box-shadow: 0 0 0 2px color-mix(in oklab, var(--warning) 35%, transparent); color: var(--text-primary); }
+.vt-core.over { transform: scale(1.12); border-color: var(--accent); }
+.vt-core-vm { position: absolute; top: 3px; right: 3px; width: 6px; height: 6px; border-radius: 50%; background: var(--series-3); }
+.vt-vms { display: flex; flex-wrap: wrap; gap: 6px; min-height: 0; }
+.vt-vm-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; padding: 3px 9px; border-radius: 999px; background: color-mix(in oklab, var(--series-3) 16%, var(--surface-1)); border: 1px solid color-mix(in oklab, var(--series-3) 45%, var(--border)); cursor: grab; }
+
+.vt-devices { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 12px; align-content: start; }
+.vt-dev { text-align: left; font: inherit; color: var(--text-primary); background: var(--surface-1); border: 1px solid var(--border); border-left: 3px solid var(--border-strong); border-radius: var(--radius); padding: 10px 12px; display: grid; gap: 4px; cursor: pointer; box-shadow: var(--shadow); transition: border-color 0.12s, transform 0.12s; }
+.vt-dev[draggable='true'] { cursor: grab; }
+.vt-dev:hover { transform: translateY(-1px); }
+.vt-dev.sel { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-wash); }
+.vt-dev.network { border-left-color: var(--series-1); }
+.vt-dev.storage { border-left-color: var(--series-2); }
+.vt-dev.display { border-left-color: var(--series-4); }
+.vt-dev.usb { border-left-color: var(--series-5); }
+.vt-dev.given { background: color-mix(in oklab, var(--series-3) 10%, var(--surface-1)); }
+.vt-dev-head { display: flex; align-items: center; gap: 7px; }
+.vt-dev-head b { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.vt-dev-name { font-size: 12px; color: var(--text-secondary); overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+.vt-dev-meta { display: flex; flex-wrap: wrap; gap: 8px; font-size: 11px; color: var(--text-muted); }
+.vt-dev-rate { display: flex; gap: 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.vt-dev-rate .in { color: var(--text-primary); }
+.vt-dev-rate .out { color: var(--text-secondary); }
+.vt-warn { color: var(--warning-text); }
+
+.vt-legend { display: flex; flex-wrap: wrap; gap: 16px; margin-top: 16px; font-size: 12px; color: var(--text-secondary); }
+.vt-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.vt-key { display: inline-block; width: 22px; height: 4px; border-radius: 2px; }
+.vt-key.in { background: var(--series-1); }
+.vt-key.out { background: var(--series-2); }
+.vt-key.irq { background: repeating-linear-gradient(90deg, var(--warning) 0 3px, transparent 3px 6px); }
+.vt-key.heat { height: 12px; width: 14px; background: color-mix(in oklab, var(--accent) 50%, var(--surface-1)); border: 1px solid var(--border); }
+.vt-key.vm { width: 8px; height: 8px; border-radius: 50%; background: var(--series-3); }
+
+.vt-panel { display: grid; grid-template-columns: minmax(0, 1.2fr) minmax(0, 1fr); gap: 20px; margin-bottom: 14px; }
+@media (max-width: 900px) { .vt-panel { grid-template-columns: 1fr; } .vt-column { gap: 40px; } }
+
+/* ---------------------------------------------------------------------------- server & BIOS */
+
+.vt-sensor { position: relative; display: inline-flex; min-width: 110px; font-variant-numeric: tabular-nums; }
+.vt-sensor-bar { position: absolute; left: 0; bottom: -4px; height: 3px; border-radius: 2px; background: var(--series-1); opacity: 0.7; }
+.vt-reco { display: grid; gap: 10px; }
+.vt-reco-row { display: grid; grid-template-columns: 92px 1fr; gap: 12px; align-items: start; }
+.vt-bios-group { border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden; }
+.vt-bios-head { width: 100%; display: flex; align-items: center; gap: 10px; padding: 10px 12px; background: var(--surface-2); border: 0; color: var(--text-primary); font: inherit; cursor: pointer; text-align: left; }
+.vt-bios-head b { flex: 1; }
+.vt-bios-items { display: grid; }
+.vt-bios-row { display: grid; grid-template-columns: minmax(0, 1fr) minmax(160px, 260px); gap: 16px; align-items: center; padding: 10px 12px; border-top: 1px solid var(--border); }
+.vt-bios-row.changed { background: var(--accent-wash); }
+.vt-bios-value { justify-self: end; width: 100%; }
+.vt-savebar { position: sticky; bottom: 12px; z-index: 5; display: flex; align-items: center; gap: 10px; padding: 12px 14px; border: 1px solid var(--accent); background: var(--surface-1); border-radius: var(--radius-lg); box-shadow: var(--shadow-pop); }
+.vt-savebar > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

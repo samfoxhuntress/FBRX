@@ -1,107 +1,21 @@
-import { Agent, request as httpsRequest } from 'node:https';
-import { Readable } from 'node:stream';
-import { connect as tlsConnect, type ConnectionOptions, type PeerCertificate, type TLSSocket } from 'node:tls';
+import type { Agent } from 'node:https';
+import * as pin from '@fbrx/shared/node';
 import { CoreError } from '../errors';
 
-/**
- * Trusting a server by its certificate's SHA-256 fingerprint ("pinning"), for servers no public authority vouches for:
- * a UniFi console, or FBRX Command on a home or school network with its own certificate. Nothing is sent until the
- * certificate the server presents has the fingerprint that was trusted.
- */
+/** Certificate pinning (see @fbrx/shared/node pinned-tls), throwing FBRX Endpoint's own errors. */
 
-export const normalizeFingerprint = (fp: string) => fp.replace(/[^0-9a-f]/gi, '').toUpperCase();
-export const formatFingerprint = (fp: string) => normalizeFingerprint(fp).match(/.{2}/g)?.join(':') ?? '';
-export const sameFingerprint = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && normalizeFingerprint(a) === normalizeFingerprint(b);
+export { formatFingerprint, normalizeFingerprint, sameFingerprint, type PresentedCertificate } from '@fbrx/shared/node';
 
-const servername = (host: string) => (/^[\d.]+$|:/.test(host) ? undefined : host);
+const err: pin.PinErrorFactory = (code, message) => new CoreError(code, message);
 
-/** An agent that checks the server's certificate fingerprint before handing the connection to the request. */
-export function pinnedAgent(fingerprint: string, mismatch = 'The server presented a different certificate than the one you trusted.'): Agent {
-  const want = normalizeFingerprint(fingerprint);
-  const agent = new Agent({ keepAlive: false, maxCachedSessions: 0 });
-  (agent as unknown as { createConnection: (o: ConnectionOptions, cb: (e: Error | null, s?: TLSSocket) => void) => undefined }).createConnection = (opts, cb) => {
-    const sock = tlsConnect({ ...opts, rejectUnauthorized: false });
-    let settled = false;
-    sock.once('secureConnect', () => {
-      settled = true;
-      const got = normalizeFingerprint(sock.getPeerCertificate()?.fingerprint256 ?? '');
-      if (got !== want) {
-        sock.destroy();
-        cb(new CoreError('FORBIDDEN', mismatch));
-      } else cb(null, sock);
-    });
-    sock.once('error', (e) => {
-      if (!settled) {
-        settled = true;
-        cb(e);
-      }
-    });
-    return undefined;
-  };
-  return agent;
+export function pinnedAgent(fingerprint: string, mismatch?: string): Agent {
+  return pin.pinnedAgent(fingerprint, mismatch, err);
 }
 
-export interface PresentedCertificate {
-  fingerprint: string;
-  subject: string;
-  issuer: string;
-  validTo: string;
-  /** Whether the system's certificate authorities vouch for it under this name (no pinning needed). */
-  trusted: boolean;
+export function peerCertificate(url: string, timeoutMs?: number): Promise<pin.PresentedCertificate> {
+  return pin.peerCertificate(url, timeoutMs, err);
 }
 
-/** The certificate a host presents, whoever signed it, and whether the system already trusts it. */
-export function peerCertificate(url: string, timeoutMs = 15_000): Promise<PresentedCertificate> {
-  const u = new URL(url);
-  return new Promise((resolve, reject) => {
-    const sock = tlsConnect({ host: u.hostname, port: Number(u.port || 443), servername: servername(u.hostname), rejectUnauthorized: false, timeout: timeoutMs });
-    sock.once('secureConnect', () => {
-      const c: PeerCertificate = sock.getPeerCertificate();
-      const trusted = sock.authorized;
-      sock.end();
-      const name = (x: PeerCertificate['subject'] | undefined) => (x ? [x.CN, x.O].filter(Boolean).join(', ') : '');
-      resolve({ fingerprint: formatFingerprint(c.fingerprint256 ?? ''), subject: name(c.subject) || 'unnamed', issuer: name(c.issuer) || 'unnamed', validTo: c.valid_to ?? '', trusted });
-    });
-    sock.once('timeout', () => {
-      sock.destroy();
-      reject(new CoreError('TIMEOUT', `No answer from ${u.host}`));
-    });
-    sock.once('error', reject);
-  });
-}
-
-/**
- * fetch() over a pinned agent: the same Request/Response shapes as the global fetch, for code that talks to a server
- * trusted by fingerprint (Node's built-in fetch cannot take an agent).
- */
 export function pinnedFetch(url: string, init: RequestInit & { duplex?: 'half' }, agent: Agent): Promise<Response> {
-  const u = new URL(url);
-  if (u.protocol !== 'https:') return Promise.reject(new CoreError('INVALID_ARGUMENT', 'Pinned connections need https://'));
-  return new Promise((resolve, reject) => {
-    const headers: Record<string, string> = {};
-    new Headers(init.headers).forEach((v, k) => (headers[k] = v));
-    const body = init.body;
-    if (typeof body === 'string' && !headers['content-length']) headers['content-length'] = String(Buffer.byteLength(body));
-    const req = httpsRequest(
-      { protocol: 'https:', hostname: u.hostname, port: u.port || 443, path: `${u.pathname}${u.search}`, method: init.method ?? 'GET', headers, agent, servername: servername(u.hostname) },
-      (res) => {
-        const h = new Headers();
-        for (const [k, v] of Object.entries(res.headers)) if (v !== undefined) h.set(k, Array.isArray(v) ? v.join(', ') : String(v));
-        const status = res.statusCode ?? 0;
-        const empty = status === 204 || status === 304 || init.method === 'HEAD';
-        if (empty) res.resume();
-        resolve(new Response(empty ? null : (Readable.toWeb(res) as ReadableStream), { status, statusText: res.statusMessage, headers: h }));
-      },
-    );
-    const signal = init.signal;
-    const abort = () => req.destroy(signal?.reason instanceof Error ? signal.reason : new CoreError('CANCELLED', 'Request cancelled'));
-    if (signal?.aborted) return abort();
-    signal?.addEventListener('abort', abort, { once: true });
-    req.once('close', () => signal?.removeEventListener('abort', abort));
-    req.once('error', reject);
-    if (body == null) req.end();
-    else if (typeof body === 'string' || body instanceof Uint8Array) req.end(body);
-    else if (body instanceof ReadableStream) Readable.fromWeb(body as never).once('error', (e) => req.destroy(e)).pipe(req);
-    else reject(new CoreError('INVALID_ARGUMENT', 'Unsupported request body'));
-  });
+  return pin.pinnedFetch(url, init, agent, err);
 }

@@ -19,3 +19,4 @@ export * from './editions';
 export * from './mdm';
 export * from './calendar';
 export * from './protection';
+export * from './virtual';
