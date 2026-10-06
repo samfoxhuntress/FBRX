@@ -59,7 +59,7 @@ LABEL="Install FBRX Server (erases the disk you choose)"
 if [ -f "$WORK/txt.cfg" ]; then
   { printf 'label fbrx\n\tmenu label ^%s\n\tmenu default\n\tkernel /install.amd/vmlinuz\n\tappend vga=788 initrd=/install.amd/initrd.gz %s --- quiet\n' "$LABEL" "$ARGS"; sed -e '/menu default/d' "$WORK/txt.cfg"; } >"$WORK/txt.new"
 fi
-[ -f "$WORK/gtk.cfg" ] && sed -e '/menu default/d' "$WORK/gtk.cfg" >"$WORK/gtk.new"
+[ -f "$WORK/gtk.cfg" ] && sed -e '/menu default/d' -e '/^default /d' "$WORK/gtk.cfg" >"$WORK/gtk.new"
 # UEFI boot menu (GRUB): the same entry, first, picked after 10 seconds.
 awk -v label="$LABEL" -v args="$ARGS" '
   !done && /^menuentry/ {
