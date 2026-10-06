@@ -45,6 +45,8 @@ export const LicenseCommandSchema = z.object({
   url: z.string().url(),
   /** An enrollment token for that tenant. */
   enrollmentToken: z.string().min(8),
+  /** FBRX Command's own certificate fingerprint, when it has no publicly trusted certificate (pinned on join). */
+  fingerprint: z.string().optional(),
 });
 export type LicenseCommand = z.infer<typeof LicenseCommandSchema>;
 

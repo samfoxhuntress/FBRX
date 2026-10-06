@@ -28,9 +28,19 @@ describe('device manager files', () => {
     expect(s).toContain("Join-Path $env:ProgramData 'FBRX OS'");
     expect(s).toContain('"audience": "student"');
     expect(s).toContain("'/S', '/allusers'");
+    expect(s).not.toContain('ServerCertificateValidationCallback');
     expect(s).toContain("et=it''s'");
     const json = s.slice(s.indexOf("@'") + 3, s.indexOf("'@"));
     expect(ProvisioningFileSchema.parse(JSON.parse(json))).toMatchObject({ serverUrl: input.serverUrl, audience: 'student' });
+  });
+  it('carries FBRX Command’s own certificate fingerprint, when it has one', () => {
+    const fp = 'AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89:AB:CD:EF:01:23:45:67:89';
+    const p = macProfile({ ...input, serverFingerprint: fp, uuids: ['AAAA-1', 'BBBB-2'] });
+    expect(p).toMatch(new RegExp(`<key>ServerFingerprint</key>\\s*<string>${fp}</string>`));
+    expect(provisioningFromPreferences({ ServerURL: input.serverUrl, EnrollmentToken: input.enrollmentToken, ServerFingerprint: fp })).toMatchObject({ serverFingerprint: fp });
+    const s = windowsScript({ ...input, serverFingerprint: fp, installerUrl: 'https://192.168.1.20:8787/v1/downloads/rel/FBRX-OS-Setup.exe?et=x' });
+    expect(s).toContain(`"serverFingerprint": "${fp}"`);
+    expect(s).toContain("-eq 'ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789'");
   });
 });
 
@@ -50,4 +60,5 @@ describe('who uses a computer', () => {
     expect(narrowTier('ultra', 'basic')).toBe('basic');
     expect(narrowTier('basic', 'ultra')).toBe('basic');
   });
+
 });

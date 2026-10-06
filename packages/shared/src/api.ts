@@ -386,6 +386,18 @@ export interface FleetStatus {
   lockedSettings: string[];
   policyManaged: boolean;
   managedSecrets: number;
+  /** FBRX Command's certificate fingerprint this computer trusts, when FBRX Command uses its own certificate. */
+  serverFingerprint: string | null;
+}
+
+/** What a computer sees of an FBRX Command address before joining it. */
+export interface FleetProbe {
+  /** The address as it will be used (https://host:port). */
+  serverUrl: string;
+  /** http:// on this same computer (no certificate involved). */
+  local: boolean;
+  /** The certificate it presents; trusted = the system already vouches for it, otherwise its fingerprint must be trusted. */
+  certificate: { fingerprint: string; subject: string; issuer: string; validTo: string; trusted: boolean } | null;
 }
 
 export interface UpdateStatus {
@@ -542,7 +554,10 @@ export interface CoreMethods extends ExtMethods {
 
   'fleet.status': () => FleetStatus;
   /** audience "student" makes this a student computer (FBRX OS Education), whatever the token says. */
-  'fleet.enroll': (p: { serverUrl: string; token: string; deviceName?: string; audience?: 'staff' | 'student' | 'parent' | 'child' }) => FleetStatus;
+  /** fingerprint: trust FBRX Command's own certificate (home and school networks without a public one). */
+  'fleet.enroll': (p: { serverUrl: string; token: string; deviceName?: string; audience?: 'staff' | 'student' | 'parent' | 'child'; fingerprint?: string }) => FleetStatus;
+  /** Looks at an FBRX Command address before joining: whether its certificate is trusted, and its fingerprint. */
+  'fleet.probe': (p: { serverUrl: string }) => FleetProbe;
   'fleet.unenroll': () => FleetStatus;
   'fleet.sync': () => FleetStatus;
 

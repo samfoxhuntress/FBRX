@@ -1,5 +1,6 @@
-# FBRX OS installer bootstrap for Windows (started by "Install FBRX OS.cmd").
-# Finds Node.js 22.15+ or downloads a private, checksum-verified copy into .fbrx-setup\node, then runs the wizard.
+# FBRX installer bootstrap for Windows (started by "Install FBRX OS.cmd" and "Install FBRX Command.cmd").
+# Finds Node.js 22.15+ or downloads a private, checksum-verified copy into .fbrx-setup\node, then runs the setup
+# script the launcher names in FBRX_SETUP_SCRIPT (the FBRX OS wizard by default).
 $ErrorActionPreference = 'Stop'
 $ProgressPreference = 'SilentlyContinue'   # Invoke-WebRequest is many times faster without the progress bar
 [Net.ServicePointManager]::SecurityProtocol = [Net.ServicePointManager]::SecurityProtocol -bor [Net.SecurityProtocolType]::Tls12
@@ -30,7 +31,7 @@ if (-not $node) {
     $arch = if ($env:PROCESSOR_ARCHITEW6432) { $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
     $platform = if ($arch -eq 'ARM64') { 'win-arm64' } else { 'win-x64' }
     $base = 'https://nodejs.org/dist/latest-v22.x'
-    Write-Host 'Downloading Node.js for the installer (about 35 MB, used only by FBRX OS setup)...'
+    Write-Host 'Downloading Node.js for the installer (about 35 MB, used only by FBRX setup)...'
     $sums = (Invoke-WebRequest -UseBasicParsing -Uri "$base/SHASUMS256.txt").Content
     if ($sums -is [byte[]]) { $sums = [Text.Encoding]::UTF8.GetString($sums) }
     $line = ($sums -split "`n") | Where-Object { $_ -match " node-v[\d.]+-$platform\.zip\s*$" } | Select-Object -First 1
@@ -64,5 +65,6 @@ if (-not $node) {
 }
 
 $ErrorActionPreference = 'Continue'
-& $node (Join-Path $root 'scripts\setup\wizard.mjs') @args
+$script = if ($env:FBRX_SETUP_SCRIPT) { $env:FBRX_SETUP_SCRIPT } else { 'scripts\setup\wizard.mjs' }
+& $node (Join-Path $root $script) @args
 exit $LASTEXITCODE

@@ -2,12 +2,16 @@
 # Node.js, installs dependencies, builds, installs and licenses the app. Then opens the installed app to prove it
 # starts and activates its license, and runs the installer a second time over the running app (the update path).
 # On Windows it also checks Setup's maintenance switches and the "make an installer to send" package.
+# "Install FBRX Command" is run the same way on Linux, macOS and Windows: install, update in place, remove.
 name: Installer
 
 on:
   push:
     paths:
       - "Install FBRX OS.*"
+      - "Install FBRX Command.*"
+      - "apps/control-plane/**"
+      - "apps/admin-console/**"
       - "scripts/setup/**"
       - "scripts/issue-license.ts"
       - "scripts/generate-license-keys.mjs"
@@ -187,4 +191,54 @@ jobs:
             .fbrx-setup/setup.log
             ~/AppData/Roaming/FBRX OS/logs/
             apps/desktop/release/*/builder-debug.yml
+          if-no-files-found: ignore
+
+  command:
+    name: FBRX Command (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Run "Install FBRX Command.command" (computers on this network)
+        if: runner.os != 'Windows'
+        run: bash "Install FBRX Command.command" --yes --network --no-open
+      - name: Run "Install FBRX Command.cmd" (computers on this network)
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: call "Install FBRX Command.cmd" --yes --network --no-open
+      - name: It answers here and on the network, with its own certificate, and first-run setup works
+        run: node scripts/setup/check-command-install.mjs installed
+        shell: bash
+      - name: Running the installer again updates it in place
+        if: runner.os != 'Windows'
+        run: bash "Install FBRX Command.command" --yes --no-open
+      - name: Running the installer again updates it in place
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: call "Install FBRX Command.cmd" --yes --no-open
+      - name: Same certificate and accounts after the update
+        run: node scripts/setup/check-command-install.mjs updated
+        shell: bash
+      - name: Remove it, keeping the data
+        if: runner.os != 'Windows'
+        run: bash "Install FBRX Command.command" --uninstall
+      - name: Remove it, keeping the data
+        if: runner.os == 'Windows'
+        shell: cmd
+        run: call "Install FBRX Command.cmd" --uninstall
+      - name: Stopped, program and icons gone, data kept
+        run: node scripts/setup/check-command-install.mjs removed
+        shell: bash
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: command-installer-log-${{ matrix.os }}
+          path: |
+            .fbrx-setup/command-setup.log
+            ~/Library/Application Support/FBRX Command/logs/
+            ~/AppData/Local/FBRX Command/logs/
+            ~/.local/share/fbrx-command/logs/
           if-no-files-found: ignore

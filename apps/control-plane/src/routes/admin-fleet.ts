@@ -247,6 +247,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
       enrollmentToken: token,
       ...(body.deviceName ? { deviceName: body.deviceName } : {}),
       ...(body.audience ? { audience: body.audience } : {}),
+      ...(ctx.tls?.selfSigned ? { serverFingerprint: ctx.tls.fingerprint } : {}),
       ...(body.templateSnapshotId
         ? {
             templateSnapshotUrl: signTemplateUrl(ctx, body.templateSnapshotId, expiresAt ? new Date(expiresAt).getTime() : Date.now() + 365 * 86400_000),

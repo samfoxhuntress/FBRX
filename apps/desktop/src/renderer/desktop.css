@@ -4697,3 +4697,16 @@ html[data-presenting='blur'] .private::selection {
 }
 
 .tier-badge.student { background: color-mix(in srgb, #3aa0ff 18%, transparent); color: #3aa0ff; border-color: color-mix(in srgb, #3aa0ff 40%, transparent); }
+
+/* Joining FBRX Command: the certificate fingerprint to compare */
+.join-fp {
+  display: block;
+  font-family: var(--font-mono, ui-monospace, monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  word-break: break-all;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+  user-select: all;
+}

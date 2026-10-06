@@ -86,6 +86,7 @@ import { buildCoreApi, isReadOnly, isUserOnly, scrubParams, type CallContext } f
 import { buildExtApi } from './api/ext-api';
 import { installConsoleGuard } from './windows/hide-consoles';
 import { ReleaseChecker } from './updates/release-check';
+import { pinnedAgent, pinnedFetch } from './util/pinned-tls';
 
 export interface KernelOptions {
   dataDir: string;
@@ -860,7 +861,7 @@ export class Kernel {
     if (this.meta.get<string>('license.joinedTenantFor') === claims.lid) return { joined: false, message: null };
     if (!this.vault.isUnlocked) return { joined: false, message: 'This computer joins your organization (FBRX Command) as soon as the vault is unlocked.' };
     try {
-      const f = await this.fleet.enroll(command.url, command.enrollmentToken, undefined, actor);
+      const f = await this.fleet.enroll(command.url, command.enrollmentToken, undefined, actor, undefined, command.fingerprint);
       this.meta.set('license.joinedTenantFor', claims.lid);
       this.audit.append({ category: 'license', action: 'tenant.joined', actor, target: command.url, outcome: 'success', details: { licenseId: claims.lid, tenant: f.tenantName } });
       return { joined: true, message: `Joined ${f.tenantName ?? 'your organization'} on FBRX Command.` };
@@ -1339,7 +1340,9 @@ export class Kernel {
     this.log.info('Provisioning file found', { file, server: prov.serverUrl });
     const stateKey = `provisioning.${prov.enrollmentToken.slice(-8)}`;
     if (prov.templateSnapshotUrl && !this.meta.get(`${stateKey}.templateApplied`)) {
-      const res = await fetch(prov.templateSnapshotUrl, { signal: AbortSignal.timeout(30 * 60_000) });
+      const init = { signal: AbortSignal.timeout(30 * 60_000) };
+      const pinned = prov.serverFingerprint && new URL(prov.templateSnapshotUrl).origin === new URL(prov.serverUrl).origin;
+      const res = pinned ? await pinnedFetch(prov.templateSnapshotUrl, init, pinnedAgent(prov.serverFingerprint!)) : await fetch(prov.templateSnapshotUrl, init);
       if (!res.ok) throw new Error(`Template snapshot download failed: HTTP ${res.status}`);
       const tmp = join(this.paths.tmp, `template-${Date.now()}.fbrxsnap`);
       writeFileSync(tmp, Buffer.from(await res.arrayBuffer()));
@@ -1351,7 +1354,7 @@ export class Kernel {
       this.platform.requestRestart('provisioning');
       return;
     }
-    await this.fleet.enroll(prov.serverUrl, prov.enrollmentToken, prov.deviceName, 'provisioning', prov.audience);
+    await this.fleet.enroll(prov.serverUrl, prov.enrollmentToken, prov.deviceName, 'provisioning', prov.audience, prov.serverFingerprint);
     try {
       renameSync(file, `${file}.applied`);
     } catch {

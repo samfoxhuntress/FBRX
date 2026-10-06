@@ -30,7 +30,44 @@ Builds without an embedded key run as Community edition (development builds unlo
 
 ## 2. Control plane
 
-### Docker (recommended)
+FBRX Command (the control plane and its console) runs three ways: **on a computer of your own** with the
+`Install FBRX Command` launcher (a family, a school, a small office), in **Docker** with a domain name and an
+automatic public certificate (a hosted service for many customers), or **from the build** under your own process
+manager.
+
+### FBRX Command on a computer of your own
+
+Double-click **`Install FBRX Command.cmd`** (Windows) or **`Install FBRX Command.command`** (macOS; on Linux run it
+with `bash`) in the unzipped FBRX folder. It uses the same Node.js bootstrap as `Install FBRX OS` and runs
+`scripts/setup/command.mjs`:
+
+| Step | What happens |
+| --- | --- |
+| Dependencies | `npm ci` without Electron's binary (skipped if `Install FBRX OS` already installed them) |
+| Signing key | Copies `~/.fbrx-keys/license-signing.pem` (made by either installer) into FBRX Command's `data/keys/`, so its licenses are the ones your FBRX OS builds trust |
+| Build | The console and the server bundle |
+| Install | `app/` (server, console, launcher and its own Node.js) and `config.json` in FBRX Command's folder: `%LOCALAPPDATA%\FBRX Command`, `~/Library/Application Support/FBRX Command` or `~/.local/share/fbrx-command` |
+| At login | Windows: Start menu, desktop and Startup shortcuts (no console window). macOS: a login item (`~/Library/LaunchAgents/com.fbrx.command.plist`, restarted if it stops) and `~/Applications/FBRX Command.app`. Linux: autostart and applications-menu entries |
+| Start | Starts it and opens the first-run page with the setup token filled in |
+
+**Who connects** (asked, or `--network` / `--local`):
+
+* **Computers on this network** (default): HTTPS on `0.0.0.0:8787` with a certificate FBRX Command makes for itself
+  on first start (`data/tls/`, kept across updates). Computers trust it by its SHA-256 fingerprint: provisioning
+  files, Mac profiles, Windows scripts and license keys made in FBRX Command carry it, and a person joining by hand
+  is shown it to compare with **Deploy & enroll** (see SECURITY.md). The console on the computer itself is
+  `http://127.0.0.1:8788` (local only, no certificate warning). The address given to computers is this computer's
+  network address (`--address` to choose another, such as a DNS name); give the computer a fixed address in your
+  router. Windows and macOS ask once whether Node.js may accept connections: allow it.
+* **Only this computer**: plain HTTP on `127.0.0.1:8787`, to try FBRX Command or join FBRX on the same computer.
+
+Run the installer again to update (same data, certificate and setup); `--uninstall` stops FBRX Command and removes
+the program, icons and login item but keeps `data/`; add `--delete-data` to erase it too. Other options: `--port`
+(default 8787; the local console uses the next port), `--yes`, `--no-open`. The installed launcher also works on
+its own: `<folder>/app/node <folder>/app/launcher.mjs open | start | stop | status`. Log: `.fbrx-setup/command-setup.log`;
+FBRX Command's own log: `logs/command.log` in its folder.
+
+### Docker (recommended for a hosted service)
 
 On a Linux host with ports 80/443 open and a DNS record (e.g. `fleet.example.com`) pointing at it:
 
@@ -65,6 +102,10 @@ Run it under systemd, launchd, NSSM or a PaaS.
 | `FBRX_CP_DATA_DIR` | `.fbrx-cp-data` | Database, keys, files |
 | `FBRX_CP_PORT` / `FBRX_CP_HOST` | `8787` / `0.0.0.0` | Listener |
 | `FBRX_CP_TRUST_PROXY` | off | Honor `X-Forwarded-*` from a reverse proxy |
+| `FBRX_CP_TLS` | off | `self-signed`: serve HTTPS with FBRX Command's own certificate (made once in `<data>/tls/`; computers pin its fingerprint) |
+| `FBRX_CP_TLS_CERT` / `FBRX_CP_TLS_KEY` | — | Serve HTTPS with a certificate you have (PEM files) |
+| `FBRX_CP_TLS_NAMES` | — | Extra names and addresses for the self-signed certificate (comma-separated; this computer's are added) |
+| `FBRX_CP_LOCAL_PORT` | — | Also answer on `http://127.0.0.1:<port>`, for the console on the same computer |
 | `FBRX_CP_ADMIN_EMAIL` / `_PASSWORD` / `_NAME`, `FBRX_CP_ORGANIZATION` | — | Bootstrap the first superadmin and tenant on an empty database |
 | `FBRX_CP_ORGANIZATION_KIND` | `work` | Kind of that first tenant: `work`, `school` or `home` (the setup page asks instead when you set up in the browser) |
 | `FBRX_CP_SETUP_TOKEN` | random, printed | Without bootstrap variables, the console's first-run screen asks for this token |

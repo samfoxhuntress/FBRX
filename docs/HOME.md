@@ -16,8 +16,12 @@ a child's "Get help" goes straight to a parent's computer.
 
 ## 1. Set up FBRX Command as a Home
 
-Run FBRX Command (DEPLOYMENT.md; for a family, the Docker setup on a small home server, a NAS or a cloud machine with
-a domain is plenty). On the first-run page, pick **Home**, then give the family's name and the parent's account.
+On the computer that will look after the family (one that stays on: a desktop, or a small home server), double-click
+**`Install FBRX Command`** in the FBRX folder (`.cmd` on Windows, `.command` on a Mac) and keep the default,
+*Computers on this network*. It installs FBRX Command, starts it whenever you log in, and opens the first-run page
+with its setup token filled in: pick **Home**, then give the family's name and the parent's account. Give that
+computer a fixed address in your router so the children's computers can always find it. (A hosted setup with Docker
+and a domain works too: DEPLOYMENT.md.)
 Already running FBRX Command for work? **Tenants → New tenant → Home** adds the family next to your other tenants.
 
 Unattended installs: `FBRX_CP_ORGANIZATION_KIND=home` with the other `FBRX_CP_*` bootstrap settings.
@@ -35,7 +39,8 @@ Copy the tokens when they are shown. **Deploy & enroll** makes more at any time.
 ## 3. Put FBRX on the computers
 
 Install FBRX on each computer and, on its **Organization** page (or in the first-run setup), paste the FBRX Command
-address and the token for its group. Or put the downloaded `fbrx-provision.json` next to the installer before running
+address and the token for its group. FBRX then shows FBRX Command's certificate fingerprint: check that it is the same
+as on **Deploy & enroll** and choose *It matches: trust and connect*. Or put the downloaded `fbrx-provision.json` next to the installer before running
 it. Using a Parents token on a child's computer? Tick **This computer is for a student or a child** and it becomes a
 child's computer. Only FBRX Command can turn a child's computer back into a parent's.
 

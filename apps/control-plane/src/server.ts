@@ -1,5 +1,7 @@
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { createServer as createHttpServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { createServer as createHttpsServer } from 'node:https';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -26,6 +28,7 @@ import { adminAssetRoutes } from './routes/admin-assets';
 import { ssoRoutes } from './routes/sso';
 import { helpdeskRoutes } from './routes/helpdesk';
 import { slugify } from './routes/util';
+import { loadTls } from './tls';
 
 function readVersion(): string {
   if (process.env.FBRX_CP_VERSION) return process.env.FBRX_CP_VERSION;
@@ -45,16 +48,26 @@ function readVersion(): string {
 export interface BuiltServer {
   app: FastifyInstance;
   ctx: AppContext;
+  /** Also answers on http://127.0.0.1:<port> (the console on this computer, no certificate warning). Resolves with the port. */
+  listenLocal(port: number): Promise<number>;
   close(): Promise<void>;
 }
 
 export async function buildServer(config: Config): Promise<BuiltServer> {
   mkdirSync(config.dataDir, { recursive: true });
+  const tls = loadTls(config);
+  let handler: ((req: IncomingMessage, res: ServerResponse) => void) | null = null;
   const app = Fastify({
     logger: config.logLevel === 'silent' ? false : { level: config.logLevel, redact: ['req.headers.authorization', 'req.query.token', 'req.query.access_token', 'req.query.et'] },
     trustProxy: config.trustProxy,
     bodyLimit: 5 * 1024 * 1024,
-  });
+    // One request handler for the main server (HTTPS when FBRX Command has a certificate) and the local listener.
+    serverFactory: (h) => {
+      handler = h;
+      return (tls ? createHttpsServer({ key: tls.key, cert: tls.cert }, h) : createHttpServer(h)) as Server;
+    },
+  }) as unknown as FastifyInstance;
+  let local: Server | null = null;
   const db = new Db(join(config.dataDir, 'control-plane.db'));
   db.migrate(CP_MIGRATIONS);
   const keys = loadKeys(config.dataDir);
@@ -68,6 +81,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     webhooks: new WebhookDispatcher(db, keys.master, version, (m, d) => app.log.warn(d, m)),
     version,
     log: app.log,
+    tls: tls ? { fingerprint: tls.fingerprint, selfSigned: tls.selfSigned, notAfter: tls.notAfter } : null,
   };
   const ctx: AppContext = { ...base, ...createContextHelpers(base) };
   ctx.audit.onAppend((entry) => ctx.realtime.emitAdmin({ type: 'audit', tenantId: entry.tenantId, entry }));
@@ -159,9 +173,23 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   return {
     app,
     ctx,
+    listenLocal(port: number) {
+      return new Promise<number>((resolve, reject) => {
+        const s = createHttpServer((req, res) => handler!(req, res));
+        // Live updates in the console: hand WebSocket upgrades to the main server's handler.
+        s.on('upgrade', (req, socket, head) => app.server.emit('upgrade', req, socket, head));
+        s.once('error', reject);
+        s.listen(port, '127.0.0.1', () => {
+          local = s;
+          resolve((s.address() as { port: number }).port);
+        });
+      });
+    },
     async close() {
       clearInterval(timer);
       ctx.realtime.closeAll();
+      if (local) await new Promise<void>((r) => local!.close(() => r()));
+      local?.closeAllConnections?.();
       await app.close();
       db.close();
     },

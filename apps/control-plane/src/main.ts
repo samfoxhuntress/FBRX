@@ -4,7 +4,13 @@ import { buildServer } from './server';
 const config = loadConfig();
 const server = await buildServer(config);
 await server.app.listen({ host: config.host, port: config.port });
-server.app.log.info(`FBRX control plane ${server.ctx.version} listening on ${config.host}:${config.port} (public URL ${config.publicUrl})`);
+const tls = server.ctx.tls;
+server.app.log.info(`FBRX control plane ${server.ctx.version} listening on ${tls ? 'https' : 'http'}://${config.host}:${config.port} (public URL ${config.publicUrl})`);
+if (tls?.selfSigned) server.app.log.info(`FBRX Command's own certificate, SHA-256 fingerprint ${tls.fingerprint} (computers trust it by this fingerprint)`);
+if (config.localPort) {
+  await server.listenLocal(config.localPort);
+  server.app.log.info(`Console on this computer: http://127.0.0.1:${config.localPort}`);
+}
 if (config.adminConsoleDir) server.app.log.info(`Admin console served from ${config.adminConsoleDir}`);
 
 const shutdown = async (signal: string) => {

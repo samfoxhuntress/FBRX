@@ -39,6 +39,10 @@ export function EnrollmentPage() {
   const groups = useQuery<Array<{ id: string; name: string }>>('/v1/admin/groups').data ?? [];
   const snapshots = useQuery<Array<{ id: string; deviceName: string; label: string | null; createdAt: string }>>('/v1/admin/snapshots').data ?? [];
   const releases = useQuery<Release[]>('/v1/admin/releases').data ?? [];
+  const system = useQuery<{ publicUrl: string; certificate: { fingerprint: string; selfSigned: boolean } | null }>('/v1/admin/system').data;
+  // The address other computers use (this page may be open on FBRX Command's own computer at 127.0.0.1).
+  const address = system?.publicUrl ?? location.origin;
+  const pin = system?.certificate?.selfSigned ? system.certificate.fingerprint : null;
   const [creating, setCreating] = useState(false);
   const [created, setCreated] = useState<Created | null>(null);
   const { confirm, dialog } = useConfirm();
@@ -63,6 +67,18 @@ export function EnrollmentPage() {
         </Button>
       }
     >
+      <Card title="Address for computers" subtitle={pin ? 'FBRX Command uses its own certificate. Computers check this fingerprint when they join, and trust nothing else.' : 'What computers connect to when they join.'}>
+        <div className="fx-form">
+          <Field label="FBRX Command address">
+            <CopyText value={address} />
+          </Field>
+          {pin && (
+            <Field label="Certificate fingerprint (SHA-256)" help="Provisioning files, Mac profiles, Windows scripts and license keys made here carry it. When someone joins by hand, FBRX shows this fingerprint: it must match.">
+              <CopyText value={pin} />
+            </Field>
+          )}
+        </div>
+      </Card>
       <Card title="Installers" subtitle={latest ? `Latest stable release: ${latest.version}` : 'No stable release has been published yet'}>
         {latest ? (
           <div className="fx-list">
@@ -143,7 +159,7 @@ export function EnrollmentPage() {
                 title="A configuration profile for Jamf, Mosyle, Kandji, Intune or another Mac device manager"
                 onClick={() =>
                   saveBlob(
-                    new Blob([macProfile({ organization, label: created.label, serverUrl: String(created.provisioning.serverUrl), enrollmentToken: created.token, audience: created.audience, uuids: [uuid(), uuid()] })], { type: 'application/x-apple-aspen-config' }),
+                    new Blob([macProfile({ organization, label: created.label, serverUrl: String(created.provisioning.serverUrl), enrollmentToken: created.token, audience: created.audience, serverFingerprint: (created.provisioning.serverFingerprint as string | undefined) ?? null, uuids: [uuid(), uuid()] })], { type: 'application/x-apple-aspen-config' }),
                     `FBRX-${created.label.replace(/[^\w-]+/g, '-')}.mobileconfig`,
                   )
                 }
@@ -155,7 +171,7 @@ export function EnrollmentPage() {
                 title="A PowerShell script for Intune (Win32 app) or another Windows device manager"
                 onClick={() =>
                   saveBlob(
-                    new Blob([windowsScript({ organization, label: created.label, serverUrl: String(created.provisioning.serverUrl), enrollmentToken: created.token, audience: created.audience, installerUrl: latestWin ? `${location.origin}/v1/downloads/${latest!.id}/${encodeURIComponent(latestWin)}?et=${created.token}` : null })], { type: 'text/plain' }),
+                    new Blob([windowsScript({ organization, label: created.label, serverUrl: String(created.provisioning.serverUrl), enrollmentToken: created.token, audience: created.audience, serverFingerprint: (created.provisioning.serverFingerprint as string | undefined) ?? null, installerUrl: latestWin ? `${address}/v1/downloads/${latest!.id}/${encodeURIComponent(latestWin)}?et=${created.token}` : null })], { type: 'text/plain' }),
                     'Install-FBRX.ps1',
                   )
                 }
@@ -178,7 +194,7 @@ export function EnrollmentPage() {
                   {latest.files
                     .filter((f) => f.kind !== 'blockmap')
                     .map((f) => (
-                      <CopyText key={f.fileName} value={`${location.origin}/v1/downloads/${latest.id}/${encodeURIComponent(f.fileName)}?et=${created.token}`} />
+                      <CopyText key={f.fileName} value={`${address}/v1/downloads/${latest.id}/${encodeURIComponent(f.fileName)}?et=${created.token}`} />
                     ))}
                 </div>
               </Field>
@@ -188,8 +204,8 @@ export function EnrollmentPage() {
                 <li>Mac device manager (Jamf, Mosyle, Kandji, Intune…): upload the <b>Mac profile</b>; FBRX joins on its next start.</li>
                 <li>Intune on Windows: package the <b>Windows script</b> with the installer as a Win32 app; it installs for all users and joins.</li>
                 <li>No device manager: put <code>fbrx-provision.json</code> next to the installer, or in <code>/Library/Application Support/FBRX OS</code> (Mac) or <code>%ProgramData%\FBRX OS</code> (Windows).</li>
-                <li>By hand: open FBRX → Organization, paste the address and token{isLearner(created.audience) ? '' : app.kind === 'home' ? ' (tick "for a child" on the children\'s computers)' : app.kind === 'business' ? '' : ' (tick "for a student" on student laptops)'}.</li>
-                <li>Headless/servers: <code>fbrx-headless enroll {location.origin} &lt;token&gt;</code></li>
+                <li>By hand: open FBRX → Organization, paste the address and token{pin ? ' and check the certificate fingerprint it shows' : ''}{isLearner(created.audience) ? '' : app.kind === 'home' ? ' (tick "for a child" on the children\'s computers)' : app.kind === 'business' ? '' : ' (tick "for a student" on student laptops)'}.</li>
+                <li>Headless/servers: <code>fbrx-headless enroll {address} &lt;token&gt;{pin ? ` --fingerprint ${pin}` : ''}</code></li>
               </ol>
             </Callout>
             <Field label="Provisioning file">

@@ -16,6 +16,8 @@ export interface AppContext {
   webhooks: WebhookDispatcher;
   version: string;
   log: FastifyBaseLogger;
+  /** The certificate FBRX Command serves HTTPS with, when it does so itself (null behind a proxy or on plain HTTP). */
+  tls: { fingerprint: string; selfSigned: boolean; notAfter: string } | null;
   /** Increments a tenant's configuration version and tells its online devices to re-sync. */
   bumpConfig(tenantId: string): number;
   /** Delivers a queued command immediately if the device is connected. */

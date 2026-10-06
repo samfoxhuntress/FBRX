@@ -4,7 +4,7 @@
  * Local API) without the desktop UI. Useful for servers, kiosks, CI and lab machines.
  *
  *   fbrx-headless [--data-dir DIR] [--dev]                 run (default)
- *   fbrx-headless enroll <serverUrl> <token> [--name N]    enroll with a control plane, then run
+ *   fbrx-headless enroll <serverUrl> <token> [--name N] [--fingerprint FP]    enroll with a control plane, then run
  *   fbrx-headless backup <passphrase> [--label L]          create an encrypted snapshot and exit
  *   fbrx-headless restore <file> <passphrase> [--clone]    stage a snapshot restore and exit
  *   fbrx-headless status                                    print status JSON and exit
@@ -32,6 +32,7 @@ const bool = (name: string) => {
 const dataDir = flag('--data-dir') ?? defaultDataRoot();
 const devMode = bool('--dev') || process.env.FBRX_DEV_MODE === '1';
 const name = flag('--name');
+const fingerprint = flag('--fingerprint');
 const label = flag('--label');
 const clone = bool('--clone');
 const [command = 'run', ...rest] = argv;
@@ -71,8 +72,8 @@ async function main() {
       break;
     case 'enroll': {
       const [serverUrl, token] = rest;
-      if (!serverUrl || !token) throw new Error('usage: enroll <serverUrl> <token> [--name NAME]');
-      const s = await k.call('fleet.enroll', { serverUrl, token, deviceName: name }, user);
+      if (!serverUrl || !token) throw new Error('usage: enroll <serverUrl> <token> [--name NAME] [--fingerprint SHA256]');
+      const s = await k.call('fleet.enroll', { serverUrl, token, deviceName: name, ...(fingerprint ? { fingerprint } : {}) }, user);
       console.log(JSON.stringify(s, null, 2));
       break;
     }

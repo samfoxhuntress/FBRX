@@ -146,5 +146,10 @@ export const ProvisioningFileSchema = z.object({
   templateSnapshotPassphrase: z.string().optional(),
   /** "student" sets the computer up as a student computer (FBRX OS Education). */
   audience: z.enum(AUDIENCES).optional(),
+  /**
+   * SHA-256 fingerprint of FBRX Command's own certificate, when it runs on a home or school network without a
+   * publicly trusted one: the computer trusts that certificate and no other.
+   */
+  serverFingerprint: z.string().optional(),
 });
 export type ProvisioningFile = z.infer<typeof ProvisioningFileSchema>;

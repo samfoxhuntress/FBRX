@@ -5,6 +5,9 @@ to watch, configure, update and support every FBRX Endpoint computer in real tim
 commands, packages, credentials, updates, backups and audit). A license issued here can enroll computers by itself:
 paste the key into FBRX Endpoint Basic and it joins the tenant (see [LICENSING.md](LICENSING.md#joining-fbrx-command)). Development: `npm run dev:console` (proxies the API on :8787).
 
+To run it on a computer of your own (a family, a school, a small office), double-click **Install FBRX Command** in
+the FBRX folder; it opens the first-run page when it is done. Hosted setups: [DEPLOYMENT.md](DEPLOYMENT.md#2-control-plane).
+
 ## Work, School or Home
 
 Every tenant has a **kind**, picked before anything else, both at first-run setup and in **Tenants → New tenant**:
@@ -32,7 +35,7 @@ license with a kind also sets it. Unattended installs can pick the first tenant'
 | | **Alerts & events** | Service failures, circuit breaks, policy denials, student and child safety alerts and other device events; acknowledge them |
 | | **Help desk** | Every ticket sent from the organization's computers, its conversation and the computer's details; answer, take, change status and priority; which computers receive tickets |
 | Configuration | **Profiles & groups** | Organization defaults: the kind (Work, School, Home), *New versions* (install automatically, tell people, off), the help desk on or off, default profile and channel. **Quick setup** for the tenant's kind (Set up for work, for a school, for a family) until its groups exist. Profiles hold managed settings, governance policy and *locks* (paths users cannot change). Groups attach a profile, who uses the computers (staff or student; parent or child), the edition (hold to Basic), *New versions*, an update channel and a pinned version |
-| | **Deploy & enroll** | Download the latest installers; create enrollment tokens (group, who uses the computers, usage limit, expiry, template snapshot); download the matching `fbrx-provision.json`, a **Mac profile** (.mobileconfig for Jamf, Mosyle, Kandji, Intune…) and a **Windows script** (Intune Win32 app) |
+| | **Deploy & enroll** | The address computers join at (and, for FBRX Command with its own certificate, the fingerprint they check); download the latest installers; create enrollment tokens (group, who uses the computers, usage limit, expiry, template snapshot); download the matching `fbrx-provision.json`, a **Mac profile** (.mobileconfig for Jamf, Mosyle, Kandji, Intune…) and a **Windows script** (Intune Win32 app) |
 | | **Credentials** | Organization secrets scoped to the tenant, a group or a single device; pushed into device vaults as read-only managed secrets; rotate or delete centrally |
 | | **Plugins** | Upload plugin packages (manifest and permissions shown), deploy to devices or groups |
 | | **Backups** | Snapshots uploaded by devices; download, mark as an enrollment template, delete |

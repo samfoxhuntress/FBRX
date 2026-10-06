@@ -1,17 +1,17 @@
 {
   "product": "FBRX OS",
   "stage": "Alpha",
-  "version": "1.9.1",
+  "version": "1.9.2",
   "codename": "Bobbin",
-  "released": "2026-10-05",
-  "importance": "optional",
-  "summary": "FBRX Command for work, school or home: pick the kind of tenant at setup, set up its groups in one click, and run children's computers on FBRX OS Home.",
+  "released": "2026-10-06",
+  "importance": "recommended",
+  "summary": "Install FBRX Command on a computer of your own with one double-click, and join it from the computers on your home or school network, no domain name needed.",
   "notes": [
-    "FBRX Command asks what it will run before setup, and for every new tenant: Work, School or Home. The wording, groups and defaults follow the choice.",
-    "One-click setup for every kind: Staff and IT (Work), Teachers, IT and Students (School), Parents and Children (Home), each with its own enrollment token and provisioning file.",
-    "FBRX OS Home: children's computers get the simple pages and the safe learning helper, which now speaks of a parent instead of a teacher.",
-    "At home, a child's \"Get help\" goes straight to every parent's computer, with no setup.",
-    "Joining a computer: \"This computer is for a student or a child\" makes it FBRX OS Education at a school or FBRX OS Home in a family."
+    "New next to the FBRX OS installers: \"Install FBRX Command\" (Windows and Mac). It installs FBRX Command, starts it whenever you log in, adds an FBRX Command icon, and opens the first-run page with its setup token filled in.",
+    "Home and school networks: FBRX Command serves HTTPS with its own certificate. Computers check its fingerprint once when they join (FBRX shows it; Deploy & enroll shows the same) and then trust nothing else.",
+    "FBRX Command signs licenses with the same key as \"Install FBRX OS\", so its licenses work on your computers.",
+    "Provisioning files, Mac profiles, Windows scripts and license keys from FBRX Command carry the certificate fingerprint, so computers join on their own.",
+    "Run the installer again to update FBRX Command, or with --uninstall to remove it; its data is kept."
   ],
   "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/heads/claude/fbrx-os-enterprise-app-bs7s2j.zip",
   "page": "https://github.com/samfoxhuntress/FBRX"

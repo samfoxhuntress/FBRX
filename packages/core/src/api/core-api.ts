@@ -263,9 +263,10 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
 
     'fleet.status': () => k.fleet.status(),
     'fleet.enroll': (p, ctx) => {
-      const q = z.object({ serverUrl: z.string(), token: z.string(), deviceName: z.string().optional(), audience: z.enum(AUDIENCES).optional() }).parse(p);
-      return k.fleet.enroll(q.serverUrl, q.token, q.deviceName, ctx.actor, q.audience);
+      const q = z.object({ serverUrl: z.string(), token: z.string(), deviceName: z.string().optional(), audience: z.enum(AUDIENCES).optional(), fingerprint: z.string().optional() }).parse(p);
+      return k.fleet.enroll(q.serverUrl, q.token, q.deviceName, ctx.actor, q.audience, q.fingerprint);
     },
+    'fleet.probe': (p) => k.fleet.probe(z.object({ serverUrl: z.string().min(1) }).parse(p).serverUrl),
     'fleet.unenroll': (_p, ctx) => k.fleet.unenroll(ctx.actor),
     'fleet.sync': async () => {
       if (!k.fleet.enrolled) throw new CoreError('UNAVAILABLE', 'This device is not enrolled');

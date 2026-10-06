@@ -20,6 +20,10 @@ locks.
 
 ## 1. Make the tenant a school
 
+No FBRX Command yet? On a computer at the school that stays on, double-click **`Install FBRX Command`** in the FBRX
+folder (computers on the school network join it over HTTPS with its own certificate), or host it with Docker and a
+domain name (DEPLOYMENT.md).
+
 Pick **School** when FBRX Command asks what it will run: on the first-run setup page, or in **Tenants → New tenant**
 for each further school. An existing tenant changes kind under **Profiles & groups → Organization defaults → Kind**.
 

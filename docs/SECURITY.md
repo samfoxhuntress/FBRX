@@ -159,6 +159,23 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
 * *Require single sign-on* turns off passwords for everyone in the organization except owners, who keep password +
   TOTP as the way back in. Accounts created for single sign-on have no password at all.
 
+## FBRX Command with its own certificate
+
+FBRX Command installed on a home or school computer (`Install FBRX Command`, network mode) has no domain name, so no
+public authority can vouch for its HTTPS certificate. It makes its own (ECDSA P-256, kept in `data/tls/`, the same
+across updates) and computers **pin** it:
+
+* A computer only joins an `https://` address whose certificate is publicly trusted, or whose SHA-256 fingerprint it
+  was given: in a provisioning file, Mac profile or Windows script from FBRX Command, in a license key that joins the
+  tenant, or by the person comparing what FBRX shows with **Deploy & enroll**. Without one, joining stops with
+  "uses its own certificate"; with a different one, nothing is sent.
+* After joining, every request and the live connection to FBRX Command go over a TLS socket that checks the
+  fingerprint at `secureConnect`, **before** the device credential is written. A replaced certificate stops the
+  connection (the computer reports it rather than trusting the new one).
+* Plain `http://` is accepted only for FBRX Command on the same computer (`localhost`). The console on FBRX Command's
+  own computer is on `http://127.0.0.1:<port + 1>`, bound to the loopback interface only.
+* The Windows script FBRX Command generates pins the same fingerprint when it downloads the installer.
+
 ## Network environments (UniFi)
 
 * The UniFi API key is stored in the vault as an internal secret (`fbrx.netenv.<id>`): never listed, never readable by

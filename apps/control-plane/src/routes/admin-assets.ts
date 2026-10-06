@@ -255,7 +255,7 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
           p.id,
           new Date().toISOString(),
         );
-        command = { url: ctx.config.publicUrl, enrollmentToken: token };
+        command = { url: ctx.config.publicUrl, enrollmentToken: token, ...(ctx.tls?.selfSigned ? { fingerprint: ctx.tls.fingerprint } : {}) };
       }
       const payload: LicensePayload = {
         v: 1,
@@ -505,6 +505,8 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
       return {
         version: ctx.version,
         publicUrl: ctx.config.publicUrl,
+        // FBRX Command's own certificate: computers on the network trust it by this fingerprint.
+        certificate: ctx.tls ? { fingerprint: ctx.tls.fingerprint, selfSigned: ctx.tls.selfSigned, notAfter: ctx.tls.notAfter } : null,
         heartbeatSeconds: ctx.config.heartbeatSeconds,
         onlineDevices: ctx.realtime.onlineCount(tenantScope(req)),
         features: { mfa: true, webhooks: true, templates: true, staged_rollouts: true },

@@ -1,15 +1,16 @@
 @echo off
-rem FBRX OS installer for Windows. Double-click this file in the unzipped FBRX folder.
+rem FBRX Command installer for Windows. Double-click this file in the unzipped FBRX folder. FBRX Command runs your
+rem company's, school's or family's FBRX computers from your browser (options: see scripts\setup\command.mjs).
 rem It uses your Node.js if it is new enough; otherwise it downloads a private copy into .fbrx-setup\ (nothing is
-rem installed system-wide), then starts the setup in scripts\setup\wizard.mjs.
+rem installed system-wide), then starts the setup in scripts\setup\command.mjs.
 rem Opened from inside the downloaded zip, Windows unpacks only this file: it then offers to unzip the FBRX folder
 rem first, using the PowerShell code at the end of this file, and continues with the unzipped copy.
-rem "Install FBRX Command.cmd" is this same file with the three settings below changed.
+rem "Install FBRX OS.cmd" is this same file with the three settings below changed.
 setlocal
 cd /d "%~dp0"
-set "FBRX_PRODUCT=FBRX OS"
-set "FBRX_LAUNCHER=Install FBRX OS.cmd"
-set "FBRX_SETUP_SCRIPT=scripts\setup\wizard.mjs"
+set "FBRX_PRODUCT=FBRX Command"
+set "FBRX_LAUNCHER=Install FBRX Command.cmd"
+set "FBRX_SETUP_SCRIPT=scripts\setup\command.mjs"
 title %FBRX_PRODUCT% setup
 set "FBRX_SKIP_PAUSE=%FBRX_NO_PAUSE%"
 if not exist "%~dp0scripts\setup\bootstrap.ps1" goto unzip

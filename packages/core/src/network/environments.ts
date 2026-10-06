@@ -1,5 +1,4 @@
-import { request as httpsRequest, Agent } from 'node:https';
-import { connect as tlsConnect, type ConnectionOptions, type PeerCertificate, type TLSSocket } from 'node:tls';
+import { request as httpsRequest } from 'node:https';
 import {
   NETENV_KINDS,
   newId,
@@ -16,6 +15,10 @@ import {
   type NetEnvVoucher,
 } from '@fbrx/shared';
 import { CoreError } from '../errors';
+import { formatFingerprint, normalizeFingerprint, peerCertificate as presentedCertificate, pinnedAgent as pinnedTlsAgent } from '../util/pinned-tls';
+
+export { normalizeFingerprint };
+const pinnedAgent = (fingerprint: string) => pinnedTlsAgent(fingerprint, 'The console presented a different certificate than the one you trusted. If it was replaced on purpose, edit the environment and test again.');
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
 import type { MetaStore } from '../storage/meta';
@@ -79,8 +82,6 @@ export interface NetEnvDeps {
   unavailable: () => string | null;
 }
 
-export const normalizeFingerprint = (fp: string) => fp.replace(/[^0-9a-f]/gi, '').toUpperCase();
-const formatFingerprint = (fp: string) => normalizeFingerprint(fp).match(/.{2}/g)?.join(':') ?? '';
 
 /** https://host[:port] with nothing after it. Bare addresses get https://. */
 export function consoleUrl(raw: string): string {
@@ -90,49 +91,9 @@ export function consoleUrl(raw: string): string {
   return `https://${u.host}`;
 }
 
-/** An agent that checks the server's certificate fingerprint before handing the connection to the request. */
-function pinnedAgent(fingerprint: string): Agent {
-  const want = normalizeFingerprint(fingerprint);
-  const agent = new Agent({ keepAlive: false, maxCachedSessions: 0 });
-  (agent as unknown as { createConnection: (o: ConnectionOptions, cb: (e: Error | null, s?: TLSSocket) => void) => undefined }).createConnection = (opts, cb) => {
-    const sock = tlsConnect({ ...opts, rejectUnauthorized: false });
-    let settled = false;
-    sock.once('secureConnect', () => {
-      settled = true;
-      const got = normalizeFingerprint(sock.getPeerCertificate()?.fingerprint256 ?? '');
-      if (got !== want) {
-        sock.destroy();
-        cb(new CoreError('FORBIDDEN', 'The console presented a different certificate than the one you trusted. If it was replaced on purpose, edit the environment and test again.'));
-      } else cb(null, sock);
-    });
-    sock.once('error', (e) => {
-      if (!settled) {
-        settled = true;
-        cb(e);
-      }
-    });
-    return undefined;
-  };
-  return agent;
-}
-
 /** The certificate a host presents, whoever signed it. */
 export function peerCertificate(url: string): Promise<{ fingerprint: string; subject: string; issuer: string; validTo: string }> {
-  const u = new URL(url);
-  return new Promise((resolve, reject) => {
-    const sock = tlsConnect({ host: u.hostname, port: Number(u.port || 443), servername: /^[\d.]+$|:/.test(u.hostname) ? undefined : u.hostname, rejectUnauthorized: false, timeout: TIMEOUT_MS });
-    sock.once('secureConnect', () => {
-      const c: PeerCertificate = sock.getPeerCertificate();
-      sock.end();
-      const name = (x: PeerCertificate['subject'] | undefined) => (x ? [x.CN, x.O].filter(Boolean).join(', ') : '');
-      resolve({ fingerprint: formatFingerprint(c.fingerprint256 ?? ''), subject: name(c.subject) || 'unnamed', issuer: name(c.issuer) || 'unnamed', validTo: c.valid_to ?? '' });
-    });
-    sock.once('timeout', () => {
-      sock.destroy();
-      reject(new CoreError('TIMEOUT', `No answer from ${u.host}`));
-    });
-    sock.once('error', reject);
-  });
+  return presentedCertificate(url, TIMEOUT_MS).then(({ trusted: _trusted, ...c }) => c);
 }
 
 interface Reply {

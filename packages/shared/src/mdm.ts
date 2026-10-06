@@ -32,6 +32,7 @@ export function provisioningFromPreferences(prefs: Record<string, unknown>): (Pr
     enrollmentToken,
     ...(str('DeviceName', 'deviceName') ? { deviceName: str('DeviceName', 'deviceName') } : {}),
     ...(audience && (AUDIENCES as readonly string[]).includes(audience) ? { audience: audience as Audience } : {}),
+    ...(str('ServerFingerprint', 'serverFingerprint') ? { serverFingerprint: str('ServerFingerprint', 'serverFingerprint') } : {}),
   };
 }
 
@@ -44,6 +45,8 @@ export interface MdmInput {
   serverUrl: string;
   enrollmentToken: string;
   audience?: Audience | null;
+  /** FBRX Command's own certificate fingerprint, when it has no publicly trusted certificate. */
+  serverFingerprint?: string | null;
   /** UUIDs for the profile and its payload (pass fresh ones). */
   uuids: [string, string];
 }
@@ -54,6 +57,7 @@ export function macProfile(i: MdmInput): string {
     ['ServerURL', i.serverUrl],
     ['EnrollmentToken', i.enrollmentToken],
     ...(i.audience ? ([['Audience', i.audience]] as Array<[string, string]>) : []),
+    ...(i.serverFingerprint ? ([['ServerFingerprint', i.serverFingerprint]] as Array<[string, string]>) : []),
   ];
   const [profileUuid, payloadUuid] = i.uuids;
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -116,7 +120,13 @@ ${settings.map(([k, v]) => `                <key>${k}</key>\n                <st
  * silently for all users from an FBRX-OS-Setup-*.exe packaged next to it (or downloaded from `installerUrl`).
  */
 export function windowsScript(i: Omit<MdmInput, 'uuids'> & { installerUrl?: string | null }): string {
-  const prov: ProvisioningFile & { audience?: Audience } = { fbrxProvisioning: 1, serverUrl: i.serverUrl, enrollmentToken: i.enrollmentToken, ...(i.audience ? { audience: i.audience } : {}) };
+  const prov: ProvisioningFile & { audience?: Audience } = {
+    fbrxProvisioning: 1,
+    serverUrl: i.serverUrl,
+    enrollmentToken: i.enrollmentToken,
+    ...(i.audience ? { audience: i.audience } : {}),
+    ...(i.serverFingerprint ? { serverFingerprint: i.serverFingerprint } : {}),
+  };
   const ps = (s: string) => s.replace(/'/g, "''");
   return `# FBRX OS for ${i.organization} (${i.label}): join FBRX Command and install for all users.
 # Intune: package this script with FBRX-OS-Setup-<version>.exe as a Win32 app (IntuneWinAppUtil), install command
@@ -134,7 +144,9 @@ $setup = Get-ChildItem -Path $PSScriptRoot -Filter 'FBRX-OS-Setup-*.exe' -ErrorA
 $installerUrl = '${ps(i.installerUrl ?? '')}'
 if (-not $setup -and $installerUrl) {
   $target = Join-Path $env:TEMP 'FBRX-OS-Setup.exe'
-  Invoke-WebRequest -Uri $installerUrl -OutFile $target -UseBasicParsing
+${i.serverFingerprint ? `  # FBRX Command uses its own certificate: trust that one certificate (by its SHA-256 fingerprint) and no other.
+  [Net.ServicePointManager]::ServerCertificateValidationCallback = { param($s, $c) ([Security.Cryptography.X509Certificates.X509Certificate2]$c).GetCertHashString([Security.Cryptography.HashAlgorithmName]::SHA256) -eq '${i.serverFingerprint.replace(/[^0-9a-f]/gi, '').toUpperCase()}' }
+` : ''}  Invoke-WebRequest -Uri $installerUrl -OutFile $target -UseBasicParsing
   $setup = Get-Item $target
 }
 if ($setup) {

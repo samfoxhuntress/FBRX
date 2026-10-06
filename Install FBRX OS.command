@@ -1,7 +1,8 @@
 #!/bin/bash
 # FBRX OS installer for macOS (and Linux). Double-click this file in Finder, or run:  bash "Install FBRX OS.command"
 # It uses your Node.js if it is new enough; otherwise it downloads a private copy into .fbrx-setup/ (nothing is
-# installed system-wide), then starts the setup wizard in scripts/setup/wizard.mjs.
+# installed system-wide), then starts the setup wizard in scripts/setup/wizard.mjs ("Install FBRX Command.command"
+# runs this file with FBRX_SETUP_SCRIPT set to scripts/setup/command.mjs).
 set -u
 cd "$(dirname "$0")" || exit 1
 
@@ -38,7 +39,7 @@ else
     *) fail "this computer type ($(uname -s) $(uname -m)) is not supported." ;;
   esac
   BASE="https://nodejs.org/dist/latest-v22.x"
-  echo "Downloading Node.js for the installer (about 50 MB, used only by FBRX OS setup)..."
+  echo "Downloading Node.js for the installer (about 50 MB, used only by FBRX setup)..."
   SUMS="$(curl -fsSL "$BASE/SHASUMS256.txt")" || fail "could not reach nodejs.org."
   LINE="$(printf '%s\n' "$SUMS" | grep -E " node-v[0-9.]+-$PLATFORM\.tar\.gz$" | head -n 1)"
   [ -n "$LINE" ] || fail "no Node.js download found for $PLATFORM."
@@ -54,7 +55,7 @@ else
   NODE="$PRIVATE_NODE"
 fi
 
-"$NODE" scripts/setup/wizard.mjs "$@"
+"$NODE" "${FBRX_SETUP_SCRIPT:-scripts/setup/wizard.mjs}" "$@"
 STATUS=$?
 if [ -t 0 ] && [ -z "${FBRX_NO_PAUSE:-}" ]; then
   echo

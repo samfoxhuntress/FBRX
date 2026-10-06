@@ -7,7 +7,7 @@
 
 # FBRX OS — Fabrics Operating System
 
-> **Alpha 1.9.1 "Bobbin".** FBRX is in alpha testing. Installed copies check this repository's
+> **Alpha 1.9.2 "Bobbin".** FBRX is in alpha testing. Installed copies check this repository's
 > [`release.json`](release.json) and offer new versions in the app.
 
 FBRX OS is the platform behind two products:
@@ -132,6 +132,23 @@ a choice instead:
 If FBRX OS is open, Setup asks it to quit properly first (and ends anything left over, such as the local AI runtime).
 An older file than the installed version offers a downgrade, with a warning. Details and the command-line switches for
 IT tools: [DEPLOYMENT.md](docs/DEPLOYMENT.md#windows-installer-upgrade-repair-and-uninstall).
+
+### FBRX Command on a computer of your own
+
+Next to the FBRX OS installers are **`Install FBRX Command.command`** (Mac) and **`Install FBRX Command.cmd`**
+(Windows). Double-click it on the computer that will run FBRX Command for your company, school or family (one that
+stays on, with a fixed address in your router). In about five minutes it:
+
+1. builds FBRX Command and installs it with its own copy of Node.js,
+2. gives it the same license signing key as `Install FBRX OS`, so the licenses it issues work on your computers,
+3. starts it now and every time you log in, with an **FBRX Command** icon in the Start menu / Applications,
+4. opens the first-run page (Work, School or Home) with its one-time setup token already filled in.
+
+It asks who will connect. **Computers on this network** (the default) serves `https://<this computer>:8787` with
+FBRX Command's own certificate: computers check its fingerprint once when they join (FBRX shows it; FBRX Command →
+Deploy & enroll shows the same one) and then trust nothing else, so no domain name is needed. **Only this computer**
+is for trying it out. Run it again to update (data kept), or with `--uninstall` to remove it (`--delete-data` to
+erase everything). Options and details: [DEPLOYMENT.md](docs/DEPLOYMENT.md#fbrx-command-on-a-computer-of-your-own).
 
 Prefer to do it by hand? `npm install`, then `npm run dev:desktop` to try it, or `npm run keys:generate`,
 `npm run package:mac` / `npm run package:win` and `npm run license:issue -- --customer "Your Name"` to build and

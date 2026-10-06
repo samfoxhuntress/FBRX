@@ -127,7 +127,11 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
 export function SetupPage({ onDone }: { onDone: () => void }) {
   const [kind, setKind] = useState<Vertical | null>(null);
   const [picking, setPicking] = useState<Vertical>('business');
-  const [f, setF] = useState({ setupToken: '', organization: '', name: '', email: '', password: '', confirm: '' });
+  // "Install FBRX Command" opens this page with the one-time setup token in the link (#setup-token=…).
+  const [f, setF] = useState(() => ({ setupToken: new URLSearchParams(location.hash.replace(/^#\/?/, '')).get('setup-token') ?? '', organization: '', name: '', email: '', password: '', confirm: '' }));
+  useEffect(() => {
+    if (location.hash.includes('setup-token=')) history.replaceState(null, '', location.pathname);
+  }, []);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
@@ -170,13 +174,13 @@ export function SetupPage({ onDone }: { onDone: () => void }) {
     <Centered>
       <Card title="Set up FBRX Command" subtitle={`Step 2 of 2: your ${info.noun} and the first administrator`}>
         <form className="fx-form" onSubmit={submit}>
-          <Callout tone="info">The one-time setup token is printed in the control plane's log on first start (or set FBRX_CP_SETUP_TOKEN).</Callout>
+          {!f.setupToken && <Callout tone="info">The one-time setup token is shown by the FBRX Command installer, or printed in the server's log on first start (or set FBRX_CP_SETUP_TOKEN).</Callout>}
           {error && <Callout tone="critical">{error}</Callout>}
           <Field label="Setup token">
-            <Input value={f.setupToken} onChange={set('setupToken')} required autoFocus />
+            <Input value={f.setupToken} onChange={set('setupToken')} required autoFocus={!f.setupToken} />
           </Field>
           <Field label={kind === 'home' ? 'Family name' : kind === 'education' ? 'School name' : 'Organization name'} help={`Kind: ${VERTICAL_NAMES[kind]}`}>
-            <Input value={f.organization} onChange={set('organization')} required placeholder={info.example} />
+            <Input value={f.organization} onChange={set('organization')} required placeholder={info.example} autoFocus={!!f.setupToken} />
           </Field>
           <Field label="Your name">
             <Input value={f.name} onChange={set('name')} required />

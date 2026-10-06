@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import type { Agent } from 'node:https';
 import { createReadStream, createWriteStream, statSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { basename, join } from 'node:path';
@@ -22,6 +23,7 @@ import {
   type ServerToDeviceMessage,
   type DeviceToServerMessage,
   type Audience,
+  type FleetProbe,
 } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { AuditLog } from '../audit/audit-log';
@@ -35,6 +37,18 @@ import type { LicenseService } from '../license/license-service';
 import type { Vault } from '../vault/vault';
 import type { UpdateController } from '../platform';
 import { sleep } from '../util/misc';
+import { formatFingerprint, peerCertificate, pinnedAgent, pinnedFetch } from '../util/pinned-tls';
+
+const CERT_CHANGED = "FBRX Command presented a different certificate than the one this computer trusts. If FBRX Command was reinstalled, disconnect and join again with its new address and fingerprint.";
+
+/** TLS errors that mean "no authority vouches for this certificate" (self-signed, or signed by a private CA). */
+const UNTRUSTED_CERT = /SELF_SIGNED|UNABLE_TO_VERIFY|UNABLE_TO_GET_ISSUER|CERT_UNTRUSTED|ERR_TLS_CERT_ALTNAME_INVALID|self[- ]signed/i;
+const certProblem = (err: unknown): boolean => {
+  for (let e = err as { code?: string; message?: string; cause?: unknown } | undefined, i = 0; e && i < 4; e = e.cause as typeof e, i++) {
+    if (UNTRUSTED_CERT.test(`${e.code ?? ''} ${e.message ?? ''}`)) return true;
+  }
+  return false;
+};
 
 const TOKEN_SECRET = 'fbrx.fleet.deviceToken';
 
@@ -82,6 +96,7 @@ export class FleetAgent {
   private state: FleetStatus['state'] = 'unenrolled';
   private message: string | null = null;
   private syncing: Promise<void> | null = null;
+  private pinned: { fingerprint: string; agent: Agent } | null = null;
 
   constructor(private readonly d: FleetDeps) {}
 
@@ -95,6 +110,24 @@ export class FleetAgent {
 
   get deviceId(): string | null {
     return this.d.meta.get<string>('fleet.deviceId');
+  }
+
+  /** FBRX Command's certificate fingerprint, when it uses its own certificate and this computer pinned it. */
+  get serverFingerprint(): string | null {
+    return this.d.meta.get<string>('fleet.serverFingerprint');
+  }
+
+  private agentFor(fingerprint: string): Agent {
+    if (this.pinned?.fingerprint !== fingerprint) this.pinned = { fingerprint, agent: pinnedAgent(fingerprint, CERT_CHANGED) };
+    return this.pinned.agent;
+  }
+
+  /** fetch() to FBRX Command, over the pinned certificate when it has its own. Other hosts use the system's trust. */
+  private cpFetch(url: string, init: RequestInit & { duplex?: 'half' }): Promise<Response> {
+    const fp = this.serverFingerprint;
+    const server = this.serverUrl;
+    if (fp && server && url.startsWith('https:') && new URL(url).origin === new URL(server).origin) return pinnedFetch(url, init, this.agentFor(fp));
+    return fetch(url, init);
   }
 
   private token(): string {
@@ -125,6 +158,7 @@ export class FleetAgent {
       lockedSettings: eff.locked,
       policyManaged: this.d.policy.effective().source === 'managed',
       managedSecrets: this.d.vault.status().managedCount,
+      serverFingerprint: this.enrolled ? this.serverFingerprint : null,
     };
   }
 
@@ -140,7 +174,7 @@ export class FleetAgent {
   }
 
   private async http<T>(method: string, path: string, body?: unknown, timeoutMs = 20_000): Promise<T> {
-    const res = await fetch(this.url(path), {
+    const res = await this.cpFetch(this.url(path), {
       method,
       headers: { ...this.authHeaders(), ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -168,26 +202,46 @@ export class FleetAgent {
 
   // ------------------------------------------------------------------------------------ enrollment
 
-  async enroll(serverUrl: string, token: string, deviceName: string | undefined, actor: string, audience?: Audience): Promise<FleetStatus> {
-    let base: URL;
+  /**
+   * Looks at an FBRX Command address before joining it: http:// is only for FBRX Command on this same computer, and
+   * an https:// address either has a certificate the system trusts or one whose fingerprint the person must trust.
+   */
+  async probe(serverUrl: string): Promise<FleetProbe> {
+    const base = parseServerUrl(serverUrl);
+    const url = base.origin + base.pathname.replace(/\/+$/, '');
+    if (base.protocol === 'http:') return { serverUrl: url, local: true, certificate: null };
     try {
-      base = new URL(serverUrl);
-      if (!/^https?:$/.test(base.protocol)) throw new Error();
-    } catch {
-      throw new CoreError('INVALID_ARGUMENT', 'Server URL must be an http(s) URL');
+      return { serverUrl: url, local: false, certificate: await peerCertificate(url, 10_000) };
+    } catch (err) {
+      throw new CoreError('UNAVAILABLE', `FBRX Command could not be reached at ${base.host}: ${errorMessage(err)}`);
     }
-    if (base.protocol === 'http:' && !['localhost', '127.0.0.1', '::1'].includes(base.hostname) && process.env.FBRX_ALLOW_INSECURE_FLEET !== '1') {
-      throw new CoreError('INVALID_ARGUMENT', 'Use https:// for remote control planes (set FBRX_ALLOW_INSECURE_FLEET=1 to override in labs)');
-    }
+  }
+
+  async enroll(serverUrl: string, token: string, deviceName: string | undefined, actor: string, audience?: Audience, fingerprint?: string): Promise<FleetStatus> {
+    const base = parseServerUrl(serverUrl);
+    const pin = fingerprint ? formatFingerprint(fingerprint) : null;
+    if (pin && pin.length !== 95) throw new CoreError('INVALID_ARGUMENT', 'That certificate fingerprint is not a SHA-256 fingerprint (32 pairs like AB:CD:…)');
+    if (pin && base.protocol !== 'https:') throw new CoreError('INVALID_ARGUMENT', 'A certificate fingerprint needs an https:// address');
     if (!this.d.vault.isUnlocked) throw new CoreError('LOCKED', 'Unlock the vault before enrolling');
     if (deviceName) this.d.settings.update({ general: { deviceName } });
     const facts = this.d.facts();
-    const res = await fetch(new URL('/v1/enroll', base).toString(), {
+    const enrollUrl = new URL('/v1/enroll', base).toString();
+    const init: RequestInit = {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ token, protocolVersion: PROTOCOL_VERSION, device: facts, previousDeviceId: this.d.meta.get('fleet.previousDeviceId') ?? undefined, ...(audience ? { audience } : {}) }),
       signal: AbortSignal.timeout(20_000),
-    });
+    };
+    let res: Response;
+    try {
+      res = pin ? await pinnedFetch(enrollUrl, init, pinnedAgent(pin, `FBRX Command at ${base.host} presented a different certificate than the fingerprint you were given. Check the address and fingerprint in FBRX Command → Deploy & enroll.`)) : await fetch(enrollUrl, init);
+    } catch (err) {
+      if (err instanceof CoreError) throw err;
+      if (!pin && base.protocol === 'https:' && certProblem(err)) {
+        throw new CoreError('FORBIDDEN', `FBRX Command at ${base.host} uses its own certificate. Check its fingerprint (FBRX Command → Deploy & enroll) and trust it to join.`);
+      }
+      throw new CoreError('UNAVAILABLE', `FBRX Command could not be reached at ${base.host}: ${errorMessage(err)}`);
+    }
     const body = (await res.json().catch(() => ({}))) as EnrollResponse & { error?: { message?: string } };
     if (!res.ok) {
       this.d.audit.append({ category: 'fleet', action: 'enroll', actor, target: base.origin, outcome: 'failure', details: { status: res.status, error: body.error?.message } });
@@ -197,6 +251,8 @@ export class FleetAgent {
     this.d.vault.set({ name: TOKEN_SECRET, value: body.deviceToken, kind: 'token', description: 'FBRX fleet device credential' }, { internal: true });
     const m = this.d.meta;
     m.set('fleet.serverUrl', base.origin + base.pathname.replace(/\/+$/, ''));
+    if (pin) m.set('fleet.serverFingerprint', pin);
+    else m.delete('fleet.serverFingerprint');
     m.set('fleet.deviceId', body.deviceId);
     m.set('fleet.tenantId', body.tenantId);
     m.set('fleet.tenantName', body.tenantName);
@@ -359,7 +415,8 @@ export class FleetAgent {
   private connect(signal: AbortSignal): Promise<void> {
     return new Promise((resolve, reject) => {
       const wsUrl = this.url('/v1/device/ws').replace(/^http/, 'ws');
-      const ws = new WebSocket(wsUrl, { headers: this.authHeaders(), handshakeTimeout: 15_000 });
+      const fp = this.serverFingerprint;
+      const ws = new WebSocket(wsUrl, { headers: this.authHeaders(), handshakeTimeout: 15_000, ...(fp && wsUrl.startsWith('wss:') ? { agent: this.agentFor(fp) } : {}) });
       this.ws = ws;
       let opened = false;
       const onAbort = () => ws.close(1000, 'stopping');
@@ -522,7 +579,7 @@ export class FleetAgent {
 
   async uploadSnapshot(file: string, label: string | null): Promise<{ snapshotId: string }> {
     const size = statSync(file).size;
-    const res = await fetch(this.url('/v1/device/snapshots'), {
+    const res = await this.cpFetch(this.url('/v1/device/snapshots'), {
       method: 'POST',
       headers: {
         ...this.authHeaders(),
@@ -543,7 +600,7 @@ export class FleetAgent {
   async download(pathOrUrl: string, sha256: string | null, fileName: string): Promise<string> {
     const url = /^https?:/i.test(pathOrUrl) ? pathOrUrl : this.url(pathOrUrl.startsWith('/') ? pathOrUrl : `/${pathOrUrl}`);
     const sameOrigin = new URL(url).origin === new URL(this.serverUrl!).origin;
-    const res = await fetch(url, { headers: sameOrigin ? this.authHeaders() : {}, signal: AbortSignal.timeout(30 * 60_000) });
+    const res = await this.cpFetch(url, { headers: sameOrigin ? this.authHeaders() : {}, signal: AbortSignal.timeout(30 * 60_000) });
     if (!res.ok || !res.body) throw new Error(`Download failed: HTTP ${res.status}`);
     const dest = join(this.d.tmpDir, `${Date.now()}-${fileName.replace(/[^A-Za-z0-9._-]/g, '_')}`);
     const hash = createHash('sha256');
@@ -564,4 +621,20 @@ export class FleetAgent {
     }
     return dest;
   }
+}
+
+/** An FBRX Command address: https://…, or http:// only on this same computer. */
+function parseServerUrl(serverUrl: string): URL {
+  let base: URL;
+  try {
+    const t = serverUrl.trim();
+    base = new URL(/^[a-z]+:\/\//i.test(t) ? t : `https://${t}`);
+    if (!/^https?:$/.test(base.protocol)) throw new Error();
+  } catch {
+    throw new CoreError('INVALID_ARGUMENT', 'The FBRX Command address must start with https://');
+  }
+  if (base.protocol === 'http:' && !['localhost', '127.0.0.1', '[::1]'].includes(base.hostname) && process.env.FBRX_ALLOW_INSECURE_FLEET !== '1') {
+    throw new CoreError('INVALID_ARGUMENT', 'Use the https:// address of FBRX Command (http:// only works for FBRX Command on this same computer)');
+  }
+  return base;
 }
