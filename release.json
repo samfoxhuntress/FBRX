@@ -1,18 +1,18 @@
 {
   "product": "FBRX OS",
   "stage": "Alpha",
-  "version": "1.9.3",
+  "version": "1.9.4",
   "codename": "Bobbin",
   "released": "2026-10-06",
   "importance": "recommended",
-  "summary": "Tidy up your chat history: delete old chats, clean up in one go, and keep chats with your projects.",
+  "summary": "Your Outlook / Microsoft 365 calendars and calendar links in FBRX: an agenda and a week view, meeting reminders, today on FBRX Glass, and Fabrix knows what is on.",
   "notes": [
-    "Chat history: each chat has a ⋯ menu to rename it, add it to a project, take it out, or delete it.",
-    "Select several chats to delete them or move them to a project together.",
-    "Clean up: delete every chat older than a week, a month, three months or a year. FBRX counts them first, and keeps chats that belong to a project unless you say otherwise.",
-    "Projects show how many chats they hold; \"Chats\" opens the history filtered to that project, and new chats started there stay with it.",
-    "Easter eggs now end on their own last line instead of a sign-off.",
-    "Help desk tickets no longer wait on a slow network lookup before they are sent."
+    "New Calendar page (Studio): sign in to Outlook / Microsoft 365 in your browser, or paste a calendar link from Outlook.com, Google, Apple or your school.",
+    "Agenda and week views, Join buttons for online meetings, event details, and new events in your Outlook calendar.",
+    "Reminders before meetings (5 to 30 minutes, or never), and what is left today on FBRX Glass.",
+    "Fabrix can tell you what is on, find a free hour, and add an event (it asks first).",
+    "Plugins can read your calendar when they ask for the new calendar permission.",
+    "Organizations can set the Microsoft sign-in for every computer from FBRX Command."
   ],
   "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/heads/claude/fbrx-os-enterprise-app-bs7s2j.zip",
   "page": "https://github.com/samfoxhuntress/FBRX"

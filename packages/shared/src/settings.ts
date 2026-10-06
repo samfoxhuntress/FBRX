@@ -291,6 +291,25 @@ export const SettingsSchema = z.object({
     /** A version the person chose to skip (no more reminders for it). */
     skipVersion: z.string().max(40),
   }),
+  /** Calendars (Outlook / Microsoft 365 accounts and calendar links) shown in Calendar, on FBRX Glass and to the agent. */
+  calendar: z.object({
+    /** Remind this many minutes before a meeting starts (0 = no reminders). */
+    remindMinutes: z.number().int().min(0).max(120),
+    /** How often to fetch the calendars, in minutes. */
+    syncMinutes: z.number().int().min(5).max(240),
+    microsoft: z.object({
+      /**
+       * Application (client) ID of a Microsoft Entra app registration for "Mobile and desktop applications" with the
+       * redirect URI http://localhost. Empty uses the one built into this copy of FBRX, if it has one. Organizations
+       * set it for every computer from FBRX Command (Configuration → profile settings).
+       */
+      clientId: z.string().max(80),
+      /** "common" (work, school and personal accounts), "organizations", "consumers", or a tenant ID or domain. */
+      tenant: z.string().max(120),
+      /** Only read calendars: FBRX asks for read access and cannot add events. */
+      readOnly: z.boolean(),
+    }),
+  }),
 });
 export type Settings = z.infer<typeof SettingsSchema>;
 
@@ -457,6 +476,11 @@ export const DEFAULT_SETTINGS: Settings = {
     autoInstall: false,
     checkRepo: true,
     skipVersion: '',
+  },
+  calendar: {
+    remindMinutes: 10,
+    syncMinutes: 15,
+    microsoft: { clientId: '', tenant: 'common', readOnly: false },
   },
 };
 

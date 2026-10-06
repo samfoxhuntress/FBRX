@@ -2,6 +2,7 @@ import type { TrophyState } from './fun';
 import type { VoiceDownloadId } from './settings';
 import type { HelpdeskScope, HelpdeskStatus, TicketCategory, TicketDetail, TicketPriority, TicketStatus, TicketSummary } from './helpdesk';
 import type { EditionStatus } from './editions';
+import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
 import type { NetEnvDeviceAction, NetEnvDeviceStats, NetEnvDevice, NetEnvInput, NetEnvironment, NetEnvOverview, NetEnvProbe, NetEnvVoucher } from './netenv';
 /**
  * Contracts for the FBRX OS command-center modules: workspace (notes, tasks, projects, snippets), live system
@@ -982,6 +983,21 @@ export interface ExtMethods {
   'netenv.deviceAction': (p: { id: string; deviceId: string; action: NetEnvDeviceAction; siteId?: string }) => Ok;
   'netenv.vouchers': (p: { id: string; siteId?: string }) => NetEnvVoucher[];
   'netenv.createVouchers': (p: { id: string; name: string; count?: number; timeLimitMinutes: number; guestLimit?: number; siteId?: string }) => NetEnvVoucher[];
+  // Calendar: Outlook / Microsoft 365 accounts and calendar links.
+  'calendar.status': () => CalendarStatus;
+  /** Events between two times (ISO), across the accounts that are turned on. */
+  'calendar.events': (p: { from: string; to: string; accountId?: string }) => CalendarEvent[];
+  /** Add a calendar link (an iCalendar address; webcal:// works too). */
+  'calendar.addLink': (p: { name: string; url: string; color?: string }) => CalendarAccount;
+  /** Start signing in to Outlook / Microsoft 365: open the returned address in the browser. */
+  'calendar.signIn': () => CalendarSignIn;
+  'calendar.cancelSignIn': () => Ok;
+  'calendar.update': (p: { id: string; name?: string; color?: string; enabled?: boolean; calendars?: Array<{ id: string; enabled: boolean }> }) => CalendarAccount;
+  'calendar.remove': (p: { id: string }) => Deleted;
+  /** Fetch now (one account, or all of them). */
+  'calendar.sync': (p?: { id?: string }) => CalendarStatus;
+  'calendar.create': (p: NewCalendarEvent) => CalendarEvent;
+  'calendar.delete': (p: { accountId: string; id: string }) => Deleted;
 
   'console.connect': (p: ConsoleConnectInput) => ConsoleConnectResult;
   'console.write': (p: { id: string; data: string }) => Ok;
@@ -1042,6 +1058,7 @@ export interface ExtEvents {
   'alerts.changed': { unread: number; critical: number };
   'net.event': NetEvent;
   'netenv.changed': NetEnvironment[];
+  'calendar.changed': CalendarChange;
   'presenter.changed': PresenterStatus;
   'helpdesk.changed': { ticketId: string; number: number; reason: 'created' | 'message' | 'updated'; subject: string };
   'migrate.event': MigrateEvent;
@@ -1106,6 +1123,15 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'netenv.remove',
   'netenv.deviceAction',
   'netenv.createVouchers',
+  'calendar.events',
+  'calendar.addLink',
+  'calendar.signIn',
+  'calendar.cancelSignIn',
+  'calendar.update',
+  'calendar.remove',
+  'calendar.sync',
+  'calendar.create',
+  'calendar.delete',
   'console.connect',
   'console.write',
   'console.resize',

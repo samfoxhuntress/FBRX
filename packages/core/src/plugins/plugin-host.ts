@@ -11,6 +11,7 @@ import {
   type PluginManifest,
   type ToolDefinition,
   type WorkerToHost,
+  type PluginCalendarEvent,
 } from '@fbrx/plugin-sdk';
 import { RISK_LEVELS, satisfies, type PluginInfo, type RiskLevel } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
@@ -50,6 +51,8 @@ export interface PluginHostDeps {
   notify: (title: string, body: string, source: string) => void;
   log: Logger;
   events?: EventBus;
+  /** The person's calendar events (for plugins with the `calendar` permission). */
+  calendar?: (from: Date, to: Date) => PluginCalendarEvent[];
 }
 
 type ToolMeta = Omit<ToolDefinition, 'run'>;
@@ -526,6 +529,16 @@ export class PluginHost {
           this.d.audit.append({ category: 'plugin', action: 'http', actor: `plugin:${id}`, target: host, outcome: 'denied', details: { reason: errorMessage(err) } });
           throw err;
         }
+      }
+      case 'calendar.events': {
+        if (!proc.has('calendar')) throw new Error('Plugin lacks the "calendar" permission');
+        const from = new Date(String(params?.from ?? ''));
+        const to = new Date(String(params?.to ?? ''));
+        if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to <= from) throw new Error('calendar.events needs a start and an end time, the end after the start');
+        if (to.getTime() - from.getTime() > 62 * 86_400_000) throw new Error('calendar.events covers at most 62 days at a time');
+        const list = this.d.calendar?.(from, to) ?? [];
+        this.d.audit.append({ category: 'plugin', action: 'calendar.read', actor: `plugin:${id}`, outcome: 'success', details: { events: list.length } });
+        return list;
       }
       case 'notify': {
         if (!proc.has('notifications')) throw new Error('Plugin lacks the "notifications" permission');

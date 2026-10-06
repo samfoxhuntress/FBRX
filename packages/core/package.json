@@ -15,6 +15,7 @@
     "@fbrx/plugin-sdk": "1.0.0",
     "@fbrx/shared": "1.0.0",
     "@modelcontextprotocol/sdk": "^1.31.0",
+    "ical.js": "^2.2.1",
     "multicast-dns": "^7.2.5",
     "nodemailer": "^7.0.13",
     "qrcode": "^1.5.4",

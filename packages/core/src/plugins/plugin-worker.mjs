@@ -80,6 +80,7 @@ function makeContext(manifest, dataDir) {
     secrets: { get: (name) => request('secrets.get', { name }) },
     http: { fetch: (url, init) => request('http.fetch', { url, init: init ?? {} }) },
     notify: (title, body) => request('notify', { title, body }),
+    calendar: { events: (from, to) => request('calendar.events', { from: new Date(from).toISOString(), to: new Date(to).toISOString() }) },
   };
 }
 

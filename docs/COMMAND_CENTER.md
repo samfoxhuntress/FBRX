@@ -47,7 +47,7 @@ and its pages slide out beside it. Counts (unread alerts, waiting approvals) sho
 
 ### Version names
 
-FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.9.2** (or Basic). Each minor version also gets a codename from cloth,
+FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.9.4** (or Basic). Each minor version also gets a codename from cloth,
 fiber to fabric, shown in **Settings → Logs & about**: 1.8 *Spindle*, 1.9 *Bobbin*, then *Shuttle*, *Heddle*, and 2.0
 *Loom* (later *Warp*, *Weft*, *Selvedge*, *Tapestry*).
 
@@ -137,8 +137,9 @@ never deletes its chats: they go back to the main history. Only the person at th
 
 | Page | What it does |
 | --- | --- |
-| **FBRX Glass** | The dashboard, in frosted glass: a split-flap board that rotates through status messages, a health score out of 100 with what costs points, insight tiles (your next task, internet speed, storage, Fabrix, backups and the vault, alerts and approvals, a tip), then live processor, memory, network and battery (sampled every 2 s), today's tasks, drives, recent alerts, this computer's hardware, and service health |
+| **FBRX Glass** | The dashboard, in frosted glass: a split-flap board that rotates through status messages, a health score out of 100 with what costs points, what is left on today's calendar (with *Join* when a meeting is about to start), insight tiles (your next task, internet speed, storage, Fabrix, backups and the vault, alerts and approvals, a tip), then live processor, memory, network and battery (sampled every 2 s), today's tasks, drives, recent alerts, this computer's hardware, and service health |
 | **Fabrix** | The agent. Six starter cards (check my PC, plan my day, free up space, slow internet, is this link safe, explain crashes). Each chat is **Offline** or **Online**: new chats start offline (Settings → Agent); the first internet tool in an offline chat asks you to put that chat online |
+| **Calendar** | Outlook / Microsoft 365 accounts and calendar links (Outlook.com, Google, Apple, a school) as an agenda or a week, with *Join* for online meetings, reminders before meetings, new events in Outlook, and *Prepare my day*. See [CALENDAR.md](CALENDAR.md) |
 | **Tasks** | Board (drag between To do / In progress / Done) and list views, priorities, due dates, projects, quick add |
 | **Notes** | Markdown notes with preview, tags, pinning, projects and autosave |
 | **Projects** | Progress, overdue tasks, milestones, linked notes, snippets and chats |
@@ -454,6 +455,8 @@ Desktop app itself.
 | `net.ping`, `net.traceroute`, `net.dns_lookup`, `net.port_check`, `net.scan_lan`, `net.check_link`, `net.speed_test` | network — offline chats ask to go online first |
 | `device_console.sessions`, `device_console.read` | read |
 | `device_console.send` | execute — asks by default, showing the exact command |
+| `calendar.agenda`, `calendar.free_time` (when a calendar is connected) | read |
+| `calendar.create_event` | write — adds to an Outlook calendar, never invites anyone |
 
 ## Local AI without the stutter
 

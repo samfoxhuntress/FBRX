@@ -10,7 +10,7 @@ a child's "Get help" goes straight to a parent's computer.
 | --- | --- | --- |
 | Runs | FBRX Endpoint (Ultra, or Basic if you hold the group to it) | **FBRX OS Home** |
 | Agent | Fabrix with every tool, asking before it changes anything | A learning helper that only talks: no files, apps, websites or commands |
-| Pages | Everything the license gives | Home, the helper, Get help, Tasks, Notes, Toolbox, Library, Settings |
+| Pages | Everything the license gives | Home, the helper, Get help, Calendar, Tasks, Notes, Toolbox, Library, Settings |
 | Defaults | Yours to choose (profiles in FBRX Command) | Presenter-safe mode with a projector, chats offline first; easter eggs, the mesh and the local API locked off |
 | Help | Receives the children's requests for help, automatically | **Get help** asks a parent |
 

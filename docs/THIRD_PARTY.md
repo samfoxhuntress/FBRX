@@ -13,3 +13,9 @@ Face; code and data are bundled with the app.
 | [CMU Pronouncing Dictionary](http://www.speech.cs.cmu.edu/cgi-bin/cmudict) 0.7b, in Kokoro phonemes (from HeadTTS) | Pronunciations | BSD-style, © 1993-2015 Carnegie Mellon University (notice kept at the top of the file) | Bundled (`kokoro/en-us.txt.gz`) |
 
 No GPL component is included: the eSpeak NG phonemizer that other Kokoro front ends use is deliberately left out.
+
+# Third-party components in Calendar
+
+| Component | Used for | License | Where |
+| --- | --- | --- | --- |
+| [ical.js](https://github.com/kewisch/ical.js) | Reading calendar links (iCalendar): repeating events, time zones | MPL-2.0 | Bundled (npm `ical.js`, unmodified) |

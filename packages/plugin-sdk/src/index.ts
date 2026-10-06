@@ -73,6 +73,23 @@ export interface PluginContext {
   };
   /** Requires the `notifications` permission. */
   notify(title: string, body: string): Promise<void>;
+  /** Requires the `calendar` permission: the person's calendar events (read-only; at most 62 days at a time). */
+  calendar: {
+    events(from: Date | string, to: Date | string): Promise<PluginCalendarEvent[]>;
+  };
+}
+
+/** An event from the person's calendars, as plugins see it (no meeting links or organizers). */
+export interface PluginCalendarEvent {
+  title: string;
+  /** ISO times; all-day events run from local midnight to local midnight. */
+  start: string;
+  end: string;
+  allDay: boolean;
+  location: string | null;
+  showAs: string;
+  cancelled: boolean;
+  calendar: string;
 }
 
 export interface ToolInvocation {
@@ -119,6 +136,7 @@ export const PLUGIN_MANIFEST_FILE = 'fbrx-plugin.json';
  * - `notifications`         desktop notifications
  * - `secrets:<NAME>`        read a named vault secret
  * - `network:<host>`        HTTP via ctx.http to host (`*.example.com` and `*` allowed)
+ * - `calendar`              read the person's calendar events (ctx.calendar.events)
  */
 export interface PluginManifest {
   id: string;
@@ -154,7 +172,7 @@ export function validateManifest(m: unknown): { ok: true; manifest: PluginManife
     if (!Array.isArray(o.permissions) || o.permissions.some((p) => typeof p !== 'string')) errors.push('permissions must be strings');
     else
       for (const p of o.permissions as string[]) {
-        if (!/^(storage|notifications|secrets:[A-Za-z0-9_.-]+|network:(\*|(\*\.)?[a-z0-9.-]+(:\d+)?))$/.test(p)) {
+        if (!/^(storage|notifications|calendar|secrets:[A-Za-z0-9_.-]+|network:(\*|(\*\.)?[a-z0-9.-]+(:\d+)?))$/.test(p)) {
           errors.push(`Unknown permission "${p}"`);
         }
       }
@@ -176,5 +194,5 @@ export type WorkerToHost =
   | { kind: 'ready'; tools: Array<Omit<ToolDefinition, 'run'>> }
   | { kind: 'init-failed'; error: string }
   | { kind: 'result'; id: string; ok: boolean; result?: ToolResult; error?: string }
-  | { kind: 'request'; id: string; method: 'storage.get' | 'storage.set' | 'storage.delete' | 'storage.keys' | 'secrets.get' | 'http.fetch' | 'notify'; params: unknown }
+  | { kind: 'request'; id: string; method: 'storage.get' | 'storage.set' | 'storage.delete' | 'storage.keys' | 'secrets.get' | 'http.fetch' | 'notify' | 'calendar.events'; params: unknown }
   | { kind: 'log'; level: 'debug' | 'info' | 'warn' | 'error'; message: string; data?: unknown };

@@ -55,6 +55,7 @@ point and its npm dependencies into a single `index.mjs`, so the package needs n
 | `notifications` | `ctx.notify(title, body)` |
 | `secrets:<NAME>` | `ctx.secrets.get('<NAME>')` — one named vault secret (set it in **Vault**, or push it from the console) |
 | `network:<host>` | `ctx.http.fetch` to that host; `*.example.com` and `*` allowed. Requests also pass network policy |
+| `calendar` | `ctx.calendar.events(from, to)` — the person's calendar events, read-only, up to 62 days per call (no meeting links or organizers; see [CALENDAR.md](CALENDAR.md)) |
 
 ### Tools
 

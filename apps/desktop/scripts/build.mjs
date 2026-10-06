@@ -31,7 +31,7 @@ await build({
   format: 'esm',
   // ssh2's optional native speed-ups: without them it uses its pure-JavaScript code.
   external: ['electron', 'bufferutil', 'utf-8-validate', 'cpu-features', '*.node'],
-  define: { __FBRX_LICENSE_PUBKEYS__: JSON.stringify(keys), 'process.env.FBRX_APP_VERSION': JSON.stringify(pkg.version) },
+  define: { __FBRX_LICENSE_PUBKEYS__: JSON.stringify(keys), __FBRX_MS_CLIENT_ID__: JSON.stringify(process.env.FBRX_MS_CLIENT_ID ?? ''), 'process.env.FBRX_APP_VERSION': JSON.stringify(pkg.version) },
   // CommonJS dependencies (ssh2 among them) expect require, __filename and __dirname.
   banner: { js: ESM_BANNER },
 });

@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import type { SystemLive, SystemStatus } from '@fbrx/shared';
+import type { CalendarEvent, SystemLive, SystemStatus } from '@fbrx/shared';
 import { TIER_NAMES, TROPHIES, displayVersion } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Grid, Icons, KeyValue, LineChart, Meter, StatTile, Status, formatBytes, formatDuration, timeAgo, useAction, type IconName } from '@fbrx/ui';
-import { call, onEvent } from '../client';
+import { call, onEvent, openExternal } from '../client';
 import { useCore } from '../hooks';
 import { navigate } from '../app';
 import { dashboardQuip, unlockTrophy } from '../fun';
 import { AskButton, NamePrompt } from '../widgets';
 import { SplitFlapBoard } from '../splitflap';
 import { useLearner, useTier, useVertical } from '../edition';
+import { fmtTime } from '../calendar-format';
 
 function serviceTone(state: string) {
   return state === 'running' ? 'good' : state === 'failed' ? 'critical' : state === 'degraded' ? 'warning' : 'neutral';
@@ -83,6 +84,34 @@ function healthScore(o: { status: SystemStatus; critical: number; unread: number
   if (o.status.pendingApprovals) hit(3, 'approvals waiting');
   score = Math.max(0, Math.round(score));
   return { score, label: score >= 90 ? 'Excellent' : score >= 75 ? 'Good' : score >= 55 ? 'Needs a look' : 'Needs attention', reasons };
+}
+
+/** FBRX Glass: the meetings left today, with a Join button when one is about to start. */
+function TodayStrip({ events }: { events: CalendarEvent[] }) {
+  const now = Date.now();
+  return (
+    <div className="glass-agenda" aria-label="Today's calendar">
+      <button className="cal-head" onClick={() => navigate('calendar')}>
+        <Icons.calendar size={16} /> Today
+      </button>
+      {events.slice(0, 8).map((e) => {
+        const starts = new Date(e.start).getTime();
+        const live = starts - 10 * 60_000 <= now && new Date(e.end).getTime() > now;
+        return (
+          <div key={`${e.accountId}:${e.id}`} className={`cal-pill${live ? ' now' : ''}`} title={`${e.title}${e.location ? ` · ${e.location}` : ''} · ${e.accountName}`}>
+            <span className="cal-dot" style={{ background: e.color }} />
+            <b>{starts <= now ? 'Now' : fmtTime(e.start)}</b>
+            <span className="private">{e.title}</span>
+            {live && e.joinUrl && (
+              <Button size="sm" variant="primary" icon="video" onClick={() => openExternal(e.joinUrl!)}>
+                Join
+              </Button>
+            )}
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function HealthRing({ score, label }: { score: number; label: string }) {
@@ -219,6 +248,13 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
   const counts = useCore('alerts.counts', undefined, ['alerts.changed'], 60_000);
   const speed = useCore('net.speedHistory');
   const trophies = useCore('fun.trophies', undefined, ['fun.trophy']);
+  // What is left on today's calendars (refreshed every minute so finished meetings drop off).
+  const dayEnd = useMemo(() => {
+    const d = new Date();
+    return new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1).toISOString();
+  }, [Math.floor(Date.now() / 3_600_000)]); // eslint-disable-line react-hooks/exhaustive-deps
+  const calendar = useCore('calendar.events', { from: new Date(Math.floor(Date.now() / 60_000) * 60_000).toISOString(), to: dayEnd }, ['calendar.changed'], 60_000);
+  const agenda = (calendar.data ?? []).filter((e) => !e.allDay && !e.cancelled && e.showAs !== 'free');
   const fullest = disks.reduce<(typeof disks)[number] | null>((m, d) => (!m || d.used / d.size > m.used / m.size ? d : m), null);
   const freeTotal = disks.reduce((n, d) => n + (d.size - d.used), 0);
   const health = healthScore({ status, critical: counts.data?.critical ?? 0, unread: counts.data?.unread ?? 0, memPct, fullestDiskPct: fullest ? (fullest.used / fullest.size) * 100 : 0, aiReady: !!aiReady });
@@ -231,6 +267,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
     const failing = status.services.filter((x) => x.state === 'failed').length;
     m.push([failing ? `${failing} SERVICE${failing > 1 ? 'S' : ''} FAILING` : 'ALL SYSTEMS GO', cur ? `CPU ${cur.cpu.toFixed(0)}%  MEM ${memPct.toFixed(0)}%` : 'MEASURING…']);
     m.push([`${open.length} OPEN TASK${open.length === 1 ? '' : 'S'}`, due.length ? `${due.length} DUE TODAY` : 'NOTHING DUE TODAY']);
+    if (agenda[0]) m.push([`NEXT ${fmtTime(agenda[0].start).toUpperCase()}`, agenda[0].title.toUpperCase().slice(0, 26)]);
     if (fullest) m.push([`DRIVE ${fullest.mount} ${formatBytes(fullest.size - fullest.used)} FREE`, `OF ${formatBytes(fullest.size)}`]);
     m.push([status.aiHalt ? 'AI ON EMERGENCY STOP' : aiReady ? `${agentName} READY` : `${agentName} NEEDS A MODEL`, `HEALTH ${health.score} · ${health.label}`]);
     m.push([now.toLocaleDateString(undefined, { weekday: 'long' }), now.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })]);
@@ -239,7 +276,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
     return m;
     // Rebuilt every half minute (and when the big things change) so the board isn't restarted on every sample.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [greeting, who, status.deviceName, status.aiHalt, open.length, due.length, aiReady, health.score, easterEggs, Math.floor(Date.now() / 30_000)]);
+  }, [greeting, who, status.deviceName, status.aiHalt, open.length, due.length, aiReady, health.score, easterEggs, agenda[0]?.id, Math.floor(Date.now() / 30_000)]);
 
   return (
     <div className="fx-page glass-dash">
@@ -285,6 +322,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
       </section>
 
       <NamePrompt fun={easterEggs} />
+      {agenda.length > 0 && <TodayStrip events={agenda} />}
       <div className="glass-insights">
         <Insight icon="tasks" title="Focus" value={open.length ? (open[0].title.length > 38 ? `${open[0].title.slice(0, 38)}…` : open[0].title) : 'All clear'} foot={due.length ? `${due.length} due today · ${open.length} open` : `${open.length} open task${open.length === 1 ? '' : 's'}`} onClick={() => navigate('tasks')} />
         <Insight icon="gauge" title="Internet" value={lastSpeed ? `↓ ${lastSpeed.downloadMbps} Mbps` : 'Not measured'} foot={lastSpeed ? `↑ ${lastSpeed.uploadMbps} Mbps · ${timeAgo(lastSpeed.at)}` : 'Run a speed test'} onClick={() => navigate('network/speed')} />
@@ -361,7 +399,13 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
           subtitle={`${open.length} open task(s)`}
           actions={
             <>
-              {open.length > 0 && <AskButton label="Plan my day" prompt="Look at my open tasks and create a prioritized plan for today. Add any missing steps as tasks if I agree." context={open.map((t) => ({ title: t.title, priority: t.priority, due: t.due, status: t.status }))} />}
+              {(open.length > 0 || agenda.length > 0) && (
+                <AskButton
+                  label="Plan my day"
+                  prompt={`Look at my open tasks${agenda.length ? ' and the meetings left on my calendar today' : ''} and create a prioritized plan for today${agenda.length ? ' that fits around the meetings' : ''}. Add any missing steps as tasks if I agree.`}
+                  context={{ tasks: open.map((t) => ({ title: t.title, priority: t.priority, due: t.due, status: t.status })), meetings: agenda.map((e) => ({ title: e.title, start: e.start, end: e.end, location: e.location })) }}
+                />
+              )}
               <Button size="sm" variant="ghost" onClick={() => navigate('tasks')}>
                 All tasks
               </Button>

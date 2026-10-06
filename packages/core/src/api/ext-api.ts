@@ -429,6 +429,59 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return k.netenv.createVouchers(x.id, x);
     },
 
+    // ---------------------------------------------------------------------------------------- calendar
+    'calendar.status': () => k.calendar.status(),
+    'calendar.events': (p) => {
+      const x = z.object({ from: z.string().min(1).max(40), to: z.string().min(1).max(40), accountId: z.string().max(80).optional() }).parse(p);
+      const from = new Date(x.from);
+      const to = new Date(x.to);
+      if (Number.isNaN(from.getTime()) || Number.isNaN(to.getTime()) || to <= from) throw new CoreError('INVALID_ARGUMENT', 'from and to must be times, with to after from');
+      if (to.getTime() - from.getTime() > 400 * 86_400_000) throw new CoreError('INVALID_ARGUMENT', 'Ask for at most 400 days at a time');
+      return k.calendar.events(from, to, x.accountId);
+    },
+    'calendar.addLink': (p) => k.calendar.addLink(z.object({ name: z.string().max(80), url: z.string().min(1).max(2000), color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional() }).parse(p)),
+    'calendar.signIn': () => k.calendar.signIn(),
+    'calendar.cancelSignIn': () => k.calendar.cancelSignIn(),
+    'calendar.update': (p) => {
+      const { id, ...patch } = z
+        .object({
+          id: z.string().min(1).max(80),
+          name: z.string().max(80).optional(),
+          color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+          enabled: z.boolean().optional(),
+          calendars: z.array(z.object({ id: z.string().min(1).max(400), enabled: z.boolean() })).max(200).optional(),
+        })
+        .parse(p);
+      return k.calendar.update(id, patch);
+    },
+    'calendar.remove': (p) => k.calendar.remove(Id.parse(p).id),
+    'calendar.sync': async (p) => {
+      const x = z.object({ id: z.string().max(80).optional() }).optional().parse(p);
+      if (x?.id) await k.calendar.sync(x.id);
+      else await k.calendar.syncAll();
+      return k.calendar.status();
+    },
+    'calendar.create': (p) =>
+      k.calendar.create(
+        z
+          .object({
+            accountId: z.string().max(80).optional(),
+            calendarId: z.string().max(400).optional(),
+            title: z.string().trim().min(1).max(255),
+            start: z.string().min(1).max(40),
+            end: z.string().max(40).optional(),
+            durationMinutes: z.number().int().min(5).max(1440).optional(),
+            allDay: z.boolean().optional(),
+            location: z.string().max(255).optional(),
+            notes: z.string().max(4000).optional(),
+          })
+          .parse(p),
+      ),
+    'calendar.delete': (p) => {
+      const x = z.object({ accountId: z.string().min(1).max(80), id: z.string().min(1).max(400) }).parse(p);
+      return k.calendar.delete(x.accountId, x.id);
+    },
+
     // ------------------------------------------------------------------------------- fun and safety
     'fun.trophies': () => k.trophies.state(),
 

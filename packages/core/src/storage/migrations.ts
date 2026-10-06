@@ -276,6 +276,43 @@ export const MIGRATIONS: Migration[] = [
     up: `ALTER TABLE conversations ADD COLUMN project_id TEXT;
       CREATE INDEX conversations_project ON conversations (project_id);`,
   },
+  {
+    version: 6,
+    name: 'calendar',
+    up: `
+      CREATE TABLE calendar_accounts (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        name TEXT NOT NULL,
+        address TEXT,
+        color TEXT NOT NULL,
+        enabled INTEGER NOT NULL DEFAULT 1,
+        can_write INTEGER NOT NULL DEFAULT 0,
+        calendars TEXT NOT NULL DEFAULT '[]',
+        config TEXT NOT NULL DEFAULT '{}',
+        last_sync_at TEXT,
+        last_error TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE calendar_events (
+        account_id TEXT NOT NULL,
+        calendar_id TEXT NOT NULL,
+        id TEXT NOT NULL,
+        title TEXT NOT NULL,
+        start TEXT NOT NULL,
+        end TEXT NOT NULL,
+        all_day INTEGER NOT NULL DEFAULT 0,
+        location TEXT,
+        organizer TEXT,
+        join_url TEXT,
+        web_link TEXT,
+        show_as TEXT NOT NULL DEFAULT 'busy',
+        cancelled INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (account_id, id)
+      );
+      CREATE INDEX calendar_events_start ON calendar_events (start);
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

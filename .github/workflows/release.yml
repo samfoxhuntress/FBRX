@@ -6,6 +6,8 @@
 #
 # Repository secrets (all optional; unsigned builds are produced when signing secrets are missing):
 #   FBRX_LICENSE_PUBLIC_KEY      PEM from `npm run keys:generate` (embedded so installs verify licenses offline)
+#   FBRX_MS_CLIENT_ID            (a variable or secret) Microsoft Entra app (client) ID built in for Outlook / Microsoft 365
+#                                calendar sign-in; see docs/CALENDAR.md. Without it, people or FBRX Command set their own
 #   MAC_CSC_LINK, MAC_CSC_KEY_PASSWORD           base64 .p12 "Developer ID Application" certificate + password
 #   APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID   notarization (required for Gatekeeper on macOS)
 #   Windows, either:
@@ -80,6 +82,7 @@ jobs:
             package: package:win
     env:
       FBRX_LICENSE_PUBLIC_KEY: ${{ secrets.FBRX_LICENSE_PUBLIC_KEY }}
+      FBRX_MS_CLIENT_ID: ${{ vars.FBRX_MS_CLIENT_ID || secrets.FBRX_MS_CLIENT_ID }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:
       - uses: actions/checkout@v5

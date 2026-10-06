@@ -187,6 +187,20 @@ across updates) and computers **pin** it:
   device is `execute` and making guest codes `write`, so they go through policy and approvals. Saving, removing,
   restarting and making codes from the API are reserved for the person at the computer.
 
+## Calendar
+
+* Outlook / Microsoft 365 sign-in is authorization code with PKCE in the person's own browser, back to a one-time
+  loopback listener (127.0.0.1 and ::1 only, one request with the expected `state`, closed after use or 10 minutes).
+  FBRX never handles the password.
+* The refresh token, and a calendar link (which is itself a credential), are internal vault secrets
+  (`fbrx.calendar.<id>`); access tokens live only in memory. The agent, plugins, the Local API and remote commands
+  cannot read them.
+* Reading is a `read` tool; adding an event is `write` and goes through policy and approvals; it never invites
+  anyone. Plugins need the `calendar` permission and get no meeting links or organizers. Event titles are marked
+  private for presenter-safe mode.
+* Adding, removing, signing in, deleting events and reading events through the API are reserved for the person at
+  the computer. See [CALENDAR.md](CALENDAR.md).
+
 ## Presenter-safe mode
 
 While it is on, the core drops desktop notifications (an `error` one becomes a content-free "needs your attention"),

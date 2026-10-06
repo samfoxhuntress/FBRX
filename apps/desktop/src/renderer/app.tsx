@@ -32,6 +32,7 @@ const SettingsPage = lazy(() => import('./pages/settings').then((m) => ({ defaul
 const TasksPage = lazy(() => import('./pages/tasks').then((m) => ({ default: m.TasksPage })));
 const NotesPage = lazy(() => import('./pages/notes').then((m) => ({ default: m.NotesPage })));
 const ProjectsPage = lazy(() => import('./pages/projects').then((m) => ({ default: m.ProjectsPage })));
+const CalendarPage = lazy(() => import('./pages/calendar').then((m) => ({ default: m.CalendarPage })));
 const SnippetsPage = lazy(() => import('./pages/snippets').then((m) => ({ default: m.SnippetsPage })));
 const FilesPage = lazy(() => import('./pages/files').then((m) => ({ default: m.FilesPage })));
 const ProcessesPage = lazy(() => import('./pages/processes').then((m) => ({ default: m.ProcessesPage })));
@@ -58,6 +59,7 @@ export type Route =
   | 'tasks'
   | 'notes'
   | 'projects'
+  | 'calendar'
   | 'snippets'
   | 'storage'
   | 'security'
@@ -292,6 +294,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'alerts', label: 'Alerts', icon: 'bell', count: alertCounts?.unread, section: 'Command' },
     // Once the computer belongs to an organization: tickets to IT (and, on receivers, everyone's tickets).
     ...(enrolled ? [{ id: 'helpdesk', label: learner ? 'Get help' : 'Help desk', icon: 'lifebuoy' as IconName, count: helpdeskCount || undefined, section: 'Command' }] : []),
+    { id: 'calendar', label: 'Calendar', icon: 'calendar', section: 'Workspace' },
     { id: 'tasks', label: 'Tasks', icon: 'tasks', section: 'Workspace' },
     { id: 'notes', label: 'Notes', icon: 'note', section: 'Workspace' },
     { id: 'projects', label: 'Projects', icon: 'layers', section: 'Workspace' },
@@ -340,6 +343,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return enrolled ? <HelpdeskPage learner={learner} /> : ultraOnly('The help desk', 'Join your organization’s FBRX Command and a Help desk tab appears here for sending problems to IT.');
       case 'alerts':
         return <AlertsPage />;
+      case 'calendar':
+        return <CalendarPage agentName={agentName} learner={learner} />;
       case 'tasks':
         return <TasksPage />;
       case 'notes':
@@ -552,11 +557,11 @@ function TopBar({
  * it; collapsed to icons, its pages slide out beside it.
  */
 /** What a student's or child's computer (FBRX OS Education or Home) shows. */
-const LEARNER_PAGES = new Set(['home', 'agent', 'helpdesk', 'tasks', 'notes', 'toolbox', 'library', 'settings']);
+const LEARNER_PAGES = new Set(['home', 'agent', 'helpdesk', 'calendar', 'tasks', 'notes', 'toolbox', 'library', 'settings']);
 
 const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; basicHint?: string; learnerHint?: string; icon: IconName }> = [
   { id: 'bridge', section: 'Command', label: 'Bridge', hint: 'Glass, agent, alerts', learnerHint: 'Home, helper, get help', icon: 'compass' },
-  { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Tasks, notes, projects', learnerHint: 'Notes and to-dos', icon: 'layers' },
+  { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Calendar, tasks, notes', learnerHint: 'Calendar, notes and to-dos', icon: 'layers' },
   { id: 'pitstop', section: 'PC care', label: 'Pit Stop', hint: 'Storage, security, repairs', icon: 'wrench' },
   { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', learnerHint: 'Tools and stories', icon: 'toolbox' },
   { id: 'orbit', section: 'Connect', label: 'Orbit', hint: 'Phone, mesh, AI models', basicHint: 'AI models', icon: 'orbit' },

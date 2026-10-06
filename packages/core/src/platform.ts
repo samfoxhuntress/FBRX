@@ -63,6 +63,8 @@ export interface PlatformAdapter {
   pluginWorkerPath: string;
   /** Ed25519 public keys (PEM) trusted to sign licenses. Embedded at build time. */
   licensePublicKeys: string[];
+  /** Microsoft app (client) ID for signing in to Outlook / Microsoft 365 calendars. Embedded at build time, if any. */
+  microsoftClientId?: string | null;
   /** Run plugins under the Node permission model. Disable only for debugging. */
   sandboxPlugins: boolean;
   updates: UpdateController | null;

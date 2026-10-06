@@ -11,7 +11,7 @@ network on UniFi, staff accounts in Google Workspace.
 | --- | --- | --- | --- |
 | Runs | FBRX Endpoint **Basic** | FBRX Endpoint **Ultra** | **FBRX OS Education** |
 | Agent | Fabrix with every tool, asking before it changes anything | Fabrix with every tool, plus the network | A learning helper that only talks: no files, apps, websites or commands |
-| Pages | The everyday ones (see COMMAND_CENTER.md) | Everything, including Network Center → Environments (UniFi), Task Manager, Terminal | Home, the helper, Get help, Tasks, Notes, Toolbox, Library, Settings |
+| Pages | The everyday ones (see COMMAND_CENTER.md) | Everything, including Network Center → Environments (UniFi), Task Manager, Terminal | Home, the helper, Get help, Calendar, Tasks, Notes, Toolbox, Library, Settings |
 | Classroom defaults | Presenter-safe mode turns on with a projector, chats start offline, no jokes | Same, changeable | Same, and the fun extras, mesh and local API locked off |
 | Help desk | Sends tickets | Receives everyone's tickets | Sends tickets ("Get help") |
 

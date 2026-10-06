@@ -47,6 +47,10 @@ license with a kind also sets it. Unattended installs can pick the first tenant'
 | | **Audit log** | Every admin action and device enrollment, hash-chained and verifiable |
 | | Account (your name, top right) | Change your password (signs out your other sessions) and enable TOTP MFA |
 
+**Calendars for everyone:** to let computers sign in to Outlook / Microsoft 365 calendars, put your Microsoft app
+(client) ID in a profile's settings, `{ "calendar": { "microsoft": { "clientId": "…", "tenant": "yourdomain" } } }`, and
+lock `calendar.microsoft` if people should not change it. See [CALENDAR.md](CALENDAR.md).
+
 Changes to profiles, groups, credentials and licenses are pushed to online devices over their WebSocket within
 seconds; offline devices pick them up when they reconnect. Device detail and the overview update live.
 

@@ -124,6 +124,8 @@ export const Icons = {
   briefcase: make(['M3 7h18v13H3z', 'M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2', 'M3 13h18']),
   house: make(['M3 11l9-8 9 8', 'M5 9.5V21h14V9.5', 'M10 21v-6h4v6']),
   more: make(['M5 12h.01', 'M12 12h.01', 'M19 12h.01']),
+  calendar: make(['M3 5h18v16H3z', 'M3 10h18', 'M8 3v4', 'M16 3v4', 'M7.5 14h.01', 'M12 14h.01', 'M16.5 14h.01', 'M7.5 17.5h.01', 'M12 17.5h.01']),
+  video: make(['M2 6h13v12H2z', 'M15 10l7-4v12l-7-4']),
 };
 
 export type IconName = keyof typeof Icons;

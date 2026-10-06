@@ -61,6 +61,8 @@ import { VendorDb } from './network/vendors';
 import { DeviceConsoles } from './network/device-console';
 import { deviceConsoleTools } from './tools/builtin/device-console-tools';
 import { netEnvTools } from './tools/builtin/netenv-tools';
+import { calendarTools } from './tools/builtin/calendar-tools';
+import { CalendarService } from './calendar/calendar-service';
 import { helpdeskTools } from './tools/builtin/helpdesk-tools';
 import { NetEnvironments } from './network/environments';
 import { Helpdesk } from './fleet/helpdesk';
@@ -148,6 +150,7 @@ export class Kernel {
   readonly alerts: AlertEngine;
   readonly net: NetDiag;
   readonly netenv: NetEnvironments;
+  readonly calendar: CalendarService;
   readonly helpdesk: Helpdesk;
   readonly vendors: VendorDb;
   readonly consoles: DeviceConsoles;
@@ -270,6 +273,8 @@ export class Kernel {
       checkUrl: urlCheck,
       notify: (title, body, source) => this.notify({ title, body, level: 'info', source }),
       log: L('plugins'),
+      calendar: (from, to) =>
+        this.calendar.events(from, to).map((e) => ({ title: e.title, start: e.start, end: e.end, allDay: e.allDay, location: e.location, showAs: e.showAs, cancelled: e.cancelled, calendar: e.calendarName })),
       events: this.events,
     });
     this.connectors = new ConnectorHub({
@@ -352,6 +357,17 @@ export class Kernel {
     });
     this.net = new NetDiag({ db: this.db, events: this.events, vendors: this.vendors, internet: () => this.internetAllowed() });
     this.netenv = new NetEnvironments({ meta: this.meta, vault: this.vault, events: this.events, log: L('netenv'), unavailable: () => this.ultraOnly('Network environments') });
+    this.calendar = new CalendarService({
+      db: this.db,
+      vault: this.vault,
+      events: this.events,
+      log: L('calendar'),
+      settings: () => this.settings.get().calendar,
+      locked: () => this.settings.effective().locked,
+      builtInClientId: this.platform.microsoftClientId ?? null,
+      internet: () => this.internetAllowed(),
+      notify: (title, body) => this.notify({ title, body, level: 'info', source: 'calendar' }),
+    });
     this.trophies = new Trophies({ meta: this.meta, events: this.events, enabled: () => funEnabled(this.settings.get(), this.license.status().tier) });
     this.migrator = new Migrator({
       events: this.events,
@@ -540,6 +556,7 @@ export class Kernel {
         }
       }),
       this.events.on('settings.changed', () => this.presenterChanged()),
+      this.events.on('settings.changed', () => this.calendar.schedule()),
     );
     this.disposers.push(this.vault.onChange(() => this.redactor.setSecrets(this.vault.valuesForRedaction())));
     // Licensed features (plugins, connectors, …) start or stop as soon as a license is activated, pushed or revoked.
@@ -657,6 +674,7 @@ export class Kernel {
           ...workspaceTools(this.workspace),
           ...deviceConsoleTools(this.consoles),
           ...netEnvTools(this.netenv, () => this.ultraOnly('Network environments')),
+          ...calendarTools(this.calendar),
           ...helpdeskTools(this.helpdesk, () => (this.fleet.enrolled ? null : 'This computer is not part of an organization, so there is no help desk to send to')),
           ...pcTools({ monitor: this.monitor, net: this.net, alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined) }),
         ]);
@@ -755,6 +773,15 @@ export class Kernel {
         this.alerts.stop();
         this.monitor.stop();
       },
+    });
+    s.register({
+      name: 'calendar',
+      title: 'Calendar',
+      description: 'Outlook / Microsoft 365 and calendar links: syncing and meeting reminders',
+      dependsOn: ['storage'],
+      // An account that cannot be updated says so on the Calendar page; it is not a problem with this computer.
+      start: () => this.calendar.start(),
+      stop: () => this.calendar.stop(),
     });
     s.register({
       name: 'mesh',

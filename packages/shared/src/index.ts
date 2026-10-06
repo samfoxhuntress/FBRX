@@ -17,3 +17,4 @@ export * from './netenv';
 export * from './helpdesk';
 export * from './editions';
 export * from './mdm';
+export * from './calendar';
