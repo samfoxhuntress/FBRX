@@ -164,7 +164,7 @@ export function chatEgg(raw: string, persona: PersonaValue, rand: Rand = Math.ra
 
   if (wookiee) {
     if (/laugh it up,?\s*fuzz\s*ball/i.test(text)) {
-      return { reply: 'Rrrgh… *grumbles, hands back the controls*\n\nFine. Plain English again. What do you need?', persona: null, trophies: ['fuzzball'] };
+      return { reply: 'Rrrgh… *grumbles, hands back the controls*', persona: null, trophies: ['fuzzball'] };
     }
     const n = count(persona!);
     if (/^no{3,}[!.]*$/i.test(text)) return { reply: 'No, I am your father.', persona: `wookiee:${n}`, trophies: ['father'] };
@@ -173,7 +173,7 @@ export function chatEgg(raw: string, persona: PersonaValue, rand: Rand = Math.ra
   }
   if (wingman) {
     if (/^(that'?s\s+a\s+copy|that\s+is\s+a\s+copy|wheels\s+down|return(ing)?\s+to\s+base|rtb|land\s+(the|this)\s+plane|normal\s+mode|over\s+and\s+out)\b/i.test(text)) {
-      return { reply: '📻 Wheels down, canopy up. Nice flying, partner. Back to plain English: what do you need?', persona: null, trophies: [] };
+      return { reply: '📻 Wheels down, canopy up. Nice flying, partner.', persona: null, trophies: [] };
     }
     const n = count(persona!);
     if (!stapler) return { reply: wingmanReply(rand), persona: `wingman:${n}`, trophies: n >= 5 ? ['topwing'] : [] };
@@ -186,7 +186,7 @@ export function chatEgg(raw: string, persona: PersonaValue, rand: Rand = Math.ra
   if (/^pc load (letter|better)\b/i.test(text)) {
     return {
       reply: jargon
-        ? "PC load letter? What does that even mean?\n\n…Fine. The stapler stays in storage, and I'm back to talking like a normal assistant. What do you need?"
+        ? 'PC load letter? What does that even mean?\n\n…Fine. The stapler stays in storage.'
         : 'PC load letter?! What the heck does that mean? *eyes the printer suspiciously*',
       persona: jargon ? null : undefined,
       trophies: ['pcload'],
@@ -194,7 +194,7 @@ export function chatEgg(raw: string, persona: PersonaValue, rand: Rand = Math.ra
   }
   if (jargon) {
     if (/^(i quit|normal mode|stop (the )?jargon|no more jargon)\b/i.test(text)) {
-      return { reply: "Yeah… I'm gonna need you to go ahead and… fine. Back to normal. What do you need?", persona: null, trophies: [] };
+      return { reply: "Yeah… I'm gonna need you to go ahead and… fine.", persona: null, trophies: [] };
     }
     const n = persona === 'lumbergh' ? 1 : count(persona!);
     return { reply: jargonReply(rand), persona: `jargon:${n}`, trophies: n >= 5 ? ['synergy'] : [] };

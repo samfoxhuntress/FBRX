@@ -84,6 +84,11 @@ const UNTRUSTED_PREFIX =
 export class AgentRuntime {
   private readonly runs = new Map<string, ActiveRun>();
 
+  /** Chats the agent is answering in right now (not to be deleted from under it). */
+  busyConversations(): Set<string> {
+    return new Set([...this.runs.values()].map((r) => r.conversationId));
+  }
+
   constructor(
     private readonly d: {
       store: ConversationStore;

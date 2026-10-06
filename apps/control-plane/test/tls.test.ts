@@ -88,6 +88,9 @@ describe('FBRX Command with its own certificate', () => {
     kernels.push({ k, dir });
     k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, profile: { name } });
     await k.start();
+    // The background monitor and alert checks only add load here (PowerShell on Windows).
+    k.alerts.stop();
+    k.monitor.stop();
     return k;
   };
 
@@ -142,7 +145,7 @@ describe('FBRX Command with its own certificate', () => {
     expect((await api('GET', `/v1/admin/helpdesk/tickets/${t.id}`)).subject).toBe('Printer is offline');
     const dev = (await api('GET', '/v1/admin/devices')).find((d: any) => d.name === 'Alex laptop');
     expect(dev).toMatchObject({ online: true, audience: 'parent' });
-  });
+  }, 60_000);
 
   it('serves the console on this computer over plain HTTP, live updates included', async () => {
     const ws = await new Promise<string>((resolve, reject) => {

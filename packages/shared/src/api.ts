@@ -184,6 +184,8 @@ export interface ConversationSummary {
   origin: InvocationOrigin;
   /** Offline chats ask before the agent uses an internet tool for the first time. */
   offline: boolean;
+  /** The project this chat belongs to (Projects), or null. */
+  projectId: string | null;
 }
 
 export interface Conversation extends ConversationSummary {
@@ -500,10 +502,20 @@ export interface CoreMethods extends ExtMethods {
   'ai.models': (p: { providerId: string }) => ModelInfo[];
   'ai.chat': (p: { conversationId?: string; message: string; providerId?: string; model?: string; offline?: boolean }) => { runId: string; conversationId: string };
   'ai.cancel': (p: { runId: string }) => { cancelled: boolean };
-  'ai.conversations.list': () => ConversationSummary[];
+  /** projectId: only that project's chats ("none": chats in no project). */
+  'ai.conversations.list': (p?: { projectId?: string | 'none' }) => ConversationSummary[];
   'ai.conversations.get': (p: { id: string }) => Conversation;
   'ai.conversations.rename': (p: { id: string; title: string }) => ConversationSummary;
   'ai.conversations.delete': (p: { id: string }) => { deleted: boolean };
+  /** Deletes several chats at once (a chat the agent is still answering in is skipped). */
+  'ai.conversations.deleteMany': (p: { ids: string[] }) => { deleted: number; skipped: number };
+  /**
+   * Cleans up the history: deletes chats not touched for olderThanDays (0 = all), keeping chats in projects unless
+   * includeProjects. dryRun only counts them.
+   */
+  'ai.conversations.cleanup': (p: { olderThanDays: number; includeProjects?: boolean; dryRun?: boolean }) => { deleted: number };
+  /** Adds a chat to a project (null takes it out). */
+  'ai.conversations.setProject': (p: { id: string; projectId: string | null }) => ConversationSummary;
   'ai.conversations.setOffline': (p: { id: string; offline: boolean }) => ConversationSummary;
 
   'runtime.status': () => RuntimeStatus;

@@ -1,7 +1,7 @@
 {
   "name": "@fbrx/desktop",
   "productName": "FBRX OS",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "private": true,
   "description": "FBRX OS — the Fabrics Operating System desktop super-tool with a governed, local-first AI agent",
   "author": "FBRX",

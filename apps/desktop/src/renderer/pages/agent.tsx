@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentEvent, ApprovalRequest, ChatMessage, ProviderStatus, ToolCallRecord } from '@fbrx/shared';
 import { NATURAL_PREFIX, addressAs, funEnabled } from '@fbrx/shared';
-import { Button, Callout, Card, Icons, Modal, Select, Status, TextArea, timeAgo, useAction, useConfirm, type IconName, FbrxMark } from '@fbrx/ui';
+import { Button, Callout, Card, Icons, Modal, Select, Status, TextArea, useAction, useConfirm, type IconName, FbrxMark } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
 import { Markdown } from '../markdown';
@@ -16,6 +16,7 @@ import { useVoiceChat } from '../voice/use-voice-chat';
 import { ModelDownload } from './settings-voice';
 import { summonGoose } from '../fun';
 import { useLearner, useTier } from '../edition';
+import { ChatHistory, type ChatFilter } from '../chat-history';
 
 const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'activity', title: 'Check my PC', prompt: 'Give me a quick health check of this computer: performance right now, storage, security status and any recent errors. Tell me what (if anything) needs attention.' },
@@ -148,6 +149,10 @@ export function AgentPage({ agentName }: { agentName: string }) {
   // Student computers: just the conversation (the school picks the model; the helper has no internet tools).
   const learner = useLearner();
   const [selected, setSelected] = useState<string | null>(null);
+  // Which chats the history shows; a new chat started while a project is shown goes into that project.
+  const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
+  const filterRef = useRef(chatFilter);
+  filterRef.current = chatFilter;
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [streaming, setStreaming] = useState<{ messageId: string; text: string } | null>(null);
   const [activeRun, setActiveRun] = useState<{ runId: string; conversationId: string } | null>(null);
@@ -336,6 +341,13 @@ export function AgentPage({ agentName }: { agentName: string }) {
     }
     const pick = () => {
       const arg = routeArg();
+      // From Projects: show that project's chats.
+      if (arg?.startsWith('project/')) {
+        setChatFilter(decodeURIComponent(arg.slice(8)));
+        navigate('agent');
+        void loadConversation(null);
+        return;
+      }
       if (arg?.startsWith('ask/')) {
         const text = decodeURIComponent(arg.slice(4));
         navigate('agent');
@@ -364,6 +376,8 @@ export function AgentPage({ agentName }: { agentName: string }) {
       if (/^talk\s+to\s+me,?\s+goose\W*$/i.test(message) && funEnabled(settings.data?.settings, tier)) summonGoose();
       if (!selected) {
         setSelected(r.conversationId);
+        const f = filterRef.current;
+        if (f !== 'all' && f !== 'none' && !learner) await call('ai.conversations.setProject', { id: r.conversationId, projectId: f }).catch(() => undefined);
         convs.reload();
       }
     } catch (err) {
@@ -383,17 +397,16 @@ export function AgentPage({ agentName }: { agentName: string }) {
   return (
     <div className="agent">
       <Card className="agent-list" title="Conversations" actions={<Button size="sm" icon="plus" onClick={() => void loadConversation(null)} aria-label="New conversation" />} flush>
-        <div className="agent-list-items private">
-          {(convs.data ?? []).map((c) => (
-            <button key={c.id} className={`agent-conv${selected === c.id ? ' active' : ''}`} onClick={() => void loadConversation(c.id)}>
-              <div className="agent-conv-title">{c.title}</div>
-              <div className="agent-conv-sub">
-                {timeAgo(c.updatedAt)} · {c.messageCount} messages{c.origin === 'remote' ? ' · remote' : ''}
-              </div>
-            </button>
-          ))}
-          {!convs.data?.length && <div className="fx-muted" style={{ padding: 12, fontSize: 13 }}>No conversations yet.</div>}
-        </div>
+        <ChatHistory
+          chats={convs.data ?? []}
+          reload={convs.reload}
+          selected={selected}
+          busyId={activeRun?.conversationId ?? null}
+          learner={learner}
+          filter={chatFilter}
+          setFilter={setChatFilter}
+          onOpen={(id) => void loadConversation(id)}
+        />
         {!learner && (
           <div className="agent-list-foot">
             <EmergencyStop compact />

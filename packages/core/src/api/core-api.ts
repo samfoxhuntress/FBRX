@@ -21,6 +21,8 @@ const USER_ONLY = new Set<string>([
   'vault.passwordOnStart',
   'vault.reset',
   'backup.restore',
+  'ai.conversations.deleteMany',
+  'ai.conversations.cleanup',
   'fleet.enroll',
   'fleet.unenroll',
   'governance.updatePolicy',
@@ -146,13 +148,27 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       return k.agent.runToCompletion({ ...q, origin: ctx.origin, actor: ctx.actor });
     },
     'ai.cancel': (p) => ({ cancelled: k.agent.cancel(z.object({ runId: z.string() }).parse(p).runId) }),
-    'ai.conversations.list': () => k.conversations.list(),
+    'ai.conversations.list': (p) => k.conversations.list(z.object({ projectId: z.string().max(64).optional() }).parse(p ?? {})),
     'ai.conversations.get': (p) => k.conversations.get(IdSchema.parse(p).id),
     'ai.conversations.rename': (p) => {
       const q = z.object({ id: z.string(), title: z.string() }).parse(p);
       return k.conversations.rename(q.id, q.title);
     },
     'ai.conversations.delete': (p) => ({ deleted: k.conversations.delete(IdSchema.parse(p).id) }),
+    'ai.conversations.deleteMany': (p) => k.conversations.deleteMany(z.object({ ids: z.array(z.string().max(64)).max(5000) }).parse(p).ids, k.agent.busyConversations()),
+    'ai.conversations.cleanup': (p) => {
+      const q = z.object({ olderThanDays: z.number().int().min(0).max(36500), includeProjects: z.boolean().optional(), dryRun: z.boolean().optional() }).parse(p);
+      const ids = k.conversations.stale(q.olderThanDays, !!q.includeProjects);
+      const busy = k.agent.busyConversations();
+      if (q.dryRun) return { deleted: ids.filter((id) => !busy.has(id)).length };
+      return { deleted: k.conversations.deleteMany(ids, busy).deleted };
+    },
+    'ai.conversations.setProject': (p) => {
+      const q = z.object({ id: z.string(), projectId: z.string().max(64).nullable() }).parse(p);
+      const s = k.conversations.setProject(q.id, q.projectId);
+      k.events.emit('workspace.changed', { kind: 'projects' });
+      return s;
+    },
     'ai.conversations.setOffline': (p) => {
       const q = z.object({ id: z.string(), offline: z.boolean() }).parse(p);
       return k.agent.setOffline(q.id, q.offline);

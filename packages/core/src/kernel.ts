@@ -1125,12 +1125,16 @@ export class Kernel {
   private async ticketDiagnostics(): Promise<Record<string, unknown>> {
     const s = await this.status();
     const hb = await this.heartbeatStatus();
+    // The network lookup can take a while on Windows; a ticket never waits more than a few seconds for it.
     let net: { ip: string | null; gateway: string | null; dns: string[] } | null = null;
+    let timer: NodeJS.Timeout | undefined;
     try {
-      const c = await this.net.context();
-      net = { ip: c.ip, gateway: c.gateway, dns: c.dns.slice(0, 3) };
+      const c = await Promise.race([this.net.context(), new Promise<null>((r) => (timer = setTimeout(() => r(null), 3000)))]);
+      net = c ? { ip: c.ip, gateway: c.gateway, dns: c.dns.slice(0, 3) } : null;
     } catch {
       net = null;
+    } finally {
+      clearTimeout(timer);
     }
     return {
       computer: s.deviceName,

@@ -123,6 +123,16 @@ share it (recent Claude models, and local models with a reasoning mode such as D
 Ollama, vLLM or OpenRouter). The thinking stays folded under each answer as **How Fabrix thought about it**. It is
 for you to read (it is not added to the conversation the model sees as text) and can be turned off in **Settings → Agent → Work budget**.
 
+### Your chat history
+
+The **⋯** next to a chat renames it, adds it to a project (or a new one), takes it out again, or deletes it. **Select**
+picks several chats to add to a project or delete together, and **Clean up** deletes chats you have not touched for
+a week, a month, three months, a year, or all of them; it shows how many first, and keeps chats in projects unless
+you include them. The list above the chats shows all of them, those in no project, or one project's; a new chat
+started while a project is shown goes into it, and **Projects → Chats** opens a project's chats. Deleting a project
+never deletes its chats: they go back to the main history. Only the person at the computer can delete chats in bulk
+(not the Local API or FBRX Command).
+
 ## Everyday
 
 | Page | What it does |
@@ -131,7 +141,7 @@ for you to read (it is not added to the conversation the model sees as text) and
 | **Fabrix** | The agent. Six starter cards (check my PC, plan my day, free up space, slow internet, is this link safe, explain crashes). Each chat is **Offline** or **Online**: new chats start offline (Settings → Agent); the first internet tool in an offline chat asks you to put that chat online |
 | **Tasks** | Board (drag between To do / In progress / Done) and list views, priorities, due dates, projects, quick add |
 | **Notes** | Markdown notes with preview, tags, pinning, projects and autosave |
-| **Projects** | Progress, overdue tasks, milestones, linked notes and snippets |
+| **Projects** | Progress, overdue tasks, milestones, linked notes, snippets and chats |
 | **Snippets** | Reusable commands and text; press Enter in Spotlight to copy one |
 | **Files** | Places and drives, folder search, previews (text and images), a plain-text editor |
 | **Task Manager** | Three tabs. **Processes**: live list by CPU or memory with search, details and End task (core Windows processes are protected); *What is this?* on any process, and *What's using my PC?* / *Anything suspicious?* in the Fabrix panel beside it. **Performance**: live processor, memory and network graphs, every core, uptime, battery and temperature. **Event Viewer**: see below |

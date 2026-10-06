@@ -10,6 +10,7 @@ interface ConvRow {
   model: string | null;
   origin: InvocationOrigin;
   offline: number;
+  project_id: string | null;
   created_at: string;
   updated_at: string;
   message_count?: number;
@@ -76,14 +77,46 @@ export class ConversationStore {
     return toSummary(row);
   }
 
-  list(limit = 200): ConversationSummary[] {
+  list(opts: { projectId?: string | 'none'; limit?: number } = {}): ConversationSummary[] {
+    const where = opts.projectId === 'none' ? 'WHERE c.project_id IS NULL' : opts.projectId ? 'WHERE c.project_id = ?' : '';
+    const args: string[] = opts.projectId && opts.projectId !== 'none' ? [opts.projectId] : [];
     return this.db
       .all<ConvRow>(
         `SELECT c.*, (SELECT COUNT(*) FROM messages m WHERE m.conversation_id = c.id AND m.role IN ('user','assistant')) AS message_count
-         FROM conversations c ORDER BY c.updated_at DESC LIMIT ?`,
-        limit,
+         FROM conversations c ${where} ORDER BY c.updated_at DESC LIMIT ?`,
+        ...args,
+        opts.limit ?? 500,
       )
       .map(toSummary);
+  }
+
+  setProject(id: string, projectId: string | null): ConversationSummary {
+    if (projectId && !this.db.get('SELECT 1 FROM projects WHERE id = ?', projectId)) throw new CoreError('NOT_FOUND', 'Project not found');
+    // Not touching updated_at: moving a chat does not make it recent.
+    const { changes } = this.db.run('UPDATE conversations SET project_id = ? WHERE id = ?', projectId, id);
+    if (!changes) throw new CoreError('NOT_FOUND', `Conversation ${id} not found`);
+    return this.summary(id);
+  }
+
+  /** Deletes the given chats, except any listed in keep (chats the agent is still answering in). */
+  deleteMany(ids: string[], keep: ReadonlySet<string> = new Set()): { deleted: number; skipped: number } {
+    let deleted = 0;
+    let skipped = 0;
+    this.db.tx(() => {
+      for (const id of new Set(ids)) {
+        if (keep.has(id)) skipped++;
+        else deleted += this.db.run('DELETE FROM conversations WHERE id = ?', id).changes;
+      }
+    });
+    return { deleted, skipped };
+  }
+
+  /** Chats last touched before the cutoff (all chats when olderThanDays is 0), outside projects unless includeProjects. */
+  stale(olderThanDays: number, includeProjects: boolean): string[] {
+    const cutoff = new Date(Date.now() - olderThanDays * 86400_000).toISOString();
+    return this.db
+      .all<{ id: string }>(`SELECT id FROM conversations WHERE updated_at < ? ${includeProjects ? '' : 'AND project_id IS NULL'}`, olderThanDays > 0 ? cutoff : '9999')
+      .map((r) => r.id);
   }
 
   get(id: string): Conversation {
@@ -157,6 +190,7 @@ function toSummary(r: ConvRow): ConversationSummary {
     model: r.model,
     origin: r.origin,
     offline: !!r.offline,
+    projectId: r.project_id ?? null,
   };
 }
 

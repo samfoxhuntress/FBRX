@@ -113,7 +113,7 @@ export function ProjectsPage() {
   return (
     <Page
       title="Projects"
-      description="Group tasks, notes and snippets, track milestones and see what is overdue."
+      description="Group tasks, notes, snippets and chats, track milestones and see what is overdue."
       actions={
         <Button variant="primary" icon="plus" onClick={() => setEditing({})}>
           New project
@@ -165,7 +165,7 @@ export function ProjectsPage() {
                     </div>
                   )}
                   <div className="fx-muted" style={{ fontSize: 12 }}>
-                    {p.notes} note(s) · {p.snippets} snippet(s)
+                    {p.notes} note(s) · {p.snippets} snippet(s) · {p.chats} chat(s)
                   </div>
                   <div className="fx-actions">
                     <Button size="sm" icon="tasks" onClick={() => navigate('tasks')}>
@@ -173,6 +173,9 @@ export function ProjectsPage() {
                     </Button>
                     <Button size="sm" icon="note" onClick={() => navigate('notes')}>
                       Notes
+                    </Button>
+                    <Button size="sm" icon="message" title="This project's chats; a new chat started there joins the project" onClick={() => navigate(`agent/project/${encodeURIComponent(p.id)}`)}>
+                      Chats
                     </Button>
                   </div>
                 </div>
@@ -182,7 +185,7 @@ export function ProjectsPage() {
         </Grid>
       ) : (
         <Empty title="No projects yet" action={<Button variant="primary" icon="plus" onClick={() => setEditing({})}>Create a project</Button>}>
-          Projects collect the tasks, notes and snippets for one piece of work.
+          Projects collect the tasks, notes, snippets and chats for one piece of work.
         </Empty>
       )}
       {editing && <ProjectEditor project={editing} onClose={() => (setEditing(null), projects.reload())} />}

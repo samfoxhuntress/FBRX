@@ -101,7 +101,7 @@ describe('the stapler', () => {
       expect(llm.requests).toHaveLength(0);
 
       await kernel.call('ai.chat', { conversationId: first.conversationId, message: 'PC load better' }, USER);
-      expect(kernel.conversations.get(first.conversationId).messages.at(-1)!.content).toMatch(/back to talking like a normal assistant/);
+      expect(kernel.conversations.get(first.conversationId).messages.at(-1)!.content).toMatch(/The stapler stays in storage\.$/);
       expect(kernel.trophies.has('pcload')).toBe(true);
       await kernel.call('ai.chat', { conversationId: first.conversationId, message: 'And now?' }, USER);
       await waitFor(() => events.filter((e) => e.type === 'run.completed').length >= 4);
@@ -226,6 +226,7 @@ describe('chat eggs', () => {
     // The stapler still finds the manager, even mid-flight.
     expect(chatEgg('Has anyone seen my stapler?', persona)).toMatchObject({ persona: 'jargon:0', trophies: ['stapler'] });
     for (const q of ["That's a copy", 'that’s a copy.', 'That is a copy!', 'Wheels down', 'return to base', 'land the plane', 'normal mode']) expect(chatEgg(q, persona)).toMatchObject({ persona: null, trophies: [] });
+    expect(chatEgg("That's a copy", persona)!.reply).toBe('📻 Wheels down, canopy up. Nice flying, partner.');
   });
 
   it('turns Wookiee on "Chewie, we\'re home" until "Laugh it up, fuzzball", with the father line on Nooo', () => {

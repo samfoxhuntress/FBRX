@@ -238,11 +238,12 @@ export class WorkspaceStore {
            (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status = 'done') AS n_done,
            (SELECT COUNT(*) FROM tasks t WHERE t.project_id = p.id AND t.status != 'done' AND t.due IS NOT NULL AND substr(t.due, 1, 10) < ?) AS n_overdue,
            (SELECT COUNT(*) FROM notes n WHERE n.project_id = p.id) AS n_notes,
-           (SELECT COUNT(*) FROM snippets s WHERE s.project_id = p.id) AS n_snippets
+           (SELECT COUNT(*) FROM snippets s WHERE s.project_id = p.id) AS n_snippets,
+           (SELECT COUNT(*) FROM conversations c WHERE c.project_id = p.id) AS n_chats
          FROM projects p ORDER BY CASE p.status WHEN 'active' THEN 0 WHEN 'paused' THEN 1 ELSE 2 END, p.updated_at DESC`,
         today,
       )
-      .map((r) => ({ ...toProject(r), tasks: r.n_tasks, done: r.n_done, overdue: r.n_overdue, notes: r.n_notes, snippets: r.n_snippets }));
+      .map((r) => ({ ...toProject(r), tasks: r.n_tasks, done: r.n_done, overdue: r.n_overdue, notes: r.n_notes, snippets: r.n_snippets, chats: r.n_chats }));
   }
 
   getProject(id: string): Project {
@@ -296,6 +297,8 @@ export class WorkspaceStore {
         if (cascade) this.db.run(`DELETE FROM ${t} WHERE project_id = ?`, id);
         else this.db.run(`UPDATE ${t} SET project_id = NULL WHERE project_id = ?`, id);
       }
+      // Chats are never deleted with a project: they go back to the main history.
+      this.db.run('UPDATE conversations SET project_id = NULL WHERE project_id = ?', id);
       ok = this.db.run('DELETE FROM projects WHERE id = ?', id).changes > 0;
     });
     if (ok) for (const k of ['projects', 'tasks', 'notes', 'snippets'] as const) this.changed(k);

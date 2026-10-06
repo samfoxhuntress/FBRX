@@ -1,17 +1,18 @@
 {
   "product": "FBRX OS",
   "stage": "Alpha",
-  "version": "1.9.2",
+  "version": "1.9.3",
   "codename": "Bobbin",
   "released": "2026-10-06",
   "importance": "recommended",
-  "summary": "Install FBRX Command on a computer of your own with one double-click, and join it from the computers on your home or school network, no domain name needed.",
+  "summary": "Tidy up your chat history: delete old chats, clean up in one go, and keep chats with your projects.",
   "notes": [
-    "New next to the FBRX OS installers: \"Install FBRX Command\" (Windows and Mac). It installs FBRX Command, starts it whenever you log in, adds an FBRX Command icon, and opens the first-run page with its setup token filled in.",
-    "Home and school networks: FBRX Command serves HTTPS with its own certificate. Computers check its fingerprint once when they join (FBRX shows it; Deploy & enroll shows the same) and then trust nothing else.",
-    "FBRX Command signs licenses with the same key as \"Install FBRX OS\", so its licenses work on your computers.",
-    "Provisioning files, Mac profiles, Windows scripts and license keys from FBRX Command carry the certificate fingerprint, so computers join on their own.",
-    "Run the installer again to update FBRX Command, or with --uninstall to remove it; its data is kept."
+    "Chat history: each chat has a ⋯ menu to rename it, add it to a project, take it out, or delete it.",
+    "Select several chats to delete them or move them to a project together.",
+    "Clean up: delete every chat older than a week, a month, three months or a year. FBRX counts them first, and keeps chats that belong to a project unless you say otherwise.",
+    "Projects show how many chats they hold; \"Chats\" opens the history filtered to that project, and new chats started there stay with it.",
+    "Easter eggs now end on their own last line instead of a sign-off.",
+    "Help desk tickets no longer wait on a slow network lookup before they are sent."
   ],
   "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/heads/claude/fbrx-os-enterprise-app-bs7s2j.zip",
   "page": "https://github.com/samfoxhuntress/FBRX"

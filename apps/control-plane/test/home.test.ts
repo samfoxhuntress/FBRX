@@ -60,6 +60,9 @@ describe('FBRX Command for a family', () => {
     kernels.push({ k, dir });
     k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, profile: { name } });
     await k.start();
+    // The background monitor and alert checks only add load here (PowerShell on Windows).
+    k.alerts.stop();
+    k.monitor.stop();
     await k.call('fleet.enroll', { serverUrl: base, token: enrollToken, deviceName: name, ...(audience ? { audience } : {}) }, USER);
     await waitFor(() => k.fleet.status().state === 'online');
     return k;
@@ -139,7 +142,7 @@ describe('FBRX Command for a family', () => {
     expect(alert).toMatchObject({ severity: 'critical', deviceName: 'Milo laptop' });
     expect(alert.message).toContain('the child using Milo laptop');
     expect(JSON.stringify(alert)).not.toContain('want to die');
-  });
+  }, 60_000);
 
   it('turns "a student computer" into a child computer in a family', async () => {
     const k = await computer('Kitchen tablet', parentToken, 'student');

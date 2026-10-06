@@ -59,6 +59,9 @@ describe('FBRX Command for a school', () => {
     kernels.push({ k, dir });
     k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, profile: { name } });
     await k.start();
+    // The background monitor and alert checks only add load here (PowerShell on Windows).
+    k.alerts.stop();
+    k.monitor.stop();
     await k.call('fleet.enroll', { serverUrl: base, token: enrollToken, deviceName: name, ...(audience ? { audience } : {}) }, USER);
     await waitFor(() => k.fleet.status().state === 'online');
     return k;
@@ -190,7 +193,7 @@ describe('FBRX Command for a school', () => {
     expect(adminView.thread.length).toBeGreaterThanOrEqual(4);
     expect((await api('GET', '/v1/admin/helpdesk')).receivers.map((r: any) => r.name)).toEqual(['Sam (IT)']);
     await expect(student.call('helpdesk.ticket', { id: t.id }, USER)).rejects.toThrow(/another computer/);
-  });
+  }, 60_000);
 
   it('turns on automatic updates for the whole school and pushes "update now"', async () => {
     await api('PATCH', `/v1/admin/tenants/${tenantId}`, { autoUpdate: 'install' });

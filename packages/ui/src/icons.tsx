@@ -123,6 +123,7 @@ export const Icons = {
   school: make(['M2 10l10-5 10 5-10 5z', 'M6 12v5c3 2 9 2 12 0v-5', 'M22 10v6']),
   briefcase: make(['M3 7h18v13H3z', 'M8 7V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2', 'M3 13h18']),
   house: make(['M3 11l9-8 9 8', 'M5 9.5V21h14V9.5', 'M10 21v-6h4v6']),
+  more: make(['M5 12h.01', 'M12 12h.01', 'M19 12h.01']),
 };
 
 export type IconName = keyof typeof Icons;

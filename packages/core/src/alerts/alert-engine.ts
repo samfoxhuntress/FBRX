@@ -155,6 +155,12 @@ export class AlertEngine {
    * Raises an alert: stored in the inbox and routed by severity. `key` scopes the cooldown (one per drive,
    * printer, task, …). Returns null when the rule is off or still cooling down.
    */
+  /** Fires from the background checks; never after the engine stopped (the database may already be closed). */
+  private raise(ruleId: string, title: string, body: string, o: { key?: string; severity?: AlertSeverity } = {}): void {
+    if (!this.timer) return;
+    void this.fire(ruleId, title, body, o).catch((err) => this.d.log.debug('Alert failed', { rule: ruleId, error: errorMessage(err) }));
+  }
+
   async fire(ruleId: string, title: string, body: string, o: { key?: string; severity?: AlertSeverity; force?: boolean } = {}): Promise<AlertItem | null> {
     const rule = this.rule(ruleId);
     const cfg = this.d.settings().alerts;
@@ -273,21 +279,21 @@ export class AlertEngine {
     const rules = Object.fromEntries(this.rules().map((r) => [r.id, r]));
     const m = this.d.monitor;
     const cpu = m.average('cpu', 300);
-    if (cpu != null && cpu > (rules.cpu_high.threshold ?? 90)) void this.fire('cpu_high', 'CPU has been very busy', `Average CPU load ${cpu.toFixed(0)}% over the last 5 minutes. Open Processes to see what is using it.`);
+    if (cpu != null && cpu > (rules.cpu_high.threshold ?? 90)) this.raise('cpu_high', 'CPU has been very busy', `Average CPU load ${cpu.toFixed(0)}% over the last 5 minutes. Open Processes to see what is using it.`);
     const mem = m.average('mem', 300);
-    if (mem != null && mem > (rules.mem_high.threshold ?? 92)) void this.fire('mem_high', 'Memory is almost full', `${mem.toFixed(0)}% of memory in use over the last 5 minutes.`);
+    if (mem != null && mem > (rules.mem_high.threshold ?? 92)) this.raise('mem_high', 'Memory is almost full', `${mem.toFixed(0)}% of memory in use over the last 5 minutes.`);
     const cur = m.current;
-    if (cur?.tempC && cur.tempC > (rules.temp_high.threshold ?? 90)) void this.fire('temp_high', 'Processor is running hot', `CPU temperature is ${cur.tempC} °C. Check the fans and airflow.`);
+    if (cur?.tempC && cur.tempC > (rules.temp_high.threshold ?? 90)) this.raise('temp_high', 'Processor is running hot', `CPU temperature is ${cur.tempC} °C. Check the fans and airflow.`);
     if (cur?.battery && !cur.battery.charging && cur.battery.percent <= (rules.battery_low.threshold ?? 15)) {
-      void this.fire('battery_low', 'Battery is low', `${cur.battery.percent}% remaining and not charging.`);
+      this.raise('battery_low', 'Battery is low', `${cur.battery.percent}% remaining and not charging.`);
     }
     if (this.ticks % 4 === 1) await this.diskCheck(rules.disk_low.threshold ?? 10);
     await this.connectivityCheck();
     for (const p of this.d.meshPeers()) {
       const prev = this.peerState.get(p.id);
       this.peerState.set(p.id, p.online);
-      if (prev === true && !p.online) void this.fire('mesh_offline', `${p.name} went offline`, `${p.name} stopped responding on your mesh.`, { key: p.id });
-      if (prev === false && p.online) void this.fire('mesh_online', `${p.name} is online`, `${p.name} is reachable again.`, { key: p.id });
+      if (prev === true && !p.online) this.raise('mesh_offline', `${p.name} went offline`, `${p.name} stopped responding on your mesh.`, { key: p.id });
+      if (prev === false && p.online) this.raise('mesh_online', `${p.name} is online`, `${p.name} is reachable again.`, { key: p.id });
     }
     if (this.ticks % 20 === 2) this.taskCheck();
     if (IS_WIN && this.ticks % 10 === 1) await this.windowsChecks(rules.signatures_old.threshold ?? 3).catch(() => undefined);
@@ -298,7 +304,7 @@ export class AlertEngine {
     for (const d of fsz) {
       if (!d.size || d.size < 2e9 || /^\/(snap|boot|run|dev|sys|proc)/.test(d.mount)) continue;
       const free = (d.available / d.size) * 100;
-      if (free < threshold) void this.fire('disk_low', `Drive ${d.mount} is running out of space`, `${(d.available / 1e9).toFixed(1)} GB free (${free.toFixed(0)}%). Open Storage to clean up.`, { key: d.mount });
+      if (free < threshold) this.raise('disk_low', `Drive ${d.mount} is running out of space`, `${(d.available / 1e9).toFixed(1)} GB free (${free.toFixed(0)}%). Open Storage to clean up.`, { key: d.mount });
     }
   }
 
@@ -314,12 +320,12 @@ export class AlertEngine {
       if (this.netFails >= 3 && !this.netDown) {
         this.netDown = true;
         this.downSince = Date.now();
-        void this.fire('net_down', 'Internet connection lost', 'FBRX OS cannot reach the internet. Open Network Center to troubleshoot.');
+        this.raise('net_down', 'Internet connection lost', 'FBRX OS cannot reach the internet. Open Network Center to troubleshoot.');
       }
     } else {
       if (this.netDown) {
         const mins = Math.max(1, Math.round((Date.now() - this.downSince) / 60_000));
-        void this.fire('net_restored', 'Internet connection restored', `Back online after about ${mins} minute(s).`);
+        this.raise('net_restored', 'Internet connection restored', `Back online after about ${mins} minute(s).`);
       }
       this.netFails = 0;
       this.netDown = false;
@@ -330,7 +336,7 @@ export class AlertEngine {
     const today = new Date().toISOString().slice(0, 10);
     for (const t of this.d.workspace.dueSoon(0)) {
       const due = (t.due ?? '').slice(0, 10);
-      void this.fire('task_due', due < today ? `Overdue: ${t.title}` : `Due today: ${t.title}`, `Priority ${t.priority}.`, { key: `${t.id}:${today}` });
+      this.raise('task_due', due < today ? `Overdue: ${t.title}` : `Due today: ${t.title}`, `Priority ${t.priority}.`, { key: `${t.id}:${today}` });
     }
   }
 
@@ -347,6 +353,7 @@ $bs=@(Get-WinEvent -FilterHashtable @{LogName='System'; Id=1001; ProviderName='M
 [pscustomobject]@{ av=$s.AntivirusEnabled; rtp=$s.RealTimeProtectionEnabled; sigAge=$s.AntivirusSignatureAge; threat=$(if ($t) { [pscustomobject]@{ time=$t.InitialDetectionTime.ToUniversalTime().ToString('o'); res=([string]($t.Resources | Select-Object -First 1)) } }); firewall=$fw; printers=$p; crashes=$cr; bsod=$bs } | ConvertTo-Json -Depth 4 -Compress`,
       60_000,
     );
+    if (!this.timer) return;
     let j: any;
     try {
       j = JSON.parse(r.out.trim());
@@ -354,16 +361,16 @@ $bs=@(Get-WinEvent -FilterHashtable @{LogName='System'; Id=1001; ProviderName='M
       return;
     }
     this.lastCrash = new Date().toISOString();
-    if (j.av === true && j.rtp === false) void this.fire('defender_off', 'Real-time protection is off', 'Microsoft Defender real-time protection is disabled. Turn it back on in Security.');
-    if (typeof j.sigAge === 'number' && j.sigAge > sigDays) void this.fire('signatures_old', 'Virus definitions are out of date', `Definitions are ${j.sigAge} days old. Open Security → Update definitions.`);
+    if (j.av === true && j.rtp === false) this.raise('defender_off', 'Real-time protection is off', 'Microsoft Defender real-time protection is disabled. Turn it back on in Security.');
+    if (typeof j.sigAge === 'number' && j.sigAge > sigDays) this.raise('signatures_old', 'Virus definitions are out of date', `Definitions are ${j.sigAge} days old. Open Security → Update definitions.`);
     if (j.threat) {
-      if (this.lastThreat && j.threat.time > this.lastThreat) void this.fire('defender_threat', 'Microsoft Defender detected a threat', `${j.threat.res || 'A threat'} was detected. Open Security → Threats for details.`, { key: j.threat.time });
+      if (this.lastThreat && j.threat.time > this.lastThreat) this.raise('defender_threat', 'Microsoft Defender detected a threat', `${j.threat.res || 'A threat'} was detected. Open Security → Threats for details.`, { key: j.threat.time });
       this.lastThreat = j.threat.time;
     } else this.lastThreat ??= '0';
-    for (const name of [].concat(j.firewall ?? [])) void this.fire('firewall_off', `Firewall is off (${name} profile)`, 'Turn Windows Firewall back on in Security → Firewall.', { key: name });
-    for (const p of [].concat(j.printers ?? []) as Array<{ name: string; status: string }>) void this.fire('printer_error', `Printer "${p.name}" needs attention`, `Status: ${p.status}. Open Network Center → Printers.`, { key: p.name });
-    for (const c of [].concat(j.crashes ?? []) as Array<{ app: string; time: string }>) void this.fire('crash', `${c.app} crashed`, 'Open Bug catcher to investigate with Fabrix.', { key: c.time });
-    if (j.bsod) void this.fire('crash', 'Windows recovered from a stop error (blue screen)', 'Open Bug catcher for the crash details.', { key: 'bsod', severity: 'critical' });
+    for (const name of [].concat(j.firewall ?? [])) this.raise('firewall_off', `Firewall is off (${name} profile)`, 'Turn Windows Firewall back on in Security → Firewall.', { key: name });
+    for (const p of [].concat(j.printers ?? []) as Array<{ name: string; status: string }>) this.raise('printer_error', `Printer "${p.name}" needs attention`, `Status: ${p.status}. Open Network Center → Printers.`, { key: p.name });
+    for (const c of [].concat(j.crashes ?? []) as Array<{ app: string; time: string }>) this.raise('crash', `${c.app} crashed`, 'Open Bug catcher to investigate with Fabrix.', { key: c.time });
+    if (j.bsod) this.raise('crash', 'Windows recovered from a stop error (blue screen)', 'Open Bug catcher for the crash details.', { key: 'bsod', severity: 'critical' });
   }
 }
 

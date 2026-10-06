@@ -4710,3 +4710,117 @@ html[data-presenting='blur'] .private::selection {
   background: var(--surface-2, rgba(127, 127, 127, 0.12));
   user-select: all;
 }
+
+/* Chat history: project filter, a menu on each chat, selecting several, cleaning up */
+.chat-filter {
+  padding: 6px 8px 0;
+}
+.agent-conv-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border-radius: var(--radius-sm);
+}
+.agent-conv-row .agent-conv {
+  flex: 1;
+  min-width: 0;
+}
+.agent-conv-row.picked .agent-conv {
+  background: var(--accent-wash);
+}
+.chat-pick {
+  margin: 0 0 0 8px;
+  flex: none;
+  accent-color: var(--accent);
+}
+.chat-more {
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  padding: 4px 6px;
+  margin-right: 2px;
+  border-radius: 6px;
+  cursor: pointer;
+  opacity: 0;
+}
+.agent-conv-row:hover .chat-more,
+.agent-conv-row.active .chat-more,
+.chat-more[aria-expanded='true'],
+.chat-more:focus-visible {
+  opacity: 1;
+}
+.chat-more:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.chat-menu {
+  position: absolute;
+  right: 4px;
+  top: calc(100% - 4px);
+  z-index: 20;
+  min-width: 200px;
+  padding: 4px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1);
+  box-shadow: var(--shadow-lg, 0 8px 24px rgba(0, 0, 0, 0.18));
+  display: flex;
+  flex-direction: column;
+}
+.chat-menu button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
+  color: var(--text-primary);
+  text-align: left;
+  padding: 7px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.chat-menu button:hover:not(:disabled) {
+  background: var(--surface-2);
+}
+.chat-menu button.danger {
+  color: var(--critical-text);
+}
+.chat-menu button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+.chat-project {
+  white-space: nowrap;
+}
+.chat-project-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  margin-right: 4px;
+  vertical-align: 1px;
+}
+.chat-tools,
+.chat-select-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 8px;
+  border-top: 1px solid var(--border);
+}
+.chat-select-bar {
+  font-size: 12.5px;
+}
+.chat-select-bar {
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.chat-select-bar > .fx-secondary {
+  flex-basis: 100%;
+}
+.chat-select-bar > .fx-spacer {
+  display: none;
+}

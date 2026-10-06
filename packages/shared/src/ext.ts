@@ -67,6 +67,8 @@ export interface ProjectSummary extends Project {
   overdue: number;
   notes: number;
   snippets: number;
+  /** Chats with the agent in this project. */
+  chats: number;
 }
 
 export interface Snippet {

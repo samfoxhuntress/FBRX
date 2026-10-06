@@ -270,6 +270,12 @@ export const MIGRATIONS: Migration[] = [
     name: 'vault-password-on-start',
     up: `ALTER TABLE vault_keys ADD COLUMN password_on_start INTEGER NOT NULL DEFAULT 0;`,
   },
+  {
+    version: 5,
+    name: 'conversation-projects',
+    up: `ALTER TABLE conversations ADD COLUMN project_id TEXT;
+      CREATE INDEX conversations_project ON conversations (project_id);`,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

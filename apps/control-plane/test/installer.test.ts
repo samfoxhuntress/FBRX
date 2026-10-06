@@ -1,5 +1,5 @@
 import { spawnSync } from 'node:child_process';
-import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:net';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
@@ -26,7 +26,8 @@ describe('the Windows launchers', () => {
 
 /** The launcher installed next to FBRX Command: start, status, stop and open, here with a stand-in server. */
 describe('the FBRX Command launcher', () => {
-  const home = mkdtempSync(join(tmpdir(), 'fbrx-command-home-'));
+  // The real path: on macOS the temp folder is reached through a link (/var → /private/var).
+  const home = realpathSync(mkdtempSync(join(tmpdir(), 'fbrx-command-home-')));
   const app = join(home, 'app');
   const launcher = join(app, 'launcher.mjs');
   const run = (action: string) => spawnSync(process.execPath, [launcher, action], { encoding: 'utf8', timeout: 60_000 });
