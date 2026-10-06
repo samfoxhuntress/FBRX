@@ -160,6 +160,7 @@ export function parseWhen(s: string): { date: Date; dateOnly: boolean } {
 export class CalendarService {
   private syncTimer: NodeJS.Timeout | null = null;
   private remindTimer: NodeJS.Timeout | null = null;
+  private kick: NodeJS.Timeout | null = null;
   private syncEvery = 0;
   private running = false;
   private readonly inflight = new Map<string, Promise<void>>();
@@ -177,9 +178,16 @@ export class CalendarService {
   start(): void {
     this.running = true;
     this.schedule();
-    const kick = setTimeout(() => void this.syncAll(), 3_000);
-    kick.unref?.();
-    this.remindTimer = setInterval(() => this.remind(), 30_000);
+    this.kick = setTimeout(() => this.background(), 3_000);
+    this.kick.unref?.();
+    this.remindTimer = setInterval(() => {
+      if (!this.running) return;
+      try {
+        this.remind();
+      } catch (err) {
+        this.d.log.debug('Calendar reminders failed', { error: errorMessage(err) });
+      }
+    }, 30_000);
     this.remindTimer.unref?.();
   }
 
@@ -187,8 +195,10 @@ export class CalendarService {
     this.running = false;
     if (this.syncTimer) clearInterval(this.syncTimer);
     if (this.remindTimer) clearInterval(this.remindTimer);
+    if (this.kick) clearTimeout(this.kick);
     this.syncTimer = null;
     this.remindTimer = null;
+    this.kick = null;
     this.syncEvery = 0;
     this.endSignIn();
   }
@@ -200,7 +210,7 @@ export class CalendarService {
     if (this.syncTimer && this.syncEvery === minutes) return;
     if (this.syncTimer) clearInterval(this.syncTimer);
     this.syncEvery = minutes;
-    this.syncTimer = setInterval(() => void this.syncAll(), minutes * 60_000);
+    this.syncTimer = setInterval(() => this.background(), minutes * 60_000);
     this.syncTimer.unref?.();
   }
 
@@ -520,6 +530,12 @@ export class CalendarService {
 
   // ---------------------------------------------------------------------------------------------- sync
 
+  /** Timed syncs: never after the service stopped (the database may be closed), never an unhandled error. */
+  private background(): void {
+    if (!this.running) return;
+    void this.syncAll().catch((err) => this.d.log.debug('Calendar sync failed', { error: errorMessage(err) }));
+  }
+
   async syncAll(): Promise<void> {
     this.schedule();
     const ids = this.d.db.all<{ id: string }>('SELECT id FROM calendar_accounts WHERE enabled = 1').map((r) => r.id);
@@ -529,7 +545,9 @@ export class CalendarService {
   sync(id: string): Promise<void> {
     const running = this.inflight.get(id);
     if (running) return running;
-    const p = this.syncNow(id).finally(() => this.inflight.delete(id));
+    const p = this.syncNow(id)
+      .catch((err) => this.d.log.debug('Calendar sync stopped', { account: id, error: errorMessage(err) }))
+      .finally(() => this.inflight.delete(id));
     this.inflight.set(id, p);
     return p;
   }

@@ -135,6 +135,17 @@ function liveFeed(): string {
 }
 
 describe('Calendar on a computer', () => {
+  it('does nothing after the computer stops (the first sync is a few seconds after start)', async () => {
+    const { cleanup } = await makeKernel();
+    await cleanup();
+    const errors: unknown[] = [];
+    const onError = (e: unknown) => errors.push(e);
+    process.on('unhandledRejection', onError);
+    await new Promise((r) => setTimeout(r, 3_500));
+    process.off('unhandledRejection', onError);
+    expect(errors).toEqual([]);
+  });
+
   let feedServer: Server;
   let feedUrl: string;
   let feedStatus = 200;
