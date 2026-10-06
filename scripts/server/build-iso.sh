@@ -46,17 +46,20 @@ fi
 [ -f "$ISO" ] || { echo "No ISO at $ISO" >&2; exit 1; }
 
 echo "Reading the installer's boot menus"
-xorriso -osirrox on -indev "$ISO" -extract /isolinux/txt.cfg "$WORK/txt.cfg" -extract /boot/grub/grub.cfg "$WORK/grub.cfg" -extract /md5sum.txt "$WORK/md5sum.txt" >/dev/null 2>&1 || true
+for f in /isolinux/txt.cfg /isolinux/gtk.cfg /boot/grub/grub.cfg /md5sum.txt; do
+  xorriso -osirrox on -indev "$ISO" -extract "$f" "$WORK/$(basename "$f")" >/dev/null 2>&1 || true
+done
 [ -f "$WORK/grub.cfg" ] || { echo "$ISO does not look like a Debian installer (no /boot/grub/grub.cfg)" >&2; exit 1; }
 chmod u+w "$WORK"/*
 
 ARGS="auto=true priority=high locale=en_US.UTF-8 keymap=us preseed/file=/cdrom/fbrx/preseed.cfg"
 LABEL="Install FBRX Server (erases the disk you choose)"
 
-# BIOS boot menu (isolinux): FBRX Server first and the default.
+# BIOS boot menu (isolinux): FBRX Server is the highlighted entry (the graphical installer gives up its claim).
 if [ -f "$WORK/txt.cfg" ]; then
-  { printf 'default fbrx\nlabel fbrx\n\tmenu label ^%s\n\tmenu default\n\tkernel /install.amd/vmlinuz\n\tappend vga=788 initrd=/install.amd/initrd.gz %s --- quiet\n' "$LABEL" "$ARGS"; sed -e 's/^default .*//' -e '/menu default/d' "$WORK/txt.cfg"; } >"$WORK/txt.new"
+  { printf 'label fbrx\n\tmenu label ^%s\n\tmenu default\n\tkernel /install.amd/vmlinuz\n\tappend vga=788 initrd=/install.amd/initrd.gz %s --- quiet\n' "$LABEL" "$ARGS"; sed -e '/menu default/d' "$WORK/txt.cfg"; } >"$WORK/txt.new"
 fi
+[ -f "$WORK/gtk.cfg" ] && sed -e '/menu default/d' "$WORK/gtk.cfg" >"$WORK/gtk.new"
 # UEFI boot menu (GRUB): the same entry, first, picked after 10 seconds.
 awk -v label="$LABEL" -v args="$ARGS" '
   !done && /^menuentry/ {
@@ -79,15 +82,17 @@ cp "$ROOT/scripts/server/preseed.cfg" "$WORK/fbrx/preseed.cfg"
 
 # The installer's "check the CD" step compares files with md5sum.txt.
 if [ -f "$WORK/md5sum.txt" ]; then
-  grep -vE '\./(isolinux/txt\.cfg|boot/grub/grub\.cfg|fbrx/)' "$WORK/md5sum.txt" >"$WORK/md5sum.new" || true
-  (cd "$WORK" && md5sum txt.new | sed 's# txt.new#./isolinux/txt.cfg#' >>md5sum.new) 2>/dev/null || true
-  (cd "$WORK" && md5sum grub.new | sed 's# grub.new#./boot/grub/grub.cfg#' >>md5sum.new)
+  grep -vE '\./(isolinux/(txt|gtk)\.cfg|boot/grub/grub\.cfg|fbrx/)' "$WORK/md5sum.txt" >"$WORK/md5sum.new" || true
+  [ -f "$WORK/txt.new" ] && (cd "$WORK" && echo "$(md5sum <txt.new | cut -d' ' -f1)  ./isolinux/txt.cfg" >>md5sum.new)
+  [ -f "$WORK/gtk.new" ] && (cd "$WORK" && echo "$(md5sum <gtk.new | cut -d' ' -f1)  ./isolinux/gtk.cfg" >>md5sum.new)
+  (cd "$WORK" && echo "$(md5sum <grub.new | cut -d' ' -f1)  ./boot/grub/grub.cfg" >>md5sum.new)
   (cd "$WORK" && find fbrx -type f -exec md5sum {} + | sed 's#  fbrx/#  ./fbrx/#' >>md5sum.new)
 fi
 
 echo "Writing $OUT"
 MAPS=(-map "$WORK/fbrx" /fbrx -map "$WORK/grub.new" /boot/grub/grub.cfg)
 [ -f "$WORK/txt.new" ] && MAPS+=(-map "$WORK/txt.new" /isolinux/txt.cfg)
+[ -f "$WORK/gtk.new" ] && MAPS+=(-map "$WORK/gtk.new" /isolinux/gtk.cfg)
 [ -f "$WORK/md5sum.new" ] && MAPS+=(-map "$WORK/md5sum.new" /md5sum.txt)
 rm -f "$OUT"
 xorriso -indev "$ISO" -outdev "$OUT" -volid "FBRX_SERVER_${VERSION//./_}" "${MAPS[@]}" -boot_image any replay >/dev/null 2>&1 || {

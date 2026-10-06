@@ -10,7 +10,14 @@
 > **Alpha 1.9.5 "Bobbin".** FBRX is in alpha testing. Installed copies check this repository's
 > [`release.json`](release.json) and offer new versions in the app.
 
-FBRX OS is the platform behind two products:
+FBRX OS is the platform behind the FBRX lineup ([docs/LINEUP.md](docs/LINEUP.md)): **FBRX Desktop** and **FBRX
+Server**, powered by FBRX OS, and the products below for the computers you already have.
+
+* **FBRX Server** with **FBRX Virtual** — FBRX OS for servers (Debian 13 + KVM) and its hypervisor: virtual machines
+  with their screens in the browser, snapshots, storage, ISOs and networks, a live **hardware map** of the server
+  where you drag a device or a virtual machine onto processors to change where its data is handled, device
+  passthrough, and the server's health, power and **BIOS settings** through its management controller (Dell iDRAC
+  and other Redfish ones). Install it from the FBRX Server ISO or on Debian 13 ([docs/SERVER.md](docs/SERVER.md)).
 
 * **FBRX Endpoint** — a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is
   governed end to end and an everyday **command center** (dashboard, tasks, notes, Spotlight, a Ctrl+Alt+Z clipboard

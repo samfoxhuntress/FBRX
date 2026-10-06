@@ -260,7 +260,9 @@ export class LibvirtHypervisor implements Hypervisor {
     return out;
   }
 
+  /** KVM when the processor offers it; FBRX_V_DOMAIN_TYPE=qemu forces software emulation (nested setups, CI). */
   private async domainType(): Promise<'kvm' | 'qemu'> {
+    if (process.env.FBRX_V_DOMAIN_TYPE === 'qemu') return 'qemu';
     return existsSync('/dev/kvm') ? 'kvm' : 'qemu';
   }
 

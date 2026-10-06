@@ -34,13 +34,44 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
-      - name: Build admin console, control plane and desktop bundles
+      - name: Build admin console, control plane, desktop and FBRX Virtual bundles
         run: |
           npm run build -w @fbrx/admin-console
           npm run build -w @fbrx/control-plane
           npm run build -w @fbrx/desktop
+          npm run build:server
       - name: Pack example plugin
         run: node scripts/pack-plugin.mjs plugins/example-toolkit
+
+  server:
+    name: FBRX Server (real libvirt, installer bundle)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - name: Install libvirt, QEMU and UEFI firmware
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends libvirt-daemon-system libvirt-clients qemu-system-x86 qemu-utils ovmf dnsmasq-base shellcheck >/dev/null
+          sudo systemctl start libvirtd
+          sudo virsh -c qemu:///system net-start default || true
+      - run: npm ci --no-audit --no-fund
+      - name: Check the installer scripts
+        run: shellcheck scripts/server/*.sh scripts/server/fbrx-server
+      - name: Build the FBRX Server bundle
+        run: scripts/server/bundle.sh --with-node
+      - name: FBRX Virtual against the real hypervisor
+        # As root, like FBRX Server, against libvirt's system hypervisor (after the build, so root leaves no files in
+        # the way). Software emulation keeps it independent of the runner's KVM.
+        run: sudo -E env "PATH=$PATH" FBRX_TEST_LIBVIRT=1 FBRX_V_DOMAIN_TYPE=qemu npx vitest run apps/virtual/test/libvirt.integration.test.ts
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fbrx-server-bundle
+          path: dist/fbrx-server-*.tar.gz
+          retention-days: 14
 
   docker:
     name: Control plane image

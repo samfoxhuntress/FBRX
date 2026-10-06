@@ -12,6 +12,7 @@ Thumbs.db
 # local runtime data
 .fbrx-data/
 .fbrx-cp-data/
+.fbrx-virtual-data/
 apps/desktop/resources/runtime/
 *.fbrxsnap
 *.tsbuildinfo

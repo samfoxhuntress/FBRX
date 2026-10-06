@@ -26,3 +26,14 @@ No GPL component is included: the eSpeak NG phonemizer that other Kokoro front e
 | --- | --- | --- | --- |
 | [abuse.ch MalwareBazaar](https://bazaar.abuse.ch/) SHA-256 exports | The default threat database feed (fingerprints only, downloaded at run time) | CC0 | Downloaded; the feed address can be changed |
 | [ClamAV](https://www.clamav.net/) | Optional second engine (Endpoint Ultra) | GPL-2.0 | Not bundled: used only when installed separately, run as its own program |
+
+# Third-party components in FBRX Server and FBRX Virtual
+
+| Component | Used for | License | Where |
+| --- | --- | --- | --- |
+| [noVNC](https://github.com/novnc/noVNC) | Virtual machines' screens in the browser | MPL-2.0 | Bundled in the console (npm `@novnc/novnc`, unmodified) |
+| [fast-xml-parser](https://github.com/NaturalIntelligence/fast-xml-parser) | Reading libvirt's XML | MIT | Bundled (npm `fast-xml-parser`) |
+| [Node.js](https://nodejs.org/) | FBRX Virtual's runtime | MIT | Downloaded by the installer (packed into the ISO) |
+| [Debian](https://www.debian.org/) 13 installer | The base of the FBRX Server ISO | DFSG-free (mostly GPL) | Downloaded from Debian when the ISO is built; FBRX adds files next to it and changes only the boot menus |
+| QEMU, libvirt, OVMF, swtpm | The hypervisor, UEFI firmware, software TPM | GPL-2.0 / LGPL-2.1 / BSD-2-Clause-Patent / BSD-3-Clause | Installed from Debian's packages, run as their own programs |
+| [PCI ID Repository](https://pci-ids.ucw.cz/) (`pci.ids`) | Device names in the hardware map | GPL-2.0+ / BSD-3-Clause | Read from the server's pciutils package at run time, not bundled |

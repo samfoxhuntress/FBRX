@@ -5,6 +5,7 @@ import { Auth } from './auth';
 import { Audit } from './audit';
 import { loadConfig } from './config';
 import { VIRTUAL_MIGRATIONS } from './migrations';
+import { clearSetupCode } from './setup-code';
 
 /**
  * Server-side helpers for FBRX Virtual, run on the server itself (fbrx-server reset-password ...): for when nobody can
@@ -35,6 +36,7 @@ try {
       const password = newPassword();
       await auth.createUser({ username, name: username, password, role: 'admin' });
       audit.record('console', 'user.create', username, 'success', { role: 'admin' });
+      clearSetupCode(config.dataDir); // set up now: the first-time code is spent
       console.log(`Administrator ${username} created. Password: ${password}`);
       break;
     }

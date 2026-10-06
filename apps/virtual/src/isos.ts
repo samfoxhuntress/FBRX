@@ -1,5 +1,5 @@
 import { createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { isAbsolute, join, relative, sep } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -45,8 +45,8 @@ export class IsoLibrary {
   /** Library names of a full path (null when it is not in the library). */
   nameOf(path: string | null): string | null {
     if (!path) return null;
-    const prefix = this.dir.endsWith('/') ? this.dir : `${this.dir}/`;
-    return path.startsWith(prefix) ? path.slice(prefix.length) : null;
+    const rel = relative(this.dir, path);
+    return rel && !rel.startsWith('..') && !isAbsolute(rel) && !rel.includes(sep) && !rel.includes('/') ? rel : null;
   }
 
   private checkNew(name: string) {
