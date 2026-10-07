@@ -17,8 +17,9 @@ borrowing theirs, and, as a **controller**, handing out work to them. It is mana
 
 ### A. From the FBRX Server ISO (wipes the server)
 
-1. Get the ISO: the **FBRX Server ISO** workflow in GitHub Actions builds it (artifact `fbrx-server-iso`), or build it
-   yourself on Linux: `scripts/server/bundle.sh --with-node && scripts/server/build-iso.sh` (needs `xorriso`).
+1. Get the ISO: it comes with **FBRX Endpoint** for now (*Lab → FBRX Server*, with the bundle and these guides), the
+   **FBRX Server ISO** workflow in GitHub Actions builds it (artifact `fbrx-server-iso`), or build it yourself on Linux:
+   `scripts/server/bundle.sh --with-node && scripts/server/build-iso.sh` (needs `xorriso`).
 2. Boot the server from it: write it to a USB stick (`dd`, or any image writer), or on a Dell PowerEdge mount it through
    the iDRAC: *Virtual Console → Virtual Media → Map CD/DVD*, then boot once from *Virtual CD/DVD/ISO* (F11 boot menu).
 3. Pick **Install FBRX Server**. The installer asks only:
@@ -34,8 +35,8 @@ The ISO is Debian's own network installer with FBRX Server added, so the server 
 ### B. On a Debian 13 server you already have
 
 ```bash
-tar -xzf fbrx-server-0.1.0.tar.gz          # the CI artifact fbrx-server-bundle, or scripts/server/bundle.sh
-sudo ./fbrx-server-0.1.0/install.sh
+tar -xzf fbrx-server-0.1.0.tar.gz          # from FBRX Endpoint (Lab → FBRX Server), the CI artifact, or bundle.sh
+sudo bash fbrx-server-0.1.0/install.sh
 ```
 
 `install.sh` installs QEMU/KVM, libvirt, UEFI firmware (OVMF) and the software TPM (swtpm), Node.js 22 (kept in
@@ -276,3 +277,18 @@ The code is in `apps/virtual` (service: `drivers/` for libvirt and the simulated
 `bmc/` for Redfish) and `apps/virtual-console` (React, the FBRX UI kit, noVNC). The installer, bundle and ISO scripts
 are in `scripts/server`. The FBRX core for the ai role is `packages/core/bin/fbrx-headless.ts`, bundled by
 `scripts/server/build-core.mjs`.
+
+### FBRX Server inside FBRX Endpoint (for now)
+
+Until FBRX Server has its own download page, the FBRX Endpoint installers carry it: the installer ISO, the bundle and
+the guides, under *Lab → FBRX Server* in the app (copy them to Downloads, check them against the fingerprints taken
+when the installer was made, read the guides). `scripts/server/endpoint-resources.mjs` gathers them into
+`apps/desktop/resources/server`; macOS and Linux packages carry them as app resources, and Windows Setup adds them once
+for both processor types (`apps/desktop/build/installer.nsh`), stored as they are.
+
+* **Release workflow:** builds the ISO and bundle first and packs them into the signed installers; the ISO and bundle
+  are also attached to the GitHub release.
+* **Install FBRX OS (the setup wizard):** builds the bundle and takes the ISO from the `fbrx-server-iso` download in
+  your Downloads folder (the zip as downloaded from GitHub Actions, or the .iso). Without one, the app carries the
+  bundle and guides only. `--no-server` leaves them all out.
+* `scripts/server/bundle.mjs` is the bundle builder (bundle.sh runs it); it works on Windows and macOS too.

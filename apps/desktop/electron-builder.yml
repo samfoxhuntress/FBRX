@@ -51,6 +51,12 @@ mac:
   entitlements: build/entitlements.mac.plist
   entitlementsInherit: build/entitlements.mac.plist
   notarize: false
+  extraResources:
+    # FBRX Server resources (installer ISO, server bundle, guides) from scripts/server/endpoint-resources.mjs, when
+    # gathered. Windows Setup adds them itself, once for both processor types (build/installer.nsh).
+    - from: resources/server
+      to: server
+      filter: ["**/*"]
 dmg:
   sign: false
 win:
@@ -76,6 +82,10 @@ nsis:
   installerSidebar: build/installerSidebar.bmp
   uninstallerSidebar: build/installerSidebar.bmp
 linux:
+  extraResources:
+    - from: resources/server
+      to: server
+      filter: ["**/*"]
   executableName: fbrx-os
   target: [AppImage]
   artifactName: FBRX-OS-${version}-${arch}.${ext}

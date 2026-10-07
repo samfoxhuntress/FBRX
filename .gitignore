@@ -15,6 +15,7 @@ Thumbs.db
 .fbrx-virtual-data/
 .fbrx-core-dev/
 apps/desktop/resources/runtime/
+apps/desktop/resources/server/
 *.fbrxsnap
 *.tsbuildinfo
 .fbrx-demo/

@@ -19,7 +19,8 @@ Server**, powered by FBRX OS, and the products below for the computers you alrea
   passthrough, and the server's health, power and **BIOS settings** through its management controller (Dell iDRAC
   and other Redfish ones). With the **ai** role the server is also an AI agent on FBRX Mesh: **Mesh Assist** lets
   your servers and computers lend each other their AI when one runs out of steps or credits, and lets a server you
-  make a controller hand out work. Install it from the FBRX Server ISO or on Debian 13 ([docs/SERVER.md](docs/SERVER.md)).
+  make a controller hand out work. Install it from the FBRX Server ISO or on Debian 13 ([docs/SERVER.md](docs/SERVER.md));
+  for now the FBRX Endpoint installer carries the ISO, the server bundle and the guides (*Lab → FBRX Server*).
 
 * **FBRX Endpoint** — a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is
   governed end to end and an everyday **command center** (dashboard, tasks, notes, Spotlight, a Ctrl+Alt+Z clipboard

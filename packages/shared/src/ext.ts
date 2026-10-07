@@ -15,6 +15,30 @@ import type { NetEnvDeviceAction, NetEnvDeviceStats, NetEnvDevice, NetEnvInput, 
  * Merged into `CoreMethods` / `CoreEvents` in api.ts. Windows-only modules throw `UNAVAILABLE` elsewhere.
  */
 
+// --------------------------------------------------------------------------- FBRX Server resources
+
+/** A file from the FBRX Server resources that ride along inside FBRX Endpoint for now. */
+export interface ServerResourceFile {
+  /** Relative name, e.g. "fbrx-server-0.1.0-amd64.iso" or "docs/SERVER.md". */
+  name: string;
+  kind: 'iso' | 'bundle' | 'doc' | 'other';
+  title: string;
+  description: string | null;
+  size: number;
+  sha256: string | null;
+  path: string;
+}
+export interface ServerResourcesInfo {
+  /** This copy of FBRX carries them (the installer was built with them). */
+  available: boolean;
+  version: string | null;
+  builtAt: string | null;
+  dir: string | null;
+  /** The installer ISO is among them. */
+  iso: boolean;
+  files: ServerResourceFile[];
+}
+
 // ------------------------------------------------------------------------------------------- workspace
 
 export interface Note {
@@ -1069,6 +1093,13 @@ export interface ExtMethods {
   /** Asks the same helper a follow-up in the same conversation. */
   'mesh.assist.followUp': (p: { sessionId: string; text: string }) => AssistSession;
   'mesh.assist.cancel': (p: { sessionId: string }) => AssistSession;
+  /** The FBRX Server installer ISO, bundle and guides carried by this copy of FBRX. */
+  'server.resources': () => ServerResourcesInfo;
+  /** Recomputes a resource's SHA-256 and compares it with the one recorded at build time. */
+  'server.verify': (p: { name: string }) => { ok: boolean; sha256: string; expected: string | null };
+  /** Copies a resource to Downloads. */
+  'server.copy': (p: { name: string }) => { path: string };
+  'server.readDoc': (p: { name: string }) => { text: string };
   /** Prefer Mesh: this computer's mesh networks, their MTU, and whether mesh traffic is marked for priority. */
   'mesh.network.status': () => MeshNetworkStatus;
   /** Which address each paired computer is reached on, the round trip, and (jumbo frames on) whether 9000-byte packets get through. */
@@ -1118,6 +1149,7 @@ export interface ExtEvents {
 
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
+  'server.copy',
   'mesh.network.applyQos',
   'processes.kill',
   'files.write',

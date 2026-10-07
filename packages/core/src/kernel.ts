@@ -73,6 +73,7 @@ import { MeshService } from './mesh/mesh-service';
 import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
 import { MeshAssist, runsElevated } from './mesh/mesh-assist';
 import { MeshNetwork } from './mesh/mesh-network';
+import { ServerResources } from './system/server-resources';
 import { meshTools } from './tools/builtin/mesh-tools';
 import { AiCoordination } from './aicoord/aicoord';
 import { ConversationStore } from './ai/conversations';
@@ -172,6 +173,8 @@ export class Kernel {
   readonly assist: MeshAssist;
   /** Prefer Mesh: mesh networks, priority marking and path tests. */
   readonly meshNetwork: MeshNetwork;
+  /** FBRX Server resources (installer ISO, bundle, guides) shipped inside the app. */
+  readonly serverResources: ServerResources;
   readonly aicoord: AiCoordination;
   private readonly api: Record<string, (p: any, ctx: CallContext) => unknown>;
   private disposers: Array<() => void> = [];
@@ -501,6 +504,7 @@ export class Kernel {
       audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
       assist: (device, method, params) => this.assist.handle(device, method, params),
     });
+    this.serverResources = new ServerResources(this.platform.resourcesDir, () => this.platform.specialDirs().downloads);
     this.meshNetwork = new MeshNetwork({
       settings: () => this.settings.get().mesh.network,
       port: () => this.settings.get().mesh.port,

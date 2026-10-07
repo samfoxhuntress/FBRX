@@ -7,8 +7,12 @@
  *   node scripts/setup/wizard.mjs [--yes] [--name "Your Name"] [--no-launch] [--allow-downgrade]
  *   node scripts/setup/wizard.mjs --share [--for "Their Name"] [--days 30]        (Windows)
  *
- * Steps: install dependencies → create license signing keys → build the app for this machine → install it →
- * issue a license for it → open it. Dependency-free on purpose: it runs before `npm install`.
+ * Steps: install dependencies → create license signing keys → gather the FBRX Server installer and guides → build
+ * the app for this machine → install it → issue a license for it → open it. Dependency-free on purpose: it runs
+ * before `npm install`.
+ *
+ * The FBRX Server resources (installer ISO, server bundle, guides) ride along inside the app for now; the ISO is taken
+ * from the "fbrx-server-iso" download in Downloads when there is one. --no-server leaves them out.
  *
  * Share mode builds the same Windows installer without installing it here, optionally with a trial license for the
  * recipient built in, and puts it in the Share folder. The recipient double-clicks it; on a computer that already
@@ -71,7 +75,7 @@ class SetupError extends Error {
 }
 
 let stepNo = 0;
-let STEPS = 6;
+let STEPS = 7;
 async function step(title, fn) {
   stepNo++;
   const label = `${dim(`[${stepNo}/${STEPS}]`)} ${title}`;
@@ -259,6 +263,32 @@ async function createKeys() {
     }
   }
   return { note };
+}
+
+/**
+ * The FBRX Server installer ISO, server bundle and guides travel inside FBRX Endpoint for now. The ISO comes from the
+ * "fbrx-server-iso" download (GitHub Actions) in Downloads, if there is one. Never stops the setup: without it the app
+ * is simply built without them.
+ */
+async function gatherServerResources(ui) {
+  if (flag('--no-server')) return { note: 'skipped (--no-server)' };
+  let iso = false;
+  try {
+    await node([join(ROOT, 'scripts', 'server', 'endpoint-resources.mjs')], {
+      label: 'Gathering the FBRX Server resources',
+      onLine: (l) => {
+        if (/Building the FBRX Server bundle/.test(l)) ui.setDetail('building the server bundle');
+        else if (/^Adding fbrx-server/.test(l)) {
+          iso = true;
+          ui.setDetail('adding the installer ISO');
+        }
+      },
+    });
+  } catch (err) {
+    log(`FBRX Server resources skipped: ${err.message}`);
+    return { note: 'skipped (see .fbrx-setup/setup.log); the app works without them' };
+  }
+  return { note: iso ? 'with the installer ISO' : 'bundle and guides (no ISO in Downloads)' };
 }
 
 async function buildApp(ui) {
@@ -489,6 +519,7 @@ async function main() {
   const started = Date.now();
   await step('Installing dependencies', installDependencies);
   await step('Creating your license signing keys', createKeys);
+  await step('Adding the FBRX Server installer and guides', gatherServerResources);
   const { artifact } = await step(`Building ${PRODUCT} for this ${platformName}`, buildApp);
   const installed = await step(`Installing ${PRODUCT}`, () => installApp(artifact));
   rememberSource();
@@ -505,6 +536,7 @@ async function main() {
   console.log(`                 a copy of the key is in .fbrx-keys${win ? '\\' : '/'}my-license.txt)`);
   console.log(`  ${bold('Update later')}   download the new version and run this installer again; your data stays`);
   if (win) console.log(`  ${bold('Share it')}       run this installer again and choose 2 to make an installer for someone else`);
+  console.log(`  ${bold('FBRX Server')}    the server installer ISO, bundle and guides are in the app under FBRX Server`);
   console.log(`\n  ${yellow(bold('Back up your license signing key'))}  ${dirname(KEY_BACKUP)}`);
   console.log(`  It signs every license you issue. Keep a copy somewhere safe (not just this computer) and never share it.\n`);
   return 0;
@@ -531,10 +563,11 @@ async function shareMain(rl, ask) {
   if (recipient.length > 80) throw new SetupError('The name is too long (80 characters at most).');
   if (!Number.isInteger(days) || days < 0 || days > 3650) throw new SetupError('The trial length must be a whole number of days between 0 and 3650.');
 
-  STEPS = 4;
+  STEPS = 5;
   const started = Date.now();
   await step('Installing dependencies', installDependencies);
   await step('Creating your license signing keys', createKeys);
+  await step('Adding the FBRX Server installer and guides', gatherServerResources);
   const { artifact } = await step(`Building ${PRODUCT} for Windows`, buildApp);
   const pkg = await step(recipient ? `Making the installer for ${recipient}` : 'Making the installer', (ui) => makeSharePackage(artifact, recipient, days, ui));
 

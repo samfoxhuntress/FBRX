@@ -15,6 +15,9 @@
 ;   /S /REPAIR              also clear cached files
 ;   /S /UNINSTALL           uninstall and keep the data; add --delete-app-data to delete it as well
 ;
+; When the build gathered them, Setup also carries the FBRX Server resources (installer ISO, server bundle, guides) and
+; puts them in resources\server, where the app lists them under FBRX Server.
+;
 ; A license key is activated for the user when Setup carries one (share packages made by the setup wizard embed it
 ; at build time through the FBRX_SHARE_LICENSE environment variable) or finds fbrx-license.key next to Setup.exe.
 
@@ -28,8 +31,14 @@ Var fbrxClosed
 ; The Windows makensis only accepts backslashes in File paths; the Linux/macOS one only forward slashes.
 !ifdef NSIS_WIN32_MAKENSIS
   !define FBRX_CLOSE_SCRIPT "${BUILD_RESOURCES_DIR}\fbrx-close.ps1"
+  !define FBRX_SERVER_DIR "${PROJECT_DIR}\resources\server"
+  !define FBRX_SERVER_FILES "${PROJECT_DIR}\resources\server\*.*"
+  !define FBRX_SERVER_MANIFEST "${PROJECT_DIR}\resources\server\manifest.json"
 !else
   !define FBRX_CLOSE_SCRIPT "${BUILD_RESOURCES_DIR}/fbrx-close.ps1"
+  !define FBRX_SERVER_DIR "${PROJECT_DIR}/resources/server"
+  !define FBRX_SERVER_FILES "${PROJECT_DIR}/resources/server/*.*"
+  !define FBRX_SERVER_MANIFEST "${PROJECT_DIR}/resources/server/manifest.json"
 !endif
 
 !ifndef BUILD_UNINSTALLER
@@ -363,7 +372,22 @@ Var fbrxClosed
 
 ; ------------------------------------------------------------------------------------------- after installing
 
+; FBRX Server resources (the installer ISO, the server bundle and the guides), gathered by
+; scripts/server/endpoint-resources.mjs. Added here, once, instead of inside each processor type's app package, and
+; stored as they are (the ISO and the bundle are compressed already).
+!macro FBRX_SERVER_RESOURCES
+  !if /FileExists "${FBRX_SERVER_MANIFEST}"
+    DetailPrint "Adding the FBRX Server installer and guides..."
+    SetOutPath "$INSTDIR\resources\server"
+    SetCompress off
+    File /r "${FBRX_SERVER_FILES}"
+    SetCompress auto
+    SetOutPath "$INSTDIR"
+  !endif
+!macroend
+
 !macro customInstall
+  !insertmacro FBRX_SERVER_RESOURCES
   ${If} ${Silent}
     ${GetParameters} $R0
     ClearErrors

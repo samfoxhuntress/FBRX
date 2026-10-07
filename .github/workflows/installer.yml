@@ -13,6 +13,7 @@ on:
       - "apps/control-plane/**"
       - "apps/admin-console/**"
       - "scripts/setup/**"
+      - "scripts/server/**"
       - "scripts/issue-license.ts"
       - "scripts/generate-license-keys.mjs"
       - "apps/desktop/**"
@@ -38,8 +39,24 @@ jobs:
     runs-on: macos-latest
     steps:
       - uses: actions/checkout@v5
+      # A small stand-in for the "fbrx-server-iso" download from GitHub Actions, where people put it: Downloads.
+      - name: Put an FBRX Server ISO download in Downloads
+        run: |
+          mkdir -p ~/Downloads /tmp/fbrx-iso && cd /tmp/fbrx-iso
+          head -c 2000000 /dev/urandom > fbrx-server-ci-amd64.iso
+          shasum -a 256 fbrx-server-ci-amd64.iso > fbrx-server-ci-amd64.iso.sha256
+          zip -q ~/Downloads/fbrx-server-iso.zip fbrx-server-ci-amd64.iso fbrx-server-ci-amd64.iso.sha256
       - name: Run "Install FBRX OS.command"
         run: bash "Install FBRX OS.command" --yes --name "CI Runner" --no-launch
+      - name: The FBRX Server installer ISO, bundle and guides came along
+        run: |
+          SRV="/Applications/FBRX OS.app/Contents/Resources/server"
+          ls -la "$SRV" "$SRV/docs"
+          test -f "$SRV/manifest.json"
+          test -f "$SRV/fbrx-server-ci-amd64.iso"
+          ls "$SRV"/fbrx-server-*.tar.gz
+          test -f "$SRV/docs/SERVER.md"
+          codesign --verify --deep --strict "/Applications/FBRX OS.app"
       - name: The app is installed, signed for this Mac, and activates its license on first start
         run: |
           APP="/Applications/FBRX OS.app"
@@ -86,6 +103,16 @@ jobs:
           $open = Join-Path $env:TEMP '0f8fad5b-d9cb-469f-a165-70867728950e_FBRX-test (2).zip.d47\FBRX-test'
           New-Item -ItemType Directory -Force $open | Out-Null
           Copy-Item 'Install FBRX OS.cmd' $open
+      # A small stand-in for the "fbrx-server-iso" download from GitHub Actions, where people put it: Downloads.
+      - name: Put an FBRX Server ISO download in Downloads
+        shell: pwsh
+        run: |
+          $dir = Join-Path $env:RUNNER_TEMP 'fbrx-iso'
+          New-Item -ItemType Directory -Force $dir | Out-Null
+          $iso = Join-Path $dir 'fbrx-server-ci-amd64.iso'
+          $bytes = New-Object byte[] 2000000; (New-Object Random 7).NextBytes($bytes); [IO.File]::WriteAllBytes($iso, $bytes)
+          "$((Get-FileHash $iso -Algorithm SHA256).Hash.ToLower())  fbrx-server-ci-amd64.iso" | Set-Content -NoNewline "$iso.sha256"
+          Compress-Archive -Path $iso, "$iso.sha256" -DestinationPath (Join-Path $env:USERPROFILE 'Downloads\fbrx-server-iso.zip') -Force
       - name: Run "Install FBRX OS.cmd" from inside the zip
         shell: cmd
         env:
@@ -108,6 +135,16 @@ jobs:
           if (Test-Path "$data\fbrx-license.key.rejected") { throw "The license was rejected" }
           if (Test-Path "$data\fbrx-license.key") { throw "The app did not pick up its license" }
           if (-not (Get-Process -Name 'FBRX OS' -ErrorAction SilentlyContinue)) { throw "The app is not running" }
+      - name: The FBRX Server installer ISO, bundle and guides came along
+        shell: pwsh
+        run: |
+          $srv = Join-Path $env:LOCALAPPDATA 'Programs\FBRX OS\resources\server'
+          Get-ChildItem -Recurse $srv | Format-Table FullName, Length
+          foreach ($f in 'manifest.json', 'fbrx-server-ci-amd64.iso', 'docs\SERVER.md') { if (-not (Test-Path (Join-Path $srv $f))) { throw "$f is missing from the installed FBRX Server resources" } }
+          if (-not (Get-ChildItem $srv -Filter 'fbrx-server-*.tar.gz')) { throw "The server bundle is missing" }
+          $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
+          $setup = Get-Item "apps/desktop/release/$version/FBRX-OS-Setup-$version.exe"
+          "Setup.exe: $([math]::Round($setup.Length / 1MB)) MB"
       - name: Running the installer again updates the app while it is open
         shell: cmd
         run: call "Install FBRX OS.cmd" --yes --name "CI Runner" --no-launch

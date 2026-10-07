@@ -1,4 +1,5 @@
-# Builds signed FBRX OS installers for macOS and Windows, publishes the control-plane image to GHCR,
+# Builds signed FBRX OS installers for macOS and Windows (carrying the FBRX Server installer ISO, bundle and guides for
+# now), publishes the control-plane image to GHCR,
 # attaches everything to a GitHub release and (optionally) pushes the build to your control plane so
 # enrolled workstations can update to it.
 #
@@ -62,8 +63,37 @@ jobs:
           echo "version=$V" >> "$GITHUB_OUTPUT"; echo "channel=$C" >> "$GITHUB_OUTPUT"
           echo "Building FBRX OS $V for the $C channel"
 
-  desktop:
+  # FBRX Server travels inside FBRX Endpoint for now: the installer ISO, the server bundle and the guides are built
+  # first and packed into the macOS and Windows installers (scripts/server/endpoint-resources.mjs).
+  server:
     needs: meta
+    name: FBRX Server (ISO, bundle, guides)
+    runs-on: ubuntu-latest
+    env:
+      ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: sudo apt-get update -qq && sudo apt-get install -y -qq xorriso >/dev/null
+      - run: npm ci --no-audit --no-fund
+      - name: Bundle FBRX Server (with Node.js)
+        run: scripts/server/bundle.sh --with-node
+      - name: Build the installer ISO
+        run: scripts/server/build-iso.sh
+      - name: Gather the resources for the FBRX Endpoint installers
+        run: node scripts/server/endpoint-resources.mjs --iso "$(ls dist/fbrx-server-*-amd64.iso | head -1)" --out server-resources
+      - uses: actions/upload-artifact@v4
+        with:
+          name: server-resources
+          path: server-resources
+          compression-level: 0
+          if-no-files-found: error
+
+  desktop:
+    needs: [meta, server]
     name: Desktop (${{ matrix.name }})
     runs-on: ${{ matrix.os }}
     strategy:
@@ -96,6 +126,11 @@ jobs:
         run: npm version "${{ needs.meta.outputs.version }}" --no-git-tag-version --allow-same-version -w @fbrx/desktop
       - name: Bundle the local AI runtime (llama.cpp)
         run: npm run runtime:fetch -- --platform ${{ matrix.platform }} --arch ${{ matrix.arches }}
+      - name: FBRX Server resources (installer ISO, bundle, guides) for the installer
+        uses: actions/download-artifact@v4
+        with:
+          name: server-resources
+          path: apps/desktop/resources/server
       - name: Package
         shell: bash
         env:
@@ -188,11 +223,18 @@ jobs:
           pattern: desktop-*
           path: dist-release
           merge-multiple: true
+      # The FBRX Server ISO and bundle are also attached to the release on their own (not sent to the control plane).
+      - uses: actions/download-artifact@v4
+        with:
+          name: server-resources
+          path: server-resources
       - name: GitHub release
         if: github.ref_type == 'tag'
         uses: softprops/action-gh-release@v2
         with:
-          files: dist-release/*
+          files: |
+            dist-release/*
+            server-resources/fbrx-server-*
           prerelease: ${{ needs.meta.outputs.channel != 'stable' }}
           generate_release_notes: true
       - name: Push to the FBRX control plane

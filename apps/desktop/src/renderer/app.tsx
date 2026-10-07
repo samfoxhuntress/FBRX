@@ -47,6 +47,7 @@ const ShieldPage = lazy(() => import('./pages/shield').then((m) => ({ default: m
 const UpdatesPage = lazy(() => import('./pages/updates').then((m) => ({ default: m.UpdatesPage })));
 const BugsPage = lazy(() => import('./pages/bugs').then((m) => ({ default: m.BugsPage })));
 const LabPage = lazy(() => import('./pages/lab').then((m) => ({ default: m.LabPage })));
+const ServerPage = lazy(() => import('./pages/server').then((m) => ({ default: m.ServerPage })));
 const MeshPage = lazy(() => import('./pages/mesh').then((m) => ({ default: m.MeshPage })));
 const AiCoordPage = lazy(() => import('./pages/aicoord').then((m) => ({ default: m.AiCoordPage })));
 const MigratePage = lazy(() => import('./pages/migrate').then((m) => ({ default: m.MigratePage })));
@@ -68,6 +69,7 @@ export type Route =
   | 'updates'
   | 'bugs'
   | 'lab'
+  | 'server'
   | 'network'
   | 'files'
   | 'processes'
@@ -326,6 +328,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'backup', label: 'Backup & restore', icon: 'archive', section: 'Protect' },
     { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', ultra: true },
     { id: 'lab', label: 'Virtual lab', icon: 'box', section: 'Advanced', ultra: true },
+    { id: 'server', label: 'FBRX Server', icon: 'server', section: 'Advanced', ultra: true },
     // A Basic computer that belongs to an FBRX Command tenant still sees its organization.
     { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System', ultra: !enrolled },
     { id: 'settings', label: 'Settings', icon: 'settings', section: 'System' },
@@ -368,6 +371,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return <UpdatesPage />;
       case 'bugs':
         return ultra ? <BugsPage agentName={agentName} advanced={ultra} /> : ultraOnly('The bug catcher', 'Crash and error logs from Windows and your apps, explained by the agent. In Basic, ask the agent what went wrong, or send it to your organization from Help desk.');
+      case 'server':
+        return ultra ? <ServerPage /> : ultraOnly('FBRX Server', 'The FBRX Server installer ISO, the bundle for a Debian 13 server you already have, and the guides.');
       case 'lab':
         return ultra ? <LabPage /> : ultraOnly('The virtual lab', 'Test machines in Hyper-V or Windows Sandbox, with capacity gauges and one-click starts.');
       case 'network':
@@ -573,7 +578,7 @@ const SECTIONS: Array<{ id: string; section: string; label: string; hint: string
   { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', learnerHint: 'Tools and stories', icon: 'toolbox' },
   { id: 'orbit', section: 'Connect', label: 'Orbit', hint: 'Phone, mesh, AI models', basicHint: 'AI models', icon: 'orbit' },
   { id: 'stronghold', section: 'Protect', label: 'Stronghold', hint: 'Antivirus, approvals, keys, backups', icon: 'castle' },
-  { id: 'lab', section: 'Advanced', label: 'Lab', hint: 'Terminal, virtual lab', icon: 'flask' },
+  { id: 'lab', section: 'Advanced', label: 'Lab', hint: 'Terminal, virtual lab, FBRX Server', icon: 'flask' },
   { id: 'control', section: 'System', label: 'Control', hint: 'Organization, settings', basicHint: 'Settings, license', learnerHint: 'Settings', icon: 'settings' },
 ];
 
