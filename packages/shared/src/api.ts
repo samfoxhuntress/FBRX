@@ -197,7 +197,8 @@ export interface TokenUsage {
   outputTokens: number;
 }
 
-export type AgentPhase = 'model' | 'thinking' | 'writing' | 'tool' | 'approval' | 'reading';
+/** "mesh": another computer's agent is taking over or being consulted (Mesh Assist). */
+export type AgentPhase = 'model' | 'thinking' | 'writing' | 'tool' | 'approval' | 'reading' | 'mesh';
 
 export type AgentEvent =
   | { type: 'run.started'; runId: string; conversationId: string; providerId: string; model: string }

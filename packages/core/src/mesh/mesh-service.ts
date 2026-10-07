@@ -37,8 +37,9 @@ import {
   type KeyPair,
 } from './mesh-crypto';
 
-export const MOBILE_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: true, approve: true, workspace: true, alerts: true, control: false };
-export const DESKTOP_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: false, approve: false, workspace: false, alerts: false, control: false };
+export const MOBILE_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: true, approve: true, workspace: true, alerts: true, control: false, assist: false, command: false };
+// Computers may ask each other's AI for help (each computer's Mesh Assist settings still decide); controllers are chosen by hand.
+export const DESKTOP_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false };
 const PERMISSION_KEYS = Object.keys(MOBILE_PERMISSIONS) as Array<keyof MeshPermissions>;
 
 const PAIRING_TTL_MS = 5 * 60_000;
@@ -94,6 +95,8 @@ export interface MeshHost {
   notify: (title: string, body: string) => void;
   system: (cmd: 'lock' | 'sleep') => Promise<string>;
   audit: (action: string, actor: string, outcome: 'success' | 'failure' | 'denied', details?: Record<string, unknown>) => void;
+  /** Mesh Assist requests (assist.offer / start / status / cancel) from a paired computer. */
+  assist?: (device: MeshDevice, method: string, params: any) => Promise<unknown>;
 }
 
 /**
@@ -393,7 +396,8 @@ export class MeshService {
 
   // ---------------------------------------------------------------------------------------- outbound
 
-  private async call<T = any>(id: string, method: string, params?: unknown, timeoutMs = 15_000): Promise<T> {
+  /** A sealed request to a paired computer, answered with its sealed reply. */
+  async call<T = any>(id: string, method: string, params?: unknown, timeoutMs = 15_000): Promise<T> {
     const r = this.row(id);
     if (r.kind !== 'desktop' || !r.addr || !r.port) throw new CoreError('UNAVAILABLE', `${r.name} cannot be reached directly`);
     const self = this.self;
@@ -689,6 +693,12 @@ export class MeshService {
       case 'alerts.list':
         need('alerts');
         return this.host.alerts();
+      case 'assist.offer':
+      case 'assist.start':
+      case 'assist.status':
+      case 'assist.cancel':
+        if (d.kind !== 'desktop' || !this.host.assist) throw new CoreError('NOT_FOUND', 'Mesh Assist is not available here');
+        return this.host.assist(d, method, p);
       case 'action': {
         const a = String(p.action ?? '');
         if (a === 'notify') {
@@ -714,7 +724,7 @@ export class MeshService {
 
   /** Approvals a device may act on: never the approval for its own request to this computer. */
   private approvalsFor(deviceId: string): ApprovalRequest[] {
-    return this.host.approvals().filter((a) => !(a.tool === 'mesh.ask' && (a.input as { deviceId?: string })?.deviceId === deviceId));
+    return this.host.approvals().filter((a) => !((a.tool === 'mesh.ask' || a.tool === 'mesh.assist') && (a.input as { deviceId?: string })?.deviceId === deviceId));
   }
 
   private startJob(d: MeshDevice, promptRaw: string): MeshJob {

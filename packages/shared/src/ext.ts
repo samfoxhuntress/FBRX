@@ -4,6 +4,7 @@ import type { HelpdeskScope, HelpdeskStatus, TicketCategory, TicketDetail, Ticke
 import type { EditionStatus } from './editions';
 import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
 import type { ProtectionState, ProtectionStatus, ScanJob, ScanType, ShieldDetection, ShieldVerdict } from './protection';
+import type { AssistOffer, AssistPriority, AssistSession, AssistTools } from './mesh-assist';
 import type { NetEnvDeviceAction, NetEnvDeviceStats, NetEnvDevice, NetEnvInput, NetEnvironment, NetEnvOverview, NetEnvProbe, NetEnvVoucher } from './netenv';
 /**
  * Contracts for the FBRX OS command-center modules: workspace (notes, tasks, projects, snippets), live system
@@ -686,6 +687,13 @@ export interface MeshPermissions {
   alerts: boolean;
   /** Locate, lock or put this computer to sleep. */
   control: boolean;
+  /** Ask this computer's AI for help with its own work (Mesh Assist), under this computer's Mesh Assist settings. */
+  assist: boolean;
+  /**
+   * Controller: when it runs as administrator, its requests for help run here without asking, may be urgent, and
+   * may stop lower-priority help (they still follow this computer's policy).
+   */
+  command: boolean;
 }
 export interface MeshDevice {
   id: string;
@@ -1051,6 +1059,15 @@ export interface ExtMethods {
   'mesh.message': (p: { text: string }) => { delivered: number; total: number };
   'mesh.messages': () => MeshMessage[];
   'mesh.action': (p: { id: string; action: (typeof MESH_ACTIONS)[number]; text?: string }) => Ok;
+  /** Paired computers that could help right now, best first. */
+  'mesh.assist.helpers': () => AssistOffer[];
+  /** Help asked from here and help given here, newest first. */
+  'mesh.assist.sessions': () => AssistSession[];
+  /** Hands work to other computers' AI ("any": the best helper). */
+  'mesh.assist.send': (p: { peerIds: string[] | 'any'; goal: string; priority?: AssistPriority; tools?: AssistTools }) => AssistSession[];
+  /** Asks the same helper a follow-up in the same conversation. */
+  'mesh.assist.followUp': (p: { sessionId: string; text: string }) => AssistSession;
+  'mesh.assist.cancel': (p: { sessionId: string }) => AssistSession;
 
   'aicoord.detect': () => AiAppInfo[];
   'aicoord.bridge': () => McpBridgeInfo;
@@ -1089,6 +1106,7 @@ export interface ExtEvents {
   'mesh.changed': MeshStatus;
   'mesh.message': MeshMessage;
   'mesh.job': { reqId: string; job: MeshJob };
+  'mesh.assist': AssistSession;
 }
 
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */

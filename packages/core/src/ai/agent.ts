@@ -25,6 +25,7 @@ import type { ProviderManager } from './provider-manager';
 import type { ProviderMessage, ProviderTool, ProviderToolCall } from './providers/types';
 import { chatEgg, type ChatEgg } from '../fun/chat-eggs';
 import { learnerConcern, learnerPrompt, type LearnerConcern } from './learner';
+import { isCapacityError } from '../mesh/mesh-assist';
 
 export interface ChatParams {
   conversationId?: string;
@@ -35,6 +36,16 @@ export interface ChatParams {
   actor: string;
   /** For a new conversation: start offline (defaults to the user's setting for chats started at the workstation). */
   offline?: boolean;
+  /** For a new conversation: its title (otherwise the start of the message). */
+  title?: string;
+  /** Narrower limits for this run (help given to another computer through Mesh Assist). */
+  limits?: {
+    maxSteps?: number;
+    /** none: no tools; read: tools that only read or look things up; all: what the policy allows. */
+    tools?: 'none' | 'read' | 'all';
+    /** false: never ask other computers for help (and hide the mesh tools). */
+    assist?: boolean;
+  };
 }
 
 export interface RunResult {
@@ -110,6 +121,11 @@ export class AgentRuntime {
       learner?: () => { vertical: Vertical } | null;
       /** A message on a student computer sounded like a child may be in danger (the text is never passed on). */
       onConcern?: (category: LearnerConcern['category'], conversationId: string) => void;
+      /** Mesh Assist: hands the task to another computer when this run runs out of steps or its AI fails. */
+      assist?: {
+        canHandoff: (trigger: 'steps' | 'provider') => boolean;
+        handoff: (h: { trigger: 'steps' | 'provider'; task: string; digest: string; error?: string; signal?: AbortSignal; onStatus: (text: string) => void }) => Promise<{ ok: true; peerName: string; answer: string } | { ok: false; reason: string }>;
+      };
       /** Easter eggs (Settings → Appearance → Fun extras). */
       fun?: {
         enabled: () => boolean;
@@ -151,7 +167,7 @@ export class AgentRuntime {
       }
     } else {
       const offline = p.offline ?? (p.origin === 'user' && this.d.settings.get().ai.newChatsOffline);
-      conversationId = this.d.store.create(text.replace(/\s+/g, ' ').slice(0, 80), p.origin, offline).id;
+      conversationId = this.d.store.create((p.title ?? text).replace(/\s+/g, ' ').slice(0, 80), p.origin, offline).id;
     }
     const runId = newId('run');
     const controller = new AbortController();
@@ -213,15 +229,61 @@ export class AgentRuntime {
     this.d.events.emit('agent', e);
   }
 
-  private availableTools(): ToolSpec[] {
+  private availableTools(limits?: ChatParams['limits']): ToolSpec[] {
     // The learning helper on student computers only talks.
     if (this.d.learner?.()) return [];
+    if (limits?.tools === 'none') return [];
     return this.d.registry
       .list()
       .filter((t) => this.d.registry.isEnabled(t.name))
       .filter((t) => !t.feature || this.d.license.has(t.feature))
       .filter((t) => !t.unavailable?.())
-      .filter((t) => this.d.policy.staticAction(t).action !== 'deny');
+      .filter((t) => this.d.policy.staticAction(t).action !== 'deny')
+      .filter((t) => limits?.tools !== 'read' || t.risk === 'read' || t.risk === 'network')
+      .filter((t) => limits?.assist !== false || !t.name.startsWith('mesh.'));
+  }
+
+  /** What this run did so far, for another computer taking it over: its own messages and tool results, newest kept. */
+  private digest(conversationId: string, budget = 12_000): string {
+    const msgs = this.d.store.messages(conversationId);
+    let start = msgs.length - 1;
+    while (start > 0 && msgs[start].role !== 'user') start--;
+    const cut = (t: string, n: number) => (t.length > n ? `${t.slice(0, n)}…` : t);
+    const lines: string[] = [];
+    for (const m of msgs.slice(start + 1)) {
+      if (m.role === 'assistant') {
+        if (m.content.trim()) lines.push(`Agent: ${cut(m.content.trim(), 600)}`);
+        for (const c of m.toolCalls ?? []) lines.push(`Tool ${c.name}(${cut(JSON.stringify(c.input ?? {}), 200)}) → ${c.status}`);
+      } else if (m.role === 'tool') lines.push(`Result of ${m.toolName}: ${cut(m.content.trim(), 800)}`);
+    }
+    const prior = msgs
+      .slice(Math.max(0, start - 6), start)
+      .filter((m) => m.role === 'user' || (m.role === 'assistant' && m.content.trim()))
+      .map((m) => `${m.role === 'user' ? 'Person' : 'Agent'} (earlier): ${cut(m.content.trim(), 400)}`);
+    let out = [...(prior.length ? ['Earlier in the conversation:', ...prior, ''] : []), 'This task so far:', ...(lines.length ? lines : ['(nothing yet)'])].join('\n');
+    if (out.length > budget) out = `…${out.slice(out.length - budget)}`;
+    return out;
+  }
+
+  /**
+   * Another computer finishes the task (Mesh Assist). Returns its answer as this run's last message, or null when no
+   * computer could (the caller then ends the run as it would have).
+   */
+  private async handoff(
+    trigger: 'steps' | 'provider',
+    ctx: { runId: string; conversationId: string; text: string; error?: string; signal: AbortSignal; progress: (detail: string) => void; providerId: string; model: string },
+  ): Promise<{ answer: string } | { failed: string } | null> {
+    const assist = this.d.assist;
+    if (!assist?.canHandoff(trigger)) return null;
+    const r = await assist.handoff({ trigger, task: ctx.text, digest: this.digest(ctx.conversationId), error: ctx.error, signal: ctx.signal, onStatus: ctx.progress });
+    if (!r.ok) return { failed: r.reason };
+    const why = trigger === 'steps' ? `ran out of steps here` : `the AI provider stopped answering here`;
+    const content = `_${this.d.settings.get().ai.agentName} ${why}, so **${r.peerName}** finished this through Mesh Assist:_\n\n${r.answer}`;
+    const msg = this.d.store.append(ctx.conversationId, { role: 'assistant', content, providerId: ctx.providerId, model: `${r.peerName} (Mesh Assist)` });
+    const { providerData: _p, ...shown } = msg;
+    this.emit({ type: 'message.completed', runId: ctx.runId, conversationId: ctx.conversationId, message: shown });
+    this.d.audit.append({ category: 'agent', action: 'run.handoff', actor: 'agent', target: ctx.conversationId, outcome: 'success', details: { runId: ctx.runId, trigger, peer: r.peerName } });
+    return { answer: content };
   }
 
   setOffline(conversationId: string, offline: boolean) {
@@ -334,7 +396,8 @@ export class AgentRuntime {
     this.d.store.append(conversationId, { role: 'user', content: text });
     this.emit({ type: 'run.started', runId, conversationId, providerId: config.id, model });
     this.d.log.info('Agent run started', { runId, provider: config.id, model, origin: p.origin });
-    const maxSteps = policy.ai.maxStepsPerRun;
+    const maxSteps = Math.min(policy.ai.maxStepsPerRun, p.limits?.maxSteps ?? Number.POSITIVE_INFINITY);
+    const mayHandOff = p.limits?.assist !== false;
     const maxTokens = this.d.settings.get().ai.maxOutputTokens || undefined;
     // What the agent is doing right now, for the activity panel while it works.
     const progress = (phase: AgentPhase, detail: string) => this.emit({ type: 'run.progress', runId, conversationId, step: steps, maxSteps, phase, detail, usage: { ...usage } });
@@ -343,7 +406,7 @@ export class AgentRuntime {
     try {
       while (steps < maxSteps) {
         steps++;
-        const tools = this.availableTools();
+        const tools = this.availableTools(p.limits);
         const byWire = new Map(tools.map((t) => [toWireName(t.name), t]));
         const wireTools: ProviderTool[] = tools.map((t) => ({
           name: toWireName(t.name),
@@ -491,12 +554,18 @@ export class AgentRuntime {
       }
 
       if (stoppedAtLimit) {
-        // The run used every step it was allowed while still working: say so instead of stopping silently.
-        const note = `I've used all ${maxSteps} steps one task may take and stopped before finishing. Say **continue** and I'll pick up where I left off, or raise **Steps per task** in Settings → Agent.`;
-        const msg = this.d.store.append(conversationId, { role: 'assistant', content: note, providerId: config.id, model });
-        const { providerData: _p, ...shown } = msg;
-        this.emit({ type: 'message.completed', runId, conversationId, message: shown });
-        finalAnswer = note;
+        // The run used every step it was allowed while still working: another computer may finish it (Mesh Assist);
+        // otherwise say so instead of stopping silently.
+        const handed = mayHandOff ? await this.handoff('steps', { runId, conversationId, text, signal, progress: (d) => progress('mesh', d), providerId: config.id, model }) : null;
+        if (handed && 'answer' in handed) finalAnswer = handed.answer;
+        else {
+          const tried = handed && 'failed' in handed ? ` (No other computer could take it over: ${handed.failed}.)` : '';
+          const note = `I've used all ${maxSteps} steps one task may take and stopped before finishing.${tried} Say **continue** and I'll pick up where I left off, or raise **Steps per task** in Settings → Agent.`;
+          const msg = this.d.store.append(conversationId, { role: 'assistant', content: note, providerId: config.id, model });
+          const { providerData: _p, ...shown } = msg;
+          this.emit({ type: 'message.completed', runId, conversationId, message: shown });
+          finalAnswer = note;
+        }
       }
       this.emit({ type: 'run.completed', runId, conversationId, steps, usage });
       this.d.audit.append({
@@ -513,6 +582,15 @@ export class AgentRuntime {
       const message = cancelled ? 'Canceled' : errorMessage(err);
       for (const u of unanswered) {
         this.d.store.append(conversationId, { role: 'tool', content: `Not executed: ${message}`, toolCallId: u.id, toolName: u.name });
+      }
+      if (!cancelled && mayHandOff && isCapacityError(message)) {
+        // Out of credits, over quota, rate limited or down: another computer's AI may finish the task (Mesh Assist).
+        const handed = await this.handoff('provider', { runId, conversationId, text, error: message, signal, progress: (d) => progress('mesh', d), providerId: config.id, model }).catch(() => null);
+        if (handed && 'answer' in handed) {
+          this.emit({ type: 'run.completed', runId, conversationId, steps, usage });
+          this.d.audit.append({ category: 'agent', action: 'run.completed', actor: p.actor, target: conversationId, outcome: 'success', details: { runId, origin: p.origin, provider: config.id, model, steps, handedOff: true, error: message } });
+          return { runId, conversationId, answer: handed.answer, steps, usage, status: 'completed' };
+        }
       }
       if (cancelled) this.emit({ type: 'run.cancelled', runId, conversationId });
       else this.emit({ type: 'run.failed', runId, conversationId, error: message });

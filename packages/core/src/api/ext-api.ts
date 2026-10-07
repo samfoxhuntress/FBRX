@@ -7,6 +7,8 @@ import {
   VOICE_DOWNLOAD_IDS,
   LAB_FEATURES,
   MESH_ACTIONS,
+  ASSIST_PRIORITIES,
+  ASSIST_TOOLS,
   NETENV_DEVICE_ACTIONS,
   NETENV_KINDS,
   HELPDESK_SCOPES,
@@ -700,6 +702,24 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       await k.mesh.action(q.id, q.action, q.text);
       return { ok: true };
     },
+    'mesh.assist.helpers': () => k.assist.helpers(),
+    'mesh.assist.sessions': () => k.assist.list(),
+    'mesh.assist.send': (p) => {
+      const q = z
+        .object({
+          peerIds: z.union([z.literal('any'), z.array(z.string().max(128)).min(1).max(32)]),
+          goal: z.string().trim().min(1).max(16_000),
+          priority: z.enum(ASSIST_PRIORITIES).optional(),
+          tools: z.enum(ASSIST_TOOLS).optional(),
+        })
+        .parse(p);
+      return k.assist.send(q);
+    },
+    'mesh.assist.followUp': (p) => {
+      const q = z.object({ sessionId: z.string().max(64), text: z.string().trim().min(1).max(16_000) }).parse(p);
+      return k.assist.followUp(q.sessionId, q.text);
+    },
+    'mesh.assist.cancel': (p) => k.assist.cancel(z.object({ sessionId: z.string().max(64) }).parse(p).sessionId),
 
     // -------------------------------------------------------------------------------- AI coordination
     'aicoord.detect': () => k.aicoord.detect(),

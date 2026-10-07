@@ -71,6 +71,8 @@ import { NetEnvironments } from './network/environments';
 import { Helpdesk } from './fleet/helpdesk';
 import { MeshService } from './mesh/mesh-service';
 import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
+import { MeshAssist } from './mesh/mesh-assist';
+import { meshTools } from './tools/builtin/mesh-tools';
 import { AiCoordination } from './aicoord/aicoord';
 import { ConversationStore } from './ai/conversations';
 import { ModelManager } from './ai/runtime/model-manager';
@@ -166,6 +168,7 @@ export class Kernel {
   readonly release: ReleaseChecker;
   readonly cli: Fbrx1Cli;
   readonly mesh: MeshService;
+  readonly assist: MeshAssist;
   readonly aicoord: AiCoordination;
   private readonly api: Record<string, (p: any, ctx: CallContext) => unknown>;
   private disposers: Array<() => void> = [];
@@ -254,6 +257,10 @@ export class Kernel {
         return e.learner ? { vertical: e.vertical } : null;
       },
       onConcern: (category) => this.reportConcern(category),
+      assist: {
+        canHandoff: (trigger) => this.assist.canHandoff(trigger),
+        handoff: (h) => this.assist.handoff(h),
+      },
       fun: {
         enabled: () => funEnabled(this.settings.get(), this.license.status().tier),
         trophy: (id) => void this.trophies.unlock(id),
@@ -489,6 +496,44 @@ export class Kernel {
       notify: (title, body) => this.notify({ title, body, level: 'info', source: 'mesh' }),
       system: (cmd) => this.spotlight.system(cmd),
       audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
+      assist: (device, method, params) => this.assist.handle(device, method, params),
+    });
+    this.assist = new MeshAssist({
+      settings: () => this.settings.get().mesh.assist,
+      meshRunning: () => this.mesh.running,
+      agentName: () => this.settings.get().ai.agentName,
+      devices: () => this.mesh.devices(),
+      call: (peerId, method, params, timeoutMs) => this.mesh.call(peerId, method, params, timeoutMs),
+      agentReady: () => this.assistReady(),
+      load: () => {
+        const live = this.monitor.current;
+        return { cpu: live?.cpu ?? null, memUsedPct: live ? Math.round((live.memUsed / live.memTotal) * 100) : null };
+      },
+      runHelp: (p) =>
+        this.agent.start({
+          message: p.message,
+          conversationId: p.conversationId ?? undefined,
+          title: p.title,
+          origin: 'remote',
+          actor: `mesh-assist:${p.peerName}`,
+          limits: { maxSteps: p.maxSteps, tools: p.tools, assist: false },
+        }),
+      onTool: (runId, cb) =>
+        this.events.on('agent', (e) => {
+          if (e.type === 'tool.updated' && e.runId === runId && e.call.status === 'running') cb(e.call.name);
+        }),
+      cancelRun: (runId) => void this.agent.cancel(runId),
+      approve: async (p) => {
+        const r = await this.approvals.request(
+          { runId: null, tool: 'mesh.assist', toolTitle: p.title, risk: 'execute', input: p.input, reason: p.reason, origin: 'remote', findings: [] },
+          this.policy.policy.approvals.timeoutSeconds,
+          p.signal,
+        );
+        return r.decision === 'approve';
+      },
+      audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
+      emit: (session) => this.events.emit('mesh.assist', session),
+      log: L('mesh'),
     });
     this.alerts = new AlertEngine({
       db: this.db,
@@ -716,6 +761,11 @@ export class Kernel {
           ...netEnvTools(this.netenv, () => this.ultraOnly('Network environments')),
           ...calendarTools(this.calendar),
           ...shieldTools(this.protection, this.shield),
+          ...meshTools(this.assist, () => {
+            const a = this.settings.get().mesh.assist;
+            if (!this.mesh.running) return 'The mesh is off';
+            return a.agentMayConsult && a.request !== 'off' ? null : 'Mesh Assist does not let the agent consult other computers';
+          }),
           ...helpdeskTools(this.helpdesk, () => (this.fleet.enrolled ? null : 'This computer is not part of an organization, so there is no help desk to send to')),
           ...pcTools({ monitor: this.monitor, net: this.net, alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined) }),
         ]);
@@ -1273,6 +1323,17 @@ export class Kernel {
   /** False when the organization's network policy blocks every internet host. */
   internetAllowed(): boolean {
     return this.policy.policy.network.allowedDomains.length > 0;
+  }
+
+  /** Whether this computer's AI could take on help for another computer, and which AI it is. */
+  private assistReady(): { ready: boolean; provider: string | null; model: string | null; local: boolean } {
+    if (this.aiHalt() || this.edition().learner) return { ready: false, provider: null, model: null, local: false };
+    try {
+      const { config, model } = this.providers.resolve();
+      return { ready: true, provider: config.name, model, local: config.type === 'local-runtime' || !config.cloud };
+    } catch {
+      return { ready: false, provider: null, model: null, local: false };
+    }
   }
 
   private meshKeyPair(): KeyPair {

@@ -3,6 +3,7 @@ import type { Tier } from './license';
 import { DEFAULT_LOCAL_API_PORT, DEFAULT_RUNTIME_PORT, UPDATE_CHANNELS } from './constants';
 import { ALERT_CHANNELS } from './ext';
 import { PROTECTION_DEFAULT_FEED } from './protection';
+import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS } from './mesh-assist';
 
 /** Built-in color themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
 export const THEME_PRESETS = ['fabrics', 'tropical', 'neon', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
@@ -252,6 +253,31 @@ export const SettingsSchema = z.object({
     port: z.number().int().min(1024).max(65535),
     /** What happens when another device asks this computer's agent to do something. */
     incoming: z.enum(['ask', 'allow', 'deny']),
+    /** Mesh Assist: computers on the mesh lending each other their AI. */
+    assist: z.object({
+      /** Bring another computer's AI in: off, ask the person here first, or on its own. */
+      request: z.enum(ASSIST_MODES),
+      /** Hand the task over when the agent runs out of steps. */
+      onStepLimit: z.boolean(),
+      /** Hand the task over when the AI provider fails (credits, quota, rate limit, outage). */
+      onProviderError: z.boolean(),
+      /** The agent may consult other computers' agents itself, mid-task (tools mesh.helpers, mesh.consult). */
+      agentMayConsult: z.boolean(),
+      /** Lend this computer's AI to others: off, ask the person here first, or on its own. */
+      offer: z.enum(ASSIST_MODES),
+      /** What this computer's agent may do while helping another. */
+      tools: z.enum(ASSIST_TOOLS),
+      /** Help given at the same time. */
+      maxConcurrent: z.number().int().min(1).max(8),
+      /** Steps one piece of help may take here. */
+      maxSteps: z.number().int().min(1).max(100),
+      /** How urgent this computer's own requests are. */
+      priority: z.enum(ASSIST_PRIORITIES),
+      /** An urgent request from a controller may stop lower-priority help running here. */
+      allowPreempt: z.boolean(),
+      /** Roles this computer announces (servers: ai, virtual, command, …). */
+      roles: z.array(z.string().regex(/^[a-z][a-z0-9-]{0,31}$/)).max(16),
+    }),
   }),
   runtime: z.object({
     enabled: z.boolean(),
@@ -468,6 +494,19 @@ export const DEFAULT_SETTINGS: Settings = {
     enabled: false,
     port: DEFAULT_MESH_PORT,
     incoming: 'ask',
+    assist: {
+      request: 'ask',
+      onStepLimit: true,
+      onProviderError: true,
+      agentMayConsult: true,
+      offer: 'ask',
+      tools: 'read',
+      maxConcurrent: 1,
+      maxSteps: 12,
+      priority: 'normal',
+      allowPreempt: true,
+      roles: [],
+    },
   },
   runtime: {
     enabled: true,

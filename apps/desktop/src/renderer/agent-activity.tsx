@@ -52,6 +52,7 @@ const PHASE: Record<AgentPhase, { label: string; icon: IconName }> = {
   writing: { label: 'Writing', icon: 'edit' },
   tool: { label: 'Working', icon: 'wrench' },
   approval: { label: 'Waiting for you', icon: 'shield' },
+  mesh: { label: 'Another computer is helping', icon: 'network' },
 };
 
 function seconds(ms: number): string {
