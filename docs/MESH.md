@@ -18,6 +18,7 @@ Each device gets its own permissions on *this* computer, changeable at any time 
 | Remote control (lock, sleep) | | |
 | Help with AI (Mesh Assist, below) | — | ✔ |
 | Controller (Mesh Assist, below) | — | |
+| Network protection (a gate's FBRX MiniDome, below) | | |
 
 Requests from another *computer* follow **When another computer asks this computer's agent**: ask me first (an
 approval appears here), allow, or never; a device can never approve its own request. Phones you pair are yours, so
@@ -75,6 +76,36 @@ stop lower-priority help that is running. Without the Controller permission a co
 * Help is never passed along twice: a helper cannot bring a third computer in.
 * Everything is in both computers' audit logs (`assist.*`, `run.handoff`), and either side can stop a request.
 * Requests travel over the same sealed, authenticated mesh connection as everything else.
+
+## Prefer Mesh
+
+A fast lane for traffic between FBRX computers, so their AI helping each other does not wait behind a backup or a
+download. Turn it on in **Mesh & phone → Prefer Mesh** (on an FBRX Server: *Mesh & AI → Network*).
+
+* **Mesh networks first.** List the networks the computers should reach each other through, in order (a VLAN for AI
+  and servers, say). Computers tell each other their addresses when they say hello, and each one picks the other's
+  address inside a mesh network; if it does not answer, the usual address is used and the mesh address is tried again
+  five minutes later.
+* **TCP, kept open.** Mesh calls go over TCP connections that are kept alive and send at once (no delay), so a
+  conversation between two computers does not start a new handshake each time.
+* **Marked for priority.** Mesh traffic (TCP port 47800) is marked with a DSCP class: AF41 by default (interactive,
+  below voice calls; EF and CS5 sit higher, CS0 turns the priority off). Switches that trust DSCP, and FBRX Gate, put it
+  in a faster queue. Marking is set up on Linux with an nftables table (`inet fbrx_mesh`, as root) and on Windows with
+  a QoS policy (after an administrator prompt); macOS does not mark.
+* **Jumbo frames.** If the mesh networks run at MTU 9000, say so: the page checks each computer's mesh interface and
+  the test sends a 9000-byte packet that may not be split, to see whether every switch on the way takes it.
+* **Test the paths.** *Test* shows, for each paired computer, which address it is reached on, whether that is a mesh
+  address, the round trip, and the jumbo-frame result.
+
+FBRX Gate does the network's side: it marks mesh traffic it routes (and everything from a mesh VLAN), shapes the
+internet line with a priority lane, and offers jumbo frames on the mesh VLAN. See [GATE.md](GATE.md#traffic-priority-and-prefer-mesh).
+
+## Network protection: FBRX MiniDome and FBRX Shield
+
+A gate's **FBRX MiniDome** ([MINIDOME.md](MINIDOME.md)) watches the network. With **Network protection** allowed for the
+gate's server, this computer gets an alert when MiniDome saw something coming from it (a known-bad domain, a DNS
+tunnel, …), and MiniDome may see how this computer is protected (its antivirus and threats found). It is off until you
+allow it, per paired server.
 
 ## Pairing
 

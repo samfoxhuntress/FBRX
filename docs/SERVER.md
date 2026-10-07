@@ -10,6 +10,10 @@ with your other FBRX computers through **Mesh Assist**, lending its AI when thei
 borrowing theirs, and, as a **controller**, handing out work to them. It is managed from the same console
 (*Mesh & AI*, below).
 
+With the **gate** role the server routes and protects your network (**FBRX Gate**: firewall, VLANs, DHCP and DNS, VPN,
+traffic priority and Prefer Mesh, [GATE.md](GATE.md)); with **minidome** it also watches it for threats (**FBRX
+MiniDome**, [MINIDOME.md](MINIDOME.md)). Same console, *Gate* pages.
+
 > First stage (FBRX Virtual 0.1). It runs real virtual machines and is tested against a real hypervisor in CI. Clusters,
 > backups of virtual machines and governance from FBRX Command come later (see [LINEUP.md](LINEUP.md)).
 
@@ -45,7 +49,8 @@ options (for device passthrough, after one reboot) and starts the `fbrx-virtual`
 
 | Option | |
 | --- | --- |
-| `--roles virtual,ai` | What the server does (below). `--roles virtual` installs the hypervisor alone; running the installer again with other roles adds or turns off the ai role (its data stays). |
+| `--roles virtual,ai` | What the server does (below). `--roles virtual` installs the hypervisor alone; `--roles gate,minidome,ai` makes a gate without virtual machines. Running the installer again with other roles adds roles, or turns the ai role off (its data stays). |
+| `--gate-wan eno1 --gate-lan eno2` | The gate's internet port and the port to your network (gate role; see [GATE.md](GATE.md#install)). `--gate-manage <cidr\|none>` keeps the console and SSH reachable from a private network on the internet side. |
 | `--bridge eno1` | Makes bridge `br0` on that port so virtual machines sit straight on your network (applies after a reboot). Only for a port set up with DHCP; for a static address, see *Networks* below. |
 | `--port 9443` | The console's port. |
 | `--uninstall [--purge]` | Takes FBRX Server off again. Virtual machines and their disks, and the ai role's mesh pairings and keys, stay unless `--purge`. |
@@ -57,15 +62,17 @@ helper, so work can go to the right server).
 
 | Role | What it runs | |
 | --- | --- | --- |
-| `virtual` | FBRX Virtual: the hypervisor and the web console | Always (the console lives here) |
+| `virtual` | FBRX Virtual: the hypervisor (virtual machines) | Default |
 | `ai` | The FBRX core: the agent, FBRX Mesh and Mesh Assist (`fbrx-core` service) | Default |
+| `gate` | FBRX Gate: routing, firewall, VLANs, DHCP and DNS, VPN, traffic priority ([GATE.md](GATE.md)) | First stage |
+| `minidome` | FBRX MiniDome: threat detection through the gate ([MINIDOME.md](MINIDOME.md)); needs `gate` | First stage |
 | `command` | FBRX Command on the server: the tenant's settings and policy, kept with the mesh | Planned |
 | `dns` | Name service for the network | Planned |
 | `directory` | Directory and sign-in for the organization's computers (a domain controller) | Planned |
 | `files` | File sharing | Planned |
-| `gate` / `minidome` | FBRX Gate (firewall) and FBRX MiniDome (network watch), see [LINEUP.md](LINEUP.md) | Planned |
 
-The installer refuses a planned role for now and says so.
+The web console comes with every role (it is FBRX Virtual's service, with or without virtual machines). The installer
+refuses a planned role for now and says so.
 
 ## Dell PowerEdge R330 checklist
 
@@ -203,6 +210,7 @@ fbrx-server restart ai             restart the FBRX core
 fbrx-server users                  who can sign in
 fbrx-server reset-password <user>  a new password for someone locked out
 fbrx-server create-admin [name]    another administrator
+fbrx-gate help                     FBRX Gate's own commands (gate role, see GATE.md)
 ```
 
 ## Settings
@@ -223,6 +231,11 @@ fbrx-server create-admin [name]    another administrator
 | `FBRX_V_DOMAIN_TYPE` | | `qemu` forces software emulation (nested setups). |
 | `FBRX_V_CORE_URL` | `http://127.0.0.1:47821` | The FBRX core's Local API (ai role). |
 | `FBRX_V_CORE_TOKEN_FILE` | `/var/lib/fbrx-core/console.token` | Where the core writes the console token. |
+| `FBRX_V_ROLES` | `virtual` | The server's roles, comma separated (the installer writes it); the console shows what is there. |
+| `FBRX_V_GATE_WAN` / `FBRX_V_GATE_LAN` | `eth0` / `eth1` | The gate's ports, for its starter configuration. |
+| `FBRX_V_GATE` | `linux` | `simulated` pretends (nothing on the computer changes). |
+| `FBRX_V_GATE_FIRST` | | `commit`: put the starter configuration in place at the first start (the installer sets it). |
+| `FBRX_V_GATE_MANAGE_WAN` | | A private network on the internet side allowed to reach the console and SSH. |
 
 `/etc/fbrx-core/fbrx-core.env` (ai role; `sudo systemctl restart fbrx-core` after a change): `FBRX_SERVER_ROLES`, the
 roles this server announces (the installer writes it). Everything else about the core is set from *Mesh & AI*.
@@ -257,6 +270,8 @@ All under `/v1`, with `Authorization: Bearer <token>` from `POST /v1/auth/login`
 | `GET/POST /networks`, `DELETE /networks/:name` | Networks |
 | `GET /hardware/topology`, `GET /hardware/flows`, `PUT /hardware/devices/:address/irqs`, `PUT /hardware/irqs/:irq`, `PUT /hardware/irqbalance` | Hardware map |
 | `GET/PUT/DELETE /bmc`, `POST /bmc/probe`, `GET /bmc/system`, `/sensors`, `/logs`, `POST /bmc/power`, `POST /bmc/boot-to-setup`, `GET/PATCH /bmc/bios`, `DELETE /bmc/bios/pending` | Server management |
+| `/gate/…` | FBRX Gate (gate role): see [GATE.md](GATE.md#api) |
+| `/dome/…` | FBRX MiniDome (minidome role): see [MINIDOME.md](MINIDOME.md#api) |
 | `GET /core`, `POST /core/call` `{ method, params }` | The FBRX core (ai role): `system.status`, `settings.get`, `ai.providers`, `mesh.status`, `mesh.assist.helpers`, `mesh.assist.sessions`, `approvals.list` (viewers); `mesh.assist.send`, `mesh.assist.followUp`, `mesh.assist.cancel`, `approvals.resolve` for Mesh Assist (operators); `settings.update` (Mesh Assist and AI provider settings), `vault.set` (provider keys), `vault.list`, `ai.models`, `mesh.setEnabled`, `mesh.rename`, `mesh.startPairing`, `mesh.cancelPairing`, `mesh.pair`, `mesh.removeDevice`, `mesh.setPermissions` (administrators) |
 
 ## Development
@@ -265,6 +280,7 @@ All under `/v1`, with `Authorization: Bearer <token>` from `POST /v1/auth/login`
 npm run dev:virtual            # FBRX Virtual on https://localhost:9443 (simulated; admin / fbrx-virtual-dev)
 npm run dev:virtual-console    # the console with hot reload on http://localhost:5175
 npx vitest run apps/virtual    # tests; FBRX_TEST_LIBVIRT=1 (as root, libvirt installed) adds the real-hypervisor test
+FBRX_V_ROLES=gate,minidome,ai FBRX_V_GATE=simulated npm run dev:virtual   # a pretend gate with MiniDome
 
 # Mesh & AI against a real core: the core in server mode, then FBRX Virtual pointed at its console token
 npm run headless -- run --server --data-dir .fbrx-core-dev --roles virtual,ai --console-token-file .fbrx-core-dev/console.token

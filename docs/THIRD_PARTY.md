@@ -37,3 +37,7 @@ No GPL component is included: the eSpeak NG phonemizer that other Kokoro front e
 | [Debian](https://www.debian.org/) 13 installer | The base of the FBRX Server ISO | DFSG-free (mostly GPL) | Downloaded from Debian when the ISO is built; FBRX adds files next to it and changes only the boot menus |
 | QEMU, libvirt, OVMF, swtpm | The hypervisor, UEFI firmware, software TPM | GPL-2.0 / LGPL-2.1 / BSD-2-Clause-Patent / BSD-3-Clause | Installed from Debian's packages, run as their own programs |
 | [PCI ID Repository](https://pci-ids.ucw.cz/) (`pci.ids`) | Device names in the hardware map | GPL-2.0+ / BSD-3-Clause | Read from the server's pciutils package at run time, not bundled |
+| nftables, dnsmasq, systemd-networkd, iproute2 (tc) | FBRX Gate: the firewall, DHCP and DNS, ports and VLANs, traffic shaping | GPL-2.0 / GPL-2.0-or-later / LGPL-2.1+ / GPL-2.0 | Installed from Debian's packages (gate role), configured by FBRX Gate, run as their own programs |
+| wireguard-tools | FBRX Gate's VPN keys and status (the VPN itself is in the Linux kernel) | GPL-2.0 | Installed from Debian's package (gate role). WireGuard is a registered trademark of Jason A. Donenfeld; FBRX Gate uses it and is not affiliated with it |
+| conntrack-tools | FBRX MiniDome: following new connections | GPL-2.0 | Installed from Debian's package (minidome role), run as its own program |
+| [qrcode](https://github.com/soldair/node-qrcode) | QR codes for VPN devices | MIT | Bundled (npm `qrcode`) |

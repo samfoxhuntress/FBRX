@@ -21,6 +21,11 @@ Server**, powered by FBRX OS, and the products below for the computers you alrea
   your servers and computers lend each other their AI when one runs out of steps or credits, and lets a server you
   make a controller hand out work. Install it from the FBRX Server ISO or on Debian 13 ([docs/SERVER.md](docs/SERVER.md));
   for now the FBRX Endpoint installer carries the ISO, the server bundle and the guides (*Lab → FBRX Server*).
+* **FBRX Gate** and **FBRX MiniDome** — FBRX Server as the network's router and firewall: VLANs, DHCP and DNS, port
+  forwards, a VPN with QR-code setup, traffic priority and **Prefer Mesh** (a fast lane, with jumbo frames, for FBRX
+  computers whose AI helps each other), all changed by commits that undo themselves unless kept, from the console or
+  the `fbrx-gate` command line ([docs/GATE.md](docs/GATE.md)). MiniDome watches the network through the gate for
+  threats and tells the FBRX computer concerned, where FBRX Shield takes it from there ([docs/MINIDOME.md](docs/MINIDOME.md)).
 
 * **FBRX Endpoint** — a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is
   governed end to end and an everyday **command center** (dashboard, tasks, notes, Spotlight, a Ctrl+Alt+Z clipboard
@@ -85,10 +90,14 @@ apps/
   desktop/          Electron app (main, preload, React renderer) + electron-builder config
   control-plane/    Fastify server: fleet, licensing, updates, admin API (bundled to one file)
   admin-console/    React admin console (served by the control plane)
+  virtual/          FBRX Virtual: FBRX Server's service (hypervisor, gate and MiniDome API, fbrx-gate)
+  virtual-console/  FBRX Server's web console
 packages/
   core/             The FBRX OS runtime (agent, governance, vault, plugins, connectors, backup, fleet agent,
                     workspace, alerts, Windows PC care, network diagnostics, mesh, AI coordination)
   core/mobile/      FBRX Mobile, the phone web app served over the mesh
+  gate/             FBRX Gate: the network configuration, its checks, nftables/dnsmasq/networkd/tc, the engine
+  dome/             FBRX MiniDome: what it hears from the gate, the detectors, findings
   shared/           Types, schemas, protocol, crypto helpers shared by everything
   ui/               Design system + charts used by both UIs
   plugin-sdk/       Types and helpers for plugin authors
@@ -96,7 +105,7 @@ plugins/example-toolkit/   Reference plugin
 scripts/            Release, licensing, plugin and runtime tooling; local fleet demo
 deploy/             Docker compose + Caddy for the control plane, provisioning example
 docs/               Architecture, deployment, backup/restore, plugins, security, licensing, admin console,
-                    command center, mesh, education
+                    command center, mesh, education, server, gate, MiniDome
 ```
 
 ## Install on your own laptop
