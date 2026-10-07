@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { VIRTUAL_DEFAULT_PORT } from '@fbrx/shared';
+import { DEFAULT_LOCAL_API_PORT, VIRTUAL_DEFAULT_PORT } from '@fbrx/shared';
 
 export interface VirtualConfig {
   host: string;
@@ -27,6 +27,11 @@ export interface VirtualConfig {
   sysRoot: string;
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
   trustProxy: boolean;
+  /**
+   * The FBRX core on this server (FBRX Server's "ai" role: the agent, FBRX Mesh and Mesh Assist), reached on its Local
+   * API with the console token it writes at every start. Not installed when the token file is missing.
+   */
+  core: { url: string; tokenFile: string };
 }
 
 function hasVirsh(): boolean {
@@ -72,6 +77,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
     sysRoot: env.FBRX_V_SYS_ROOT ?? '/',
     logLevel: (env.FBRX_V_LOG_LEVEL as VirtualConfig['logLevel']) ?? 'info',
     trustProxy: env.FBRX_V_TRUST_PROXY === '1',
+    core: { url: (env.FBRX_V_CORE_URL ?? `http://127.0.0.1:${DEFAULT_LOCAL_API_PORT}`).replace(/\/+$/, ''), tokenFile: resolve(env.FBRX_V_CORE_TOKEN_FILE ?? '/var/lib/fbrx-core/console.token') },
     ...overrides,
   };
 }

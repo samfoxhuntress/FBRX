@@ -184,7 +184,7 @@ function SessionList({ sessions }: { sessions: AssistSession[] }) {
               <div className="assist-body">
                 <div className="fx-muted" style={{ fontSize: 12 }}>
                   {s.direction === 'out' ? `Asked from here, ${TRIGGER_WORDS[s.trigger]}` : `Given here to ${s.peerName}, ${TRIGGER_WORDS[s.trigger]}`}
-                  {s.admin ? ' · controller' : ''} · {s.steps} step{s.steps === 1 ? '' : 's'}
+                  {s.admin && s.trigger !== 'controller' ? ' · as a controller' : ''} · {s.steps} step{s.steps === 1 ? '' : 's'}
                   {s.tools.length ? ` · used ${[...new Set(s.tools)].join(', ')}` : ''}
                 </div>
                 {s.answer && <div className="md" style={{ whiteSpace: 'pre-wrap' }}>{s.answer}</div>}

@@ -73,6 +73,12 @@ async function boot(): Promise<Kernel> {
   });
   if (serverMode && command === 'run') applyServerDefaults(k);
   await k.start();
+  if (serverMode && command === 'run') {
+    // A server has no administrator sitting at it: its console's administrators decide whether it is a controller.
+    const controller = () => k.assist.setAdmin(k.settings.get().mesh.assist.controller);
+    controller();
+    k.settings.onChange(controller);
+  }
   if (consoleTokenFile && command === 'run') {
     const token = `fbrx_console_${randomBytes(32).toString('base64url')}`;
     mkdirSync(dirname(consoleTokenFile), { recursive: true, mode: 0o700 });

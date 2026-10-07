@@ -5,6 +5,11 @@ FBRX Virtual runs virtual machines on KVM (through libvirt) and is managed from 
 virtual machines and their screens, storage and ISOs, networks, a live **hardware map** of the server, and the server
 itself (health, power and **BIOS settings**) through its management controller.
 
+With the **ai** role (on by default) the server also runs the **FBRX core**: an AI agent on **FBRX Mesh** that works
+with your other FBRX computers through **Mesh Assist**, lending its AI when theirs runs out of steps or credits,
+borrowing theirs, and, as a **controller**, handing out work to them. It is managed from the same console
+(*Mesh & AI*, below).
+
 > First stage (FBRX Virtual 0.1). It runs real virtual machines and is tested against a real hypervisor in CI. Clusters,
 > backups of virtual machines and governance from FBRX Command come later (see [LINEUP.md](LINEUP.md)).
 
@@ -34,14 +39,32 @@ sudo ./fbrx-server-0.1.0/install.sh
 ```
 
 `install.sh` installs QEMU/KVM, libvirt, UEFI firmware (OVMF) and the software TPM (swtpm), Node.js 22 (kept in
-`/opt/fbrx-server/node`, not system-wide) and FBRX Virtual, turns on the IOMMU in the kernel options (for device
-passthrough, after one reboot) and starts the `fbrx-virtual` service.
+`/opt/fbrx-server/node`, not system-wide), FBRX Virtual and (ai role) the FBRX core, turns on the IOMMU in the kernel
+options (for device passthrough, after one reboot) and starts the `fbrx-virtual` and `fbrx-core` services.
 
 | Option | |
 | --- | --- |
+| `--roles virtual,ai` | What the server does (below). `--roles virtual` installs the hypervisor alone; running the installer again with other roles adds or turns off the ai role (its data stays). |
 | `--bridge eno1` | Makes bridge `br0` on that port so virtual machines sit straight on your network (applies after a reboot). Only for a port set up with DHCP; for a static address, see *Networks* below. |
 | `--port 9443` | The console's port. |
-| `--uninstall [--purge]` | Takes FBRX Virtual off again. Virtual machines and their disks stay unless `--purge`. |
+| `--uninstall [--purge]` | Takes FBRX Server off again. Virtual machines and their disks, and the ai role's mesh pairings and keys, stay unless `--purge`. |
+
+### Server roles
+
+An FBRX Server announces its roles to the other computers on FBRX Mesh (Mesh Assist shows them when it picks a
+helper, so work can go to the right server).
+
+| Role | What it runs | |
+| --- | --- | --- |
+| `virtual` | FBRX Virtual: the hypervisor and the web console | Always (the console lives here) |
+| `ai` | The FBRX core: the agent, FBRX Mesh and Mesh Assist (`fbrx-core` service) | Default |
+| `command` | FBRX Command on the server: the tenant's settings and policy, kept with the mesh | Planned |
+| `dns` | Name service for the network | Planned |
+| `directory` | Directory and sign-in for the organization's computers (a domain controller) | Planned |
+| `files` | File sharing | Planned |
+| `gate` / `minidome` | FBRX Gate (firewall) and FBRX MiniDome (network watch), see [LINEUP.md](LINEUP.md) | Planned |
+
+The installer refuses a planned role for now and says so.
 
 ## Dell PowerEdge R330 checklist
 
@@ -99,6 +122,38 @@ and sign-in is in the audit log.
       bridge_fd 0
   ```
 
+## Mesh & AI (the ai role)
+
+The FBRX core runs as its own unprivileged account (`fbrx-core`, no login, no sudo) with only `/var/lib/fbrx-core`
+writable, so its agent can look around the server but not change it as root; its tools follow FBRX policy and ask
+before anything risky, like on any FBRX computer. It listens for FBRX Mesh on port **47800** and for its console on
+`127.0.0.1:47821` only.
+
+*Mesh & AI* in the console:
+
+* **Mesh Assist:** when this server brings other computers' AI in (out of steps, AI provider out of credits or
+  unreachable, the agent consulting another), whether it lends its own (never, ask an operator here first, or
+  automatically), what its agent may do while helping, how much help at once and at what priority. **This server is a
+  controller** makes its requests run without asking on computers that gave it the Controller permission (urgent ones
+  may stop lower-priority help there). *Who can help?* lists the paired computers with their AI, load and roles;
+  *Hand out work* sends a task to the best helper, every computer, or one; requests waiting for a yes, and all help
+  asked and given (with the answers and follow-up questions), are on the same tab. See [MESH.md](MESH.md).
+* **Computers on the mesh:** turn FBRX Mesh on or off, show a pairing code for another computer (on that computer:
+  *Mesh & phone → Join a computer*), join another computer's code, and set what each paired computer may do here,
+  including **Help with AI** and **Controller**.
+* **AI provider:** what this server's agent runs on: a cloud provider with an API key (kept encrypted in the core's
+  vault, never shown again), or a model on your network (Ollama or any OpenAI-compatible server, by address).
+
+**Who may do what.** Viewers see it all. Operators answer Mesh Assist's requests for help and hand out work.
+Administrators change the settings, pair computers, set permissions, choose the provider, save keys and answer any
+approval. Every change is in FBRX Virtual's audit log and, with the console user's name, in the core's own.
+
+**How the console reaches the core.** At every start the core writes a new random **console token** to
+`/var/lib/fbrx-core/console.token` (readable by root only); FBRX Virtual, which runs as root, reads it and calls the
+core's Local API on `127.0.0.1` with it, as the person signed in to the console. FBRX Virtual passes on only the
+calls the page makes, with the role each needs, and only the settings above (never the core's policy, Local API or
+system prompt). The console token can never read a secret back or the Local API's automation tokens.
+
 ## The hardware map
 
 *Hardware map* draws the server as it is wired: the processor sockets (NUMA nodes) with their cores on top, and the
@@ -141,7 +196,9 @@ talks only to that exact controller, and keeps the password encrypted.
 fbrx-server status                 where the console is, service and hypervisor state, certificate fingerprint
 fbrx-server setup-code             the first-time setup code
 fbrx-server logs [-f]              FBRX Virtual's log
+fbrx-server logs ai [-f]           the FBRX core's log (agent, FBRX Mesh, Mesh Assist)
 fbrx-server restart                restart FBRX Virtual (virtual machines keep running)
+fbrx-server restart ai             restart the FBRX core
 fbrx-server users                  who can sign in
 fbrx-server reset-password <user>  a new password for someone locked out
 fbrx-server create-admin [name]    another administrator
@@ -163,6 +220,11 @@ fbrx-server create-admin [name]    another administrator
 | `FBRX_V_DRIVER` | `libvirt` | `simulated` pretends (no virtual machines really run). |
 | `FBRX_V_LIBVIRT_URI` | `qemu:///system` | |
 | `FBRX_V_DOMAIN_TYPE` | | `qemu` forces software emulation (nested setups). |
+| `FBRX_V_CORE_URL` | `http://127.0.0.1:47821` | The FBRX core's Local API (ai role). |
+| `FBRX_V_CORE_TOKEN_FILE` | `/var/lib/fbrx-core/console.token` | Where the core writes the console token. |
+
+`/etc/fbrx-core/fbrx-core.env` (ai role; `sudo systemctl restart fbrx-core` after a change): `FBRX_SERVER_ROLES`, the
+roles this server announces (the installer writes it). Everything else about the core is set from *Mesh & AI*.
 
 ## Security
 
@@ -173,6 +235,8 @@ fbrx-server create-admin [name]    another administrator
 * virsh is called with argument lists (never a shell), and names, addresses and processor lists are checked before
   they reach it.
 * The management controller's password is encrypted with a key kept in the data folder (`keys/master.key`, mode 600).
+* The FBRX core (ai role) runs unprivileged and sandboxed by systemd (read-only system, only its data folder
+  writable); see *Mesh & AI* for how the console reaches it.
 
 ## API
 
@@ -192,6 +256,7 @@ All under `/v1`, with `Authorization: Bearer <token>` from `POST /v1/auth/login`
 | `GET/POST /networks`, `DELETE /networks/:name` | Networks |
 | `GET /hardware/topology`, `GET /hardware/flows`, `PUT /hardware/devices/:address/irqs`, `PUT /hardware/irqs/:irq`, `PUT /hardware/irqbalance` | Hardware map |
 | `GET/PUT/DELETE /bmc`, `POST /bmc/probe`, `GET /bmc/system`, `/sensors`, `/logs`, `POST /bmc/power`, `POST /bmc/boot-to-setup`, `GET/PATCH /bmc/bios`, `DELETE /bmc/bios/pending` | Server management |
+| `GET /core`, `POST /core/call` `{ method, params }` | The FBRX core (ai role): `system.status`, `settings.get`, `ai.providers`, `mesh.status`, `mesh.assist.helpers`, `mesh.assist.sessions`, `approvals.list` (viewers); `mesh.assist.send`, `mesh.assist.followUp`, `mesh.assist.cancel`, `approvals.resolve` for Mesh Assist (operators); `settings.update` (Mesh Assist and AI provider settings), `vault.set` (provider keys), `vault.list`, `ai.models`, `mesh.setEnabled`, `mesh.rename`, `mesh.startPairing`, `mesh.cancelPairing`, `mesh.pair`, `mesh.removeDevice`, `mesh.setPermissions` (administrators) |
 
 ## Development
 
@@ -199,8 +264,15 @@ All under `/v1`, with `Authorization: Bearer <token>` from `POST /v1/auth/login`
 npm run dev:virtual            # FBRX Virtual on https://localhost:9443 (simulated; admin / fbrx-virtual-dev)
 npm run dev:virtual-console    # the console with hot reload on http://localhost:5175
 npx vitest run apps/virtual    # tests; FBRX_TEST_LIBVIRT=1 (as root, libvirt installed) adds the real-hypervisor test
+
+# Mesh & AI against a real core: the core in server mode, then FBRX Virtual pointed at its console token
+npm run headless -- run --server --data-dir .fbrx-core-dev --roles virtual,ai --console-token-file .fbrx-core-dev/console.token
+FBRX_V_CORE_TOKEN_FILE=$PWD/.fbrx-core-dev/console.token npm run dev:virtual
+
+scripts/server/bundle.sh && scripts/server/smoke.sh dist/fbrx-server-0.1.0   # the bundle, end to end
 ```
 
 The code is in `apps/virtual` (service: `drivers/` for libvirt and the simulated hypervisor, `hardware/` for the map,
 `bmc/` for Redfish) and `apps/virtual-console` (React, the FBRX UI kit, noVNC). The installer, bundle and ISO scripts
-are in `scripts/server`.
+are in `scripts/server`. The FBRX core for the ai role is `packages/core/bin/fbrx-headless.ts`, bundled by
+`scripts/server/build-core.mjs`.

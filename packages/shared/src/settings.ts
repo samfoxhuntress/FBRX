@@ -277,6 +277,12 @@ export const SettingsSchema = z.object({
       allowPreempt: z.boolean(),
       /** Roles this computer announces (servers: ai, virtual, command, …). */
       roles: z.array(z.string().regex(/^[a-z][a-z0-9-]{0,31}$/)).max(16),
+      /**
+       * FBRX Server only: this server sends work as an administrator would (a controller), where its console's
+       * administrators turn that on. Desktops ignore it: there, running FBRX as administrator is what counts. Either
+       * way a controller is obeyed only by computers that gave it the Controller permission.
+       */
+      controller: z.boolean(),
     }),
   }),
   runtime: z.object({
@@ -506,6 +512,7 @@ export const DEFAULT_SETTINGS: Settings = {
       priority: 'normal',
       allowPreempt: true,
       roles: [],
+      controller: false,
     },
   },
   runtime: {

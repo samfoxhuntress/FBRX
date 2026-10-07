@@ -19,6 +19,8 @@ helper() {
   set +a
   "$APP/node/bin/node" --no-warnings "$APP/fbrx-virtual/cli.mjs" "$@"
 }
+has_ai() { [ -f /etc/systemd/system/fbrx-core.service ]; }
+roles() { (grep -E '^ROLES=' /etc/fbrx-server-release 2>/dev/null || echo 'ROLES="virtual"') | cut -d'"' -f2; }
 need_root() { [ "$(id -u)" -eq 0 ] || { echo "Run this as root (sudo fbrx-server $1)." >&2; exit 1; }; }
 
 case "${1:-status}" in
@@ -26,7 +28,9 @@ case "${1:-status}" in
     # shellcheck disable=SC1091
     echo "FBRX Server $(. /etc/fbrx-server-release 2>/dev/null && echo "${VERSION:-}") · powered by FBRX OS"
     echo "Console:      $(url)"
+    echo "Roles:        $(roles | sed 's/,/, /g')"
     echo "Service:      $(systemctl is-active fbrx-virtual 2>/dev/null || true)"
+    if has_ai; then echo "AI role:      $(systemctl is-active fbrx-core 2>/dev/null || true) (FBRX core: FBRX Mesh on port 47800; Mesh & AI in the console)"; fi
     echo "Hypervisor:   $(systemctl is-active libvirtd 2>/dev/null || true) (libvirt) · KVM $([ -e /dev/kvm ] && echo on || echo 'off: turn on Virtualization Technology in the BIOS')"
     echo "IOMMU:        $([ -n "$(ls -A /sys/kernel/iommu_groups 2>/dev/null)" ] && echo on || echo 'off (needed to give PCI devices to virtual machines)')"
     echo "Certificate:  $(fingerprint)"
@@ -38,8 +42,16 @@ case "${1:-status}" in
     need_root setup-code
     if [ -s "$DATA/setup-code" ]; then cat "$DATA/setup-code"; else echo "This server is already set up (fbrx-server users lists who can sign in)."; fi
     ;;
-  logs) shift; exec journalctl -u fbrx-virtual "${@:--n 100}" ;;
-  restart) need_root restart; systemctl restart fbrx-virtual && echo "FBRX Virtual restarted: $(url)" ;;
+  logs)
+    shift
+    if [ "${1:-}" = "ai" ]; then shift; exec journalctl -u fbrx-core "${@:--n 100}"; fi
+    exec journalctl -u fbrx-virtual "${@:--n 100}"
+    ;;
+  restart)
+    need_root restart
+    if [ "${2:-}" = "ai" ]; then systemctl restart fbrx-core && echo "The FBRX core restarted"; exit 0; fi
+    systemctl restart fbrx-virtual && echo "FBRX Virtual restarted: $(url)"
+    ;;
   users) need_root users; helper users ;;
   reset-password) need_root reset-password; shift; helper reset-password "$@" ;;
   create-admin) need_root create-admin; shift; helper create-admin "$@" ;;
@@ -49,7 +61,9 @@ fbrx-server status          what runs, where to open the console, the certificat
 fbrx-server url             the console's address
 fbrx-server setup-code      the first-time setup code (until someone sets the server up)
 fbrx-server logs [-f]       FBRX Virtual's log
+fbrx-server logs ai [-f]    the FBRX core's log (the ai role: agent, FBRX Mesh, Mesh Assist)
 fbrx-server restart         restart FBRX Virtual (virtual machines keep running)
+fbrx-server restart ai      restart the FBRX core (help it was giving or asking for stops)
 fbrx-server users           who can sign in
 fbrx-server reset-password <user>   a new password for someone locked out
 fbrx-server create-admin [name]     another administrator

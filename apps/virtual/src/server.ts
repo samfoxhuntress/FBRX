@@ -20,6 +20,7 @@ import { IsoLibrary } from './isos';
 import { HardwareService } from './hardware/service';
 import { BmcService } from './bmc/service';
 import { ConsoleTickets } from './console-proxy';
+import { CoreLink } from './core-link';
 import { bearer, type VirtualContext } from './context';
 import { VirtualError } from './errors';
 import { loadTls } from './tls';
@@ -32,6 +33,7 @@ import { vmRoutes } from './routes/vms';
 import { storageRoutes } from './routes/storage';
 import { hardwareRoutes } from './routes/hardware';
 import { bmcRoutes } from './routes/bmc';
+import { coreRoutes } from './routes/core';
 
 function readVersion(): string {
   if (process.env.FBRX_V_VERSION) return process.env.FBRX_V_VERSION;
@@ -58,6 +60,8 @@ export interface BuildOptions {
   hypervisor?: Hypervisor;
   /** Talks to the management controller with this instead of HTTPS (tests). */
   bmcFetch?: typeof fetch;
+  /** Talks to the server's FBRX core with this (tests). */
+  coreFetch?: typeof fetch;
 }
 
 export function makeHypervisor(config: VirtualConfig): Hypervisor {
@@ -91,6 +95,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     hardware: new HardwareService(db, hv, config.sysRoot, (m) => app.log.warn(m)),
     bmc: new BmcService(db, key, opts.bmcFetch ?? null),
     tickets: new ConsoleTickets(),
+    core: new CoreLink(config.core.url, config.core.tokenFile, opts.coreFetch),
     log: app.log,
     tls: tls ? { fingerprint: tls.fingerprint, selfSigned: tls.selfSigned, notAfter: tls.notAfter } : null,
   };
@@ -144,6 +149,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   await storageRoutes(app, ctx);
   await hardwareRoutes(app, ctx);
   await bmcRoutes(app, ctx);
+  await coreRoutes(app, ctx);
 
   if (config.consoleDir && existsSync(join(config.consoleDir, 'index.html'))) {
     await app.register(fastifyStatic, { root: config.consoleDir, index: 'index.html' });

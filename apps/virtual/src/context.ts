@@ -9,6 +9,7 @@ import type { IsoLibrary } from './isos';
 import type { HardwareService } from './hardware/service';
 import type { BmcService } from './bmc/service';
 import type { ConsoleTickets } from './console-proxy';
+import type { CoreLink } from './core-link';
 import { allows } from './auth';
 import { forbidden, unauthorized } from './errors';
 
@@ -23,6 +24,8 @@ export interface VirtualContext {
   hardware: HardwareService;
   bmc: BmcService;
   tickets: ConsoleTickets;
+  /** The FBRX core on this server (the AI role), when installed. */
+  core: CoreLink;
   log: FastifyBaseLogger;
   tls: { fingerprint: string; selfSigned: boolean; notAfter: string } | null;
 }

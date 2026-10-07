@@ -119,10 +119,15 @@ export class MeshAssist {
     this.pollMs = ms;
   }
 
-  /** For tests and for FBRX Server, where the service is known to run as root. */
+  /** For tests and for FBRX Server, where its console's administrators decide (setting mesh.assist.controller). */
   setAdmin(v: boolean) {
     this.admin = v;
     this.adminFixed = true;
+  }
+
+  /** Whether this computer's requests count as an administrator's. */
+  isAdmin(): boolean {
+    return this.admin;
   }
 
   list(): AssistSession[] {

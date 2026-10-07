@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # FBRX Server installer: turns Debian 13 ("trixie") into FBRX Server (FBRX OS for servers), running the FBRX Virtual
-# hypervisor (KVM through libvirt) with its web console on port 9443.
+# hypervisor (KVM through libvirt) with its web console on port 9443, and (the "ai" role) the FBRX core: an AI agent
+# on FBRX Mesh that lends its AI to the other computers and borrows theirs (Mesh Assist).
 #
 #   sudo ./install.sh                 from an unpacked FBRX Server bundle (this script sits next to fbrx-virtual/)
+#   sudo ./install.sh --roles virtual hypervisor only, without the AI role
 #   sudo ./install.sh --bridge eno1   also put virtual machines straight onto your network through eno1 (after a reboot)
-#   sudo ./install.sh --uninstall     take FBRX Virtual off again (virtual machines and their disks stay)
+#   sudo ./install.sh --uninstall     take FBRX Server off again (virtual machines and their disks stay)
 #
 # The FBRX Server ISO runs this at the end of the Debian installer (--no-start).
 set -euo pipefail
@@ -14,7 +16,14 @@ APP=/opt/fbrx-server
 DATA=/var/lib/fbrx-virtual
 ETC=/etc/fbrx-virtual
 UNIT=/etc/systemd/system/fbrx-virtual.service
+CORE_DATA=/var/lib/fbrx-core
+CORE_ETC=/etc/fbrx-core
+CORE_UNIT=/etc/systemd/system/fbrx-core.service
+CORE_USER=fbrx-core
 NODE_MAJOR=22
+# Roles this installer sets up. Planned roles (command, dns, directory, files, gate, minidome) come with later releases.
+AVAILABLE_ROLES="virtual ai"
+PLANNED_ROLES="command dns directory files gate minidome"
 
 BUNDLE=""
 YES=0
@@ -24,6 +33,7 @@ UNINSTALL=0
 PURGE=0
 FORCE=0
 PORT=9443
+ROLES="virtual,ai"
 
 say() { printf '\033[1;36m==>\033[0m %s\n' "$*"; }
 note() { printf '    %s\n' "$*"; }
@@ -31,17 +41,21 @@ warn() { printf '\033[1;33m !! \033[0m %s\n' "$*" >&2; }
 die() { printf '\033[1;31mxx\033[0m %s\n' "$*" >&2; exit 1; }
 
 usage() {
-  sed -n '2,10p' "$0" | sed 's/^# \{0,1\}//'
+  sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'
   cat <<'EOF'
 
 Options:
   --bundle <dir|file.tar.gz>  the FBRX Server bundle (default: the folder this script is in)
+  --roles <list>              what this server does, comma separated (default virtual,ai):
+                                virtual  the FBRX Virtual hypervisor and its web console (always installed)
+                                ai       the FBRX core: an AI agent on FBRX Mesh with Mesh Assist, run from the console
   --bridge <nic>              make bridge br0 on this network port for virtual machines (applies after a reboot)
   --port <n>                  the console's port (default 9443)
   --no-start                  install and enable, but do not start (inside an installer)
   --yes                       do not ask
   --force                     install on something other than Debian 13
-  --uninstall [--purge]       remove FBRX Virtual (--purge also deletes its data: the ISO library and virtual disks)
+  --uninstall [--purge]       remove FBRX Server (--purge also deletes its data: the ISO library, virtual disks and
+                              the AI role's settings, mesh pairings and keys)
 EOF
 }
 
@@ -49,6 +63,7 @@ while [ $# -gt 0 ]; do
   case "$1" in
     --bundle) BUNDLE="${2:?--bundle needs a folder or file}"; shift 2 ;;
     --bridge) BRIDGE="${2:?--bridge needs a network port, like eno1}"; shift 2 ;;
+    --roles) ROLES="${2:?--roles needs a list, like virtual,ai}"; shift 2 ;;
     --port) PORT="${2:?--port needs a number}"; shift 2 ;;
     --no-start) START=0; shift ;;
     --yes | -y) YES=1; shift ;;
@@ -62,6 +77,22 @@ done
 
 [ "$(id -u)" -eq 0 ] || die "Run this as root: sudo $0 $*"
 [[ "$PORT" =~ ^[0-9]{2,5}$ ]] || die "--port must be a number"
+
+# The console lives in FBRX Virtual, so every FBRX Server has the virtual role.
+ROLE_LIST="virtual"
+for r in ${ROLES//,/ }; do
+  case " $AVAILABLE_ROLES " in
+    *" $r "*) ;;
+    *)
+      case " $PLANNED_ROLES " in
+        *" $r "*) die "The $r role is planned for a later FBRX Server release (available now: ${AVAILABLE_ROLES// /, })" ;;
+        *) die "Unknown role $r (available: ${AVAILABLE_ROLES// /, })" ;;
+      esac
+      ;;
+  esac
+  case ",$ROLE_LIST," in *",$r,"*) ;; *) ROLE_LIST="$ROLE_LIST,$r" ;; esac
+done
+has_role() { case ",$ROLE_LIST," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 
 confirm() {
   [ "$YES" -eq 1 ] && return 0
@@ -78,9 +109,10 @@ in_chroot() {
 # ------------------------------------------------------------------------------------------- uninstall
 
 if [ "$UNINSTALL" -eq 1 ]; then
-  say "Removing FBRX Virtual"
+  say "Removing FBRX Server (FBRX Virtual and the AI role)"
   systemctl disable --now fbrx-virtual.service 2>/dev/null || true
-  rm -f "$UNIT" /usr/local/sbin/fbrx-server /etc/fbrx-server-release /etc/issue.d/fbrx-virtual-setup.issue /etc/modules-load.d/fbrx-vfio.conf /etc/motd.d/fbrx-server 2>/dev/null || true
+  systemctl disable --now fbrx-core.service 2>/dev/null || true
+  rm -f "$UNIT" "$CORE_UNIT" /usr/local/sbin/fbrx-server /etc/fbrx-server-release /etc/issue.d/fbrx-virtual-setup.issue /etc/modules-load.d/fbrx-vfio.conf /etc/motd.d/fbrx-server 2>/dev/null || true
   rm -rf "$APP"
   if [ -f /etc/default/grub.d/fbrx-server.cfg ]; then
     rm -f /etc/default/grub.d/fbrx-server.cfg
@@ -89,9 +121,13 @@ if [ "$UNINSTALL" -eq 1 ]; then
   [ -f /etc/issue.fbrx-backup ] && mv -f /etc/issue.fbrx-backup /etc/issue
   systemctl daemon-reload 2>/dev/null || true
   if [ "$PURGE" -eq 1 ]; then
-    confirm "Delete $DATA (the ISO library, virtual disks, users and settings) and $ETC?" && rm -rf "$DATA" "$ETC" && note "Deleted."
+    if confirm "Delete $DATA (the ISO library, virtual disks, users and settings), $CORE_DATA (the AI role: mesh pairings, keys, chats) and $ETC?"; then
+      rm -rf "$DATA" "$ETC" "$CORE_DATA" "$CORE_ETC"
+      if id "$CORE_USER" >/dev/null 2>&1; then userdel "$CORE_USER" 2>/dev/null || true; fi
+      note "Deleted."
+    fi
   else
-    note "Kept $DATA and $ETC (virtual disks, ISO library, users). --purge deletes them."
+    note "Kept $DATA, $CORE_DATA and $ETC (virtual disks, ISO library, users, mesh pairings). --purge deletes them."
   fi
   note "Virtual machines stay defined in libvirt (virsh list --all). libvirt and QEMU stay installed."
   exit 0
@@ -124,10 +160,13 @@ if [ -f "$BUNDLE" ]; then
 fi
 BUNDLE="$(cd "$BUNDLE" && pwd)"
 [ -f "$BUNDLE/fbrx-virtual/server.mjs" ] || die "No FBRX Virtual in $BUNDLE (expected fbrx-virtual/server.mjs). Use the FBRX Server bundle."
+if has_role ai && [ ! -f "$BUNDLE/fbrx-core/core.mjs" ]; then die "This bundle has no FBRX core (fbrx-core/core.mjs) for the ai role: use a newer bundle, or --roles virtual"; fi
 VERSION="$(cat "$BUNDLE/VERSION" 2>/dev/null || echo 0.0.0)"
 
 say "FBRX Server $VERSION · powered by FBRX OS"
+note "Roles: ${ROLE_LIST//,/, }"
 note "Installs QEMU/KVM, libvirt and FBRX Virtual (web console on port $PORT)."
+if has_role ai; then note "And the FBRX core (ai role): an AI agent on FBRX Mesh (port 47800), run from the console's Mesh & AI page."; fi
 if ! grep -qE '\b(vmx|svm)\b' /proc/cpuinfo; then
   warn "The processor does not offer virtualization right now: turn on Virtualization Technology in the BIOS."
   note "You can do that later from FBRX Virtual (Server & BIOS) once the iDRAC is connected."
@@ -187,6 +226,11 @@ install -m 0644 "$BUNDLE/fbrx-virtual.service" "$UNIT"
 
 mkdir -p "$ETC" "$DATA/images" "$DATA/isos"
 chmod 0755 "$DATA" "$DATA/images" "$DATA/isos"
+if [ -f "$ETC/fbrx-virtual.env" ]; then
+  # Settings added in later releases.
+  grep -q '^FBRX_V_CORE_URL=' "$ETC/fbrx-virtual.env" || printf '%s\n' "# The FBRX core on this server (ai role): Mesh & AI in the console" "FBRX_V_CORE_URL=http://127.0.0.1:47821" >>"$ETC/fbrx-virtual.env"
+  grep -q '^FBRX_V_CORE_TOKEN_FILE=' "$ETC/fbrx-virtual.env" || printf '%s\n' "FBRX_V_CORE_TOKEN_FILE=$CORE_DATA/console.token" >>"$ETC/fbrx-virtual.env"
+fi
 if [ ! -f "$ETC/fbrx-virtual.env" ]; then
   cat >"$ETC/fbrx-virtual.env" <<EOF
 # FBRX Virtual settings (sudo systemctl restart fbrx-virtual after a change). See docs/SERVER.md.
@@ -198,6 +242,9 @@ FBRX_V_DRIVER=libvirt
 FBRX_V_CONSOLE_DIR=$APP/fbrx-virtual/virtual-console
 # Extra names for the HTTPS certificate (comma separated), e.g. fbrx-server.example.lan
 FBRX_V_TLS_NAMES=
+# The FBRX core on this server (ai role): Mesh & AI in the console
+FBRX_V_CORE_URL=http://127.0.0.1:47821
+FBRX_V_CORE_TOKEN_FILE=$CORE_DATA/console.token
 EOF
   chmod 0600 "$ETC/fbrx-virtual.env"
 else
@@ -205,11 +252,41 @@ else
   note "Kept your settings in $ETC/fbrx-virtual.env"
 fi
 
+# ------------------------------------------------------------------------------------------ ai role
+
+if has_role ai; then
+  say "Installing the FBRX core (ai role)"
+  rm -rf "$APP/fbrx-core.new"
+  cp -r "$BUNDLE/fbrx-core" "$APP/fbrx-core.new"
+  rm -rf "$APP/fbrx-core"
+  mv "$APP/fbrx-core.new" "$APP/fbrx-core"
+  chmod -R go-w "$APP/fbrx-core"
+  # Its own account, with no login and no special rights.
+  if ! id "$CORE_USER" >/dev/null 2>&1; then
+    useradd --system --home-dir "$CORE_DATA" --no-create-home --shell /usr/sbin/nologin "$CORE_USER"
+  fi
+  mkdir -p "$CORE_DATA" "$CORE_ETC"
+  chown "$CORE_USER:$CORE_USER" "$CORE_DATA"
+  chmod 0700 "$CORE_DATA"
+  install -m 0644 "$BUNDLE/fbrx-core.service" "$CORE_UNIT"
+  cat >"$CORE_ETC/fbrx-core.env" <<EOF
+# The FBRX core on FBRX Server (sudo systemctl restart fbrx-core after a change). See docs/SERVER.md.
+# Roles this server announces to the other computers on FBRX Mesh (Mesh Assist shows them when picking helpers).
+FBRX_SERVER_ROLES=$ROLE_LIST
+EOF
+  chmod 0644 "$CORE_ETC/fbrx-core.env"
+elif [ -f "$CORE_UNIT" ]; then
+  say "Turning the ai role off (its data stays in $CORE_DATA)"
+  systemctl disable --now fbrx-core.service 2>/dev/null || true
+  rm -f "$CORE_UNIT" /etc/systemd/system/multi-user.target.wants/fbrx-core.service
+fi
+
 cat >/etc/fbrx-server-release <<EOF
 NAME="FBRX Server"
 VERSION="$VERSION"
 POWERED_BY="FBRX OS"
 HYPERVISOR="FBRX Virtual"
+ROLES="$ROLE_LIST"
 EOF
 
 # ------------------------------------------------------------------------------- devices for machines
@@ -281,10 +358,13 @@ EOF
 # ---------------------------------------------------------------------------------------------- start
 
 systemctl daemon-reload 2>/dev/null || true
+mkdir -p /etc/systemd/system/multi-user.target.wants
 systemctl enable fbrx-virtual.service >/dev/null 2>&1 || ln -sf "$UNIT" /etc/systemd/system/multi-user.target.wants/fbrx-virtual.service
+if has_role ai; then systemctl enable fbrx-core.service >/dev/null 2>&1 || ln -sf "$CORE_UNIT" /etc/systemd/system/multi-user.target.wants/fbrx-core.service; fi
 
 if [ "$START" -eq 1 ] && ! in_chroot; then
   systemctl restart libvirtd.service || warn "libvirt did not start (journalctl -u libvirtd)"
+  if has_role ai; then systemctl restart fbrx-core.service || warn "The FBRX core did not start (journalctl -u fbrx-core)"; fi
   systemctl restart fbrx-virtual.service
   say "Starting FBRX Virtual"
   for _ in $(seq 1 30); do
@@ -298,11 +378,12 @@ if [ "$START" -eq 1 ] && ! in_chroot; then
     warn "FBRX Virtual did not answer yet: fbrx-server logs shows why."
   fi
 else
-  note "Enabled: FBRX Virtual starts with the server."
+  if has_role ai; then note "Enabled: FBRX Virtual and the FBRX core start with the server."; else note "Enabled: FBRX Virtual starts with the server."; fi
 fi
 
 echo
 say "FBRX Server is installed."
 note "Open https://<this server>:$PORT and sign in with the setup code (fbrx-server setup-code)."
 note "Your browser warns about the certificate the first time: compare it with fbrx-server fingerprint."
+if has_role ai; then note "Then open Mesh & AI in the console: pick this server's AI provider and pair it with your other computers."; fi
 if [ "$REBOOT_NEEDED" -eq 1 ]; then note "Restart the server once (sudo reboot) to turn on device passthrough${BRIDGE:+ and the bridge}."; fi

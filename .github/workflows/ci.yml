@@ -63,6 +63,8 @@ jobs:
         run: shellcheck scripts/server/*.sh scripts/server/fbrx-server
       - name: Build the FBRX Server bundle
         run: scripts/server/bundle.sh --with-node
+      - name: Smoke-test the bundle (the FBRX core in server mode, managed by FBRX Virtual)
+        run: scripts/server/smoke.sh "$(ls -d dist/fbrx-server-*/ | head -1)"
       - name: FBRX Virtual against the real hypervisor
         # As root, like FBRX Server, against libvirt's system hypervisor (after the build, so root leaves no files in
         # the way). Software emulation keeps it independent of the runner's KVM.

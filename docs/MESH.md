@@ -16,6 +16,8 @@ Each device gets its own permissions on *this* computer, changeable at any time 
 | Tasks and notes | ✔ | |
 | Receive alerts | ✔ | |
 | Remote control (lock, sleep) | | |
+| Help with AI (Mesh Assist, below) | — | ✔ |
+| Controller (Mesh Assist, below) | — | |
 
 Requests from another *computer* follow **When another computer asks this computer's agent**: ask me first (an
 approval appears here), allow, or never; a device can never approve its own request. Phones you pair are yours, so
@@ -25,6 +27,54 @@ under this computer's policy: each risky tool call still waits for an approval.
 **FBRX Mobile** is a small web app the computer serves to paired phones at `http://<computer>:47800/m/`. Add it to
 the home screen. It shows status, alerts, tasks, messages and waiting approvals, lets you ask the agent, and can
 make the phone ring (*Find my phone*). It refreshes while open; phones are not woken in the background.
+
+## Mesh Assist: computers lending each other their AI
+
+When the agent on one computer runs out of room, another computer on the mesh finishes the job, and the two can talk
+it through. It also lets one computer (typically a server) hand work out to the others.
+
+**When help is brought in** (each one a setting under **Mesh & phone → Mesh Assist**):
+
+* **Out of steps.** The agent reached its step limit for a task: the task, a digest of what was done so far and what
+  is left go to a helper, whose answer finishes the reply (marked as coming from that computer).
+* **The AI provider stopped answering.** Out of credits, over a quota or rate limit, a billing problem, an outage or a
+  network failure: the same handover, instead of an error.
+* **The agent asks.** Mid-task, the agent can look at who could help (`mesh.helpers`) and consult another computer's
+  agent (`mesh.consult`), with follow-up questions in the same conversation on the helper.
+* **A person or a controller sends work** to the best helper, to every computer, or to one, with a priority.
+
+**Who helps.** The asking computer asks each paired computer what it can do right now (its AI and model, whether it
+runs locally, how busy it is, its processor load and the roles it announces) and picks the best one: one that helps
+right away before one that asks its person, a ready AI, a free slot, a light load.
+
+**The settings, on both sides:**
+
+| Setting | Default | |
+| --- | --- | --- |
+| Bring another computer's AI in | Ask me first | Off, ask the person here first (an approval), or automatically. |
+| When the agent runs out of steps / when the AI provider stops answering / the agent may consult | On | Which of the above may bring help in. |
+| Priority of this computer's requests | Normal | Background, normal, high (urgent is for controllers). |
+| Lend the agent to other computers | Ask me first | Off, ask the person here first, or automatically. |
+| While helping, the agent here may | Look things up | Think and answer only, read-only tools, or anything its policy allows. |
+| Help at the same time / steps per request | 1 / 12 | The rest waits in a queue, highest priority first. |
+| Urgent work from a controller may stop lower-priority help | On | The stopped help is told why. |
+
+The **Help with AI** permission decides which paired computers may ask at all (on by default between computers, never
+for phones).
+
+**Priorities and controllers.** Requests are background, normal, high or urgent; a helper runs the most urgent first.
+A **controller** is a computer you trust to hand out work: give it the **Controller** permission on each computer
+that should obey it. A controller's requests (when FBRX runs as administrator there, or, on FBRX Server, when its
+console's administrators made it a controller) run without the helper's person being asked, may be urgent, and may
+stop lower-priority help that is running. Without the Controller permission a computer treats it like any other.
+
+**What never changes:**
+
+* Help runs under the **helping** computer's policy and Guardian: every risky tool call there still needs its usual
+  approval, and the helper works with its own files, not the asker's.
+* Help is never passed along twice: a helper cannot bring a third computer in.
+* Everything is in both computers' audit logs (`assist.*`, `run.handoff`), and either side can stop a request.
+* Requests travel over the same sealed, authenticated mesh connection as everything else.
 
 ## Pairing
 
@@ -66,5 +116,5 @@ the phone's browser storage for the FBRX Mobile page.
 ## Organizations
 
 The mesh is per person. Administrators can switch it off for a tenant or group by locking `mesh.enabled` to `false`
-in managed settings; device pairing, requests and permission changes are written to the audit log
-(`category: mesh`).
+in managed settings (and Mesh Assist on its own with the `mesh.assist.*` settings); device pairing, requests and
+permission changes are written to the audit log (`category: mesh`).

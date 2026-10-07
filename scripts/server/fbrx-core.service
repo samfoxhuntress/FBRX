@@ -1,0 +1,38 @@
+[Unit]
+Description=FBRX core (the "ai" role of FBRX Server: the agent, FBRX Mesh and Mesh Assist)
+Documentation=https://github.com/samfoxhuntress/fbrx/blob/main/docs/SERVER.md
+After=network-online.target
+Wants=network-online.target
+Before=fbrx-virtual.service
+
+[Service]
+Type=simple
+User=fbrx-core
+Group=fbrx-core
+Environment=HOME=/var/lib/fbrx-core
+Environment=FBRX_SERVER=1
+EnvironmentFile=-/etc/fbrx-core/fbrx-core.env
+ExecStart=/opt/fbrx-server/node/bin/node /opt/fbrx-server/fbrx-core/core.mjs run --server --data-dir /var/lib/fbrx-core --console-token-file /var/lib/fbrx-core/console.token
+WorkingDirectory=/opt/fbrx-server/fbrx-core
+StateDirectory=fbrx-core
+StateDirectoryMode=0700
+Restart=on-failure
+RestartSec=3
+# Its own unprivileged account: the agent works under FBRX policy and can look around the server, but cannot change
+# it as root. Only its data folder is writable. Its console token (in that folder) is for FBRX Virtual, which runs
+# as root, to read.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/fbrx-core
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+UMask=0077
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

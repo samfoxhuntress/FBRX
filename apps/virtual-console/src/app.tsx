@@ -11,6 +11,7 @@ import { NetworksPage } from './pages/networks';
 import { HardwarePage } from './pages/hardware';
 import { ServerPage } from './pages/server';
 import { AccessPage } from './pages/access';
+import { MeshAiPage } from './pages/mesh-ai';
 
 export function App() {
   const [phase, setPhase] = useState<'loading' | 'setup' | 'login' | 'ready'>('loading');
@@ -85,6 +86,7 @@ function Console() {
     { id: 'networks', label: 'Networks', icon: 'network', section: 'Virtual' },
     { id: 'hardware', label: 'Hardware map', icon: 'cpu', section: 'Server' },
     { id: 'server', label: 'Server & BIOS', icon: 'server', section: 'Server' },
+    { id: 'mesh', label: 'Mesh & AI', icon: 'sparkles', section: 'Server' },
     ...(app.can('admin') ? [{ id: 'access', label: 'Users & audit', icon: 'users', section: 'Access' } as NavItem] : []),
   ];
   const active = route.page === 'vm' ? 'vms' : route.page;
@@ -102,6 +104,8 @@ function Console() {
         return <HardwarePage />;
       case 'server':
         return <ServerPage tab={route.id} />;
+      case 'mesh':
+        return <MeshAiPage tab={route.id} />;
       case 'access':
         return <AccessPage />;
       default:

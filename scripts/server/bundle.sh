@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Builds the FBRX Server bundle: FBRX Virtual (server + web console), its installer and the fbrx-server command.
+# Builds the FBRX Server bundle: FBRX Virtual (server + web console), the FBRX core for the "ai" role, the installer
+# and the fbrx-server command.
 #   scripts/server/bundle.sh               → dist/fbrx-server-<version>.tar.gz
 #   scripts/server/bundle.sh --with-node   also packs Node.js (for the ISO, which installs without reaching nodejs.org)
 set -euo pipefail
@@ -32,7 +33,9 @@ mkdir -p "$OUT/fbrx-virtual"
 cp "$ROOT/apps/virtual/dist/server.mjs" "$ROOT/apps/virtual/dist/cli.mjs" "$ROOT/apps/virtual/dist/package.json" "$OUT/fbrx-virtual/"
 cp -r "$ROOT/apps/virtual/dist/virtual-console" "$OUT/fbrx-virtual/virtual-console"
 find "$OUT/fbrx-virtual/virtual-console" -name '*.map' -delete
-cp "$ROOT/scripts/server/install.sh" "$ROOT/scripts/server/fbrx-server" "$ROOT/scripts/server/fbrx-virtual.service" "$OUT/"
+# The FBRX core (ai role): the agent, FBRX Mesh and Mesh Assist, headless.
+node "$ROOT/scripts/server/build-core.mjs" "$OUT/fbrx-core"
+cp "$ROOT/scripts/server/install.sh" "$ROOT/scripts/server/fbrx-server" "$ROOT/scripts/server/fbrx-virtual.service" "$ROOT/scripts/server/fbrx-core.service" "$OUT/"
 chmod +x "$OUT/install.sh" "$OUT/fbrx-server"
 echo "$VERSION" >"$OUT/VERSION"
 
