@@ -67,6 +67,11 @@ the program, icons and login item but keeps `data/`; add `--delete-data` to eras
 its own: `<folder>/app/node <folder>/app/launcher.mjs open | start | stop | status`. Log: `.fbrx-setup/command-setup.log`;
 FBRX Command's own log: `logs/command.log` in its folder.
 
+**The setup token.** The first sign-in asks for a one-time setup token. The installer shows it (*Setup token*, a short
+code like `4qZy-…`) and opening FBRX Command from its icon fills it in; it is also `setupToken` in `config.json` in
+FBRX Command's folder until setup is done. The long `AB:CD:…` code under *Certificate* is the certificate's
+fingerprint, not the token: the setup page says so if it is pasted there.
+
 ### Docker (recommended for a hosted service)
 
 On a Linux host with ports 80/443 open and a DNS record (e.g. `fleet.example.com`) pointing at it:

@@ -124,11 +124,30 @@ export function LoginPage({ onLogin }: { onLogin: () => void }) {
   );
 }
 
+const SETUP_TOKEN_KEY = 'fbrx.setupToken';
+
+/**
+ * "Install FBRX Command" (and its icon) opens this page with the one-time setup token in the link (#setup-token=…).
+ * The link is cleared from the address bar, so the token is kept for this browser tab: a reload keeps it filled in.
+ */
+function initialSetupToken(): string {
+  const fromLink = new URLSearchParams(location.hash.replace(/^#\/?/, '')).get('setup-token');
+  try {
+    if (fromLink) sessionStorage.setItem(SETUP_TOKEN_KEY, fromLink);
+    return fromLink ?? sessionStorage.getItem(SETUP_TOKEN_KEY) ?? '';
+  } catch {
+    return fromLink ?? '';
+  }
+}
+
+/** The installer shows the certificate's fingerprint (32 pairs of hex digits) right next to the setup token. */
+const looksLikeFingerprint = (s: string) => /^([0-9a-f]{2}:){15,}[0-9a-f]{2}$/i.test(s.trim());
+const FINGERPRINT_HINT = 'That is the certificate fingerprint, not the setup token. The setup token is the short code after "Setup token" in the installer\'s window; opening FBRX Command from its icon fills it in.';
+
 export function SetupPage({ onDone }: { onDone: () => void }) {
   const [kind, setKind] = useState<Vertical | null>(null);
   const [picking, setPicking] = useState<Vertical>('business');
-  // "Install FBRX Command" opens this page with the one-time setup token in the link (#setup-token=…).
-  const [f, setF] = useState(() => ({ setupToken: new URLSearchParams(location.hash.replace(/^#\/?/, '')).get('setup-token') ?? '', organization: '', name: '', email: '', password: '', confirm: '' }));
+  const [f, setF] = useState(() => ({ setupToken: initialSetupToken(), organization: '', name: '', email: '', password: '', confirm: '' }));
   useEffect(() => {
     if (location.hash.includes('setup-token=')) history.replaceState(null, '', location.pathname);
   }, []);
@@ -137,11 +156,17 @@ export function SetupPage({ onDone }: { onDone: () => void }) {
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (looksLikeFingerprint(f.setupToken)) return setError(FINGERPRINT_HINT);
     if (f.password !== f.confirm) return setError('Passwords do not match');
     setBusy(true);
     setError(null);
     try {
-      await api('POST', '/v1/setup', { setupToken: f.setupToken, organization: f.organization, kind, name: f.name, email: f.email, password: f.password });
+      await api('POST', '/v1/setup', { setupToken: f.setupToken.trim(), organization: f.organization, kind, name: f.name, email: f.email, password: f.password });
+      try {
+        sessionStorage.removeItem(SETUP_TOKEN_KEY);
+      } catch {
+        /* private mode */
+      }
       onDone();
     } catch (err) {
       setError((err as Error).message);
@@ -174,9 +199,13 @@ export function SetupPage({ onDone }: { onDone: () => void }) {
     <Centered>
       <Card title="Set up FBRX Command" subtitle={`Step 2 of 2: your ${info.noun} and the first administrator`}>
         <form className="fx-form" onSubmit={submit}>
-          {!f.setupToken && <Callout tone="info">The one-time setup token is shown by the FBRX Command installer, or printed in the server's log on first start (or set FBRX_CP_SETUP_TOKEN).</Callout>}
+          {!f.setupToken && (
+            <Callout tone="info">
+              The one-time setup token is in the FBRX Command installer's window, after "Setup token" (a short code, not the long certificate fingerprint). Opening FBRX Command from its icon fills it in. On a server, it is printed in the log on first start (or set FBRX_CP_SETUP_TOKEN).
+            </Callout>
+          )}
           {error && <Callout tone="critical">{error}</Callout>}
-          <Field label="Setup token">
+          <Field label="Setup token" error={looksLikeFingerprint(f.setupToken) ? FINGERPRINT_HINT : undefined}>
             <Input value={f.setupToken} onChange={set('setupToken')} required autoFocus={!f.setupToken} />
           </Field>
           <Field label={kind === 'home' ? 'Family name' : kind === 'education' ? 'School name' : 'Organization name'} help={`Kind: ${VERTICAL_NAMES[kind]}`}>

@@ -51,7 +51,9 @@ export async function authRoutes(app: FastifyInstance, ctx: AppContext) {
       })
       .parse(req.body);
     if (Number(ctx.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM users')?.n ?? 0) > 0) throw forbidden('Setup has already been completed');
-    if (!ctx.config.setupToken || !safeEqual(body.setupToken, ctx.config.setupToken)) throw unauthorized('Invalid setup token (see the server log)');
+    if (!ctx.config.setupToken || !safeEqual(body.setupToken.trim(), ctx.config.setupToken)) {
+      throw unauthorized('That is not the setup token. Use the one-time setup token the FBRX Command installer showed (after "Setup token"), or the one printed in the server log on first start.');
+    }
     const now = new Date().toISOString();
     const tenantId = ids.tenant();
     const userId = ids.user();

@@ -71,7 +71,9 @@ describe('control plane ⇄ device fleet', () => {
     expect((await (await fetch(`${base}/v1/setup/status`)).json()).needsSetup).toBe(true);
     const bad = await fetch(`${base}/v1/setup`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ setupToken: 'nope', organization: 'Fabrics Inc', name: 'Sam', email: 'sam@fabrics.example', password: ADMIN_PASSWORD }) });
     expect(bad.status).toBe(401);
-    const setup = await (await fetch(`${base}/v1/setup`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ setupToken: 'setup-token-123', organization: 'Fabrics Inc', name: 'Sam', email: 'sam@fabrics.example', password: ADMIN_PASSWORD }) })).json();
+    expect((await bad.json()).error.message).toMatch(/not the setup token.*installer/);
+    // Copied from a terminal with a space or line break around it: still the token.
+    const setup = await (await fetch(`${base}/v1/setup`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ setupToken: ' setup-token-123\n', organization: 'Fabrics Inc', name: 'Sam', email: 'sam@fabrics.example', password: ADMIN_PASSWORD }) })).json();
     tenantId = setup.tenantId;
     const login = await (await fetch(`${base}/v1/auth/login`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'sam@fabrics.example', password: ADMIN_PASSWORD }) })).json();
     token = login.token;

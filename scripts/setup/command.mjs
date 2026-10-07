@@ -555,13 +555,14 @@ async function main() {
   const local = `http://127.0.0.1:${mode === 'network' ? config.localPort : config.port}`;
   console.log(`\n${green(bold(`${PRODUCT} is running`))} ${dim(`in ${elapsed(started)}`)}\n`);
   console.log(`  ${bold('On this computer')}  ${local}  ${dim(`(the "${PRODUCT}" icon opens it)`)}`);
+  // The token first, and plainly: the certificate fingerprint below is long and looks like one, but is not it.
+  if (status?.needsSetup !== false) console.log(`  ${bold('Setup token')}       ${cyan(bold(config.setupToken))}\n                    ${dim('The first sign-in asks for it once. Opening FBRX Command from its icon fills it in.')}`);
   if (mode === 'network') {
     console.log(`  ${bold('Other computers')}   join at ${config.publicUrl}`);
-    if (fp) console.log(`  ${bold('Certificate')}       ${fp}\n                    ${dim('Computers show this when they join; it must match. Deploy & enroll shows it too.')}`);
+    if (fp) console.log(`  ${bold('Certificate')}       ${fp}\n                    ${dim('Not the setup token: computers show this when they join, and it must match. Deploy & enroll shows it too.')}`);
   } else {
     console.log(`  ${bold('Other computers')}   cannot join yet: run the installer again with --network when you are ready`);
   }
-  if (status?.needsSetup !== false) console.log(`  ${bold('First sign-in')}     the setup page fills in your one-time setup token: ${config.setupToken}`);
   console.log(`  ${bold('Data')}              ${DATA} ${dim('(kept when you update or remove FBRX Command)')}`);
   console.log(`  ${bold('Update')}            download the new FBRX folder and run this installer again`);
   console.log(`  ${bold('Remove')}            run it with --uninstall ${dim('(add --delete-data to erase everything)')}`);
