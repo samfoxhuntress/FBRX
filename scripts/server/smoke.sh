@@ -69,7 +69,7 @@ echo "OK: the FBRX core runs in server mode and FBRX Virtual manages it (roles $
 
 echo "==> FBRX Gate (the gate role, simulated) and its command line"
 G_PORT=$((V_PORT + 1))
-GATE_ENV=(FBRX_V_ROLES=gate FBRX_V_GATE=simulated FBRX_V_GATE_WAN=eno1 FBRX_V_GATE_LAN=eno2 FBRX_V_GATE_FIRST=commit FBRX_V_TLS=off FBRX_V_HOST=127.0.0.1 FBRX_V_PORT="$G_PORT" FBRX_V_DATA_DIR="$WORK/gate" FBRX_V_LOG_LEVEL=warn FBRX_V_CONSOLE_DIR="$BUNDLE/fbrx-virtual/virtual-console")
+GATE_ENV=("FBRX_V_ROLES=gate,minidome" FBRX_V_GATE=simulated FBRX_V_GATE_WAN=eno1 FBRX_V_GATE_LAN=eno2 FBRX_V_GATE_FIRST=commit FBRX_V_TLS=off FBRX_V_HOST=127.0.0.1 FBRX_V_PORT="$G_PORT" FBRX_V_DATA_DIR="$WORK/gate" FBRX_V_LOG_LEVEL=warn FBRX_V_CONSOLE_DIR="$BUNDLE/fbrx-virtual/virtual-console")
 env "${GATE_ENV[@]}" "$NODE" "$BUNDLE/fbrx-virtual/server.mjs" >"$WORK/gate.log" 2>&1 &
 PIDS+=($!)
 wait_for "[ -s '$WORK/gate/cli.token' ] && curl -fs 'http://127.0.0.1:$G_PORT/healthz' >/dev/null" || { cat "$WORK/gate.log" >&2; fail "FBRX Virtual as a gate does not answer"; }
@@ -85,5 +85,7 @@ gate confirm | grep -q 'confirmed' || fail "fbrx-gate confirm"
 gate preview nftables | grep -q 'iifname "eno2.20" ip dscp set af41' || fail "the guest network is not marked for Prefer Mesh in the firewall"
 gate status >/dev/null || fail "fbrx-gate status"
 [ "$(curl -s -o /dev/null -w '%{http_code}' -H "authorization: Bearer $(cat "$WORK/gate/cli.token")" "http://127.0.0.1:$G_PORT/v1/gate")" = "200" ] || fail "the command line's token is not accepted from this computer"
-echo "OK: FBRX Gate commits, confirms and previews from the bundled command line"
+DOME="$(curl -fs -H "authorization: Bearer $(cat "$WORK/gate/cli.token")" "http://127.0.0.1:$G_PORT/v1/dome")" || fail "FBRX MiniDome does not answer"
+[ "$(json 'v.mode + " " + v.settings.enabled' <<<"$DOME")" = "simulated true" ] || fail "FBRX MiniDome is not watching: $DOME"
+echo "OK: FBRX Gate commits, confirms and previews from the bundled command line; FBRX MiniDome watches it"
 

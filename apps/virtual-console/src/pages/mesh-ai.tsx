@@ -83,6 +83,7 @@ const PERMS: Array<{ key: keyof MeshPermissions; label: string; help: string }> 
   { key: 'approve', label: 'Approve actions', help: 'Approve or deny actions waiting on this server' },
   { key: 'alerts', label: 'Alerts', help: 'Receive this server’s alerts' },
   { key: 'assist', label: 'Help with AI', help: 'Ask this server’s AI to help with its own work (the Mesh Assist settings decide whether someone here is asked)' },
+  { key: 'network', label: 'Network protection', help: 'This server’s FBRX MiniDome may tell it about threats seen coming from this server, and see how this server is protected (rarely needed for a server)' },
   { key: 'command', label: 'Controller', help: 'Its work runs here without asking, may be urgent, and may stop lower-priority help. Still follows this server’s policy.' },
 ];
 

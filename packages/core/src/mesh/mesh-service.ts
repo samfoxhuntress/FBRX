@@ -15,8 +15,11 @@ import {
   type MeshDevice,
   type MeshJob,
   type MeshMessage,
+  type MeshNetworkComputer,
+  type MeshNetworkFinding,
   type MeshPairing,
   type MeshPermissions,
+  type MeshProtectionInfo,
   type MeshStatus,
   type Note,
   type Task,
@@ -40,9 +43,9 @@ import {
   type KeyPair,
 } from './mesh-crypto';
 
-export const MOBILE_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: true, approve: true, workspace: true, alerts: true, control: false, assist: false, command: false };
+export const MOBILE_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: true, approve: true, workspace: true, alerts: true, control: false, assist: false, command: false, network: false };
 // Computers may ask each other's AI for help (each computer's Mesh Assist settings still decide); controllers are chosen by hand.
-export const DESKTOP_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false };
+export const DESKTOP_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false, network: false };
 const PERMISSION_KEYS = Object.keys(MOBILE_PERMISSIONS) as Array<keyof MeshPermissions>;
 
 const PAIRING_TTL_MS = 5 * 60_000;
@@ -111,6 +114,10 @@ export interface MeshHost {
   audit: (action: string, actor: string, outcome: 'success' | 'failure' | 'denied', details?: Record<string, unknown>) => void;
   /** Mesh Assist requests (assist.offer / start / status / cancel) from a paired computer. */
   assist?: (device: MeshDevice, method: string, params: any) => Promise<unknown>;
+  /** A gate's FBRX MiniDome saw something coming from this computer (Network protection). */
+  networkFinding?: (device: MeshDevice, finding: MeshNetworkFinding) => void;
+  /** How this computer is protected (antivirus, threats), for a MiniDome allowed to ask. */
+  protection?: () => MeshProtectionInfo | null;
 }
 
 /**
@@ -250,6 +257,51 @@ export class MeshService {
   rolesOf(id: string): string[] {
     const r = this.db.get<DeviceRow>('SELECT roles FROM mesh_devices WHERE id = ?', id);
     return parseList(r?.roles ?? null);
+  }
+
+  // ------------------------------------------------------------------------------- network protection
+
+  /** All the addresses a paired computer has told this one about (and the one it last talked from). */
+  private addressesOf(r: DeviceRow): string[] {
+    return [...new Set([...parseList(r.addrs), ...(r.addr ? [r.addr] : [])])].filter(isIP);
+  }
+
+  /**
+   * FBRX MiniDome (on a gate) saw something coming from an address: the paired FBRX computer with that address is
+   * told, if it allows Network protection. Returns its name when it was.
+   */
+  async notifyNetwork(address: string, finding: MeshNetworkFinding): Promise<{ delivered: string | null }> {
+    const rows = this.db.all<DeviceRow>("SELECT * FROM mesh_devices WHERE kind = 'desktop'").filter((r) => this.addressesOf(r).includes(address));
+    for (const r of rows) {
+      try {
+        await this.call(r.id, 'dome.finding', { finding }, 8000);
+        return { delivered: r.name };
+      } catch (err) {
+        this.log.debug('Network finding not delivered', { device: r.name, error: errorMessage(err) });
+      }
+    }
+    return { delivered: null };
+  }
+
+  private protectionCache = new Map<string, { at: number; value: MeshProtectionInfo | null }>();
+
+  /** Paired FBRX computers with their addresses, and how they are protected where they let this computer see it. */
+  async networkComputers(): Promise<MeshNetworkComputer[]> {
+    const rows = this.db.all<DeviceRow>("SELECT * FROM mesh_devices WHERE kind = 'desktop' ORDER BY name");
+    return Promise.all(
+      rows.map(async (r) => {
+        const d = this.toDevice(r);
+        let cached = this.protectionCache.get(r.id);
+        if (d.online && (!cached || Date.now() - cached.at > 60_000)) {
+          const value = await this.call<{ protection: MeshProtectionInfo | null }>(r.id, 'shield.status', {}, 5000)
+            .then((x) => x?.protection ?? null)
+            .catch(() => null);
+          cached = { at: Date.now(), value };
+          this.protectionCache.set(r.id, cached);
+        }
+        return { id: r.id, name: r.name, online: d.online, addresses: this.addressesOf(r), protection: cached?.value ?? null };
+      }),
+    );
   }
 
   devices(): MeshDevice[] {
@@ -794,6 +846,26 @@ export class MeshService {
       case 'alerts.list':
         need('alerts');
         return this.host.alerts();
+      case 'dome.finding': {
+        need('network');
+        const f = p?.finding ?? {};
+        const severities = ['info', 'warning', 'serious', 'critical'];
+        const finding: MeshNetworkFinding = {
+          kind: String(f.kind ?? 'finding').slice(0, 40),
+          severity: (severities.includes(f.severity) ? f.severity : 'warning') as MeshNetworkFinding['severity'],
+          title: String(f.title ?? '').slice(0, 200) || 'Something on the network',
+          detail: String(f.detail ?? '').slice(0, 2000),
+          subject: typeof f.subject === 'string' ? f.subject.slice(0, 200) : null,
+          evidence: Array.isArray(f.evidence) ? f.evidence.filter((x: unknown) => typeof x === 'string').slice(0, 10).map((x: string) => x.slice(0, 300)) : [],
+          at: typeof f.at === 'string' ? f.at : new Date().toISOString(),
+        };
+        this.host.audit('network.finding', actor, 'success', { kind: finding.kind, severity: finding.severity });
+        this.host.networkFinding?.(d, finding);
+        return { ok: true, protection: this.host.protection?.() ?? null };
+      }
+      case 'shield.status':
+        need('network');
+        return { protection: this.host.protection?.() ?? null };
       case 'assist.offer':
       case 'assist.start':
       case 'assist.status':

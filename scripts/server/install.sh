@@ -28,9 +28,9 @@ GATE_DATA=/var/lib/fbrx-gate
 GATE_LOG=/var/log/fbrx-gate
 GATE_UNIT=/etc/systemd/system/fbrx-gate-firewall.service
 NODE_MAJOR=22
-# Roles this installer sets up. Planned roles (command, dns, directory, files, minidome) come with later releases.
-AVAILABLE_ROLES="virtual ai gate"
-PLANNED_ROLES="command dns directory files minidome"
+# Roles this installer sets up. Planned roles (command, dns, directory, files) come with later releases.
+AVAILABLE_ROLES="virtual ai gate minidome"
+PLANNED_ROLES="command dns directory files"
 
 BUNDLE=""
 YES=0
@@ -63,6 +63,7 @@ Options:
                                 ai       the FBRX core: an AI agent on FBRX Mesh with Mesh Assist, run from the console
                                 gate     FBRX Gate: this server routes and protects your network (needs --gate-wan
                                          and --gate-lan); the console's Gate pages and the fbrx-gate command
+                                minidome FBRX MiniDome: watches the network through the gate for threats (with gate)
                               The web console comes with every role.
   --gate-wan <nic>            the gate's internet port (from your modem or provider)
   --gate-lan <nic>            the gate's port to your network (it becomes 192.168.1.1 and hands out addresses)
@@ -115,6 +116,7 @@ for r in ${ROLES//,/ }; do
   case ",$ROLE_LIST," in *",$r,"*) ;; *) ROLE_LIST="${ROLE_LIST:+$ROLE_LIST,}$r" ;; esac
 done
 [ -n "$ROLE_LIST" ] || die "Pick at least one role (--roles virtual,ai,gate)"
+if has_role minidome && ! has_role gate; then die "FBRX MiniDome watches the network through FBRX Gate: use --roles …,gate,minidome"; fi
 has_role() { case ",$ROLE_LIST," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 # Text that is there only with a role: "$(with_role ai ', the FBRX core')".
 with_role() { if has_role "$1"; then printf '%s' "$2"; fi; }
@@ -141,7 +143,7 @@ if [ "$UNINSTALL" -eq 1 ]; then
     # The gate's networks go away: the ports get the settings they had before FBRX Gate (after a restart).
     systemctl disable fbrx-gate-firewall.service 2>/dev/null || true
     nft delete table inet fbrx_gate 2>/dev/null || true
-    rm -f /etc/systemd/network/10-fbrx-* /etc/systemd/networkd.conf.d/fbrx-gate.conf /etc/dnsmasq.d/fbrx-gate.conf /etc/sysctl.d/90-fbrx-gate.conf /etc/modules-load.d/fbrx-gate.conf
+    rm -f /etc/logrotate.d/fbrx-gate /etc/systemd/network/10-fbrx-* /etc/systemd/networkd.conf.d/fbrx-gate.conf /etc/dnsmasq.d/fbrx-gate.conf /etc/sysctl.d/90-fbrx-gate.conf /etc/modules-load.d/fbrx-gate.conf
     [ -f /etc/network/interfaces.fbrx-backup ] && mv -f /etc/network/interfaces.fbrx-backup /etc/network/interfaces
     [ -f /etc/resolv.conf.fbrx-backup ] && mv -f /etc/resolv.conf.fbrx-backup /etc/resolv.conf
     systemctl restart dnsmasq.service 2>/dev/null || true
@@ -235,6 +237,7 @@ say "FBRX Server $VERSION · powered by FBRX OS"
 note "Roles: ${ROLE_LIST//,/, }"
 note "Installs the web console on port $PORT$(with_role virtual ', QEMU/KVM, libvirt and FBRX Virtual')."
 if has_role ai; then note "And the FBRX core (ai role): an AI agent on FBRX Mesh (port 47800), run from the console's Mesh & AI page."; fi
+if has_role minidome; then note "And FBRX MiniDome: watches the gate's names, connections and devices for threats (MiniDome in the console)."; fi
 if has_role gate; then
   note "And FBRX Gate: the internet on $GATE_WAN, your network on $GATE_LAN (192.168.1.1, handing out addresses)."
   if [ -n "$GATE_MANAGE" ]; then note "The console and SSH stay reachable from $GATE_MANAGE on the internet side (--gate-manage none closes that)."; fi
@@ -269,6 +272,8 @@ if has_role gate; then
     printf '%s\n' '# FBRX Gate: replaced at the first commit. Until then dnsmasq answers this server only.' 'interface=lo' 'bind-interfaces' >/etc/dnsmasq.d/fbrx-gate.conf
   fi
   GATE_PKGS="nftables dnsmasq wireguard-tools"
+  # MiniDome follows new connections with conntrack's event stream.
+  if has_role minidome; then GATE_PKGS="$GATE_PKGS conntrack"; fi
   # Newer Debian ships systemd-networkd on its own.
   if apt-cache show systemd-networkd >/dev/null 2>&1; then GATE_PKGS="$GATE_PKGS systemd-networkd"; fi
   # shellcheck disable=SC2086
@@ -393,6 +398,20 @@ if has_role gate; then
   set_env FBRX_V_GATE_MANAGE_WAN "$GATE_MANAGE"
   # The first start puts the starter configuration in place (once: later starts apply what was committed).
   set_env FBRX_V_GATE_FIRST commit
+  # The question log (MiniDome reads it) is rotated daily; dnsmasq reopens it on USR2.
+  cat >/etc/logrotate.d/fbrx-gate <<EOF
+$GATE_LOG/dnsmasq.log {
+    daily
+    rotate 7
+    compress
+    delaycompress
+    missingok
+    notifempty
+    postrotate
+        systemctl kill -s USR2 dnsmasq.service >/dev/null 2>&1 || true
+    endscript
+}
+EOF
   # Kernel parts the gate uses, loaded at boot: VLANs, the VPN, traffic shaping.
   printf '%s\n' 8021q wireguard sch_cake sch_htb sch_fq_codel ifb act_mirred cls_u32 >/etc/modules-load.d/fbrx-gate.conf
   if ! in_chroot; then for m in 8021q wireguard sch_cake sch_htb ifb act_mirred cls_u32; do modprobe "$m" 2>/dev/null || true; done; fi

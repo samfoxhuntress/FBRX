@@ -5,6 +5,9 @@ import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import type { GateConfig } from '../src/index';
 import { GateEngine, GateStore, LinuxApplier, runCommand } from '../src/node/index';
+// FBRX MiniDome listens to this gate too (it depends on FBRX Gate, so its real-network check lives here).
+import { DOME_TEST_DOMAIN } from '../../dome/src/index';
+import { ConntrackSensor, DnsLogSensor, DomeEngine, DomeStore } from '../../dome/src/node/index';
 
 /**
  * FBRX Gate as a real router, inside Linux network namespaces: an "internet" host, the gate, and clients on the LAN,
@@ -232,6 +235,27 @@ describe.runIf(can)('FBRX Gate on a real (namespaced) network', () => {
     expect(live.dns.running).toBe(true);
     if (vlans) expect(live.interfaces.find((i) => i.name === 'gwlan.30')?.mtu).toBe(9000);
   });
+
+  it('is heard by FBRX MiniDome: a known-bad name, and DNS around the gate', async () => {
+    const domeStore = new DomeStore(join(dir, 'dome.db'));
+    const conntrack = spawnSync('conntrack', ['--version']).error === undefined;
+    const sensors = [new DnsLogSensor(join(dir, 'log', 'dnsmasq.log'), 100), ...(conntrack ? [new ConntrackSensor({ command: 'ip', args: ['netns', 'exec', NS.gw, 'conntrack', '-E', '-e', 'NEW'] })] : [])];
+    const dome = new DomeEngine({ store: domeStore, sensors, mode: 'linux', gate: () => engine.running(), feedCache: join(dir, 'feeds.json'), fetchFeed: async () => '', learnMs: 0 });
+    try {
+      dome.start();
+      await wait(600);
+      dnsq(NS.lan, '192.168.50.1', DOME_TEST_DOMAIN);
+      if (conntrack) dnsq(NS.lan, '203.0.113.1', 'example.com');
+      for (let i = 0; i < 40 && dome.findings().length < (conntrack ? 2 : 1); i++) await wait(200);
+      const found = dome.findings();
+      expect(found.find((f) => f.kind === 'bad-domain')).toMatchObject({ device: { ip: '192.168.50.10' }, subject: 'fbrx.invalid' });
+      if (conntrack) expect(found.find((f) => f.kind === 'dns-bypass')).toMatchObject({ subject: '203.0.113.1:53' });
+      expect(dome.state().stats.sensors.every((s) => s.ok)).toBe(true);
+    } finally {
+      dome.stop();
+      domeStore.close();
+    }
+  }, 20_000);
 
   it('undoes a commit that cut something off, unless it is confirmed', async () => {
     const c = structuredClone(engine.candidate());

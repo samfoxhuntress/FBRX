@@ -18,6 +18,7 @@ const PERMS: Array<{ key: keyof MeshPermissions; label: string; help: string }> 
   { key: 'alerts', label: 'Alerts', help: 'Receive this computer’s alerts' },
   { key: 'control', label: 'Remote control', help: 'Lock this computer or put it to sleep' },
   { key: 'assist', label: 'Help with AI', help: 'Ask this computer’s AI to help with its own work (Mesh Assist settings above decide whether to ask you)' },
+  { key: 'network', label: 'Network protection', help: 'When it is a gate with FBRX MiniDome: it tells this computer about threats it sees coming from it, and sees how this computer is protected.' },
   { key: 'command', label: 'Controller', help: 'When it runs as administrator: its work runs here without asking, may be urgent, and may stop lower-priority help. Still follows this computer’s policy.' },
 ];
 /** Mesh Assist permissions only mean something between computers. */

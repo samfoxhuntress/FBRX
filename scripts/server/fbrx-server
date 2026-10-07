@@ -32,6 +32,7 @@ case "${1:-status}" in
     echo "Roles:        $(roles | sed 's/,/, /g')"
     echo "Service:      $(systemctl is-active fbrx-virtual 2>/dev/null || true)"
     if has_ai; then echo "AI role:      $(systemctl is-active fbrx-core 2>/dev/null || true) (FBRX core: FBRX Mesh on port 47800; Mesh & AI in the console)"; fi
+    case ",$(roles)," in *,minidome,*) echo "MiniDome:     watching (findings in the console's MiniDome page)" ;; esac
     if has_gate; then echo "Gate:         firewall $(nft list table inet fbrx_gate >/dev/null 2>&1 && echo loaded || echo 'not loaded yet') · DNS and DHCP $(systemctl is-active dnsmasq 2>/dev/null || true) (fbrx-gate status for more)"; fi
     case ",$(roles)," in
       *,virtual,*)

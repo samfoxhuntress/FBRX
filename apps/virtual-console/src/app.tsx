@@ -19,6 +19,7 @@ import { GateFirewallPage } from './pages/gate-firewall';
 import { GateServicesPage } from './pages/gate-services';
 import { GateTrafficPage } from './pages/gate-traffic';
 import { GateChangesPage } from './pages/gate-changes';
+import { DomePage } from './pages/dome';
 
 export function App() {
   const [phase, setPhase] = useState<'loading' | 'setup' | 'login' | 'ready'>('loading');
@@ -110,6 +111,7 @@ function Console() {
           { id: 'gate-changes', label: 'Changes', icon: 'diff', section: 'Gate', ...(changes ? { count: changes } : {}) },
         ] satisfies NavItem[])
       : []),
+    ...(app.has('minidome') ? ([{ id: 'dome', label: 'MiniDome', icon: 'eye', section: 'Gate' }] satisfies NavItem[]) : []),
     { id: 'hardware', label: 'Hardware map', icon: 'cpu', section: 'Server' },
     { id: 'server', label: 'Server & BIOS', icon: 'server', section: 'Server' },
     { id: 'mesh', label: 'Mesh & AI', icon: 'sparkles', section: 'Server' },
@@ -133,6 +135,8 @@ function Console() {
         return <GateTrafficPage />;
       case 'gate-changes':
         return <GateChangesPage />;
+      case 'dome':
+        return <DomePage tab={route.id} />;
       case 'vms':
         return <VmsPage />;
       case 'vm':

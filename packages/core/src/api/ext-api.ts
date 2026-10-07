@@ -9,6 +9,7 @@ import {
   MESH_ACTIONS,
   ASSIST_PRIORITIES,
   ASSIST_TOOLS,
+  isIP,
   NETENV_DEVICE_ACTIONS,
   NETENV_KINDS,
   HELPDESK_SCOPES,
@@ -726,6 +727,24 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'server.readDoc': (p) => k.serverResources.readDoc(z.object({ name: z.string().max(200) }).parse(p).name),
     'mesh.network.status': () => k.meshNetwork.status(),
     'mesh.network.test': (p) => k.meshNetwork.test(z.object({ peerId: z.string().max(80).optional() }).parse(p ?? {}).peerId),
+    'mesh.network.computers': () => k.mesh.networkComputers(),
+    'mesh.network.notify': (p) => {
+      const q = z
+        .object({
+          address: z.string().refine(isIP, 'Not an address'),
+          finding: z.object({
+            kind: z.string().max(40),
+            severity: z.enum(['info', 'warning', 'serious', 'critical']),
+            title: z.string().max(200),
+            detail: z.string().max(2000),
+            subject: z.string().max(200).nullable(),
+            evidence: z.array(z.string().max(300)).max(10),
+            at: z.string().max(40),
+          }),
+        })
+        .parse(p);
+      return k.mesh.notifyNetwork(q.address, q.finding);
+    },
     'mesh.network.applyQos': (p) => k.meshNetwork.applyQos(z.object({ remove: z.boolean().optional() }).parse(p ?? {}).remove ?? false),
 
     // -------------------------------------------------------------------------------- AI coordination

@@ -503,6 +503,12 @@ export class Kernel {
       system: (cmd) => this.spotlight.system(cmd),
       audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
       assist: (device, method, params) => this.assist.handle(device, method, params),
+      // A gate's FBRX MiniDome saw something coming from this computer: an alert here (critical when it is serious).
+      networkFinding: (device, f) =>
+        void this.alerts
+          .fire('network_threat', f.title, `${f.detail}${f.evidence.length ? `\n\n${f.evidence.slice(0, 3).join('\n')}` : ''}\n\nSeen by FBRX MiniDome on ${device.name}. A quick scan with your antivirus is a good next step.`, { key: `${f.kind}:${f.subject ?? ''}`, severity: f.severity === 'serious' || f.severity === 'critical' ? 'critical' : f.severity === 'info' ? 'info' : 'warning' })
+          .catch(() => undefined),
+      protection: () => this.protection.summary(),
     });
     this.serverResources = new ServerResources(this.platform.resourcesDir, () => this.platform.specialDirs().downloads);
     this.meshNetwork = new MeshNetwork({

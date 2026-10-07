@@ -32,6 +32,7 @@ export const ALERT_RULES: RuleDef[] = [
   { id: 'net_restored', group: 'Network', label: 'Internet connection restored', unit: null, threshold: null, enabled: true, severity: 'info', help: '' },
   { id: 'new_device', group: 'Network', label: 'Unknown device joined my network', unit: null, threshold: null, enabled: false, severity: 'warning', help: 'Compares each LAN scan with the devices seen before' },
   { id: 'shield_threat', group: 'Security', label: 'FBRX Shield found a threat', unit: null, threshold: null, enabled: true, severity: 'critical', help: 'Malware or a suspicious file, from a scan or a new download' },
+  { id: 'network_threat', group: 'Security', label: 'The network gate saw a threat from this computer', unit: null, threshold: null, enabled: true, severity: 'warning', help: 'From FBRX MiniDome on an FBRX Server gate you allow Network protection on FBRX Mesh' },
   { id: 'av_problem', group: 'Security', label: 'Antivirus needs attention', unit: null, threshold: null, enabled: true, severity: 'warning', help: 'The antivirus protecting this computer is off, out of date or missing' },
   { id: 'defender_off', group: 'Security', label: 'Real-time protection turned off', unit: null, threshold: null, enabled: true, severity: 'critical', help: 'Microsoft Defender real-time protection is disabled', windowsOnly: true },
   { id: 'defender_threat', group: 'Security', label: 'Threat detected', unit: null, threshold: null, enabled: true, severity: 'critical', help: 'Microsoft Defender recorded a new detection', windowsOnly: true },

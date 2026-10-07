@@ -40,6 +40,9 @@ import { hardwareRoutes } from './routes/hardware';
 import { bmcRoutes } from './routes/bmc';
 import { coreRoutes } from './routes/core';
 import { gateRoutes } from './routes/gate';
+import { domeRoutes } from './routes/dome';
+import { ConntrackSensor, DevicesSensor, DnsLogSensor, DomeEngine, DomeStore, SimulatedSensor, type DomeSensor } from '@fbrx/dome/node';
+import type { MeshNetworkComputer } from '@fbrx/shared';
 
 function readVersion(): string {
   if (process.env.FBRX_V_VERSION) return process.env.FBRX_V_VERSION;
@@ -72,6 +75,8 @@ export interface BuildOptions {
   nft?: NftRunner;
   /** FBRX Gate applies through this (tests). */
   gateApplier?: GateApplier;
+  /** FBRX MiniDome listens to these instead (tests). */
+  domeSensors?: DomeSensor[];
 }
 
 export function makeHypervisor(config: VirtualConfig): Hypervisor {
@@ -109,6 +114,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     core: new CoreLink(config.core.url, config.core.tokenFile, opts.coreFetch),
     meshMark: new HostMeshMark(db, opts.nft),
     gate: null,
+    dome: null,
     cliToken: randomBytes(32).toString('base64url'),
     log: app.log,
     tls: tls ? { fingerprint: tls.fingerprint, selfSigned: tls.selfSigned, notAfter: tls.notAfter } : null,
@@ -147,6 +153,44 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
         .commit({ by: 'installer', comment: 'Starter configuration (from the installer)' })
         .then((c) => app.log.info(`FBRX Gate: starter configuration in place (commit ${c.id})`))
         .catch((e) => app.log.error(`FBRX Gate: the starter configuration was not applied: ${(e as Error).message}`));
+    }
+  }
+
+  // FBRX MiniDome: watches the network through the gate.
+  let domeStore: DomeStore | null = null;
+  if (config.roles.includes('minidome')) {
+    const gate = ctx.gate;
+    if (!gate) app.log.warn('FBRX MiniDome watches the network through FBRX Gate: add the gate role too (install.sh --roles …,gate,minidome)');
+    else {
+      domeStore = new DomeStore(join(config.dataDir, 'dome.db'));
+      const current = () => gate.engine.running() ?? (config.gate.mode === 'simulated' ? gate.engine.candidate() : null);
+      const sensors =
+        opts.domeSensors ??
+        (config.gate.mode === 'simulated'
+          ? [new SimulatedSensor(current)]
+          : [new DnsLogSensor(join(DEFAULT_PATHS.logDir, 'dnsmasq.log')), new ConntrackSensor(), new DevicesSensor({ leases: join(DEFAULT_PATHS.varDir, 'dnsmasq.leases'), gate: current })]);
+      ctx.dome = new DomeEngine({
+        store: domeStore,
+        sensors,
+        mode: config.gate.mode,
+        gate: current,
+        gateAddresses: async () => {
+          const wan = (await gate.engine.live()).wan.address;
+          return wan ? [wan] : [];
+        },
+        feedCache: join(config.dataDir, 'dome-feeds.json'),
+        learnMs: config.gate.mode === 'simulated' ? 20_000 : undefined,
+        // FBRX computers hear what was seen from them through the FBRX core (ai role) and FBRX Mesh.
+        notify: async (f) => {
+          if (!f.device.ip) return null;
+          const finding = { kind: f.kind, severity: f.severity, title: f.title, detail: f.detail, subject: f.subject, evidence: f.evidence.slice(0, 10), at: f.lastAt };
+          const r = await ctx.core.call<{ delivered: string | null }>('mesh.network.notify', { address: f.device.ip, finding }, 'minidome', 15_000);
+          return r.delivered;
+        },
+        computers: async () => (await ctx.core.call<MeshNetworkComputer[]>('mesh.network.computers', {}, 'minidome', 20_000)).map((c) => ({ name: c.name, addresses: c.addresses, protection: c.protection })),
+        log: (level, msg) => app.log[level](msg),
+      });
+      ctx.dome.start();
     }
   }
 
@@ -199,6 +243,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   await bmcRoutes(app, ctx);
   await coreRoutes(app, ctx);
   await gateRoutes(app, ctx);
+  await domeRoutes(app, ctx);
 
   if (config.consoleDir && existsSync(join(config.consoleDir, 'index.html'))) {
     await app.register(fastifyStatic, { root: config.consoleDir, index: 'index.html' });
@@ -231,6 +276,8 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     ctx,
     async close() {
       clearInterval(timer);
+      ctx.dome?.stop();
+      domeStore?.close();
       ctx.gate?.engine.stop();
       gateStore?.close();
       ctx.isos.stop();

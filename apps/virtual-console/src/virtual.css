@@ -149,3 +149,23 @@
   .gt-pm-side { border-left: 0; padding-left: 0; border-top: 1px solid var(--border); padding-top: 14px; }
   .gt-res-row { grid-template-columns: 1fr 1fr; }
 }
+
+/* ------------------------------------------------------------------------------ FBRX MiniDome */
+
+.dm-list { display: grid; }
+.dm-item { border-bottom: 1px solid var(--border); border-left: 3px solid transparent; }
+.dm-item:last-child { border-bottom: 0; }
+.dm-item.warning { border-left-color: var(--warning); }
+.dm-item.serious { border-left-color: var(--serious, var(--warning)); }
+.dm-item.critical { border-left-color: var(--critical); }
+.dm-item.info { border-left-color: var(--border-strong); }
+.dm-head { width: 100%; display: flex; align-items: center; gap: 12px; padding: 12px 16px; background: transparent; border: 0; color: var(--text-primary); font: inherit; text-align: left; cursor: pointer; }
+.dm-head:hover { background: var(--surface-2); }
+.dm-head > .fx-status { flex: none; width: 128px; }
+.dm-title { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.dm-title b { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dm-when { white-space: nowrap; font-size: 12px; }
+.dm-body { display: grid; gap: 10px; padding: 0 16px 14px 16px; font-size: 13px; }
+.dm-evidence { margin: 0; max-height: 180px; }
+.dm-meta { font-size: 12px; }
+@media (max-width: 640px) { .dm-head { flex-wrap: wrap; } .dm-when { order: 3; } }

@@ -719,6 +719,40 @@ export interface MeshPermissions {
    * may stop lower-priority help (they still follow this computer's policy).
    */
   command: boolean;
+  /**
+   * Network protection: its FBRX MiniDome (on an FBRX Server gate) may tell this computer about threats it sees
+   * coming from it, and may see how this computer is protected (antivirus, threats found).
+   */
+  network: boolean;
+}
+
+/** What an FBRX MiniDome saw coming from this computer, sent to it over FBRX Mesh. */
+export interface MeshNetworkFinding {
+  kind: string;
+  severity: 'info' | 'warning' | 'serious' | 'critical';
+  title: string;
+  detail: string;
+  subject: string | null;
+  evidence: string[];
+  at: string;
+}
+
+/** How a computer is protected, as it tells a MiniDome it allows to ask (Network protection). */
+export interface MeshProtectionInfo {
+  name: string;
+  state: string;
+  realtime: boolean | null;
+  threats: number;
+}
+
+/** A paired FBRX computer, as the network sees it. */
+export interface MeshNetworkComputer {
+  id: string;
+  name: string;
+  online: boolean;
+  addresses: string[];
+  /** Null when it does not let this computer see its protection (or did not answer). */
+  protection: MeshProtectionInfo | null;
 }
 export interface MeshDevice {
   id: string;
@@ -1106,6 +1140,10 @@ export interface ExtMethods {
   'mesh.network.test': (p?: { peerId?: string }) => MeshPathTest[];
   /** Marks (or stops marking) mesh traffic with the traffic class; needs administrator rights. */
   'mesh.network.applyQos': (p?: { remove?: boolean }) => MeshNetworkStatus;
+  /** Paired FBRX computers with their addresses, and their protection where they allow it (FBRX MiniDome's device list). */
+  'mesh.network.computers': () => MeshNetworkComputer[];
+  /** Tells the paired computer at this address what FBRX MiniDome saw coming from it (when it allows Network protection). */
+  'mesh.network.notify': (p: { address: string; finding: MeshNetworkFinding }) => { delivered: string | null };
 
   'aicoord.detect': () => AiAppInfo[];
   'aicoord.bridge': () => McpBridgeInfo;
