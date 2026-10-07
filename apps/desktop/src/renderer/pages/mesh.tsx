@@ -6,6 +6,7 @@ import { Button, Callout, Card, Empty, Field, Grid, Icons, Input, Modal, Page, S
 import { call, onEvent } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
 import { PointingComputers, useTriplePing } from '../mesh-egg';
+import { MeshAssistCard } from './mesh-assist';
 
 const PERMS: Array<{ key: keyof MeshPermissions; label: string; help: string }> = [
   { key: 'status', label: 'See status', help: 'Health, performance and service status of this computer' },
@@ -15,7 +16,11 @@ const PERMS: Array<{ key: keyof MeshPermissions; label: string; help: string }> 
   { key: 'workspace', label: 'Tasks and notes', help: 'Read and edit tasks and notes' },
   { key: 'alerts', label: 'Alerts', help: 'Receive this computer’s alerts' },
   { key: 'control', label: 'Remote control', help: 'Lock this computer or put it to sleep' },
+  { key: 'assist', label: 'Help with AI', help: 'Ask this computer’s AI to help with its own work (Mesh Assist settings above decide whether to ask you)' },
+  { key: 'command', label: 'Controller', help: 'When it runs as administrator: its work runs here without asking, may be urgent, and may stop lower-priority help. Still follows this computer’s policy.' },
 ];
+/** Mesh Assist permissions only mean something between computers. */
+const permsFor = (d: MeshDevice) => PERMS.filter((p) => d.kind === 'desktop' || (p.key !== 'assist' && p.key !== 'command'));
 
 function Pairing({ onClose }: { onClose: () => void }) {
   const status = useCore('mesh.status', undefined, ['mesh.changed']);
@@ -121,7 +126,7 @@ function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => 
         <div>
           <div className="fx-label">What {d.name} may do on this computer</div>
           <div className="perm-grid">
-            {PERMS.map((p) => (
+            {permsFor(d).map((p) => (
               <label key={p.key} className="perm" title={p.help}>
                 <Toggle checked={d.permissions[p.key]} onChange={(v) => void run(p.key, () => call('mesh.setPermissions', { id: d.id, permissions: { [p.key]: v } }))} />
                 <span>{p.label}</span>
@@ -320,6 +325,7 @@ export function MeshPage() {
           )}
         </Card>
       )}
+      {s?.enabled && <MeshAssistCard devices={s.devices} running={s.running} />}
       {s && s.devices.length > 0 ? (
         <Grid cols={2}>
           {s.devices.map((d) => (

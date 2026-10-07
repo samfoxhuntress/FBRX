@@ -95,7 +95,7 @@ function httpBridge(): Bridge {
     },
     on(cb) {
       const es = new EventSource(`${base}/v1/events?token=${encodeURIComponent(token)}`);
-      const names: CoreEventName[] = ['agent', 'approval.requested', 'approval.resolved', 'service.changed', 'vault.changed', 'audit.appended', 'runtime.changed', 'runtime.download', 'settings.changed', 'policy.changed', 'plugins.changed', 'connectors.changed', 'tools.changed', 'fleet.changed', 'license.changed', 'updates.changed', 'notification', 'workspace.changed', 'alerts.new', 'alerts.changed', 'mesh.changed', 'mesh.message', 'fun.trophy', 'ai.halted', 'migrate.event', 'ai.quick', 'voice.download'];
+      const names: CoreEventName[] = ['agent', 'approval.requested', 'approval.resolved', 'service.changed', 'vault.changed', 'audit.appended', 'runtime.changed', 'runtime.download', 'settings.changed', 'policy.changed', 'plugins.changed', 'connectors.changed', 'tools.changed', 'fleet.changed', 'license.changed', 'updates.changed', 'notification', 'workspace.changed', 'alerts.new', 'alerts.changed', 'mesh.changed', 'mesh.message', 'mesh.job', 'mesh.assist', 'fun.trophy', 'ai.halted', 'migrate.event', 'ai.quick', 'voice.download'];
       for (const n of names) es.addEventListener(n, (e) => cb(n, JSON.parse((e as MessageEvent).data)));
       return () => es.close();
     },

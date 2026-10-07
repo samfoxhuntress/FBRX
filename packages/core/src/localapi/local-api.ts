@@ -16,7 +16,15 @@ export interface LocalApiDeps {
   appVersion: string;
 }
 
-type Scope = 'full' | 'agent';
+/**
+ * full and agent: automation (scripts, other apps). console: the management console of a server that runs this core
+ * headless (FBRX Virtual on FBRX Server). Its token never leaves the server (a root-only file), and it acts as the
+ * person at the computer would, because on a server without a screen the console is where that person sits.
+ */
+type Scope = 'full' | 'agent' | 'console';
+
+/** Even the console never reads secrets back out or touches the automation tokens. */
+const CONSOLE_DENIED = new Set<string>(['vault.reveal', 'vault.reset', 'vault.changeRecovery', 'localapi.info', 'localapi.rotateToken']);
 
 const STATUS: Record<string, number> = {
   INVALID_ARGUMENT: 400,
@@ -48,6 +56,12 @@ export class LocalApiServer {
   private port = 0;
   private sseClients = new Set<ServerResponse>();
   private unsubscribe: (() => void) | null = null;
+  private consoleToken: string | null = null;
+
+  /** Accepts the server console's token (headless servers only; see Scope). */
+  setConsoleToken(token: string | null) {
+    this.consoleToken = token;
+  }
 
   constructor(private readonly d: LocalApiDeps) {}
 
@@ -106,12 +120,14 @@ export class LocalApiServer {
   }
 
   private authenticate(req: IncomingMessage, url: URL): Scope | null {
-    const tokens = this.d.tokens();
-    if (!tokens) return null;
     const header = req.headers.authorization ?? '';
     let presented = header.startsWith('Bearer ') ? header.slice(7).trim() : '';
     if (!presented && url.pathname === '/v1/events') presented = url.searchParams.get('token') ?? '';
     if (!presented) return null;
+    // The console works even while the vault is locked (it is how a server's vault gets unlocked).
+    if (this.consoleToken && safeEqual(presented, this.consoleToken)) return 'console';
+    const tokens = this.d.tokens();
+    if (!tokens) return null;
     if (safeEqual(presented, tokens.full)) return 'full';
     if (safeEqual(presented, tokens.agent)) return 'agent';
     return null;
@@ -166,7 +182,9 @@ export class LocalApiServer {
     }
     const scope = this.authenticate(req, url);
     if (!scope) return this.json(res, 401, { error: { code: 'UNAUTHENTICATED', message: 'Missing or invalid token' } });
-    const ctx: CallContext = { origin: 'api', actor: `localapi:${scope}` };
+    // The console names the person signed in to it (for the audit log).
+    const who = String(req.headers['x-fbrx-actor'] ?? '').replace(/[^\w.@-]/g, '').slice(0, 64) || 'admin';
+    const ctx: CallContext = scope === 'console' ? { origin: 'user', actor: `console:${who}` } : { origin: 'api', actor: `localapi:${scope}` };
     try {
       if (req.method === 'GET' && url.pathname === '/v1/events') {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
@@ -185,6 +203,7 @@ export class LocalApiServer {
       if (url.pathname === '/v1/rpc') {
         const method = String(body.method ?? '') as CoreMethod;
         if (scope === 'agent' && !AGENT_SCOPE_METHODS.includes(method)) throw new CoreError('FORBIDDEN', `Token scope does not allow ${method}`);
+        if (scope === 'console' && CONSOLE_DENIED.has(method)) throw new CoreError('FORBIDDEN', `The console may not call ${method}`);
         const result = await this.d.call(method, body.params ?? {}, ctx);
         return this.json(res, 200, { result });
       }

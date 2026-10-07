@@ -49,4 +49,36 @@ describe('local API', () => {
       await cleanup();
     }
   });
+
+  it('accepts a server console token that acts as the person at the computer', async () => {
+    const port = 48000 + Math.floor(Math.random() * 1000);
+    const { kernel, cleanup } = await makeKernel({ localApiPort: port });
+    try {
+      const base = `http://127.0.0.1:${port}`;
+      const rpc = (token: string, method: string, params: unknown = {}, actor?: string) =>
+        fetch(`${base}/v1/rpc`, {
+          method: 'POST',
+          headers: { authorization: `Bearer ${token}`, 'content-type': 'application/json', ...(actor ? { 'x-fbrx-actor': actor } : {}) },
+          body: JSON.stringify({ method, params }),
+        });
+      expect((await rpc('fbrx_console_nope', 'system.status')).status).toBe(401);
+
+      kernel.localApi.setConsoleToken('fbrx_console_test');
+      const update = await rpc('fbrx_console_test', 'settings.update', { patch: { mesh: { assist: { offer: 'auto' } } } }, 'sam <admin>');
+      expect(update.status).toBe(200);
+      expect(kernel.settings.get().mesh.assist.offer).toBe('auto');
+      const entry = kernel.audit.query({ limit: 5 }).find((e) => e.action === 'settings.update');
+      expect(entry?.actor).toBe('console:samadmin');
+
+      // Never secrets or the automation tokens.
+      kernel.vault.set({ name: 'S', value: 'secret-value' });
+      expect((await rpc('fbrx_console_test', 'vault.reveal', { name: 'S' })).status).toBe(403);
+      expect((await rpc('fbrx_console_test', 'localapi.info', { revealToken: true })).status).toBe(403);
+
+      kernel.localApi.setConsoleToken(null);
+      expect((await rpc('fbrx_console_test', 'system.status')).status).toBe(401);
+    } finally {
+      await cleanup();
+    }
+  });
 });

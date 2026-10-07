@@ -9,7 +9,15 @@
  *   fbrx-headless restore <file> <passphrase> [--clone]    stage a snapshot restore and exit
  *   fbrx-headless status                                    print status JSON and exit
  *   fbrx-headless token                                     print the Local API token and exit
+ *
+ * On FBRX Server (the "ai" role) it runs as a service with --server: the mesh and the Local API are on from the first
+ * start, the roles it announces come from --roles, and a console token for the server's own management console
+ * (FBRX Virtual) is written to --console-token-file (root only; a new one each start).
  */
+import { chmodSync, mkdirSync, writeFileSync } from 'node:fs';
+import { randomBytes } from 'node:crypto';
+import { hostname } from 'node:os';
+import { dirname, join } from 'node:path';
 import { Kernel } from '../src/kernel';
 import { createNodePlatform } from '../src/node-platform';
 import { defaultDataRoot } from '../src/paths';
@@ -35,6 +43,9 @@ const name = flag('--name');
 const fingerprint = flag('--fingerprint');
 const label = flag('--label');
 const clone = bool('--clone');
+const serverMode = bool('--server') || process.env.FBRX_SERVER === '1';
+const roles = (flag('--roles') ?? process.env.FBRX_SERVER_ROLES ?? '').split(',').map((r) => r.trim()).filter((r) => /^[a-z][a-z0-9-]{0,31}$/.test(r));
+const consoleTokenFile = flag('--console-token-file') ?? process.env.FBRX_CONSOLE_TOKEN_FILE ?? (serverMode ? join(dataDir, 'console.token') : undefined);
 const [command = 'run', ...rest] = argv;
 const user = { origin: 'user' as const, actor: 'cli' };
 
@@ -60,8 +71,33 @@ async function boot(): Promise<Kernel> {
       },
     }),
   });
+  if (serverMode && command === 'run') applyServerDefaults(k);
   await k.start();
+  if (consoleTokenFile && command === 'run') {
+    const token = `fbrx_console_${randomBytes(32).toString('base64url')}`;
+    mkdirSync(dirname(consoleTokenFile), { recursive: true, mode: 0o700 });
+    writeFileSync(consoleTokenFile, `${token}\n`, { mode: 0o600 });
+    chmodSync(consoleTokenFile, 0o600);
+    k.localApi.setConsoleToken(token);
+  }
   return k;
+}
+
+/** A server's first start: on the mesh, Local API for its console, named after the host; roles every start. */
+function applyServerDefaults(k: Kernel) {
+  const first = !k.meta.get<boolean>('server.defaults.v1');
+  k.settings.update({
+    ...(first
+      ? {
+          general: { deviceName: hostname(), onboardingComplete: true },
+          localApi: { enabled: true, allowRemote: false },
+          mesh: { enabled: true },
+          runtime: { autoStart: false },
+        }
+      : {}),
+    mesh: { ...(first ? { enabled: true } : {}), assist: { roles } },
+  } as never);
+  if (first) k.meta.set('server.defaults.v1', true);
 }
 
 async function main() {

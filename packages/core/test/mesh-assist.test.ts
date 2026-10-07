@@ -164,7 +164,7 @@ describe('Mesh Assist', () => {
     assist(ka, { request: 'ask' });
     scriptA = (b) => (toolNames(b).length && !b.messages.some((m: any) => m.role === 'tool') ? { tool: { name: 'mesh__consult', args: { question: 'Check the backups' } } } : { text: 'ok' });
     const run = ka.agent.runToCompletion({ message: 'Have the other server check the backups', origin: 'user', actor: 'test' });
-    const ask = await waitFor(() => ka.approvals.list().find((x) => x.tool === 'mesh.assist'));
+    const ask = (await waitFor(() => ka.approvals.list().find((x) => x.tool === 'mesh.assist')))!;
     expect(ask.toolTitle).toBe('Bring in server-b');
     ka.approvals.resolve(ask.id, 'deny', 'test');
     const denied = await run;
@@ -175,7 +175,7 @@ describe('Mesh Assist', () => {
     assist(kb, { offer: 'ask' });
     const [s] = (await ka.call('mesh.assist.send', { peerIds: [bOnA], goal: 'Rotate the logs' }, USER)) as AssistSession[];
     expect(s.status).toBe('waiting-approval');
-    const onB = await waitFor(() => kb.approvals.list().find((x) => x.tool === 'mesh.assist'));
+    const onB = (await waitFor(() => kb.approvals.list().find((x) => x.tool === 'mesh.assist')))!;
     expect(onB.toolTitle).toBe('Help server-a');
     kb.approvals.resolve(onB.id, 'approve', 'test');
     await waitFor(() => (ka.assist.list().find((x) => x.id === s.id)?.status === 'done' ? true : null));
@@ -230,7 +230,7 @@ describe('Mesh Assist', () => {
     ka.assist.setAdmin(true);
     try {
       await ka.call('mesh.assist.send', { peerIds: [bOnA], goal: 'urgent fix', priority: 'urgent' }, USER);
-      const stopped = await waitFor(() => kb.assist.list().find((x) => x.goal.startsWith('SLOW') && x.status === 'cancelled'));
+      const stopped = (await waitFor(() => kb.assist.list().find((x) => x.goal.startsWith('SLOW') && x.status === 'cancelled')))!;
       expect(stopped.error).toBe('Stopped to make way for an urgent request from server-a');
       await waitFor(() => ['urgent fix', 'FIRST high job', 'second normal job'].every((g) => kb.assist.list().find((x) => x.goal === g)?.status === 'done'));
       const finished = kb.assist
