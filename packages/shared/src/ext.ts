@@ -5,6 +5,7 @@ import type { EditionStatus } from './editions';
 import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
 import type { ProtectionState, ProtectionStatus, ScanJob, ScanType, ShieldDetection, ShieldVerdict } from './protection';
 import type { AssistOffer, AssistPriority, AssistSession, AssistTools } from './mesh-assist';
+import type { MeshNetworkStatus, MeshPathTest } from './net';
 import type { NetEnvDeviceAction, NetEnvDeviceStats, NetEnvDevice, NetEnvInput, NetEnvironment, NetEnvOverview, NetEnvProbe, NetEnvVoucher } from './netenv';
 /**
  * Contracts for the FBRX OS command-center modules: workspace (notes, tasks, projects, snippets), live system
@@ -1068,6 +1069,12 @@ export interface ExtMethods {
   /** Asks the same helper a follow-up in the same conversation. */
   'mesh.assist.followUp': (p: { sessionId: string; text: string }) => AssistSession;
   'mesh.assist.cancel': (p: { sessionId: string }) => AssistSession;
+  /** Prefer Mesh: this computer's mesh networks, their MTU, and whether mesh traffic is marked for priority. */
+  'mesh.network.status': () => MeshNetworkStatus;
+  /** Which address each paired computer is reached on, the round trip, and (jumbo frames on) whether 9000-byte packets get through. */
+  'mesh.network.test': (p?: { peerId?: string }) => MeshPathTest[];
+  /** Marks (or stops marking) mesh traffic with the traffic class; needs administrator rights. */
+  'mesh.network.applyQos': (p?: { remove?: boolean }) => MeshNetworkStatus;
 
   'aicoord.detect': () => AiAppInfo[];
   'aicoord.bridge': () => McpBridgeInfo;
@@ -1111,6 +1118,7 @@ export interface ExtEvents {
 
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
+  'mesh.network.applyQos',
   'processes.kill',
   'files.write',
   'files.open',

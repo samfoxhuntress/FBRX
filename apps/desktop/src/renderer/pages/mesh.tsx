@@ -7,6 +7,7 @@ import { call, onEvent } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
 import { PointingComputers, useTriplePing } from '../mesh-egg';
 import { MeshAssistCard } from './mesh-assist';
+import { PreferMeshCard } from './mesh-network';
 
 const PERMS: Array<{ key: keyof MeshPermissions; label: string; help: string }> = [
   { key: 'status', label: 'See status', help: 'Health, performance and service status of this computer' },
@@ -326,6 +327,7 @@ export function MeshPage() {
         </Card>
       )}
       {s?.enabled && <MeshAssistCard devices={s.devices} running={s.running} />}
+      {s?.enabled && <PreferMeshCard />}
       {s && s.devices.length > 0 ? (
         <Grid cols={2}>
           {s.devices.map((d) => (

@@ -5436,3 +5436,15 @@ html[data-presenting='blur'] .private::selection {
 .glass-tile.insight-alert {
   border-color: color-mix(in srgb, var(--critical) 55%, var(--border));
 }
+/* Prefer Mesh: remove a mesh network */
+.pm-x {
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  padding: 0 0 0 4px;
+}
+.pm-x:hover {
+  color: var(--text-primary);
+}

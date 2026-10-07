@@ -4,6 +4,7 @@ import { DEFAULT_LOCAL_API_PORT, DEFAULT_RUNTIME_PORT, UPDATE_CHANNELS } from '.
 import { ALERT_CHANNELS } from './ext';
 import { PROTECTION_DEFAULT_FEED } from './protection';
 import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS } from './mesh-assist';
+import { isCidr, MESH_TRAFFIC_CLASSES } from './net';
 
 /** Built-in color themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
 export const THEME_PRESETS = ['fabrics', 'tropical', 'neon', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
@@ -284,6 +285,20 @@ export const SettingsSchema = z.object({
        */
       controller: z.boolean(),
     }),
+    /**
+     * Prefer Mesh: how mesh traffic (Mesh Assist included) travels. With it on, computers reach each other through
+     * the preferred mesh networks first (an AI or server VLAN, for example), keep their connections open, and mark
+     * the traffic with a priority class that switches and FBRX Gate honor.
+     */
+    network: z.object({
+      preferMesh: z.boolean(),
+      /** The mesh networks, in order of preference (CIDR, e.g. 10.20.0.0/24). */
+      subnets: z.array(z.string().refine(isCidr, 'Enter a network like 10.20.0.0/24')).max(8),
+      /** DSCP class mesh traffic is marked with. */
+      trafficClass: z.enum(MESH_TRAFFIC_CLASSES),
+      /** The mesh networks are set up for jumbo frames (MTU 9000): check that they really are. */
+      jumbo: z.boolean(),
+    }),
   }),
   runtime: z.object({
     enabled: z.boolean(),
@@ -513,6 +528,12 @@ export const DEFAULT_SETTINGS: Settings = {
       allowPreempt: true,
       roles: [],
       controller: false,
+    },
+    network: {
+      preferMesh: false,
+      subnets: [],
+      trafficClass: 'af41',
+      jumbo: false,
     },
   },
   runtime: {

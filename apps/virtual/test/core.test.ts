@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -17,6 +17,16 @@ let tokenFile: string;
 let admin = '';
 let operator = '';
 let viewer = '';
+// A pretend nftables: remembers the table it was given.
+let nftTable: string | null = null;
+const nftLoads: string[] = [];
+const fakeNft = async (args: string[]) => {
+  if (args[0] === 'list') return nftTable ? { code: 0, out: nftTable, err: '' } : { code: 1, out: '', err: 'Error: No such file or directory' };
+  const text = readFileSync(args[1], 'utf8');
+  nftLoads.push(text);
+  nftTable = text.includes('chain mark_out') ? text.slice(text.indexOf('table inet fbrx_mesh {')) : null;
+  return { code: 0, out: '', err: '' };
+};
 
 const req = async (method: string, url: string, token: string, payload?: unknown) => {
   const r = await s.app.inject({ method: method as 'GET', url, headers: { authorization: `Bearer ${token}` }, payload: payload as never });
@@ -42,7 +52,7 @@ beforeAll(async () => {
     FBRX_V_CORE_URL: `http://127.0.0.1:${port}/`,
     FBRX_V_CORE_TOKEN_FILE: tokenFile,
   });
-  s = await buildServer(config, { hypervisor: new SimulatedHypervisor({ dataDir: dir, isosDir: config.isosDir, seed: false }) });
+  s = await buildServer(config, { hypervisor: new SimulatedHypervisor({ dataDir: dir, isosDir: config.isosDir, seed: false }), nft: fakeNft });
   const login = async (username: string, password: string) => (await s.app.inject({ method: 'POST', url: '/v1/auth/login', payload: { username, password } })).json().token as string;
   admin = await login('sam', 'correct horse battery');
   await req('POST', '/v1/users', admin, { username: 'olly', password: 'operator password', role: 'operator' });
@@ -110,6 +120,39 @@ describe('FBRX Virtual and the server core', () => {
     expect((await help).decision).toBe('approve');
     expect((await core(admin, 'approvals.resolve', { id: otherId, decision: 'deny' })).status).toBe(200);
     expect((await other).decision).toBe('deny');
+  });
+
+  it('sets up Prefer Mesh and marks the server’s mesh traffic as root', async () => {
+    expect((await core(operator, 'settings.update', { patch: { mesh: { network: { preferMesh: true } } } })).status).toBe(403);
+    expect((await core(admin, 'settings.update', { patch: { mesh: { network: { subnets: ['not a network'] } } } })).status).toBe(400);
+    const on = await core(admin, 'settings.update', { patch: { mesh: { network: { preferMesh: true, subnets: ['10.20.0.0/24'], jumbo: true } } } });
+    expect(on.status).toBe(200);
+    expect(kernel.settings.get().mesh.network).toMatchObject({ preferMesh: true, subnets: ['10.20.0.0/24'], jumbo: true, trafficClass: 'af41' });
+
+    const before = await req('GET', '/v1/core/network', viewer);
+    expect(before.status).toBe(200);
+    expect(before.body).toMatchObject({ preferMesh: true, qos: { method: 'nftables', applied: false } });
+    expect(before.body.warnings.join(' ')).toMatch(/does not mark/);
+
+    expect((await req('POST', '/v1/core/network/mark', operator, {})).status).toBe(403);
+    const marked = await req('POST', '/v1/core/network/mark', admin, {});
+    expect(marked.body).toEqual({ applied: true });
+    expect(nftLoads.at(-1)).toContain('tcp dport 47800 ip dscp set af41');
+    expect((await req('GET', '/v1/core/network', viewer)).body.qos.applied).toBe(true);
+
+    // A new priority class: the marking follows.
+    await core(admin, 'settings.update', { patch: { mesh: { network: { trafficClass: 'ef' } } } });
+    expect(nftLoads.at(-1)).toContain('ip dscp set ef');
+    expect(s.ctx.meshMark.wanted()).toEqual({ port: 47800, trafficClass: 'ef' });
+    // After a restart of FBRX Virtual it is put back.
+    nftTable = null;
+    await s.ctx.meshMark.restore();
+    expect(nftTable).toContain('dscp set ef');
+
+    expect((await core(operator, 'mesh.network.test', {})).body.result).toEqual([]);
+    await req('POST', '/v1/core/network/mark', admin, { remove: true });
+    expect(nftTable).toBeNull();
+    expect(s.ctx.audit.list(10).map((e) => e.action)).toContain('mesh.mark.remove');
   });
 
   it('follows the core through a restart and says when it is missing', async () => {

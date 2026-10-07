@@ -21,6 +21,7 @@ import { HardwareService } from './hardware/service';
 import { BmcService } from './bmc/service';
 import { ConsoleTickets } from './console-proxy';
 import { CoreLink } from './core-link';
+import { HostMeshMark, type NftRunner } from './mesh-mark';
 import { bearer, type VirtualContext } from './context';
 import { VirtualError } from './errors';
 import { loadTls } from './tls';
@@ -62,6 +63,8 @@ export interface BuildOptions {
   bmcFetch?: typeof fetch;
   /** Talks to the server's FBRX core with this (tests). */
   coreFetch?: typeof fetch;
+  /** Runs nft with this (tests). */
+  nft?: NftRunner;
 }
 
 export function makeHypervisor(config: VirtualConfig): Hypervisor {
@@ -96,6 +99,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     bmc: new BmcService(db, key, opts.bmcFetch ?? null),
     tickets: new ConsoleTickets(),
     core: new CoreLink(config.core.url, config.core.tokenFile, opts.coreFetch),
+    meshMark: new HostMeshMark(db, opts.nft),
     log: app.log,
     tls: tls ? { fingerprint: tls.fingerprint, selfSigned: tls.selfSigned, notAfter: tls.notAfter } : null,
   };
@@ -106,6 +110,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     app.log.error(`The hypervisor is not ready: ${(e as Error).message}`);
   }
   await ctx.hardware.applyPinned().catch((e) => app.log.warn(`Interrupt placements not applied: ${(e as Error).message}`));
+  await ctx.meshMark.restore().catch((e) => app.log.warn(`Mesh traffic marking not restored: ${(e as Error).message}`));
 
   await app.register(helmet, {
     contentSecurityPolicy: {

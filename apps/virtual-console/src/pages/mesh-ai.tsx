@@ -8,7 +8,14 @@ import {
   type AssistPriority,
   type AssistSession,
   type AssistTools,
+  isCidr,
+  MESH_TRAFFIC_CLASSES,
+  MESH_TRAFFIC_CLASS_WORDS,
+  networkOf,
   type MeshDevice,
+  type MeshNetworkStatus,
+  type MeshPathTest,
+  type MeshTrafficClass,
   type MeshPermissions,
   type MeshStatus,
   type ModelInfo,
@@ -79,7 +86,7 @@ const PERMS: Array<{ key: keyof MeshPermissions; label: string; help: string }> 
   { key: 'command', label: 'Controller', help: 'Its work runs here without asking, may be urgent, and may stop lower-priority help. Still follows this server’s policy.' },
 ];
 
-type Tab = 'assist' | 'computers' | 'provider';
+type Tab = 'assist' | 'computers' | 'network' | 'provider';
 
 /**
  * Mesh & AI: the FBRX core on this server lends its AI to the other computers on FBRX Mesh and borrows theirs (Mesh
@@ -89,7 +96,7 @@ type Tab = 'assist' | 'computers' | 'provider';
 export function MeshAiPage({ tab }: { tab?: string }) {
   const [, go] = useRoute();
   const state = usePoll<CoreState>('/v1/core', 15000);
-  const active = (['assist', 'computers', 'provider'].includes(tab ?? '') ? tab : 'assist') as Tab;
+  const active = (['assist', 'computers', 'network', 'provider'].includes(tab ?? '') ? tab : 'assist') as Tab;
   const s = state.data;
   return (
     <Page title="Mesh & AI" description="This server's AI, the computers it works with on FBRX Mesh, and Mesh Assist: lending AI to each other when one runs out of steps or credits, and handing out work.">
@@ -114,11 +121,13 @@ export function MeshAiPage({ tab }: { tab?: string }) {
             tabs={[
               { id: 'assist', label: 'Mesh Assist' },
               { id: 'computers', label: 'Computers on the mesh' },
+              { id: 'network', label: 'Prefer Mesh' },
               { id: 'provider', label: 'AI provider' },
             ]}
           />
           {active === 'assist' && <Assist />}
           {active === 'computers' && <Computers />}
+          {active === 'network' && <PreferMesh />}
           {active === 'provider' && <Provider />}
         </>
       )}
@@ -586,6 +595,143 @@ function Provider() {
           );
         })}
         <div className="fx-help">Keys are kept encrypted in this server's FBRX vault and never shown again, here or anywhere else.</div>
+      </Card>
+    </>
+  );
+}
+
+// -------------------------------------------------------------------------------------------- Prefer Mesh
+
+function PreferMesh() {
+  const app = useApp();
+  const admin = app.can('admin');
+  const settings = useCore<CoreSettings>('settings.get', 30000);
+  const status = usePoll<MeshNetworkStatus>('/v1/core/network', 30000);
+  const { run, busy } = useAction();
+  const [subnet, setSubnet] = useState('');
+  const [paths, setPaths] = useState<MeshPathTest[] | null>(null);
+  const n = settings.data?.settings.mesh.network;
+  const st = status.data;
+  if (settings.error) return <Callout tone="critical">{settings.error}</Callout>;
+  if (!n) return <Empty title="Loading…" />;
+  const set = (patch: Partial<Settings['mesh']['network']>) =>
+    void run('set', async () => settings.set(await coreCall<CoreSettings>('settings.update', { patch: { mesh: { network: patch } } })), 'Saved').then(() => status.reload());
+  const add = (c: string) => {
+    const v = c.trim();
+    if (!isCidr(v) || n.subnets.includes(v)) return;
+    set({ subnets: [...n.subnets, v] });
+    setSubnet('');
+  };
+  const suggestions = (st?.local ?? []).map((a) => networkOf(a.cidr)).filter((c, i, all) => all.indexOf(c) === i && !n.subnets.includes(c));
+  return (
+    <>
+      <Card
+        title="Prefer Mesh"
+        subtitle="Give the traffic between this server and the other computers (Mesh Assist included) its own lane: a network for it (an AI or server VLAN), connections that stay open, and a priority mark switches and FBRX Gate honor."
+        actions={<Toggle disabled={!admin} checked={n.preferMesh} onChange={(v) => set({ preferMesh: v })} label={n.preferMesh ? 'On' : 'Off'} />}
+      >
+        {!admin && <Callout tone="info">Only administrators change these.</Callout>}
+        <Grid cols={2}>
+          <fieldset className="vt-fieldset" disabled={!admin}>
+            <Field label="Mesh networks, in order" help="This server reaches the others through these first; its usual network stays the fallback.">
+              <div className="vt-chips">
+                {n.subnets.map((c) => (
+                  <button key={c} className="vt-chip on mono" title="Remove" onClick={() => set({ subnets: n.subnets.filter((x) => x !== c) })}>
+                    {c} ×
+                  </button>
+                ))}
+                {!n.subnets.length && <span className="fx-muted">None yet</span>}
+              </div>
+            </Field>
+            <div className="vt-input-row">
+              <Input className="mono" value={subnet} onChange={(e) => setSubnet(e.target.value)} placeholder="10.20.0.0/24" onKeyDown={(e) => e.key === 'Enter' && add(subnet)} />
+              <Button size="sm" disabled={!isCidr(subnet.trim())} onClick={() => add(subnet)}>
+                Add
+              </Button>
+            </div>
+            {suggestions.length > 0 && (
+              <div className="vt-chips">
+                <span className="fx-muted" style={{ fontSize: 12 }}>This server is on:</span>
+                {suggestions.map((c) => (
+                  <button key={c} className="vt-chip mono" onClick={() => add(c)}>
+                    + {c}
+                  </button>
+                ))}
+              </div>
+            )}
+          </fieldset>
+          <fieldset className="vt-fieldset" disabled={!admin}>
+            <Field label="Priority mark (DSCP)" help="AF41 sits below voice calls, so mesh traffic goes first without drowning out phones.">
+              <Select value={n.trafficClass} onChange={(e) => set({ trafficClass: e.target.value as MeshTrafficClass })} options={MESH_TRAFFIC_CLASSES.map((c) => ({ value: c, label: MESH_TRAFFIC_CLASS_WORDS[c] }))} />
+            </Field>
+            <Toggle disabled={!admin} checked={n.jumbo} onChange={(v) => set({ jumbo: v })} label="The mesh networks use jumbo frames (MTU 9000): check them" />
+            <div className="fx-help">Mesh connections are TCP and stay open between requests, with no delay before small packets go out.</div>
+          </fieldset>
+        </Grid>
+      </Card>
+
+      {st && (
+        <Card title="This server">
+          {st.warnings.map((w) => (
+            <Callout key={w} tone="warning">
+              {w}
+            </Callout>
+          ))}
+          {st.local.map((a) => (
+            <div key={`${a.iface}${a.address}`} className="fx-list-item">
+              <Status tone={a.preferred ? 'good' : 'neutral'}>{a.preferred ? 'mesh network' : 'other network'}</Status>
+              <strong className="mono">{a.address}</strong>
+              <span className="fx-muted" style={{ flex: 1 }}>
+                {a.iface} · {a.cidr}
+                {a.mtu ? ` · MTU ${a.mtu}` : ''}
+              </span>
+            </div>
+          ))}
+          <div className="fx-list-item">
+            <Status tone={st.qos.applied ? 'good' : st.qos.applied === false ? 'warning' : 'neutral'}>{st.qos.applied ? 'marked' : st.qos.applied === false ? 'not marked' : 'unknown'}</Status>
+            <span style={{ flex: 1 }}>
+              Mesh traffic (TCP port {st.port}) marked {st.trafficClass.toUpperCase()} (DSCP {st.dscp}). <span className="fx-muted">{st.qos.detail}</span>
+            </span>
+            {admin && (
+              <>
+                <Button size="sm" variant="primary" loading={busy === 'mark'} onClick={() => void run('mark', () => api('POST', '/v1/core/network/mark', {}), 'Mesh traffic is marked').then(() => status.reload())}>
+                  {st.qos.applied ? 'Mark again' : 'Mark mesh traffic'}
+                </Button>
+                {st.qos.applied && (
+                  <Button size="sm" loading={busy === 'unmark'} onClick={() => void run('unmark', () => api('POST', '/v1/core/network/mark', { remove: true }), 'Marking removed').then(() => status.reload())}>
+                    Stop marking
+                  </Button>
+                )}
+              </>
+            )}
+          </div>
+        </Card>
+      )}
+
+      <Card
+        title="The way to each computer"
+        actions={
+          app.can('operator') && (
+            <Button size="sm" icon="activity" loading={busy === 'test'} onClick={() => void run('test', () => coreCall<MeshPathTest[]>('mesh.network.test', {})).then((r) => r && setPaths(r))}>
+              Test
+            </Button>
+          )
+        }
+      >
+        {!paths && <div className="fx-muted">Which address each paired computer is reached on, the round trip of a mesh request, and (jumbo frames on) whether 9000-byte packets get through.</div>}
+        {paths && paths.length === 0 && <div className="fx-muted">No paired computers to test.</div>}
+        {paths?.map((p) => (
+          <div key={p.peerId} className="fx-list-item">
+            <Status tone={p.error ? 'critical' : p.preferred ? 'good' : 'warning'}>{p.error ? 'unreachable' : p.preferred ? 'mesh network' : 'usual network'}</Status>
+            <strong>{p.peerName}</strong>
+            <span className="fx-muted" style={{ flex: 1 }}>
+              {p.address ?? '—'}
+              {p.rttMs !== null ? ` · ${p.rttMs} ms round trip` : ''}
+              {p.jumbo.tested ? ` · ${p.jumbo.detail}` : ''}
+              {p.error ? ` · ${p.error}` : ''}
+            </span>
+          </div>
+        ))}
       </Card>
     </>
   );

@@ -720,6 +720,9 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return k.assist.followUp(q.sessionId, q.text);
     },
     'mesh.assist.cancel': (p) => k.assist.cancel(z.object({ sessionId: z.string().max(64) }).parse(p).sessionId),
+    'mesh.network.status': () => k.meshNetwork.status(),
+    'mesh.network.test': (p) => k.meshNetwork.test(z.object({ peerId: z.string().max(80).optional() }).parse(p ?? {}).peerId),
+    'mesh.network.applyQos': (p) => k.meshNetwork.applyQos(z.object({ remove: z.boolean().optional() }).parse(p ?? {}).remove ?? false),
 
     // -------------------------------------------------------------------------------- AI coordination
     'aicoord.detect': () => k.aicoord.detect(),

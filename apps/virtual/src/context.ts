@@ -10,6 +10,7 @@ import type { HardwareService } from './hardware/service';
 import type { BmcService } from './bmc/service';
 import type { ConsoleTickets } from './console-proxy';
 import type { CoreLink } from './core-link';
+import type { HostMeshMark } from './mesh-mark';
 import { allows } from './auth';
 import { forbidden, unauthorized } from './errors';
 
@@ -26,6 +27,8 @@ export interface VirtualContext {
   tickets: ConsoleTickets;
   /** The FBRX core on this server (the AI role), when installed. */
   core: CoreLink;
+  /** Prefer Mesh: the server's own mesh traffic marking (root). */
+  meshMark: HostMeshMark;
   log: FastifyBaseLogger;
   tls: { fingerprint: string; selfSigned: boolean; notAfter: string } | null;
 }

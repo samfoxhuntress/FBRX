@@ -21,3 +21,4 @@ export * from './calendar';
 export * from './protection';
 export * from './virtual';
 export * from './mesh-assist';
+export * from './net';

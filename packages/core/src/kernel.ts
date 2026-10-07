@@ -71,7 +71,8 @@ import { NetEnvironments } from './network/environments';
 import { Helpdesk } from './fleet/helpdesk';
 import { MeshService } from './mesh/mesh-service';
 import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
-import { MeshAssist } from './mesh/mesh-assist';
+import { MeshAssist, runsElevated } from './mesh/mesh-assist';
+import { MeshNetwork } from './mesh/mesh-network';
 import { meshTools } from './tools/builtin/mesh-tools';
 import { AiCoordination } from './aicoord/aicoord';
 import { ConversationStore } from './ai/conversations';
@@ -169,6 +170,8 @@ export class Kernel {
   readonly cli: Fbrx1Cli;
   readonly mesh: MeshService;
   readonly assist: MeshAssist;
+  /** Prefer Mesh: mesh networks, priority marking and path tests. */
+  readonly meshNetwork: MeshNetwork;
   readonly aicoord: AiCoordination;
   private readonly api: Record<string, (p: any, ctx: CallContext) => unknown>;
   private disposers: Array<() => void> = [];
@@ -497,6 +500,13 @@ export class Kernel {
       system: (cmd) => this.spotlight.system(cmd),
       audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
       assist: (device, method, params) => this.assist.handle(device, method, params),
+    });
+    this.meshNetwork = new MeshNetwork({
+      settings: () => this.settings.get().mesh.network,
+      port: () => this.settings.get().mesh.port,
+      peers: () => this.mesh.devices().filter((d) => d.kind === 'desktop').map((d) => ({ id: d.id, name: d.name, address: this.mesh.addressFor(d.id) })),
+      hello: (id) => this.mesh.hello(id),
+      elevated: () => runsElevated(),
     });
     this.assist = new MeshAssist({
       settings: () => this.settings.get().mesh.assist,

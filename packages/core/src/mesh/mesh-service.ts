@@ -1,4 +1,4 @@
-import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
+import { Agent, createServer, request as httpRequest, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
 import { existsSync, readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { networkInterfaces, platform as osPlatform } from 'node:os';
@@ -6,7 +6,10 @@ import { extname, join, normalize } from 'node:path';
 import mdnsFactory from 'multicast-dns';
 import QRCode from 'qrcode';
 import {
+  inCidr,
+  isIP,
   newId,
+  preferAddresses,
   type AlertItem,
   type ApprovalRequest,
   type MeshDevice,
@@ -59,6 +62,10 @@ interface DeviceRow {
   last_seen: string | null;
   paired_at: string;
   permissions: string;
+  /** The addresses the device says it has (JSON array), preferred mesh networks first. */
+  addrs: string | null;
+  /** Roles it announces (JSON array). */
+  roles: string | null;
 }
 
 interface RpcRequest {
@@ -78,7 +85,14 @@ type OutboxItem =
 export interface MeshHost {
   appVersion: string;
   deviceName: () => string;
-  settings: () => { enabled: boolean; port: number; incoming: 'ask' | 'allow' | 'deny' };
+  settings: () => {
+    enabled: boolean;
+    port: number;
+    incoming: 'ask' | 'allow' | 'deny';
+    /** Prefer Mesh: reach paired computers through these networks first. */
+    network?: { preferMesh: boolean; subnets: string[] };
+    assist?: { roles: string[] };
+  };
   /** Long-term key pair, kept in the vault. */
   keyPair: () => KeyPair;
   mobileDir: string | null;
@@ -116,6 +130,10 @@ export class MeshService {
   private pingTimer: NodeJS.Timeout | null = null;
   private lastError: string | null = null;
   private online = new Map<string, boolean>();
+  /** Addresses that recently failed, per device (tried again after a few minutes). */
+  private readonly failed = new Map<string, number>();
+  /** Connections to paired computers stay open (Prefer Mesh: no handshake per request, no Nagle delay). */
+  private readonly agent = new Agent({ keepAlive: true, keepAliveMsecs: 30_000, maxSockets: 8, maxFreeSockets: 4, timeout: 60_000 });
 
   constructor(
     private readonly db: Db,
@@ -141,6 +159,9 @@ export class MeshService {
     const server = createServer((req, res) => void this.handle(req, res));
     server.requestTimeout = 30_000;
     server.headersTimeout = 15_000;
+    // Paired computers keep their connection open between requests.
+    server.keepAliveTimeout = 65_000;
+    server.on('connection', (sock) => sock.setNoDelay(true));
     await new Promise<void>((resolve, reject) => {
       server.once('error', reject);
       server.listen(port, '0.0.0.0', () => {
@@ -171,7 +192,11 @@ export class MeshService {
     this.mdns = null;
     const s = this.server;
     this.server = null;
-    if (s) await new Promise<void>((r) => s.close(() => r()));
+    if (s) {
+      s.closeAllConnections?.();
+      await new Promise<void>((r) => s.close(() => r()));
+    }
+    this.agent.destroy();
     this.pairing = null;
   }
 
@@ -185,12 +210,46 @@ export class MeshService {
 
   // ------------------------------------------------------------------------------------------ status
 
+  /** This computer's addresses, the preferred mesh networks first. */
   addresses(): string[] {
     const out: string[] = [];
     for (const list of Object.values(networkInterfaces())) {
       for (const a of list ?? []) if (a.family === 'IPv4' && !a.internal && !a.address.startsWith('169.254.')) out.push(a.address);
     }
-    return out;
+    return preferAddresses(out, this.preferred());
+  }
+
+  /** The preferred mesh networks while Prefer Mesh is on. */
+  private preferred(): string[] {
+    const n = this.host.settings().network;
+    return n?.preferMesh ? n.subnets : [];
+  }
+
+  /**
+   * The address a paired computer is reached on: with Prefer Mesh, the first of its addresses inside a preferred mesh
+   * network (unless it failed a moment ago); otherwise the address it last talked to this computer from.
+   */
+  addressFor(id: string): string | null {
+    const r = this.db.get<DeviceRow>('SELECT * FROM mesh_devices WHERE id = ?', id);
+    return r ? this.pickAddress(r) : null;
+  }
+
+  private pickAddress(r: DeviceRow): string | null {
+    const subnets = this.preferred();
+    if (subnets.length) {
+      const all = [...new Set([...parseList(r.addrs), ...(r.addr ? [r.addr] : [])])].filter(isIP);
+      for (const a of preferAddresses(all, subnets)) {
+        if (!subnets.some((n) => inCidr(a, n))) break;
+        if ((this.failed.get(`${r.id}@${a}`) ?? 0) < Date.now()) return a;
+      }
+    }
+    return r.addr;
+  }
+
+  /** Roles a paired computer announces (servers: ai, virtual, gate, minidome…). */
+  rolesOf(id: string): string[] {
+    const r = this.db.get<DeviceRow>('SELECT roles FROM mesh_devices WHERE id = ?', id);
+    return parseList(r?.roles ?? null);
   }
 
   devices(): MeshDevice[] {
@@ -403,19 +462,20 @@ export class MeshService {
     const self = this.self;
     const req: RpcRequest = { id: newId('rq'), ts: Date.now(), method, params };
     const env = seal(req, r.public_key, self.secretKey, self.id);
-    let res: Response;
+    const addr = this.pickAddress(r) ?? r.addr;
+    let res: { status: number; body: any };
     try {
-      res = await fetch(`http://${r.addr.includes(':') ? `[${r.addr}]` : r.addr}:${r.port}/mesh/rpc`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(env),
-        signal: AbortSignal.timeout(timeoutMs),
-      });
+      res = await this.post(addr, r.port, JSON.stringify(env), timeoutMs);
     } catch (err) {
+      // A preferred mesh address that does not answer: note it and use the usual one.
+      if (addr !== r.addr) {
+        this.failed.set(`${id}@${addr}`, Date.now() + 5 * 60_000);
+        return this.call<T>(id, method, params, timeoutMs);
+      }
       this.setOnline(id, false);
-      throw new CoreError('UNAVAILABLE', `${r.name} is not reachable (${(err as any).cause?.code ?? errorMessage(err)})`);
+      throw new CoreError('UNAVAILABLE', `${r.name} is not reachable (${(err as any).code ?? errorMessage(err)})`);
     }
-    const body: any = await res.json().catch(() => ({}));
+    const body = res.body;
     if (!body.nonce) {
       const code = ['UNAUTHENTICATED', 'FORBIDDEN', 'NOT_FOUND', 'INVALID_ARGUMENT'].includes(body.error?.code) ? body.error.code : 'UNAVAILABLE';
       throw new CoreError(code, `${r.name}: ${body.error?.message ?? `refused the request (HTTP ${res.status})`}`);
@@ -428,6 +488,38 @@ export class MeshService {
     return reply.result as T;
   }
 
+  /** POSTs a sealed envelope over a kept-open connection. */
+  private post(addr: string, port: number, body: string, timeoutMs: number): Promise<{ status: number; body: any }> {
+    return new Promise((resolve, reject) => {
+      const req = httpRequest(
+        { host: addr, port, method: 'POST', path: '/mesh/rpc', agent: this.agent, headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body) } },
+        (res) => {
+          const chunks: Buffer[] = [];
+          let size = 0;
+          res.on('data', (c: Buffer) => {
+            size += c.length;
+            if (size > 4 * MAX_BODY) req.destroy(new Error('reply too large'));
+            else chunks.push(c);
+          });
+          res.on('end', () => {
+            let parsed: any = {};
+            try {
+              parsed = JSON.parse(Buffer.concat(chunks).toString('utf8') || '{}');
+            } catch {
+              /* not JSON */
+            }
+            resolve({ status: res.statusCode ?? 0, body: parsed });
+          });
+          res.on('error', reject);
+        },
+      );
+      req.on('socket', (sock) => sock.setNoDelay(true));
+      req.setTimeout(timeoutMs, () => req.destroy(Object.assign(new Error('timed out'), { code: 'ETIMEDOUT' })));
+      req.on('error', reject);
+      req.end(body);
+    });
+  }
+
   private setOnline(id: string, on: boolean) {
     if (this.online.get(id) !== on) {
       this.online.set(id, on);
@@ -438,8 +530,17 @@ export class MeshService {
   private async pingPeers() {
     for (const d of this.devices()) {
       if (d.kind !== 'desktop') continue;
-      await this.call(d.id, 'hello', undefined, 5000).catch(() => undefined);
+      await this.hello(d.id).catch(() => undefined);
     }
+  }
+
+  /** A round trip that also learns the peer's addresses and roles (Prefer Mesh, MiniDome). */
+  async hello(id: string): Promise<{ name: string; addresses?: string[]; roles?: string[] }> {
+    const h = await this.call<{ name: string; addresses?: unknown; roles?: unknown }>(id, 'hello', undefined, 5000);
+    const addrs = Array.isArray(h.addresses) ? h.addresses.filter((a): a is string => typeof a === 'string' && isIP(a)).slice(0, 16) : [];
+    const roles = Array.isArray(h.roles) ? h.roles.filter((x): x is string => typeof x === 'string' && /^[a-z][a-z0-9-]{0,31}$/.test(x)).slice(0, 16) : [];
+    this.db.run('UPDATE mesh_devices SET addrs = ?, roles = ? WHERE id = ?', JSON.stringify(addrs), JSON.stringify(roles), id);
+    return { name: h.name, addresses: addrs, roles };
   }
 
   async peerInfo(id: string): Promise<unknown> {
@@ -634,7 +735,7 @@ export class MeshService {
     const actor = `mesh:${d.name}`;
     switch (method) {
       case 'hello':
-        return { name: this.host.deviceName(), version: this.host.appVersion, platform: osPlatform(), permissions: d.permissions };
+        return { name: this.host.deviceName(), version: this.host.appVersion, platform: osPlatform(), permissions: d.permissions, addresses: this.addresses(), roles: this.host.settings().assist?.roles ?? [] };
       case 'status':
         need('status');
         return this.host.status();
@@ -816,6 +917,16 @@ export class MeshService {
     } catch (err) {
       this.log.debug('mDNS unavailable', { error: errorMessage(err) });
     }
+  }
+}
+
+function parseList(raw: string | null): string[] {
+  if (!raw) return [];
+  try {
+    const v = JSON.parse(raw);
+    return Array.isArray(v) ? v.filter((x): x is string => typeof x === 'string') : [];
+  } catch {
+    return [];
   }
 }
 

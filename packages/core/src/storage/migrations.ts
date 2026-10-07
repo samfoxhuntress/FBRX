@@ -348,6 +348,14 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX shield_detections_at ON shield_detections (at);
     `,
   },
+  {
+    version: 8,
+    name: 'mesh-addresses-roles',
+    up: `
+      ALTER TABLE mesh_devices ADD COLUMN addrs TEXT;
+      ALTER TABLE mesh_devices ADD COLUMN roles TEXT;
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

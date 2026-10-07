@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS, type ApprovalRequest, type EffectiveSettings, type MeshStatus, type SecretMeta, type SystemStatus, type VirtualRole } from '@fbrx/shared';
+import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS, isCidr, MESH_TRAFFIC_CLASSES, type ApprovalRequest, type MeshNetworkStatus, type MeshTrafficClass, type EffectiveSettings, type MeshStatus, type SecretMeta, type SystemStatus, type VirtualRole } from '@fbrx/shared';
 import { allows } from '../auth';
 import { audited, need, type VirtualContext } from '../context';
 import { badRequest, forbidden } from '../errors';
@@ -50,10 +50,19 @@ const Provider = z
     cloud: z.boolean(),
   })
   .strict();
+const NetworkPatch = z
+  .object({
+    preferMesh: z.boolean(),
+    subnets: z.array(z.string().refine(isCidr, 'Enter a network like 10.20.0.0/24')).max(8),
+    trafficClass: z.enum(MESH_TRAFFIC_CLASSES),
+    jumbo: z.boolean(),
+  })
+  .partial()
+  .strict();
 const SettingsPatch = z
   .object({
     ai: z.object({ defaultProvider: z.string().max(64), defaultModel: z.string().max(200), agentName: z.string().min(1).max(40), providers: z.array(Provider).max(32) }).partial().strict(),
-    mesh: z.object({ incoming: z.enum(['ask', 'allow', 'deny']), assist: AssistPatch }).partial().strict(),
+    mesh: z.object({ incoming: z.enum(['ask', 'allow', 'deny']), assist: AssistPatch, network: NetworkPatch }).partial().strict(),
   })
   .partial()
   .strict();
@@ -83,6 +92,7 @@ const RULES: Record<string, Rule> = {
   // Pairing codes let a computer join: administrators only.
   'mesh.status': { role: 'viewer', result: (r, role) => (allows(role, 'admin') ? r : { ...(r as MeshStatus), pairing: null }) },
   'mesh.assist.helpers': { role: 'viewer' },
+  'mesh.network.test': { role: 'operator', params: (p) => z.object({ peerId: z.string().max(80).optional() }).strict().parse(p) },
   'mesh.assist.sessions': { role: 'viewer' },
   'approvals.list': { role: 'viewer' },
 
@@ -139,7 +149,7 @@ const RULES: Record<string, Rule> = {
   },
 };
 
-const READS = new Set(['system.status', 'settings.get', 'ai.providers', 'mesh.status', 'mesh.assist.helpers', 'mesh.assist.sessions', 'approvals.list', 'vault.list', 'ai.models']);
+const READS = new Set(['system.status', 'settings.get', 'ai.providers', 'mesh.status', 'mesh.assist.helpers', 'mesh.assist.sessions', 'approvals.list', 'vault.list', 'ai.models', 'mesh.network.test']);
 
 function target(method: string, p: Record<string, unknown>): string | null {
   if (method === 'vault.set') return String(p.name);
@@ -177,6 +187,30 @@ export async function coreRoutes(app: FastifyInstance, ctx: VirtualContext) {
       return rule.result ? rule.result(out, user.role) : out;
     };
     const result = READS.has(method) ? await call() : await audited(ctx, req, `core.${method}`, target(method, args as Record<string, unknown>), call, details(method, args as Record<string, unknown>));
+    // A new priority class for mesh traffic: the server's own marking follows it.
+    const cls = (args as { patch?: { mesh?: { network?: { trafficClass?: MeshTrafficClass } } } }).patch?.mesh?.network?.trafficClass;
+    const mark = ctx.meshMark.wanted();
+    if (method === 'settings.update' && cls && mark && cls !== mark.trafficClass) await ctx.meshMark.apply(mark.port, cls).catch((e) => req.log.warn(`Mesh marking not updated: ${(e as Error).message}`));
     return { result };
+  });
+
+  /** Prefer Mesh on this server: the core's view, with the marking FBRX Virtual does as root. */
+  app.get('/v1/core/network', async (req) => {
+    need(req, 'viewer');
+    const st = await ctx.core.call<MeshNetworkStatus>('mesh.network.status', {}, actor(req));
+    const applied = await ctx.meshMark.applied();
+    return {
+      ...st,
+      qos: { method: 'nftables', applied, canApply: true, detail: 'FBRX Virtual marks this server’s mesh traffic (nftables) and puts the marking back after every restart.', script: null },
+      warnings: st.warnings.filter((w) => !/not marked/.test(w)).concat(st.preferMesh && applied === false ? ['This server does not mark its mesh traffic yet.'] : []),
+    };
+  });
+
+  app.post('/v1/core/network/mark', async (req) => {
+    need(req, 'admin');
+    const { remove } = z.object({ remove: z.boolean().default(false) }).parse(req.body ?? {});
+    const s = (await ctx.core.call<EffectiveSettings>('settings.get', {}, actor(req))).settings.mesh;
+    await audited(ctx, req, remove ? 'mesh.mark.remove' : 'mesh.mark', remove ? null : `TCP ${s.port} → ${s.network.trafficClass}`, () => (remove ? ctx.meshMark.remove() : ctx.meshMark.apply(s.port, s.network.trafficClass)));
+    return { applied: await ctx.meshMark.applied() };
   });
 }
