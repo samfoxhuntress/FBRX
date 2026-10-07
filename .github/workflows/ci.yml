@@ -65,6 +65,10 @@ jobs:
         run: scripts/server/bundle.sh --with-node
       - name: Smoke-test the bundle (the FBRX core in server mode, managed by FBRX Virtual)
         run: scripts/server/smoke.sh "$(ls -d dist/fbrx-server-*/ | head -1)"
+      - name: The ISO's first start on Debian 13 (a fresh Debian root, the install disc still a package source)
+        run: |
+          sudo apt-get install -y -qq --no-install-recommends debootstrap debian-archive-keyring >/dev/null
+          sudo scripts/server/test-debian-firstboot.sh "$(ls -d dist/fbrx-server-*/ | head -1)"
       - name: FBRX Gate as a real router, FBRX MiniDome listening to it, and Prefer Mesh marking (network namespaces)
         # As root: namespaces, nftables, dnsmasq, tc and conntrack (FBRX MiniDome listening to the gate). VLANs and cake
         # are used where the runner's kernel has them.

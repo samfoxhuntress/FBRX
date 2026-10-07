@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Builds the FBRX Server installer ISO: Debian 13's network installer with FBRX Server added. Booting it offers
-# "Install FBRX Server", which installs Debian the FBRX way (it asks which disk to wipe, and the passwords) and then
-# FBRX Virtual. Needs xorriso, curl and the bundle from bundle.sh --with-node.
+# "Install FBRX Server", which installs Debian the FBRX way (it asks which disk to wipe, the account and its password)
+# and copies FBRX Server on; the first start finishes the setup (firstboot.sh). Needs xorriso, curl and the bundle from
+# bundle.sh --with-node.
 #
 #   scripts/server/build-iso.sh                                  downloads the current Debian 13 netinst (checked)
 #   scripts/server/build-iso.sh --iso debian-13.x.y-amd64-netinst.iso

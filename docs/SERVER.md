@@ -24,17 +24,23 @@ MiniDome**, [MINIDOME.md](MINIDOME.md)). Same console, *Gate* pages.
 1. Get the ISO: it comes with **FBRX Endpoint** for now (*Lab → FBRX Server*, with the bundle and these guides), the
    **FBRX Server ISO** workflow in GitHub Actions builds it (artifact `fbrx-server-iso`), or build it yourself on Linux:
    `scripts/server/bundle.sh --with-node && scripts/server/build-iso.sh` (needs `xorriso`).
-2. Boot the server from it: write it to a USB stick (`dd`, or any image writer), or on a Dell PowerEdge mount it through
-   the iDRAC: *Virtual Console → Virtual Media → Map CD/DVD*, then boot once from *Virtual CD/DVD/ISO* (F11 boot menu).
+2. Boot the server from it: write it to a USB stick (`dd`, or any image writer; in Rufus choose **DD Image mode** when
+   it asks), or on a Dell PowerEdge mount it through the iDRAC: *Virtual Console → Virtual Media → Map CD/DVD*, then boot
+   once from *Virtual CD/DVD/ISO* (F11 boot menu). In Hyper-V, use a generation 2 machine.
 3. Pick **Install FBRX Server**. The installer asks only:
    * which disk to install on, and to confirm erasing it (it asks every time it is about to write),
    * the time zone,
-   * the password of the administrator account `fbrx` (there is no root password; `fbrx` uses `sudo`).
+   * the administrator account's name (suggested: **`fbrx`**) and its password. There is no root password; the
+     administrator uses `sudo`.
    Everything else is answered: US English, DHCP, host name `fbrx-server`, LVM over the whole disk, SSH server.
-4. At the end it installs FBRX Virtual and restarts. The server's screen then shows where to open the console and the
-   first-time setup code.
+4. It copies FBRX Server onto the new system and restarts. At this **first start FBRX Server finishes its setup** (the
+   hypervisor, FBRX Virtual, the AI role): a few minutes, with its progress on the screen, before the login prompt.
+   The screen then shows where to open the console, the first-time setup code, and which account to sign in with.
 
-The ISO is Debian's own network installer with FBRX Server added, so the server needs internet access while installing.
+The ISO is Debian's own network installer with FBRX Server added, so the server needs internet access while installing
+and at its first start. If the first start could not finish (no internet, say), the login screen says so: sign in,
+fix the network, and run `sudo bash /opt/fbrx-installer/firstboot.sh` (it also tries again at every start until it
+finishes). Everything it did is in `/var/log/fbrx-server-install.log`.
 
 ### B. On a Debian 13 server you already have
 

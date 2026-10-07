@@ -116,10 +116,10 @@ for r in ${ROLES//,/ }; do
   case ",$ROLE_LIST," in *",$r,"*) ;; *) ROLE_LIST="${ROLE_LIST:+$ROLE_LIST,}$r" ;; esac
 done
 [ -n "$ROLE_LIST" ] || die "Pick at least one role (--roles virtual,ai,gate)"
-if has_role minidome && ! has_role gate; then die "FBRX MiniDome watches the network through FBRX Gate: use --roles …,gate,minidome"; fi
 has_role() { case ",$ROLE_LIST," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 # Text that is there only with a role: "$(with_role ai ', the FBRX core')".
 with_role() { if has_role "$1"; then printf '%s' "$2"; fi; }
+if has_role minidome && ! has_role gate; then die "FBRX MiniDome watches the network through FBRX Gate: use --roles …,gate,minidome"; fi
 
 confirm() {
   [ "$YES" -eq 1 ] && return 0
@@ -149,6 +149,8 @@ if [ "$UNINSTALL" -eq 1 ]; then
     systemctl restart dnsmasq.service 2>/dev/null || true
     note "FBRX Gate is off. Restart the server (sudo reboot) for the ports to take their old settings."
   fi
+  systemctl disable fbrx-server-firstboot.service 2>/dev/null || true
+  rm -f /etc/systemd/system/fbrx-server-firstboot.service /etc/issue.d/fbrx-server-firstboot.issue
   rm -f "$UNIT" "$CORE_UNIT" "$GATE_UNIT" /usr/local/sbin/fbrx-server /usr/local/sbin/fbrx-gate /etc/fbrx-server-release /etc/issue.d/fbrx-virtual-setup.issue /etc/modules-load.d/fbrx-vfio.conf /etc/motd.d/fbrx-server 2>/dev/null || true
   rm -rf "$APP"
   if [ -f /etc/default/grub.d/fbrx-server.cfg ]; then
@@ -188,7 +190,13 @@ fi
 
 if [ -z "$BUNDLE" ]; then BUNDLE="$HERE"; fi
 WORK=""
-cleanup() { [ -n "$WORK" ] && rm -rf "$WORK"; }
+APT_SOURCES=""
+# An EXIT trap's last status becomes the script's: it must end in success, or a finished install reports failure.
+cleanup() {
+  if [ -n "$WORK" ]; then rm -rf "$WORK"; fi
+  if [ -n "$APT_SOURCES" ]; then rm -f "$APT_SOURCES"; fi
+  return 0
+}
 trap cleanup EXIT
 if [ -f "$BUNDLE" ]; then
   WORK="$(mktemp -d)"
@@ -255,13 +263,33 @@ confirm "Continue?" || exit 1
 # -------------------------------------------------------------------------------------------- packages
 
 export DEBIAN_FRONTEND=noninteractive
-apt-get update -qq
-apt-get install -y -qq --no-install-recommends pciutils ca-certificates curl xz-utils openssl iproute2 >/dev/null
+# Packages come from the network. A "cdrom:" source (the Debian installer leaves one while it runs, and a DVD install
+# keeps it) would make apt stop and wait for the disc, so it is left out here.
+APT_CFG=()
+if grep -qsE '^[[:space:]]*deb[[:space:]]+(\[[^]]*\][[:space:]]+)?cdrom:' /etc/apt/sources.list; then
+  APT_SOURCES="$(mktemp)"
+  grep -vE '^[[:space:]]*deb[[:space:]]+(\[[^]]*\][[:space:]]+)?cdrom:' /etc/apt/sources.list >"$APT_SOURCES" || true
+  APT_CFG=(-o "Dir::Etc::SourceList=$APT_SOURCES")
+  note "Leaving the install disc out of the package sources"
+fi
+# Configuration files someone changed stay as they are; a daily update holding the package lock is waited for.
+APT=(apt-get "${APT_CFG[@]}" -o DPkg::Lock::Timeout=600 -o Dpkg::Options::=--force-confdef -o Dpkg::Options::=--force-confold)
+apt_install() {
+  local log
+  log="$(mktemp)"
+  if ! "${APT[@]}" install -y -q --no-install-recommends "$@" >"$log" 2>&1; then
+    tail -n 25 "$log" >&2
+    rm -f "$log"
+    die "Could not install $* (the lines above say why). Check that this server reaches the internet, then run the installer again."
+  fi
+  rm -f "$log"
+}
+"${APT[@]}" update -qq || die "Could not read the package lists. Check that this server reaches the internet (and its name servers), then run the installer again."
+apt_install pciutils ca-certificates curl xz-utils openssl iproute2
 if has_role virtual; then
   say "Installing the hypervisor (QEMU/KVM, libvirt, UEFI firmware, software TPM)"
-  apt-get install -y -qq --no-install-recommends \
-    qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients ovmf swtpm swtpm-tools \
-    dnsmasq-base bridge-utils irqbalance >/dev/null
+  apt_install qemu-system-x86 qemu-utils libvirt-daemon-system libvirt-clients ovmf swtpm swtpm-tools \
+    dnsmasq-base bridge-utils irqbalance
   systemctl enable libvirtd.service >/dev/null 2>&1 || true
 fi
 if has_role gate; then
@@ -275,9 +303,9 @@ if has_role gate; then
   # MiniDome follows new connections with conntrack's event stream.
   if has_role minidome; then GATE_PKGS="$GATE_PKGS conntrack"; fi
   # Newer Debian ships systemd-networkd on its own.
-  if apt-cache show systemd-networkd >/dev/null 2>&1; then GATE_PKGS="$GATE_PKGS systemd-networkd"; fi
+  if apt-cache "${APT_CFG[@]}" show systemd-networkd >/dev/null 2>&1; then GATE_PKGS="$GATE_PKGS systemd-networkd"; fi
   # shellcheck disable=SC2086
-  apt-get install -y -qq --no-install-recommends $GATE_PKGS >/dev/null
+  apt_install $GATE_PKGS
 fi
 
 # ------------------------------------------------------------------------------------------------ Node
@@ -511,6 +539,9 @@ fi
 # ------------------------------------------------------------------------------------ screen and motd
 
 [ -f /etc/issue ] && [ ! -f /etc/issue.fbrx-backup ] && cp /etc/issue /etc/issue.fbrx-backup
+# The account made while installing (the ISO suggests "fbrx"): the login screen says which one to use.
+ADMIN_USER="$(getent passwd | awk -F: '$3 >= 1000 && $3 < 60000 && $7 !~ /(nologin|false)$/ { print $1; exit }' || true)"
+SIGN_IN="${ADMIN_USER:+Sign in here as $ADMIN_USER (the password you chose while installing); it uses sudo.}"
 if has_role gate; then
   cat >/etc/issue <<EOF
 FBRX Server $VERSION · powered by FBRX OS  (\n, \l)
@@ -518,6 +549,7 @@ FBRX Server $VERSION · powered by FBRX OS  (\n, \l)
 FBRX Gate: the internet on $GATE_WAN, your network on $GATE_LAN.
 Open the console from a computer on your network:  https://192.168.1.1:$PORT
 (or https://\4:$PORT${GATE_MANAGE:+ from $GATE_MANAGE})
+$SIGN_IN
 
 EOF
 else
@@ -525,6 +557,7 @@ else
 FBRX Server $VERSION · powered by FBRX OS  (\n, \l)
 
 Open the FBRX Virtual console from another computer:  https://\4:$PORT
+$SIGN_IN
 
 EOF
 fi

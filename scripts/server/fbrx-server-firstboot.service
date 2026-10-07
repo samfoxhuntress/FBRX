@@ -1,0 +1,19 @@
+# FBRX Server: finishes the setup at the first start after the ISO (firstboot.sh), then switches itself off.
+[Unit]
+Description=FBRX Server: finish the setup
+Wants=network-online.target
+After=network-online.target
+# The console login waits, so the setup's progress is on the screen and the banner after it is FBRX Server's.
+Before=getty@tty1.service
+ConditionPathExists=/opt/fbrx-installer/firstboot.sh
+
+[Service]
+Type=oneshot
+ExecStart=/bin/bash /opt/fbrx-installer/firstboot.sh
+StandardOutput=journal+console
+StandardError=journal+console
+TimeoutStartSec=45min
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
