@@ -184,7 +184,15 @@ export function LineChart({
   const maxY = Math.ceil(top / step) * step;
   // Room on the left for the longest y-axis label ("391 KB/s" needs more than "100%").
   const labelChars = Math.max(4, ...Array.from({ length: Math.floor(maxY / step) + 1 }, (_x, i) => yFormat(i * step).length));
-  const m = { l: Math.max(40, Math.ceil(labelChars * 6.2) + 10), r: series.length <= 4 ? 64 : 12, t: 10, b: 24 };
+  // Room on the right for the end labels ("Download 585 kb/s"), when there are any.
+  const endChars = Math.max(
+    0,
+    ...series.map((s) => {
+      const last = s.points.filter((p) => p.v !== null).pop();
+      return last ? (series.length > 1 ? s.label.length + 1 : 0) + yFormat(last.v!).length : 0;
+    }),
+  );
+  const m = { l: Math.max(40, Math.ceil(labelChars * 6.2) + 10), r: series.length <= 4 ? Math.max(64, Math.ceil(endChars * 6.2) + 16) : 12, t: 10, b: 24 };
   const w = Math.max(0, width - m.l - m.r);
   const h = height - m.t - m.b;
   const t0 = times[0] ?? 0;

@@ -141,17 +141,18 @@ export function renderNftables(c: GateConfig): string {
     add(`  # Prefer Mesh: traffic between FBRX computers, and everything from the mesh networks, goes first.`);
     add(`  chain mark_forward {`);
     add(`    type filter hook forward priority mangle; policy accept;`);
-    add(`    tcp dport ${pm.port} ip dscp set ${pm.trafficClass}`);
-    add(`    tcp sport ${pm.port} ip dscp set ${pm.trafficClass}`);
+    // Counted ("mesh:…"), so the console can say how much traffic went first.
+    add(`    tcp dport ${pm.port} ip dscp set ${pm.trafficClass} counter comment "mesh:to-port"`);
+    add(`    tcp sport ${pm.port} ip dscp set ${pm.trafficClass} counter comment "mesh:from-port"`);
     if (meshIfaces.length) {
-      add(`    iifname ${set(meshIfaces)} ip dscp set ${pm.trafficClass}`);
-      add(`    oifname ${set(meshIfaces)} ip dscp set ${pm.trafficClass}`);
+      add(`    iifname ${set(meshIfaces)} ip dscp set ${pm.trafficClass} counter comment "mesh:from-networks"`);
+      add(`    oifname ${set(meshIfaces)} ip dscp set ${pm.trafficClass} counter comment "mesh:to-networks"`);
     }
     add(`  }`);
     add(`  chain mark_output {`);
     add(`    type filter hook output priority mangle; policy accept;`);
-    add(`    tcp dport ${pm.port} ip dscp set ${pm.trafficClass}`);
-    add(`    tcp sport ${pm.port} ip dscp set ${pm.trafficClass}`);
+    add(`    tcp dport ${pm.port} ip dscp set ${pm.trafficClass} counter comment "mesh:gate-to-port"`);
+    add(`    tcp sport ${pm.port} ip dscp set ${pm.trafficClass} counter comment "mesh:gate-from-port"`);
     add(`  }`);
   }
   add(`}`);

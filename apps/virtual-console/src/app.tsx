@@ -12,6 +12,13 @@ import { HardwarePage } from './pages/hardware';
 import { ServerPage } from './pages/server';
 import { AccessPage } from './pages/access';
 import { MeshAiPage } from './pages/mesh-ai';
+import { GateBanner, GateProvider, useGate } from './gate-state';
+import { GateDashboardPage } from './pages/gate-dashboard';
+import { GateNetworksPage } from './pages/gate-networks';
+import { GateFirewallPage } from './pages/gate-firewall';
+import { GateServicesPage } from './pages/gate-services';
+import { GateTrafficPage } from './pages/gate-traffic';
+import { GateChangesPage } from './pages/gate-changes';
 
 export function App() {
   const [phase, setPhase] = useState<'loading' | 'setup' | 'login' | 'ready'>('loading');
@@ -48,7 +55,9 @@ export function App() {
   if (phase === 'login' || !me) return <LoginPage onLogin={() => void boot()} />;
   return (
     <AppStateProvider me={me} onLogout={() => setPhase('login')}>
-      <Console />
+      <GateProvider>
+        <Console />
+      </GateProvider>
     </AppStateProvider>
   );
 }
@@ -78,20 +87,52 @@ function ThemeToggle() {
 
 function Console() {
   const app = useApp();
+  const gate = useGate();
   const [route, go] = useRoute();
+  const virtual = app.has('virtual');
+  const changes = gate.info?.state.changes.length ?? 0;
   const nav: NavItem[] = [
-    { id: 'overview', label: 'Overview', icon: 'dashboard', section: 'Virtual' },
-    { id: 'vms', label: 'Virtual machines', icon: 'layers', section: 'Virtual' },
-    { id: 'storage', label: 'Storage & ISOs', icon: 'drive', section: 'Virtual' },
-    { id: 'networks', label: 'Networks', icon: 'network', section: 'Virtual' },
+    ...(virtual
+      ? ([
+          { id: 'overview', label: 'Overview', icon: 'dashboard', section: 'Virtual' },
+          { id: 'vms', label: 'Virtual machines', icon: 'layers', section: 'Virtual' },
+          { id: 'storage', label: 'Storage & ISOs', icon: 'drive', section: 'Virtual' },
+          { id: 'networks', label: 'Networks', icon: 'network', section: 'Virtual' },
+        ] satisfies NavItem[])
+      : []),
+    ...(app.has('gate')
+      ? ([
+          { id: 'gate', label: 'Gate', icon: 'castle', section: 'Gate' },
+          { id: 'gate-networks', label: 'Networks & VLANs', icon: 'network', section: 'Gate' },
+          { id: 'gate-firewall', label: 'Firewall', icon: 'shield', section: 'Gate' },
+          { id: 'gate-dns', label: 'DNS & VPN', icon: 'globe', section: 'Gate' },
+          { id: 'gate-traffic', label: 'Traffic & Prefer Mesh', icon: 'gauge', section: 'Gate' },
+          { id: 'gate-changes', label: 'Changes', icon: 'diff', section: 'Gate', ...(changes ? { count: changes } : {}) },
+        ] satisfies NavItem[])
+      : []),
     { id: 'hardware', label: 'Hardware map', icon: 'cpu', section: 'Server' },
     { id: 'server', label: 'Server & BIOS', icon: 'server', section: 'Server' },
     { id: 'mesh', label: 'Mesh & AI', icon: 'sparkles', section: 'Server' },
     ...(app.can('admin') ? [{ id: 'access', label: 'Users & audit', icon: 'users', section: 'Access' } as NavItem] : []),
   ];
-  const active = route.page === 'vm' ? 'vms' : route.page;
+  // Without virtual machines, the console opens on the gate (or the hardware map).
+  const home = virtual ? 'overview' : app.has('gate') ? 'gate' : 'hardware';
+  const current = route.page === 'overview' && !virtual ? home : route.page;
+  const active = current === 'vm' ? 'vms' : current;
   const page = (() => {
-    switch (route.page) {
+    switch (current) {
+      case 'gate':
+        return <GateDashboardPage />;
+      case 'gate-networks':
+        return <GateNetworksPage />;
+      case 'gate-firewall':
+        return <GateFirewallPage />;
+      case 'gate-dns':
+        return <GateServicesPage tab={route.id} />;
+      case 'gate-traffic':
+        return <GateTrafficPage />;
+      case 'gate-changes':
+        return <GateChangesPage />;
       case 'vms':
         return <VmsPage />;
       case 'vm':
@@ -109,19 +150,19 @@ function Console() {
       case 'access':
         return <AccessPage />;
       default:
-        return <OverviewPage />;
+        return virtual ? <OverviewPage /> : <HardwarePage />;
     }
   })();
   return (
     <Shell
-      brandName="FBRX Virtual"
+      brandName={virtual ? 'FBRX Virtual' : app.has('gate') ? 'FBRX Gate' : 'FBRX Server'}
       brandSub="FBRX Server · powered by FBRX OS"
       nav={nav}
       active={active}
       onNavigate={(id) => go(id)}
       footer={
         <span>
-          FBRX Virtual {app.me.version} · {app.me.driver === 'simulated' ? 'simulated' : 'KVM / libvirt'}
+          FBRX Virtual {app.me.version} · {app.me.driver === 'none' ? (app.me.roles ?? []).join(', ') : app.me.driver === 'simulated' ? 'simulated' : 'KVM / libvirt'}
         </span>
       }
       topbar={
@@ -138,6 +179,7 @@ function Console() {
         </>
       }
     >
+      {app.has('gate') && <GateBanner />}
       {page}
     </Shell>
   );

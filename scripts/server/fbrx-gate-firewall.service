@@ -1,0 +1,18 @@
+[Unit]
+Description=FBRX Gate firewall (in place before the network comes up)
+Documentation=https://github.com/samfoxhuntress/fbrx/blob/main/docs/GATE.md
+DefaultDependencies=no
+After=local-fs.target nftables.service systemd-modules-load.service
+Before=network-pre.target shutdown.target
+Wants=network-pre.target
+Conflicts=shutdown.target
+# Written by FBRX Gate at each commit; until the first one there is nothing to load.
+ConditionPathExists=/etc/fbrx-gate/gate.nft
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/fbrx-gate/gate.nft
+
+[Install]
+WantedBy=sysinit.target

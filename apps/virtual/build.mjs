@@ -20,6 +20,8 @@ const common = {
 await build({ ...common, entryPoints: [join(here, 'src/main.ts')], outfile: join(here, 'dist/server.mjs') });
 // Helpers run on the server itself (fbrx-server reset-password …).
 await build({ ...common, entryPoints: [join(here, 'src/cli.ts')], outfile: join(here, 'dist/cli.mjs'), sourcemap: false });
+// FBRX Gate's command line (fbrx-gate), for the gate role.
+await build({ ...common, entryPoints: [join(here, 'src/gate-cli.ts')], outfile: join(here, 'dist/gate-cli.mjs'), sourcemap: false });
 const consoleDist = join(here, '../virtual-console/dist');
 if (existsSync(join(consoleDist, 'index.html'))) {
   cpSync(consoleDist, join(here, 'dist/virtual-console'), { recursive: true });

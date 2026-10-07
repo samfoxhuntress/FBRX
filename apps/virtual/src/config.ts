@@ -1,14 +1,29 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { DEFAULT_LOCAL_API_PORT, VIRTUAL_DEFAULT_PORT } from '@fbrx/shared';
+import { DEFAULT_LOCAL_API_PORT, isCidr, networkOf, parseCidr, VIRTUAL_DEFAULT_PORT } from '@fbrx/shared';
 
 export interface VirtualConfig {
   host: string;
   port: number;
   dataDir: string;
-  /** "libvirt" runs real virtual machines; "simulated" pretends (development, demos, tests). */
-  driver: 'libvirt' | 'simulated';
+  /** "libvirt" runs real virtual machines; "simulated" pretends (development, demos, tests); "none": no virtual role. */
+  driver: 'libvirt' | 'simulated' | 'none';
+  /** What this server does (FBRX Server roles): virtual, ai, gate, minidome. The console shows what is there. */
+  roles: string[];
+  /**
+   * FBRX Gate (the gate role): "linux" applies to this system, "simulated" pretends (development). The ports it
+   * starts with on a new gate.
+   */
+  gate: {
+    mode: 'linux' | 'simulated';
+    wan: string;
+    lan: string;
+    /** "commit": put the starter configuration in place at the first start (the installer sets this up). */
+    first: 'commit' | 'wait';
+    /** A private network on the internet side allowed to manage the gate (so an install over that side keeps working). */
+    manageFromWan: string | null;
+  };
   libvirtUri: string;
   imagesDir: string;
   isosDir: string;
@@ -53,13 +68,22 @@ function findConsoleDir(env: NodeJS.ProcessEnv): string | null {
 
 export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Partial<VirtualConfig> = {}): VirtualConfig {
   const dataDir = resolve(env.FBRX_V_DATA_DIR ?? '.fbrx-virtual-data');
-  const driver = env.FBRX_V_DRIVER === 'simulated' || env.FBRX_V_DRIVER === 'libvirt' ? env.FBRX_V_DRIVER : hasVirsh() ? 'libvirt' : 'simulated';
+  const roles = [...new Set((env.FBRX_V_ROLES ?? 'virtual').split(',').map((r) => r.trim()).filter((r) => /^[a-z][a-z0-9-]{0,31}$/.test(r)))];
+  const driver = !roles.includes('virtual') ? 'none' : env.FBRX_V_DRIVER === 'simulated' || env.FBRX_V_DRIVER === 'libvirt' ? env.FBRX_V_DRIVER : hasVirsh() ? 'libvirt' : 'simulated';
   const tlsMode = env.FBRX_V_TLS ?? 'self-signed';
   return {
     host: env.FBRX_V_HOST ?? '0.0.0.0',
     port: Number(env.FBRX_V_PORT ?? VIRTUAL_DEFAULT_PORT),
     dataDir,
     driver,
+    roles,
+    gate: {
+      mode: env.FBRX_V_GATE === 'linux' || env.FBRX_V_GATE === 'simulated' ? env.FBRX_V_GATE : env.FBRX_V_DRIVER === 'simulated' ? 'simulated' : 'linux',
+      wan: env.FBRX_V_GATE_WAN ?? 'eth0',
+      lan: env.FBRX_V_GATE_LAN ?? 'eth1',
+      first: env.FBRX_V_GATE_FIRST === 'commit' ? 'commit' : 'wait',
+      manageFromWan: env.FBRX_V_GATE_MANAGE_WAN && isCidr(env.FBRX_V_GATE_MANAGE_WAN) && parseCidr(env.FBRX_V_GATE_MANAGE_WAN)?.family === 4 ? networkOf(env.FBRX_V_GATE_MANAGE_WAN) : null,
+    },
     libvirtUri: env.FBRX_V_LIBVIRT_URI ?? 'qemu:///system',
     imagesDir: resolve(env.FBRX_V_IMAGES_DIR ?? resolve(dataDir, 'images')),
     isosDir: resolve(env.FBRX_V_ISOS_DIR ?? resolve(dataDir, 'isos')),

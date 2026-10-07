@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+# fbrx-gate: FBRX Gate's command line on the gate itself (as root). fbrx-gate help lists the commands.
+set -euo pipefail
+ENV_FILE=/etc/fbrx-virtual/fbrx-virtual.env
+APP=/opt/fbrx-server
+[ "$(id -u)" -eq 0 ] || { echo "Run this as root: sudo fbrx-gate $*" >&2; exit 1; }
+[ -f "$APP/fbrx-virtual/gate-cli.mjs" ] || { echo "FBRX Gate is not installed (install.sh --roles …,gate adds it)." >&2; exit 1; }
+set -a
+# shellcheck disable=SC1090
+. "$ENV_FILE"
+set +a
+exec "$APP/node/bin/node" --no-warnings "$APP/fbrx-virtual/gate-cli.mjs" "$@"

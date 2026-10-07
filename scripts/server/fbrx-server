@@ -20,6 +20,7 @@ helper() {
   "$APP/node/bin/node" --no-warnings "$APP/fbrx-virtual/cli.mjs" "$@"
 }
 has_ai() { [ -f /etc/systemd/system/fbrx-core.service ]; }
+has_gate() { [ -f /etc/systemd/system/fbrx-gate-firewall.service ]; }
 roles() { (grep -E '^ROLES=' /etc/fbrx-server-release 2>/dev/null || echo 'ROLES="virtual"') | cut -d'"' -f2; }
 need_root() { [ "$(id -u)" -eq 0 ] || { echo "Run this as root (sudo fbrx-server $1)." >&2; exit 1; }; }
 
@@ -31,8 +32,13 @@ case "${1:-status}" in
     echo "Roles:        $(roles | sed 's/,/, /g')"
     echo "Service:      $(systemctl is-active fbrx-virtual 2>/dev/null || true)"
     if has_ai; then echo "AI role:      $(systemctl is-active fbrx-core 2>/dev/null || true) (FBRX core: FBRX Mesh on port 47800; Mesh & AI in the console)"; fi
-    echo "Hypervisor:   $(systemctl is-active libvirtd 2>/dev/null || true) (libvirt) · KVM $([ -e /dev/kvm ] && echo on || echo 'off: turn on Virtualization Technology in the BIOS')"
-    echo "IOMMU:        $([ -n "$(ls -A /sys/kernel/iommu_groups 2>/dev/null)" ] && echo on || echo 'off (needed to give PCI devices to virtual machines)')"
+    if has_gate; then echo "Gate:         firewall $(nft list table inet fbrx_gate >/dev/null 2>&1 && echo loaded || echo 'not loaded yet') · DNS and DHCP $(systemctl is-active dnsmasq 2>/dev/null || true) (fbrx-gate status for more)"; fi
+    case ",$(roles)," in
+      *,virtual,*)
+        echo "Hypervisor:   $(systemctl is-active libvirtd 2>/dev/null || true) (libvirt) · KVM $([ -e /dev/kvm ] && echo on || echo 'off: turn on Virtualization Technology in the BIOS')"
+        echo "IOMMU:        $([ -n "$(ls -A /sys/kernel/iommu_groups 2>/dev/null)" ] && echo on || echo 'off (needed to give PCI devices to virtual machines)')"
+        ;;
+    esac
     echo "Certificate:  $(fingerprint)"
     if [ -s "$DATA/setup-code" ]; then echo "Setup code:   $(cat "$DATA/setup-code")"; fi
     ;;
@@ -68,6 +74,7 @@ fbrx-server users           who can sign in
 fbrx-server reset-password <user>   a new password for someone locked out
 fbrx-server create-admin [name]     another administrator
 USAGE
+    if has_gate; then echo "fbrx-gate help              FBRX Gate's own commands (networks, firewall, commit, roll back)"; fi
     ;;
   *) echo "Unknown command $1 (fbrx-server help)" >&2; exit 1 ;;
 esac

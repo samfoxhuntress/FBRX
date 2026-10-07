@@ -5,7 +5,9 @@ import { api, session } from './api';
 export interface Me {
   user: VirtualUser;
   version: string;
-  driver: 'libvirt' | 'simulated';
+  driver: 'libvirt' | 'simulated' | 'none';
+  /** FBRX Server roles on this server (virtual, ai, gate, minidome). */
+  roles: string[];
 }
 
 const RANK: Record<VirtualRole, number> = { viewer: 0, operator: 1, admin: 2 };
@@ -13,6 +15,8 @@ const RANK: Record<VirtualRole, number> = { viewer: 0, operator: 1, admin: 2 };
 interface AppState {
   me: Me;
   can: (role: VirtualRole) => boolean;
+  /** Whether this server has an FBRX Server role. */
+  has: (role: string) => boolean;
   logout: () => Promise<void>;
 }
 
@@ -22,6 +26,7 @@ export function AppStateProvider({ me, onLogout, children }: { me: Me; onLogout:
   const value: AppState = {
     me,
     can: (role) => RANK[me.user.role] >= RANK[role],
+    has: (role) => (me.roles ?? ['virtual']).includes(role),
     logout: async () => {
       await api('POST', '/v1/auth/logout').catch(() => undefined);
       session.token = null;

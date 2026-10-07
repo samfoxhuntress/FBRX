@@ -20,7 +20,8 @@ export function renderNetworkd(c: GateConfig, paths: GatePaths): NetworkdFile[] 
     if (i.kind === 'vlan') files.push({ name: `10-fbrx-${i.name}.netdev`, mode: 0o644, content: [HEAD, '[NetDev]', `Name=${i.name}`, 'Kind=vlan', `MTUBytes=${i.mtu}`, '', '[VLAN]', `Id=${i.vlanId}`, ''].join('\n') });
     const net = nets.get(i.name);
     const vlans = c.interfaces.filter((v) => v.kind === 'vlan' && v.parent === i.name).map((v) => `VLAN=${v.name}`);
-    const lines = [HEAD, '[Match]', `Name=${i.name}`, '', '[Link]', `MTUBytes=${i.mtu}`, '', '[Network]', ...vlans];
+    // Only the internet side holds back "the network is up" at boot (a LAN port without a cable must not).
+    const lines = [HEAD, '[Match]', `Name=${i.name}`, '', '[Link]', `MTUBytes=${i.mtu}`, ...(i.name === c.wan.interface ? [] : ['RequiredForOnline=no']), '', '[Network]', ...vlans];
     if (i.name === c.wan.interface) {
       if (c.wan.mode === 'dhcp') lines.push('DHCP=ipv4');
       else lines.push(`Address=${c.wan.address}`, `Gateway=${c.wan.gateway}`);
@@ -36,7 +37,7 @@ export function renderNetworkd(c: GateConfig, paths: GatePaths): NetworkdFile[] 
     const netdev = [HEAD, '[NetDev]', `Name=${WG_IFACE}`, 'Kind=wireguard', '', '[WireGuard]', `PrivateKeyFile=${paths.etcDir}/wg-fbrx.key`, `ListenPort=${c.vpn.port}`];
     for (const p of c.vpn.peers) netdev.push('', '[WireGuardPeer]', `# ${p.name}`, `PublicKey=${p.publicKey}`, `AllowedIPs=${p.address}/32`, ...(p.keepalive ? [`PersistentKeepalive=${p.keepalive}`] : []));
     files.push({ name: `10-fbrx-${WG_IFACE}.netdev`, mode: 0o640, content: `${netdev.join('\n')}\n` });
-    files.push({ name: `10-fbrx-${WG_IFACE}.network`, mode: 0o644, content: [HEAD, '[Match]', `Name=${WG_IFACE}`, '', '[Network]', `Address=${c.vpn.address}`, ''].join('\n') });
+    files.push({ name: `10-fbrx-${WG_IFACE}.network`, mode: 0o644, content: [HEAD, '[Match]', `Name=${WG_IFACE}`, '', '[Link]', 'RequiredForOnline=no', '', '[Network]', `Address=${c.vpn.address}`, ''].join('\n') });
   }
   return files;
 }

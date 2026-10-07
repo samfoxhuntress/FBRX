@@ -11,3 +11,4 @@ export { peerConfig } from './render/wireguard';
 export { DEFAULT_PATHS, type GatePaths } from './render/paths';
 export { IFB } from './render/qos';
 export * from './types';
+export * from './path';

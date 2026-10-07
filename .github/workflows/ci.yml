@@ -60,7 +60,7 @@ jobs:
           sudo virsh -c qemu:///system net-start default || true
       - run: npm ci --no-audit --no-fund
       - name: Check the installer scripts
-        run: shellcheck scripts/server/*.sh scripts/server/fbrx-server
+        run: shellcheck scripts/server/*.sh scripts/server/fbrx-server scripts/server/fbrx-gate
       - name: Build the FBRX Server bundle
         run: scripts/server/bundle.sh --with-node
       - name: Smoke-test the bundle (the FBRX core in server mode, managed by FBRX Virtual)

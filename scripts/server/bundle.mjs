@@ -49,13 +49,13 @@ if (!existsSync(join(VDIST, 'server.mjs')) || !existsSync(join(VDIST, 'virtual-c
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(join(OUT, 'fbrx-virtual'), { recursive: true });
-for (const f of ['server.mjs', 'cli.mjs', 'package.json']) cpSync(join(VDIST, f), join(OUT, 'fbrx-virtual', f));
+for (const f of ['server.mjs', 'cli.mjs', 'gate-cli.mjs', 'package.json']) cpSync(join(VDIST, f), join(OUT, 'fbrx-virtual', f));
 cpSync(join(VDIST, 'virtual-console'), join(OUT, 'fbrx-virtual/virtual-console'), { recursive: true, filter: (src) => !src.endsWith('.map') });
 // The FBRX core (ai role): the agent, FBRX Mesh and Mesh Assist, headless.
 node(join(ROOT, 'scripts/server/build-core.mjs'), [join(OUT, 'fbrx-core')]);
-for (const f of ['install.sh', 'fbrx-server', 'fbrx-virtual.service', 'fbrx-core.service']) cpSync(join(ROOT, 'scripts/server', f), join(OUT, f));
+for (const f of ['install.sh', 'fbrx-server', 'fbrx-gate', 'fbrx-virtual.service', 'fbrx-core.service', 'fbrx-gate-firewall.service']) cpSync(join(ROOT, 'scripts/server', f), join(OUT, f));
 writeFileSync(join(OUT, 'VERSION'), `${VERSION}\n`);
-const EXECUTABLE = new Set(['install.sh', 'fbrx-server']);
+const EXECUTABLE = new Set(['install.sh', 'fbrx-server', 'fbrx-gate']);
 if (process.platform !== 'win32') for (const f of EXECUTABLE) chmodSync(join(OUT, f), 0o755);
 
 if (WITH_NODE) {

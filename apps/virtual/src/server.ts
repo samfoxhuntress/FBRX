@@ -1,5 +1,6 @@
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
-import { randomBytes } from 'node:crypto';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { hostname } from 'node:os';
+import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { dirname, join } from 'node:path';
@@ -29,12 +30,16 @@ import type { Hypervisor } from './drivers/types';
 import { ISOS_POOL } from './drivers/types';
 import { LibvirtHypervisor } from './drivers/libvirt';
 import { SimulatedHypervisor } from './drivers/simulated';
+import { NoHypervisor } from './drivers/none';
+import { DEFAULT_PATHS, starterConfig, type GateConfig } from '@fbrx/gate';
+import { GateEngine, GateStore, LinuxApplier, SimulatedApplier, type GateApplier } from '@fbrx/gate/node';
 import { authRoutes } from './routes/auth';
 import { vmRoutes } from './routes/vms';
 import { storageRoutes } from './routes/storage';
 import { hardwareRoutes } from './routes/hardware';
 import { bmcRoutes } from './routes/bmc';
 import { coreRoutes } from './routes/core';
+import { gateRoutes } from './routes/gate';
 
 function readVersion(): string {
   if (process.env.FBRX_V_VERSION) return process.env.FBRX_V_VERSION;
@@ -65,9 +70,12 @@ export interface BuildOptions {
   coreFetch?: typeof fetch;
   /** Runs nft with this (tests). */
   nft?: NftRunner;
+  /** FBRX Gate applies through this (tests). */
+  gateApplier?: GateApplier;
 }
 
 export function makeHypervisor(config: VirtualConfig): Hypervisor {
+  if (config.driver === 'none') return new NoHypervisor();
   return config.driver === 'libvirt'
     ? new LibvirtHypervisor({ uri: config.libvirtUri, imagesDir: config.imagesDir, isosDir: config.isosDir })
     : new SimulatedHypervisor({ dataDir: config.dataDir, isosDir: config.isosDir });
@@ -100,6 +108,8 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     tickets: new ConsoleTickets(),
     core: new CoreLink(config.core.url, config.core.tokenFile, opts.coreFetch),
     meshMark: new HostMeshMark(db, opts.nft),
+    gate: null,
+    cliToken: randomBytes(32).toString('base64url'),
     log: app.log,
     tls: tls ? { fingerprint: tls.fingerprint, selfSigned: tls.selfSigned, notAfter: tls.notAfter } : null,
   };
@@ -111,6 +121,34 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   }
   await ctx.hardware.applyPinned().catch((e) => app.log.warn(`Interrupt placements not applied: ${(e as Error).message}`));
   await ctx.meshMark.restore().catch((e) => app.log.warn(`Mesh traffic marking not restored: ${(e as Error).message}`));
+
+  // The command line on the server (fbrx-gate) signs in with this token, readable by root only.
+  const cliFile = join(config.dataDir, 'cli.token');
+  writeFileSync(cliFile, `${ctx.cliToken}\n`, { mode: 0o600 });
+  chmodSync(cliFile, 0o600);
+
+  // FBRX Gate: the gate role.
+  let gateStore: GateStore | null = null;
+  if (config.roles.includes('gate')) {
+    gateStore = new GateStore(join(config.dataDir, 'gate.db'));
+    const applier = opts.gateApplier ?? (config.gate.mode === 'simulated' ? new SimulatedApplier() : new LinuxApplier({ paths: DEFAULT_PATHS, mode: 'networkd' }));
+    const engine = new GateEngine({
+      store: gateStore,
+      applier,
+      paths: DEFAULT_PATHS,
+      initial: () => gateStarter(config),
+      log: (level, msg) => app.log[level](msg),
+    });
+    ctx.gate = { engine, applier };
+    await engine.start();
+    // A gate set up by the installer starts routing at once, like any router: your network on the LAN port.
+    if (config.gate.first === 'commit' && !engine.running()) {
+      await engine
+        .commit({ by: 'installer', comment: 'Starter configuration (from the installer)' })
+        .then((c) => app.log.info(`FBRX Gate: starter configuration in place (commit ${c.id})`))
+        .catch((e) => app.log.error(`FBRX Gate: the starter configuration was not applied: ${(e as Error).message}`));
+    }
+  }
 
   await app.register(helmet, {
     contentSecurityPolicy: {
@@ -135,6 +173,11 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   app.addHook('onRequest', async (req) => {
     req.token = bearer(req);
     req.user = ctx.auth.session(req.token);
+    // fbrx-gate (and other commands run as root on the server itself) with the root-only CLI token.
+    const local = ['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(req.socket.remoteAddress ?? '');
+    if (!req.user && local && req.token && req.token.length === ctx.cliToken.length && timingSafeEqual(Buffer.from(req.token), Buffer.from(ctx.cliToken))) {
+      req.user = { id: 'cli', username: 'root', name: 'Command line (root)', role: 'admin', createdAt: new Date(0).toISOString(), lastLoginAt: null };
+    }
   });
 
   app.setErrorHandler((err, req, reply) => {
@@ -155,6 +198,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   await hardwareRoutes(app, ctx);
   await bmcRoutes(app, ctx);
   await coreRoutes(app, ctx);
+  await gateRoutes(app, ctx);
 
   if (config.consoleDir && existsSync(join(config.consoleDir, 'index.html'))) {
     await app.register(fastifyStatic, { root: config.consoleDir, index: 'index.html' });
@@ -187,9 +231,22 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     ctx,
     async close() {
       clearInterval(timer);
+      ctx.gate?.engine.stop();
+      gateStore?.close();
       ctx.isos.stop();
       await app.close();
       db.close();
     },
   };
+}
+
+/** The configuration a new gate starts from: its ports, this console's port, and the installer's management network. */
+export function gateStarter(config: VirtualConfig): GateConfig {
+  const name = hostname().split('.')[0].toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '') || 'fbrx-gate';
+  const c = starterConfig({ hostname: name, wan: config.gate.wan, lan: config.gate.lan });
+  c.management.consolePort = config.port;
+  if (config.gate.manageFromWan) {
+    c.firewall.rules.push({ id: 'manage-from-wan', name: `Manage the gate from ${config.gate.manageFromWan}`, enabled: true, from: 'wan', to: 'gate', proto: 'tcp', ports: `22,${config.port}`, source: config.gate.manageFromWan, action: 'accept', log: false });
+  }
+  return c;
 }

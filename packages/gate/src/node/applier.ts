@@ -2,7 +2,7 @@ import { execFile } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { inCidr } from '@fbrx/shared';
+import { inCidr, intToIPv4, ipv4ToInt } from '@fbrx/shared';
 import type { GateConfig } from '../model';
 import type { GateRendered } from '../render/index';
 import { NFT_TABLE, WG_IFACE } from '../render/nftables';
@@ -29,6 +29,17 @@ export interface GateApplier {
   live(c: GateConfig | null): Promise<GateLive>;
   /** The VPN's key pair: made once, the private half kept in a file only root reads. */
   vpnKey(): Promise<{ publicKey: string }>;
+  /** This computer's network ports, to choose from. */
+  systemInterfaces(): Promise<SystemInterface[]>;
+}
+
+export interface SystemInterface {
+  name: string;
+  mac: string | null;
+  up: boolean;
+  /** Link speed in Mbit/s, when known. */
+  speed: number | null;
+  kind: 'ethernet' | 'vlan' | 'bridge' | 'virtual';
 }
 
 export const runCommand: Runner = (cmd, args) =>
@@ -90,17 +101,33 @@ export class SimulatedApplier implements GateApplier {
     return { publicKey: this.key.publicKey };
   }
 
+  async systemInterfaces(): Promise<SystemInterface[]> {
+    return ['eno1', 'eno2', 'eno3', 'eno4'].map((name, i) => ({ name, mac: `02:fb:00:00:01:0${i + 1}`, up: i < 2, speed: i < 2 ? 1000 : null, kind: 'ethernet' as const }));
+  }
+
   async live(c: GateConfig | null): Promise<GateLive> {
     const live = emptyLive();
     if (!c) return live;
     const t = Date.now() / 1000;
-    const wave = (k: number) => Math.round((Math.sin(t / 30 + k) + 1.5) * 4e8 + t * 1e4 * (k + 1));
+    // A day's worth of traffic that keeps growing at a few hundred kB/s, with some wobble.
+    const wave = (k: number) => Math.round((t % 86400) * (1.5e5 + 6e4 * k) + Math.sin(t / 20 + k) * 2e6 + 5e7);
     live.interfaces = c.interfaces.map((i, k) => ({ name: i.name, up: true, mtu: i.mtu, mac: `02:fb:00:00:00:${(k + 1).toString(16).padStart(2, '0')}`, addresses: c.networks.filter((n) => n.interface === i.name).map((n) => n.address).concat(i.name === c.wan.interface ? [c.wan.address ?? '203.0.113.20/24'] : []), rxBytes: wave(k), txBytes: wave(k + 3), rxPackets: Math.round(wave(k) / 900), txPackets: Math.round(wave(k + 3) / 900) }));
     live.wan = { address: c.wan.address?.split('/')[0] ?? '203.0.113.20', gateway: c.wan.gateway ?? '203.0.113.1' };
-    live.leases = c.networks.flatMap((n) => n.dhcp.reservations.map((r) => ({ expires: null, mac: r.mac.toLowerCase(), address: r.address, name: r.name ?? null, network: n.name })));
+    // Reserved devices, and a few that came and asked (in each network handing out addresses).
+    const visitors = ['laptop', 'phone', 'printer', 'tv'];
+    live.leases = c.networks.flatMap((n) => [
+      ...n.dhcp.reservations.map((r) => ({ expires: null, mac: r.mac.toLowerCase(), address: r.address, name: r.name ?? null, network: n.name })),
+      ...(n.dhcp.enabled
+        ? visitors.slice(0, 2 + (n.name.length % 3)).map((v, k) => ({ expires: new Date((Math.floor(t / 3600) + 1 + k) * 3600_000).toISOString(), mac: `02:fb:${n.name.length.toString(16).padStart(2, '0')}:00:10:${(k + 1).toString(16).padStart(2, '0')}`, address: intToIPv4(ipv4ToInt(n.dhcp.start) + k), name: `${v}-${n.name}`, network: n.name }))
+        : []),
+    ]);
     for (const r of c.firewall.rules) live.counters[`rule:${r.id}`] = { packets: Math.round(t % 997), bytes: Math.round((t % 997) * 600) };
     live.counters['default:input'] = { packets: Math.round(t % 4093), bytes: Math.round((t % 4093) * 80) };
     live.counters['default:forward'] = { packets: Math.round(t % 211), bytes: Math.round((t % 211) * 120) };
+    if (c.qos.preferMesh.enabled) {
+      live.counters['mesh:to-port'] = { packets: Math.round(wave(5) / 1400), bytes: wave(5) };
+      live.counters['mesh:from-port'] = { packets: Math.round(wave(6) / 1400), bytes: wave(6) };
+    }
     live.qos = c.qos.enabled ? { kind: 'cake', detail: `cake diffserv4 ${c.qos.upload} Mbit/s up` } : { kind: null, detail: null };
     live.dns.running = true;
     live.conntrack = 180 + Math.round(t % 300);
@@ -176,6 +203,31 @@ export class LinuxApplier implements GateApplier {
     } finally {
       rmSync(tmp, { recursive: true, force: true });
     }
+  }
+
+  async systemInterfaces(): Promise<SystemInterface[]> {
+    const r = await this.run('ip', ['-j', '-d', 'link', 'show']);
+    if (r.code !== 0) return [];
+    type Link = { ifname: string; link_type?: string; address?: string; flags?: string[]; operstate?: string; linkinfo?: { info_kind?: string } };
+    let links: Link[] = [];
+    try {
+      links = JSON.parse(r.out) as Link[];
+    } catch {
+      return [];
+    }
+    return links
+      .filter((l) => l.link_type === 'ether' && l.ifname !== WG_IFACE)
+      .map((l) => {
+        const k = l.linkinfo?.info_kind;
+        let speed: number | null = null;
+        try {
+          const v = Number(readFileSync(`/sys/class/net/${l.ifname}/speed`, 'utf8').trim());
+          speed = v > 0 ? v : null;
+        } catch {
+          /* virtual or down */
+        }
+        return { name: l.ifname, mac: l.address ?? null, up: l.operstate === 'UP', speed, kind: !k ? 'ethernet' : k === 'vlan' ? 'vlan' : k === 'bridge' ? 'bridge' : 'virtual' } as SystemInterface;
+      });
   }
 
   async vpnKey(): Promise<{ publicKey: string }> {

@@ -11,7 +11,7 @@ const Password = z.string().min(MIN_PASSWORD, `Passwords need at least ${MIN_PAS
 const Username = z.string().min(2).max(32);
 
 export async function authRoutes(app: FastifyInstance, ctx: VirtualContext) {
-  app.get('/v1/setup', async () => ({ needed: ctx.auth.userCount() === 0, version: ctx.version, driver: ctx.hv.kind }));
+  app.get('/v1/setup', async () => ({ needed: ctx.auth.userCount() === 0, version: ctx.version, driver: ctx.hv.kind, roles: ctx.config.roles }));
 
   app.post('/v1/setup', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
     const body = z.object({ setupToken: z.string(), username: Username, name: z.string().max(120).default(''), password: Password }).parse(req.body);
@@ -43,7 +43,7 @@ export async function authRoutes(app: FastifyInstance, ctx: VirtualContext) {
 
   app.get('/v1/auth/me', async (req) => {
     const user = need(req, 'viewer');
-    return { user, version: ctx.version, driver: ctx.hv.kind };
+    return { user, version: ctx.version, driver: ctx.hv.kind, roles: ctx.config.roles };
   });
 
   app.post('/v1/auth/password', async (req) => {

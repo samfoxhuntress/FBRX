@@ -11,6 +11,7 @@ import type { BmcService } from './bmc/service';
 import type { ConsoleTickets } from './console-proxy';
 import type { CoreLink } from './core-link';
 import type { HostMeshMark } from './mesh-mark';
+import type { GateEngine, GateApplier } from '@fbrx/gate/node';
 import { allows } from './auth';
 import { forbidden, unauthorized } from './errors';
 
@@ -29,6 +30,10 @@ export interface VirtualContext {
   core: CoreLink;
   /** Prefer Mesh: the server's own mesh traffic marking (root). */
   meshMark: HostMeshMark;
+  /** FBRX Gate (the gate role), when this server is one. */
+  gate: { engine: GateEngine; applier: GateApplier } | null;
+  /** The command line's token (fbrx-gate, run as root on the server; accepted from this computer only). */
+  cliToken: string;
   log: FastifyBaseLogger;
   tls: { fingerprint: string; selfSigned: boolean; notAfter: string } | null;
 }

@@ -20,7 +20,7 @@ export interface VirtualUser {
 
 export interface HypervisorInfo {
   /** "libvirt" on a real server; "simulated" for development and demos (no virtual machines really run). */
-  driver: 'libvirt' | 'simulated';
+  driver: 'libvirt' | 'simulated' | 'none';
   version: string | null;
   /** Hardware acceleration: without it virtual machines run in slow software emulation. */
   kvm: boolean;

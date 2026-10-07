@@ -1,4 +1,4 @@
-import { cidrsOverlap, hostRange, inCidr, ipv4ToInt, JUMBO_MTU, networkOf, parseCidr } from '@fbrx/shared';
+import { cidrsOverlap, hostRange, inCidr, ipv4ToInt, isPrivateIP, JUMBO_MTU, networkOf, parseCidr } from '@fbrx/shared';
 import { GateConfigSchema, RESERVED_ZONES, type GateConfig } from './model';
 
 export interface GateIssue {
@@ -110,7 +110,17 @@ export function checkConfig(input: unknown): GateCheck {
       macs.add(r.mac.toLowerCase());
       addrs.add(r.address);
     }
-    if (n.purpose === 'mesh' && i && i.mtu < JUMBO_MTU) warn(p, `Prefer Mesh works at MTU ${i.mtu}; if your switch and computers take jumbo frames, set ${n.interface} (and its port) to ${JUMBO_MTU}`);
+    if (i && i.kind === 'ethernet' && i.mtu > 1500 && c.interfaces.some((v) => v.parent === i.name && v.mtu > 1500) && n.purpose !== 'mesh')
+      warn(p, `${i.name} is at MTU ${i.mtu} for its jumbo VLANs, so ${n.name} (untagged on it) uses jumbo frames too: every device on ${n.name} must take them`);
+    if (n.purpose === 'mesh' && i && i.mtu < JUMBO_MTU) {
+      const shared = i.kind === 'vlan' ? c.networks.find((x) => x.interface === i.parent) : undefined;
+      warn(
+        p,
+        shared
+          ? `Prefer Mesh works at MTU ${i.mtu}; for jumbo frames give ${n.name} a port of its own (${i.parent} also carries ${shared.name} untagged, which would get them too)`
+          : `Prefer Mesh works at MTU ${i.mtu}; if your switch and computers take jumbo frames, set ${n.interface}${i.kind === 'vlan' ? ' (and its port)' : ''} to ${JUMBO_MTU}`,
+      );
+    }
     if (n.purpose === 'guest' && n.access === 'full') warn(p, `${n.name} is for guests but can reach all your networks`);
     if (n.manage && n.access === 'internet' && n.purpose === 'guest') warn(p, `Guests on ${n.name} can reach the gate’s console`);
   }
@@ -127,7 +137,8 @@ export function checkConfig(input: unknown): GateCheck {
     if (!zones.has(r.to)) err(p, `"${r.name}": there is no zone ${r.to}`);
     if (r.from === r.to && r.from !== 'any') warn(p, `"${r.name}": traffic inside ${r.from} does not pass the gate`);
     if (r.ports && !['tcp', 'udp', 'tcp+udp'].includes(r.proto)) err(p, `"${r.name}": ports need TCP or UDP`);
-    if (r.action === 'accept' && r.from === 'wan' && r.to === 'gate' && r.ports && portRanges(r.ports).some(([a, b]) => a <= 22 && 22 <= b)) warn(p, `"${r.name}" opens SSH to the whole internet`);
+    if (r.action === 'accept' && r.from === 'wan' && r.to === 'gate' && (!r.source || !isPrivateIP(r.source.split('/')[0])) && (!r.ports || portRanges(r.ports).some(([a, b]) => a <= 22 && 22 <= b)) && ['tcp', 'tcp+udp', 'any'].includes(r.proto))
+      warn(p, `"${r.name}" opens SSH to ${r.source ? r.source : 'the whole internet'}`);
   }
   const fids = new Set<string>();
   const used: Array<{ proto: string; ranges: Array<[number, number]>; name: string }> = [];

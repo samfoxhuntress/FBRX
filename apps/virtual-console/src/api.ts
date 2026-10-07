@@ -3,6 +3,8 @@ export class ApiError extends Error {
   constructor(
     readonly status: number,
     message: string,
+    /** The error's details, when the service sent them (FBRX Gate's problems, with where they are). */
+    readonly issues: Array<{ path: string; message: string }> = [],
   ) {
     super(message);
   }
@@ -46,7 +48,7 @@ export async function api<T = any>(method: string, path: string, body?: unknown)
     json = text;
   }
   if (res.status === 401 && !path.startsWith('/v1/auth/login') && !path.startsWith('/v1/setup')) onUnauthorized();
-  if (!res.ok) throw new ApiError(res.status, json?.error?.message ?? `Request failed (${res.status})`);
+  if (!res.ok) throw new ApiError(res.status, json?.error?.message ?? `Request failed (${res.status})`, Array.isArray(json?.error?.issues) ? json.error.issues : []);
   return json as T;
 }
 
