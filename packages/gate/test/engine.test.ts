@@ -5,17 +5,23 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { starterConfig, type GateConfig } from '../src/index';
 import { GateEngine, GateError, GateStore, SimulatedApplier } from '../src/node/index';
 
-const dirs: string[] = [];
+// Engines stop and stores close before their folder goes (Windows keeps open files from being deleted).
+const cleanups: Array<() => void> = [];
 afterEach(() => {
-  for (const d of dirs.splice(0)) rmSync(d, { recursive: true, force: true });
+  for (const fn of cleanups.splice(0).reverse()) fn();
 });
 
 function setup() {
   const dir = mkdtempSync(join(tmpdir(), 'fbrx-gate-engine-'));
-  dirs.push(dir);
+  cleanups.push(() => rmSync(dir, { recursive: true, force: true }));
   const store = new GateStore(join(dir, 'gate.db'));
+  cleanups.push(() => store.close());
   const applier = new SimulatedApplier();
-  const make = () => new GateEngine({ store, applier, paths: { varDir: dir, logDir: dir, etcDir: dir }, initial: () => starterConfig({ wan: 'eno1', lan: 'eno2' }) });
+  const make = () => {
+    const e = new GateEngine({ store, applier, paths: { varDir: dir, logDir: dir, etcDir: dir }, initial: () => starterConfig({ wan: 'eno1', lan: 'eno2' }) });
+    cleanups.push(() => e.stop());
+    return e;
+  };
   return { store, applier, engine: make(), make, dir };
 }
 
