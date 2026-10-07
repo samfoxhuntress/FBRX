@@ -3,12 +3,25 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
+import { createServer } from 'node:net';
 import { DEFAULT_POLICY, type Policy } from '@fbrx/shared';
 import { Kernel } from '../src/kernel';
 import { createNodePlatform } from '../src/node-platform';
 import { StaticKeyKeychain, type KeychainAdapter } from '../src/platform';
 
 export const USER = { origin: 'user' as const, actor: 'test-user' };
+
+/** A port nothing listens on right now (the system picks it), for tests that run side by side. */
+export function freePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const s = createServer();
+    s.once('error', reject);
+    s.listen(0, '127.0.0.1', () => {
+      const port = (s.address() as { port: number }).port;
+      s.close(() => resolve(port));
+    });
+  });
+}
 
 export function tempDir(prefix = 'fbrx-test-'): string {
   return mkdtempSync(join(tmpdir(), prefix));

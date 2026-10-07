@@ -10,12 +10,12 @@ const SHIM = resolve(__dirname, '../src/aicoord/mcp-shim.ts');
 
 describe('AI coordination', () => {
   it('lets an MCP client use FBRX tools through the governed Local API', async () => {
-    const { kernel, sandbox, cleanup } = await makeKernel({ localApiPort: 47831 });
+    const { kernel, sandbox, cleanup } = await makeKernel({ localApiPort: 47835 });
     const client = new Client({ name: 'test-host', version: '1.0.0' });
     try {
       await waitFor(() => kernel.localApi.running);
       const tokenFile = JSON.parse(readFileSync(join(kernel.paths.root, 'localapi-agent.json'), 'utf8'));
-      expect(tokenFile.url).toBe('http://127.0.0.1:47831');
+      expect(tokenFile.url).toBe('http://127.0.0.1:47835');
 
       await client.connect(
         new StdioClientTransport({

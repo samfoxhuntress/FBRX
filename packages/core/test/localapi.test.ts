@@ -1,10 +1,10 @@
 import { request } from 'node:http';
 import { describe, expect, it } from 'vitest';
-import { makeKernel, USER } from './helpers';
+import { freePort, makeKernel, USER } from './helpers';
 
 describe('local API', () => {
   it('requires a token, enforces scopes and exposes the governed core', async () => {
-    const port = 48000 + Math.floor(Math.random() * 1000);
+    const port = await freePort();
     const { kernel, cleanup } = await makeKernel({ localApiPort: port });
     try {
       const base = `http://127.0.0.1:${port}`;
@@ -51,7 +51,7 @@ describe('local API', () => {
   });
 
   it('accepts a server console token that acts as the person at the computer', async () => {
-    const port = 48000 + Math.floor(Math.random() * 1000);
+    const port = await freePort();
     const { kernel, cleanup } = await makeKernel({ localApiPort: port });
     try {
       const base = `http://127.0.0.1:${port}`;

@@ -398,11 +398,13 @@ if has_role gate; then
   set_env FBRX_V_GATE_MANAGE_WAN "$GATE_MANAGE"
   # The first start puts the starter configuration in place (once: later starts apply what was committed).
   set_env FBRX_V_GATE_FIRST commit
-  # The question log (MiniDome reads it) is rotated daily; dnsmasq reopens it on USR2.
+  # The question log (MiniDome reads it) is rotated daily. dnsmasq reopens it on USR2 as its own user, so the new file
+  # keeps the old one's owner ("create" without attributes).
   cat >/etc/logrotate.d/fbrx-gate <<EOF
 $GATE_LOG/dnsmasq.log {
     daily
     rotate 7
+    create
     compress
     delaycompress
     missingok
