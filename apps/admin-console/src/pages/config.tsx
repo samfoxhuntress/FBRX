@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { AUDIENCE_NAMES, AUTO_UPDATE_MODES, isLearner, AUTO_UPDATE_NAMES, DEFAULT_POLICY, UPDATE_CHANNELS, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_NAMES, type Audience, type AutoUpdateMode, type Vertical } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Grid, Input, JsonEditor, Modal, Page, Select, Table, TextArea, Toggle, timeAgo, useAction, useConfirm } from '@fbrx/ui';
+import { AUDIENCE_NAMES, AUTO_UPDATE_MODES, isLearner, AUTO_UPDATE_NAMES, DEFAULT_POLICY, PROFILE_PRESETS, presetApplied, UPDATE_CHANNELS, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_NAMES, type Audience, type AutoUpdateMode, type Vertical } from '@fbrx/shared';
+import { Button, Callout, Card, Empty, Field, Grid, Input, JsonEditor, Modal, More, Page, Select, Table, TextArea, Toggle, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
 import { QUICK_SETUP_TITLE, QuickSetup, quickSetupDone } from './quick-setup';
+import { SettingsBuilder, type SettingsDraft } from './settings-builder';
 
 interface Profile {
   id: string;
@@ -43,11 +44,6 @@ const VERTICAL_HELP: Record<Vertical, string> = {
   home: "Parents' computers run FBRX Endpoint and get the children's requests for help; children's computers run FBRX OS Home with the same protections as students.",
 };
 
-const EXAMPLE_SETTINGS = {
-  ai: { defaultProvider: 'local', temperature: 0.2 },
-  backup: { scheduleEnabled: true, intervalHours: 24, retention: 7 },
-  updates: { autoDownload: true },
-};
 
 export function ConfigPage() {
   const app = useApp();
@@ -103,7 +99,7 @@ export function ConfigPage() {
         </Card>
       )}
       <Grid cols={2}>
-        <Card title="Configuration profiles" actions={<Button size="sm" icon="plus" onClick={() => setEditProfile({ name: '', description: '', settings: EXAMPLE_SETTINGS, locked: [], policy: null })}>New profile</Button>} flush>
+        <Card title="Configuration profiles" actions={<Button size="sm" icon="plus" onClick={() => setEditProfile({ name: '', description: '', settings: {}, locked: [], policy: null })}>New profile</Button>} flush>
           <Table
             rows={profiles.data ?? []}
             rowKey={(p) => p.id}
@@ -111,6 +107,7 @@ export function ConfigPage() {
             empty={<Empty title="No profiles">Create one to standardize settings and governance across devices.</Empty>}
             columns={[
               { key: 'n', header: 'Profile', render: (p) => (<div><div className="fx-cell-title">{p.name}</div><div className="fx-cell-sub">{p.description || `${Object.keys(p.settings).length} setting groups`}</div></div>) },
+              { key: 'presets', header: 'Ready-made', render: (p) => PROFILE_PRESETS.filter((x) => presetApplied(x, p.settings, p.locked)).map((x) => x.name).join(', ') || <span className="fx-muted">—</span> },
               { key: 'l', header: 'Locked', className: 'num', render: (p) => p.locked.length },
               { key: 'p', header: 'Policy', render: (p) => (p.policy ? <span className="fx-badge accent">custom</span> : <span className="fx-muted">inherit</span>) },
               { key: 'u', header: 'Updated', render: (p) => <span className="fx-secondary">v{p.version} · {timeAgo(p.updatedAt)}</span> },
@@ -167,8 +164,7 @@ export function ConfigPage() {
 function ProfileEditor({ profile, onClose, onSaved, onDelete }: { profile: Partial<Profile>; onClose: () => void; onSaved: () => void; onDelete: () => void }) {
   const [name, setName] = useState(profile.name ?? '');
   const [description, setDescription] = useState(profile.description ?? '');
-  const [settings, setSettings] = useState(JSON.stringify(profile.settings ?? {}, null, 2));
-  const [locked, setLocked] = useState((profile.locked ?? []).join('\n'));
+  const [draft, setDraft] = useState<SettingsDraft>({ settings: profile.settings ?? {}, locked: profile.locked ?? [] });
   const [policy, setPolicy] = useState(profile.policy ? JSON.stringify(profile.policy, null, 2) : '');
   const [ok, setOk] = useState({ s: true, p: true });
   const { busy, run } = useAction();
@@ -179,8 +175,8 @@ function ProfileEditor({ profile, onClose, onSaved, onDelete }: { profile: Parti
         api(profile.id ? 'PATCH' : 'POST', profile.id ? `/v1/admin/profiles/${profile.id}` : '/v1/admin/profiles', {
           name,
           description,
-          settings: settings.trim() ? JSON.parse(settings) : {},
-          locked: locked.split(/[\n,]/).map((x) => x.trim()).filter(Boolean),
+          settings: draft.settings,
+          locked: draft.locked,
           policy: policy.trim() ? JSON.parse(policy) : null,
         }).then(onSaved),
       'Profile saved; devices are syncing',
@@ -213,22 +209,19 @@ function ProfileEditor({ profile, onClose, onSaved, onDelete }: { profile: Parti
             <Input value={description} onChange={(e) => setDescription(e.target.value)} />
           </Field>
         </div>
-        <Field label="Settings (JSON, partial)" help="Any subset of FBRX OS settings: general, ai, runtime, localApi, backup, fleet, updates">
-          <JsonEditor value={settings} onChange={setSettings} rows={10} onValidity={(v) => setOk((o) => (o.s === v ? o : { ...o, s: v }))} />
-        </Field>
-        <Field label="Locked settings" help="One dotted path per line. Users cannot change locked settings on their workstation.">
-          <TextArea code rows={4} value={locked} onChange={(e) => setLocked(e.target.value)} placeholder={'ai.defaultProvider\nbackup.scheduleEnabled'} />
-        </Field>
-        <Field label="Governance policy (JSON)" help="Replaces the device's local policy: tool rules, folders, network, shell, AI providers, approvals">
-          <JsonEditor value={policy} onChange={setPolicy} rows={10} onValidity={(v) => setOk((o) => (o.p === v ? o : { ...o, p: v }))} />
-        </Field>
-        {!policy.trim() && (
-          <div>
-            <Button size="sm" onClick={() => setPolicy(JSON.stringify(DEFAULT_POLICY, null, 2))}>
-              Start from the default policy
-            </Button>
-          </div>
-        )}
+        <SettingsBuilder value={draft} onChange={setDraft} onJsonValidity={(v) => setOk((o) => (o.s === v ? o : { ...o, s: v }))} />
+        <More label="Governance policy (what the agent may do)">
+          <Field label="Governance policy (JSON)" help="Replaces the computer's own policy: tool rules, folders, network, shell, AI providers, approvals. Empty keeps each computer's own.">
+            <JsonEditor value={policy} onChange={setPolicy} rows={10} onValidity={(v) => setOk((o) => (o.p === v ? o : { ...o, p: v }))} />
+          </Field>
+          {!policy.trim() && (
+            <div>
+              <Button size="sm" onClick={() => setPolicy(JSON.stringify(DEFAULT_POLICY, null, 2))}>
+                Start from the default policy
+              </Button>
+            </div>
+          )}
+        </More>
       </div>
     </Modal>
   );

@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { isCidr, MESH_TRAFFIC_CLASSES, MESH_TRAFFIC_CLASS_WORDS, networkOf, type MeshPathTest, type MeshTrafficClass, type Settings } from '@fbrx/shared';
-import { Button, Callout, Card, CopyText, Field, Grid, Input, Select, Status, Toggle, useAction } from '@fbrx/ui';
+import { Button, Callout, Card, CopyText, Field, Grid, InfoTip, Input, More, Select, Status, Toggle, useAction } from '@fbrx/ui';
 import { call } from '../client';
 import { useCore } from '../hooks';
 
@@ -16,6 +16,7 @@ export function PreferMeshCard() {
   const status = useCore('mesh.network.status', undefined, ['settings.changed']);
   const { run, busy } = useAction();
   const [subnet, setSubnet] = useState('');
+  const [adding, setAdding] = useState('');
   const [paths, setPaths] = useState<MeshPathTest[] | null>(null);
   const n = settings.data?.settings.mesh.network;
   const st = status.data;
@@ -28,58 +29,57 @@ export function PreferMeshCard() {
     if (!isCidr(v) || n.subnets.includes(v)) return;
     set({ subnets: [...n.subnets, v] });
     setSubnet('');
+    setAdding('');
   };
+  const typing = adding === '__typed';
   return (
     <Card
-      title="Prefer Mesh"
-      subtitle="Give the traffic between your computers (Mesh Assist included) its own lane: a network for it, connections that stay open, and a priority mark your switches and FBRX Gate honor."
+      title={
+        <span className="fx-field-head">
+          Prefer Mesh
+          <InfoTip>A fast lane for your FBRX computers: they reach each other through the network you pick first, keep their connections open, and mark their traffic so switches and FBRX Gate send it first. Mesh Assist answers sooner, even during a backup or a big download.</InfoTip>
+        </span>
+      }
+      subtitle="Puts the traffic between your FBRX computers first, so their AI helping each other never waits behind a download or a backup."
       actions={<Toggle checked={n.preferMesh} onChange={(v) => set({ preferMesh: v })} label={n.preferMesh ? 'On' : 'Off'} />}
     >
       {managed && <Callout tone="info">Your organization sets some of these.</Callout>}
-      <Grid cols={2}>
-        <div className="fx-grid">
-          <Field label="Mesh networks, in order" help="Computers reach each other through these first, for example a VLAN for AI and servers. The usual network stays the fallback.">
-            <div className="fx-row" style={{ flexWrap: 'wrap', gap: 6 }}>
-              {n.subnets.map((c) => (
-                <span key={c} className="fx-badge mono">
-                  {c}{' '}
-                  <button className="pm-x" aria-label={`Remove ${c}`} onClick={() => set({ subnets: n.subnets.filter((x) => x !== c) })}>
-                    ×
-                  </button>
-                </span>
-              ))}
-              {!n.subnets.length && <span className="fx-muted">None yet</span>}
-            </div>
-          </Field>
-          <div className="fx-row" style={{ gap: 6 }}>
+      <Field
+        label="Networks your computers use to reach each other"
+        info="If your computers and servers have their own network (a VLAN for AI and servers, say), add it: they try it first and fall back to the usual network. With none, they use the usual network."
+      >
+        <div className="fx-row" style={{ flexWrap: 'wrap', gap: 6, alignItems: 'center' }}>
+          {n.subnets.map((c) => (
+            <span key={c} className="fx-badge mono">
+              {c}{' '}
+              <button className="pm-x" aria-label={`Remove ${c}`} onClick={() => set({ subnets: n.subnets.filter((x) => x !== c) })}>
+                ×
+              </button>
+            </span>
+          ))}
+          {!n.subnets.length && <span className="fx-muted">The usual network</span>}
+          <Select
+            className="pm-add"
+            aria-label="Add a network"
+            value={typing ? '__typed' : ''}
+            onChange={(e) => (e.target.value === '__typed' ? setAdding('__typed') : e.target.value && addSubnet(e.target.value))}
+            options={[{ value: '', label: '+ Add a network…', disabled: true }, ...suggestions.map((c) => ({ value: c, label: `${c} (this computer is on it)` })), { value: '__typed', label: 'Type one…' }]}
+          />
+        </div>
+        {typing && (
+          <div className="fx-row" style={{ gap: 6, marginTop: 6 }}>
             <div style={{ flex: 1 }}>
-              <Input className="mono" value={subnet} onChange={(e) => setSubnet(e.target.value)} placeholder="10.20.0.0/24" onKeyDown={(e) => e.key === 'Enter' && addSubnet(subnet)} />
+              <Input autoFocus className="mono" value={subnet} onChange={(e) => setSubnet(e.target.value)} placeholder="10.20.0.0/24" onKeyDown={(e) => e.key === 'Enter' && addSubnet(subnet)} />
             </div>
-            <Button size="sm" disabled={!isCidr(subnet.trim())} onClick={() => addSubnet(subnet)}>
+            <Button size="sm" variant="primary" disabled={!isCidr(subnet.trim())} onClick={() => addSubnet(subnet)}>
               Add
             </Button>
+            <Button size="sm" variant="ghost" onClick={() => setAdding('')}>
+              Cancel
+            </Button>
           </div>
-          {suggestions.length > 0 && (
-            <div className="fx-row" style={{ flexWrap: 'wrap', gap: 6 }}>
-              <span className="fx-muted" style={{ fontSize: 12 }}>This computer is on:</span>
-              {suggestions.map((c) => (
-                <Button key={c} size="sm" variant="ghost" onClick={() => addSubnet(c)}>
-                  + {c}
-                </Button>
-              ))}
-            </div>
-          )}
-        </div>
-        <div className="fx-grid">
-          <Field label="Priority mark (DSCP)" help="Switches and FBRX Gate put marked traffic in a faster queue. AF41 sits below voice calls, so it never drowns them out.">
-            <Select value={n.trafficClass} onChange={(e) => set({ trafficClass: e.target.value as MeshTrafficClass })} options={MESH_TRAFFIC_CLASSES.map((c) => ({ value: c, label: MESH_TRAFFIC_CLASS_WORDS[c] }))} />
-          </Field>
-          <Toggle checked={n.jumbo} onChange={(v) => set({ jumbo: v })} label="The mesh networks use jumbo frames (MTU 9000): check them" />
-          <div className="fx-muted" style={{ fontSize: 12 }}>
-            Mesh connections are TCP and stay open between requests, with no delay before small packets go out, so a computer helping another answers without a new handshake each time.
-          </div>
-        </div>
-      </Grid>
+        )}
+      </Field>
 
       {st && (
         <div style={{ marginTop: 14 }} className="fx-grid">
@@ -88,21 +88,10 @@ export function PreferMeshCard() {
               {w}
             </Callout>
           ))}
-          <div className="fx-label">This computer</div>
-          {st.local.map((a) => (
-            <div key={`${a.iface}${a.address}`} className="fx-list-item">
-              <Status tone={a.preferred ? 'good' : 'neutral'}>{a.preferred ? 'mesh network' : 'other network'}</Status>
-              <strong className="mono">{a.address}</strong>
-              <span className="fx-muted" style={{ flex: 1 }}>
-                {a.iface} · {a.cidr}
-                {a.mtu ? ` · MTU ${a.mtu}` : ''}
-              </span>
-            </div>
-          ))}
           <div className="fx-list-item">
             <Status tone={st.qos.applied ? 'good' : st.qos.applied === false ? 'warning' : 'neutral'}>{st.qos.applied ? 'marked' : st.qos.applied === false ? 'not marked' : 'unknown'}</Status>
             <span style={{ flex: 1 }}>
-              Mesh traffic (TCP port {st.port}) marked {st.trafficClass.toUpperCase()} (DSCP {st.dscp}). <span className="fx-muted">{st.qos.detail}</span>
+              {st.qos.applied ? 'Mesh traffic leaves this computer marked for the fast lane.' : 'Mesh traffic is not marked yet on this computer.'} <span className="fx-muted">{st.qos.detail}</span>
             </span>
             {st.qos.method !== 'none' && st.qos.canApply && (
               <>
@@ -129,8 +118,11 @@ export function PreferMeshCard() {
       )}
 
       <div style={{ marginTop: 14 }}>
-        <div className="fx-row" style={{ justifyContent: 'space-between' }}>
-          <div className="fx-label">The way to each computer</div>
+        <div className="fx-row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
+          <span className="fx-field-head">
+            <span className="fx-label">The way to each computer</span>
+            <InfoTip>Test reaches every paired computer and shows whether it went through your mesh network (good) or the usual one, how long a round trip takes, and whether jumbo frames got through.</InfoTip>
+          </span>
           <Button size="sm" icon="activity" loading={busy === 'test'} onClick={() => void run('test', () => call('mesh.network.test', {})).then((r) => r && setPaths(r))}>
             Test
           </Button>
@@ -149,6 +141,35 @@ export function PreferMeshCard() {
           </div>
         ))}
       </div>
+
+      <More label="More settings">
+        <Grid cols={2}>
+          <Field label="Priority mark" info="A label on each packet (DSCP) that switches and FBRX Gate use to pick a faster queue. AF41, the usual choice, sits just below voice calls so it never drowns them out.">
+            <Select value={n.trafficClass} onChange={(e) => set({ trafficClass: e.target.value as MeshTrafficClass })} options={MESH_TRAFFIC_CLASSES.map((c) => ({ value: c, label: MESH_TRAFFIC_CLASS_WORDS[c] }))} />
+          </Field>
+          <div className="fx-grid" style={{ alignContent: 'end' }}>
+            <Toggle checked={n.jumbo} onChange={(v) => set({ jumbo: v })} label="The mesh networks use jumbo frames" info="Turn on only if every switch and computer on the mesh network is set to MTU 9000. FBRX then checks that big packets really get through and warns you where they do not." />
+          </div>
+        </Grid>
+        {st && (
+          <div className="fx-grid" style={{ gap: 6 }}>
+            <div className="fx-label">This computer’s networks</div>
+            {st.local.map((a) => (
+              <div key={`${a.iface}${a.address}`} className="fx-list-item">
+                <Status tone={a.preferred ? 'good' : 'neutral'}>{a.preferred ? 'mesh network' : 'other network'}</Status>
+                <strong className="mono">{a.address}</strong>
+                <span className="fx-muted" style={{ flex: 1 }}>
+                  {a.iface} · {a.cidr}
+                  {a.mtu ? ` · MTU ${a.mtu}` : ''}
+                </span>
+              </div>
+            ))}
+            <div className="fx-muted" style={{ fontSize: 12 }}>
+              Mesh traffic is TCP port {st.port}, marked {st.trafficClass.toUpperCase()} (DSCP {st.dscp}). Connections stay open between requests and small packets go out without delay, so help starts without a new handshake each time.
+            </div>
+          </div>
+        )}
+      </More>
     </Card>
   );
 }

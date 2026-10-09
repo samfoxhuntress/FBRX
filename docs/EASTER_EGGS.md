@@ -128,7 +128,7 @@ later everything drops back to zero as if nothing happened. (A real test you sta
 
 ## Who's who?
 
-On **Mesh & phone**, press **Send a ping** for the same computer three times in a row. The two computers appear side
+On **Mesh & phone**, choose **More → Send a ping** for the same computer three times in a row. The two computers appear side
 by side, pointing at each other, each convinced the other is the copy ("Wait… you're me?" "No. YOU'RE me."). No other
 computer yet? Click this computer's own address (under *Reachable at*) three times: it pings itself and has the same
 crisis. Click anywhere to make them stop.

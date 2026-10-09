@@ -129,7 +129,7 @@ behind a backup or a download:
 * **Marked**: FBRX Mesh traffic (TCP port 47800) through the gate, and everything from the networks you pick (a mesh
   VLAN), gets the DSCP mark you choose (AF41 by default: the video lane, below voice calls). The gate counts what it
   marked.
-* **At both ends**: FBRX computers mark what they send too (*Mesh & phone → Prefer Mesh* in FBRX Endpoint; *Mesh & AI →
+* **At both ends**: FBRX computers mark what they send too (*Mesh & phone → Network* in FBRX Endpoint; *Mesh & AI →
   Network* on a server), and reach each other through the mesh network first. See [MESH.md](MESH.md#prefer-mesh).
 * **TCP, kept open**: mesh connections are TCP, kept alive and sent without delay, so help between computers starts
   without a new handshake each time.

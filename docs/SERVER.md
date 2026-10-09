@@ -153,7 +153,7 @@ before anything risky, like on any FBRX computer. It listens for FBRX Mesh on po
   *Hand out work* sends a task to the best helper, every computer, or one; requests waiting for a yes, and all help
   asked and given (with the answers and follow-up questions), are on the same tab. See [MESH.md](MESH.md).
 * **Computers on the mesh:** turn FBRX Mesh on or off, show a pairing code for another computer (on that computer:
-  *Mesh & phone → Join a computer*), join another computer's code, and set what each paired computer may do here,
+  *Mesh & phone → Add a device → Enter a code*), join another computer's code, and set what each paired computer may do here,
   including **Help with AI** and **Controller**.
 * **AI provider:** what this server's agent runs on: a cloud provider with an API key (kept encrypted in the core's
   vault, never shown again), or a model on your network (Ollama or any OpenAI-compatible server, by address).

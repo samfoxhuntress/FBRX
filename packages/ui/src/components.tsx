@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ButtonHTMLAttributes, type ComponentProps, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ComponentProps, type ReactNode, type SelectHTMLAttributes } from 'react';
 import { FbrxMark } from './brand';
 import { Icon, Icons, type IconName } from './icons';
 
@@ -252,7 +252,7 @@ export function Grid({ cols = 2, children }: { cols?: 2 | 3 | 4 | 'auto'; childr
 
 // -------------------------------------------------------------------------------------- inputs
 
-export function Button({ variant, size, icon, loading, children, className, ...rest }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: 'primary' | 'danger' | 'danger-solid' | 'ghost'; size?: 'sm'; icon?: IconName; loading?: boolean }) {
+export function Button({ variant, size, icon, loading, children, className, ...rest }: ComponentProps<'button'> & { variant?: 'primary' | 'danger' | 'danger-solid' | 'ghost'; size?: 'sm'; icon?: IconName; loading?: boolean }) {
   const Ico = icon ? Icons[icon] : null;
   return (
     <button
@@ -267,10 +267,18 @@ export function Button({ variant, size, icon, loading, children, className, ...r
   );
 }
 
-export function Field({ label, help, error, children }: { label?: ReactNode; help?: ReactNode; error?: ReactNode; children: ReactNode }) {
+export function Field({ label, help, error, info, children }: { label?: ReactNode; help?: ReactNode; error?: ReactNode; /** What the setting does, behind an (i) beside the label. */ info?: ReactNode; children: ReactNode }) {
   return (
     <div className="fx-field">
-      {label && <label>{label}</label>}
+      {label &&
+        (info ? (
+          <span className="fx-field-head">
+            <label>{label}</label>
+            <InfoTip label={typeof label === 'string' ? `About ${label}` : undefined}>{info}</InfoTip>
+          </span>
+        ) : (
+          <label>{label}</label>
+        ))}
       {children}
       {error ? <div className="fx-error-text">{error}</div> : help ? <div className="fx-help">{help}</div> : null}
     </div>
@@ -300,12 +308,204 @@ export function TextArea({ code, className, ...props }: ComponentProps<'textarea
   return <textarea className={cx('fx-textarea', code && 'code', className)} spellCheck={!code} {...props} />;
 }
 
-export function Toggle({ checked, onChange, label, disabled, title }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; disabled?: boolean; title?: string }) {
-  return (
+export function Toggle({ checked, onChange, label, disabled, title, info }: { checked: boolean; onChange: (v: boolean) => void; label?: ReactNode; disabled?: boolean; title?: string; /** What switching it on does, behind an (i) beside the label. */ info?: ReactNode }) {
+  const toggle = (
     <label className="fx-toggle" title={title}>
       <input type="checkbox" role="switch" checked={checked} disabled={disabled} onChange={(e) => onChange(e.target.checked)} />
       {label && <span>{label}</span>}
     </label>
+  );
+  if (!info) return toggle;
+  // The (i) sits beside the label, not inside it, so pressing it never flips the switch.
+  return (
+    <span className="fx-toggle-row">
+      {toggle}
+      <InfoTip label={typeof label === 'string' ? `About ${label}` : undefined}>{info}</InfoTip>
+    </span>
+  );
+}
+
+/**
+ * A small (i) beside a setting that explains what it does: hover to peek, click (or Enter) to keep it open, Escape or
+ * a click elsewhere to close. The bubble is placed in the window, so cards and scroll areas never cut it off.
+ */
+export function InfoTip({ children, label = 'What does this do?' }: { children: ReactNode; label?: string }) {
+  const [open, setOpen] = useState<'peek' | 'pinned' | null>(null);
+  const [pos, setPos] = useState<{ left: number; top: number; above: boolean } | null>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const pop = useRef<HTMLSpanElement>(null);
+  const id = useId();
+  const place = useCallback(() => {
+    const r = btn.current?.getBoundingClientRect();
+    if (!r) return;
+    const width = Math.min(300, window.innerWidth - 16);
+    const left = Math.max(8, Math.min(window.innerWidth - width - 8, r.left + r.width / 2 - width / 2));
+    const above = window.innerHeight - r.bottom < 180 && r.top > 180;
+    setPos({ left, top: above ? r.top - 8 : r.bottom + 8, above });
+  }, []);
+  const show = (how: 'peek' | 'pinned') => {
+    place();
+    setOpen(how);
+  };
+  useEffect(() => {
+    if (open !== 'pinned') return;
+    const away = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!btn.current?.contains(t) && !pop.current?.contains(t)) setOpen(null);
+    };
+    const esc = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setOpen(null);
+        btn.current?.focus();
+      }
+    };
+    const close = () => setOpen(null);
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', esc, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    return () => {
+      document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', esc, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [open]);
+  return (
+    <span className="fx-info">
+      <button
+        ref={btn}
+        type="button"
+        className={cx('fx-info-btn', open && 'open')}
+        aria-label={label}
+        aria-expanded={open === 'pinned'}
+        aria-describedby={open ? id : undefined}
+        onClick={(e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          if (open === 'pinned') setOpen(null);
+          else show('pinned');
+        }}
+        onMouseEnter={() => !open && show('peek')}
+        onMouseLeave={() => open === 'peek' && setOpen(null)}
+      >
+        i
+      </button>
+      {open && pos && (
+        <span ref={pop} id={id} role="tooltip" className={cx('fx-info-pop', pos.above && 'above')} style={{ left: pos.left, top: pos.top }}>
+          {children}
+        </span>
+      )}
+    </span>
+  );
+}
+
+/** "More settings": a quieter section that opens on request, for the settings most people never need. */
+export function More({ label = 'More settings', children, defaultOpen }: { label?: ReactNode; children: ReactNode; defaultOpen?: boolean }) {
+  return (
+    <details className="fx-more" open={defaultOpen}>
+      <summary>
+        <Icons.chevronRight size={14} className="fx-more-chev" />
+        {label}
+      </summary>
+      <div className="fx-more-body">{children}</div>
+    </details>
+  );
+}
+
+export interface MenuItem {
+  label: ReactNode;
+  icon?: IconName;
+  onSelect: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+  /** One line under the label saying what it does. */
+  hint?: ReactNode;
+}
+
+/** A button that opens a short list of less-used actions ("More"), so a card shows only its main buttons. */
+export function MenuButton({ label = 'More', icon = 'more', items, size = 'sm' }: { label?: ReactNode; icon?: IconName; items: Array<MenuItem | false | null | undefined>; size?: 'sm' }) {
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ left: number; top: number; up: boolean } | null>(null);
+  const btn = useRef<HTMLButtonElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  const list = items.filter((i): i is MenuItem => !!i);
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: MouseEvent) => {
+      const t = e.target as Node;
+      if (!btn.current?.contains(t) && !menu.current?.contains(t)) setOpen(false);
+    };
+    const key = (e: KeyboardEvent) => {
+      const buttons = [...(menu.current?.querySelectorAll<HTMLButtonElement>('button:not(:disabled)') ?? [])];
+      const at = buttons.indexOf(document.activeElement as HTMLButtonElement);
+      if (e.key === 'Escape') {
+        e.stopPropagation();
+        setOpen(false);
+        btn.current?.focus();
+      } else if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+        e.preventDefault();
+        buttons[(at + (e.key === 'ArrowDown' ? 1 : buttons.length - 1)) % buttons.length]?.focus();
+      }
+    };
+    const close = () => setOpen(false);
+    document.addEventListener('mousedown', away);
+    document.addEventListener('keydown', key, true);
+    window.addEventListener('resize', close);
+    window.addEventListener('scroll', close, true);
+    menu.current?.querySelector<HTMLButtonElement>('button:not(:disabled)')?.focus();
+    return () => {
+      document.removeEventListener('mousedown', away);
+      document.removeEventListener('keydown', key, true);
+      window.removeEventListener('resize', close);
+      window.removeEventListener('scroll', close, true);
+    };
+  }, [open]);
+  if (!list.length) return null;
+  return (
+    <>
+      <Button
+        ref={btn}
+        size={size}
+        variant="ghost"
+        icon={icon}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => {
+          const r = btn.current!.getBoundingClientRect();
+          const width = 240;
+          const up = window.innerHeight - r.bottom < list.length * 44 + 24;
+          setPos({ left: Math.max(8, Math.min(window.innerWidth - width - 8, r.right - width)), top: up ? r.top - 6 : r.bottom + 6, up });
+          setOpen(!open);
+        }}
+      >
+        {label}
+      </Button>
+      {open && pos && (
+        <div ref={menu} role="menu" className={cx('fx-menu', pos.up && 'up')} style={{ left: pos.left, top: pos.top }}>
+          {list.map((i, n) => (
+            <button
+              key={n}
+              type="button"
+              role="menuitem"
+              className={cx('fx-menu-item', i.danger && 'danger')}
+              disabled={i.disabled}
+              onClick={() => {
+                setOpen(false);
+                i.onSelect();
+              }}
+            >
+              {i.icon && <Icon name={i.icon} size={15} />}
+              <span>
+                {i.label}
+                {i.hint && <small>{i.hint}</small>}
+              </span>
+            </button>
+          ))}
+        </div>
+      )}
+    </>
   );
 }
 

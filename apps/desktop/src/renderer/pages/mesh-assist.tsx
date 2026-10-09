@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { ASSIST_PRIORITIES, ASSIST_TERMINAL, type AssistMode, type AssistOffer, type AssistPriority, type AssistSession, type AssistTools, type MeshDevice, type Settings } from '@fbrx/shared';
-import { Button, Callout, Card, Field, Grid, Input, Select, Status, TextArea, Toggle, timeAgo, useAction, type StatusTone } from '@fbrx/ui';
+import { Button, Callout, Card, Field, Grid, InfoTip, Input, More, Select, Status, TextArea, Toggle, timeAgo, useAction, type StatusTone } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { useAgentName, useCore } from '../hooks';
 
@@ -12,7 +12,7 @@ const MODES = (what: string): Array<{ value: AssistMode; label: string }> => [
   { value: 'auto', label: `Automatically${what}` },
 ];
 const PRIORITY_WORDS: Record<AssistPriority, string> = { background: 'Background', normal: 'Normal', high: 'High', urgent: 'Urgent (controllers only)' };
-const TOOL_WORDS: Record<AssistTools, string> = { none: 'Think and answer only', read: 'Look things up (changes nothing)', all: 'Anything its policy allows' };
+const TOOL_WORDS: Record<AssistTools, string> = { none: 'Only think and answer', read: 'Look things up (changes nothing)', all: 'Anything its policy allows' };
 const STATUS_TONE: Record<AssistSession['status'], StatusTone> = { 'waiting-approval': 'warning', queued: 'info', running: 'busy', done: 'good', denied: 'neutral', error: 'critical', cancelled: 'neutral' };
 const STATUS_WORDS: Record<AssistSession['status'], string> = { 'waiting-approval': 'waiting for a yes', queued: 'queued', running: 'working', done: 'done', denied: 'declined', error: 'failed', cancelled: 'stopped' };
 const TRIGGER_WORDS: Record<AssistSession['trigger'], string> = { agent: 'consulted by the agent', steps: 'ran out of steps', provider: 'AI provider stopped answering', person: 'sent by a person', controller: 'sent by a controller' };
@@ -46,10 +46,17 @@ export function MeshAssistCard({ devices, running }: { devices: MeshDevice[]; ru
   const set = (patch: Partial<AssistSettings>) => void run('set', () => call('settings.update', { patch: { mesh: { assist: patch } } }));
   const computers = devices.filter((d) => d.kind === 'desktop');
 
+  // One choice for most people: asking for and lending help together. Fine-tune splits them.
+  const sharing = a.request === a.offer ? a.request : 'custom';
   return (
     <Card
-      title="Mesh Assist"
-      subtitle={`Your computers lend each other their AI: when ${agent} runs out of steps or its AI provider stops answering (credits, limits, an outage), another computer finishes the task. ${agent} can also consult another computer mid-task.`}
+      title={
+        <span className="fx-field-head">
+          Share AI between your computers
+          <InfoTip>This is Mesh Assist. Help always runs under the helping computer’s own policy, and help is never passed on a second time. Which computers may ask is set on each device (Borrow its AI, Controller).</InfoTip>
+        </span>
+      }
+      subtitle={`When ${agent} gets stuck (it runs out of steps, or its AI service stops answering because of credits, limits or an outage), another of your computers finishes the job.`}
       actions={
         running && (
           <Button size="sm" icon="refresh" loading={busy === 'helpers'} onClick={() => void run('helpers', () => call('mesh.assist.helpers')).then((h) => h && setHelpers(h))}>
@@ -59,41 +66,52 @@ export function MeshAssistCard({ devices, running }: { devices: MeshDevice[]; ru
       }
     >
       {managed && <Callout tone="info">Your organization sets some of these.</Callout>}
-      <Grid cols={2}>
-        <div className="fx-grid">
-          <div className="fx-label">This computer asking for help</div>
-          <Field label={`Bring another computer's AI in`}>
-            <Select value={a.request} onChange={(e) => set({ request: e.target.value as AssistMode })} options={MODES('')} />
-          </Field>
-          <Toggle checked={a.onStepLimit} onChange={(v) => set({ onStepLimit: v })} label={`When ${agent} runs out of steps`} />
-          <Toggle checked={a.onProviderError} onChange={(v) => set({ onProviderError: v })} label="When the AI provider stops answering (credits, limits, outage)" />
-          <Toggle checked={a.agentMayConsult} onChange={(v) => set({ agentMayConsult: v })} label={`${agent} may consult other computers itself`} />
-          <Field label="Priority of this computer's requests">
-            <Select value={a.priority} onChange={(e) => set({ priority: e.target.value as AssistPriority })} options={ASSIST_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_WORDS[p] }))} />
-          </Field>
-        </div>
-        <div className="fx-grid">
-          <div className="fx-label">This computer helping others</div>
-          <Field label={`Lend ${agent} to other computers`}>
-            <Select value={a.offer} onChange={(e) => set({ offer: e.target.value as AssistMode })} options={MODES(' (policy still applies)')} />
-          </Field>
-          <Field label={`While helping, ${agent} here may`}>
-            <Select value={a.tools} onChange={(e) => set({ tools: e.target.value as AssistTools })} options={(['none', 'read', 'all'] as AssistTools[]).map((t) => ({ value: t, label: TOOL_WORDS[t] }))} />
-          </Field>
-          <Grid cols={2}>
-            <Field label="Help at the same time">
-              <Input type="number" min={1} max={8} value={a.maxConcurrent} onChange={(e) => set({ maxConcurrent: Math.max(1, Math.min(8, Number(e.target.value) || 1)) })} />
+      <Field label="Sharing" info="Sets both directions at once: this computer asking others for help, and lending its own AI. Fine-tune sets them apart." help={SHARING_HELP[sharing]}>
+        <Select
+          value={sharing}
+          onChange={(e) => e.target.value !== 'custom' && set({ request: e.target.value as AssistMode, offer: e.target.value as AssistMode })}
+          options={[
+            { value: 'off', label: 'Off' },
+            { value: 'ask', label: 'Ask me each time' },
+            { value: 'auto', label: 'Automatic' },
+            ...(sharing === 'custom' ? [{ value: 'custom', label: 'Custom (see Fine-tune)' }] : []),
+          ]}
+        />
+      </Field>
+      <More label="Fine-tune">
+        <Grid cols={2}>
+          <div className="fx-grid">
+            <div className="fx-label">This computer asking for help</div>
+            <Field label="Bring another computer’s AI in" info={`Whether ${agent} here may hand its work to another computer, and whether you are asked first.`}>
+              <Select value={a.request} onChange={(e) => set({ request: e.target.value as AssistMode })} options={MODES('')} />
             </Field>
-            <Field label="Steps per request">
-              <Input type="number" min={1} max={100} value={a.maxSteps} onChange={(e) => set({ maxSteps: Math.max(1, Math.min(100, Number(e.target.value) || 1)) })} />
+            <Toggle checked={a.onStepLimit} onChange={(v) => set({ onStepLimit: v })} label={`When ${agent} runs out of steps`} info={`${agent} stops after a set number of steps per task (Settings → AI). With this on, another computer picks up where it stopped.`} />
+            <Toggle checked={a.onProviderError} onChange={(v) => set({ onProviderError: v })} label="When the AI service stops answering" info="Out of credits, over a limit, or down: another computer with a working AI finishes the task." />
+            <Toggle checked={a.agentMayConsult} onChange={(v) => set({ agentMayConsult: v })} label={`${agent} may ask other computers itself`} info={`${agent} can ask another computer for a second opinion or a fact while it works, without stopping.`} />
+            <Field label="How important this computer’s requests are" info="Busy helpers take more important work first. Urgent is only for controllers.">
+              <Select value={a.priority} onChange={(e) => set({ priority: e.target.value as AssistPriority })} options={ASSIST_PRIORITIES.map((p) => ({ value: p, label: PRIORITY_WORDS[p] }))} />
             </Field>
-          </Grid>
-          <Toggle checked={a.allowPreempt} onChange={(v) => set({ allowPreempt: v })} label="Urgent work from a controller may stop lower-priority help" />
-        </div>
-      </Grid>
-      <div className="fx-muted" style={{ fontSize: 12, marginTop: 8 }}>
-        Which computers may ask, and which are controllers, is set on each computer below (<em>Help with AI</em>, <em>Controller</em>). A controller running as administrator hands out work without asking. Help always runs under the helping computer’s policy, and help is never passed along twice.
-      </div>
+          </div>
+          <div className="fx-grid">
+            <div className="fx-label">This computer helping others</div>
+            <Field label={`Lend ${agent} to other computers`} info="Whether other computers may use this computer’s AI, and whether you are asked first.">
+              <Select value={a.offer} onChange={(e) => set({ offer: e.target.value as AssistMode })} options={MODES(' (policy still applies)')} />
+            </Field>
+            <Field label={`While helping, ${agent} here may`} info="What the helping AI may touch on this computer. Look things up is safe for most: it reads, but changes nothing.">
+              <Select value={a.tools} onChange={(e) => set({ tools: e.target.value as AssistTools })} options={(['none', 'read', 'all'] as AssistTools[]).map((t) => ({ value: t, label: TOOL_WORDS[t] }))} />
+            </Field>
+            <Grid cols={2}>
+              <Field label="Help at once" info="How many computers this one helps at the same time. More can slow this computer down.">
+                <Input type="number" min={1} max={8} value={a.maxConcurrent} onChange={(e) => set({ maxConcurrent: Math.max(1, Math.min(8, Number(e.target.value) || 1)) })} />
+              </Field>
+              <Field label="Steps per request" info="The most steps the helping AI takes for one request before it stops and answers with what it has.">
+                <Input type="number" min={1} max={100} value={a.maxSteps} onChange={(e) => set({ maxSteps: Math.max(1, Math.min(100, Number(e.target.value) || 1)) })} />
+              </Field>
+            </Grid>
+            <Toggle checked={a.allowPreempt} onChange={(v) => set({ allowPreempt: v })} label="Urgent work may stop less important help" info="A controller’s urgent work goes first: help in progress for others is stopped and they are told." />
+          </div>
+        </Grid>
+      </More>
 
       {helpers && (
         <div style={{ marginTop: 14 }}>
@@ -114,11 +132,22 @@ export function MeshAssistCard({ devices, running }: { devices: MeshDevice[]; ru
         </div>
       )}
 
-      {running && computers.length > 0 && <SendWork computers={computers} defaultPriority={a.priority} />}
+      {running && computers.length > 0 && (
+        <More label="Send a job to your other computers">
+          <SendWork computers={computers} defaultPriority={a.priority} />
+        </More>
+      )}
       <SessionList sessions={live ?? []} />
     </Card>
   );
 }
+
+const SHARING_HELP: Record<AssistMode | 'custom', string> = {
+  off: 'Each computer uses only its own AI.',
+  ask: 'Your computers offer to help each other, and you say yes each time.',
+  auto: 'Your computers help each other without asking. Each one’s policy still applies.',
+  custom: 'Asking and lending are set differently (Fine-tune).',
+};
 
 function SendWork({ computers, defaultPriority }: { computers: MeshDevice[]; defaultPriority: AssistPriority }) {
   const [goal, setGoal] = useState('');
@@ -127,8 +156,7 @@ function SendWork({ computers, defaultPriority }: { computers: MeshDevice[]; def
   const [tools, setTools] = useState<AssistTools>('read');
   const { run, busy } = useAction();
   return (
-    <div className="fx-grid" style={{ marginTop: 16 }}>
-      <div className="fx-label">Hand work to other computers</div>
+    <div className="fx-grid">
       <TextArea rows={2} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="For example: check the backups on your disks and tell me which are older than a week" />
       <Grid cols={3}>
         <Field label="To">
@@ -162,7 +190,7 @@ function SessionList({ sessions }: { sessions: AssistSession[] }) {
   const [open, setOpen] = useState<string | null>(null);
   const [follow, setFollow] = useState('');
   const { run, busy } = useAction();
-  if (!sessions.length) return <div className="fx-muted" style={{ marginTop: 14 }}>No help asked or given yet.</div>;
+  if (!sessions.length) return null;
   return (
     <div style={{ marginTop: 16 }}>
       <div className="fx-label">Help asked and given</div>

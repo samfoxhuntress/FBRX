@@ -28,6 +28,7 @@ import {
   useConfirm,
 } from '@fbrx/ui';
 import { api, download } from '../api';
+import { SettingsBuilder, type SettingsDraft } from './settings-builder';
 import { useApp, useQuery } from '../state';
 import { CommandComposer } from './command-composer';
 import { CommandStatus, HealthStatus, audienceHelp, audienceOptions, OnlineStatus, PLATFORM_LABEL, ProtectionCell, ServiceState, SeverityStatus, type DeviceSummary } from './common';
@@ -316,8 +317,7 @@ function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
   const [notes, setNotes] = useState(d.notes);
   const [channel, setChannel] = useState(d.updateChannel ?? '');
   const [pinned, setPinned] = useState(d.pinnedVersion ?? '');
-  const [settings, setSettings] = useState(JSON.stringify(d.settingsOverride, null, 2));
-  const [locked, setLocked] = useState(d.lockedOverride.join('\n'));
+  const [draft, setDraft] = useState<SettingsDraft>({ settings: d.settingsOverride, locked: d.lockedOverride });
   const [policy, setPolicy] = useState(d.policyOverride ? JSON.stringify(d.policyOverride, null, 2) : '');
   const [audience, setAudience] = useState<string>(d.audience ?? '');
   const [receiver, setReceiver] = useState(!!d.helpdeskReceiver);
@@ -338,8 +338,8 @@ function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
                 groupId: groupId || null,
                 updateChannel: channel || null,
                 pinnedVersion: pinned || null,
-                settingsOverride: settings.trim() ? JSON.parse(settings) : {},
-                lockedOverride: locked.split(/[\n,]/).map((x) => x.trim()).filter(Boolean),
+                settingsOverride: draft.settings,
+                lockedOverride: draft.locked,
                 policyOverride: policy.trim() ? JSON.parse(policy) : null,
                 audience: audience || null,
                 helpdeskReceiver: receiver,
@@ -380,12 +380,7 @@ function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
       </Card>
       <Card title="Overrides" subtitle="Applied on top of the tenant and group profiles, for this device only">
         <div className="fx-form">
-          <Field label="Settings override (JSON)" help='e.g. { "ai": { "defaultProvider": "anthropic" } }'>
-            <JsonEditor value={settings} onChange={setSettings} rows={7} onValidity={(ok) => setValid((v) => (v.s === ok ? v : { ...v, s: ok }))} />
-          </Field>
-          <Field label="Locked settings" help="One path per line; the user cannot change these (e.g. ai.defaultProvider)">
-            <TextArea code rows={3} value={locked} onChange={(e) => setLocked(e.target.value)} disabled={!canConfig} />
-          </Field>
+          <SettingsBuilder value={draft} onChange={setDraft} disabled={!canConfig} onJsonValidity={(ok) => setValid((v) => (v.s === ok ? v : { ...v, s: ok }))} />
           <Field label="Governance policy override (JSON)" help="Leave empty to inherit the profile policy">
             <JsonEditor value={policy} onChange={setPolicy} rows={7} onValidity={(ok) => setValid((v) => (v.p === ok ? v : { ...v, p: ok }))} />
           </Field>

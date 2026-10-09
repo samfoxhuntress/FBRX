@@ -224,13 +224,36 @@ export function useAppearance(settings: Settings | undefined, tier: Tier | undef
   }, [theme, tier, a?.preset, a?.density, a?.radius, a?.texture, a?.textureStrength, a?.reduceMotion, a?.fontScale, a?.accent, a?.effects]);
 }
 
+const STARTUP_VOLUME = 0.85;
+/** The start-up sound eases in over its first half second instead of starting at full volume. */
+const STARTUP_FADE_IN_SECONDS = 0.5;
+
 /** The FBRX start-up sound (from the FBRX intro), like a computer's chime when it boots. */
 export function playStartupSound(): void {
+  let audio: HTMLAudioElement;
   try {
-    const audio = new Audio('./sounds/startup.ogg');
-    audio.volume = 0.85;
-    void audio.play().catch(() => undefined);
+    audio = new Audio('./sounds/startup.ogg');
   } catch {
-    /* audio unavailable */
+    return; // audio unavailable
+  }
+  try {
+    const ctx = new AudioContext();
+    const gain = ctx.createGain();
+    gain.gain.value = 0;
+    ctx.createMediaElementSource(audio).connect(gain).connect(ctx.destination);
+    // Slow at first, then quicker (a squared curve), so the start sounds gentle rather than clipped.
+    const curve = Float32Array.from({ length: 32 }, (_, i) => STARTUP_VOLUME * (i / 31) ** 2);
+    audio.addEventListener('playing', () => gain.gain.setValueCurveAtTime(curve, ctx.currentTime, STARTUP_FADE_IN_SECONDS), { once: true });
+    const close = () => void ctx.close().catch(() => undefined);
+    audio.addEventListener('ended', close, { once: true });
+    audio.addEventListener('error', close, { once: true });
+    void ctx
+      .resume()
+      .then(() => audio.play())
+      .catch(close);
+  } catch {
+    // No Web Audio: play it as before, without the fade.
+    audio.volume = STARTUP_VOLUME;
+    void audio.play().catch(() => undefined);
   }
 }

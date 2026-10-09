@@ -1018,11 +1018,17 @@
   grid-template-columns: repeat(auto-fill, minmax(170px, 1fr));
   gap: 6px 14px;
 }
-.perm {
-  display: flex;
-  align-items: center;
-  gap: 8px;
+.perm-grid .fx-toggle {
   font-size: 13px;
+}
+.mesh-peer-status {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
 }
 /* Mesh Assist: help asked and given */
 .assist-row {
@@ -5437,6 +5443,11 @@ html[data-presenting='blur'] .private::selection {
   border-color: color-mix(in srgb, var(--critical) 55%, var(--border));
 }
 /* Prefer Mesh: remove a mesh network */
+.pm-add {
+  width: auto;
+  height: 28px;
+  font-size: 12.5px;
+}
 .pm-x {
   border: 0;
   background: transparent;

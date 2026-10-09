@@ -47,6 +47,21 @@ license with a kind also sets it. Unattended installs can pick the first tenant'
 | | **Audit log** | Every admin action and device enrollment, hash-chained and verifiable |
 | | Account (your name, top right) | Change your password (signs out your other sessions) and enable TOTP MFA |
 
+### Building a profile without JSON
+
+A profile (and a single device's overrides) is built from:
+
+* **Ready-made** bundles, one click each and one click to take out again: **No Fun Extras** (no easter eggs, jokes,
+  goose or start-up sound), **Private by default** (AI on the computer, chats start offline, no usage statistics or
+  clipboard history), **Locked down** (no mesh, no Local API, no sharing AI), **Strong protection**, **Daily backups**,
+  **Meeting-room safe**, **Calm and quick** and **Share AI across computers**. They combine; the profiles table shows
+  which ones each profile carries.
+* **The usual settings**, by area (AI, fun and look, privacy, screens and meetings, mesh, backups, protection,
+  updates, everyday), each with an **(i)** saying what it does: *Not set / On / Off* for switches, a list for choices,
+  and **Lock** so people cannot change it on their computer. *Find a setting* searches names and explanations.
+* **Advanced: everything as text**: the same profile as JSON (any FBRX OS setting) and the locked paths, one per line,
+  for settings the switches do not cover. Both views are the same profile.
+
 **Antivirus:** device detail shows each computer's antivirus and its state (the Health column flags *Antivirus at
 risk* and *Antivirus needs attention*). To choose it for a group, put `{ "protection": { "provider": "shield" } }` (or
 `defender`, `product:sophos`, `auto`…) in a profile's settings and lock `protection.provider`. See [SHIELD.md](SHIELD.md).

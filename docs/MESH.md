@@ -9,16 +9,22 @@ Each device gets its own permissions on *this* computer, changeable at any time 
 
 | Permission | Phones (default) | Computers (default) |
 | --- | :-: | :-: |
-| See status (health, performance, services) | ✔ | ✔ |
+| See how it is doing (health, performance, services) | ✔ | ✔ |
 | Messages and notifications | ✔ | ✔ |
 | Ask this computer's agent | ✔ | |
 | Approve or deny waiting actions | ✔ | |
 | Tasks and notes | ✔ | |
 | Receive alerts | ✔ | |
-| Remote control (lock, sleep) | | |
-| Help with AI (Mesh Assist, below) | — | ✔ |
+| Lock and sleep | | |
+| Borrow its AI (Mesh Assist, below) | — | ✔ |
 | Controller (Mesh Assist, below) | — | |
 | Network protection (a gate's FBRX MiniDome, below) | | |
+
+Each device card offers one choice, **What it may do here**: *The usual* (the defaults above), *Full trust* (everything
+but the two special permissions), *Messages only* or *Paused* (stays paired, can do nothing). **Choose one by one**
+opens every permission, each with an (i) that explains it; **Network protection** and **Controller** are special and
+never part of a preset. *Message*, *Ask its agent* and *How is it doing?* are on the card; *Send a ping*, *Find my
+phone*, *Lock it*, *Put it to sleep* and *Remove* are under **More**.
 
 Requests from another *computer* follow **When another computer asks this computer's agent**: ask me first (an
 approval appears here), allow, or never; a device can never approve its own request. Phones you pair are yours, so
@@ -34,7 +40,7 @@ make the phone ring (*Find my phone*). It refreshes while open; phones are not w
 When the agent on one computer runs out of room, another computer on the mesh finishes the job, and the two can talk
 it through. It also lets one computer (typically a server) hand work out to the others.
 
-**When help is brought in** (each one a setting under **Mesh & phone → Mesh Assist**):
+**When help is brought in** (each one a setting under **Mesh & phone → Share AI → Fine-tune**; *Sharing* sets asking and lending together):
 
 * **Out of steps.** The agent reached its step limit for a task: the task, a digest of what was done so far and what
   is left go to a helper, whose answer finishes the reply (marked as coming from that computer).
@@ -80,7 +86,7 @@ stop lower-priority help that is running. Without the Controller permission a co
 ## Prefer Mesh
 
 A fast lane for traffic between FBRX computers, so their AI helping each other does not wait behind a backup or a
-download. Turn it on in **Mesh & phone → Prefer Mesh** (on an FBRX Server: *Mesh & AI → Network*).
+download. Turn it on in **Mesh & phone → Network** (on an FBRX Server: *Mesh & AI → Network*).
 
 * **Mesh networks first.** List the networks the computers should reach each other through, in order (a VLAN for AI
   and servers, say). Computers tell each other their addresses when they say hello, and each one picks the other's
@@ -109,10 +115,11 @@ allow it, per paired server.
 
 ## Pairing
 
-1. **Mesh & phone → Pair a device** shows a QR code and a 20-character one-time code (100 bits), valid for five
+1. **Mesh & phone → Add a device → Show a code on this computer** shows a QR code and a 20-character one-time code (100 bits), valid for five
    minutes.
 2. A phone scans the QR code (it contains the computer's address, the code and the computer's key fingerprint);
-   another computer uses **Join a computer** and types the address and code.
+   another computer uses **Add a device → Enter a code from another computer** (or **Join** beside it under *FBRX
+   computers nearby*) and types the code.
 3. The joining device creates its own X25519 key pair and sends its public key with
    `HMAC-SHA512(code, "fbrx-pair-v1" | its key | the computer's key)`. The computer checks it, stores the device and
    answers with its own HMAC over both keys and the new device id, which the joining device checks before trusting
