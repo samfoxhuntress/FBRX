@@ -119,9 +119,17 @@ and sign-in is in the audit log.
 * **Changes.** Processors and memory change at the machine's next start (the page says so); the CD drive, the disk size
   and processor placement change right away.
 * **ISOs.** Upload installers, or have the server download them from a web address (faster).
-* **Networks.** `default` is a private network with internet through the server. Make more (private with internet, or
-  machines-only lab networks), or use a bridge for machines on your own network. For a server with a static address,
-  add a bridge in `/etc/network/interfaces` yourself:
+* **Networks.** Each network is a card showing the way out: machines → the network or switch → where it leads, and
+  which machines are plugged in. `default` is a private network with internet through the server: machines reach the
+  internet, nothing on your network reaches them. To put machines **on your network** (next to your other devices,
+  reachable from them, one more device for your router or gate):
+  * **with FBRX Gate on this server**, turn on *Virtual machines can join this network* for a gate network (your LAN,
+    a VLAN) and commit: it becomes a switch machines plug into ([GATE.md](GATE.md#virtual-machines-on-your-networks));
+  * **otherwise**, a bridge on the port cabled to your network: the installer's `--bridge eno1`, or by hand.
+  Any number of machines share a switch or bridge with the server itself. Giving a network card to one machine
+  (*Hardware map*, passthrough) is different: that machine alone uses the card, at full speed.
+  Pick the network when creating a machine, or move one under *its Settings → Network* (running machines move at
+  once; the MAC address stays). For a server with a static address, add a bridge in `/etc/network/interfaces` yourself:
 
   ```
   auto eno1

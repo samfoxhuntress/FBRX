@@ -149,3 +149,42 @@ describe('a gate set up by the installer', () => {
     }
   });
 });
+
+describe('virtual machines on the gate’s networks', () => {
+  it('starts the LAN as a switch on a hypervisor, lists it as a network, and moves a machine onto it', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'fbrx-gate-vms-'));
+    const env = {
+      FBRX_V_DATA_DIR: d,
+      FBRX_V_ROLES: 'virtual,gate',
+      FBRX_V_DRIVER: 'simulated',
+      FBRX_V_GATE: 'simulated',
+      FBRX_V_GATE_WAN: 'eno1',
+      FBRX_V_GATE_LAN: 'eno2',
+      FBRX_V_GATE_FIRST: 'commit',
+      FBRX_V_TLS: 'off',
+      FBRX_V_LOG_LEVEL: 'silent',
+      FBRX_V_SYS_ROOT: join(d, 'no-sysfs'),
+      FBRX_V_ADMIN_USER: 'sam',
+      FBRX_V_ADMIN_PASSWORD: 'correct horse battery',
+    };
+    const s2 = await buildServer(loadConfig(env), { gateApplier: new SimulatedApplier() });
+    try {
+      expect(s2.ctx.gate!.engine.running()!.networks[0]).toMatchObject({ name: 'lan', vmSwitch: true });
+      const token = (await s2.app.inject({ method: 'POST', url: '/v1/auth/login', payload: { username: 'sam', password: 'correct horse battery' } })).json().token as string;
+      const call = async (method: string, url: string, payload?: unknown) => {
+        const r = await s2.app.inject({ method: method as 'GET', url, headers: { authorization: `Bearer ${token}` }, payload: payload as never });
+        return { status: r.statusCode, body: r.json() };
+      };
+      const nets = (await call('GET', '/v1/networks')).body.networks;
+      expect(nets.find((n: any) => n.name === 'br-lan')).toMatchObject({ kind: 'bridge', bridge: 'br-lan', subnet: '192.168.1.0/24', ports: ['eno2'], gate: { network: 'lan', access: 'full', port: 'eno2' } });
+      const vm = (await call('GET', '/v1/vms')).body.vms[0];
+      const moved = await call('PATCH', `/v1/vms/${vm.id}`, { network: { kind: 'bridge', source: 'br-lan' } });
+      expect(moved.status).toBe(200);
+      expect(moved.body.nics[0]).toMatchObject({ kind: 'bridge', source: 'br-lan' });
+      expect((await call('PATCH', `/v1/vms/${vm.id}`, { network: { kind: 'network', source: 'nowhere' } })).status).toBe(404);
+    } finally {
+      await s2.close();
+      rmSync(d, { recursive: true, force: true });
+    }
+  });
+});

@@ -113,9 +113,10 @@ export class SimulatedHypervisor implements Hypervisor {
       description: v.description,
       cpuPct: running ? Math.round((4 + wobble(n) * 30) * 10) / 10 : this.live(v) ? 0 : null,
       memoryUsedMb: this.live(v) ? Math.round(v.memoryMb * (0.35 + wobble(n + 1) * 0.3)) : null,
-      ip: this.live(v) && v.network.kind === 'network' ? `192.168.122.${10 + (n % 200)}` : null,
+      ip: this.live(v) ? (v.network.kind === 'network' ? `192.168.122.${10 + (n % 200)}` : v.network.source === 'br-lan' ? `192.168.1.${100 + (n % 99)}` : null) : null,
       uptimeSeconds: this.live(v) && v.startedAt ? Math.round((Date.now() - v.startedAt) / 1000) : null,
       cpuset: v.cpuset,
+      networks: [v.network.source],
     };
   }
 
@@ -190,6 +191,10 @@ export class SimulatedHypervisor implements Hypervisor {
     if (c.description !== undefined) v.description = c.description;
     if (c.diskGb !== undefined) v.diskGb = c.diskGb;
     if (c.cpuset !== undefined) v.cpuset = c.cpuset;
+    if (c.network) {
+      if (c.network.kind === 'network' && !this.state.networks.some((n) => n.name === c.network!.source)) throw notFound(`No network ${c.network.source}`);
+      v.network = c.network;
+    }
     if (isoPath !== undefined) v.iso = isoPath;
     this.save();
     return this.detail(v);

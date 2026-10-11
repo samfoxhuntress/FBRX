@@ -92,6 +92,27 @@ set the same tag on your switch's ports. A VLAN on the internet port works but i
 be at least as large, and an untagged network on that port would get jumbo frames too, so the console only offers them
 by default where that cannot happen and says why otherwise.
 
+### Virtual machines on your networks
+
+On a server that is both the gate and a hypervisor (the **virtual** role), virtual machines can sit on any of the gate's
+networks like computers plugged into its port: turn on **Virtual machines can join this network** for it (your LAN,
+a server VLAN, an IoT VLAN…) and commit. The network becomes a **switch**, a Linux bridge called `br-<network>`
+(`br-lan`), holding the port or VLAN, the gate's address, its DHCP and its firewall zone. Any number of machines plug
+into it and share the port with the server, the way virtual switches on other hypervisors do.
+
+* Machines get addresses from the gate (reserve one like for any device), resolve names through it, and follow that
+  network's rules: *reaches*, *manages the gate*, firewall rules, Prefer Mesh.
+* They see the other devices on the network directly, so a controller for your access points or cameras finds them.
+* VLANs riding on a switched port keep working; a VLAN can be a switch of its own (`br-iot`).
+* A new gate on a hypervisor starts with its LAN as a switch; new networks offer it too.
+* In FBRX Virtual: pick the switch when creating a machine, or move one under *its Settings → Network* (it keeps its
+  MAC address, so a reservation follows it). *Networks* shows every switch, where it leads and who is plugged in.
+
+The switch keeps the port's MAC address, so devices on the network do not notice the change and machines joining it
+never alter the gate's address. Turning a switch on or off briefly drops the network while the address moves (the
+trial commit has you covered).
+From the command line: `sudo fbrx-gate set networks lan vmSwitch true`, then `sudo fbrx-gate commit confirmed 5`.
+
 ## Firewall
 
 The **basics** come from each network's *reaches* and *manages the gate*. **Rules** go between zones: a network's name,
@@ -169,7 +190,7 @@ It signs in with a token only root can read, accepted only from the gate itself.
 | `/var/lib/fbrx-virtual/gate.db` | The candidate, every commit with its configuration |
 | `/etc/fbrx-gate/gate.nft` | The firewall, loaded at boot by `fbrx-gate-firewall.service` |
 | `/etc/fbrx-gate/wg-fbrx.key` | The gate's VPN key |
-| `/etc/systemd/network/10-fbrx-*` | Ports, VLANs, addresses, the VPN interface |
+| `/etc/systemd/network/10-fbrx-*` | Ports, VLANs, switches (`br-*`), addresses, the VPN interface |
 | `/etc/dnsmasq.d/fbrx-gate.conf` | DHCP and DNS |
 | `/var/lib/fbrx-gate/` | Leases, the downloaded blocklist |
 | `/var/log/fbrx-gate/dnsmasq.log` | The question log |

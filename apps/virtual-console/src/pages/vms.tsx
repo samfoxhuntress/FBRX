@@ -3,7 +3,7 @@ import type { HostInfo, IsoImage, VirtualNetwork, VmCreateSpec, VmDetail, VmSumm
 import { Button, Callout, Card, ChoiceCards, Empty, Field, formatDuration, Grid, Input, Modal, Page, Select, Table, TextArea, Toggle, useAction, useToast } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, usePoll, useRoute } from '../state';
-import { gb, mb, osName, Pct, PowerButtons, VmStateBadge } from './common';
+import { gb, mb, networkOptions, osName, Pct, PowerButtons, VmStateBadge } from './common';
 
 export function VmsPage() {
   const app = useApp();
@@ -101,13 +101,7 @@ function NewVmModal({ onClose, onCreated }: { onClose: () => void; onCreated: (v
   const h = host.data;
   const threads = h?.cpu.threads ?? 8;
   const freeGb = h ? Math.max(1, Math.floor((h.memory.totalMb - h.memory.usedMb) / 1024)) : null;
-  const netOptions = useMemo(
-    () =>
-      (nets.data?.networks ?? [])
-        .filter((n) => n.active && n.kind !== 'other')
-        .map((n) => ({ value: `${n.managed ? 'network' : 'bridge'}:${n.name}`, label: n.managed ? `${n.name} (${n.kind === 'nat' ? 'private, internet through the server' : n.kind === 'isolated' ? 'machines only' : 'bridge'}${n.subnet ? `, ${n.subnet}` : ''})` : `${n.name} (straight onto the network${n.ports.length ? ` via ${n.ports.join(', ')}` : ''})` })),
-    [nets.data],
-  );
+  const netOptions = useMemo(() => networkOptions(nets.data?.networks ?? []), [nets.data]);
   const validName = /^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/.test(name);
   const create = () =>
     run('create', async () => {

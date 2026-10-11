@@ -55,7 +55,7 @@ jobs:
       - name: Install libvirt, QEMU and UEFI firmware
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends libvirt-daemon-system libvirt-clients qemu-system-x86 qemu-utils ovmf dnsmasq-base nftables iproute2 conntrack shellcheck >/dev/null
+          sudo apt-get install -y -qq --no-install-recommends libvirt-daemon-system libvirt-clients qemu-system-x86 qemu-utils ovmf dnsmasq-base nftables iproute2 conntrack busybox shellcheck >/dev/null
           sudo systemctl start libvirtd
           sudo virsh -c qemu:///system net-start default || true
       - run: npm ci --no-audit --no-fund

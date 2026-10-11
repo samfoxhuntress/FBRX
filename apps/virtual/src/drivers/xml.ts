@@ -196,6 +196,20 @@ export function hostdevXml(address: string): string {
  * Changes to a saved (inactive) definition: processors, memory, where it runs and its description. libvirt writes its
  * XML in one canonical form, so these edits are exact.
  */
+/** The first network card plugged into another network or bridge, keeping its MAC address, model and the rest. */
+export function setNicSource(xml: string, network: { kind: 'network' | 'bridge'; source: string }): string {
+  const m = /<interface\b[^>]*type=(['"])[^'"]*\1[^>]*>[\s\S]*?<\/interface>/.exec(xml);
+  if (!m) throw new Error('This virtual machine has no network card');
+  const attr = network.kind === 'bridge' ? 'bridge' : 'network';
+  const nic = m[0]
+    .replace(/(<interface\b[^>]*type=)(['"])[^'"]*\2/, `$1'${network.kind}'`)
+    .replace(/<source\b[^>]*\/>/, `<source ${attr}='${esc(network.source)}'/>`)
+    // Settings of the old kind of connection go with it.
+    .replace(/\s*<target\b[^>]*\/>/, '')
+    .replace(/\s*<alias\b[^>]*\/>/, '');
+  return xml.slice(0, m.index) + nic + xml.slice(m.index + m[0].length);
+}
+
 export function editDomainXml(xml: string, c: { cpus?: number; memoryMb?: number; description?: string; cpuset?: string | null }): string {
   let out = xml;
   if (c.cpus !== undefined || c.cpuset !== undefined) {

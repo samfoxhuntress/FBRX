@@ -4,7 +4,7 @@ import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addPath, deletePath, getPath, parseValue, setPath, type GateCommit, type GateConfig, type GateIssue, type GateLive, type GateState } from '@fbrx/gate';
+import { addPath, deletePath, getPath, netDevice, parseValue, setPath, type GateCommit, type GateConfig, type GateIssue, type GateLive, type GateState } from '@fbrx/gate';
 import { loadConfig } from './config';
 
 /**
@@ -127,7 +127,7 @@ async function main(argv: string[]): Promise<number> {
       if (s.changes.length) console.log(yellow(`${s.changes.length} change${s.changes.length === 1 ? '' : 's'} not committed (fbrx-gate compare)`));
       console.log(`Internet     ${live.wan.address ?? '—'}${live.wan.gateway ? ` via ${live.wan.gateway}` : ''}`);
       for (const i of live.interfaces) {
-        const net = run?.networks.find((n) => n.interface === i.name);
+        const net = run?.networks.find((n) => netDevice(n) === i.name);
         console.log(`${i.name.padEnd(12)} ${i.up ? green('up  ') : red('down')} mtu ${String(i.mtu).padEnd(5)} ${(net ? `${net.name} ${net.address}` : i.name === run?.wan.interface ? 'internet' : '').padEnd(26)} ↓ ${fmtBytes(i.rxBytes)}  ↑ ${fmtBytes(i.txBytes)}`);
       }
       console.log(`Leases       ${live.leases.length}   Connections ${live.conntrack ?? '—'}   DNS ${live.dns.running ? green('running') : red('stopped')}   Shaping ${live.qos.kind ?? 'off'}`);

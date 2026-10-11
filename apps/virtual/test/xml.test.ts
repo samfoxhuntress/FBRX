@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { VmCreateSpec } from '@fbrx/shared';
-import { buildDomainXml, editDomainXml, hostdevXml, parseDomainXml } from '../src/drivers/xml';
+import { buildDomainXml, editDomainXml, hostdevXml, parseDomainXml, setNicSource } from '../src/drivers/xml';
 
 const linux: VmCreateSpec = { name: 'web-01', os: 'linux', cpus: 2, memoryMb: 2048, diskGb: 20, network: { kind: 'network', source: 'default' }, firmware: 'bios', description: 'Web & <proxy>' };
 
@@ -77,6 +77,15 @@ describe('domain XML', () => {
     expect(again).toContain("<vcpu placement='static' cpuset='2-5'>2</vcpu>");
     expect(again).not.toContain('<description>');
     expect(editDomainXml(out, { cpuset: null })).toContain("<vcpu placement='static'>4</vcpu>");
+  });
+
+  it('plugs the network card into another network or switch, keeping its MAC address and model', () => {
+    const xml = `<domain type='kvm'><name>unifi</name><devices>\n    <interface type='network'><mac address='52:54:00:aa:bb:cc'/><source network='default' bridge='virbr0'/><target dev='vnet3'/><model type='virtio'/><alias name='net0'/></interface>\n  </devices></domain>`;
+    const out = setNicSource(xml, { kind: 'bridge', source: 'br-lan' });
+    expect(parseDomainXml(out).nics).toEqual([{ mac: '52:54:00:aa:bb:cc', kind: 'bridge', source: 'br-lan', model: 'virtio' }]);
+    expect(out).not.toContain('vnet3');
+    expect(parseDomainXml(setNicSource(out, { kind: 'network', source: 'default' })).nics[0]).toMatchObject({ kind: 'network', source: 'default', mac: '52:54:00:aa:bb:cc' });
+    expect(() => setNicSource('<domain><devices/></domain>', { kind: 'bridge', source: 'br-lan' })).toThrow(/no network card/);
   });
 
   it('makes hostdev XML only for real PCI addresses', () => {

@@ -70,8 +70,21 @@ export const NetworkSchema = z.object({
     reservations: z.array(ReservationSchema).max(512),
   }),
   description: TEXT.default(''),
+  /**
+   * Virtual machines on this server (FBRX Virtual) can join the network, like computers plugged into its port: the
+   * network becomes a bridge (br-<name>, a virtual switch) holding the port or VLAN, the gate's address and DHCP, and
+   * every machine attached to it.
+   */
+  vmSwitch: z.boolean().default(false),
 });
 export type GateNetwork = z.infer<typeof NetworkSchema>;
+
+/** The virtual switch (Linux bridge) a network becomes when virtual machines may join it. */
+export const bridgeName = (n: Pick<GateNetwork, 'name'>): string => `br-${n.name}`;
+/** Longest network name that still leaves room for "br-" in a 15-character interface name. */
+export const VM_SWITCH_NAME_MAX = 12;
+/** Where a network's address, DHCP and firewall zone live: its bridge when machines may join it, else its port or VLAN. */
+export const netDevice = (n: Pick<GateNetwork, 'name' | 'interface' | 'vmSwitch'>): string => (n.vmSwitch ? bridgeName(n) : n.interface);
 
 /** A zone: a network's name, "wan" (the internet), "vpn" (remote devices), "gate" (the gate itself) or "any". */
 export const ZONE = z.string().regex(/^[a-z][a-z0-9-]{0,14}$/);
@@ -175,7 +188,7 @@ export const GateConfigSchema = z.object({
 export type GateConfig = z.infer<typeof GateConfigSchema>;
 
 /** A first configuration: the internet on one port (DHCP), your network on another, nothing else open. */
-export function starterConfig(o: { hostname?: string; wan: string; lan: string; lanAddress?: string } = { wan: 'eth0', lan: 'eth1' }): GateConfig {
+export function starterConfig(o: { hostname?: string; wan: string; lan: string; lanAddress?: string; vmSwitch?: boolean } = { wan: 'eth0', lan: 'eth1' }): GateConfig {
   const lan = o.lanAddress ?? '192.168.1.1/24';
   const base = lan.split('/')[0].split('.').slice(0, 3).join('.');
   return {
@@ -196,6 +209,7 @@ export function starterConfig(o: { hostname?: string; wan: string; lan: string; 
         manage: true,
         dhcp: { enabled: true, start: `${base}.100`, end: `${base}.199`, leaseHours: 12, reservations: [] },
         description: 'Your network',
+        vmSwitch: o.vmSwitch ?? false,
       },
     ],
     firewall: { rules: [], forwards: [] },

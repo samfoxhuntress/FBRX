@@ -408,6 +408,12 @@ function DevicePanel({
                   Give
                 </Button>
               </div>
+              {d.kind === 'network' && (
+                <div className="fx-muted" style={{ fontSize: 12 }}>
+                  Giving a network card makes it that machine’s alone. To put several machines on the network this port is cabled to, while the server keeps using it,
+                  plug them into a switch instead (Networks).
+                </div>
+              )}
             </>
           )}
         </div>

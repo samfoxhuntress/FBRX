@@ -6,7 +6,7 @@ import { XMLParser } from 'fast-xml-parser';
 import type { HypervisorInfo, StoragePool, StorageVolume, VirtualNetwork, VmChanges, VmDetail, VmDisk, VmNic, VmPowerAction, VmSnapshot, VmCreateSpec, VmState, VmSummary } from '@fbrx/shared';
 import { badRequest, conflict, errorMessage, notFound, VirtualError } from '../errors';
 import { IMAGES_POOL, ISOS_POOL, type Hypervisor } from './types';
-import { buildDomainXml, editDomainXml, esc, hostdevXml, parseDomainXml, type ParsedDomain } from './xml';
+import { buildDomainXml, editDomainXml, esc, hostdevXml, parseDomainXml, setNicSource, type ParsedDomain } from './xml';
 import { firstColumn, nonEmptyLines, parseBlkinfo, parseDomstats, parseIfaddr, parseInfo, stateFromWords, stateName, virshRunner, type VirshRunner } from './virsh';
 
 export interface LibvirtOptions {
@@ -191,6 +191,7 @@ export class LibvirtHypervisor implements Hypervisor {
       ip: live ? (p.nics.map((n) => ips.get(n.mac.toLowerCase())).find(Boolean) ?? null) : null,
       uptimeSeconds: live ? this.uptime(p.name) : null,
       cpuset: p.cpuset,
+      networks: [...new Set(p.nics.map((n) => n.source))],
     };
   }
 
@@ -326,6 +327,16 @@ export class LibvirtHypervisor implements Hypervisor {
       if (live && c.cpuset !== undefined) await this.pinLive(uuid, p.cpus, c.cpuset);
     }
     if (c.autostart !== undefined) await this.run(['autostart', uuid, ...(c.autostart ? [] : ['--disable'])]);
+    if (c.network) {
+      const nets = await this.networks();
+      if (c.network.kind === 'network' ? !nets.some((n) => n.managed && n.name === c.network!.source) : !nets.some((n) => n.bridge === c.network!.source)) throw notFound(`There is no ${c.network.kind === 'bridge' ? 'switch' : 'network'} ${c.network.source}`);
+      await this.withXmlFile(setNicSource(await this.xmlOf(uuid, true), c.network), (f) => this.run(['define', f]));
+      if (live) {
+        // A running machine moves at once (its link drops for a moment); where QEMU cannot, it moves at its next start.
+        const nic = /<interface\b[\s\S]*?<\/interface>/.exec(setNicSource(await this.xmlOf(uuid, false), c.network))?.[0];
+        if (nic) await this.withXmlFile(nic, (f) => this.run(['update-device', uuid, f, '--live'])).catch(() => undefined);
+      }
+    }
     if (isoPath !== undefined) {
       const cd = p.disks.find((d) => d.device === 'cdrom');
       if (!cd) throw badRequest('This virtual machine has no CD drive');

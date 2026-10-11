@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
-import type { HostInfo, HwTopology, IsoImage, VmDetail, VmSnapshot } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, formatDate, formatDuration, Grid, Input, KeyValue, Page, Select, Table, Tabs, Toggle, useAction, useConfirm, useToast } from '@fbrx/ui';
+import type { HostInfo, HwTopology, IsoImage, VirtualNetwork, VmDetail, VmSnapshot } from '@fbrx/shared';
+import { Button, Callout, Card, Empty, Field, formatDate, formatDuration, Grid, InfoTip, Input, KeyValue, Page, Select, Table, Tabs, Toggle, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, usePoll, useRoute } from '../state';
-import { gb, mb, osName, Pct, PowerButtons, VmStateBadge } from './common';
+import { gb, mb, networkLabel, networkOptions, osName, Pct, PowerButtons, VmStateBadge } from './common';
 import { DescriptionEditor } from './vms';
 
 type Tab = 'summary' | 'console' | 'snapshots' | 'placement' | 'settings';
@@ -95,7 +95,7 @@ function Summary({ vm, reload }: { vm: VmDetail & { isoName: string | null }; re
           rowKey={(n) => n.mac}
           columns={[
             { key: 'm', header: 'MAC', render: (n) => <span className="mono">{n.mac}</span> },
-            { key: 's', header: 'Connected to', render: (n) => `${n.source} (${n.kind === 'bridge' ? 'bridge' : 'network'})` },
+            { key: 's', header: 'Plugged into', render: (n) => `${n.source} (${n.kind === 'bridge' ? 'switch' : 'network'})` },
             { key: 'mo', header: 'Card', render: (n) => n.model },
             { key: 'ip', header: 'Address', render: (n) => <span className="mono">{n.ip ?? '—'}</span> },
           ]}
@@ -378,6 +378,7 @@ function Settings({ vm, reload }: { vm: VmDetail & { isoName: string | null }; r
           )}
         </div>
       </Card>
+      <NetworkCard vm={vm} reload={reload} />
       <Card title="CD drive and start-up">
         <div className="fx-form">
           <Field label="In the CD drive">
@@ -414,5 +415,66 @@ function Settings({ vm, reload }: { vm: VmDetail & { isoName: string | null }; r
       )}
       {dialog}
     </Grid>
+  );
+}
+
+/** Which network or switch the machine is plugged into, and moving it (its MAC address, and so any reservation, stays). */
+function NetworkCard({ vm, reload }: { vm: VmDetail; reload: () => Promise<void> }) {
+  const app = useApp();
+  const { busy, run } = useAction();
+  const nets = usePoll<{ networks: VirtualNetwork[] }>('/v1/networks', 30000);
+  const nic = vm.nics[0];
+  const current = nic ? `${nic.kind}:${nic.source}` : '';
+  const [pick, setPick] = useState(current);
+  useEffect(() => setPick(current), [current]);
+  const list = nets.data?.networks ?? [];
+  const here = list.find((n) => (nic?.kind === 'bridge' ? n.bridge === nic.source : n.managed && n.name === nic?.source));
+  const op = app.can('operator');
+  return (
+    <Card
+      title={
+        <span className="fx-field-head">
+          Network
+          <InfoTip>
+            A switch on your network (FBRX Gate’s, or a bridge on a port) puts the machine next to your other devices: it gets an address there and they reach it directly, as
+            a controller for your access points needs. A private network keeps it behind the server: it reaches the internet, nothing reaches it.
+          </InfoTip>
+        </span>
+      }
+      subtitle={here ? networkLabel(here) : nic ? `${nic.source} (${nic.kind})` : 'No network card'}
+    >
+      {nic && (
+        <div className="fx-form">
+          <Field label="Plugged into" help={vm.state === 'running' ? 'A running machine moves right away (its connection drops for a moment; it may need to ask for a new address).' : 'It uses the new network when it starts.'}>
+            <Select value={pick} disabled={!op} onChange={(e) => setPick(e.target.value)} options={networkOptions(list, nic.source)} />
+          </Field>
+          {op && (
+            <div className="fx-actions">
+              <Button
+                variant="primary"
+                disabled={pick === current}
+                loading={busy === 'net'}
+                onClick={() =>
+                  void run(
+                    'net',
+                    async () => {
+                      const [kind, source] = pick.split(':') as ['network' | 'bridge', string];
+                      await api('PATCH', `/v1/vms/${vm.id}`, { network: { kind, source } });
+                      await reload();
+                    },
+                    'Plugged in',
+                  )
+                }
+              >
+                Move it
+              </Button>
+              <span className="fx-muted mono" style={{ fontSize: 12 }}>
+                MAC {nic.mac}
+              </span>
+            </div>
+          )}
+        </div>
+      )}
+    </Card>
   );
 }

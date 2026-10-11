@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { cidrsOverlap, hostRange, intToIPv4, ipv4ToInt, isCidr, JUMBO_MTU, networkOf, parseCidr } from '@fbrx/shared';
-import { NETWORK_PRESETS, PURPOSES, type GateConfig, type GateInterface, type GateNetwork, type NetworkPurpose } from '@fbrx/gate';
+import { bridgeName, NETWORK_PRESETS, PURPOSES, type GateConfig, type GateInterface, type GateNetwork, type NetworkPurpose } from '@fbrx/gate';
 import { Button, Card, ChoiceCards, Empty, Field, Grid, Input, KeyValue, Modal, Select, Status, Table, Toggle, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { draftIssues, inItem, useGate } from '../gate-state';
@@ -118,6 +118,7 @@ export function GateNetworksPage() {
                         <div>
                           <div className="mono">{n.interface}</div>
                           <div className="fx-cell-sub">{i?.kind === 'vlan' ? `VLAN ${i.vlanId} on ${i.parent}` : 'Untagged'}{i && i.mtu >= JUMBO_MTU ? ' · jumbo' : ''}</div>
+                          {n.vmSwitch && <div className="fx-cell-sub" title="Virtual machines can join this network">+ virtual machines (<span className="mono">{bridgeName(n)}</span>)</div>}
                         </div>
                       );
                     },
@@ -213,6 +214,7 @@ export function GateNetworksPage() {
 
 function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig; index: number | null; onClose: () => void; onDelete: (n: GateNetwork) => void }) {
   const g = useGate();
+  const app = useApp();
   const sys = useSystemInterfaces();
   const isNew = index === null;
   const ports = config.interfaces.filter((i) => i.kind === 'ethernet' && i.name !== config.wan.interface);
@@ -225,7 +227,7 @@ function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig
     const s = suggest(config, 'guest', firstParent);
     const p = NETWORK_PRESETS.guest;
     return {
-      net: { name: s.name, purpose: 'guest' as NetworkPurpose, interface: '', address: s.address, access: p.access, manage: p.manage, dhcp: { enabled: true, ...autoRange(s.address), leaseHours: 12, reservations: [] }, description: '' } satisfies GateNetwork,
+      net: { name: s.name, purpose: 'guest' as NetworkPurpose, interface: '', address: s.address, access: p.access, manage: p.manage, dhcp: { enabled: true, ...autoRange(s.address), leaseHours: 12, reservations: [] }, description: '', vmSwitch: app.has('virtual') } satisfies GateNetwork,
       vlanId: s.vlanId,
     };
   });
@@ -391,6 +393,19 @@ function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig
           ]}
         />
         <Toggle checked={net.manage} onChange={(manage) => set({ manage })} label="Devices here may manage the gate (this console and SSH)" />
+        <Toggle
+          checked={net.vmSwitch}
+          onChange={(vmSwitch) => set({ vmSwitch })}
+          label="Virtual machines can join this network"
+          info={
+            <>
+              Like a virtual switch: the port (or VLAN) and the gate’s address move onto a bridge, <span className="mono">{bridgeName({ name: net.name || 'name' })}</span>, and machines in FBRX
+              Virtual plug into it. They get addresses here and follow this network’s rules, exactly like computers plugged into the port, and see the other devices on it
+              (a controller VM can find your access points, say). Any number of machines can join; the server keeps using the port.
+            </>
+          }
+        />
+        {net.vmSwitch && !app.has('virtual') && <div className="fx-muted" style={{ fontSize: 12 }}>This server has no virtual machines (the virtual role); the switch is ready for when it does.</div>}
         <div className="gt-section">
           <Toggle checked={net.dhcp.enabled} onChange={(enabled) => setDhcp({ enabled })} label="Hand out addresses (DHCP)" />
           {net.dhcp.enabled && (

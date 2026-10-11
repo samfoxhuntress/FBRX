@@ -1,5 +1,5 @@
 import { cidrsOverlap, hostRange, inCidr, ipv4ToInt, isPrivateIP, JUMBO_MTU, networkOf, parseCidr } from '@fbrx/shared';
-import { GateConfigSchema, RESERVED_ZONES, type GateConfig } from './model';
+import { bridgeName, GateConfigSchema, RESERVED_ZONES, VM_SWITCH_NAME_MAX, type GateConfig } from './model';
 
 export interface GateIssue {
   /** Where: "networks.guest.dhcp.start", "firewall.rules.r3", … */
@@ -121,6 +121,8 @@ export function checkConfig(input: unknown): GateCheck {
           : `Prefer Mesh works at MTU ${i.mtu}; if your switch and computers take jumbo frames, set ${n.interface}${i.kind === 'vlan' ? ' (and its port)' : ''} to ${JUMBO_MTU}`,
       );
     }
+    if (n.vmSwitch && n.name.length > VM_SWITCH_NAME_MAX) err(`${p}.vmSwitch`, `Virtual machines can join a network whose name has ${VM_SWITCH_NAME_MAX} characters at most (its switch is called ${bridgeName({ name: n.name.slice(0, VM_SWITCH_NAME_MAX) })}…): shorten ${n.name}`);
+    if (n.vmSwitch && ifaces.has(bridgeName(n))) err(`${p}.vmSwitch`, `An interface is already called ${bridgeName(n)}, the name of ${n.name}’s switch`);
     if (n.purpose === 'guest' && n.access === 'full') warn(p, `${n.name} is for guests but can reach all your networks`);
     if (n.manage && n.access === 'internet' && n.purpose === 'guest') warn(p, `Guests on ${n.name} can reach the gate’s console`);
   }

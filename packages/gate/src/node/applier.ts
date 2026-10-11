@@ -3,8 +3,8 @@ import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSyn
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { inCidr, intToIPv4, ipv4ToInt } from '@fbrx/shared';
-import type { GateConfig } from '../model';
-import type { GateRendered } from '../render/index';
+import { bridgeName, type GateConfig } from '../model';
+import { linkNames, type GateRendered } from '../render/index';
 import { NFT_TABLE, WG_IFACE } from '../render/nftables';
 import type { GatePaths } from '../render/paths';
 import { IFB } from '../render/qos';
@@ -111,7 +111,8 @@ export class SimulatedApplier implements GateApplier {
     const t = Date.now() / 1000;
     // A day's worth of traffic that keeps growing at a few hundred kB/s, with some wobble.
     const wave = (k: number) => Math.round((t % 86400) * (1.5e5 + 6e4 * k) + Math.sin(t / 20 + k) * 2e6 + 5e7);
-    live.interfaces = c.interfaces.map((i, k) => ({ name: i.name, up: true, mtu: i.mtu, mac: `02:fb:00:00:00:${(k + 1).toString(16).padStart(2, '0')}`, addresses: c.networks.filter((n) => n.interface === i.name).map((n) => n.address).concat(i.name === c.wan.interface ? [c.wan.address ?? '203.0.113.20/24'] : []), rxBytes: wave(k), txBytes: wave(k + 3), rxPackets: Math.round(wave(k) / 900), txPackets: Math.round(wave(k + 3) / 900) }));
+    live.interfaces = c.interfaces.map((i, k) => ({ name: i.name, up: true, mtu: i.mtu, mac: `02:fb:00:00:00:${(k + 1).toString(16).padStart(2, '0')}`, addresses: c.networks.filter((n) => n.interface === i.name && !n.vmSwitch).map((n) => n.address).concat(i.name === c.wan.interface ? [c.wan.address ?? '203.0.113.20/24'] : []), rxBytes: wave(k), txBytes: wave(k + 3), rxPackets: Math.round(wave(k) / 900), txPackets: Math.round(wave(k + 3) / 900) }));
+    c.networks.filter((n) => n.vmSwitch).forEach((n, k) => live.interfaces.push({ name: bridgeName(n), up: true, mtu: c.interfaces.find((i) => i.name === n.interface)?.mtu ?? 1500, mac: `02:fb:00:00:01:${(k + 1).toString(16).padStart(2, '0')}`, addresses: [n.address], rxBytes: wave(k + 5), txBytes: wave(k + 7), rxPackets: Math.round(wave(k + 5) / 900), txPackets: Math.round(wave(k + 7) / 900) }));
     live.wan = { address: c.wan.address?.split('/')[0] ?? '203.0.113.20', gateway: c.wan.gateway ?? '203.0.113.1' };
     // Reserved devices, and a few that came and asked (in each network handing out addresses).
     const visitors = ['laptop', 'phone', 'printer', 'tv'];
@@ -256,19 +257,28 @@ export class LinuxApplier implements GateApplier {
       for (const f of r.networkd) this.write(join(this.networkdDir, f.name), f.content, f.mode);
       // systemd-networkd reads the VPN key file as its own user.
       if (c.vpn.enabled) await this.run('chgrp', ['systemd-network', join(this.o.paths.etcDir, 'wg-fbrx.key')]);
+      // A virtual switch taken away is deleted here (systemd-networkd leaves links it no longer has files for), which
+      // frees its port; a port joining a switch gives its address up to it.
+      const bridges = (rr: GateRendered | null) => new Set((rr?.networkd ?? []).map((f) => /^10-fbrx-(br-[a-z0-9-]+)\.netdev$/.exec(f.name)?.[1]).filter((b): b is string => !!b));
+      const nowBridges = bridges(r);
+      for (const b of bridges(previous)) if (!nowBridges.has(b)) await this.run('ip', ['link', 'del', 'dev', b]);
+      for (const n of c.networks) if (n.vmSwitch) await this.run('ip', ['-4', 'addr', 'flush', 'dev', n.interface, 'scope', 'global']);
       await this.must('networkctl', ['reload'], 'systemd-networkd');
       const names = [...new Set(r.networkd.map((f) => f.name.replace(/^10-fbrx-/, '').replace(/\.(network|netdev)$/, '')))];
       for (const n of names) await this.run('networkctl', ['reconfigure', n]);
     } else {
-      const vlans = (rr: GateRendered | null) => new Set((rr?.ip ?? []).filter((a) => a[0] === 'link' && a[1] === 'add').map((a) => a[4]));
-      const now = vlans(r);
-      for (const v of vlans(previous)) if (!now.has(v)) await this.run('ip', ['link', 'del', 'dev', v]);
+      const now = linkNames(r.ip);
+      for (const v of linkNames(previous?.ip ?? [])) if (!now.has(v)) await this.run('ip', ['link', 'del', 'dev', v]);
       for (const cmd of r.ip) {
         const res = await this.run('ip', cmd);
         if (res.code !== 0 && !/File exists/.test(res.err)) throw new Error(`ip ${cmd.join(' ')}: ${res.err.trim()}`);
       }
       if (c.vpn.enabled) notes.push(...(await this.wireguardIproute(c)));
     }
+
+    // A switch keeps its port's MAC address, so the gate's address on the network stays where devices expect it when
+    // the switch comes or goes, and machines joining it never change it.
+    for (const n of c.networks.filter((x) => x.vmSwitch)) await this.pinSwitchMac(bridgeName(n), n.interface);
 
     // The firewall, loaded from a file the boot service loads again at the next start.
     const nft = join(this.o.paths.etcDir, 'gate.nft');
@@ -284,6 +294,20 @@ export class LinuxApplier implements GateApplier {
     notes.push(...(await this.qos(r, previous)));
     this.write(join(this.o.paths.etcDir, 'qos.json'), JSON.stringify(r.qos, null, 2));
     return notes;
+  }
+
+  private async pinSwitchMac(bridge: string, port: string): Promise<void> {
+    const mac = async (dev: string) => {
+      const r = await this.run('ip', ['-j', 'link', 'show', 'dev', dev]);
+      try {
+        return r.code === 0 ? ((JSON.parse(r.out) as Array<{ address?: string }>)[0]?.address ?? null) : null;
+      } catch {
+        return null;
+      }
+    };
+    // Set even when it already matches: a bridge whose address was set keeps it as ports come and go.
+    const want = await mac(port);
+    if (want) await this.run('ip', ['link', 'set', 'dev', bridge, 'address', want]);
   }
 
   private async wireguardIproute(c: GateConfig): Promise<string[]> {
@@ -375,7 +399,7 @@ export class LinuxApplier implements GateApplier {
     type Addr = { ifname: string; addr_info?: Array<{ family: string; local: string; prefixlen: number; scope?: string }> };
     const links = (await json<Link[]>('ip', ['-j', '-s', 'link', 'show'])) ?? [];
     const addrs = (await json<Addr[]>('ip', ['-j', 'addr', 'show'])) ?? [];
-    const wanted = new Set(c ? [...c.interfaces.map((i) => i.name), ...(c.vpn.enabled ? [WG_IFACE] : [])] : []);
+    const wanted = new Set(c ? [...c.interfaces.map((i) => i.name), ...c.networks.filter((n) => n.vmSwitch).map(bridgeName), ...(c.vpn.enabled ? [WG_IFACE] : [])] : []);
     live.interfaces = links
       .filter((l) => wanted.has(l.ifname))
       .map((l): GateInterfaceLive => ({

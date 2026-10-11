@@ -17,7 +17,9 @@ import { ConntrackSensor, DnsLogSensor, DomeEngine, DomeStore } from '../../dome
 const can = process.platform === 'linux' && process.getuid?.() === 0 && ['nft', 'dnsmasq', 'ip', 'tc'].every((c) => spawnSync(c, ['-V']).error === undefined || spawnSync(c, ['--version']).error === undefined);
 
 const id = process.pid % 100000;
-const NS = { gw: `fgw${id}`, wan: `fwan${id}`, lan: `flan${id}`, guest: `fgst${id}`, mesh: `fmsh${id}` };
+const NS = { gw: `fgw${id}`, wan: `fwan${id}`, lan: `flan${id}`, guest: `fgst${id}`, mesh: `fmsh${id}`, vm: `fvm${id}` };
+// A DHCP client for the virtual machine (busybox's udhcpc), where the system has one.
+const udhcpc = spawnSync('busybox', ['udhcpc', '--help']).error === undefined;
 const sh = (...a: string[]) => execFileSync('ip', a, { encoding: 'utf8' });
 const inNs = (ns: string, cmd: string, ...a: string[]) => execFileSync('ip', ['netns', 'exec', ns, cmd, ...a], { encoding: 'utf8', timeout: 20_000 });
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -124,9 +126,9 @@ describe.runIf(can)('FBRX Gate on a real (namespaced) network', () => {
           ],
       wan: { interface: 'gwwan', mode: 'static', address: '203.0.113.2/24', gateway: '203.0.113.1', ping: false },
       networks: [
-        { name: 'lan', purpose: 'lan', interface: LAN.lan, address: '192.168.50.1/24', access: 'full', manage: true, dhcp: { enabled: true, start: '192.168.50.100', end: '192.168.50.150', leaseHours: 12, reservations: [] }, description: '' },
-        { name: 'guest', purpose: 'guest', interface: LAN.guest, address: '192.168.60.1/24', access: 'internet', manage: false, dhcp: { enabled: true, start: '192.168.60.100', end: '192.168.60.150', leaseHours: 2, reservations: [] }, description: '' },
-        { name: 'mesh', purpose: 'mesh', interface: LAN.mesh, address: '10.30.0.1/24', access: 'full', manage: true, dhcp: { enabled: false, start: '10.30.0.100', end: '10.30.0.150', leaseHours: 12, reservations: [] }, description: '' },
+        { name: 'lan', purpose: 'lan', interface: LAN.lan, address: '192.168.50.1/24', access: 'full', manage: true, dhcp: { enabled: true, start: '192.168.50.100', end: '192.168.50.150', leaseHours: 12, reservations: [] }, description: '', vmSwitch: false },
+        { name: 'guest', purpose: 'guest', interface: LAN.guest, address: '192.168.60.1/24', access: 'internet', manage: false, dhcp: { enabled: true, start: '192.168.60.100', end: '192.168.60.150', leaseHours: 2, reservations: [] }, description: '', vmSwitch: false },
+        { name: 'mesh', purpose: 'mesh', interface: LAN.mesh, address: '10.30.0.1/24', access: 'full', manage: true, dhcp: { enabled: false, start: '10.30.0.100', end: '10.30.0.150', leaseHours: 12, reservations: [] }, description: '', vmSwitch: false },
       ],
       firewall: { rules: [], forwards: [{ id: 'web', name: 'Web server', enabled: true, proto: 'tcp', port: '8443', to: '192.168.50.10', toPort: 8081 }] },
       dns: { upstream: ['203.0.113.1'], domain: 'lan', records: [{ name: 'nas', address: '192.168.50.20' }], block: { enabled: true, lists: [], domains: ['ads.example'] }, logQueries: true },
@@ -267,4 +269,48 @@ describe.runIf(can)('FBRX Gate on a real (namespaced) network', () => {
     expect(engine.history()[0].status).toBe('rolled-back');
     expect(connect(NS.lan, '203.0.113.1', 8080)).toBe('OK 203.0.113.2');
   }, 20_000);
+
+  it('lets virtual machines join a network through its switch, as if plugged into its port', async () => {
+    const c = structuredClone(engine.candidate());
+    // (The rule the trial above rolled back is still among the edits.)
+    c.firewall.rules = c.firewall.rules.filter((r) => r.id !== 'cut');
+    c.networks.find((n) => n.name === 'lan')!.vmSwitch = true;
+    engine.setCandidate(c, 'test');
+    expect((await engine.commit({ by: 'test', comment: 'Virtual machines may join the LAN' })).status).toBe('confirmed');
+    expect(sh('-n', NS.gw, '-br', 'addr', 'show', 'br-lan')).toContain('192.168.50.1/24');
+    expect(sh('-n', NS.gw, 'link', 'show', LAN.lan)).toContain('master br-lan');
+
+    // A virtual machine, plugged into the switch the way the hypervisor does it (its own port on br-lan).
+    sh('-n', NS.gw, 'link', 'add', 'vnet7', 'type', 'veth', 'peer', 'name', 'eth0', 'netns', NS.vm);
+    sh('-n', NS.gw, 'link', 'set', 'vnet7', 'master', 'br-lan', 'up');
+    // The gate keeps its port's MAC address on the network, whatever the machines plugged in have.
+    const macOf = (dev: string) => /link\/ether ([0-9a-f:]{17})/.exec(sh('-n', NS.gw, 'link', 'show', dev))?.[1];
+    expect(macOf('br-lan')).toBe(macOf(LAN.lan));
+    sh('-n', NS.vm, 'link', 'set', 'lo', 'up');
+    sh('-n', NS.vm, 'link', 'set', 'eth0', 'up');
+    if (udhcpc) {
+      // The gate hands it an address, like any computer on the network.
+      const r = spawnSync('ip', ['netns', 'exec', NS.vm, 'busybox', 'udhcpc', '-i', 'eth0', '-n', '-q', '-t', '10', '-T', '2', '-s', '/bin/true'], { encoding: 'utf8', timeout: 30_000 });
+      expect(`${r.stdout}${r.stderr}`).toMatch(/lease of 192\.168\.50\.1[0-5]\d obtained/);
+    }
+    sh('-n', NS.vm, 'addr', 'add', '192.168.50.77/24', 'dev', 'eth0');
+    sh('-n', NS.vm, 'route', 'add', 'default', 'via', '192.168.50.1');
+    // (Generous waits: the first packets wait for the new port to learn addresses, and CI machines can be busy.)
+    expect(connect(NS.vm, '203.0.113.1', 8080, 5000)).toBe('OK 203.0.113.2');
+    expect(connect(NS.vm, '192.168.50.10', 8081, 5000)).toBe('OK 192.168.50.77');
+    expect(dnsq(NS.vm, '192.168.50.1', 'nas.lan')).toBe('OK 192.168.50.20');
+    // The computers on the port, and the VLANs riding on it, carry on as before.
+    expect(connect(NS.lan, '203.0.113.1', 8080, 5000)).toBe('OK 203.0.113.2');
+    expect(connect(NS.guest, '203.0.113.1', 8080, 5000)).toBe('OK 203.0.113.2');
+    expect(connect(NS.guest, '192.168.50.77', 8081, 1000)).toBe('TIMEOUT');
+
+    // Off again: the switch goes, and the port holds the network on its own.
+    const back = structuredClone(engine.candidate());
+    back.networks.find((n) => n.name === 'lan')!.vmSwitch = false;
+    engine.setCandidate(back, 'test');
+    expect((await engine.commit({ by: 'test' })).status).toBe('confirmed');
+    expect(spawnSync('ip', ['-n', NS.gw, 'link', 'show', 'br-lan']).status).not.toBe(0);
+    expect(sh('-n', NS.gw, '-br', 'addr', 'show', LAN.lan)).toContain('192.168.50.1/24');
+    expect(connect(NS.lan, '203.0.113.1', 8080, 5000)).toBe('OK 203.0.113.2');
+  }, 90_000);
 });

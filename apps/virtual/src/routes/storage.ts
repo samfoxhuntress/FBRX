@@ -1,5 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { networkOf } from '@fbrx/shared';
+import { bridgeName } from '@fbrx/gate';
 import { audited, need, type VirtualContext } from '../context';
 import { conflict } from '../errors';
 import { ISOS_POOL } from '../drivers/types';
@@ -77,7 +79,18 @@ export async function storageRoutes(app: FastifyInstance, ctx: VirtualContext) {
 
   app.get('/v1/networks', async (req) => {
     need(req, 'viewer');
-    return { networks: await ctx.hv.networks() };
+    const networks = await ctx.hv.networks();
+    // The gate's switches: a machine plugged into one is on that gate network, like a device on its port.
+    const gate = ctx.gate?.engine.running();
+    for (const n of gate?.networks.filter((x) => x.vmSwitch) ?? []) {
+      const br = bridgeName(n);
+      const info = { network: n.name, purpose: n.purpose, address: n.address, access: n.access, port: n.interface };
+      const hit = networks.find((x) => x.bridge === br || x.name === br);
+      if (hit) Object.assign(hit, { gate: info, subnet: hit.subnet ?? networkOf(n.address) });
+      // A committed switch the hypervisor does not see: simulated here, or the gate could not make it (fbrx-gate status says why).
+      else networks.push({ name: br, kind: 'bridge', active: ctx.config.driver === 'simulated', autostart: true, bridge: br, subnet: networkOf(n.address), ports: [n.interface], managed: false, gate: info });
+    }
+    return { networks };
   });
 
   app.post('/v1/networks', async (req) => {

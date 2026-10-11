@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { checkConfig, diffConfig, peerConfig, render, renderDnsmasq, renderNetworkd, renderNftables, renderQos, starterConfig, type GateConfig } from '../src/index';
+import { checkConfig, diffConfig, linkNames, peerConfig, render, renderDnsmasq, renderIpPlan, renderNetworkd, renderNftables, renderQos, starterConfig, type GateConfig } from '../src/index';
 import { wgKeyPair, wgPublicKey } from '../src/node/keys';
 
 const paths = { varDir: '/var/lib/fbrx-gate', logDir: '/var/log/fbrx-gate', etcDir: '/etc/fbrx-gate' };
@@ -10,8 +10,8 @@ function office(): GateConfig {
   c.interfaces[1].mtu = 9000;
   c.interfaces.push({ name: 'eno2.20', kind: 'vlan', parent: 'eno2', vlanId: 20, mtu: 1500, description: 'Guests' }, { name: 'eno2.30', kind: 'vlan', parent: 'eno2', vlanId: 30, mtu: 9000, description: 'Mesh' });
   c.networks.push(
-    { name: 'guest', purpose: 'guest', interface: 'eno2.20', address: '192.168.20.1/24', access: 'internet', manage: false, dhcp: { enabled: true, start: '192.168.20.50', end: '192.168.20.250', leaseHours: 4, reservations: [] }, description: '' },
-    { name: 'mesh', purpose: 'mesh', interface: 'eno2.30', address: '10.30.0.1/24', access: 'full', manage: true, dhcp: { enabled: true, start: '10.30.0.100', end: '10.30.0.200', leaseHours: 24, reservations: [{ mac: 'AA:BB:CC:00:00:01', address: '10.30.0.10', name: 'fbrx-server-1' }] }, description: '' },
+    { name: 'guest', purpose: 'guest', interface: 'eno2.20', address: '192.168.20.1/24', access: 'internet', manage: false, dhcp: { enabled: true, start: '192.168.20.50', end: '192.168.20.250', leaseHours: 4, reservations: [] }, description: '', vmSwitch: false },
+    { name: 'mesh', purpose: 'mesh', interface: 'eno2.30', address: '10.30.0.1/24', access: 'full', manage: true, dhcp: { enabled: true, start: '10.30.0.100', end: '10.30.0.200', leaseHours: 24, reservations: [{ mac: 'AA:BB:CC:00:00:01', address: '10.30.0.10', name: 'fbrx-server-1' }] }, description: '', vmSwitch: false },
   );
   c.firewall.rules.push({ id: 'smtp', name: 'No mail servers from guests', enabled: true, from: 'guest', to: 'wan', proto: 'tcp', ports: '25,465,587', action: 'reject', log: true });
   c.firewall.forwards.push({ id: 'nas', name: 'NAS photos', enabled: true, proto: 'tcp', port: '8443', to: '192.168.1.20', toPort: 443 });
@@ -133,5 +133,57 @@ describe('what a configuration turns into', () => {
     b.dns.upstream = ['9.9.9.9'];
     const d = diffConfig(a, b).map((x) => `${x.kind} ${x.path}`);
     expect(d).toEqual(expect.arrayContaining(['changed networks.guest.access', 'removed firewall.rules.smtp', 'changed dns.upstream']));
+  });
+});
+
+describe('networks virtual machines can join', () => {
+  const switched = () => {
+    const c = office();
+    c.networks[0].vmSwitch = true;
+    c.networks[1].vmSwitch = true;
+    return c;
+  };
+
+  it('puts the port (or VLAN) on a bridge that holds the address, and keeps the VLANs riding on the port', () => {
+    const files = Object.fromEntries(renderNetworkd(switched(), paths).map((f) => [f.name, f.content]));
+    expect(files['10-fbrx-eno2.network']).toContain('Bridge=br-lan');
+    expect(files['10-fbrx-eno2.network']).toContain('VLAN=eno2.20');
+    expect(files['10-fbrx-eno2.network']).not.toContain('Address=');
+    expect(files['10-fbrx-br-lan.netdev']).toMatch(/Kind=bridge[\s\S]*MTUBytes=9000[\s\S]*STP=no/);
+    expect(files['10-fbrx-br-lan.network']).toContain('Address=192.168.1.1/24');
+    expect(files['10-fbrx-eno2.20.network']).toContain('Bridge=br-guest');
+    expect(files['10-fbrx-br-guest.network']).toContain('Address=192.168.20.1/24');
+    // The mesh VLAN is not switched: its address stays on the VLAN.
+    expect(files['10-fbrx-eno2.30.network']).toContain('Address=10.30.0.1/24');
+  });
+
+  it('serves addresses and names on the bridge, and lets its machines talk to each other', () => {
+    const c = switched();
+    const dns = renderDnsmasq(c, paths);
+    expect(dns).toContain('interface=br-lan');
+    expect(dns).not.toContain('interface=eno2\n');
+    const nft = renderNftables(c);
+    expect(nft).toContain('iifname "br-lan" oifname "eno1" accept comment "internet:lan"');
+    expect(nft).toContain('iifname "br-lan" oifname "br-lan" accept comment "within:lan"');
+    expect(nft).toMatch(/iifname "br-lan" udp dport 67 accept/);
+  });
+
+  it('builds the same with ip commands, and knows which links to remove when a switch goes', () => {
+    const on = renderIpPlan(switched());
+    expect(on).toContainEqual(['link', 'add', 'name', 'br-lan', 'type', 'bridge', 'stp_state', '0', 'forward_delay', '0']);
+    expect(on).toContainEqual(['link', 'set', 'dev', 'eno2', 'master', 'br-lan']);
+    expect(on).toContainEqual(['addr', 'add', '192.168.1.1/24', 'dev', 'br-lan']);
+    expect([...linkNames(on)].sort()).toEqual(['br-guest', 'br-lan', 'eno2.20', 'eno2.30']);
+    const off = renderIpPlan(office());
+    expect(off).toContainEqual(['link', 'set', 'dev', 'eno2', 'nomaster']);
+    expect([...linkNames(off)].sort()).toEqual(['eno2.20', 'eno2.30']);
+  });
+
+  it('needs a short enough name for the switch', () => {
+    const c = switched();
+    c.networks[1].name = 'visitors-floor2';
+    c.firewall.rules = [];
+    expect(checkConfig(c).errors).toEqual(expect.arrayContaining([expect.objectContaining({ path: 'networks.visitors-floor2.vmSwitch' })]));
+    expect(checkConfig(switched()).ok).toBe(true);
   });
 });

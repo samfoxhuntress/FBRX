@@ -1,6 +1,6 @@
 import type { GateConfig } from '../model';
 import { renderDnsmasq } from './dnsmasq';
-import { renderIpPlan, renderNetworkd, renderSysctl, type NetworkdFile } from './networkd';
+import { linkNames, renderIpPlan, renderNetworkd, renderSysctl, type NetworkdFile } from './networkd';
 import { renderNftables } from './nftables';
 import type { GatePaths } from './paths';
 import { renderQos, type QosPlan } from './qos';
@@ -29,5 +29,5 @@ export function render(c: GateConfig, paths: GatePaths): GateRendered {
   };
 }
 
-export { renderDnsmasq, renderNetworkd, renderIpPlan, renderNftables, renderQos, renderSysctl };
+export { linkNames, renderDnsmasq, renderNetworkd, renderIpPlan, renderNftables, renderQos, renderSysctl };
 export type { NetworkdFile, QosPlan };

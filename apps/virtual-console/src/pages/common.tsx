@@ -1,4 +1,4 @@
-import type { VmPowerAction, VmState, VmSummary } from '@fbrx/shared';
+import type { VirtualNetwork, VmPowerAction, VmState, VmSummary } from '@fbrx/shared';
 import { Button, Status, useAction, useToast, type StatusTone } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp } from '../state';
@@ -65,4 +65,20 @@ export function Pct({ value }: { value: number | null }) {
       <span>{value.toFixed(value < 10 ? 1 : 0)}%</span>
     </span>
   );
+}
+
+/** What a network is, in words: a switch on your network (FBRX Gate's or a bridge), private behind the server, or closed. */
+export function networkLabel(n: VirtualNetwork): string {
+  if (n.gate) return `${n.gate.network} on FBRX Gate (${n.subnet ?? n.gate.address}, via ${n.gate.port})`;
+  if (!n.managed) return `${n.name}: straight onto your network${n.ports.length ? ` via ${n.ports.join(', ')}` : ''}`;
+  return `${n.name}: ${n.kind === 'nat' ? 'private, internet through the server' : n.kind === 'isolated' ? 'machines only' : 'other'}${n.subnet ? ` (${n.subnet})` : ''}`;
+}
+
+/** The choices for plugging a machine in: gate switches first, then bridges, then the server's private networks. */
+export function networkOptions(nets: VirtualNetwork[], keep?: string): Array<{ value: string; label: string; disabled?: boolean }> {
+  const rank = (n: VirtualNetwork) => (n.gate ? 0 : !n.managed ? 1 : 2);
+  return nets
+    .filter((n) => n.kind !== 'other' && (n.active || !!n.gate || n.name === keep))
+    .sort((a, b) => rank(a) - rank(b) || a.name.localeCompare(b.name))
+    .map((n) => ({ value: `${n.managed ? 'network' : 'bridge'}:${n.managed ? n.name : (n.bridge ?? n.name)}`, label: `${networkLabel(n)}${n.active ? '' : ' (not up yet)'}` }));
 }

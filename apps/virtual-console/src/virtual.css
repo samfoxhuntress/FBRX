@@ -169,3 +169,97 @@
 .dm-evidence { margin: 0; max-height: 180px; }
 .dm-meta { font-size: 12px; }
 @media (max-width: 640px) { .dm-head { flex-wrap: wrap; } .dm-when { order: 3; } }
+
+/* ---------------------------------------------------------------- networks: how machines connect */
+.vn-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(420px, 1fr));
+  gap: 16px;
+}
+@media (max-width: 720px) {
+  .vn-grid {
+    grid-template-columns: 1fr;
+  }
+}
+.vn-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.vn-card.gate .vn-title svg:first-child,
+.vn-card.bridge .vn-title svg:first-child {
+  color: var(--accent);
+}
+.vn-flow {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  margin: 4px 0 12px;
+}
+.vn-node {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.vn-node b {
+  font-size: 13px;
+  color: var(--text-primary);
+  overflow-wrap: anywhere;
+}
+.vn-node svg {
+  color: var(--text-muted);
+}
+.vn-node.mid {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+.vn-link {
+  flex: 0 0 22px;
+  align-self: center;
+  height: 2px;
+  background: var(--accent);
+  position: relative;
+}
+.vn-link::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: -4px;
+  border: 5px solid transparent;
+  border-left-color: var(--accent);
+  border-right: 0;
+}
+.vn-link.cut {
+  background: repeating-linear-gradient(90deg, var(--text-muted) 0 4px, transparent 4px 8px);
+}
+.vn-link.cut::after {
+  display: none;
+}
+.vn-vms {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.vn-vm {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.vn-vm:hover {
+  border-color: var(--accent);
+}

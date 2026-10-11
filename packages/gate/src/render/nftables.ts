@@ -1,4 +1,4 @@
-import type { GateConfig, GateRule } from '../model';
+import { netDevice, type GateConfig, type GateRule } from '../model';
 import { portRanges } from '../validate';
 
 export const WG_IFACE = 'wg-fbrx';
@@ -11,14 +11,14 @@ const ports = (p: string) => set(portRanges(p).map(([a, b]) => (a === b ? String
 /** The interfaces of each zone. */
 export function zoneInterfaces(c: GateConfig): Map<string, string> {
   const m = new Map<string, string>([['wan', c.wan.interface]]);
-  for (const n of c.networks) m.set(n.name, n.interface);
+  for (const n of c.networks) m.set(n.name, netDevice(n));
   if (c.vpn.enabled) m.set('vpn', WG_IFACE);
   return m;
 }
 
 /** Every interface the gate governs (traffic on the others, a hypervisor's own networks say, is left alone). */
 export function gateInterfaces(c: GateConfig): string[] {
-  const out = [...new Set([...c.interfaces.map((i) => i.name), c.wan.interface, ...c.networks.map((n) => n.interface)])];
+  const out = [...new Set([...c.interfaces.map((i) => i.name), c.wan.interface, ...c.networks.map(netDevice)])];
   if (c.vpn.enabled) out.push(WG_IFACE);
   return out;
 }
@@ -73,7 +73,7 @@ export function renderNftables(c: GateConfig): string {
   for (const r of c.firewall.rules) if (r.enabled && r.to === 'gate') add(`    ${ruleLine(r, zones, 'input')}`);
   const mgmt = [...(c.management.ssh ? [22] : []), c.management.consolePort];
   for (const n of c.networks) {
-    const i = q(n.interface);
+    const i = q(netDevice(n));
     if (n.dhcp.enabled) add(`    iifname ${i} udp dport 67 accept comment "dhcp:${n.name}"`);
     add(`    iifname ${i} meta l4proto { tcp, udp } th dport 53 accept comment "dns:${n.name}"`);
     add(`    iifname ${i} icmp type echo-request accept`);
@@ -102,12 +102,14 @@ export function renderNftables(c: GateConfig): string {
   add(`    iifname != @gate_ifaces oifname ${wan} accept comment "other:internet"`);
   for (const r of c.firewall.rules) if (r.enabled && r.to !== 'gate') add(`    ${ruleLine(r, zones, 'forward')}`);
   if (c.firewall.forwards.some((f) => f.enabled)) add(`    iifname ${wan} ct status dnat counter accept comment "forwards"`);
-  const lans = c.networks.map((n) => n.interface);
+  const lans = c.networks.map(netDevice);
   for (const n of c.networks) {
-    const i = q(n.interface);
+    const i = q(netDevice(n));
+    // Machines on a virtual switch talk to the network's other devices freely, even where bridged traffic is filtered.
+    if (n.vmSwitch) add(`    iifname ${i} oifname ${i} accept comment "within:${n.name}"`);
     if (n.access !== 'isolated') add(`    iifname ${i} oifname ${wan} accept comment "internet:${n.name}"`);
     if (n.access === 'full') {
-      const others = [...lans.filter((x) => x !== n.interface), ...(c.vpn.enabled ? [WG_IFACE] : [])];
+      const others = [...lans.filter((x) => x !== netDevice(n)), ...(c.vpn.enabled ? [WG_IFACE] : [])];
       if (others.length) add(`    iifname ${i} oifname ${set(others.map(q))} accept comment "networks:${n.name}"`);
     }
   }
@@ -137,7 +139,7 @@ export function renderNftables(c: GateConfig): string {
   // -------------------------------------------------------------------------------------- Prefer Mesh
   const pm = c.qos.preferMesh;
   if (pm.enabled) {
-    const meshIfaces = c.networks.filter((n) => pm.networks.includes(n.name)).map((n) => q(n.interface));
+    const meshIfaces = c.networks.filter((n) => pm.networks.includes(n.name)).map((n) => q(netDevice(n)));
     add(`  # Prefer Mesh: traffic between FBRX computers, and everything from the mesh networks, goes first.`);
     add(`  chain mark_forward {`);
     add(`    type filter hook forward priority mangle; policy accept;`);

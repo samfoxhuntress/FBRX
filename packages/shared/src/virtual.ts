@@ -90,6 +90,8 @@ export interface VmSummary {
   uptimeSeconds: number | null;
   /** Host CPUs it is pinned to (null: any). */
   cpuset: string | null;
+  /** The networks and switches its network cards are plugged into (libvirt network names, or bridges). */
+  networks: string[];
 }
 
 export interface VmDetail extends VmSummary {
@@ -137,6 +139,8 @@ export interface VmChanges {
   diskGb?: number;
   /** Run on these host CPUs ("0-3", "4-7", null for any): keeps it next to the hardware it uses. */
   cpuset?: string | null;
+  /** Plug its network card into another network or switch (it keeps its MAC address, so reservations follow it). */
+  network?: { kind: 'network' | 'bridge'; source: string };
 }
 
 export interface VmSnapshot {
@@ -197,6 +201,8 @@ export interface VirtualNetwork {
   /** For a host bridge: the physical ports in it. */
   ports: string[];
   managed: boolean;
+  /** A switch of FBRX Gate on this server: machines on it are on that gate network (addresses, rules) like its devices. */
+  gate?: { network: string; purpose: string; address: string; access: 'full' | 'internet' | 'isolated'; port: string } | null;
 }
 
 // ------------------------------------------------------------------------------------- hardware view

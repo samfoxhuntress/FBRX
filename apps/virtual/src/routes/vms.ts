@@ -35,6 +35,7 @@ const Changes = z.object({
   iso: z.string().max(200).nullable().optional(),
   diskGb: z.number().int().min(1).max(64 * 1024).optional(),
   cpuset: z.string().regex(CPUSET_RE, 'Give processors like 0-3 or 0,2,4').nullable().optional(),
+  network: z.object({ kind: z.enum(['network', 'bridge']), source: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/) }).optional(),
 });
 
 export async function vmRoutes(app: FastifyInstance, ctx: VirtualContext) {

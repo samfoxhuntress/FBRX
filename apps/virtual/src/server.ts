@@ -290,7 +290,8 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
 /** The configuration a new gate starts from: its ports, this console's port, and the installer's management network. */
 export function gateStarter(config: VirtualConfig): GateConfig {
   const name = hostname().split('.')[0].toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '') || 'fbrx-gate';
-  const c = starterConfig({ hostname: name, wan: config.gate.wan, lan: config.gate.lan });
+  // On a server that also runs virtual machines, they can join the LAN from the start (its virtual switch, br-lan).
+  const c = starterConfig({ hostname: name, wan: config.gate.wan, lan: config.gate.lan, vmSwitch: config.roles.includes('virtual') });
   c.management.consolePort = config.port;
   if (config.gate.manageFromWan) {
     c.firewall.rules.push({ id: 'manage-from-wan', name: `Manage the gate from ${config.gate.manageFromWan}`, enabled: true, from: 'wan', to: 'gate', proto: 'tcp', ports: `22,${config.port}`, source: config.gate.manageFromWan, action: 'accept', log: false });
