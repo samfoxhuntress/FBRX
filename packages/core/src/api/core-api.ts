@@ -196,6 +196,13 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       return k.models.import(q.path, q.name);
     },
     'runtime.deleteModel': async (p) => ({ deleted: await k.models.remove(z.object({ modelId: z.string() }).parse(p).modelId) }),
+    'runtime.redownload': async (p) => {
+      const { modelId } = z.object({ modelId: z.string() }).parse(p);
+      if (k.runtime.status().modelId === modelId) await k.runtime.stop();
+      await k.models.redownload(modelId);
+      return { started: true };
+    },
+    'runtime.logs': () => k.runtime.recentLogs().slice(-80),
     'runtime.selectModel': async (p) => {
       const { modelId } = z.object({ modelId: z.string() }).parse(p);
       if (!k.models.get(modelId)) throw new CoreError('NOT_FOUND', 'Model is not installed');

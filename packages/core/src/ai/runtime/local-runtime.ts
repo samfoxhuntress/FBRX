@@ -13,6 +13,11 @@ import { sleep } from '../../util/misc';
 import si from 'systeminformation';
 import { installLlamaRuntime } from './runtime-installer';
 import { resourcePlan } from '../resources';
+import { readGgufInfo } from './gguf';
+import { explainLoadFailure, type LoadFailure } from './load-failure';
+
+/** "Every layer": llama.cpp puts as many as the model has on the graphics card. */
+const ALL_LAYERS = 999;
 
 const EXE = process.platform === 'win32' ? 'llama-server.exe' : 'llama-server';
 
@@ -75,6 +80,10 @@ export class LocalRuntime {
   private active = 0;
   private lastUsed = 0;
   private idleTimer: NodeJS.Timeout | null = null;
+  /** Layers that fit on the graphics card, per model, learned at the last start (automatic layer count only). */
+  private readonly gpuFit = new Map<string, number>();
+  /** What went wrong at the last start, for the AI models page to offer the right fix. */
+  private problem: LoadFailure['kind'] | null = null;
 
   constructor(
     private readonly d: {
@@ -91,12 +100,13 @@ export class LocalRuntime {
     const cfg = this.d.settings.get().runtime.binaryPath;
     if (cfg && existsSync(cfg)) return cfg;
     const plat = `${process.platform}-${process.arch}`;
+    // One downloaded here (Install or Update the runtime) is newer than the one that came with FBRX.
+    const downloaded = findIn(join(this.d.runtimeDir, plat)) ?? findIn(this.d.runtimeDir);
+    if (downloaded) return downloaded;
     if (this.d.resourcesDir) {
       const bundled = findIn(join(this.d.resourcesDir, 'runtime', plat)) ?? findIn(join(this.d.resourcesDir, 'runtime'));
       if (bundled) return bundled;
     }
-    const downloaded = findIn(join(this.d.runtimeDir, plat)) ?? findIn(this.d.runtimeDir);
-    if (downloaded) return downloaded;
     for (const dir of (process.env.PATH ?? '').split(delimiter)) {
       if (dir && existsSync(join(dir, EXE)) && isExecutable(join(dir, EXE))) return join(dir, EXE);
     }
@@ -136,6 +146,7 @@ export class LocalRuntime {
       pid: this.child?.pid ?? null,
       endpoint: this.state === 'running' ? this.endpoint : null,
       message,
+      problem: state === 'failed' ? this.problem : null,
     };
   }
 
@@ -186,6 +197,7 @@ export class LocalRuntime {
     if (!binary) throw new CoreError('UNAVAILABLE', 'llama-server runtime not found');
     const model = s.modelId ? this.d.models.get(s.modelId) : undefined;
     if (!model) throw new CoreError('UNAVAILABLE', 'No model selected for the local runtime');
+    this.problem = null;
     // A model that does not fit in memory makes the whole computer swap until it freezes; refuse it up front.
     let size = 0;
     try {
@@ -197,32 +209,82 @@ export class LocalRuntime {
       throw new CoreError('UNAVAILABLE', `${model.name} needs about ${Math.ceil(size / 1e9)} GB of memory, more than this computer can spare (${Math.round(totalmem() / 1e9)} GB in total). Choose a smaller model.`);
     }
     if (size + 1.5e9 > freemem()) this.d.log.warn('Little free memory for the local model; the computer may slow down while it loads', { modelGB: +(size / 1e9).toFixed(1), freeGB: +(freemem() / 1e9).toFixed(1) });
+    // Not a model at all (an error page saved instead, an empty file): say so before the runtime does, less clearly.
+    const info = size > 0 ? readGgufInfo(model.file) : null;
+    if (size > 0 && !info) return this.fail({ kind: 'damaged', message: `The ${model.name} file is not a usable model (incomplete or damaged). Download it again (AI models → Download again).`, detail: 'not a GGUF file' });
     const plan = resourcePlan(this.d.settings.get().ai.resources);
+    const threads = s.threads > 0 ? s.threads : plan.threads;
 
+    // All of the model on the graphics card when it fits. When it does not, try half of it there, then none, and keep
+    // what worked for next time (a manual layer count in Settings is used as it is).
+    const auto = s.gpuLayers < 0;
+    const first = auto ? (this.gpuFit.get(model.id) ?? ALL_LAYERS) : s.gpuLayers;
+    const tries = [first];
+    if (auto) {
+      if (first >= ALL_LAYERS && info?.blockCount) tries.push(Math.floor(info.blockCount / 2));
+      if (first !== 0) tries.push(0);
+    }
+    for (const [i, layers] of tries.entries()) {
+      this.setState('starting', i === 0 ? `Loading ${model.name}…` : `Loading ${model.name} with ${layers ? 'part of it' : 'none of it'} on the graphics card…`);
+      const r = await this.spawnOnce(binary, model, layers, threads, plan.priority);
+      if (r === 'ready') {
+        if (auto) this.gpuFit.set(model.id, layers);
+        const note =
+          auto && layers < ALL_LAYERS && first >= ALL_LAYERS
+            ? layers > 0
+              ? `${model.name} did not all fit in the graphics card's memory: ${info?.blockCount ? `${layers} of its ${info.blockCount} layers` : 'part of it'} run there and the rest on the processor. Answers come a little slower.`
+              : `${model.name} did not fit in the graphics card's memory, so it runs on the processor. Answers come slower; a smaller model would fit on the card.`
+            : null;
+        this.setState('running', note);
+        this.lastUsed = Date.now();
+        this.watchIdle();
+        this.d.log.info('Local runtime ready', { model: model.id, threads, gpuLayers: layers });
+        return this.status();
+      }
+      if (r === 'stopped') throw new CoreError('CANCELLED', 'The local model was stopped while it was loading');
+      if (r === 'timeout') {
+        await this.stop();
+        return this.fail({ kind: 'other', message: `${model.name} did not finish loading within 3 minutes.`, detail: this.recentOutput.at(-1) ?? null });
+      }
+      this.d.log.warn('The local model did not load', { model: model.id, gpuLayers: layers, kind: r.kind, detail: r.detail });
+      if (r.kind !== 'gpu-memory' || i === tries.length - 1) return this.fail(r);
+    }
+    return this.fail({ kind: 'other', message: `${model.name} could not be loaded.`, detail: null });
+  }
+
+  private fail(f: LoadFailure): never {
+    this.problem = f.kind;
+    this.setState('failed', f.detail && f.kind !== 'damaged' ? `${f.message} (${f.detail.slice(0, 200)})` : f.message);
+    throw new CoreError('UNAVAILABLE', f.message);
+  }
+
+  /** Starts llama-server once and waits until it answers, gives up, or exits (and why). */
+  private async spawnOnce(binary: string, model: { id: string; name: string; file: string }, gpuLayers: number, threads: number, priority: number): Promise<'ready' | 'timeout' | 'stopped' | LoadFailure> {
+    const s = this.d.settings.get().runtime;
     this.apiKeyValue = randomBytes(24).toString('base64url');
     const args = [
       '--model', model.file,
       '--host', '127.0.0.1',
       '--port', String(s.port),
       '--ctx-size', String(s.contextSize),
-      '--n-gpu-layers', String(s.gpuLayers < 0 ? 999 : s.gpuLayers),
+      '--n-gpu-layers', String(gpuLayers),
       '--jinja',
       '--alias', model.id,
       '--api-key', this.apiKeyValue,
-      '--threads', String(s.threads > 0 ? s.threads : plan.threads),
+      '--threads', String(threads),
       // One conversation at a time: the whole context goes to it and the memory for extra slots is not reserved.
       '--parallel', '1',
     ];
     this.stopping = false;
     this.recentOutput = [];
-    this.setState('starting', `Loading ${model.name}…`);
-    this.d.log.info('Starting local runtime', { binary, model: model.id, port: s.port });
+    this.d.log.info('Starting local runtime', { binary, model: model.id, port: s.port, gpuLayers });
     const child = spawn(binary, args, { stdio: ['ignore', 'pipe', 'pipe'], windowsHide: true });
     this.child = child;
+    let spawnError: string | null = null;
     // Below-normal priority keeps the desktop responsive while the model thinks.
     if (child.pid) {
       try {
-        setPriority(child.pid, plan.priority);
+        setPriority(child.pid, priority);
       } catch {
         /* not permitted here; runs at normal priority */
       }
@@ -240,7 +302,8 @@ export class LocalRuntime {
       if (this.child !== child) return;
       this.child = null;
       if (this.stopping) this.setState('stopped');
-      else {
+      else if (this.state === 'running') {
+        // It stopped on its own after loading: say why, from its last words.
         const tail = this.recentOutput.slice(-5).join(' | ');
         this.d.log.error('Local runtime exited unexpectedly', { code, signal, tail });
         this.setState('failed', `Runtime exited (${code ?? signal}). ${tail}`.slice(0, 500));
@@ -248,31 +311,28 @@ export class LocalRuntime {
     });
     child.on('error', (err) => {
       this.d.log.error('Local runtime failed to spawn', err);
-      this.setState('failed', err.message);
+      spawnError = err.message;
+      if (this.child === child) this.child = null;
     });
 
     const deadline = Date.now() + 180_000;
     while (Date.now() < deadline) {
-      if (!this.child) break;
+      if (this.child !== child) {
+        if (this.stopping) return 'stopped';
+        if (spawnError) return { kind: 'other', message: `The runtime could not start: ${spawnError}`, detail: null };
+        // Let the last lines of output arrive before reading them.
+        await sleep(200);
+        return explainLoadFailure(this.recentOutput, model.name, gpuLayers > 0);
+      }
       try {
         const res = await fetch(`http://127.0.0.1:${s.port}/health`, { signal: AbortSignal.timeout(2000) });
-        if (res.ok) {
-          this.setState('running');
-          this.lastUsed = Date.now();
-          this.watchIdle();
-          this.d.log.info('Local runtime ready', { model: model.id, threads: s.threads > 0 ? s.threads : plan.threads });
-          return this.status();
-        }
+        if (res.ok) return 'ready';
       } catch {
         /* still loading */
       }
       await sleep(750);
     }
-    if (this.child) {
-      await this.stop();
-      this.setState('failed', 'Runtime did not become ready within 3 minutes');
-    }
-    throw new CoreError('UNAVAILABLE', this.message ?? 'Runtime failed to start');
+    return 'timeout';
   }
 
   /** Unloads the model after the configured idle time, so the memory goes back to the computer. */

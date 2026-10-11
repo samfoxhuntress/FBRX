@@ -246,6 +246,8 @@ export interface RuntimeStatus {
   pid: number | null;
   endpoint: string | null;
   message: string | null;
+  /** Why the last start failed, so the right fix can be offered (download again, update the runtime…). */
+  problem?: 'gpu-memory' | 'memory' | 'damaged' | 'unsupported' | 'other' | null;
 }
 
 export interface CatalogModel {
@@ -532,6 +534,10 @@ export interface CoreMethods extends ExtMethods {
   'runtime.cancelDownload': (p: { modelId: string }) => { cancelled: boolean };
   'runtime.importModel': (p: { path: string; name?: string }) => InstalledModel;
   'runtime.deleteModel': (p: { modelId: string }) => { deleted: boolean };
+  /** Deletes a downloaded model's file (even the one in use) and downloads it again. */
+  'runtime.redownload': (p: { modelId: string }) => { started: boolean };
+  /** The runtime's last lines of output, for troubleshooting. */
+  'runtime.logs': () => string[];
   'runtime.selectModel': (p: { modelId: string }) => RuntimeStatus;
 
   'tools.list': () => ToolInfo[];

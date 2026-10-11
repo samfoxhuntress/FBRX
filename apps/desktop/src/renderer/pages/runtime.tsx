@@ -68,7 +68,8 @@ export function RuntimePage() {
                   ['Endpoint', r.endpoint ?? '—'],
                 ]}
               />
-              {r.message && r.state !== 'running' && <Callout tone={r.state === 'failed' ? 'critical' : 'info'}>{r.message}</Callout>}
+              {r.message && <Callout tone={r.state === 'failed' ? 'critical' : 'info'}>{r.message}</Callout>}
+              {r.state === 'failed' && <RuntimeFix problem={r.problem ?? null} modelId={r.modelId} busy={busy} run={run} />}
               {r.state === 'not-installed' && (
                 <div className="fx-actions">
                   {downloads['llama-runtime'] && ['downloading', 'verifying'].includes(downloads['llama-runtime'].state) ? (
@@ -350,5 +351,32 @@ function OllamaModels({ defaultProvider, defaultModel, onUse, locked, busy }: { 
         ]}
       />
     </Card>
+  );
+}
+
+/** What to do about a model that would not load: the fix that matches the reason, and what the runtime said. */
+function RuntimeFix({ problem, modelId, busy, run }: { problem: string | null; modelId: string | null; busy: string | null; run: ReturnType<typeof useAction>['run'] }) {
+  const [lines, setLines] = useState<string[] | null>(null);
+  return (
+    <>
+      <div className="fx-actions">
+        {problem === 'damaged' && modelId && (
+          <Button size="sm" variant="primary" icon="download" loading={busy === 'redl'} onClick={() => void run('redl', () => call('runtime.redownload', { modelId }), 'Downloading it again')}>
+            Download again
+          </Button>
+        )}
+        {problem === 'unsupported' && (
+          <Button size="sm" variant="primary" icon="download" loading={busy === 'rt'} onClick={() => void run('rt', () => call('runtime.installRuntime'), 'Updating the runtime')}>
+            Update the runtime
+          </Button>
+        )}
+        {(problem === 'memory' || problem === 'gpu-memory') && <span className="fx-muted" style={{ fontSize: 12.5 }}>A smaller model (Qwen3 8B, say) fits more computers; Settings → Agent → How hard the AI may work can also free memory.</span>}
+        <span className="fx-spacer" />
+        <Button size="sm" variant="ghost" onClick={async () => setLines(lines ? null : await call('runtime.logs'))}>
+          {lines ? 'Hide' : 'Show'} what the runtime said
+        </Button>
+      </div>
+      {lines && <pre className="fx-code" style={{ maxHeight: 220, overflow: 'auto', fontSize: 11.5 }}>{lines.join('\n') || 'Nothing yet.'}</pre>}
+    </>
   );
 }

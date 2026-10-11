@@ -514,7 +514,12 @@ Windows copies signed by a publisher only install updates signed by the same pub
 
 * **Built-in local runtime** (llama.cpp). *Install runtime* downloads the newest official llama.cpp build for this
   computer: the Vulkan build when there is a graphics card with at least 2 GB of memory, otherwise the CPU build.
-  *Use* on a downloaded model makes it the default.
+  *Use* on a downloaded model makes it the default. A model that does not all fit in the graphics card's memory (Qwen3
+  14B on a laptop card, say) loads with half of its layers on the card, then none, and the page says how it runs;
+  the next start goes straight to what fit. When a model will not load, the page says why and offers the fix:
+  **Download again** for an incomplete or damaged file, **Update the runtime** for a model newer than the runtime,
+  a smaller model when memory is short, and **Show what the runtime said** for everything else. A download that
+  stops early is kept and continues where it stopped.
 * **Ollama models**: the models Ollama has already downloaded on this computer, read from Ollama, or from its model
   folder (`OLLAMA_MODELS` or `~/.ollama/models`) while Ollama is not running, with *Start Ollama*. *Use* makes one the
   default. With no model chosen, Fabrix picks the installed model best suited to tool calling.

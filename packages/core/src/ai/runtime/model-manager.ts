@@ -117,6 +117,9 @@ export class ModelManager {
         },
       });
       await pipeline(Readable.fromWeb(res.body as any), counter, createWriteStream(part, { flags: offset ? 'a' : 'w' }), { signal: controller.signal });
+      // A connection that ends early leaves a short file the runtime cannot load: keep it to resume, and say so.
+      const got = (await stat(part)).size;
+      if (len && got < len + offset) throw new Error(`The download stopped early (${Math.round(got / 1e6)} of ${Math.round((len + offset) / 1e6)} MB). Download again to continue where it stopped.`);
       progress.state = 'verifying';
       this.emit(progress);
       const sha256 = await sha256File(part);
@@ -165,6 +168,18 @@ export class ModelManager {
       new Date().toISOString(),
     );
     return this.get(id)!;
+  }
+
+  /** A damaged download: the file goes (even for the model in use) and the same model downloads again. */
+  async redownload(id: string): Promise<void> {
+    const row = this.db.get<ModelRow>('SELECT * FROM models WHERE id = ?', id);
+    if (!MODEL_CATALOG.some((m) => m.id === id)) throw new CoreError('INVALID_ARGUMENT', row ? 'Imported models cannot be downloaded again: import the file again' : `Unknown catalog model ${id}`);
+    if (row) {
+      await rm(join(this.dir, row.file), { force: true });
+      await rm(join(this.dir, `${row.file}.part`), { force: true });
+      this.db.run('DELETE FROM models WHERE id = ?', id);
+    }
+    this.download(id);
   }
 
   async remove(id: string): Promise<boolean> {
