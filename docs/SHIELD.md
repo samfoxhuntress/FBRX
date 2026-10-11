@@ -57,7 +57,7 @@ What happens to a finding:
 * From quarantine: **Restore** (put back next to its old name if something else is there now, checked against its
   fingerprint, and trusted from then on) or **Delete** for good.
 * Each finding raises a **FBRX Shield found a threat** alert (desktop, phone, e-mail, webhooks and FBRX Command, as
-  set in Alerts).
+  set in Alerts). Deciding on the finding (Trust, Quarantine or Delete) takes its alert out of Alerts too.
 
 **Download checks** look at new files in Downloads and on the desktop as soon as they stop growing (unfinished browser
 downloads are skipped). **Quick scan**: Downloads, the desktop, the temp folder and the startup folders. **Full scan**:

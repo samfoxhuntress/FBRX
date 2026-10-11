@@ -220,6 +220,10 @@ describe('FBRX Shield on a computer', () => {
       expect(found[0]).toMatchObject({ source: 'download', kind: 'suspicious', name: 'Archive hides a script' });
       const alerts = (await kernel.call('alerts.inbox', { limit: 5 }, USER)) as Array<{ ruleId: string; title: string }>;
       expect(alerts.find((a) => a.ruleId === 'shield_threat')?.title).toBe('FBRX Shield: Archive hides a script');
+      // Trusting the file clears its alert too (no second stop in Alerts).
+      await kernel.call('shield.act', { id: found[0].id, action: 'allow' }, USER);
+      const after = (await kernel.call('alerts.inbox', { limit: 5 }, USER)) as Array<{ ruleId: string }>;
+      expect(after.filter((a) => a.ruleId === 'shield_threat')).toEqual([]);
 
       if (process.platform !== 'win32') {
         // The antivirus test file (Windows' own antivirus would take it first on Windows).

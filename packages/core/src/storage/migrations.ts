@@ -356,6 +356,15 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE mesh_devices ADD COLUMN roles TEXT;
     `,
   },
+  {
+    version: 9,
+    name: 'alert-refs',
+    // What an alert is about (a detection, a drive…), so dealing with that thing clears its alert too.
+    up: `
+      ALTER TABLE alerts ADD COLUMN ref TEXT;
+      CREATE INDEX alerts_ref ON alerts (rule_id, ref);
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

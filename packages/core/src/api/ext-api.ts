@@ -451,6 +451,8 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'shield.act': async (p) => {
       const x = z.object({ id: z.string().min(1).max(80), action: z.enum(['quarantine', 'restore', 'delete', 'allow']) }).parse(p);
       const d = x.action === 'quarantine' ? await k.shield.quarantine(x.id) : x.action === 'restore' ? await k.shield.restore(x.id) : x.action === 'delete' ? await k.shield.remove(x.id) : k.shield.allow(x.id);
+      // Decided: its alert has nothing left to say (the detection stays in FBRX Shield's history).
+      if (x.action !== 'restore') k.alerts.resolve('shield_threat', x.id);
       void k.protection.status(true).catch(() => undefined);
       return d;
     },

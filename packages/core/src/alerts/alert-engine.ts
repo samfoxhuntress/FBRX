@@ -136,6 +136,17 @@ export class AlertEngine {
     this.d.events.emit('alerts.changed', this.counts());
   }
 
+  /**
+   * The thing an alert was about has been dealt with (a file trusted or quarantined in FBRX Shield, say): its alerts
+   * leave the inbox, and the next one about it is not held back by the cooldown.
+   */
+  resolve(ruleId: string, key: string): number {
+    const n = this.d.db.run('DELETE FROM alerts WHERE rule_id = ? AND ref = ?', ruleId, key).changes ?? 0;
+    this.last.delete(`${ruleId}:${key}`);
+    if (n) this.d.events.emit('alerts.changed', this.counts());
+    return n;
+  }
+
   remove(id: string): void {
     if (id === '*') this.d.db.run('DELETE FROM alerts');
     else this.d.db.run('DELETE FROM alerts WHERE id = ?', id);
@@ -175,7 +186,7 @@ export class AlertEngine {
     const severity = o.severity ?? rule?.severity ?? 'info';
     const alert: AlertItem = { id: newId('alrt'), ruleId, severity, title: title.slice(0, 200), body: body.slice(0, 2000), createdAt: new Date().toISOString(), read: false, deliveries: {} };
     this.d.db.run(
-      'INSERT INTO alerts (id, rule_id, severity, title, body, created_at, read, deliveries) VALUES (?, ?, ?, ?, ?, ?, 0, ?)',
+      'INSERT INTO alerts (id, rule_id, severity, title, body, created_at, read, deliveries, ref) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)',
       alert.id,
       ruleId,
       severity,
@@ -183,6 +194,7 @@ export class AlertEngine {
       alert.body,
       alert.createdAt,
       '{}',
+      o.key ?? null,
     );
     this.d.db.run("DELETE FROM alerts WHERE id NOT IN (SELECT id FROM alerts ORDER BY created_at DESC LIMIT 1000)");
     alert.deliveries = await this.deliver(alert, new Set(cfg.routing[severity]));
