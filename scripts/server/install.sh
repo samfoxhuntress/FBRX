@@ -307,6 +307,15 @@ if has_role gate; then
   # shellcheck disable=SC2086
   apt_install $GATE_PKGS
 fi
+if has_role ai; then
+  # The built-in AI runtime (llama.cpp, downloaded from the console's Mesh & AI → Models) needs OpenMP; with a graphics
+  # card it runs through Vulkan. NVIDIA cards also need NVIDIA's own driver (Debian's non-free nvidia-driver).
+  AI_PKGS="libgomp1"
+  if lspci 2>/dev/null | grep -qiE '(vga|3d|display).*(nvidia|amd|ati|radeon|intel)'; then AI_PKGS="$AI_PKGS libvulkan1 mesa-vulkan-drivers"; fi
+  say "Installing what the built-in AI runtime needs ($AI_PKGS)"
+  # shellcheck disable=SC2086
+  apt_install $AI_PKGS
+fi
 
 # ------------------------------------------------------------------------------------------------ Node
 
@@ -396,6 +405,10 @@ if has_role ai; then
   if ! id "$CORE_USER" >/dev/null 2>&1; then
     useradd --system --home-dir "$CORE_DATA" --no-create-home --shell /usr/sbin/nologin "$CORE_USER"
   fi
+  # The graphics cards, for the built-in AI runtime (nothing else of the system).
+  for g in render video; do
+    if getent group "$g" >/dev/null; then usermod -aG "$g" "$CORE_USER"; fi
+  done
   mkdir -p "$CORE_DATA" "$CORE_ETC"
   chown "$CORE_USER:$CORE_USER" "$CORE_DATA"
   chmod 0700 "$CORE_DATA"
@@ -623,6 +636,6 @@ else
   note "Open https://<this server>:$PORT and sign in with the setup code (fbrx-server setup-code)."
 fi
 note "Your browser warns about the certificate the first time: compare it with fbrx-server fingerprint."
-if has_role ai; then note "Then open Mesh & AI in the console: pick this server's AI provider and pair it with your other computers."; fi
+if has_role ai; then note "Then open Mesh & AI in the console: under Models on this server, download a model that fits and use it (or pick a provider), and pair the server with your other computers."; fi
 if has_role gate; then note "The Gate pages (or fbrx-gate on this server) change networks, VLANs, the firewall, the VPN and Prefer Mesh: edit, review, commit."; fi
 if [ "$REBOOT_NEEDED" -eq 1 ]; then note "Restart the server once (sudo reboot) for ${REBOOT_WHY:-the changes}."; fi

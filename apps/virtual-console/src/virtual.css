@@ -263,3 +263,9 @@
 .vn-vm:hover {
   border-color: var(--accent);
 }
+/* Mesh & AI → Models on this server */
+.vt-model-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 12px; }
+.vt-model { display: flex; flex-direction: column; gap: 6px; padding: 12px 14px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: var(--surface-1); }
+.vt-model.active { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent) inset; }
+.vt-model > .fx-status { align-self: flex-start; }
+.vt-tag { font-size: 11px; padding: 1px 8px; border-radius: 999px; border: 1px solid var(--accent); background: var(--accent-wash); white-space: nowrap; }

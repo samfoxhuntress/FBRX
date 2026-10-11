@@ -62,6 +62,12 @@ case "${1:-status}" in
   users) need_root users; helper users ;;
   reset-password) need_root reset-password; shift; helper reset-password "$@" ;;
   create-admin) need_root create-admin; shift; helper create-admin "$@" ;;
+  ai)
+    need_root ai
+    has_ai || { echo "The ai role is not installed (sudo bash install.sh --roles <your roles>,ai)." >&2; exit 1; }
+    shift
+    helper ai "$@"
+    ;;
   help | -h | --help)
     cat <<USAGE
 fbrx-server status          what runs, where to open the console, the certificate fingerprint
@@ -74,6 +80,7 @@ fbrx-server restart ai      restart the FBRX core (help it was giving or asking 
 fbrx-server users           who can sign in
 fbrx-server reset-password <user>   a new password for someone locked out
 fbrx-server create-admin [name]     another administrator
+fbrx-server ai [help]       the AI models on this server: what fits, download, use (ai role)
 USAGE
     if has_gate; then echo "fbrx-gate help              FBRX Gate's own commands (networks, firewall, commit, roll back)"; fi
     ;;

@@ -262,8 +262,36 @@ export interface CatalogModel {
   sha256: string | null;
   license: string;
   description: string;
-  tier: 'small' | 'medium' | 'large';
+  /** "server": for FBRX Server or a workstation with a lot of memory (the hive other computers call on). */
+  tier: 'small' | 'medium' | 'large' | 'server';
   toolCalling: boolean;
+}
+
+/** What this computer offers a model: memory, and a graphics card the runtime can use. */
+export interface RuntimeHardware {
+  memoryBytes: number;
+  freeMemoryBytes: number;
+  cpus: number;
+  /** The graphics cards found; the runtime uses one through Vulkan (Metal on a Mac). */
+  gpus: Array<{ name: string; vramBytes: number }>;
+  /** Which runtime build suits it. */
+  variant: 'cpu' | 'vulkan' | 'metal';
+}
+
+export type ModelFit = 'gpu' | 'memory' | 'tight' | 'too-big';
+
+/**
+ * Whether a model runs well here: all of it on the graphics card, in memory on the processor (slower, fine for a
+ * server doing background work), only just, or not at all. The model needs its file size plus room for its context.
+ */
+export function modelFit(sizeBytes: number, hw: Pick<RuntimeHardware, 'memoryBytes' | 'gpus' | 'variant'>): ModelFit {
+  const need = sizeBytes * 1.1 + 1.5e9;
+  const vram = Math.max(0, ...hw.gpus.map((g) => g.vramBytes));
+  if (hw.variant === 'metal' ? need <= hw.memoryBytes * 0.7 : hw.variant === 'vulkan' && need <= vram) return 'gpu';
+  // Leave the operating system (and, on a server, its virtual machines) a quarter.
+  if (need <= hw.memoryBytes * 0.75) return 'memory';
+  if (need <= hw.memoryBytes * 0.9) return 'tight';
+  return 'too-big';
 }
 
 export interface InstalledModel {
@@ -539,6 +567,12 @@ export interface CoreMethods extends ExtMethods {
   /** The runtime's last lines of output, for troubleshooting. */
   'runtime.logs': () => string[];
   'runtime.selectModel': (p: { modelId: string }) => RuntimeStatus;
+  /** Memory and graphics cards, for choosing a model that fits. */
+  'runtime.hardware': () => RuntimeHardware;
+  /** Downloads under way (models and the runtime itself), and ones that finished in the last few minutes. */
+  'runtime.downloads': () => DownloadProgress[];
+  /** Makes a model this computer's AI: the built-in runtime on, the model selected, the local provider the default. */
+  'runtime.useModel': (p: { modelId: string }) => RuntimeStatus;
 
   'tools.list': () => ToolInfo[];
   'tools.setEnabled': (p: { name: string; enabled: boolean }) => ToolInfo;

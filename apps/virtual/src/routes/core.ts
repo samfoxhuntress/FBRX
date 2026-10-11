@@ -21,6 +21,7 @@ interface Rule {
 type Runner = <T>(method: string, params?: unknown) => Promise<T>;
 
 const ROLE_NAME = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/);
+const MODEL_ID = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,99}$/);
 const AssistPatch = z
   .object({
     request: z.enum(ASSIST_MODES),
@@ -137,6 +138,22 @@ const RULES: Record<string, Rule> = {
       return { name: a.name, value: a.value, kind: 'api-key', description: 'AI provider key (set from FBRX Virtual)' };
     },
   },
+  // Models on this server (the built-in llama.cpp runtime): anyone looks, operators start and stop it, administrators
+  // download, delete and choose (they decide what fills the disk and what this server's AI is).
+  'runtime.status': { role: 'viewer' },
+  'runtime.hardware': { role: 'viewer' },
+  'runtime.catalog': { role: 'viewer' },
+  'runtime.installed': { role: 'viewer' },
+  'runtime.downloads': { role: 'viewer' },
+  'runtime.logs': { role: 'operator' },
+  'runtime.start': { role: 'operator' },
+  'runtime.stop': { role: 'operator' },
+  'runtime.installRuntime': { role: 'admin' },
+  'runtime.download': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
+  'runtime.cancelDownload': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
+  'runtime.redownload': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
+  'runtime.deleteModel': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
+  'runtime.useModel': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
   'mesh.setEnabled': { role: 'admin', params: (p) => z.object({ enabled: z.boolean() }).strict().parse(p) },
   'mesh.rename': { role: 'admin', params: (p) => z.object({ name: z.string().min(1).max(120) }).strict().parse(p) },
   'mesh.startPairing': { role: 'admin' },
@@ -149,13 +166,30 @@ const RULES: Record<string, Rule> = {
   },
 };
 
-const READS = new Set(['system.status', 'settings.get', 'ai.providers', 'mesh.status', 'mesh.assist.helpers', 'mesh.assist.sessions', 'approvals.list', 'vault.list', 'ai.models', 'mesh.network.test']);
+const READS = new Set([
+  'system.status',
+  'settings.get',
+  'ai.providers',
+  'mesh.status',
+  'mesh.assist.helpers',
+  'mesh.assist.sessions',
+  'approvals.list',
+  'vault.list',
+  'ai.models',
+  'mesh.network.test',
+  'runtime.status',
+  'runtime.hardware',
+  'runtime.catalog',
+  'runtime.installed',
+  'runtime.downloads',
+  'runtime.logs',
+]);
 
 function target(method: string, p: Record<string, unknown>): string | null {
   if (method === 'vault.set') return String(p.name);
   if (method === 'mesh.assist.send') return Array.isArray(p.peerIds) ? p.peerIds.join(', ') : 'best helper';
   if (method === 'settings.update') return Object.keys((p.patch as object) ?? {}).join(', ');
-  for (const k of ['sessionId', 'id', 'host', 'name']) if (typeof p[k] === 'string') return p[k] as string;
+  for (const k of ['sessionId', 'id', 'host', 'name', 'modelId']) if (typeof p[k] === 'string') return p[k] as string;
   return null;
 }
 

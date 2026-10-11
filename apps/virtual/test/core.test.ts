@@ -155,6 +155,34 @@ describe('FBRX Virtual and the server core', () => {
     expect(s.ctx.audit.list(10).map((e) => e.action)).toContain('mesh.mark.remove');
   });
 
+  it('shows the models on this server; administrators download and choose, operators start and stop', async () => {
+    const hw = (await core(viewer, 'runtime.hardware')).body.result;
+    expect(hw.memoryBytes).toBeGreaterThan(0);
+    expect(['cpu', 'vulkan', 'metal']).toContain(hw.variant);
+    const catalog = (await core(viewer, 'runtime.catalog')).body.result as Array<{ id: string; tier: string }>;
+    expect(catalog.filter((m) => m.tier === 'server').map((m) => m.id)).toEqual(['qwen3-30b-a3b-q4km', 'qwen3-32b-q4km', 'llama-3.3-70b-instruct-q4km']);
+    expect((await core(viewer, 'runtime.downloads')).body.result).toEqual([]);
+    // Filling the disk and choosing this server's AI are for administrators.
+    expect((await core(viewer, 'runtime.download', { modelId: 'qwen3-30b-a3b-q4km' })).status).toBe(403);
+    expect((await core(operator, 'runtime.download', { modelId: 'qwen3-30b-a3b-q4km' })).status).toBe(403);
+    expect((await core(admin, 'runtime.download', { modelId: '../../etc/passwd' })).status).toBe(400);
+    expect((await core(operator, 'runtime.logs')).status).toBe(200);
+    expect((await core(viewer, 'runtime.logs')).status).toBe(403);
+
+    // A model copied to the server and imported (fbrx-server ai import), then made this server's AI.
+    const file = join(dir, 'My-Model-Q4.gguf');
+    writeFileSync(file, Buffer.concat([Buffer.from('GGUF'), Buffer.alloc(64)]));
+    const m = await kernel.models.import(file, 'My model');
+    expect((await core(viewer, 'runtime.useModel', { modelId: m.id })).status).toBe(403);
+    const used = await core(admin, 'runtime.useModel', { modelId: m.id });
+    expect(used.status).toBe(200);
+    expect(kernel.settings.get().runtime.modelId).toBe(m.id);
+    expect(kernel.settings.get().ai.defaultProvider).toBe('local');
+    expect(((await core(viewer, 'runtime.installed')).body.result as Array<{ id: string; active: boolean }>).find((x) => x.id === m.id)?.active).toBe(true);
+    expect(s.ctx.audit.list(10).map((e) => e.action)).toContain('core.runtime.useModel');
+    expect((await core(admin, 'runtime.useModel', { modelId: 'not-there' })).status).toBe(404);
+  });
+
   it('follows the core through a restart and says when it is missing', async () => {
     // The core makes a new console token each start.
     kernel.localApi.setConsoleToken('fbrx_console_two');

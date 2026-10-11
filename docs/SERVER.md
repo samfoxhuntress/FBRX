@@ -164,8 +164,53 @@ before anything risky, like on any FBRX computer. It listens for FBRX Mesh on po
 * **Computers on the mesh:** turn FBRX Mesh on or off, show a pairing code for another computer (on that computer:
   *Mesh & phone → Add a device → Enter a code*), join another computer's code, and set what each paired computer may do here,
   including **Help with AI** and **Controller**.
+* **Models on this server:** run the AI right here, with FBRX's built-in runtime (llama.cpp), so the server is the
+  big agent the other computers lean on (see below).
 * **AI provider:** what this server's agent runs on: a cloud provider with an API key (kept encrypted in the core's
   vault, never shown again), or a model on your network (Ollama or any OpenAI-compatible server, by address).
+
+### A bigger AI on the server
+
+Endpoints run small models (or a cloud provider). A server with plenty of memory, or a graphics card, can run a much
+larger one and lend it over FBRX Mesh: a computer whose own AI is too small for a job, runs out of steps or stops
+answering asks Mesh Assist, which hands the work to the server (*Mesh Assist* tab: who may ask, how many at once, at
+what priority).
+
+1. *Mesh & AI → Models on this server* shows the server's memory, threads and graphics cards, and for every model
+   whether it fits the graphics card, fits in memory (processors only: slower, fine for background work), only just
+   fits, or is too big. Leave room for the virtual machines.
+2. **Install the runtime** (a small download from the llama.cpp project's own releases; the graphics-card build when
+   the server has a card it can use).
+3. **Download** a model. Besides the desktop ones there are models *for servers*:
+   * **Qwen3 30B-A3B** (~19 GB): only 3B of its 30B parameters work at a time, so it answers quickly without a
+     graphics card. The one to start with on a server with 32 GB or more.
+   * **Qwen3 32B** (~20 GB): stronger and careful, at home on a 24 GB graphics card; slow on processors alone.
+   * **Llama 3.3 70B Instruct** (~43 GB): for 64 GB+ of memory or 48 GB of graphics memory.
+4. **Use it**: the model becomes this server's AI (the built-in runtime turns on and becomes the default provider).
+   The runtime starts at the first question and stops after a while unused.
+
+Any other GGUF model works too: copy the file to the server (not into a home folder: the core cannot see those), then
+`sudo fbrx-server ai import /srv/model.gguf "Its name"`.
+
+From the command line (as root):
+
+| | |
+| --- | --- |
+| `fbrx-server ai` | the runtime, the model in use, memory and graphics |
+| `fbrx-server ai models` | every model, what fits this server, which are downloaded |
+| `fbrx-server ai install-runtime` | install or update the runtime |
+| `fbrx-server ai download <id>` | download a model, with its progress (Ctrl+C stops watching; the download goes on) |
+| `fbrx-server ai use <id>` | make it this server's AI |
+| `fbrx-server ai import <file> [name]` | a GGUF file copied to the server |
+| `fbrx-server ai start`, `stop`, `logs` | the runtime itself |
+
+**Graphics cards.** The installer gives the core's account the `render` and `video` groups and, when it finds an
+AMD, Intel or NVIDIA card, installs the Vulkan libraries. AMD and Intel cards work with Debian's own drivers; an
+NVIDIA card also needs NVIDIA's driver (Debian's `nvidia-driver`, from the non-free section). Without a usable card the
+runtime uses the processors.
+
+Viewers see the models; operators start and stop the runtime; administrators install the runtime, download, delete
+and choose models (they fill the disk and decide what the server's AI is).
 
 **Who may do what.** Viewers see it all. Operators answer Mesh Assist's requests for help and hand out work.
 Administrators change the settings, pair computers, set permissions, choose the provider, save keys and answer any

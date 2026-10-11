@@ -83,8 +83,19 @@ export class ModelManager {
     return true;
   }
 
+  /** How the last downloads ended, kept a few minutes for screens that look now and then (FBRX Server's console). */
+  private finished = new Map<string, { progress: DownloadProgress; at: number }>();
+
   private emit(p: DownloadProgress) {
+    if (p.state === 'completed' || p.state === 'failed' || p.state === 'cancelled') this.finished.set(p.modelId, { progress: { ...p }, at: Date.now() });
     this.events?.emit('runtime.download', { ...p });
+  }
+
+  /** Downloads under way, and the ones that ended in the last ten minutes. */
+  recentDownloads(): DownloadProgress[] {
+    const since = Date.now() - 10 * 60_000;
+    for (const [id, f] of this.finished) if (f.at < since) this.finished.delete(id);
+    return [...this.activeDownloads(), ...[...this.finished.values()].filter((f) => !this.downloads.has(f.progress.modelId)).map((f) => f.progress)];
   }
 
   private async runDownload(entry: CatalogModel, controller: AbortController, progress: DownloadProgress) {
