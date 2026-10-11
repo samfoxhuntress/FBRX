@@ -120,7 +120,7 @@ describe('mesh pairing and permissions', () => {
       await expect(kb.call('mesh.action', { id: peer.id, action: 'lock' }, USER)).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
       const got = new Promise((r) => ka.events.on('mesh.message', r));
-      expect(await kb.call('mesh.message', { text: 'hello A' }, USER)).toEqual({ delivered: 1, total: 1 });
+      expect(await kb.call('mesh.message', { text: 'hello A' }, USER)).toMatchObject({ delivered: 1, total: 1, message: { state: 'sent' } });
       expect(await got).toMatchObject({ fromName: 'pc-47812', text: 'hello A' });
 
       // A revokes B: B's requests are refused immediately.
@@ -171,6 +171,13 @@ describe('mesh pairing and permissions', () => {
       A.kernel.settings.update({ alerts: { routing: { warning: ['inbox', 'mobile'] } } });
       await A.kernel.alerts.fire('cpu_high', 'CPU busy', 'Average 99%');
       expect((await phone.rpc('sync')).items[0]).toMatchObject({ type: 'alert', alert: { title: 'CPU busy' } });
+
+      // Messages: the phone's own lands in its conversation with this computer; replies go to its outbox.
+      await phone.rpc('chat.send', { id: 'phone-msg-1', text: 'On my way' });
+      expect(((await A.kernel.call('messages.thread', { id: `mesh:${phone.id}` }, USER)) as any[]).map((m) => m.text)).toEqual(['On my way']);
+      await A.kernel.call('messages.send', { id: `mesh:${phone.id}`, text: 'Drive safe' }, USER);
+      expect((await phone.rpc('sync')).items).toEqual([expect.objectContaining({ type: 'message', message: expect.objectContaining({ text: 'Drive safe', conversation: phone.id }) })]);
+      expect(((await phone.rpc('messages')) as any[]).map((m) => m.text)).toEqual(['On my way', 'Drive safe']);
 
       // Control is off for phones by default.
       await expect(phone.rpc('action', { action: 'lock' })).rejects.toMatchObject({ code: 'FORBIDDEN' });

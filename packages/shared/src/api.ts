@@ -472,6 +472,8 @@ export interface NotificationEvent {
   body: string;
   level: 'info' | 'success' | 'warning' | 'error';
   source: string;
+  /** The page a click opens ("messages/mesh:…"). */
+  open?: string;
 }
 
 /** Method name → (params) => result. Results may be returned as promises by implementations. */

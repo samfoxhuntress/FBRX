@@ -175,4 +175,6 @@ export const LEARNER_DEFAULTS = {
   mesh: { enabled: false },
   localApi: { enabled: false },
 } as const;
+/** Students in a school: no chatting between computers unless the school's own profiles turn it on. */
+export const STUDENT_DEFAULTS = { messages: { organization: false } } as const;
 export const LEARNER_LOCKED = ['appearance.easterEggs', 'appearance.gooseVisits', 'mesh.enabled', 'localApi.enabled', 'ai.systemPrompt', 'ai.providers', 'ai.defaultProvider', 'ai.defaultModel'];

@@ -69,4 +69,5 @@ export const ids = {
   sso: () => newId('sso'),
   ticket: () => newId('tkt'),
   ticketMessage: () => newId('tkm'),
+  chatMessage: () => newId('chm'),
 };

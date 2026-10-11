@@ -26,6 +26,9 @@ export const PERMISSIONS = {
   /** Help desk tickets: everyone can read them; operators and up answer them. */
   'helpdesk.read': ['superadmin', 'owner', 'admin', 'operator', 'viewer'],
   'helpdesk.manage': ['superadmin', 'owner', 'admin', 'operator'],
+  /** Organization chat: everyone can read the organization-wide conversation; operators and up post to it and remove messages. */
+  'messages.read': ['superadmin', 'owner', 'admin', 'operator', 'viewer'],
+  'messages.manage': ['superadmin', 'owner', 'admin', 'operator'],
 } as const satisfies Record<string, readonly Role[]>;
 export type Permission = keyof typeof PERMISSIONS;
 

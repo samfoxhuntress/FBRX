@@ -80,6 +80,8 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     /** How the organization's computers install new versions (groups may differ). */
     autoUpdate: z.enum(AUTO_UPDATE_MODES).optional(),
     helpdeskEnabled: z.boolean().optional(),
+    /** Messages between the organization's computers. */
+    chatEnabled: z.boolean().optional(),
   });
   const tenantView = (t: any) => ({
     id: t.id,
@@ -93,6 +95,7 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     vertical: t.vertical ?? 'business',
     autoUpdate: t.auto_update ?? 'notify',
     helpdeskEnabled: Number(t.helpdesk_enabled ?? 1) === 1,
+    chatEnabled: Number(t.chat_enabled ?? 1) === 1,
     configVersion: Number(t.config_version),
     createdAt: t.created_at,
     deviceCount: Number(ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM devices WHERE tenant_id = ? AND status = 'active'", t.id)?.n ?? 0),
@@ -142,7 +145,7 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!t) throw notFound();
     if (body.defaultProfileId && !ctx.db.get('SELECT 1 FROM profiles WHERE id = ? AND tenant_id = ?', body.defaultProfileId, id)) throw badRequest('Unknown profile');
     ctx.db.run(
-      'UPDATE tenants SET name = ?, contact_email = ?, notes = ?, status = ?, update_channel = ?, default_profile_id = ?, vertical = ?, auto_update = ?, helpdesk_enabled = ?, updated_at = ? WHERE id = ?',
+      'UPDATE tenants SET name = ?, contact_email = ?, notes = ?, status = ?, update_channel = ?, default_profile_id = ?, vertical = ?, auto_update = ?, helpdesk_enabled = ?, chat_enabled = ?, updated_at = ? WHERE id = ?',
       body.name ?? t.name,
       body.contactEmail !== undefined ? body.contactEmail : t.contact_email,
       body.notes ?? t.notes,
@@ -152,6 +155,7 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
       body.vertical ?? t.vertical ?? 'business',
       body.autoUpdate ?? t.auto_update ?? 'notify',
       body.helpdeskEnabled === undefined ? Number(t.helpdesk_enabled ?? 1) : body.helpdeskEnabled ? 1 : 0,
+      body.chatEnabled === undefined ? Number(t.chat_enabled ?? 1) : body.chatEnabled ? 1 : 0,
       new Date().toISOString(),
       id,
     );

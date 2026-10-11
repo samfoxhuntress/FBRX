@@ -6,6 +6,7 @@ import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarSignIn, Ca
 import type { ProtectionState, ProtectionStatus, ScanJob, ScanType, ShieldDetection, ShieldVerdict } from './protection';
 import type { AssistOffer, AssistPriority, AssistSession, AssistTools } from './mesh-assist';
 import type { MeshNetworkStatus, MeshPathTest } from './net';
+import type { MessagesOverview, MessageState, ThreadMessage } from './messages';
 import type { NetEnvDeviceAction, NetEnvDeviceStats, NetEnvDevice, NetEnvInput, NetEnvironment, NetEnvOverview, NetEnvProbe, NetEnvVoucher } from './netenv';
 /**
  * Contracts for the FBRX OS command-center modules: workspace (notes, tasks, projects, snippets), live system
@@ -774,6 +775,11 @@ export interface MeshMessage {
   fromName: string;
   text: string;
   at: string;
+  /** "all" (everyone on the mesh) or the other device's id (just the two of you). */
+  conversation?: string;
+  /** Your own messages: delivered, waiting for the device to come online, or not accepted. */
+  state?: MessageState;
+  error?: string;
 }
 export interface MeshPairing {
   code: string;
@@ -1115,8 +1121,21 @@ export interface ExtMethods {
   'mesh.rename': (p: { name: string }) => MeshStatus;
   'mesh.peerInfo': (p: { id: string }) => unknown;
   'mesh.ask': (p: { id: string; prompt: string; reqId: string }) => MeshJob;
-  'mesh.message': (p: { text: string }) => { delivered: number; total: number };
-  'mesh.messages': () => MeshMessage[];
+  /** To one paired device (`to`), or to every one allowed to chat. */
+  'mesh.message': (p: { text: string; to?: string }) => { delivered: number; total: number; message: MeshMessage };
+  'mesh.messages': (p?: { conversation?: string }) => MeshMessage[];
+
+  /** Messages: your mesh and your organization in one list of conversations. */
+  'messages.overview': () => MessagesOverview;
+  'messages.unread': () => { unread: number };
+  /** Every computer in the organization, to start a conversation with one. */
+  'messages.directory': () => Array<{ id: string; title: string; subtitle: string; online: boolean }>;
+  'messages.thread': (p: { id: string; before?: string; limit?: number }) => ThreadMessage[];
+  'messages.send': (p: { id: string; text: string }) => ThreadMessage;
+  'messages.resend': (p: { messageId: string }) => ThreadMessage;
+  'messages.read': (p: { id: string }) => Ok;
+  /** The conversation on screen (null when Messages is closed or the window hidden): no pop-ups for it. */
+  'messages.focus': (p: { id: string | null }) => Ok;
   'mesh.action': (p: { id: string; action: (typeof MESH_ACTIONS)[number]; text?: string }) => Ok;
   /** Paired computers that could help right now, best first. */
   'mesh.assist.helpers': () => AssistOffer[];
@@ -1181,6 +1200,7 @@ export interface ExtEvents {
   'winupdates.event': { reqId: string; line: string };
   'mesh.changed': MeshStatus;
   'mesh.message': MeshMessage;
+  'messages.changed': { threadId: string | null; message?: ThreadMessage; unread: number };
   'mesh.job': { reqId: string; job: MeshJob };
   'mesh.assist': AssistSession;
 }

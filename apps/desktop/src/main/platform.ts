@@ -59,6 +59,8 @@ export function createElectronPlatform(o: {
   dataDir: string;
   updates: UpdateController | null;
   onNotify: (n: NotificationEvent) => void;
+  /** Shows the window on a page (a notification was clicked). */
+  onOpen?: (route: string) => void;
   requestRestart: (reason: string) => void;
 }): PlatformAdapter {
   const resources = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources');
@@ -96,7 +98,10 @@ export function createElectronPlatform(o: {
     },
     notify: (n) => {
       o.onNotify(n);
-      if (Notification.isSupported()) new Notification({ title: n.title, body: n.body, silent: n.level === 'info' }).show();
+      if (!Notification.isSupported()) return;
+      const note = new Notification({ title: n.title, body: n.body, silent: n.level === 'info' });
+      if (n.open && o.onOpen) note.on('click', () => o.onOpen!(n.open!));
+      note.show();
     },
     requestRestart: o.requestRestart,
   };

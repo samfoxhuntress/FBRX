@@ -3,6 +3,7 @@ import {
   AUTO_UPDATE_MODES,
   EDUCATION_STAFF_DEFAULTS,
   LEARNER_DEFAULTS,
+  STUDENT_DEFAULTS,
   LEARNER_LOCKED,
   TIERS,
   VERTICALS,
@@ -45,6 +46,7 @@ export function resolveDeviceConfig(db: Db, master: Buffer, deviceId: string): D
     : edition.vertical === 'education'
       ? structuredClone(EDUCATION_STAFF_DEFAULTS) as Record<string, unknown>
       : {};
+  if (edition.vertical === 'education' && isLearner(edition.audience)) settings = deepMerge(settings, STUDENT_DEFAULTS);
   const locked = new Set<string>(isLearner(edition.audience) ? LEARNER_LOCKED : []);
   // Automatic updates, as the organization (or group) decided: from FBRX Command's releases or the repository.
   settings = deepMerge(settings, { updates: AUTO_UPDATE_SETTINGS[edition.autoUpdate] });

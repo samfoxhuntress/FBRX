@@ -3,6 +3,7 @@ import { PLATFORMS } from './constants';
 import { PolicySchema } from './policy';
 import type { DeviceCommand } from './commands';
 import { AUDIENCES, type DeviceEdition } from './editions';
+import type { OrgChatMessage } from './messages';
 
 /** Hardware/OS facts a device reports at enrollment and in heartbeats. */
 export const DeviceFactsSchema = z.object({
@@ -138,7 +139,9 @@ export type ServerToDeviceMessage =
   | { type: 'config.changed'; version: number }
   | { type: 'ping'; at: string }
   /** A help desk ticket this computer asked or receives changed (new ticket, reply, status). */
-  | { type: 'helpdesk.changed'; ticketId: string; number: number; reason: 'created' | 'message' | 'updated'; subject: string };
+  | { type: 'helpdesk.changed'; ticketId: string; number: number; reason: 'created' | 'message' | 'updated'; subject: string }
+  /** A message for this computer (Messages, organization chat). */
+  | { type: 'chat.message'; message: OrgChatMessage };
 
 export type DeviceToServerMessage =
   | { type: 'heartbeat'; heartbeat: Heartbeat }

@@ -249,6 +249,15 @@ export const SettingsSchema = z.object({
     quietHours: z.object({ enabled: z.boolean(), start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/) }),
     cooldownMinutes: z.number().int().min(1).max(1440),
   }),
+  /** Messages: chat with your other devices (Mesh) and the computers in your organization. */
+  messages: z.object({
+    /** The Messages page, and messages reaching this computer at all. */
+    enabled: z.boolean(),
+    /** Talk with the other computers in the organization (FBRX Command passes the messages on). */
+    organization: z.boolean(),
+    /** A notification when a message arrives (not for the conversation open on screen). */
+    notify: z.boolean(),
+  }),
   mesh: z.object({
     enabled: z.boolean(),
     port: z.number().int().min(1024).max(65535),
@@ -511,6 +520,7 @@ export const DEFAULT_SETTINGS: Settings = {
     quietHours: { enabled: false, start: '22:00', end: '07:00' },
     cooldownMinutes: 30,
   },
+  messages: { enabled: true, organization: true, notify: true },
   mesh: {
     enabled: false,
     port: DEFAULT_MESH_PORT,

@@ -6,13 +6,14 @@
 import { UPDATE_CHANNELS } from './constants';
 import { getPath } from './json';
 
-export type ProfileArea = 'ai' | 'fun' | 'privacy' | 'mesh' | 'backup' | 'protection' | 'updates' | 'presenter' | 'everyday';
+export type ProfileArea = 'ai' | 'fun' | 'privacy' | 'messages' | 'mesh' | 'backup' | 'protection' | 'updates' | 'presenter' | 'everyday';
 
 export const PROFILE_AREAS: Array<{ id: ProfileArea; label: string }> = [
   { id: 'ai', label: 'AI' },
   { id: 'fun', label: 'Fun and look' },
   { id: 'privacy', label: 'Privacy' },
   { id: 'presenter', label: 'Screens and meetings' },
+  { id: 'messages', label: 'Messages' },
   { id: 'mesh', label: 'Mesh and phone' },
   { id: 'backup', label: 'Backups' },
   { id: 'protection', label: 'Protection' },
@@ -111,6 +112,10 @@ export const PROFILE_SETTINGS: ProfileSetting[] = [
   { path: 'presenter.blurPrivate', area: 'presenter', kind: 'toggle', label: 'Blur private lists when presenting', help: 'Chats, alerts, credentials and tickets are blurred while presenter-safe mode is on.' },
   { path: 'presenter.maskClipboard', area: 'presenter', kind: 'toggle', label: 'Mask the clipboard when presenting', help: 'Clipboard history shows dots instead of what was copied while presenter-safe mode is on.' },
   { path: 'alerts.quietHours.enabled', area: 'presenter', kind: 'toggle', label: 'Quiet hours', help: 'Alerts below critical wait until quiet hours end (the times are set on each computer, or in JSON).' },
+  // Messages
+  { path: 'messages.enabled', area: 'messages', kind: 'toggle', label: 'Messages', help: 'The Messages page: people chat with their other devices and with the organization’s computers. Off hides it and turns messages away.' },
+  { path: 'messages.organization', area: 'messages', kind: 'toggle', label: 'Chat across the organization', help: 'People can message any computer in the organization, and everyone at once. Off keeps Messages to their own mesh.' },
+  { path: 'messages.notify', area: 'messages', kind: 'toggle', label: 'Notify about new messages', help: 'A notification pops up when a message arrives.' },
   // Mesh
   { path: 'mesh.enabled', area: 'mesh', kind: 'toggle', label: 'FBRX Mesh', help: 'Connects the computer to the person’s phone and other FBRX computers. Only paired devices can do anything.' },
   {
@@ -189,6 +194,13 @@ export const PROFILE_PRESETS: ProfilePreset[] = [
     description: 'No mesh, no Local API, no sharing AI: for shared, public or kiosk computers.',
     values: { 'mesh.enabled': false, 'localApi.enabled': false, 'localApi.allowRemote': false, 'mesh.assist.request': 'off', 'mesh.assist.offer': 'off' },
     lock: ['mesh.enabled', 'localApi.enabled', 'localApi.allowRemote', 'mesh.assist.request', 'mesh.assist.offer'],
+  },
+  {
+    id: 'no-chat',
+    name: 'No chatting',
+    description: 'Messages is off: computers do not message each other, in the organization or on a mesh. Help desk tickets still work.',
+    values: { 'messages.enabled': false, 'messages.organization': false },
+    lock: ['messages.enabled', 'messages.organization'],
   },
   {
     id: 'strong-protection',

@@ -23,11 +23,12 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'presenting' | 'agent' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
+type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
   { id: 'presenting', label: 'Presenting', icon: 'presentation', group: 'You' },
+  { id: 'messages', label: 'Messages', icon: 'message', group: 'You' },
   { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
   { id: 'voice', label: 'Voice', icon: 'mic', group: 'You' },
   { id: 'snippets', label: 'Snippets', icon: 'code', group: 'You' },
@@ -41,7 +42,7 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: str
 ];
 
 /** Student computers: who they are, how it looks and sounds, presenting, and About. */
-const LEARNER_SECTIONS = new Set<SectionId>(['general', 'appearance', 'presenting', 'voice', 'logs']);
+const LEARNER_SECTIONS = new Set<SectionId>(['general', 'appearance', 'presenting', 'messages', 'voice', 'logs']);
 
 const sectionFromRoute = (): SectionId | null => (SECTIONS.some((x) => x.id === routeArg()) ? (routeArg() as SectionId) : null);
 
@@ -88,6 +89,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'general' && <General onRerunSetup={onRerunSetup} />}
           {tab === 'appearance' && <Appearance />}
           {tab === 'presenting' && <PresentingSettings />}
+          {tab === 'messages' && <MessagesSettings />}
           {tab === 'agent' && <AgentSettings />}
           {tab === 'voice' && <VoiceSettings />}
           {tab === 'snippets' && <SnippetSettings />}
@@ -428,6 +430,46 @@ function PresentingSettings() {
           <li>Turn it on before you share your screen in a video call; FBRX cannot tell when a call app is sharing.</li>
           <li>Mirrored displays can look like one screen to the computer, so the automatic switch may not notice them. The shortcut always works.</li>
           <li>Your organization can turn the automatic switch on for every staff computer.</li>
+        </ul>
+      </Card>
+    </Grid>
+  );
+}
+
+function MessagesSettings() {
+  const { s, locked, patch } = useSettings();
+  const fleet = useCore('fleet.status', undefined, ['fleet.changed']).data;
+  const home = useVertical() === 'home';
+  if (!s) return null;
+  const m = s.messages;
+  const L = (k: string) => isLocked(locked, `messages.${k}`);
+  const org = fleet && fleet.state !== 'unenrolled' ? (fleet.tenantName ?? (home ? 'your family' : 'your organization')) : null;
+  return (
+    <Grid cols={2}>
+      <Card title="Messages" subtitle="Chat with your other computers and your phone, and with the other computers in your organization or family.">
+        <div className="fx-form">
+          <Toggle
+            checked={m.enabled}
+            disabled={L('enabled')}
+            onChange={(v) => void patch({ messages: { enabled: v } })}
+            label={<>Messages <Locked show={L('enabled')} /></>}
+            info="Shows Messages in the sidebar. Off hides it, and other devices are told this computer does not take messages."
+          />
+          <Toggle
+            checked={m.organization}
+            disabled={!m.enabled || L('organization')}
+            onChange={(v) => void patch({ messages: { organization: v } })}
+            label={<>Chat with {org ?? 'your organization'} <Locked show={L('organization')} /></>}
+            info="Message any computer in the organization, or everyone at once. FBRX Command passes these on and keeps them for 180 days. Off keeps Messages to your own mesh."
+          />
+          <Toggle checked={m.notify} disabled={!m.enabled || L('notify')} onChange={(v) => void patch({ messages: { notify: v } })} label={<>Notify me about new messages <Locked show={L('notify')} /></>} info="A pop-up when a message arrives, except for the conversation you have open. Presenter-safe mode keeps them quiet too." />
+        </div>
+      </Card>
+      <Card title="Good to know">
+        <ul className="fx-muted" style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>
+          <li>Messages between your own devices go straight between them over FBRX Mesh, encrypted end to end.</li>
+          <li>A computer that is switched off gets mesh messages when it is back (for up to a week); organization messages wait in FBRX Command.</li>
+          <li>{org ? `${org} can turn messages off for some computers (classrooms, say).` : 'Join an organization’s FBRX Command and its computers show up in Messages too.'}</li>
         </ul>
       </Card>
     </Grid>

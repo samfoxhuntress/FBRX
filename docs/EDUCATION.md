@@ -105,7 +105,8 @@ point and client, lets you restart a device, and makes guest Wi-Fi codes for vis
 * Conversations stay on the student's computer. FBRX Command sees health, version and ticket information, not chats or
   files.
 * Student computers start with presenter-safe mode on a projector, chats offline first, and easter eggs, the mesh and the
-  local API locked off. Choose which AI model they use in a profile for the Students group (a local model keeps
+  local API locked off. Organization **Messages** start off for students; turn them on in a profile for the Students
+  group if you want them, or use the **No chatting** preset to keep any group off ([MESSAGES.md](MESSAGES.md)). Choose which AI model they use in a profile for the Students group (a local model keeps
   everything on the computer).
 
 Schools have their own duties under student privacy law (FERPA and state student data privacy rules); review the

@@ -183,7 +183,9 @@ export class FleetAgent {
     if (res.status === 401) throw new UnauthorizedError(`Control plane rejected this device (HTTP ${res.status})`);
     if (res.status === 403 && path !== '/v1/device/config' && !path.startsWith('/v1/device/heartbeat')) throw new CoreError('FORBIDDEN', await serverMessage(res));
     if (res.status === 403) throw new UnauthorizedError(`Control plane rejected this device (HTTP ${res.status})`);
-    if (res.status === 404 && path.startsWith('/v1/device/helpdesk')) throw new CoreError('NOT_FOUND', await serverMessage(res));
+    const feature = path.startsWith('/v1/device/helpdesk') || path.startsWith('/v1/device/chat');
+    if (res.status === 404 && feature) throw new CoreError('NOT_FOUND', await serverMessage(res));
+    if (res.status === 429 && feature) throw new CoreError('UNAVAILABLE', await serverMessage(res));
     if (!res.ok) throw new Error(`Control plane error ${res.status}: ${(await serverMessage(res)).slice(0, 300)}`);
     return (await res.json()) as T;
   }
@@ -483,6 +485,7 @@ export class FleetAgent {
         this.send({ type: 'pong', at: new Date().toISOString() });
         break;
       case 'helpdesk.changed':
+      case 'chat.message':
         this.d.onMessage?.(msg);
         break;
     }

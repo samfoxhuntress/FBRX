@@ -7,6 +7,7 @@ import {
   VOICE_DOWNLOAD_IDS,
   LAB_FEATURES,
   MESH_ACTIONS,
+  MESSAGE_MAX_CHARS,
   ASSIST_PRIORITIES,
   ASSIST_TOOLS,
   isIP,
@@ -698,8 +699,33 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       const q = z.object({ id: z.string(), prompt: z.string().min(1).max(8000), reqId: ReqId }).parse(p);
       return k.mesh.ask(q.id, q.prompt, q.reqId);
     },
-    'mesh.message': (p) => k.mesh.message(z.object({ text: z.string().min(1).max(4000) }).parse(p).text),
-    'mesh.messages': () => k.mesh.messages(),
+    'mesh.message': (p) => {
+      const q = z.object({ text: z.string().min(1).max(4000), to: z.string().max(80).optional() }).parse(p);
+      return k.mesh.message(q.text, q.to);
+    },
+    'mesh.messages': (p) => k.mesh.messages(z.object({ conversation: z.string().max(80).optional() }).optional().parse(p)?.conversation),
+
+    // ---------------------------------------------------------------------------------------- messages
+    'messages.overview': () => k.messages.overview(),
+    'messages.unread': () => ({ unread: k.messages.unread() }),
+    'messages.directory': () => k.messages.directory(),
+    'messages.thread': (p) => {
+      const q = z.object({ id: z.string().min(1).max(100), before: z.string().max(40).optional(), limit: z.number().int().min(1).max(200).optional() }).parse(p);
+      return k.messages.thread(q.id, q);
+    },
+    'messages.send': (p) => {
+      const q = z.object({ id: z.string().min(1).max(100), text: z.string().min(1).max(MESSAGE_MAX_CHARS) }).parse(p);
+      return k.messages.send(q.id, q.text);
+    },
+    'messages.resend': (p) => k.messages.resend(z.object({ messageId: z.string().min(1).max(80) }).parse(p).messageId),
+    'messages.read': async (p) => {
+      await k.messages.read(Id.parse(p).id);
+      return { ok: true };
+    },
+    'messages.focus': async (p) => {
+      await k.messages.focus(z.object({ id: z.string().min(1).max(100).nullable() }).parse(p).id);
+      return { ok: true };
+    },
     'mesh.action': async (p) => {
       const q = z.object({ id: z.string(), action: z.enum(MESH_ACTIONS), text: z.string().max(500).optional() }).parse(p);
       await k.mesh.action(q.id, q.action, q.text);

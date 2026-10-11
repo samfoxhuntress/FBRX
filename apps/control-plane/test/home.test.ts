@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { HelpdeskStatus, SystemStatus, TicketDetail, TicketSummary } from '@fbrx/shared';
+import type { HelpdeskStatus, MessagesOverview, SystemStatus, ThreadMessage, TicketDetail, TicketSummary } from '@fbrx/shared';
 import { buildServer, type BuiltServer } from '../src/server';
 import { loadConfig } from '../src/config';
 import { Kernel } from '../../../packages/core/src/kernel';
@@ -143,6 +143,52 @@ describe('FBRX Command for a family', () => {
     expect(alert).toMatchObject({ severity: 'critical', deviceName: 'Milo laptop' });
     expect(alert.message).toContain('the child using Milo laptop');
     expect(JSON.stringify(alert)).not.toContain('want to die');
+  }, 60_000);
+
+  it('lets the family message each other in Messages, without the help desk', async () => {
+    const parentId = parent.fleet.deviceId!;
+    const childId = child.fleet.deviceId!;
+    const overview = (k: Kernel) => k.call('messages.overview', undefined, USER) as Promise<MessagesOverview>;
+    const o = await overview(child);
+    expect(o.org).toMatchObject({ on: true, name: 'The Rivera family' });
+    expect(o.threads.map((t) => t.id)).toEqual(expect.arrayContaining(['org:all', `org:${parentId}`]));
+    expect(o.threads.find((t) => t.id === `org:${parentId}`)).toMatchObject({ title: 'Alex laptop', kind: 'direct', online: true });
+
+    // One computer to another: it arrives at once, unread, with a notification.
+    const notes: string[] = [];
+    parent.events.on('notification', (n) => n.source === 'messages' && notes.push(`${n.title}|${n.open}`));
+    const sent = (await child.call('messages.send', { id: `org:${parentId}`, text: 'Can I play for ten more minutes?' }, USER)) as ThreadMessage;
+    expect(sent).toMatchObject({ mine: true, threadId: `org:${parentId}`, fromName: 'Milo laptop' });
+    await waitFor(() => notes.length > 0);
+    expect(notes[0]).toBe(`Milo laptop|messages/org:${childId}`);
+    const p = await overview(parent);
+    expect(p.threads.find((t) => t.id === `org:${childId}`)).toMatchObject({ unread: 1, last: { text: 'Can I play for ten more minutes?', mine: false } });
+    expect((await parent.call('messages.unread', undefined, USER)) as { unread: number }).toEqual({ unread: 1 });
+    const thread = (await parent.call('messages.thread', { id: `org:${childId}` }, USER)) as ThreadMessage[];
+    expect(thread.map((m) => [m.fromName, m.mine, m.text])).toEqual([['Milo laptop', false, 'Can I play for ten more minutes?']]);
+
+    // Read on screen: no pop-up for the open conversation, and the count clears.
+    await parent.call('messages.focus', { id: `org:${childId}` }, USER);
+    expect((await overview(parent)).unread).toBe(0);
+    await parent.call('messages.send', { id: `org:${childId}`, text: 'Five, then dinner.' }, USER);
+    await child.call('messages.send', { id: `org:${parentId}`, text: 'OK!' }, USER);
+    await waitFor(async () => ((await parent.call('messages.thread', { id: `org:${childId}` }, USER)) as ThreadMessage[]).length === 3);
+    expect(notes).toHaveLength(1);
+    expect((await overview(parent)).unread).toBe(0);
+    await parent.call('messages.focus', { id: null }, USER);
+
+    // A parent in FBRX Command writes to everyone.
+    const posted = await api('POST', '/v1/admin/chat/messages', { text: 'Pizza night!' });
+    expect(posted).toMatchObject({ with: 'all', fromKind: 'admin', fromName: 'Alex' });
+    const all = await waitFor(async () => ((await child.call('messages.thread', { id: 'org:all' }, USER)) as ThreadMessage[]).find((m) => m.text === 'Pizza night!'));
+    expect(all).toMatchObject({ fromAdmin: true, mine: false });
+    expect((await api('GET', '/v1/admin/chat/messages')).messages.map((m: any) => m.text)).toEqual(['Pizza night!']);
+
+    // The family can turn it off.
+    await api('PATCH', `/v1/admin/tenants/${tenantId}`, { chatEnabled: false });
+    expect((await overview(child)).org).toMatchObject({ on: false, note: 'Your organization has turned off messages between computers' });
+    await expect(child.call('messages.send', { id: `org:${parentId}`, text: 'Hello?' }, USER)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await api('PATCH', `/v1/admin/tenants/${tenantId}`, { chatEnabled: true });
   }, 60_000);
 
   it('turns "a student computer" into a child computer in a family', async () => {

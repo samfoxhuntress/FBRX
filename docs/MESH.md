@@ -10,7 +10,7 @@ Each device gets its own permissions on *this* computer, changeable at any time 
 | Permission | Phones (default) | Computers (default) |
 | --- | :-: | :-: |
 | See how it is doing (health, performance, services) | ✔ | ✔ |
-| Messages and notifications | ✔ | ✔ |
+| Messages (to this computer alone or to everyone) and notifications | ✔ | ✔ |
 | Ask this computer's agent | ✔ | |
 | Approve or deny waiting actions | ✔ | |
 | Tasks and notes | ✔ | |
@@ -23,7 +23,8 @@ Each device gets its own permissions on *this* computer, changeable at any time 
 Each device card offers one choice, **What it may do here**: *The usual* (the defaults above), *Full trust* (everything
 but the two special permissions), *Messages only* or *Paused* (stays paired, can do nothing). **Choose one by one**
 opens every permission, each with an (i) that explains it; **Network protection** and **Controller** are special and
-never part of a preset. *Message*, *Ask its agent* and *How is it doing?* are on the card; *Send a ping*, *Find my
+never part of a preset. *Message* (opens the conversation with it in **Messages**, see [MESSAGES.md](MESSAGES.md)),
+*Ask its agent* and *How is it doing?* are on the card; *Send a ping*, *Find my
 phone*, *Lock it*, *Put it to sleep* and *Remove* are under **More**.
 
 Requests from another *computer* follow **When another computer asks this computer's agent**: ask me first (an

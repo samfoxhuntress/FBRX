@@ -10,9 +10,9 @@ a child's "Get help" goes straight to a parent's computer.
 | --- | --- | --- |
 | Runs | FBRX Endpoint (Ultra, or Basic if you hold the group to it) | **FBRX OS Home** |
 | Agent | Fabrix with every tool, asking before it changes anything | A learning helper that only talks: no files, apps, websites or commands |
-| Pages | Everything the license gives | Home, the helper, Get help, Calendar, Tasks, Notes, Toolbox, Library, Settings |
+| Pages | Everything the license gives | Home, the helper, Messages, Calendar, Tasks, Notes, Toolbox, Library, Settings |
 | Defaults | Yours to choose (profiles in FBRX Command) | Presenter-safe mode with a projector, chats offline first; easter eggs, the mesh and the local API locked off |
-| Help | Receives the children's requests for help, automatically | **Get help** asks a parent |
+| Talking | **Messages** with every computer in the family; with Ultra, the Help desk receives requests for help | **Messages** with the family |
 
 ## 1. Set up FBRX Command as a Home
 
@@ -44,12 +44,18 @@ as on **Deploy & enroll** and choose *It matches: trust and connect*. Or put the
 it. Using a Parents token on a child's computer? Tick **This computer is for a student or a child** and it becomes a
 child's computer. Only FBRX Command can turn a child's computer back into a parent's.
 
-## 4. Getting help
+## 4. Talking to each other
 
-Every computer in the family has a Help desk tab (**Get help** on children's computers). A child's request reaches
-every parent's computer within a second, with a short summary of the computer, and the parent's answer goes straight
-back. A parent can also answer from FBRX Command's **Help desk** page. To stop a parent's computer receiving requests,
-open it under **Devices → Configuration** and turn off *Receives the family's requests for help*.
+Every computer in the family has **Messages** in the sidebar: message one computer ("Can I play for ten more
+minutes?") or everyone at once ("Pizza night at 6!"). Messages arrive within a second, with a pop-up, and wait in
+FBRX Command for a computer that is off. A parent can also write to everyone from FBRX Command's **Messages** page, and
+turn messages off for the family under **Profiles & groups → Organization defaults**. See
+[MESSAGES.md](MESSAGES.md).
+
+The help desk is there too, for computers on Endpoint Ultra: a parent's Ultra computer receives requests for help
+within a second, with a short summary of the computer, and can answer from FBRX Command's **Help desk** page as well.
+To stop a parent's computer receiving requests, open it under **Devices → Configuration** and turn off *Receives the
+family's requests for help*. On Endpoint Basic and FBRX OS Home, Messages takes its place.
 
 ## Children and safety
 

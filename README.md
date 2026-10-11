@@ -33,8 +33,9 @@ Server**, powered by FBRX OS, and the products below for the computers you alrea
   **FBRX Shield**, FBRX's own antivirus, next to the choice of Microsoft Defender or an antivirus already installed. **Endpoint Basic** runs without a license key: the everyday
   tools and the agent, in a plain light or dark look. A license key turns on **Endpoint Ultra**: IT and developer tool
   sets (Terminal, FBRX/1, Task Manager, virtual lab, device consoles, UniFi network environments…), Mesh and AI
-  coordination, connections and plugins, the theme studio and the easter eggs. Every edition has presenter-safe mode,
-  and computers in an organization get a **Help desk** tab.
+  coordination, connections and plugins, the theme studio and the easter eggs. Every edition has presenter-safe mode
+  and **Messages**, chat with your other devices and with the computers in your organization or family
+  ([docs/MESSAGES.md](docs/MESSAGES.md)); computers in an organization get a **Help desk** tab.
 * **FBRX OS Education** and **FBRX OS Home** — what a student's computer at a school, or a child's computer at home,
   runs: a short set of friendly pages and a safe learning helper with no tools.
 * **FBRX Command** — the tenant controller (control plane and console) for running FBRX Endpoint across a fleet

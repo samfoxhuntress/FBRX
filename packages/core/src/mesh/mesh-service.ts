@@ -118,7 +118,12 @@ export interface MeshHost {
   networkFinding?: (device: MeshDevice, finding: MeshNetworkFinding) => void;
   /** How this computer is protected (antivirus, threats), for a MiniDome allowed to ask. */
   protection?: () => MeshProtectionInfo | null;
+  /** Whether messages are welcome here (Settings → Messages); false turns them away. */
+  acceptMessages?: () => boolean;
 }
+
+/** A message to a computer that is off waits this long for it to come back. */
+const MESSAGE_WAIT_MS = 7 * 24 * 3600_000;
 
 /**
  * The personal mesh: this computer, your other FBRX computers and your phone. Devices pair once with a one-time
@@ -134,6 +139,7 @@ export class MeshService {
   private readonly jobs = new Map<string, MeshJob & { deviceId: string; at: number }>();
   private readonly nearby = new Map<string, { id: string; name: string; addr: string; at: number }>();
   private readonly pairAttempts = new Map<string, number[]>();
+  private readonly flushing = new Set<string>();
   private pingTimer: NodeJS.Timeout | null = null;
   private lastError: string | null = null;
   private online = new Map<string, boolean>();
@@ -576,6 +582,8 @@ export class MeshService {
     if (this.online.get(id) !== on) {
       this.online.set(id, on);
       this.changed();
+      // Back: hand over the messages that waited for it.
+      if (on) void this.flushWaiting(id);
     }
   }
 
@@ -622,12 +630,20 @@ export class MeshService {
     return job;
   }
 
-  /** Sends a chat message to every paired device allowed to chat. */
-  async message(text: string): Promise<{ delivered: number; total: number }> {
+  /**
+   * Sends a message to one paired device (`to`), or to every paired device allowed to chat. A computer that is off
+   * gets it when it is back (for a week); a phone collects it the next time it checks in.
+   */
+  async message(text: string, to?: string): Promise<{ delivered: number; total: number; message: MeshMessage }> {
     const t = text.trim().slice(0, 4000);
     if (!t) throw new CoreError('INVALID_ARGUMENT', 'Type a message');
-    const self = this.self;
-    const msg = this.storeMessage({ id: newId('mmsg'), fromId: self.id, fromName: this.host.deviceName(), text: t, at: new Date().toISOString() });
+    if (to) {
+      const d = this.toDevice(this.row(to));
+      const msg = this.storeMessage({ id: newId('mmsg'), fromId: this.self.id, fromName: this.host.deviceName(), text: t, at: new Date().toISOString(), conversation: d.id, state: 'waiting' });
+      const final = await this.deliver(d, msg);
+      return { delivered: final.state === 'sent' ? 1 : 0, total: 1, message: final };
+    }
+    const msg = this.storeMessage({ id: newId('mmsg'), fromId: this.self.id, fromName: this.host.deviceName(), text: t, at: new Date().toISOString(), conversation: 'all', state: 'waiting' });
     const targets = this.devices().filter((d) => d.permissions.chat);
     let delivered = 0;
     await Promise.all(
@@ -635,22 +651,106 @@ export class MeshService {
         if (d.kind === 'mobile') {
           this.queue(d.id, { type: 'message', message: msg });
           delivered++;
-        } else if (await this.call(d.id, 'chat.send', { id: msg.id, text: t }).then(() => true, () => false)) delivered++;
+        } else if (await this.call(d.id, 'chat.send', { id: msg.id, text: t, direct: false }).then(() => true, () => false)) delivered++;
       }),
     );
-    return { delivered, total: targets.length };
+    const state = delivered > 0 ? 'sent' : 'failed';
+    const error = delivered === targets.length ? null : targets.length === 0 ? 'No device on your mesh takes messages yet' : delivered === 0 ? 'No device on your mesh was reachable' : `Reached ${delivered} of ${targets.length}`;
+    return { delivered, total: targets.length, message: this.setMessageState(msg.id, state, error) };
   }
 
-  messages(): MeshMessage[] {
+  /** Hands a message to one device; one that is off keeps it waiting. */
+  private async deliver(d: MeshDevice, msg: MeshMessage): Promise<MeshMessage> {
+    if (d.kind === 'mobile') {
+      this.queue(d.id, { type: 'message', message: msg });
+      return this.setMessageState(msg.id, 'sent', null);
+    }
+    try {
+      await this.call(d.id, 'chat.send', { id: msg.id, text: msg.text, direct: true });
+      return this.setMessageState(msg.id, 'sent', null);
+    } catch (err) {
+      const e = err instanceof CoreError ? err : new CoreError('UNAVAILABLE', errorMessage(err));
+      // Not reachable: try again when it is back. Refused (messages off there, not allowed): say why.
+      if (e.code === 'UNAVAILABLE' && Date.now() - Date.parse(msg.at) < MESSAGE_WAIT_MS) return this.setMessageState(msg.id, 'waiting', `${d.name} is not reachable right now: it gets this when it is back`);
+      return this.setMessageState(msg.id, 'failed', e.message.startsWith(`${d.name}: `) ? e.message.slice(d.name.length + 2) : e.message);
+    }
+  }
+
+  /** Sends what was waiting for a computer that just came back. */
+  private async flushWaiting(id: string): Promise<void> {
+    if (this.flushing.has(id)) return;
+    this.flushing.add(id);
+    try {
+      const d = this.toDevice(this.row(id));
+      const rows = this.db.all<any>("SELECT * FROM mesh_messages WHERE conversation = ? AND state = 'waiting' ORDER BY at", id);
+      for (const r of rows) {
+        const m = await this.deliver(d, this.toMessage(r));
+        if (m.state === 'waiting') break;
+      }
+    } catch {
+      /* removed meanwhile */
+    } finally {
+      this.flushing.delete(id);
+    }
+  }
+
+  /** Tries a message again (one that failed or is still waiting). */
+  async resend(messageId: string): Promise<MeshMessage> {
+    const r = this.db.get<any>('SELECT * FROM mesh_messages WHERE id = ?', messageId);
+    if (!r || r.from_id !== this.self.id) throw new CoreError('NOT_FOUND', 'Message not found');
+    if (r.conversation === 'all') throw new CoreError('INVALID_ARGUMENT', 'Send it again as a new message');
+    this.db.run("UPDATE mesh_messages SET at = ?, state = 'waiting' WHERE id = ?", new Date().toISOString(), messageId);
+    return this.deliver(this.toDevice(this.row(r.conversation)), this.toMessage(this.db.get<any>('SELECT * FROM mesh_messages WHERE id = ?', messageId)));
+  }
+
+  /** Messages to and from everyone ("all", the default) or with one device, oldest first. */
+  messages(conversation = 'all', opts: { before?: string; limit?: number } = {}): MeshMessage[] {
+    const limit = Math.min(Math.max(opts.limit ?? 200, 1), 500);
     return this.db
-      .all<any>('SELECT * FROM mesh_messages ORDER BY at DESC LIMIT 200')
+      .all<any>(`SELECT * FROM mesh_messages WHERE conversation = ? ${opts.before ? 'AND at < ?' : ''} ORDER BY at DESC LIMIT ?`, ...[conversation, ...(opts.before ? [opts.before] : []), limit])
       .reverse()
-      .map((r) => ({ id: r.id, fromId: r.from_id, fromName: r.from_name, text: r.text, at: r.at }));
+      .map((r) => this.toMessage(r));
+  }
+
+  /** The newest message and how many arrived after `since`, per conversation. */
+  threadSummaries(readAt: (conversation: string) => string): Array<{ conversation: string; last: MeshMessage; unread: number }> {
+    const self = this.self.id;
+    return this.db.all<{ conversation: string }>('SELECT DISTINCT conversation FROM mesh_messages').map(({ conversation }) => {
+      const last = this.toMessage(this.db.get<any>('SELECT * FROM mesh_messages WHERE conversation = ? ORDER BY at DESC LIMIT 1', conversation));
+      const unread = Number(this.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM mesh_messages WHERE conversation = ? AND at > ? AND from_id != ?', conversation, readAt(conversation), self)?.n ?? 0);
+      return { conversation, last, unread };
+    });
+  }
+
+  /** This computer's id on the mesh (its key's fingerprint). */
+  get selfId(): string {
+    return this.self.id;
+  }
+
+  private toMessage(r: any): MeshMessage {
+    return { id: r.id, fromId: r.from_id, fromName: r.from_name, text: r.text, at: r.at, conversation: r.conversation ?? 'all', ...(r.state ? { state: r.state } : {}), ...(r.error ? { error: r.error } : {}) };
+  }
+
+  private setMessageState(id: string, state: 'sent' | 'waiting' | 'failed', error: string | null): MeshMessage {
+    this.db.run('UPDATE mesh_messages SET state = ?, error = ? WHERE id = ?', state, error, id);
+    const m = this.toMessage(this.db.get<any>('SELECT * FROM mesh_messages WHERE id = ?', id));
+    this.events.emit('mesh.message', m);
+    return m;
   }
 
   private storeMessage(m: MeshMessage): MeshMessage {
-    this.db.run('INSERT OR IGNORE INTO mesh_messages (id, from_id, from_name, text, at) VALUES (?, ?, ?, ?, ?)', m.id, m.fromId, m.fromName, m.text, m.at);
-    this.db.run('DELETE FROM mesh_messages WHERE id NOT IN (SELECT id FROM mesh_messages ORDER BY at DESC LIMIT 1000)');
+    this.db.run(
+      'INSERT OR IGNORE INTO mesh_messages (id, from_id, from_name, text, at, conversation, state, error) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
+      m.id,
+      m.fromId,
+      m.fromName,
+      m.text,
+      m.at,
+      m.conversation ?? 'all',
+      m.state ?? null,
+      m.error ?? null,
+    );
+    this.db.run('DELETE FROM mesh_messages WHERE id NOT IN (SELECT id FROM mesh_messages ORDER BY at DESC LIMIT 5000)');
     this.events.emit('mesh.message', m);
     return m;
   }
@@ -804,15 +904,21 @@ export class MeshService {
       }
       case 'chat.send': {
         need('chat');
+        if (this.host.acceptMessages && !this.host.acceptMessages()) throw new CoreError('FORBIDDEN', 'Messages are turned off on this computer');
         const text = String(p.text ?? '').trim().slice(0, 4000);
         if (!text) throw new CoreError('INVALID_ARGUMENT', 'Empty message');
-        this.storeMessage({ id: /^[\w-]{4,64}$/.test(p.id) ? p.id : newId('mmsg'), fromId: d.id, fromName: d.name, text, at: new Date().toISOString() });
-        this.host.notify(`Message from ${d.name}`, text.slice(0, 200));
+        // Just the two of you, or everyone on the mesh. Older computers only broadcast; a phone talks to this computer only.
+        const direct = typeof p.direct === 'boolean' ? p.direct : d.kind === 'mobile';
+        // Messages decides about the notification (Settings → Messages, the conversation open on screen).
+        this.storeMessage({ id: /^[\w-]{4,64}$/.test(p.id) ? p.id : newId('mmsg'), fromId: d.id, fromName: d.name, text, at: new Date().toISOString(), conversation: direct ? d.id : 'all' });
         return { ok: true };
       }
-      case 'messages':
+      case 'messages': {
         need('chat');
-        return this.messages().slice(-100);
+        // A phone sees what went to everyone and what is between the two of you.
+        const mine = [...this.messages('all', { limit: 100 }), ...this.messages(d.id, { limit: 100 })].sort((a, b) => a.at.localeCompare(b.at));
+        return mine.slice(-100);
+      }
       case 'ask':
         need('ask');
         return publicJob(this.startJob(d, String(p.prompt ?? '')));

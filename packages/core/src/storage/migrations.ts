@@ -365,6 +365,20 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX alerts_ref ON alerts (rule_id, ref);
     `,
   },
+  {
+    version: 10,
+    name: 'message-threads',
+    // Messages: mesh messages to one device (conversation = its id) as well as to everyone ("all"), whether yours
+    // reached it, and how far each thread has been read. Everything already there counts as read.
+    up: `
+      ALTER TABLE mesh_messages ADD COLUMN conversation TEXT NOT NULL DEFAULT 'all';
+      ALTER TABLE mesh_messages ADD COLUMN state TEXT;
+      ALTER TABLE mesh_messages ADD COLUMN error TEXT;
+      CREATE INDEX mesh_messages_conversation ON mesh_messages (conversation, at);
+      CREATE TABLE message_reads (thread TEXT PRIMARY KEY, read_at TEXT NOT NULL);
+      INSERT INTO message_reads (thread, read_at) VALUES ('mesh:all', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

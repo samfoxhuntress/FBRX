@@ -597,6 +597,7 @@ async function boot() {
     dataDir,
     updates,
     onNotify: () => undefined,
+    onOpen: (route) => showWindow(route),
     requestRestart: (reason) => {
       quitting = true;
       void kernel?.stop().finally(() => {

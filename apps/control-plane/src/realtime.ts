@@ -19,7 +19,8 @@ export type AdminEvent =
   | { type: 'command.updated'; tenantId: string; command: unknown }
   | { type: 'device.event'; tenantId: string; event: unknown }
   | { type: 'audit'; tenantId: string | null; entry: unknown }
-  | { type: 'ticket.updated'; tenantId: string; ticket: unknown };
+  | { type: 'ticket.updated'; tenantId: string; ticket: unknown }
+  | { type: 'chat.message'; tenantId: string; message: unknown };
 
 /** In-memory registry of live device and admin-console WebSocket connections. */
 export class Realtime {

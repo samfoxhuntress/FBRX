@@ -20,6 +20,7 @@ import { PresenterPill, usePresenter } from './presenter';
 // Pages load when first opened, so the app starts with only what the first screen needs.
 const AgentPage = lazy(() => import('./pages/agent').then((m) => ({ default: m.AgentPage })));
 const HelpdeskPage = lazy(() => import('./pages/helpdesk').then((m) => ({ default: m.HelpdeskPage })));
+const MessagesPage = lazy(() => import('./pages/messages').then((m) => ({ default: m.MessagesPage })));
 const ApprovalsPage = lazy(() => import('./pages/approvals').then((m) => ({ default: m.ApprovalsPage })));
 const ToolsPage = lazy(() => import('./pages/tools').then((m) => ({ default: m.ToolsPage })));
 const ConnectionsPage = lazy(() => import('./pages/connections').then((m) => ({ default: m.ConnectionsPage })));
@@ -58,6 +59,7 @@ export type Route =
   | 'agent'
   | 'alerts'
   | 'helpdesk'
+  | 'messages'
   | 'tasks'
   | 'notes'
   | 'projects'
@@ -171,6 +173,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const hd = useCore('helpdesk.status', undefined, ['fleet.changed']).data;
   const hdList = useCore('helpdesk.tickets', { scope: hd?.receiver ? 'queue' : 'mine', state: 'open' }, ['helpdesk.changed', 'fleet.changed'], 300_000).data;
   const helpdeskCount = hd?.available ? (hdList ?? []).filter((t) => (hd.receiver ? t.status === 'open' : t.status === 'waiting')).length : 0;
+  // Messages waiting to be read, on your mesh and in your organization.
+  const messagesOn = settings?.settings.messages.enabled ?? true;
+  const unreadMessages = useCore('messages.unread', undefined, ['messages.changed', 'mesh.changed', 'fleet.changed', 'settings.changed'], 120_000).data?.unread ?? 0;
   // FBRX Shield's number: findings waiting for a decision.
   const shieldCount = useCore('protection.status', undefined, ['protection.changed', 'shield.detected'], 300_000).data?.shield.open ?? 0;
   const [forceOnboarding, setForceOnboarding] = useState(false);
@@ -220,6 +225,12 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         const p = presenting.current;
         if (p?.active && p.hideNotifications) {
           if (n.level === 'error') toast.error('FBRX needs your attention', 'Open Alerts when you have finished presenting.');
+          return;
+        }
+        // A message: one click opens the conversation (and none while it is already on screen).
+        if (n.open) {
+          if (location.hash === `#/${n.open}`) return;
+          toast.info(n.title, n.body, { label: 'Open', onClick: () => navigate(n.open!) });
           return;
         }
         toast[n.level === 'error' ? 'error' : n.level === 'warning' ? 'warning' : n.level === 'success' ? 'success' : 'info'](n.title, n.body);
@@ -293,13 +304,17 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   // FBRX OS Education or Home (a student's or child's computer): a short list of friendly pages.
   const learner = !!status.edition?.learner;
   const vertical = status.edition?.vertical ?? 'business';
+  const helpdeskShown = vertical !== 'home' || ultra;
 
   const all: Array<NavItem & { ultra?: boolean }> = [
     { id: 'home', label: 'FBRX Glass', icon: 'dashboard', section: 'Command' },
     { id: 'agent', label: agentName, icon: 'sparkles', section: 'Command' },
     { id: 'alerts', label: 'Alerts', icon: 'bell', count: alertCounts?.unread, section: 'Command' },
-    // Once the computer belongs to an organization: tickets to IT (and, on receivers, everyone's tickets).
-    ...(enrolled ? [{ id: 'helpdesk', label: learner ? 'Get help' : 'Help desk', icon: 'lifebuoy' as IconName, count: helpdeskCount || undefined, section: 'Command' }] : []),
+    // Chat with your other devices and the organization's (or family's) computers, in every edition.
+    ...(messagesOn ? [{ id: 'messages', label: 'Messages', icon: 'message' as IconName, count: unreadMessages || undefined, section: 'Command' }] : []),
+    // Once the computer belongs to an organization: tickets to IT (and, on receivers, everyone's tickets). At home,
+    // Messages does that job, so the help desk stays with Endpoint Ultra (a parent's receiving computer, say).
+    ...(enrolled && helpdeskShown ? [{ id: 'helpdesk', label: learner ? 'Get help' : 'Help desk', icon: 'lifebuoy' as IconName, count: helpdeskCount || undefined, section: 'Command' }] : []),
     { id: 'calendar', label: 'Calendar', icon: 'calendar', section: 'Workspace' },
     { id: 'tasks', label: 'Tasks', icon: 'tasks', section: 'Workspace' },
     { id: 'notes', label: 'Notes', icon: 'note', section: 'Workspace' },
@@ -348,7 +363,10 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'agent':
         return <AgentPage agentName={agentName} />;
       case 'helpdesk':
+        if (enrolled && !helpdeskShown) return ultraOnly('The help desk', 'At home, Messages is the way to reach the family’s other computers. The help desk (tickets) comes with Endpoint Ultra.');
         return enrolled ? <HelpdeskPage learner={learner} /> : ultraOnly('The help desk', 'Join your organization’s FBRX Command and a Help desk tab appears here for sending problems to IT.');
+      case 'messages':
+        return <MessagesPage />;
       case 'alerts':
         return <AlertsPage />;
       case 'calendar':
@@ -569,10 +587,10 @@ function TopBar({
  * it; collapsed to icons, its pages slide out beside it.
  */
 /** What a student's or child's computer (FBRX OS Education or Home) shows. */
-const LEARNER_PAGES = new Set(['home', 'agent', 'helpdesk', 'calendar', 'tasks', 'notes', 'toolbox', 'library', 'settings']);
+const LEARNER_PAGES = new Set(['home', 'agent', 'messages', 'helpdesk', 'calendar', 'tasks', 'notes', 'toolbox', 'library', 'settings']);
 
 const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; basicHint?: string; learnerHint?: string; icon: IconName }> = [
-  { id: 'bridge', section: 'Command', label: 'Bridge', hint: 'Glass, agent, alerts', learnerHint: 'Home, helper, get help', icon: 'compass' },
+  { id: 'bridge', section: 'Command', label: 'Bridge', hint: 'Glass, agent, messages, alerts', learnerHint: 'Home, helper, messages', icon: 'compass' },
   { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Calendar, tasks, notes', learnerHint: 'Calendar, notes and to-dos', icon: 'layers' },
   { id: 'pitstop', section: 'PC care', label: 'Pit Stop', hint: 'Storage, security, repairs', icon: 'wrench' },
   { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', learnerHint: 'Tools and stories', icon: 'toolbox' },

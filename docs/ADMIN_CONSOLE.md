@@ -34,7 +34,8 @@ license with a kind also sets it. Unattended installs can pick the first tenant'
 | | Device detail | Live health and services, metrics charts, installed plugins, versions, audit chain head; run any command and watch its result; move to a group; set update channel or pin; who uses it (staff or student; parent or child at home); whether it receives help desk tickets; per-device overrides; its backups; retire |
 | | **Alerts & events** | Service failures, circuit breaks, policy denials, student and child safety alerts and other device events; acknowledge them |
 | | **Help desk** | Every ticket sent from the organization's computers, its conversation and the computer's details; answer, take, change status and priority; which computers receive tickets |
-| Configuration | **Profiles & groups** | Organization defaults: the kind (Work, School, Home), *New versions* (install automatically, tell people, off), the help desk on or off, default profile and channel. **Quick setup** for the tenant's kind (Set up for work, for a school, for a family) until its groups exist. Profiles hold managed settings, governance policy and *locks* (paths users cannot change). Groups attach a profile, who uses the computers (staff or student; parent or child), the edition (hold to Basic), *New versions*, an update channel and a pinned version |
+| | **Messages** | The *Everyone* conversation every computer sees in Messages: post to it, remove what does not belong ([MESSAGES.md](MESSAGES.md)) |
+| Configuration | **Profiles & groups** | Organization defaults: the kind (Work, School, Home), *New versions* (install automatically, tell people, off), the help desk on or off, Messages on or off, default profile and channel. **Quick setup** for the tenant's kind (Set up for work, for a school, for a family) until its groups exist. Profiles hold managed settings, governance policy and *locks* (paths users cannot change). Groups attach a profile, who uses the computers (staff or student; parent or child), the edition (hold to Basic), *New versions*, an update channel and a pinned version |
 | | **Deploy & enroll** | The address computers join at (and, for FBRX Command with its own certificate, the fingerprint they check); download the latest installers; create enrollment tokens (group, who uses the computers, usage limit, expiry, template snapshot); download the matching `fbrx-provision.json`, a **Mac profile** (.mobileconfig for Jamf, Mosyle, Kandji, Intune…) and a **Windows script** (Intune Win32 app) |
 | | **Credentials** | Organization secrets scoped to the tenant, a group or a single device; pushed into device vaults as read-only managed secrets; rotate or delete centrally |
 | | **Plugins** | Upload plugin packages (manifest and permissions shown), deploy to devices or groups |
@@ -53,10 +54,11 @@ A profile (and a single device's overrides) is built from:
 
 * **Ready-made** bundles, one click each and one click to take out again: **No Fun Extras** (no easter eggs, jokes,
   goose or start-up sound), **Private by default** (AI on the computer, chats start offline, no usage statistics or
-  clipboard history), **Locked down** (no mesh, no Local API, no sharing AI), **Strong protection**, **Daily backups**,
+  clipboard history), **Locked down** (no mesh, no Local API, no sharing AI), **No chatting** (Messages off),
+  **Strong protection**, **Daily backups**,
   **Meeting-room safe**, **Calm and quick** and **Share AI across computers**. They combine; the profiles table shows
   which ones each profile carries.
-* **The usual settings**, by area (AI, fun and look, privacy, screens and meetings, mesh, backups, protection,
+* **The usual settings**, by area (AI, fun and look, privacy, screens and meetings, messages, mesh, backups, protection,
   updates, everyday), each with an **(i)** saying what it does: *Not set / On / Off* for switches, a list for choices,
   and **Lock** so people cannot change it on their computer. *Find a setting* searches names and explanations.
 * **Advanced: everything as text**: the same profile as JSON (any FBRX OS setting) and the locked paths, one per line,
@@ -100,6 +102,8 @@ everyone now** sends `update.install` to every active computer (online ones star
 | Set up sign in with Google or Microsoft | ✔ | ✔ | | | |
 | Read help desk tickets | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Answer help desk tickets | ✔ | ✔ | ✔ | ✔ | |
+| Read the organization's *Everyone* messages | ✔ | ✔ | ✔ | ✔ | ✔ |
+| Post to *Everyone* and remove messages | ✔ | ✔ | ✔ | ✔ | |
 | Read licenses | ✔ | ✔ | ✔ | | |
 | Tenants, releases, issuing licenses | ✔ | | | | |
 

@@ -378,4 +378,30 @@ export const CP_MIGRATIONS: Migration[] = [
       ALTER TABLE licenses ADD COLUMN vertical TEXT;
     `,
   },
+  {
+    version: 5,
+    name: 'messages',
+    // Organization chat: "all" (everyone) or "dm:<device>:<device>" (the two ids sorted). Admins post to "all".
+    up: `
+      CREATE TABLE chat_messages (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        conversation TEXT NOT NULL,
+        from_device_id TEXT,
+        from_user_id TEXT,
+        from_name TEXT NOT NULL,
+        from_kind TEXT NOT NULL,
+        text TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX cp_chat_conversation ON chat_messages (tenant_id, conversation, created_at);
+      CREATE TABLE chat_reads (
+        device_id TEXT NOT NULL REFERENCES devices(id) ON DELETE CASCADE,
+        conversation TEXT NOT NULL,
+        read_at TEXT NOT NULL,
+        PRIMARY KEY (device_id, conversation)
+      );
+      ALTER TABLE tenants ADD COLUMN chat_enabled INTEGER NOT NULL DEFAULT 1;
+    `,
+  },
 ];

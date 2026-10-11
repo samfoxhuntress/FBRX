@@ -69,6 +69,7 @@ import { shieldTools } from './tools/builtin/shield-tools';
 import { helpdeskTools } from './tools/builtin/helpdesk-tools';
 import { NetEnvironments } from './network/environments';
 import { Helpdesk } from './fleet/helpdesk';
+import { Messages } from './messages/messages';
 import { MeshService } from './mesh/mesh-service';
 import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
 import { MeshAssist, runsElevated } from './mesh/mesh-assist';
@@ -161,6 +162,7 @@ export class Kernel {
   readonly shield: Shield;
   readonly protection: ProtectionService;
   readonly helpdesk: Helpdesk;
+  readonly messages: Messages;
   readonly vendors: VendorDb;
   readonly consoles: DeviceConsoles;
   readonly trophies: Trophies;
@@ -335,7 +337,10 @@ export class Kernel {
       facts: () => deviceFacts(this.platform.appVersion, this.deviceName()),
       heartbeatStatus: () => this.heartbeatStatus(),
       executeCommand: (cmd) => this.executeRemoteCommand(cmd),
-      onMessage: (msg) => this.helpdesk.onPush(msg),
+      onMessage: (msg) => {
+        this.helpdesk.onPush(msg);
+        this.messages.onPush(msg);
+      },
     });
     this.helpdesk = new Helpdesk({
       fleet: this.fleet,
@@ -509,6 +514,18 @@ export class Kernel {
           .fire('network_threat', f.title, `${f.detail}${f.evidence.length ? `\n\n${f.evidence.slice(0, 3).join('\n')}` : ''}\n\nSeen by FBRX MiniDome on ${device.name}. A quick scan with your antivirus is a good next step.`, { key: `${f.kind}:${f.subject ?? ''}`, severity: f.severity === 'serious' || f.severity === 'critical' ? 'critical' : f.severity === 'info' ? 'info' : 'warning' })
           .catch(() => undefined),
       protection: () => this.protection.summary(),
+      acceptMessages: () => this.settings.get().messages.enabled,
+    });
+    this.messages = new Messages({
+      db: this.db,
+      events: this.events,
+      log: L('messages'),
+      mesh: this.mesh,
+      fleet: this.fleet,
+      settings: () => this.settings.get().messages,
+      meshOn: () => this.settings.get().mesh.enabled && this.mesh.running,
+      myName: () => this.settings.get().profile.name || this.deviceName(),
+      notify: (title, body, open) => this.notify({ title, body, level: 'info', source: 'messages', open }),
     });
     this.serverResources = new ServerResources(this.platform.resourcesDir, () => this.platform.specialDirs().downloads);
     this.meshNetwork = new MeshNetwork({
@@ -943,6 +960,7 @@ export class Kernel {
     this.applyLicenseFile();
     // Look for new versions in the FBRX repository (the desktop app only; servers and tests don't).
     if (this.platform.shell === 'desktop') this.release.start();
+    this.messages.start();
     // A provisioning file (IT deployment) goes first; a license that names an FBRX Command tenant joins after it.
     void this.applyProvisioning()
       .catch((err) => this.log.error('Provisioning failed', { error: errorMessage(err) }))
@@ -958,6 +976,7 @@ export class Kernel {
     }
     this.started = false;
     this.release.stop();
+    this.messages.stop();
     this.terminal.killAll();
     this.consoles.closeAll();
     this.migrator.cancelAll();

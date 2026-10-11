@@ -21,6 +21,7 @@ import { AuditPage } from './pages/audit';
 import { EventsPage } from './pages/events';
 import { AccountPage } from './pages/account';
 import { HelpdeskPage } from './pages/helpdesk';
+import { MessagesPage } from './pages/messages';
 
 export function App() {
   const [phase, setPhase] = useState<'loading' | 'setup' | 'login' | 'ready'>('loading');
@@ -94,6 +95,7 @@ function Console() {
     { id: 'devices', label: 'Devices', icon: 'laptop', section: 'Fleet' },
     { id: 'events', label: 'Alerts & events', icon: 'activity', section: 'Fleet' },
     ...(app.can('helpdesk.read') ? [{ id: 'helpdesk', label: 'Help desk', icon: 'lifebuoy', section: 'Fleet' } as NavItem] : []),
+    ...(app.can('messages.read') ? [{ id: 'messages', label: 'Messages', icon: 'message', section: 'Fleet' } as NavItem] : []),
     ...(app.can('config.manage') ? [{ id: 'config', label: 'Profiles & groups', icon: 'settings', section: 'Configuration' } as NavItem] : []),
     ...(app.can('enrollment.manage') ? [{ id: 'enrollment', label: 'Deploy & enroll', icon: 'download', section: 'Configuration' } as NavItem] : []),
     ...(app.can('secrets.manage') ? [{ id: 'secrets', label: 'Credentials', icon: 'key', section: 'Configuration' } as NavItem] : []),
@@ -120,6 +122,8 @@ function Console() {
         return <EventsPage />;
       case 'helpdesk':
         return <HelpdeskPage />;
+      case 'messages':
+        return <MessagesPage />;
       case 'config':
         return <ConfigPage />;
       case 'enrollment':

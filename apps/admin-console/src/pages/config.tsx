@@ -36,6 +36,7 @@ interface Tenant {
   vertical: Vertical;
   autoUpdate: AutoUpdateMode;
   helpdeskEnabled: boolean;
+  chatEnabled: boolean;
 }
 
 const VERTICAL_HELP: Record<Vertical, string> = {
@@ -81,6 +82,9 @@ export function ConfigPage() {
               </Field>
               <Field label="Help desk" help={tenant.vertical === 'home' ? 'Computers get a Help desk tab for asking a parent for help' : 'Computers get a Help desk tab for sending tickets to IT'}>
                 <Toggle checked={tenant.helpdeskEnabled} onChange={(v) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { helpdeskEnabled: v }).then(tenants.reload), v ? 'Help desk on' : 'Help desk off')} label={tenant.helpdeskEnabled ? 'On' : 'Off'} />
+              </Field>
+              <Field label="Messages" help={tenant.vertical === 'home' ? 'The family’s computers can message each other (Messages in the sidebar)' : 'Computers can message each other and everyone at once (the No chatting preset turns it off for a group)'}>
+                <Toggle checked={tenant.chatEnabled} onChange={(v) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { chatEnabled: v }).then(tenants.reload), v ? 'Messages on' : 'Messages off')} label={tenant.chatEnabled ? 'On' : 'Off'} />
               </Field>
             </div>
             <div className="fx-row">
