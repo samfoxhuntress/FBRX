@@ -465,6 +465,24 @@ function MessagesSettings() {
           <Toggle checked={m.notify} disabled={!m.enabled || L('notify')} onChange={(v) => void patch({ messages: { notify: v } })} label={<>Notify me about new messages <Locked show={L('notify')} /></>} info="A pop-up when a message arrives, except for the conversation you have open. Presenter-safe mode keeps them quiet too." />
         </div>
       </Card>
+      {org && (
+        <Card title="Help desk" subtitle="When you send a ticket, the help desk can work on this computer from it: check how it is doing, ask the AI here, and run commands.">
+          <div className="fx-form">
+            <Field label={<>Let the help desk in <Locked show={isLocked(locked, 'helpdesk.assist')} /></>} help="Commands always ask you first when you choose Ask me.">
+              <Select
+                value={s.helpdesk.assist}
+                disabled={isLocked(locked, 'helpdesk.assist')}
+                onChange={(e) => void patch({ helpdesk: { assist: e.target.value as Settings['helpdesk']['assist'] } })}
+                options={[
+                  { value: 'ask', label: 'Ask me once per ticket' },
+                  { value: 'allow', label: 'Without asking (the policy still applies to commands)' },
+                  { value: 'off', label: 'Never' },
+                ]}
+              />
+            </Field>
+          </div>
+        </Card>
+      )}
       <Card title="Good to know">
         <ul className="fx-muted" style={{ margin: 0, paddingLeft: 18, fontSize: 13, lineHeight: 1.6 }}>
           <li>Messages between your own devices go straight between them over FBRX Mesh, encrypted end to end.</li>

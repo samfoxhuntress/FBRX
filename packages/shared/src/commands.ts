@@ -26,6 +26,15 @@ export const CommandPayloadSchemas = {
   'agent.run': z.object({ prompt: z.string().min(1).max(20000), providerId: z.string().optional(), model: z.string().optional() }),
   'vault.lock': z.object({}).default({}),
   'app.restart': z.object({}).default({}),
+  /** A help desk receiver working on this computer for a ticket it sent (see helpdesk.ts). */
+  'helpdesk.assist': z.object({
+    ticketId: z.string().max(80),
+    ticketNumber: z.number().int(),
+    subject: z.string().max(200),
+    helper: z.string().max(100),
+    action: z.enum(['diagnostics', 'ask', 'run']),
+    text: z.string().max(8000).default(''),
+  }),
 } as const;
 
 export type CommandType = keyof typeof CommandPayloadSchemas;
@@ -46,6 +55,7 @@ export const COMMAND_DESCRIPTIONS: Record<CommandType, string> = {
   'agent.run': 'Run the governed AI agent with a prompt and return its answer',
   'vault.lock': 'Lock the credential vault on the device',
   'app.restart': 'Restart the FBRX OS application',
+  'helpdesk.assist': 'A help desk receiver works on the computer for a ticket it sent (diagnostics, ask its AI, run a command)',
 };
 
 export const COMMAND_STATUSES = ['queued', 'sent', 'running', 'succeeded', 'failed', 'expired', 'cancelled'] as const;

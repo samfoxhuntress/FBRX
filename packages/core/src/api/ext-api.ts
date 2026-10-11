@@ -8,6 +8,7 @@ import {
   LAB_FEATURES,
   MESH_ACTIONS,
   MESSAGE_MAX_CHARS,
+  ASSIST_ACTIONS,
   ASSIST_PRIORITIES,
   ASSIST_TOOLS,
   isIP,
@@ -397,6 +398,11 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       const { id, ...change } = z.object({ id: z.string().min(1), status: z.enum(TICKET_STATUSES).optional(), priority: z.enum(TICKET_PRIORITIES).optional(), assignToMe: z.boolean().optional() }).parse(p);
       return k.helpdesk.update(id, change);
     },
+    'helpdesk.assist': (p) => {
+      const x = z.object({ ticketId: z.string().min(1).max(80), action: z.enum(ASSIST_ACTIONS), text: z.string().max(8000).optional() }).parse(p);
+      return k.helpdesk.assist(x.ticketId, x.action, x.text ?? '');
+    },
+    'helpdesk.assistJobs': (p) => k.helpdesk.assistJobs(z.object({ ticketId: z.string().min(1).max(80) }).parse(p).ticketId),
     'edition.status': () => k.edition(),
     'presenter.status': () => k.presenterStatus(),
     'presenter.set': (p, ctx) => k.setPresenting(z.object({ on: z.boolean() }).parse(p).on, ctx.actor),

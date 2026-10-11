@@ -1,12 +1,15 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import {
+  AssistRequestSchema,
+  CommandPayloadSchemas,
   OPEN_TICKET_STATUSES,
   TICKET_STATUSES,
   TICKET_STATUS_NAMES,
   TicketCreateSchema,
   TicketReplySchema,
   TicketUpdateSchema,
+  type AssistJob,
   type HelpdeskStatus,
   type TicketDetail,
   type TicketMessage,
@@ -18,6 +21,9 @@ import { ids } from '../context';
 import { actorOf, adminAuth, assertTenantAccess, deviceAuth, requirePerm, tenantScope } from '../auth';
 import { HttpError, badRequest, forbidden, notFound } from '../errors';
 import { parseJson } from './util';
+
+/** How long a request to work on the asker's computer waits for it to come online. */
+const ASSIST_WAIT_MINUTES = 30;
 
 /**
  * The help desk. Computers in an organization send tickets from their Help desk tab; FBRX Command keeps each ticket
@@ -106,6 +112,21 @@ export async function helpdeskRoutes(app: FastifyInstance, ctx: AppContext) {
     for (const n of notes) addMessage(t, 'system', 'FBRX Command', n);
     db.run('UPDATE tickets SET updated_at = ? WHERE id = ?', now, t.id);
     return db.get<any>('SELECT * FROM tickets WHERE id = ?', t.id);
+  };
+
+  const assistView = (c: any): AssistJob => {
+    const p = parseJson<{ ticketId?: string; action?: AssistJob['action']; text?: string }>(c.payload, {});
+    return {
+      id: c.id,
+      ticketId: p.ticketId ?? '',
+      action: p.action ?? 'diagnostics',
+      text: p.text ?? '',
+      status: c.status,
+      result: parseJson(c.result, null),
+      error: c.error ?? null,
+      createdAt: c.created_at,
+      completedAt: c.completed_at ?? null,
+    };
   };
 
   const listQuery = z.object({ state: z.enum(['open', 'closed', 'all']).default('open'), scope: z.enum(['mine', 'queue']).default('mine'), limit: z.coerce.number().int().min(1).max(500).default(200) });
@@ -203,6 +224,58 @@ export async function helpdeskRoutes(app: FastifyInstance, ctx: AppContext) {
       ctx.audit.record(actorOf(req), 'ticket.updated', { type: 'ticket', id: t.id, tenantId: t.tenant_id }, body);
       announce(row, 'updated');
       return detail(row);
+    });
+
+    /**
+     * A receiver works on the asker's computer: FBRX Command hands the request over as a command (it waits for a
+     * computer that is off), notes it in the ticket, and keeps the answer for the receiver that asked.
+     */
+    dev.post('/v1/device/helpdesk/tickets/:id/assist', async (req): Promise<AssistJob> => {
+      const t = ticketFor(req, (req.params as { id: string }).id);
+      const d = me(req);
+      if (!isReceiver(req)) throw forbidden('Only the help desk can work on the computer that asked');
+      if (!t.device_id) throw badRequest('This ticket did not come from a computer');
+      if (t.device_id === d.id) throw badRequest('This ticket came from this computer');
+      if (t.status === 'closed') throw badRequest('The ticket is closed: open it again first');
+      const asker = db.get<any>("SELECT * FROM devices WHERE id = ? AND status = 'active'", t.device_id);
+      if (!asker) throw notFound('The computer that asked is no longer in the organization');
+      const body = AssistRequestSchema.parse(req.body);
+      if (body.action !== 'diagnostics' && !body.text) throw badRequest(body.action === 'ask' ? 'Type a question for its AI' : 'Type a command');
+      const recent = Number(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM commands WHERE created_by = ? AND created_at > ?", `helpdesk:${d.id}`, new Date(Date.now() - 10 * 60_000).toISOString())?.n ?? 0);
+      if (recent >= 40) throw new HttpError(429, 'That is a lot of requests in ten minutes. Please wait a moment.', 'RATE_LIMITED');
+      const helper = body.helperName?.trim() || d.name;
+      const payload = CommandPayloadSchemas['helpdesk.assist'].parse({ ticketId: t.id, ticketNumber: Number(t.number), subject: t.subject, helper, action: body.action, text: body.text });
+      const id = ids.command();
+      const now = new Date();
+      db.run(
+        'INSERT INTO commands (id, tenant_id, device_id, type, payload, status, created_by, created_at, expires_at) VALUES (?,?,?,?,?,?,?,?,?)',
+        id,
+        t.tenant_id,
+        asker.id,
+        'helpdesk.assist',
+        JSON.stringify(payload),
+        'queued',
+        `helpdesk:${d.id}`,
+        now.toISOString(),
+        new Date(now.getTime() + ASSIST_WAIT_MINUTES * 60_000).toISOString(),
+      );
+      ctx.audit.record(actorOf(req), 'command.helpdesk.assist', { type: 'device', id: asker.id, tenantId: t.tenant_id }, { commandId: id, ticket: Number(t.number), action: body.action, text: body.text.slice(0, 200) });
+      const short = body.text.length > 120 ? `${body.text.slice(0, 117)}…` : body.text;
+      addMessage(
+        t,
+        'system',
+        'FBRX Command',
+        body.action === 'diagnostics' ? `${helper} checked how ${asker.name} is doing` : body.action === 'ask' ? `${helper} asked ${asker.name}'s AI: “${short}”` : `${helper} ran a command on ${asker.name}: ${short}`,
+      );
+      ctx.dispatch(id);
+      announce(db.get<any>('SELECT * FROM tickets WHERE id = ?', t.id), 'updated');
+      return assistView(db.get<any>('SELECT * FROM commands WHERE id = ?', id));
+    });
+
+    dev.get('/v1/device/helpdesk/assist/:commandId', async (req): Promise<AssistJob> => {
+      const c = db.get<any>("SELECT * FROM commands WHERE id = ? AND type = 'helpdesk.assist'", (req.params as { commandId: string }).commandId);
+      if (!c || c.created_by !== `helpdesk:${me(req).id}`) throw notFound('Unknown request');
+      return assistView(c);
     });
   });
 

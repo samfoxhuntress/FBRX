@@ -1,7 +1,8 @@
-import { useEffect, useState } from 'react';
-import { VERTICAL_INFO, TICKET_CATEGORIES, TICKET_CATEGORY_NAMES, TICKET_PRIORITIES, TICKET_STATUSES, TICKET_STATUS_NAMES, type HelpdeskScope, type TicketDetail, type TicketStatus, type TicketSummary } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Input, Modal, Page, Select, Status, Tabs, TextArea, Toggle, timeAgo, useAction } from '@fbrx/ui';
-import { call } from '../client';
+import { useContext, useEffect, useState } from 'react';
+import { VERTICAL_INFO, TICKET_CATEGORIES, TICKET_CATEGORY_NAMES, TICKET_PRIORITIES, TICKET_STATUSES, TICKET_STATUS_NAMES, type AssistAction, type AssistJob, type HelpdeskScope, type TicketDetail, type TicketStatus, type TicketSummary } from '@fbrx/shared';
+import { Button, Callout, Card, Empty, Field, Icons, InfoTip, Input, KeyValue, Modal, Page, Select, Status, Tabs, TextArea, Toggle, timeAgo, useAction } from '@fbrx/ui';
+import { call, onEvent } from '../client';
+import { AgentNameContext, AskButton } from '../widgets';
 import { useCore } from '../hooks';
 import { routeArg } from '../app';
 import { useVertical } from '../edition';
@@ -195,6 +196,7 @@ function TicketView({ id, receiver }: { id: string; receiver: boolean }) {
           )}
         </div>
       </div>
+      {receiver && d.deviceId && d.status !== 'closed' && <AssistPanel ticket={d} />}
     </Card>
   );
 }
@@ -242,5 +244,126 @@ function NewTicket({ learner, home, onClose, onSent }: { learner: boolean; home:
         <Toggle checked={details} onChange={setDetails} label="Include a short summary of this computer (name, system, free space, network)" />
       </div>
     </Modal>
+  );
+}
+
+const ASSIST_LABELS: Record<AssistAction, { tab: string; button: string; icon: 'activity' | 'sparkles' | 'terminal'; placeholder: string }> = {
+  diagnostics: { tab: 'Check it', button: 'Run diagnostics', icon: 'activity', placeholder: '' },
+  ask: { tab: 'Ask its AI', button: 'Ask', icon: 'sparkles', placeholder: 'Why is the printer offline? What changed since yesterday?' },
+  run: { tab: 'Run a command', button: 'Run', icon: 'terminal', placeholder: 'ipconfig /flushdns' },
+};
+const JOB_TONE: Record<AssistJob['status'], 'busy' | 'good' | 'critical' | 'neutral' | 'warning'> = { queued: 'warning', sent: 'busy', running: 'busy', succeeded: 'good', failed: 'critical', expired: 'neutral', cancelled: 'neutral' };
+
+/**
+ * A receiver works on the asker's computer from the ticket: how it is doing, a question for its AI, or a command.
+ * The person there lets the help desk in once per ticket and approves commands, as its settings and policy say.
+ */
+function AssistPanel({ ticket }: { ticket: TicketDetail }) {
+  const agent = useContext(AgentNameContext);
+  const [action, setAction] = useState<AssistAction>('diagnostics');
+  const [text, setText] = useState('');
+  const [jobs, setJobs] = useState<AssistJob[]>([]);
+  const { run, busy } = useAction();
+  const where = ticket.deviceName ?? 'the computer that asked';
+  useEffect(() => {
+    void call('helpdesk.assistJobs', { ticketId: ticket.id }).then(setJobs).catch(() => undefined);
+    return onEvent('helpdesk.assist', (j) => j.ticketId === ticket.id && setJobs((xs) => [j, ...xs.filter((x) => x.id !== j.id)]));
+  }, [ticket.id]);
+  const go = () => void run('assist', () => call('helpdesk.assist', { ticketId: ticket.id, action, text: action === 'diagnostics' ? '' : text })).then((j) => j && action !== 'diagnostics' && setText(''));
+  const meta = ASSIST_LABELS[action];
+  return (
+    <div className="hd-assist">
+      <div className="hd-assist-head">
+        <Icons.wrench size={15} />
+        <b>Work on {where}</b>
+        <InfoTip>
+          Look at how {where} is doing, ask its AI about it, or run a command there. The first request asks the person at it to let the help desk in (for 2 hours); every command asks them again, unless your organization lets the help desk in
+          outright. A computer that is off gets the request when it is back (within 30 minutes).
+        </InfoTip>
+      </div>
+      <div className="seg" role="group" aria-label="What to do">
+        {(Object.keys(ASSIST_LABELS) as AssistAction[]).map((a) => (
+          <button key={a} type="button" className={action === a ? 'on' : ''} onClick={() => setAction(a)}>
+            {ASSIST_LABELS[a].tab}
+          </button>
+        ))}
+      </div>
+      <div className="hd-assist-row">
+        {action === 'diagnostics' ? (
+          <span className="fx-muted" style={{ fontSize: 12.5, flex: 1 }}>
+            Processor, memory, disk, network, protection and the busiest apps right now. Nothing is changed.
+          </span>
+        ) : (
+          <Input
+            className={action === 'run' ? 'mono' : undefined}
+            value={text}
+            placeholder={meta.placeholder}
+            aria-label={action === 'ask' ? 'Question for its AI' : 'Command'}
+            onChange={(e) => setText(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && text.trim() && go()}
+          />
+        )}
+        <Button variant="primary" size="sm" icon={meta.icon} loading={busy === 'assist'} disabled={action !== 'diagnostics' && !text.trim()} onClick={go}>
+          {meta.button}
+        </Button>
+      </div>
+      {jobs.length > 0 && (
+        <div className="hd-jobs private">
+          {jobs.map((j) => (
+            <AssistResult key={j.id} job={j} where={where} agent={agent} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function AssistResult({ job, where, agent }: { job: AssistJob; where: string; agent: string }) {
+  const r = (job.result ?? {}) as Record<string, any>;
+  const waiting = job.status === 'queued' ? `${where} is offline: it gets this when it is back` : job.status === 'sent' || job.status === 'running' ? `Working (the person at ${where} may need to allow it)` : null;
+  const title = job.action === 'diagnostics' ? 'Diagnostics' : job.action === 'ask' ? `Asked: ${job.text}` : `Ran: ${job.text}`;
+  return (
+    <div className="hd-job">
+      <div className="hd-job-head">
+        <span className={job.action === 'run' ? 'mono' : undefined}>{title}</span>
+        <span className="fx-spacer" />
+        <Status tone={JOB_TONE[job.status]}>{job.status === 'succeeded' ? 'done' : job.status}</Status>
+        <span className="fx-muted" style={{ fontSize: 11.5 }}>{timeAgo(job.completedAt ?? job.createdAt)}</span>
+      </div>
+      {waiting && <div className="fx-muted" style={{ fontSize: 12.5 }}>{waiting}</div>}
+      {job.error && <div className="fx-error-text">{job.error}</div>}
+      {job.status === 'succeeded' && job.action === 'diagnostics' && (
+        <>
+          <KeyValue
+            items={[
+              ['Computer', `${r.computer ?? '—'} · ${r.system ?? ''} · FBRX ${r.appVersion ?? ''}`],
+              ['Up for', r.uptimeHours != null ? `${r.uptimeHours} h` : '—'],
+              ['Processor', r.cpuLoadPct != null ? `${r.cpuLoadPct}%` : '—'],
+              ['Memory', r.memoryUsedPct != null ? `${r.memoryUsedPct}% of ${r.memoryGb} GB` : '—'],
+              ['Free disk', r.diskFreeGb != null ? `${r.diskFreeGb} GB` : '—'],
+              ['Network', r.network ? `${r.network.ip ?? 'no address'} · gateway ${r.network.gateway ?? '—'} · DNS ${(r.network.dns ?? []).join(', ') || '—'}` : 'unknown'],
+              ['Protection', r.protection ? `${r.protection.name} · ${r.protection.state}${r.protection.threats ? ` · ${r.protection.threats} threat${r.protection.threats === 1 ? '' : 's'}` : ''}` : '—'],
+              ['Problems', (r.problems ?? []).length ? r.problems.join('; ') : 'none'],
+              ['Busiest apps', (r.busiestApps ?? []).slice(0, 5).map((a: any) => `${a.name} ${a.cpuPct}%`).join(', ') || '—'],
+            ]}
+          />
+          <div className="fx-actions">
+            <AskButton label="Explain" prompt={`Help desk diagnostics from ${where} for a ticket. What stands out, and what would you check first?`} context={r} />
+          </div>
+        </>
+      )}
+      {job.status === 'succeeded' && job.action === 'ask' && <div className="hd-job-answer">{r.answer || r.error || `${agent} on ${where} had no answer.`}</div>}
+      {job.status === 'succeeded' && job.action === 'run' && (
+        <>
+          {r.status !== 'succeeded' && <div className="fx-error-text">{r.status === 'denied' ? 'Not run: ' : ''}{r.error ?? r.output}</div>}
+          {r.status === 'succeeded' && <pre className="fx-code hd-job-output">{r.output}</pre>}
+          {r.status === 'succeeded' && (
+            <div className="fx-actions">
+              <AskButton label="Explain" prompt={`I ran \`${job.text}\` on ${where} for a help desk ticket. Explain the output and what to do next.`} context={{ output: r.output }} />
+            </div>
+          )}
+        </>
+      )}
+    </div>
   );
 }

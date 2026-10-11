@@ -249,6 +249,11 @@ export const SettingsSchema = z.object({
     quietHours: z.object({ enabled: z.boolean(), start: z.string().regex(/^\d{2}:\d{2}$/), end: z.string().regex(/^\d{2}:\d{2}$/) }),
     cooldownMinutes: z.number().int().min(1).max(1440),
   }),
+  /** The help desk working on this computer from a ticket it sent. */
+  helpdesk: z.object({
+    /** ask: the person lets them in once per ticket; allow: no question; off: never. Commands follow the policy. */
+    assist: z.enum(['ask', 'allow', 'off']),
+  }),
   /** Messages: chat with your other devices (Mesh) and the computers in your organization. */
   messages: z.object({
     /** The Messages page, and messages reaching this computer at all. */
@@ -520,6 +525,7 @@ export const DEFAULT_SETTINGS: Settings = {
     quietHours: { enabled: false, start: '22:00', end: '07:00' },
     cooldownMinutes: 30,
   },
+  helpdesk: { assist: 'ask' },
   messages: { enabled: true, organization: true, notify: true },
   mesh: {
     enabled: false,

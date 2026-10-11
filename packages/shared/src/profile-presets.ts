@@ -104,6 +104,18 @@ export const PROFILE_SETTINGS: ProfileSetting[] = [
   { path: 'general.telemetry', area: 'privacy', kind: 'toggle', label: 'Anonymous usage statistics', help: 'Counts of which features are used, without content or names, to improve FBRX.' },
   { path: 'clipboard.history', area: 'privacy', kind: 'toggle', label: 'Clipboard history', help: 'Keeps what was copied (in memory only, never on disk) so it can be pasted again later.' },
   { path: 'spotlight.fileSearch', area: 'privacy', kind: 'toggle', label: 'Search finds files', help: 'The search box (Alt+Space) also looks through file names in the person’s folders.' },
+  {
+    path: 'helpdesk.assist',
+    area: 'privacy',
+    kind: 'select',
+    label: 'The help desk works on the computer',
+    help: 'From a ticket, a help desk receiver can run diagnostics, ask the computer’s AI and run commands on it. Commands always follow the policy (usually the person approves each one).',
+    options: [
+      { value: 'ask', label: 'Ask the person once per ticket' },
+      { value: 'allow', label: 'Allowed without asking' },
+      { value: 'off', label: 'Never' },
+    ],
+  },
   { path: 'localApi.enabled', area: 'privacy', kind: 'toggle', label: 'Local API', help: 'Lets scripts and other apps on the computer talk to FBRX with a token. Off unless you use it.' },
   { path: 'localApi.allowRemote', area: 'privacy', kind: 'toggle', label: 'Local API reachable from the network', help: 'Other computers may reach the Local API (they still need a token). Leave off unless you know you need it.' },
   // Screens and meetings

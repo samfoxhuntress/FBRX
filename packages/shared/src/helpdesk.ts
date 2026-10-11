@@ -93,5 +93,38 @@ export interface HelpdeskStatus {
   organization: string | null;
 }
 
+/**
+ * Working on the asker's computer from a ticket (a receiver): look at how it is doing, ask its AI, or run a command.
+ * FBRX Command hands the request to that computer, whose person lets the help desk in once per ticket (unless the
+ * organization allows it outright) and approves commands as its policy asks.
+ */
+export const ASSIST_ACTIONS = ['diagnostics', 'ask', 'run'] as const;
+export type AssistAction = (typeof ASSIST_ACTIONS)[number];
+
+export const AssistRequestSchema = z.object({
+  action: z.enum(ASSIST_ACTIONS),
+  /** ask: the question for its AI. run: the command line. */
+  text: z.string().trim().max(8000).default(''),
+  /** The receiver's person, as the asker sees them ("Alex from the help desk"). */
+  helperName: z.string().max(100).optional(),
+});
+export type AssistRequest = z.input<typeof AssistRequestSchema>;
+
+/** One request to the asker's computer and what came back. */
+export interface AssistJob {
+  /** The FBRX Command command id. */
+  id: string;
+  ticketId: string;
+  action: AssistAction;
+  text: string;
+  /** queued (the computer is off), sent, running (it may be waiting for the person), succeeded, failed, expired. */
+  status: 'queued' | 'sent' | 'running' | 'succeeded' | 'failed' | 'expired' | 'cancelled';
+  /** diagnostics: a snapshot; ask: { answer, status }; run: { ok, output }. */
+  result: unknown;
+  error: string | null;
+  createdAt: string;
+  completedAt: string | null;
+}
+
 export const HELPDESK_SCOPES = ['mine', 'queue'] as const;
 export type HelpdeskScope = (typeof HELPDESK_SCOPES)[number];

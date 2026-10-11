@@ -409,6 +409,25 @@ Computers marked as **receivers** in FBRX Command (Devices → a device → *Rec
 tab: every open ticket, newest and most urgent first, delivered within a second of being sent. Take a ticket, answer,
 change its status and priority. Admins can answer from FBRX Command's Help desk page as well.
 
+### Working on the computer that asked
+
+Under a ticket, a receiver has **Work on** *that computer*:
+
+| | What happens on the computer that asked |
+| --- | --- |
+| **Check it** (Run diagnostics) | A fresh snapshot comes back: processor, memory, disk, network (address, gateway, DNS), protection, problems and the busiest apps. Nothing is changed. **Explain** hands it to your own agent. |
+| **Ask its AI** | Its agent answers a question about that computer, looking things up with its own tools; anything that would change the computer asks the person there. |
+| **Run a command** | The command runs in its shell (PowerShell on Windows) and the output comes back, with **Explain**. |
+
+The person at that computer is asked once per ticket (*Let … from the help desk work on this computer*, under
+Approvals, with a notification); a yes lasts 2 hours. Every command asks them again, by itself, and a no comes back as
+*Not run*. Each request is noted in the ticket (*Alex checked how Milo laptop is doing*), and FBRX Command's audit
+log keeps it. A computer that is off gets the request when it is back (within 30 minutes).
+
+Settings → Messages → **Help desk** on each computer (or `helpdesk.assist` in a profile, *The help desk works on the
+computer*) chooses: **Ask me once per ticket** (the default), **Without asking** (commands then follow the governance
+policy, like any remote request), or **Never**.
+
 Tickets travel through FBRX Command rather than the mesh: Command keeps every ticket and its conversation (so nothing
 is lost while the IT computer is off or at home), works across networks, and pushes each change instantly over the
 encrypted connection every computer already keeps with it. The mesh stays for one person's own devices.

@@ -74,6 +74,10 @@ a second, with a short summary of the sending computer, and replies go straight 
 shows every ticket and lets admins answer too. Turn the help desk off under Organization defaults if you use another
 ticket system (webhooks `ticket.created` and `ticket.updated` can feed it).
 
+From a ticket, the IT computer can also **work on the computer that asked**: check how it is doing, ask its AI, or run a
+command there. The person at it lets IT in once per ticket and approves each command (a profile can change that with
+*The help desk works on the computer*). See [COMMAND_CENTER.md](COMMAND_CENTER.md#working-on-the-computer-that-asked).
+
 ## 6. Updates
 
 **Organization defaults → New versions**:

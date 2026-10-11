@@ -1,7 +1,10 @@
 import {
+  AssistRequestSchema,
   TicketCreateSchema,
   TicketReplySchema,
   TicketUpdateSchema,
+  type AssistAction,
+  type AssistJob,
   type HelpdeskScope,
   type HelpdeskStatus,
   type ServerToDeviceMessage,
@@ -35,6 +38,8 @@ export class Helpdesk {
   /** Tickets this computer just changed, so it does not notify itself about them. */
   private readonly own = new Map<string, number>();
   private last: HelpdeskStatus | null = null;
+  /** Requests this computer made to askers' computers, per ticket, newest first. */
+  private readonly jobs = new Map<string, AssistJob[]>();
 
   constructor(private readonly d: HelpdeskDeps) {}
 
@@ -94,6 +99,46 @@ export class Helpdesk {
     const t = await this.d.fleet.request<TicketDetail>('PATCH', `/v1/device/helpdesk/tickets/${encodeURIComponent(id)}`, { ...c, authorName: this.d.requesterName() });
     this.d.events.emit('helpdesk.changed', { ticketId: t.id, number: t.number, reason: 'updated', subject: t.subject });
     return t;
+  }
+
+  /**
+   * A receiver works on the asker's computer: FBRX Command hands the request over, and this computer follows it until
+   * the answer arrives (`helpdesk.assist` events), for as long as the asker's computer may take to come online.
+   */
+  async assist(ticketId: string, action: AssistAction, text = ''): Promise<AssistJob> {
+    const body = AssistRequestSchema.parse({ action, text, helperName: this.d.requesterName() });
+    const job = await this.d.fleet.request<AssistJob>('POST', `/v1/device/helpdesk/tickets/${encodeURIComponent(ticketId)}/assist`, body);
+    this.mine(ticketId);
+    this.keep(job);
+    void this.follow(job);
+    return job;
+  }
+
+  assistJobs(ticketId: string): AssistJob[] {
+    return this.jobs.get(ticketId) ?? [];
+  }
+
+  private keep(job: AssistJob) {
+    const list = (this.jobs.get(job.ticketId) ?? []).filter((j) => j.id !== job.id);
+    this.jobs.set(job.ticketId, [job, ...list].slice(0, 50));
+    this.d.events.emit('helpdesk.assist', job);
+  }
+
+  private async follow(job: AssistJob) {
+    const until = Date.now() + 35 * 60_000;
+    let cur = job;
+    let wait = 1000;
+    while (!['succeeded', 'failed', 'expired', 'cancelled'].includes(cur.status) && Date.now() < until) {
+      await new Promise((r) => setTimeout(r, wait));
+      wait = Math.min(wait + 500, 5000);
+      try {
+        const next = await this.d.fleet.request<AssistJob>('GET', `/v1/device/helpdesk/assist/${encodeURIComponent(job.id)}`);
+        if (next.status !== cur.status || next.completedAt !== cur.completedAt) this.keep(next);
+        cur = next;
+      } catch (err) {
+        this.d.log.debug('Help desk request not followed', { error: String(err) });
+      }
+    }
   }
 
   /** A push from FBRX Command: refresh the tab, and tell the person when someone else did something. */

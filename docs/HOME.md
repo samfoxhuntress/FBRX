@@ -54,8 +54,10 @@ turn messages off for the family under **Profiles & groups → Organization defa
 
 The help desk is there too, for computers on Endpoint Ultra: a parent's Ultra computer receives requests for help
 within a second, with a short summary of the computer, and can answer from FBRX Command's **Help desk** page as well.
-To stop a parent's computer receiving requests, open it under **Devices → Configuration** and turn off *Receives the
-family's requests for help*. On Endpoint Basic and FBRX OS Home, Messages takes its place.
+From a request, the parent's computer can also check how the child's computer is doing, ask its AI, or run a command
+there; the child (or whoever is at it) says yes first, and again for each command. To stop a parent's computer
+receiving requests, open it under **Devices → Configuration** and turn off *Receives the family's requests for help*.
+On Endpoint Basic and FBRX OS Home, Messages takes its place.
 
 ## Children and safety
 

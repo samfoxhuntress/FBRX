@@ -1,6 +1,6 @@
 import type { TrophyState } from './fun';
 import type { VoiceDownloadId } from './settings';
-import type { HelpdeskScope, HelpdeskStatus, TicketCategory, TicketDetail, TicketPriority, TicketStatus, TicketSummary } from './helpdesk';
+import type { AssistAction, AssistJob, HelpdeskScope, HelpdeskStatus, TicketCategory, TicketDetail, TicketPriority, TicketStatus, TicketSummary } from './helpdesk';
 import type { EditionStatus } from './editions';
 import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
 import type { ProtectionState, ProtectionStatus, ScanJob, ScanType, ShieldDetection, ShieldVerdict } from './protection';
@@ -1044,6 +1044,10 @@ export interface ExtMethods {
   'helpdesk.create': (p: { subject: string; body: string; category?: TicketCategory; priority?: TicketPriority; attachDiagnostics?: boolean }) => TicketDetail;
   'helpdesk.reply': (p: { id: string; body: string }) => TicketDetail;
   'helpdesk.update': (p: { id: string; status?: TicketStatus; priority?: TicketPriority; assignToMe?: boolean }) => TicketDetail;
+  /** A receiver works on the asker's computer: diagnostics, a question for its AI, or a command. */
+  'helpdesk.assist': (p: { ticketId: string; action: AssistAction; text?: string }) => AssistJob;
+  /** Requests made from this computer for a ticket, newest first. */
+  'helpdesk.assistJobs': (p: { ticketId: string }) => AssistJob[];
   /** What this computer is: its edition, organization kind and who uses it. */
   'edition.status': () => EditionStatus;
   'presenter.status': () => PresenterStatus;
@@ -1194,6 +1198,7 @@ export interface ExtEvents {
   'shield.detected': ShieldDetection;
   'presenter.changed': PresenterStatus;
   'helpdesk.changed': { ticketId: string; number: number; reason: 'created' | 'message' | 'updated'; subject: string };
+  'helpdesk.assist': AssistJob;
   'migrate.event': MigrateEvent;
   'ai.quick': { reqId: string; delta: string };
   'voice.download': { model: VoiceDownloadId; received: number; total: number; done: boolean; error: string | null };
@@ -1208,6 +1213,7 @@ export interface ExtEvents {
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'server.copy',
+  'helpdesk.assist',
   'mesh.network.applyQos',
   'processes.kill',
   'files.write',

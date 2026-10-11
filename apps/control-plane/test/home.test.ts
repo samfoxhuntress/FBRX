@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
 import { randomBytes } from 'node:crypto';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { HelpdeskStatus, MessagesOverview, SystemStatus, ThreadMessage, TicketDetail, TicketSummary } from '@fbrx/shared';
+import type { ApprovalRequest, AssistJob, HelpdeskStatus, MessagesOverview, SystemStatus, ThreadMessage, TicketDetail, TicketSummary } from '@fbrx/shared';
 import { buildServer, type BuiltServer } from '../src/server';
 import { loadConfig } from '../src/config';
 import { Kernel } from '../../../packages/core/src/kernel';
@@ -189,6 +189,49 @@ describe('FBRX Command for a family', () => {
     expect((await overview(child)).org).toMatchObject({ on: false, note: 'Your organization has turned off messages between computers' });
     await expect(child.call('messages.send', { id: `org:${parentId}`, text: 'Hello?' }, USER)).rejects.toMatchObject({ code: 'FORBIDDEN' });
     await api('PATCH', `/v1/admin/tenants/${tenantId}`, { chatEnabled: true });
+  }, 60_000);
+
+  it("lets a parent work on the child's computer from a request for help", async () => {
+    const t = (await child.call('helpdesk.create', { subject: 'Wi-Fi keeps dropping', body: 'It drops every few minutes.', category: 'network', priority: 'normal' }, USER)) as TicketDetail;
+    await waitFor(async () => ((await parent.call('helpdesk.tickets', { scope: 'queue' }, USER)) as TicketSummary[]).some((q) => q.id === t.id));
+    const jobs = async () => (await parent.call('helpdesk.assistJobs', { ticketId: t.id }, USER)) as AssistJob[];
+    const asked: ApprovalRequest[] = [];
+    child.events.on('approval.requested', (a) => asked.push(a));
+
+    // The child's computer asks once before the help desk may look; saying yes lets the check run.
+    const job = (await parent.call('helpdesk.assist', { ticketId: t.id, action: 'diagnostics' }, USER)) as AssistJob;
+    expect(job).toMatchObject({ action: 'diagnostics', ticketId: t.id });
+    await waitFor(() => asked.some((a) => a.tool === 'helpdesk.assist'));
+    expect(asked[0].toolTitle).toBe('Let Alex laptop from the help desk work on this computer');
+    child.approvals.resolve(asked[0].id, 'approve', 'Milo');
+    const done = await waitFor(async () => (await jobs()).find((j) => j.id === job.id && j.status === 'succeeded'));
+    expect(done!.result).toMatchObject({ computer: 'Milo laptop', busiestApps: expect.any(Array) });
+
+    // Each command still asks.
+    const cmd = (await parent.call('helpdesk.assist', { ticketId: t.id, action: 'run', text: 'echo hello-from-the-help-desk' }, USER)) as AssistJob;
+    await waitFor(() => asked.some((a) => a.tool === 'shell.run'));
+    expect(asked.filter((a) => a.tool === 'helpdesk.assist')).toHaveLength(1);
+    child.approvals.resolve(asked.find((a) => a.tool === 'shell.run')!.id, 'approve', 'Milo');
+    const ran = await waitFor(async () => (await jobs()).find((j) => j.id === cmd.id && j.status === 'succeeded'));
+    expect(ran!.result).toMatchObject({ ok: true, output: expect.stringContaining('hello-from-the-help-desk') });
+
+    // A command the child turns down does not run.
+    const no = (await parent.call('helpdesk.assist', { ticketId: t.id, action: 'run', text: 'echo nope' }, USER)) as AssistJob;
+    await waitFor(() => asked.filter((a) => a.tool === 'shell.run').length === 2);
+    child.approvals.resolve(asked.filter((a) => a.tool === 'shell.run')[1].id, 'deny', 'Milo');
+    expect((await waitFor(async () => (await jobs()).find((j) => j.id === no.id && j.status === 'succeeded')))!.result).toMatchObject({ ok: false, status: 'denied' });
+
+    // The ticket says what was done, for everyone following it.
+    const thread = ((await parent.call('helpdesk.ticket', { id: t.id }, USER)) as TicketDetail).thread.map((m) => m.body);
+    expect(thread).toEqual(expect.arrayContaining(['Alex laptop checked how Milo laptop is doing', 'Alex laptop ran a command on Milo laptop: echo hello-from-the-help-desk']));
+
+    // Turned off on the child's computer: refused, with why.
+    child.settings.update({ helpdesk: { assist: 'off' } });
+    const off = (await parent.call('helpdesk.assist', { ticketId: t.id, action: 'diagnostics' }, USER)) as AssistJob;
+    const refused = await waitFor(async () => (await jobs()).find((j) => j.id === off.id && j.status === 'failed'));
+    expect(refused!.error).toMatch(/does not let the help desk work on it/);
+    // Only the help desk may ask.
+    await expect(child.call('helpdesk.assist', { ticketId: t.id, action: 'diagnostics' }, USER)).rejects.toMatchObject({ code: 'FORBIDDEN' });
   }, 60_000);
 
   it('turns "a student computer" into a child computer in a family', async () => {

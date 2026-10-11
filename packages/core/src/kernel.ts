@@ -69,7 +69,9 @@ import { shieldTools } from './tools/builtin/shield-tools';
 import { helpdeskTools } from './tools/builtin/helpdesk-tools';
 import { NetEnvironments } from './network/environments';
 import { Helpdesk } from './fleet/helpdesk';
+import { HelpdeskAssistHost } from './fleet/helpdesk-assist';
 import { Messages } from './messages/messages';
+import { sleep } from './util/misc';
 import { MeshService } from './mesh/mesh-service';
 import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
 import { MeshAssist, runsElevated } from './mesh/mesh-assist';
@@ -162,6 +164,8 @@ export class Kernel {
   readonly shield: Shield;
   readonly protection: ProtectionService;
   readonly helpdesk: Helpdesk;
+  /** The help desk working on this computer from a ticket it sent. */
+  readonly helpdeskAssist: HelpdeskAssistHost;
   readonly messages: Messages;
   readonly vendors: VendorDb;
   readonly consoles: DeviceConsoles;
@@ -349,6 +353,32 @@ export class Kernel {
       requesterName: () => this.settings.get().profile.name || this.deviceName(),
       diagnostics: () => this.ticketDiagnostics(),
       notify: (title, body) => this.notify({ title, body, level: 'info', source: 'helpdesk' }),
+    });
+    this.helpdeskAssist = new HelpdeskAssistHost({
+      mode: () => this.settings.get().helpdesk.assist,
+      approvals: this.approvals,
+      approvalSeconds: () => Math.max(this.policy.policy.approvals.timeoutSeconds, 180),
+      diagnostics: async () => {
+        const top = await this.monitor.processes({ sort: 'cpu', limit: 8 }).catch(() => null);
+        // Protection as it is now (a few seconds at most: the antivirus is asked again).
+        const prot = await Promise.race([this.protection.status().catch(() => null), sleep(5000).then(() => null)]);
+        return {
+          ...(await this.ticketDiagnostics()),
+          busiestApps: top?.list.map((x) => ({ name: x.name, pid: x.pid, cpuPct: x.cpu, memoryMb: Math.round(x.memBytes / 1048576) })) ?? [],
+          protection: prot ? { name: prot.active.name, state: prot.state, realtime: prot.realtime, threats: prot.threats } : this.protection.summary(),
+          checkedAt: new Date().toISOString(),
+        };
+      },
+      ask: async (prompt, actor) => {
+        const r = await this.agent.runToCompletion({ message: prompt, origin: 'remote', actor });
+        return { status: r.status, answer: r.answer, error: r.error };
+      },
+      run: async (command, actor, consent) => {
+        const r = await this.gate.invoke('shell.run', { command }, { origin: consent === 'approved' ? 'user' : 'remote', actor });
+        return { ok: r.ok, status: r.status, output: r.output, error: r.error };
+      },
+      notify: (title, body) => this.notify({ title, body, level: 'info', source: 'helpdesk', open: 'approvals' }),
+      agentName: () => this.settings.get().ai.agentName,
     });
     this.localApi = new LocalApiServer({
       call: (m, p, ctx) => this.call(m, p, ctx),
@@ -1234,6 +1264,8 @@ export class Kernel {
       case 'app.restart':
         setTimeout(() => this.platform.requestRestart('remote'), 500);
         return { restarting: true };
+      case 'helpdesk.assist':
+        return this.helpdeskAssist.handle(p);
     }
   }
 
