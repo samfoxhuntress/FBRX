@@ -359,11 +359,15 @@ export class Kernel {
       approvals: this.approvals,
       approvalSeconds: () => Math.max(this.policy.policy.approvals.timeoutSeconds, 180),
       diagnostics: async () => {
-        const top = await this.monitor.processes({ sort: 'cpu', limit: 8 }).catch(() => null);
-        // Protection as it is now (a few seconds at most: the antivirus is asked again).
-        const prot = await Promise.race([this.protection.status().catch(() => null), sleep(5000).then(() => null)]);
+        // All at once: each one asks the system (PowerShell on Windows), which takes seconds.
+        const [base, top, prot] = await Promise.all([
+          this.ticketDiagnostics(),
+          this.monitor.processes({ sort: 'cpu', limit: 8 }).catch(() => null),
+          // Protection as it is now (a few seconds at most: the antivirus is asked again).
+          Promise.race([this.protection.status().catch(() => null), sleep(5000).then(() => null)]),
+        ]);
         return {
-          ...(await this.ticketDiagnostics()),
+          ...base,
           busiestApps: top?.list.map((x) => ({ name: x.name, pid: x.pid, cpuPct: x.cpu, memoryMb: Math.round(x.memBytes / 1048576) })) ?? [],
           protection: prot ? { name: prot.active.name, state: prot.state, realtime: prot.realtime, threats: prot.threats } : this.protection.summary(),
           checkedAt: new Date().toISOString(),

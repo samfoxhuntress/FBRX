@@ -1,10 +1,11 @@
-import { mkdtempSync, readFileSync, statSync, writeFileSync } from 'node:fs';
+import { lstatSync, mkdirSync, mkdtempSync, readFileSync, statSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { unzip } from '../src/util/unzip';
 import { makeZip } from './helpers';
-import { pickRelease, selectRuntimeAsset } from '../src/ai/runtime/runtime-installer';
+import * as tar from 'tar';
+import { extractRuntimeTarball, pickRelease, selectRuntimeAsset } from '../src/ai/runtime/runtime-installer';
 
 
 describe('runtime installer', () => {
@@ -15,6 +16,29 @@ describe('runtime installer', () => {
     unzip(zip, join(dir, 'out'));
     expect(readFileSync(join(dir, 'out/README.md'), 'utf8')).toBe('hello');
     if (process.platform !== 'win32') expect(statSync(join(dir, 'out/build/bin/llama-server')).mode & 0o111).toBeTruthy();
+  });
+
+  it.skipIf(process.platform === 'win32')('unpacks a macOS build whose libraries are chains of links, and only links that stay inside', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fbrx-tgz-'));
+    const src = join(dir, 'src', 'llama-b1');
+    mkdirSync(src, { recursive: true });
+    writeFileSync(join(src, 'libmtmd.0.0.1.dylib'), 'lib');
+    writeFileSync(join(src, 'llama-server'), 'bin');
+    symlinkSync('libmtmd.0.0.1.dylib', join(src, 'libmtmd.0.dylib'));
+    symlinkSync('libmtmd.0.dylib', join(src, 'libmtmd.dylib'));
+    symlinkSync('../../../outside.txt', join(src, 'escape'));
+    symlinkSync('/etc/passwd', join(src, 'absolute'));
+    // The order llama.cpp's archive has: the link to a link comes after the link it points to.
+    const tgz = join(dir, 'llama.tar.gz');
+    await tar.c({ file: tgz, gzip: true, cwd: join(dir, 'src') }, ['llama-b1/libmtmd.0.0.1.dylib', 'llama-b1/libmtmd.0.dylib', 'llama-b1/libmtmd.dylib', 'llama-b1/llama-server', 'llama-b1/escape', 'llama-b1/absolute']);
+    const out = join(dir, 'out');
+    mkdirSync(out);
+    await extractRuntimeTarball(tgz, out);
+    expect(readFileSync(join(out, 'llama-b1/libmtmd.dylib'), 'utf8')).toBe('lib');
+    expect(lstatSync(join(out, 'llama-b1/libmtmd.dylib')).isSymbolicLink()).toBe(true);
+    expect(readFileSync(join(out, 'llama-b1/llama-server'), 'utf8')).toBe('bin');
+    expect(() => lstatSync(join(out, 'llama-b1/escape'))).toThrow();
+    expect(() => lstatSync(join(out, 'llama-b1/absolute'))).toThrow();
   });
 
   it('refuses archive entries that escape the destination', () => {

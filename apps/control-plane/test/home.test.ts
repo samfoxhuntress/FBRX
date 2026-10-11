@@ -204,7 +204,8 @@ describe('FBRX Command for a family', () => {
     await waitFor(() => asked.some((a) => a.tool === 'helpdesk.assist'));
     expect(asked[0].toolTitle).toBe('Let Alex laptop from the help desk work on this computer');
     child.approvals.resolve(asked[0].id, 'approve', 'Milo');
-    const done = await waitFor(async () => (await jobs()).find((j) => j.id === job.id && j.status === 'succeeded'));
+    // A real look at the computer (processes, antivirus, disks): seconds on a busy Windows runner.
+    const done = await waitFor(async () => (await jobs()).find((j) => j.id === job.id && j.status === 'succeeded'), 40_000);
     expect(done!.result).toMatchObject({ computer: 'Milo laptop', busiestApps: expect.any(Array) });
 
     // Each command still asks.
@@ -232,7 +233,7 @@ describe('FBRX Command for a family', () => {
     expect(refused!.error).toMatch(/does not let the help desk work on it/);
     // Only the help desk may ask.
     await expect(child.call('helpdesk.assist', { ticketId: t.id, action: 'diagnostics' }, USER)).rejects.toMatchObject({ code: 'FORBIDDEN' });
-  }, 60_000);
+  }, 120_000);
 
   it('turns "a student computer" into a child computer in a family', async () => {
     const k = await computer('Kitchen tablet', parentToken, 'student');
