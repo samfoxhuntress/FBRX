@@ -2271,6 +2271,87 @@ html.goose-mode #root {
   color: var(--warning);
   border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
 }
+/* FBRX Server: your servers and the built-in browser for their consoles. */
+.srv-section {
+  margin: 8px 0 0;
+  font-size: 15px;
+}
+.srv-suggest {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.srv-fp {
+  font-family: var(--mono);
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 10px 12px;
+  border-radius: var(--radius);
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  width: fit-content;
+  letter-spacing: 0.02em;
+}
+.srv-browser {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  /* The window less the top bar (52px) and the content's padding (24px above and below). */
+  height: calc(100vh - 106px);
+  min-height: 420px;
+}
+.srv-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.srv-bar-sep {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+  margin: 0 4px;
+}
+.srv-address {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background: var(--surface-2);
+  font-size: 12.5px;
+  overflow: hidden;
+  white-space: nowrap;
+}
+.srv-address svg {
+  color: var(--good);
+  flex: none;
+}
+.srv-address.insecure svg {
+  color: var(--warning);
+}
+.srv-address .mono {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-secondary);
+}
+.srv-address-name {
+  font-weight: 600;
+  flex: none;
+}
+.srv-webview {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: #fff;
+}
 .story-ref {
   margin-top: 12px;
   padding-top: 10px;
@@ -4862,7 +4943,7 @@ html[data-presenting='blur'] .private::selection {
 /* Joining FBRX Command: the certificate fingerprint to compare */
 .join-fp {
   display: block;
-  font-family: var(--font-mono, ui-monospace, monospace);
+  font-family: var(--mono);
   font-size: 12px;
   line-height: 1.6;
   word-break: break-all;

@@ -11,6 +11,7 @@ import { ElectronUpdateController } from './updater';
 import { ClipHistory } from './clip-history';
 import { PasteKeys } from './paste-keys';
 import { runJavaScript, stopJavaScript } from './code-sandbox';
+import { guardWebviews, setupServerBrowser } from './server-browser';
 
 const dataDir = process.env.FBRX_HOME ?? app.getPath('userData');
 const rendererUrl = process.env.FBRX_RENDERER_URL ?? null;
@@ -186,8 +187,11 @@ function createWindow() {
       nodeIntegration: false,
       webSecurity: true,
       spellcheck: true,
+      // Server consoles open in a <webview> (Lab → FBRX Server), locked down by guardWebviews.
+      webviewTag: true,
     },
   });
+  guardWebviews(win);
   // Launched at sign-in with --hidden: start in the tray.
   win.once('ready-to-show', () => {
     if (!process.argv.includes('--hidden')) win?.show();
@@ -660,6 +664,7 @@ app.whenReady().then(async () => {
   registerIpc();
   serveVoice();
   guardPermissions();
+  setupServerBrowser(() => kernel);
   appMenu();
   try {
     await boot();

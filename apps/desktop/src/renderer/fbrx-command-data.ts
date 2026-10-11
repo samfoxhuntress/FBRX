@@ -148,7 +148,7 @@ export const FBRX_HOWTOS: FbrxHowto[] = [
     s: 'Its address and the certificate to trust',
     steps: [
       'On the server (its screen or SSH): <code>fbrx-server status</code>.',
-      'Open the Console address in your browser, or add it under Lab → FBRX Server.',
+      'Add the Console address under Lab → FBRX Server → Your servers and open it right in FBRX (or in your browser).',
       'The first time, compare the certificate fingerprint your browser shows with the one <code>fbrx-server status</code> printed.',
       'Never set up yet? <code>sudo fbrx-server setup-code</code> gives the code the console asks for.',
     ],

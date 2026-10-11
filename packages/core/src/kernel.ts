@@ -77,6 +77,7 @@ import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
 import { MeshAssist, runsElevated } from './mesh/mesh-assist';
 import { MeshNetwork } from './mesh/mesh-network';
 import { ServerResources } from './system/server-resources';
+import { SavedServers } from './system/saved-servers';
 import { meshTools } from './tools/builtin/mesh-tools';
 import { AiCoordination } from './aicoord/aicoord';
 import { ConversationStore } from './ai/conversations';
@@ -181,6 +182,7 @@ export class Kernel {
   readonly meshNetwork: MeshNetwork;
   /** FBRX Server resources (installer ISO, bundle, guides) shipped inside the app. */
   readonly serverResources: ServerResources;
+  readonly servers: SavedServers;
   readonly aicoord: AiCoordination;
   private readonly api: Record<string, (p: any, ctx: CallContext) => unknown>;
   private disposers: Array<() => void> = [];
@@ -562,6 +564,16 @@ export class Kernel {
       notify: (title, body, open) => this.notify({ title, body, level: 'info', source: 'messages', open }),
     });
     this.serverResources = new ServerResources(this.platform.resourcesDir, () => this.platform.specialDirs().downloads);
+    this.servers = new SavedServers({
+      meta: this.meta,
+      audit: (action, details) => this.audit.append({ category: 'server', action, actor: 'user', outcome: 'success', details }),
+      meshServers: () =>
+        this.mesh
+          .devices()
+          .filter((d) => d.kind === 'desktop')
+          .map((d) => ({ name: d.name, host: this.mesh.addressFor(d.id) ?? '', roles: this.mesh.rolesOf(d.id) }))
+          .filter((d) => d.host && d.roles.length),
+    });
     this.meshNetwork = new MeshNetwork({
       settings: () => this.settings.get().mesh.network,
       port: () => this.settings.get().mesh.port,

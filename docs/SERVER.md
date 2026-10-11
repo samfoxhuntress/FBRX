@@ -24,9 +24,10 @@ MiniDome**, [MINIDOME.md](MINIDOME.md)). Same console, *Gate* pages.
 1. Get the ISO: it comes with **FBRX Endpoint** for now (*Lab → FBRX Server*, with the bundle and these guides), the
    **FBRX Server ISO** workflow in GitHub Actions builds it (artifact `fbrx-server-iso`), or build it yourself on Linux:
    `scripts/server/bundle.sh --with-node && scripts/server/build-iso.sh` (needs `xorriso`).
-2. Boot the server from it: write it to a USB stick (`dd`, or any image writer; in Rufus choose **DD Image mode** when
-   it asks), or on a Dell PowerEdge mount it through the iDRAC: *Virtual Console → Virtual Media → Map CD/DVD*, then boot
-   once from *Virtual CD/DVD/ISO* (F11 boot menu). In Hyper-V, use a generation 2 machine.
+2. Boot the server from it: write it to a USB stick (`dd`, or any image writer; if the writer offers a choice, pick
+   the raw/DD image mode), or attach it as virtual media through the server's management controller (its remote
+   console), then boot once from it (the one-time boot menu, often F11 or F12). In Hyper-V, use a generation 2
+   machine.
 3. Pick **Install FBRX Server**. The installer asks only:
    * which disk to install on, and to confirm erasing it (it asks every time it is about to write),
    * the time zone,
@@ -80,27 +81,27 @@ helper, so work can go to the right server).
 The web console comes with every role (it is FBRX Virtual's service, with or without virtual machines). The installer
 refuses a planned role for now and says so.
 
-## Dell PowerEdge R330 checklist
+## Before you install: the server's own settings
 
-The R330 (13th generation) has an **iDRAC 8**. Before (or after) installing:
+Any 64-bit (x86-64) PC or server works. Before (or after) installing:
 
-1. **iDRAC network.** At boot press F2 → *iDRAC Settings → Network*: give it an address on your network. Change the
-   default `root` password, and make a separate iDRAC user with the Administrator role for FBRX Virtual.
-2. **BIOS** (F2 → *System BIOS*, or later from FBRX Virtual's *Server & BIOS* page):
-   * *Processor Settings → Virtualization Technology: Enabled.* On these servers it turns on both VT-x (fast virtual
-     machines) and VT-d (giving PCI devices to virtual machines).
-   * *Boot Settings → Boot Mode: UEFI.*
-   * *System Profile Settings → System Profile: Performance* (processors stay at full speed).
-   * *Integrated Devices → SR-IOV Global Enable: Enabled* (network cards that split into virtual ones).
-3. **Disks.** The PERC H330 can present the disks as a RAID volume (pick the virtual disk in the installer) or pass
-   them through (HBA / non-RAID mode).
-
-FBRX Virtual's *Server & BIOS → BIOS settings* shows these as **Recommended for FBRX Virtual** and sets them in one go.
+1. **Firmware (BIOS/UEFI).** Turn on hardware virtualization (VT-x or AMD-V; fast virtual machines) and the IOMMU
+   (VT-d or AMD-Vi; giving PCI devices to virtual machines). Boot in **UEFI** mode. If there is a power or system
+   profile, pick **performance** (processors stay at full speed). On servers with network cards that split into
+   virtual ones, turn on **SR-IOV**.
+2. **Management controller** (most rack servers have one, a small computer that runs even when the server is off):
+   give it an address on your network, change its default password, and make a separate administrator account for
+   FBRX Virtual. FBRX Virtual's *Server & BIOS* page then shows its health and changes the firmware settings above
+   for you (any Redfish controller; its *BIOS settings* list marks them **Recommended for FBRX Virtual**).
+3. **Disks.** A RAID controller can offer the disks as one volume (pick that volume in the installer) or pass them
+   through as they are (HBA or non-RAID mode, for software RAID or ZFS later).
 
 ## First sign-in
 
-Open `https://<server address>:9443` from another computer. FBRX Virtual makes its own certificate, so the browser warns
-the first time: check that the fingerprint matches what the server shows (`fbrx-server fingerprint`), then continue.
+Open `https://<server address>:9443` from another computer, or in FBRX Endpoint add it under **Lab → FBRX Server →
+Your servers** and open it there (a browser built into FBRX, with its own sign-ins; see below). FBRX Virtual makes its
+own certificate, so the browser warns the first time: check that the fingerprint matches what the server shows
+(`fbrx-server fingerprint`), then continue.
 Enter the **setup code** (on the server's screen, or `sudo fbrx-server setup-code`) and make the first administrator.
 
 Roles: **administrators** do everything (users, networks, deleting machines, device passthrough, interrupt placement,
@@ -198,18 +199,18 @@ moves. Cores glow by how many device interrupts they handle.
 
 On a computer without a Linux hardware view (development, the simulated mode) the page shows a sample server.
 
-## Server & BIOS (iDRAC and other Redfish controllers)
+## Server & BIOS (Redfish management controllers)
 
 *Server & BIOS → Connect*: enter the controller's address, check the certificate it presents (compare its fingerprint
-with the iDRAC's own page, *iDRAC Settings → Network/Services → SSL*), trust it and sign in. From then on FBRX Virtual
+with the one on the controller's own web page, usually under its network or SSL settings), trust it and sign in. From then on FBRX Virtual
 talks only to that exact controller, and keeps the password encrypted.
 
 * **Health & power:** model, service tag, BIOS and controller firmware, temperatures, fans, power use; turn the server
   on, shut it down, restart or force it (the page reminds you every virtual machine stops with it).
 * **BIOS settings:** every setting by group, with the maker's names, choices and help. Changes are **staged** and applied
-  by the server at its next restart (Dell controllers do this through a configuration job, which the page lists).
+  by the server at its next restart (some controllers do this through a configuration job, which the page lists).
   *Apply at next restart* or *Apply and restart now*; *Throw them away* cancels staged changes. *Next start: BIOS setup*
-  boots into the setup screen once (see it through the iDRAC virtual console).
+  boots into the setup screen once (see it through the controller's remote console).
 * **Event log:** the hardware event log (memory, power supply, fan and temperature events).
 
 ## Everyday commands
@@ -307,6 +308,21 @@ The code is in `apps/virtual` (service: `drivers/` for libvirt and the simulated
 `bmc/` for Redfish) and `apps/virtual-console` (React, the FBRX UI kit, noVNC). The installer, bundle and ISO scripts
 are in `scripts/server`. The FBRX core for the ai role is `packages/core/bin/fbrx-headless.ts`, bundled by
 `scripts/server/build-core.mjs`.
+
+### Your servers in FBRX Endpoint
+
+*Lab → FBRX Server → Your servers* keeps the servers you manage: FBRX Server's console (port 9443) or any other web
+page a server or device has (a NAS, another hypervisor, a management controller). FBRX Servers paired on FBRX Mesh
+are offered there. *Open* shows the console inside FBRX, in a browser of its own:
+
+* its sign-ins, cookies and storage are kept apart from everything else in FBRX, and the page cannot reach FBRX
+  itself (no FBRX bridge, no Node.js, only clipboard writes and full screen allowed);
+* a certificate a public authority vouches for opens straight away. FBRX Server's own certificate is shown the first
+  time with its fingerprint to compare with the server's (`fbrx-server fingerprint`); once trusted, FBRX accepts
+  exactly that certificate at exactly that address and port, and stops with a warning if the server ever presents
+  another one;
+* links to the same server open in place (back, forward and reload in the bar); anything else opens in your own
+  browser, as does the button at the end of the bar.
 
 ### FBRX Server inside FBRX Endpoint (for now)
 

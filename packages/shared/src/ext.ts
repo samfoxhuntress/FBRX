@@ -40,6 +40,44 @@ export interface ServerResourcesInfo {
   files: ServerResourceFile[];
 }
 
+/** The built-in browser's own storage (cookies, sign-ins) for server consoles, apart from everything else in FBRX. */
+export const SERVER_BROWSER_PARTITION = 'persist:fbrx-servers';
+
+/** A server whose web console opens inside FBRX (Lab → FBRX Server → Your servers). */
+export interface SavedServer {
+  id: string;
+  name: string;
+  scheme: 'https' | 'http';
+  host: string;
+  port: number;
+  /** Where the console opens, e.g. https://192.168.1.20:9443/. */
+  url: string;
+  /** The certificate trusted for it (SHA-256, "AB:CD:…") when no certificate authority vouches for it. */
+  fingerprint: string | null;
+  notes: string;
+  createdAt: string;
+  lastOpenedAt: string | null;
+}
+/** A paired computer on FBRX Mesh that announces server roles and is not saved yet. */
+export interface ServerSuggestion {
+  name: string;
+  host: string;
+  port: number;
+  roles: string[];
+}
+/** What a saved server's console answers before it is opened. */
+export interface ServerCheck {
+  url: string;
+  reachable: boolean;
+  /** https only: the certificate it presents. */
+  certificate: { fingerprint: string; subject: string; issuer: string; validTo: string; trustedBySystem: boolean } | null;
+  /** It can open: a certificate authority vouches for it, or it is the one trusted before (or http). */
+  ok: boolean;
+  /** A certificate was trusted before and this is a different one. */
+  changed: boolean;
+  error: string | null;
+}
+
 // ------------------------------------------------------------------------------------------- workspace
 
 export interface Note {
@@ -1182,6 +1220,14 @@ export interface ExtMethods {
   /** Copies a resource to Downloads. */
   'server.copy': (p: { name: string }) => { path: string };
   'server.readDoc': (p: { name: string }) => { text: string };
+  'server.saved': () => { servers: SavedServer[]; suggestions: ServerSuggestion[] };
+  /** Adds or changes a saved server. "address" may be a host, host:port or a whole URL. */
+  'server.save': (p: { id?: string; name?: string; address: string; port?: number; notes?: string }) => SavedServer;
+  'server.remove': (p: { id: string }) => { ok: true };
+  'server.check': (p: { id: string }) => ServerCheck;
+  /** Trusts the certificate a saved server presents (compared with `fbrx-server fingerprint` on the server). */
+  'server.trust': (p: { id: string; fingerprint: string }) => SavedServer;
+  'server.opened': (p: { id: string }) => { ok: true };
   /** Prefer Mesh: this computer's mesh networks, their MTU, and whether mesh traffic is marked for priority. */
   'mesh.network.status': () => MeshNetworkStatus;
   /** Which address each paired computer is reached on, the round trip, and (jumbo frames on) whether 9000-byte packets get through. */
@@ -1238,6 +1284,12 @@ export interface ExtEvents {
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'server.copy',
+  'server.saved',
+  'server.save',
+  'server.remove',
+  'server.check',
+  'server.trust',
+  'server.opened',
   'helpdesk.assist',
   'mesh.network.applyQos',
   'processes.kill',

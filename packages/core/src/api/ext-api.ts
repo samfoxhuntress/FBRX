@@ -781,6 +781,20 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'server.verify': (p) => k.serverResources.verify(z.object({ name: z.string().max(200) }).parse(p).name),
     'server.copy': (p) => k.serverResources.copy(z.object({ name: z.string().max(200) }).parse(p).name),
     'server.readDoc': (p) => k.serverResources.readDoc(z.object({ name: z.string().max(200) }).parse(p).name),
+    'server.saved': () => ({ servers: k.servers.list(), suggestions: k.servers.suggestions() }),
+    'server.save': (p) =>
+      k.servers.save(
+        z
+          .object({ id: z.string().max(64).optional(), name: z.string().max(200).optional(), address: z.string().min(1).max(300), port: z.number().int().min(1).max(65535).optional(), notes: z.string().max(2000).optional() })
+          .parse(p),
+      ),
+    'server.remove': (p) => (k.servers.remove(z.object({ id: z.string().max(64) }).parse(p).id), { ok: true as const }),
+    'server.check': (p) => k.servers.check(z.object({ id: z.string().max(64) }).parse(p).id),
+    'server.trust': (p) => {
+      const q = z.object({ id: z.string().max(64), fingerprint: z.string().min(32).max(200) }).parse(p);
+      return k.servers.trust(q.id, q.fingerprint);
+    },
+    'server.opened': (p) => (k.servers.opened(z.object({ id: z.string().max(64) }).parse(p).id), { ok: true as const }),
     'mesh.network.status': () => k.meshNetwork.status(),
     'mesh.network.test': (p) => k.meshNetwork.test(z.object({ peerId: z.string().max(80).optional() }).parse(p ?? {}).peerId),
     'mesh.network.computers': () => k.mesh.networkComputers(),
