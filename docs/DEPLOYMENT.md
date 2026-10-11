@@ -132,9 +132,11 @@ unit), users and API keys. Health endpoint: `GET /healthz`.
    `release.json`'s `download` at the tag's source zip, `https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v<version>.zip`,
    and `page` at `https://github.com/samfoxhuntress/FBRX/releases/tag/v<version>`.
 2. Merge into `main` (the default branch: installed copies read `release.json` from it).
-3. Tag that commit `v<version>` and push the tag. The Release workflow builds the Mac and Windows installers, the
-   FBRX Server ISO and bundle and the FBRX Command image, and publishes them as a GitHub release named after the
-   version (a version with a `-` in it, such as `2.0.0-beta.1`, is published as a pre-release on the beta channel).
+3. Tag that commit `v<version>` and push the tag, or run the **Release** workflow on `main` (Actions → Release →
+   Run workflow) with *channel* `stable` and *Also publish a GitHub release* ticked, which creates the tag itself. It
+   builds the Mac and Windows installers, the FBRX Server ISO and bundle and the FBRX Command image, and publishes them
+   as a GitHub release named after the version (a version with a `-` in it, such as `2.0.0-beta.1`, or the beta or
+   dev channel, is published as a pre-release).
 
 Installed copies see the new `release.json` within six hours and offer the update; Update now downloads the tag's zip
 (checked to hold that version) and runs the installer in the folder FBRX was installed from.
