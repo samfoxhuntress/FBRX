@@ -7,7 +7,8 @@
 
 # FBRX OS — Fabrics Operating System
 
-> **Alpha 1.9.5 "Bobbin".** FBRX is in alpha testing. Installed copies check this repository's
+> **Alpha 1.9.5 "Bobbin".** FBRX is in alpha testing. Downloads are on the
+> [Releases](https://github.com/samfoxhuntress/FBRX/releases) page; installed copies check this repository's
 > [`release.json`](release.json) and offer new versions in the app.
 
 FBRX OS is the platform behind the FBRX lineup ([docs/LINEUP.md](docs/LINEUP.md)): **FBRX Desktop** and **FBRX
@@ -108,6 +109,19 @@ deploy/             Docker compose + Caddy for the control plane, provisioning e
 docs/               Architecture, deployment, backup/restore, plugins, security, licensing, admin console,
                     command center, mesh, education, server, gate, MiniDome
 ```
+
+## Get FBRX
+
+Every version is on the **[Releases](https://github.com/samfoxhuntress/FBRX/releases)** page, named by its number:
+
+| Download | What it is |
+| --- | --- |
+| **Source code (zip)**, `FBRX-1.9.5.zip` | The whole project. Unzip it and run **Install FBRX OS** (below): it builds FBRX OS on your computer with your own license signing key. This is how you install your own copy. |
+| `FBRX-OS-Setup-1.9.5.exe`, `FBRX-OS-1.9.5-arm64.dmg`, `FBRX-OS-1.9.5-x64.dmg` | Ready-made installers built by GitHub. They carry your license key and a publisher signature only when the repository's signing secrets are set ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); otherwise they run as Endpoint Basic until a license or your FBRX Command turns on more. |
+| `fbrx-server-0.1.0-amd64.iso`, `fbrx-server-0.1.0.tar.gz` | FBRX Server: the installer ISO, and the bundle for a Debian 13 server you already have ([docs/SERVER.md](docs/SERVER.md)). |
+
+**Code → Download ZIP** on the main page gives the newest work (`FBRX-main.zip`), which can be ahead of the latest
+release. Installed copies are offered releases only.
 
 ## Install on your own laptop
 
