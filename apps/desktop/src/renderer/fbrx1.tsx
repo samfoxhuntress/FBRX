@@ -100,9 +100,12 @@ const HISTORY_KEY = 'fbrx.fbrx1.history';
 
 type ConsoleApi = { run: (lines: string[]) => void; insert: (text: string) => void };
 
-/** The console with its library beside it. */
-export function Fbrx1Panel() {
+/** The console with its library beside it. "prefill" types a command in, ready to run (from the Library). */
+export function Fbrx1Panel({ prefill }: { prefill?: string }) {
   const api = useRef<ConsoleApi | null>(null);
+  useEffect(() => {
+    if (prefill) api.current?.insert(prefill);
+  }, [prefill]);
   return (
     <div className="term-layout">
       <Fbrx1Console apiRef={api} />

@@ -151,7 +151,7 @@ never deletes its chats: they go back to the main history. Only the person at th
 | **Copy & migrate** | Copy, back up, mirror or move folders between drives, computers and network shares with **Robocopy** (Windows), **rsync** (Mac and Linux) or FBRX's own copier. Pick the folders, the tool and what to do (copy; new and changed only; mirror; move), skip clutter, retries, files at once, files and folders to leave out; the exact command is shown before it runs. **Preview** lists what would happen without changing anything; mirror and move ask first. Live output, counts and a summary, with *Explain this result*. Recipes: back up Documents, mirror to a NAS, copy a USB stick, move a project, and **Move my user folders to a new PC** (Desktop, Documents, Pictures, Music, Videos and Downloads, one after another). Guard rails refuse mirroring onto a drive root or a system or home folder, copying a folder into itself, and moving a whole drive or home folder away |
 | **Terminal** (Ultra) | **What if?** next to Run has Fabrix explain what the command in the box would do — what it reads, changes, deletes or downloads, whether it needs admin rights, and a verdict — without running it. Runs commands with streaming output in **PowerShell 7** when it is installed, otherwise **Windows PowerShell 5.1**, or Command Prompt (picker in the header). A **reference panel** puts ready-made commands (network, system, disks, processes, repair, security, power, printing; admin-only ones marked), your snippets, the code in your notes, and each project's snippets and notes one click away; ▶ runs one (commands that change something ask first). Save any command you ran as a snippet. Start a line with `?` to ask Fabrix for a command. Every command is in the audit log. The **Code** tab is the code lab (below), the **Device consoles** tab holds SSH and Telnet sessions (see Network Center), and **FBRX/1** is the management console for FBRX itself (below) |
 | **Toolbox** | Passwords, QR codes (guest Wi-Fi codes phones join by scanning, links, text), text tools, compare text, sizes and numbers (why a 1 TB drive shows 931 GB; decimal, hex, binary), decision maker, colors. Ultra: JSON, Base64, URL, hashes, UUIDs, timestamps, regex, JWT, subnet calculator, MAC vendor lookup, port reference (with risky ports flagged) and the command library. Every tool has *Try* examples, and the top row recommends common jobs — all offline |
-| **Library** | 61 short how-tos (Windows basics, files, Wi-Fi, security, speed, devices, troubleshooting) with buttons that open the right Windows setting or ask Fabrix. In Endpoint Ultra, **The Lab** adds power-user how-tos (install USBs, dual boot, a malware lab, device consoles, blue screen dumps, repairs, verifying downloads) and official download pages for Windows, Linux, security distributions and power tools, plus your computer maker's driver page. Safety goggles recommended (sold separately) |
+| **Library** | 61 short how-tos (Windows basics, files, Wi-Fi, security, speed, devices, troubleshooting) with buttons that open the right Windows setting or ask Fabrix. In Endpoint Ultra, **The Lab** adds power-user how-tos (install USBs, dual boot, a malware lab, device consoles, blue screen dumps, repairs, verifying downloads) and official download pages for Windows, Linux, security distributions and power tools, plus your computer maker's driver page. Safety goggles recommended (sold separately). **FBRX commands** (Ultra) is the library of FBRX's own command lines: FBRX/1 on this computer (*Try it* opens FBRX/1 with the command typed in), FBRX Server and FBRX Gate (copy, then run in a device console), and how-tos such as copying settings to another computer or changing a gate without locking yourself out. With fun extras on it stays hidden until you talk to the search like a switch (`show commands`, `enable`, `configure terminal`) and earn *Operator Mode* |
 
 ### Snippets and the / menu
 
@@ -257,7 +257,8 @@ Unique prefixes work (`sh sys st`), **Tab** completes, **?** lists what can come
 output can be piped: `| match <text>`, `| except <text>`, `| count`, `| last <n>`, `| display json`,
 `| display set`. The **FBRX/1 library** next to the console has pre-configured commands and multi-line recipes
 (health check, switch theme, offline-first agent, try-before-you-commit); ▶ runs every line in order, and the
-bookmark on any command you ran saves it as an FBRX/1 snippet that appears under *My snippets*. FBRX/1 is reserved
+bookmark on any command you ran saves it as an FBRX/1 snippet that appears under *My snippets*. Every FBRX/1
+command, with what it does, is also in **Library → FBRX commands**, next to the FBRX Server and FBRX Gate ones. FBRX/1 is reserved
 for the person at the computer: it is not available over the Local API, the mesh or remote commands, and every
 change goes through the same checks and audit log as the rest of FBRX.
 
@@ -354,12 +355,18 @@ A device with SSH (22, or 4118 for WatchGuard) or Telnet (23) open gets a **Conn
 Terminal → Device consoles with a full terminal (colors, `--More--` paging, full-screen editors) and, next to it, the
 **device guide** for the maker: how to log in, the commands people use most (click to type one, ▶ to run it;
 commands that change or restart the device ask first), a button that turns paging off, the maker's official
-documentation and a search for more commands. Guides: Ubiquiti UniFi / EdgeMAX, Sophos Firewall, Cisco IOS / IOS XE,
+documentation and a search for more commands. Guides: **FBRX Server** (FBRX Virtual, its roles and libvirt) and
+**FBRX Gate & MiniDome** (picked by themselves when the server's name has fbrx in it), Ubiquiti UniFi / EdgeMAX, Sophos Firewall, Cisco IOS / IOS XE,
 Cisco Meraki (no CLI: dashboard pointers), Fortinet FortiGate, Palo Alto PAN-OS, Juniper Junos, HPE Aruba, MikroTik
 RouterOS, pfSense / OPNsense, TP-Link Omada / JetStream, NETGEAR, SonicWall, WatchGuard, Zyxel, Synology, QNAP,
 Raspberry Pi and generic Linux. *Web admin* opens the device's admin page; *Windows Terminal* opens the same SSH
 login outside FBRX.
 
+- **Saved connections:** every device you connect to is kept on the left and in the *Saved connections* view
+  (shown when no console is open): name, address, protocol, user, device guide, notes and when you last used it.
+  Edit one to name it and add notes, add one by hand, or untick *Keep in Saved connections* when connecting.
+  A key means its password is saved, so *Connect* logs in with one click. Removing a connection can forget its
+  password too. Passwords stay encrypted in the vault (Credentials); the list itself never holds them.
 - **Identity:** the device's SSH host key is saved the first time (you see its fingerprint) and a changed key is
   refused with a warning until you confirm it.
 - **Logins:** user name and password (or keyboard-interactive), or your SSH keys in `~/.ssh` when the password is

@@ -18,7 +18,7 @@ Every easter egg has a badge in **Settings → Trophy case** (also in Spotlight:
 count in the sidebar footer). Badges you haven't found are greyed out with a hint; found ones are in color with how and
 when you earned them. A toast with **See trophy case** pops up the moment you find one.
 
-Find all 25 and you unlock the **Golden Goose**: from then on the goose arrives wearing a golden egg with a red **#1**
+Find all 26 and you unlock the **Golden Goose**: from then on the goose arrives wearing a golden egg with a red **#1**
 ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `show trophies` in FBRX/1 lists it.
 
 | Badge | How to earn it |
@@ -29,6 +29,7 @@ ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `
 | Master Weaver | Click the FBRX logo (top left) seven times quickly: the loom spins |
 | Safety First | Open **Library → The Lab** |
 | Storyteller | Search the Library for "tell me a story" (or "story time", "once upon a time") |
+| Operator Mode | Talk to the Library search like a switch: `show commands`, `enable`, `configure terminal` or `fbrx help`. It unlocks **FBRX commands** in the Library (Ultra) |
 | Digital Rain | Type `matrix` in the Terminal |
 | Sandwich Artist | Type `sudo make me a sandwich` in the Terminal |
 | I'm a Teapot | Type `coffee` in the Terminal |

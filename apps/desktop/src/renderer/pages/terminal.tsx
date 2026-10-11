@@ -350,7 +350,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
         ]}
       />
       {tab === 'fbrx1' ? (
-        <Fbrx1Panel />
+        <Fbrx1Panel prefill={arg.startsWith('fbrx1/') ? decodeURIComponent(arg.slice(6)) : undefined} />
       ) : tab === 'code' ? (
         <Suspense fallback={<div className="fx-muted" style={{ padding: 24 }}>Loading the code lab…</div>}>
           <CodeLabPanel />

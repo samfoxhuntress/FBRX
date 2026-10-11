@@ -592,6 +592,8 @@ export interface ConsoleConnectInput {
   profileId?: string;
   vendor?: string;
   label?: string;
+  /** Keep it in Saved connections (default yes). */
+  save?: boolean;
 }
 export type ConsoleConnectResult =
   | { session: ConsoleSession }
@@ -602,6 +604,23 @@ export interface ConsoleLogin {
   protocol: ConsoleProtocol;
   username: string;
   savedAt: string;
+}
+/** A device in Saved connections: one click to connect again, with its guide and (if saved) its password. */
+export interface ConsoleBookmark {
+  id: string;
+  label: string;
+  host: string;
+  port: number;
+  protocol: ConsoleProtocol;
+  username: string | null;
+  /** Device guide (see DEVICE_PROFILES). */
+  profileId: string | null;
+  vendor: string | null;
+  notes: string;
+  createdAt: string;
+  lastConnectedAt: string | null;
+  /** A password is saved for this user (encrypted in the vault). */
+  passwordSaved: boolean;
 }
 
 // ------------------------------------------------------------------------------------------ FBRX/1
@@ -1101,6 +1120,12 @@ export interface ExtMethods {
   'console.list': () => ConsoleSession[];
   'console.transcript': (p: { id: string }) => { text: string };
   'console.logins': () => ConsoleLogin[];
+  /** Saved connections, most recently used first. */
+  'console.bookmarks': () => ConsoleBookmark[];
+  /** Adds a device to Saved connections, or changes one (id). */
+  'console.saveBookmark': (p: { id?: string; label?: string; host: string; port?: number; protocol: ConsoleProtocol; username?: string | null; profileId?: string | null; notes?: string }) => ConsoleBookmark;
+  /** Removes one; forgetPassword also deletes its saved password. */
+  'console.removeBookmark': (p: { id: string; forgetPassword?: boolean }) => Ok;
   'console.forgetLogin': (p: { host: string; port: number; username: string }) => Ok;
   'console.forgetHostKey': (p: { host: string; port: number }) => Ok;
 
@@ -1291,6 +1316,9 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'console.logins',
   'console.forgetLogin',
   'console.forgetHostKey',
+  'console.bookmarks',
+  'console.saveBookmark',
+  'console.removeBookmark',
   'fun.unlock',
   'ai.resume',
   'cli.exec',

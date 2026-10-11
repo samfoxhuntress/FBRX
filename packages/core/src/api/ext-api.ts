@@ -647,6 +647,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
             profileId: z.string().max(40).optional(),
             vendor: z.string().max(200).optional(),
             label: z.string().max(200).optional(),
+            save: z.boolean().optional(),
           })
           .parse(p),
       ),
@@ -667,6 +668,27 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'console.list': () => k.consoles.list(),
     'console.transcript': (p) => ({ text: k.consoles.transcript(Id.parse(p).id) }),
     'console.logins': () => k.consoles.logins(),
+    'console.bookmarks': () => k.consoles.bookmarks(),
+    'console.saveBookmark': (p) =>
+      k.consoles.saveBookmark(
+        z
+          .object({
+            id: z.string().max(64).optional(),
+            label: z.string().max(200).optional(),
+            host: z.string().min(1).max(253),
+            port: z.number().int().min(1).max(65535).optional(),
+            protocol: z.enum(['ssh', 'telnet']),
+            username: z.string().max(64).nullable().optional(),
+            profileId: z.string().max(40).nullable().optional(),
+            notes: z.string().max(2000).optional(),
+          })
+          .parse(p),
+      ),
+    'console.removeBookmark': (p) => {
+      const q = z.object({ id: z.string().min(1).max(64), forgetPassword: z.boolean().optional() }).parse(p);
+      k.consoles.removeBookmark(q.id, q.forgetPassword);
+      return { ok: true };
+    },
     'console.forgetLogin': (p) => {
       const q = z.object({ host: z.string().max(253), port: z.number().int(), username: z.string().max(64) }).parse(p);
       k.consoles.forgetLogin(q.host, q.port, q.username);

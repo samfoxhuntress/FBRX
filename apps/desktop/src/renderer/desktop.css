@@ -1792,6 +1792,74 @@ body.spotlight-body {
 .consoles-list .dot.busy {
   background: var(--warning);
 }
+.consoles-saved-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 12px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+.consoles-saved-head .linklike {
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  color: inherit;
+}
+.consoles-saved-head .linklike.on,
+.consoles-saved-head .linklike:hover {
+  color: var(--accent);
+}
+.agent-conv.saved .agent-conv-title svg {
+  color: var(--accent);
+  vertical-align: -1px;
+}
+.saved-connections {
+  gap: 12px;
+}
+.saved-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 10px;
+  align-content: start;
+  overflow: auto;
+}
+.saved-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  background: var(--surface-2);
+}
+.saved-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.saved-card-head b {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1;
+}
+.saved-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  color: var(--good);
+}
+.saved-notes {
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  color: var(--text-secondary);
+}
 .console-main {
   display: flex;
   flex-direction: column;
@@ -2153,6 +2221,55 @@ html.goose-mode #root {
 }
 .chip.story-chip {
   border-color: color-mix(in srgb, #8b5cf6 50%, var(--border));
+}
+/* FBRX commands: a terminal-blue banner with a faint scanline. */
+.lab-banner.cli-banner {
+  border-color: color-mix(in srgb, #17a2b8 45%, transparent);
+  background:
+    repeating-linear-gradient(0deg, color-mix(in srgb, #17a2b8 7%, transparent) 0 1px, transparent 1px 4px),
+    linear-gradient(135deg, color-mix(in srgb, #17a2b8 16%, var(--surface-1)), var(--surface-1));
+}
+.lab-banner.cli-banner svg {
+  color: #17a2b8;
+}
+.chip.cli-chip {
+  border-color: color-mix(in srgb, #17a2b8 50%, var(--border));
+}
+.fbrx-cmds {
+  display: flex;
+  flex-direction: column;
+}
+.fbrx-cmd {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 0;
+}
+.fbrx-cmd + .fbrx-cmd {
+  border-top: 1px solid var(--border);
+}
+.fbrx-cmd-text {
+  flex: 1;
+  min-width: 0;
+  font-size: 12.5px;
+}
+.fbrx-cmd-text code {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.fbrx-cmd-grid {
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  align-items: start;
+}
+.fbrx-cmd-tag {
+  display: inline-block;
+  margin-right: 6px;
+  padding: 0 6px;
+  white-space: nowrap;
+  border-radius: 999px;
+  font-size: 10.5px;
+  color: var(--warning);
+  border: 1px solid color-mix(in srgb, var(--warning) 45%, transparent);
 }
 .story-ref {
   margin-top: 12px;
