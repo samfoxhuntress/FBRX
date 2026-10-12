@@ -60,7 +60,7 @@ describe('fbrx.doctor and fbrx.fix', () => {
   it('finds what makes FBRX slow or stuck, each with its fix', async () => {
     const found = await runDoctor(
       base({
-        services: () => [{ name: 'mesh', title: 'FBRX Mesh', description: '', state: 'failed', message: 'Port 47860 is in use', startedAt: null, restarts: 4, dependsOn: [] }],
+        services: () => [{ name: 'mesh', title: 'FBRX Mesh', description: '', state: 'failed', message: 'Port 47860 is in use', startedAt: null, restarts: 4, dependsOn: [], critical: false }],
         runtime: () => ({ state: 'running', binaryPath: 'x', modelId: 'big', modelFile: 'big.gguf', port: 1, pid: 1, endpoint: 'x', message: null }) as RuntimeStatus,
         modelBytes: () => 12 * 1024 ** 3,
         mem: () => ({ total: 16 * 1024 ** 3, free: 1 * 1024 ** 3 }),
