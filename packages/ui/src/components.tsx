@@ -112,7 +112,7 @@ export function Shell(props: {
 function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
   const Ico = Icons[item.icon];
   return (
-    <button className={cx('fx-nav-item', active && 'active')} onClick={onClick} aria-current={active ? 'page' : undefined} data-nav={item.id}>
+    <button className={cx('fx-nav-item', active && 'active')} onClick={onClick} aria-current={active ? 'page' : undefined} data-nav={item.id} data-section={item.section}>
       <Ico />
       <span>{item.label}</span>
       {item.tag && <span className="fx-adv-tag">{item.tag}</span>}
@@ -157,7 +157,7 @@ function GroupedNav({ groups, active, onNavigate, collapsed }: { groups: NavGrou
         const count = g.items.reduce((n, i) => n + (i.count ?? 0), 0);
         const flying = collapsed && flyout?.id === g.id;
         return (
-          <div key={g.id} className={cx('fx-group', isOpen && 'open', current === g.id && 'here')}>
+          <div key={g.id} className={cx('fx-group', isOpen && 'open', current === g.id && 'here')} data-group={g.id}>
             <button
               className="fx-group-head"
               aria-expanded={collapsed ? flying : isOpen}

@@ -26,18 +26,19 @@
   --focus: rgba(181, 107, 12, 0.4);
 }
 :root[data-preset='fabrics'][data-theme='dark'] {
-  --page: #100e0b;
-  --surface-1: #1a1714;
-  --surface-2: #221e1a;
-  --surface-3: #2d2822;
-  --sidebar: #13110e;
-  --text-primary: #f6f1e9;
-  --text-secondary: #cfc5b4;
-  --text-muted: #91877a;
-  --border: rgba(246, 226, 196, 0.1);
-  --border-strong: rgba(246, 226, 196, 0.18);
-  --grid: #2d2822;
-  --axis: #3b352d;
+  /* A cool page; the theme's color is on the elements (accent, glow, section colors). */
+  --page: #0d1015;
+  --surface-1: #161a20;
+  --surface-2: #1d222a;
+  --surface-3: #272d36;
+  --sidebar: #10141a;
+  --text-primary: #f2f4f7;
+  --text-secondary: #c3c9d2;
+  --text-muted: #858d99;
+  --border: rgba(190, 205, 228, 0.11);
+  --border-strong: rgba(190, 205, 228, 0.2);
+  --grid: #272d36;
+  --axis: #343b46;
   --accent: #f0a530;
   --accent-hover: #f6b955;
   --accent-ink: #1a1408;
@@ -67,18 +68,19 @@
   --focus: rgba(232, 89, 12, 0.4);
 }
 :root[data-preset='tropical'][data-theme='dark'] {
-  --page: #150b07;
-  --surface-1: #20120c;
-  --surface-2: #2a1810;
-  --surface-3: #372015;
-  --sidebar: #180d08;
-  --text-primary: #fff3e8;
-  --text-secondary: #f1cdb2;
-  --text-muted: #b3876b;
-  --border: rgba(255, 196, 150, 0.12);
-  --border-strong: rgba(255, 196, 150, 0.2);
-  --grid: #372015;
-  --axis: #4a2c1d;
+  /* A cool page; the theme's color is on the elements (accent, glow, section colors). */
+  --page: #0b1014;
+  --surface-1: #141b21;
+  --surface-2: #1b232a;
+  --surface-3: #252e36;
+  --sidebar: #0e1418;
+  --text-primary: #f6f7f9;
+  --text-secondary: #c4ccd3;
+  --text-muted: #84909b;
+  --border: rgba(180, 215, 225, 0.12);
+  --border-strong: rgba(180, 215, 225, 0.2);
+  --grid: #252e36;
+  --axis: #323c45;
   --accent: #ffa23a;
   --accent-hover: #ffb862;
   --accent-ink: #2a1200;
@@ -146,18 +148,19 @@
   --focus: rgba(194, 65, 12, 0.4);
 }
 :root[data-preset='ember'][data-theme='dark'] {
-  --page: #110c0a;
-  --surface-1: #1b1412;
-  --surface-2: #241b18;
-  --surface-3: #30241f;
-  --sidebar: #140f0d;
-  --text-primary: #fbf1ec;
-  --text-secondary: #d6c3ba;
-  --text-muted: #998479;
-  --border: rgba(255, 220, 205, 0.1);
-  --border-strong: rgba(255, 220, 205, 0.18);
-  --grid: #30241f;
-  --axis: #3f302a;
+  /* A cool page; the theme's color is on the elements (accent, glow, section colors). */
+  --page: #0e0f13;
+  --surface-1: #17191f;
+  --surface-2: #1e2128;
+  --surface-3: #282b33;
+  --sidebar: #111317;
+  --text-primary: #f4f4f6;
+  --text-secondary: #c6c8cf;
+  --text-muted: #878a94;
+  --border: rgba(200, 205, 220, 0.11);
+  --border-strong: rgba(200, 205, 220, 0.19);
+  --grid: #282b33;
+  --axis: #353943;
   --accent: #ff6b3d;
   --accent-hover: #ff875f;
   --accent-ink: #1c0c06;
@@ -342,18 +345,19 @@
   --shadow: none;
 }
 :root[data-preset='paper'][data-theme='dark'] {
-  --page: #1a1611;
-  --surface-1: #231e17;
-  --surface-2: #2b251d;
-  --surface-3: #362e24;
-  --sidebar: #1d1914;
-  --text-primary: #f3e9d7;
-  --text-secondary: #cdbfa6;
-  --text-muted: #948670;
-  --border: rgba(243, 233, 215, 0.12);
-  --border-strong: rgba(243, 233, 215, 0.2);
-  --grid: #362e24;
-  --axis: #453b2e;
+  /* A cool page; the theme's color is on the elements (accent, glow, section colors). */
+  --page: #121418;
+  --surface-1: #1b1e24;
+  --surface-2: #22262d;
+  --surface-3: #2c3038;
+  --sidebar: #15181d;
+  --text-primary: #eef0f3;
+  --text-secondary: #c3c7ce;
+  --text-muted: #8a8f99;
+  --border: rgba(220, 225, 235, 0.12);
+  --border-strong: rgba(220, 225, 235, 0.2);
+  --grid: #2c3038;
+  --axis: #393e47;
   --accent: #d9a066;
   --accent-hover: #e3b483;
   --accent-ink: #1d1409;
@@ -1365,4 +1369,115 @@
 }
 :root[data-effects='light'] .fx-card {
   box-shadow: none !important;
+}
+
+/* ------------------------------------------------------------------ Color on the elements (dark mode) */
+/*
+ * Dark mode keeps the page itself cool and quiet (slate neutrals in every theme) and puts the color on the things
+ * you use: each sidebar section has its own color, cards carry a breath of the theme's accent, and table heads,
+ * buttons and the current page pick it up too. The page glow is softer than the sidebar's. High contrast stays flat.
+ */
+:root {
+  --sec-command: #4c8dff;
+  --sec-workspace: #a78bfa;
+  --sec-care: #f5a524;
+  --sec-utilities: #2dd4bf;
+  --sec-connect: #38bdf8;
+  --sec-protect: #34d399;
+  --sec-advanced: #f472b6;
+  --sec-system: #94a3b8;
+}
+:root[data-theme='light'] {
+  --sec-command: #2a6fd6;
+  --sec-workspace: #7c5cd6;
+  --sec-care: #c27800;
+  --sec-utilities: #0f9488;
+  --sec-connect: #0284c7;
+  --sec-protect: #0d9f6e;
+  --sec-advanced: #d0397f;
+  --sec-system: #64748b;
+}
+/* Sections by name (the grouped sidebar) and by heading (Essentials' short list). */
+.fx-group[data-group='bridge'],
+[data-section='Command'],
+[data-section='Everyday'] { --hue: var(--sec-command); }
+.fx-group[data-group='studio'],
+[data-section='Workspace'] { --hue: var(--sec-workspace); }
+.fx-group[data-group='pitstop'],
+[data-section='PC care'],
+[data-section='Your computer'] { --hue: var(--sec-care); }
+.fx-group[data-group='workbench'],
+[data-section='Utilities'] { --hue: var(--sec-utilities); }
+.fx-group[data-group='orbit'],
+[data-section='Connect'] { --hue: var(--sec-connect); }
+.fx-group[data-group='stronghold'],
+[data-section='Protect'] { --hue: var(--sec-protect); }
+.fx-group[data-group='lab'],
+[data-section='Advanced'] { --hue: var(--sec-advanced); }
+.fx-group[data-group='control'],
+[data-section='System'],
+[data-section='Help & settings'] { --hue: var(--sec-system); }
+
+:root:not([data-preset='contrast']) .fx-group .fx-group-icon {
+  color: var(--hue, var(--text-secondary));
+  background: color-mix(in srgb, var(--hue, var(--text-secondary)) 13%, var(--surface-2));
+  border-color: color-mix(in srgb, var(--hue, var(--text-secondary)) 28%, transparent);
+}
+:root:not([data-preset='contrast']) .fx-group.here .fx-group-icon {
+  color: #ffffff;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--hue, var(--accent)) 92%, #ffffff), var(--hue, var(--accent)));
+  border-color: transparent;
+  box-shadow: 0 4px 14px -6px var(--hue, var(--accent));
+}
+:root:not([data-preset='contrast']) .fx-nav-item[data-section] svg {
+  color: color-mix(in srgb, var(--hue, var(--text-secondary)) 85%, var(--text-secondary));
+}
+:root:not([data-preset='contrast']) .fx-nav-item.active[data-section] {
+  background: color-mix(in srgb, var(--hue, var(--accent)) 14%, transparent);
+}
+:root:not([data-preset='contrast']) .fx-nav-item.active[data-section]::before {
+  background: var(--hue, var(--accent));
+}
+:root:not([data-preset='contrast']) .fx-nav-item.active[data-section] svg {
+  color: var(--hue, var(--accent));
+}
+
+/* Dark mode: a cool page with softer glows, color on cards, table heads, buttons and tabs. */
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-main {
+  background:
+    radial-gradient(1000px 460px at 8% -12%, color-mix(in srgb, var(--glow) calc(7% * var(--glow-strength)), transparent), transparent 70%),
+    radial-gradient(900px 520px at 100% 100%, color-mix(in srgb, var(--glow-2) calc(6% * var(--glow-strength)), transparent), transparent 70%),
+    var(--page);
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-card {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, var(--surface-1)) 0, var(--surface-1) 120px);
+  border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-card-title svg,
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-card-head svg:first-child {
+  color: var(--accent);
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-table th {
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-2));
+  color: color-mix(in srgb, var(--accent) 35%, var(--text-secondary));
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-btn:not(.primary):not(.danger):not(.danger-solid):not(.ghost) {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border-strong));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-2));
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-btn:not(.primary):not(.danger):not(.danger-solid):not(.ghost):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface-2));
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-btn.primary {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 6px 18px -10px var(--accent);
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-badge {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-tab.active {
+  color: var(--text-primary);
+  background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--accent) 16%, transparent) 100%);
 }

@@ -23,6 +23,14 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 | Effects | Auto, Full or Lite. Lite turns off frosted glass, glows and decorative animation; Auto picks Lite on computers with four or fewer processor threads or 4 GB of memory |
 | Fun extras | Endpoint Ultra (see [EASTER_EGGS.md](EASTER_EGGS.md), spoilers): easter eggs and jokes, the Silly Goose's occasional visits, a *Release the goose* button and the **Trophy case**. An organization can lock fun extras off |
 
+**Dark mode: a cool page, color on the elements.** In dark mode every theme keeps the page itself cool and quiet
+(slate neutrals, also in the warm themes: Fabrics, Tropical, Ember and Paper keep their accent and glow but not a
+brown page) and puts the color on what you use: each sidebar section has its own color (Bridge blue, Studio violet,
+Pit Stop amber, Workbench teal, Orbit sky, Stronghold green, Lab pink, Control slate; in Essentials, Everyday blue,
+Your computer amber, Help & settings slate) on its icon and on the current page's marker, cards carry a breath of
+the theme's accent, and table heads, buttons, badges and tabs pick it up too. The page's glow is softer than the
+sidebar's. The section colors show in light mode as well; High contrast stays flat.
+
 Chart series and status colors stay on the validated design-system palette in every theme, so charts remain
 readable for color-blind users. Organizations can lock any appearance setting from the admin console.
 
