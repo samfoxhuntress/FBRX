@@ -3,6 +3,7 @@ import { PLATFORMS } from './constants';
 import { PolicySchema } from './policy';
 import type { DeviceCommand } from './commands';
 import { AUDIENCES, type DeviceEdition } from './editions';
+import { TIERS } from './license';
 import type { OrgChatMessage } from './messages';
 
 /** Hardware/OS facts a device reports at enrollment and in heartbeats. */
@@ -58,6 +59,8 @@ export const HeartbeatSchema = z.object({
     vaultState: z.string(),
     licenseEdition: z.string(),
     licenseState: z.string(),
+    /** The edition it runs (FBRX Endpoint 1.9.6+): essentials, basic (Standard) or ultra. */
+    editionTier: z.enum(TIERS).optional(),
     activeAgentRuns: z.number().int(),
     pendingApprovals: z.number().int(),
     agentRuns24h: z.number().int(),

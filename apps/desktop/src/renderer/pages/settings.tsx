@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { DeepPartial, Settings, Texture } from '@fbrx/shared';
-import { AUDIENCE_NAMES, TIER_NAMES, UPDATE_CHANNELS, displayVersion, funEnabled } from '@fbrx/shared';
+import { AUDIENCE_NAMES, TIER_NAMES, TIER_SHORT, UPDATE_CHANNELS, displayVersion, funEnabled, tierRank, type Tier } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
@@ -13,7 +13,7 @@ import { KeyRecorder, MacroSettings } from './settings-macros';
 import { SnippetSettings } from './settings-snippets';
 import { VoiceSettings } from './settings-voice';
 import { AboutVersion, ReleasePanel } from '../release';
-import { UltraHint, useLearner, useTier, useVertical } from '../edition';
+import { UltraHint, useChooseEdition, useEditionStatus, useLearner, useTier, useVertical } from '../edition';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -23,19 +23,20 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
-const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string }> = [
+type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'edition' | 'license' | 'api' | 'logs';
+const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
   { id: 'presenting', label: 'Presenting', icon: 'presentation', group: 'You' },
   { id: 'messages', label: 'Messages', icon: 'message', group: 'You' },
   { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
   { id: 'voice', label: 'Voice', icon: 'mic', group: 'You' },
-  { id: 'snippets', label: 'Snippets', icon: 'code', group: 'You' },
-  { id: 'macros', label: 'Macros', icon: 'zap', group: 'You' },
+  { id: 'snippets', label: 'Snippets', icon: 'code', group: 'You', notEssentials: true },
+  { id: 'macros', label: 'Macros', icon: 'zap', group: 'You', notEssentials: true },
   { id: 'spotlight', label: 'Spotlight', icon: 'search', group: 'You' },
   { id: 'trophies', label: 'Trophy case', icon: 'trophy', group: 'You', ultra: true },
   { id: 'updates', label: 'Updates', icon: 'download', group: 'This computer' },
+  { id: 'edition', label: 'Edition', icon: 'layers', group: 'This computer' },
   { id: 'license', label: 'License', icon: 'key', group: 'This computer' },
   { id: 'api', label: 'Local API', icon: 'link', group: 'For experts', ultra: true },
   { id: 'logs', label: 'Logs & about', icon: 'book', group: 'For experts', basicLabel: 'About' },
@@ -47,11 +48,12 @@ const LEARNER_SECTIONS = new Set<SectionId>(['general', 'appearance', 'presentin
 const sectionFromRoute = (): SectionId | null => (SECTIONS.some((x) => x.id === routeArg()) ? (routeArg() as SectionId) : null);
 
 export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
-  const ultra = useTier() === 'ultra';
+  const tier = useTier();
+  const ultra = tier === 'ultra';
   const funUnlocked = useCore('settings.get', undefined, ['settings.changed']).data?.settings.appearance.funUnlocked ?? false;
   const learner = useLearner();
   const vertical = useVertical();
-  const sections = SECTIONS.filter((x) => (learner ? LEARNER_SECTIONS.has(x.id) : ultra || !x.ultra));
+  const sections = SECTIONS.filter((x) => (learner ? LEARNER_SECTIONS.has(x.id) : (ultra || !x.ultra) && !(tier === 'essentials' && x.notEssentials)));
   const [picked, setTab] = useState<SectionId>(() => sectionFromRoute() ?? 'general');
   const tab = sections.some((x) => x.id === picked) ? picked : 'general';
   // A link to a section (such as "See it" on a trophy) while Settings is already open.
@@ -97,6 +99,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'spotlight' && <SpotlightSettings />}
           {tab === 'trophies' && <Trophies />}
           {tab === 'updates' && <Updates />}
+          {tab === 'edition' && <EditionSettings />}
           {tab === 'license' && <License />}
           {tab === 'api' && <LocalApi />}
           {tab === 'logs' && <Logs />}
@@ -106,7 +109,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   );
 }
 
-/** Which FBRX Endpoint this is, at the top of Settings: Basic with a way up to Ultra, or Ultra and who it is licensed to. */
+/** Which FBRX Endpoint this is, at the top of Settings, who set it, and the way to Settings → Edition. */
 function EditionCard() {
   const { data: l } = useCore('license.status', undefined, ['license.changed']);
   const { data: fleet } = useCore('fleet.status', undefined, ['fleet.changed']);
@@ -130,26 +133,120 @@ function EditionCard() {
   }
   const ultra = l.tier === 'ultra';
   const by = l.source === 'managed' ? `Set by ${fleet?.tenantName ?? 'your organization'} (FBRX Command)` : l.source === 'development' ? 'Development build' : l.customer ? `Licensed to ${l.customer}` : null;
+  const more = ed && tierRank(ed.ceiling) > tierRank(l.tier);
   return (
     <div className={`mode-card edition-card ${l.tier}`}>
       <div>
         <div className="mode-card-title">
-          {TIER_NAMES[l.tier]} <span className={`tier-badge ${l.tier}`}>{ultra ? 'Ultra' : 'Basic'}</span>
+          {TIER_NAMES[l.tier]} <span className={`tier-badge ${l.tier}`}>{TIER_SHORT[l.tier]}</span>
           {ed && ed.vertical !== 'business' && <span className="tier-badge student" style={{ marginLeft: 6 }}>{ed.vertical === 'home' ? 'Home' : 'Education'}</span>}
         </div>
         <div className="fx-muted" style={{ fontSize: 12.5 }}>
-          {ultra
-            ? 'Everything is on: expert tool sets, Mesh, AI coordination, connections and plugins, and every theme.'
-            : 'The everyday tools and the agent, with a simple light or dark look. A license key turns on Endpoint Ultra.'}
+          {TIER_BLURB[l.tier]}
           {by && <> · {by}</>}
         </div>
       </div>
-      {!ultra && l.source !== 'managed' && (
-        <Button variant="primary" icon="key" onClick={() => navigate('settings/license')}>
-          Upgrade to Ultra
-        </Button>
-      )}
+      <Button variant={more ? 'primary' : undefined} icon="layers" onClick={() => navigate('settings/edition')}>
+        {more ? 'More tools' : 'Edition'}
+      </Button>
     </div>
+  );
+}
+
+const TIER_BLURB: Record<Tier, string> = {
+  essentials: 'The everyday pages and the agent, in a short and simple list.',
+  basic: 'The everyday tools and the agent, with a simple light or dark look.',
+  ultra: 'Everything is on: expert tool sets, Mesh, AI coordination, connections and plugins, and every theme.',
+};
+
+const TIER_POINTS: Record<Tier, string[]> = {
+  essentials: ['Home, the agent, alerts and messages', 'Storage, FBRX Shield, updates and backups', 'Notes, tasks and how-tos', 'A short sidebar, and a walkthrough'],
+  basic: ['Everything in Essentials', 'Calendar, projects, files, clipboard and snippets', 'The toolbox, security checks and AI models', 'Approvals, saved credentials and macros'],
+  ultra: ['Everything in Standard', 'Terminal, Task Manager, the virtual lab and FBRX Server', 'Mesh & phone, AI coordination, connections and plugins', 'The theme studio, and the easter eggs'],
+};
+
+/**
+ * Settings → Edition: Essentials (where a new computer starts), Standard (anyone switches to it) and Ultra (there to
+ * turn on only when FBRX Command allows it), with why a choice is locked and the walkthrough again.
+ */
+function EditionSettings() {
+  const ed = useEditionStatus();
+  const { choose, busy } = useChooseEdition();
+  if (!ed) return null;
+  const why =
+    ed.ceilingReason === 'development'
+      ? 'Development build: every edition can be turned on.'
+      : ed.ceilingReason === 'standalone'
+        ? 'On its own, this computer goes up to Standard. Ultra comes from FBRX Command: when your organization adds this computer and allows it, Ultra unlocks here.'
+        : ed.ceilingReason === 'organization'
+          ? `Your organization (FBRX Command) lets this computer go up to ${TIER_SHORT[ed.ceiling]}.`
+          : `Your organization's license allows up to ${TIER_SHORT[ed.ceiling]}.`;
+  return (
+    <>
+      <Card title="Edition" subtitle="How much of FBRX this computer shows. Switch any time: nothing you saved goes away.">
+        <div className="ed-choices">
+          {(['essentials', 'basic', 'ultra'] as Tier[]).map((t) => {
+            const current = ed.tier === t;
+            const locked = tierRank(t) > tierRank(ed.ceiling);
+            return (
+              <div key={t} className={`ed-choice${current ? ' current' : ''}${locked ? ' locked' : ''}`}>
+                <h4>
+                  {TIER_SHORT[t]} {locked && <Icons.lock size={13} />}
+                </h4>
+                <ul>
+                  {TIER_POINTS[t].map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+                <div className="ed-choice-foot">
+                  {current ? (
+                    <Status tone="good">On now</Status>
+                  ) : locked ? (
+                    <span className="fx-muted" style={{ fontSize: 12.5 }}>
+                      {t === 'ultra' && !ed.enrolled ? 'Comes from FBRX Command' : 'Not allowed on this computer'}
+                    </span>
+                  ) : (
+                    <Button size="sm" variant={tierRank(t) > tierRank(ed.tier) ? 'primary' : undefined} loading={busy === t} onClick={() => void choose(t)}>
+                      Switch to {TIER_SHORT[t]}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="fx-muted" style={{ margin: '12px 0 0' }}>
+          {why}
+          {ed.chosen !== ed.tier && tierRank(ed.chosen) > tierRank(ed.tier) && <> You chose {TIER_SHORT[ed.chosen]}; it runs {TIER_SHORT[ed.tier]} until that is allowed.</>}
+        </p>
+        {!ed.enrolled && ed.ceilingReason === 'standalone' && (
+          <div className="fx-actions" style={{ marginTop: 10 }}>
+            <Button size="sm" icon="globe" onClick={() => navigate('fleet')}>
+              Join your organization
+            </Button>
+          </div>
+        )}
+      </Card>
+      <Card title="The walkthrough" subtitle="A one-minute look around the Essentials pages.">
+        {ed.tier === 'essentials' ? (
+          <Button
+            icon="compass"
+            onClick={() =>
+              void call('edition.tourDone', { done: false }).then(() => {
+                navigate('home');
+                window.dispatchEvent(new Event('fbrx:tour'));
+              })
+            }
+          >
+            Take the tour again
+          </Button>
+        ) : (
+          <p className="fx-muted" style={{ margin: 0 }}>
+            The walkthrough shows the Essentials pages: switch to Essentials to take it.
+          </p>
+        )}
+      </Card>
+    </>
   );
 }
 

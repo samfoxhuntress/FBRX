@@ -846,7 +846,7 @@ const NET_TABS: Tab[] = ['overview', 'environments', 'trace', 'devices', 'speed'
 export function NetworkPage({ advanced, easterEggs }: { advanced: boolean; easterEggs: boolean }) {
   // network/speed, network/printers… open that tab directly.
   const [tab, setTab] = useState<Tab>(() => (NET_TABS.includes(routeArg() as Tab) ? (routeArg() as Tab) : 'overview'));
-  // Endpoint Basic keeps the everyday tabs; Ultra adds the IT ones and the network environments.
+  // Endpoint Essentials and Standard keep the everyday tabs; Ultra adds the IT ones and the network environments.
   const all: Array<{ id: Tab; label: ReactNode; ultra?: boolean }> = [
     { id: 'overview', label: 'Overview' },
     { id: 'environments', label: advancedLabel('Environments'), ultra: true },

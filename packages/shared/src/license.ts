@@ -25,16 +25,35 @@ export const EDITION_FEATURES: Record<Edition, Feature[]> = {
 };
 
 /**
- * The two FBRX Endpoint products. **Basic** is what runs without a license key: the everyday tools and the AI agent,
- * with a plain light or dark look. **Ultra** is what a license key (or an FBRX Command tenant) turns on: expert tool
- * sets, Mesh and AI coordination, connections and plugins, the theme studio with its gradients and textures, and the
- * easter eggs.
+ * The three FBRX Endpoint editions, lightest first.
+ * - **Essentials**: where every new computer starts. The everyday pages, the agent, and a walkthrough.
+ * - **Standard** (`basic`, its id from when it was called Basic): the rest of the everyday tools. Anyone may switch to
+ *   it in Settings → Edition.
+ * - **Ultra**: expert tool sets, Mesh and AI coordination, connections and plugins, the theme studio and the easter
+ *   eggs. It unlocks only through FBRX Command: the organization's license allows it, and nothing holds the computer
+ *   or its group below it.
  */
-export const TIERS = ['basic', 'ultra'] as const;
+export const TIERS = ['essentials', 'basic', 'ultra'] as const;
 export type Tier = (typeof TIERS)[number];
-export const TIER_NAMES: Record<Tier, string> = { basic: 'FBRX Endpoint Basic', ultra: 'FBRX Endpoint Ultra' };
+export const TIER_NAMES: Record<Tier, string> = { essentials: 'FBRX Endpoint Essentials', basic: 'FBRX Endpoint Standard', ultra: 'FBRX Endpoint Ultra' };
+/** "Essentials", "Standard", "Ultra" (badges, buttons). */
+export const TIER_SHORT: Record<Tier, string> = { essentials: 'Essentials', basic: 'Standard', ultra: 'Ultra' };
+/** What a license key can grant (a license never asks for Essentials: that is the person's choice). */
+export const LICENSE_TIERS = ['basic', 'ultra'] as const;
 
-/** Without a `tier` claim, a Community license runs Basic and Pro or Enterprise run Ultra. */
+export const tierRank = (t: Tier): number => TIERS.indexOf(t);
+/** The lighter of two editions. */
+export const minTier = (a: Tier, b: Tier): Tier => (tierRank(a) <= tierRank(b) ? a : b);
+/** Accepts an edition's id or name (essentials, standard, basic, ultra), e.g. from FBRX_EDITION. */
+export function parseTier(raw: string | null | undefined): Tier | null {
+  const v = String(raw ?? '').trim().toLowerCase();
+  if (v === 'essentials' || v === 'essential') return 'essentials';
+  if (v === 'standard' || v === 'basic') return 'basic';
+  if (v === 'ultra') return 'ultra';
+  return null;
+}
+
+/** Without a `tier` claim, a Community license allows Standard and Pro or Enterprise allow Ultra. */
 export function tierFor(edition: Edition, claim?: Tier | null): Tier {
   return claim ?? (edition === 'community' ? 'basic' : 'ultra');
 }
@@ -64,8 +83,8 @@ export const LicensePayloadSchema = z.object({
   expiresAt: z.string().nullable(),
   /** Optional: the newest app major version this license covers (`null` = all). */
   maxMajorVersion: z.number().int().nullable(),
-  /** Optional: Basic or Ultra, when the tenant decides (otherwise it follows the edition, see tierFor). */
-  tier: z.enum(TIERS).optional(),
+  /** Optional: Standard or Ultra, when the tenant decides (otherwise it follows the edition, see tierFor). */
+  tier: z.enum(LICENSE_TIERS).optional(),
   /** Optional: the FBRX Command tenant to join on activation. */
   command: LicenseCommandSchema.optional(),
   /** Optional: an Education (or Home) license; staff computers start in classroom mode (see editions.ts). */
@@ -78,8 +97,13 @@ export const LICENSE_PREFIX = 'FBRX1';
 export interface LicenseStatus {
   state: 'unlicensed' | 'valid' | 'expired' | 'invalid' | 'development';
   edition: Edition;
-  /** FBRX Endpoint Basic or Ultra (see TIERS). */
+  /** The edition this computer runs: what the person chose, under what it may run (see TIERS). */
   tier: Tier;
+  /** The edition the person chose in Settings → Edition (Essentials on a new computer). */
+  chosen?: Tier;
+  /** The most this computer may run, and why: on its own (Standard), or what FBRX Command allows. */
+  ceiling?: Tier;
+  ceilingReason?: 'standalone' | 'organization' | 'license' | 'learner' | 'development';
   customer: string | null;
   tenantId: string | null;
   licenseId: string | null;

@@ -1,6 +1,7 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer, type AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config';
 import { buildServer, type BuiltVirtual } from '../src/server';
@@ -36,7 +37,15 @@ const core = (token: string, method: string, params?: unknown) => req('POST', '/
 
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), 'fbrx-virtual-core-'));
-  const port = 49000 + Math.floor(Math.random() * 900);
+  // A port the system says is free (a random one can fall in a range Windows keeps for itself).
+  const port = await new Promise<number>((resolve, reject) => {
+    const probe = createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const p = (probe.address() as AddressInfo).port;
+      probe.close(() => resolve(p));
+    });
+  });
   ({ kernel, cleanup: cleanupKernel } = await makeKernel({ localApiPort: port }));
   kernel.localApi.setConsoleToken('fbrx_console_one');
   tokenFile = join(dir, 'console.token');

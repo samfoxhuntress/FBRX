@@ -8,7 +8,7 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 
 ## Look and feel
 
-**Settings → Appearance** is the theme studio in FBRX Endpoint Ultra (Endpoint Basic has the plain light and dark look, with the layout and behavior options below):
+**Settings → Appearance** is the theme studio in FBRX Endpoint Ultra (Essentials and Standard have the plain light and dark look, with the layout and behavior options below):
 
 | Option | Choices |
 | --- | --- |
@@ -47,30 +47,39 @@ and its pages slide out beside it. Counts (unread alerts, waiting approvals) sho
 
 ### Version names
 
-FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.9.5** (or Basic). Each minor version also gets a codename from cloth,
+FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.9.5** (or Essentials, or Standard). Each minor version also gets a codename from cloth,
 fiber to fabric, shown in **Settings → Logs & about**: 1.8 *Spindle*, 1.9 *Bobbin*, then *Shuttle*, *Heddle*, and 2.0
 *Loom* (later *Warp*, *Weft*, *Selvedge*, *Tapestry*).
 
-### FBRX Endpoint Basic and Ultra
+### FBRX Endpoint Essentials, Standard and Ultra
 
-The desktop app comes as two products, decided by the license (there is no switch to flip):
+The desktop app comes in three editions. Every new computer opens in **Essentials** and walks its person through the
+app; **Settings → Edition** switches between them (nothing saved goes away), up to what the computer may run:
 
-| | **FBRX Endpoint Basic** | **FBRX Endpoint Ultra** |
-| --- | --- | --- |
-| How you get it | Out of the box, no license key | A license key (Settings → License → *Upgrade to Ultra*), or the FBRX Command tenant this computer belongs to |
-| Everyday tools | FBRX Glass, Fabrix (local models and your own cloud AI keys), alerts, tasks, notes, projects, snippets, storage, security, updates, Network Center (overview, speed, Wi-Fi, Bluetooth, printers), files, clipboard (with Ctrl+Alt+Z history), Toolbox, Library, AI models, approvals, credentials, backup & restore, presenter-safe mode, and the Help desk tab in an organization | Everything in Basic |
-| IT and expert tool sets | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools, adapters and **network environments (UniFi)**, device consoles, the developer tools in the Toolbox, The Lab in the Library, the agent's work budget, logs, update channels, the Local API |
-| Connect | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance |
-| Look | Light, dark or follow the computer: plain, no theme colors, gradients or textures | The theme studio: eleven themes, accent colors, gradients and textures (with a strength slider) |
-| Fun | — | Easter eggs, the Silly Goose and the trophy case, once unlocked with the secret key (see EASTER_EGGS.md, spoilers) |
+| | **Essentials** | **Standard** | **Ultra** |
+| --- | --- | --- | --- |
+| How you get it | Where every new computer starts | Settings → Edition (anyone), or *Switch to Standard* on a Standard page | Settings → Edition, once **FBRX Command** allows it: the computer is in an organization whose license allows Ultra, and neither its group nor the computer itself is held lower |
+| Pages | A short, flat list: Home, Fabrix, alerts, messages, the help desk (in an organization), notes, tasks, storage, FBRX Shield, updates, Network Center, backup, How-tos (the Library) and Settings | Everything in Essentials, plus calendar, projects, snippets, security, files, clipboard (with Ctrl+Alt+Z history), Toolbox, AI models, approvals, credentials and macros, in the branded sidebar sections | Everything in Standard |
+| IT and expert tool sets | — | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX Server, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools, adapters and **network environments (UniFi)**, device consoles, the developer tools in the Toolbox, The Lab in the Library, the agent's work budget, logs, update channels, the Local API |
+| Connect | — | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance |
+| Look | Light, dark or follow the computer: plain | The same | The theme studio: eleven themes, accent colors, gradients and textures (with a strength slider) |
+| Fun | — | — | Easter eggs, the Silly Goose and the trophy case, once unlocked with the secret key (see EASTER_EGGS.md, spoilers) |
 
-Basic keeps its settings short: no temperature slider, work budget, model unloading, logs or update channel, just the
-choices most people make. Ultra features are marked with an **Ultra** tag. In Basic, an Ultra page opens a short card
-saying what it does and how to get it. An organization can hold a group of computers to Basic in FBRX Command (for
-example teachers on Basic and IT on Ultra), and student computers run **FBRX OS Education** (see EDUCATION.md). The edition shows beside the name in the sidebar, at the top of **Settings**, in the window title and
-under **Settings → Logs & about**. Licenses: Community runs Basic; Pro and Enterprise run Ultra; a license can also
-say which one outright (see [LICENSING.md](LICENSING.md)). Developers can try Basic in a development build with
-`FBRX_EDITION=basic`.
+**The walkthrough.** On a new computer, after setup, Essentials dims the window and lights up one page at a time:
+Home, Fabrix, alerts, storage, FBRX Shield, updates, the help desk (or How-tos), and Settings → Edition, ending with
+the Spotlight shortcut. Enter or → goes on, ← back, Esc skips; *Take the tour again* is in Settings → Edition.
+
+**What may be unlocked.** On its own, a computer goes up to Standard: Ultra comes only through FBRX Command (a
+license key alone no longer turns it on). In an organization, the most a computer may run is what the license allows
+(Community up to Standard; Pro and Enterprise up to Ultra; a license can name it), held lower by its group in
+FBRX Command (*Profiles & groups → Edition*) or by the computer itself (*Devices → a device → Configuration →
+Edition*): **Essentials only**, **Up to Standard** or **Up to Ultra**. A page from a higher edition opens a short card
+that says what it does and how to get it: *Switch to Standard* in one click, or for Ultra *Turn on Ultra* when it is
+allowed and *Join your organization* when it is not. Student computers run **FBRX OS Education** (see EDUCATION.md).
+The edition shows beside the name in the sidebar, at the top of **Settings**, in the window title, under **Settings →
+Logs & about**, and in FBRX Command next to each device's version. A computer set up before Essentials existed keeps
+the edition it had (up to what it may run now). Developers can try the lighter editions in a development build with
+`FBRX_EDITION=essentials` or `FBRX_EDITION=standard`.
 
 ### Your name
 
@@ -348,7 +357,7 @@ device), every client (name, address, MAC, Wi-Fi or wired, which access point or
 device its uptime, CPU, memory and uplink traffic. **Restart** a device, and make **Guest Wi-Fi codes** (vouchers for a
 hotspot guest network) for visitors, substitutes or parent night. The key is kept in the vault; the agent can read the
 network (*which access points are offline? where is the Room 12 TV connected?*), and asks before it restarts anything
-or makes codes. Endpoint Basic does not show environments.
+or makes codes. Essentials and Standard do not show environments.
 
 ### Device consoles (advanced)
 

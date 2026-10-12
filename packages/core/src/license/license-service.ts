@@ -1,4 +1,4 @@
-import { ALL_FEATURES, FEATURES, isLearner, parseSemver, type DeviceEdition, type Feature, type LicenseStatus } from '@fbrx/shared';
+import { ALL_FEATURES, FEATURES, isLearner, minTier, narrowTier, parseSemver, parseTier, TIER_NAMES, tierRank, type DeviceEdition, type Feature, type LicenseStatus, type Tier } from '@fbrx/shared';
 import { licenseStatusFrom, verifyLicense } from '@fbrx/shared/node';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
@@ -27,8 +27,11 @@ export class LicenseService {
     let status = managed
       ? licenseStatusFrom(managed, this.publicKeys, 'managed', major)
       : licenseStatusFrom(local, this.publicKeys, 'local', major);
-    // Development builds run as Ultra with everything on, unless FBRX_EDITION=basic asks to try Endpoint Basic.
-    if (this.devMode && status.state !== 'valid' && process.env.FBRX_EDITION !== 'basic') {
+    // Development builds may run Ultra with everything on, unless FBRX_EDITION asks to try a lighter edition (then
+    // they start there, like a computer on its own).
+    const asked = this.devMode ? parseTier(process.env.FBRX_EDITION) : null;
+    const tryTier = asked === 'ultra' ? null : asked;
+    if (this.devMode && status.state !== 'valid' && !tryTier) {
       status = {
         ...status,
         state: 'development',
@@ -39,11 +42,41 @@ export class LicenseService {
         message: 'Development build: all features unlocked',
       };
     }
-    // FBRX Command can hold a group to Endpoint Basic, and student computers always run the learner edition on Basic.
+    // The most this computer may run. On its own: Standard (Ultra comes only through FBRX Command). In an organization:
+    // what its license allows, held lower by FBRX Command for the computer or its group. Student and child computers
+    // always run the learner edition on Standard.
     const ed = this.meta.get<DeviceEdition>('fleet.edition');
-    if (ed && status.tier === 'ultra' && (ed.tier === 'basic' || isLearner(ed.audience))) status = { ...status, tier: 'basic' };
-    this.cached = status;
-    return status;
+    const enrolled = !!this.meta.get<string>('fleet.deviceId');
+    let ceiling: Tier = status.tier;
+    let reason: NonNullable<LicenseStatus['ceilingReason']> = status.source === 'development' ? 'development' : enrolled ? 'license' : 'standalone';
+    if (!enrolled && status.source !== 'development') ceiling = minTier(ceiling, 'basic');
+    if (ed?.tier && tierRank(ed.tier) < tierRank(ceiling)) {
+      ceiling = narrowTier(ceiling, ed.tier);
+      reason = 'organization';
+    }
+    if (ed && isLearner(ed.audience)) return (this.cached = { ...status, tier: 'basic', chosen: 'basic', ceiling: 'basic', ceilingReason: 'learner' });
+    // What the person chose (Essentials on a new computer; see Kernel's first start), never above the ceiling.
+    const chosen = this.meta.get<Tier>('edition.chosen') ?? (this.devMode ? (tryTier ?? 'ultra') : 'essentials');
+    this.cached = { ...status, tier: minTier(chosen, ceiling), chosen, ceiling, ceilingReason: reason };
+    return this.cached;
+  }
+
+  /** The edition the person wants (Settings → Edition): Essentials or Standard any time, Ultra when it is allowed. */
+  choose(tier: Tier): LicenseStatus {
+    const now = this.status();
+    if (now.ceilingReason === 'learner') throw new CoreError('FORBIDDEN', 'This computer runs the learner edition chosen by your organization');
+    if (now.ceiling && tierRank(tier) > tierRank(now.ceiling)) {
+      throw new CoreError(
+        'FORBIDDEN',
+        now.ceilingReason === 'standalone'
+          ? `${TIER_NAMES[tier]} comes through FBRX Command: once your organization adds this computer and allows it, it unlocks here`
+          : now.ceilingReason === 'organization'
+            ? `Your organization holds this computer to ${TIER_NAMES[now.ceiling]} (in FBRX Command)`
+            : `Your organization's license allows up to ${TIER_NAMES[now.ceiling]}`,
+      );
+    }
+    this.meta.set('edition.chosen', tier);
+    return this.changed();
   }
 
   /** Re-reads the license and edition (after FBRX Command changed what this computer is). */

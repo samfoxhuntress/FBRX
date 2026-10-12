@@ -1,4 +1,4 @@
-import type { CliResult, DeepPartial, EffectiveSettings, Settings } from '@fbrx/shared';
+import type { CliResult, DeepPartial, EffectiveSettings, Settings, Tier } from '@fbrx/shared';
 import { DEFAULT_SETTINGS, SettingsSchema, TIER_NAMES, deepMerge, funEnabled, isPathLocked, leafPaths, newId } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 
@@ -110,7 +110,7 @@ const OPERATIONAL: Record<string, Node> = {
         help: 'Product, version and license',
         run: async (_a, c) => {
           const s = await c.call('system.status');
-          return [`Product:      ${s.product}`, `Version:      ${s.version}`, `Platform:     ${s.platform} ${s.arch}`, `Device name:  ${s.deviceName}`, `Edition:      ${s.license.tier === 'ultra' ? TIER_NAMES.ultra : TIER_NAMES.basic}`, `License:      ${s.license.edition}${s.license.customer ? ` (${s.license.customer})` : ''}`, `Build:        ${s.devMode ? 'development' : 'release'}`].join('\n');
+          return [`Product:      ${s.product}`, `Version:      ${s.version}`, `Platform:     ${s.platform} ${s.arch}`, `Device name:  ${s.deviceName}`, `Edition:      ${TIER_NAMES[s.license.tier as Tier] ?? s.license.tier}`, `License:      ${s.license.edition}${s.license.customer ? ` (${s.license.customer})` : ''}`, `Build:        ${s.devMode ? 'development' : 'release'}`].join('\n');
         },
       },
       system: {

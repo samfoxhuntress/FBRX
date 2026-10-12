@@ -14,10 +14,10 @@ const API = { origin: 'api' as const, actor: 'localapi:agent' };
 
 describe('trophy case', () => {
   it('records trophies once, awards the golden goose for all of them, and stays quiet with fun extras off', async () => {
-    // Endpoint Basic (no license) has no easter eggs at all.
+    // A new computer on its own (Essentials, no license) has no easter eggs at all.
     const basic = await makeKernel({ devMode: false });
     try {
-      expect(basic.kernel.license.status().tier).toBe('basic');
+      expect(basic.kernel.license.status().tier).toBe('essentials');
       expect(await basic.kernel.call('fun.unlock', { id: 'loom' }, USER)).toEqual({ unlocked: false, golden: false });
     } finally {
       await basic.cleanup();
@@ -258,7 +258,11 @@ describe('chat eggs', () => {
       await waitFor(() => events.some((e) => e.type === 'run.completed'));
       expect(llm.requests).toHaveLength(1);
       const key = signLicense({ v: 1, lid: 'lic_u', tenantId: 't', customer: 'Acme', edition: 'pro', seats: 1, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null }, keys.privateKeyPem);
-      expect(await kernel.call('license.activate', { key }, USER)).toMatchObject({ state: 'valid', tier: 'ultra' });
+      expect(await kernel.call('license.activate', { key }, USER)).toMatchObject({ state: 'valid' });
+      // Ultra comes through FBRX Command: as if this computer had joined its organization.
+      kernel.meta.set('fleet.deviceId', 'dev_test');
+      kernel.license.refresh();
+      expect(await kernel.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra' });
       await kernel.call('ai.chat', { message: "Chewie, we're home" }, USER);
       await waitFor(() => events.filter((e) => e.type === 'run.completed').length >= 2);
       expect(llm.requests).toHaveLength(2);

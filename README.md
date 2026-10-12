@@ -31,7 +31,7 @@ Server**, powered by FBRX OS, and the products below for the computers you alrea
 * **FBRX Endpoint** — a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is
   governed end to end and an everyday **command center** (dashboard, tasks, notes, Spotlight, a Ctrl+Alt+Z clipboard
   history, calendars from Outlook / Microsoft 365 and calendar links, alerts, PC care, Network Center, your phone) and
-  **FBRX Shield**, FBRX's own antivirus, next to the choice of Microsoft Defender or an antivirus already installed. **Endpoint Basic** runs without a license key: the everyday
+  **FBRX Shield**, FBRX's own antivirus, next to the choice of Microsoft Defender or an antivirus already installed. **Endpoint Essentials** is where every computer starts (with a walkthrough), **Standard** is a switch away in Settings, and **Ultra** comes through FBRX Command. Without a license key: the everyday
   tools and the agent, in a plain light or dark look. A license key turns on **Endpoint Ultra**: IT and developer tool
   sets (Terminal, FBRX/1, Task Manager, virtual lab, device consoles, UniFi network environments…), Mesh and AI
   coordination, connections and plugins, the theme studio and the easter eggs. Every edition has presenter-safe mode
@@ -44,7 +44,7 @@ Server**, powered by FBRX OS, and the products below for the computers you alrea
   tenant is a **Work**, **School** or **Home** tenant, picked at setup, with a one-click setup of its usual groups. A
   license key from FBRX Command joins the computer to the tenant on its own, and staff sign in to it with Google
   Workspace or Microsoft 365. It routes help desk tickets to IT (or a child's request for help to a parent), pushes
-  updates and makes Mac profiles and Intune scripts for device managers. A School runs staff on Basic in classroom
+  updates and makes Mac profiles and Intune scripts for device managers. A School runs staff up to Standard in classroom
   mode, IT on Ultra and students on FBRX OS Education ([docs/EDUCATION.md](docs/EDUCATION.md)); a Home runs parents on
   FBRX Endpoint and children on FBRX OS Home ([docs/HOME.md](docs/HOME.md)).
 
@@ -76,7 +76,7 @@ Server**, powered by FBRX OS, and the products below for the computers you alrea
 | Agents and services that govern it | Policy engine, guardian (dangerous-command and prompt-injection detection, optional model review), human approvals, rate limits, secret redaction, tamper-evident audit log, service watchdog. |
 | Back up, redeploy, carry on as if nothing happened | Encrypted `.fbrxsnap` snapshots (manual, scheduled or remote) restored in **migrate** mode — same identity, same fleet enrollment, same vault. See [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md). |
 | Deploy to other Macs and PCs | Signed `.dmg`/`.zip` and NSIS `.exe` installers, zero-touch provisioning files, golden template snapshots, auto-updates by channel, pin and staged rollout. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). |
-| Sell it | Endpoint Basic and Ultra, tenants per customer, editions (Community / Pro / Enterprise), offline-verifiable Ed25519 license keys that can join their FBRX Command tenant by themselves, seats, expiry, version caps. See [docs/LICENSING.md](docs/LICENSING.md). |
+| Sell it | Endpoint Essentials, Standard and Ultra, tenants per customer, editions (Community / Pro / Enterprise), offline-verifiable Ed25519 license keys that can join their FBRX Command tenant by themselves, seats, expiry, version caps. See [docs/LICENSING.md](docs/LICENSING.md). |
 | FBRX Command (admin console), credentials management, real-time backend | Fleet dashboard, device detail and live commands, managed settings/policy with locks, secrets pushed into device vaults, users/roles/MFA/API keys, a help desk, releases and automatic updates, packages, snapshots, webhooks, audit. See [docs/ADMIN_CONSOLE.md](docs/ADMIN_CONSOLE.md). |
 | Run it for work, a school or a family | Pick Work, School or Home for each tenant and set up its groups in one click. Schools: staff and student computers, FBRX OS Education with a safe learning helper, presenter-safe mode for projectors, help desk to IT, Google / Microsoft sign-in, Mac and Windows device-manager files ([docs/EDUCATION.md](docs/EDUCATION.md)). Families: parents' and children's computers, FBRX OS Home, requests for help that go to a parent ([docs/HOME.md](docs/HOME.md)). |
 | Build in other tools and connect to other apps | Plugin SDK (sandboxed workers), REST / MCP / webhook / FBRX-peer connectors, Local API for scripts and other apps. See [docs/PLUGINS.md](docs/PLUGINS.md). |
@@ -117,7 +117,7 @@ Every version is on the **[Releases](https://github.com/samfoxhuntress/FBRX/rele
 | Download | What it is |
 | --- | --- |
 | **Source code (zip)**, `FBRX-1.9.5.zip` | The whole project. Unzip it and run **Install FBRX OS** (below): it builds FBRX OS on your computer with your own license signing key. This is how you install your own copy. |
-| `FBRX-OS-Setup-1.9.5.exe`, `FBRX-OS-1.9.5-arm64.dmg`, `FBRX-OS-1.9.5-x64.dmg` | Ready-made installers built by GitHub. They carry your license key and a publisher signature only when the repository's signing secrets are set ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); otherwise they run as Endpoint Basic until a license or your FBRX Command turns on more. |
+| `FBRX-OS-Setup-1.9.5.exe`, `FBRX-OS-1.9.5-arm64.dmg`, `FBRX-OS-1.9.5-x64.dmg` | Ready-made installers built by GitHub. They carry your license key and a publisher signature only when the repository's signing secrets are set ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); otherwise they open in Endpoint Essentials, go up to Standard, and reach Ultra when your FBRX Command allows it. |
 | `fbrx-server-0.1.0-amd64.iso`, `fbrx-server-0.1.0.tar.gz` | FBRX Server: the installer ISO, and the bundle for a Debian 13 server you already have ([docs/SERVER.md](docs/SERVER.md)). |
 
 **Code → Download ZIP** on the main page gives the newest work (`FBRX-main.zip`), which can be ahead of the latest

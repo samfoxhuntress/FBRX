@@ -26,6 +26,7 @@ import {
   VM_ACTIONS,
   type ExtMethods,
   type SpotlightItem,
+  TIERS,
 } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
@@ -404,6 +405,8 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     },
     'helpdesk.assistJobs': (p) => k.helpdesk.assistJobs(z.object({ ticketId: z.string().min(1).max(80) }).parse(p).ticketId),
     'edition.status': () => k.edition(),
+    'edition.choose': (p, ctx) => k.chooseEdition(z.object({ tier: z.enum(TIERS) }).parse(p).tier, ctx.actor),
+    'edition.tourDone': (p) => k.setTourDone(z.object({ done: z.boolean() }).parse(p).done),
     'presenter.status': () => k.presenterStatus(),
     'presenter.set': (p, ctx) => k.setPresenting(z.object({ on: z.boolean() }).parse(p).on, ctx.actor),
     'netenv.list': () => k.netenv.list(),

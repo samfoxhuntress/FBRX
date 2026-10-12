@@ -6,7 +6,7 @@ import type { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import * as tar from 'tar';
 import { z } from 'zod';
-import { ALL_FEATURES, EDITIONS, TIERS, UPDATE_CHANNELS, VERTICALS, compareSemver, decodeLicenseUnverified, isValidSemver, newId, tierFor, type Edition, type LicensePayload } from '@fbrx/shared';
+import { ALL_FEATURES, EDITIONS, LICENSE_TIERS, UPDATE_CHANNELS, VERTICALS, compareSemver, decodeLicenseUnverified, isValidSemver, newId, tierFor, type Edition, type LicensePayload } from '@fbrx/shared';
 import { openString, randomToken, sealString, sha256Hex, signLicense } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
@@ -193,7 +193,7 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
       tenantId: l.tenant_id,
       customer: l.customer,
       edition: l.edition,
-      /** FBRX Endpoint Basic or Ultra on the devices that use it. */
+      /** The most FBRX Endpoint may run on the devices that use it (Standard or Ultra). */
       tier: tierFor(l.edition as Edition, claims?.tier),
       /** The FBRX Command address devices join when the key is pasted in. */
       commandUrl: claims?.command?.url ?? null,
@@ -226,8 +226,8 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
           expiresAt: z.string().datetime().nullable().optional(),
           maxMajorVersion: z.number().int().min(1).nullable().optional(),
           customer: z.string().max(200).optional(),
-          /** Endpoint Basic or Ultra (otherwise Community runs Basic and Pro or Enterprise run Ultra). */
-          tier: z.enum(TIERS).optional(),
+          /** Up to Endpoint Standard (basic) or Ultra (otherwise Community allows Standard and Pro or Enterprise Ultra). */
+          tier: z.enum(LICENSE_TIERS).optional(),
           /** Computers that activate the key join this tenant on their own (FBRX Command). */
           joinTenant: z.boolean().optional(),
           groupId: z.string().nullable().optional(),

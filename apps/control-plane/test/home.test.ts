@@ -126,7 +126,9 @@ describe('FBRX Command for a family', () => {
     parent = await computer('Alex laptop', parentToken);
     child = await computer('Milo laptop', childToken);
     await waitFor(async () => (await edition(child)).vertical === 'home');
-    expect(await edition(parent)).toMatchObject({ vertical: 'home', audience: 'parent', learner: false, productName: 'FBRX Endpoint Ultra' });
+    // A new computer opens in Essentials; a parent's may go up to Ultra (the family's license, nothing holding it).
+    expect(await edition(parent)).toMatchObject({ vertical: 'home', audience: 'parent', learner: false, tier: 'essentials', ceiling: 'ultra', productName: 'FBRX Endpoint Essentials' });
+    expect(await parent.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra', productName: 'FBRX Endpoint Ultra' });
     expect(await edition(child)).toMatchObject({ vertical: 'home', audience: 'child', learner: true, productName: 'FBRX OS Home' });
     expect(child.settings.effective().locked).toEqual(expect.arrayContaining(['appearance.easterEggs', 'localApi.enabled', 'ai.providers']));
 

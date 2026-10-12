@@ -8,7 +8,7 @@ a child's "Get help" goes straight to a parent's computer.
 
 | | Parents | Children |
 | --- | --- | --- |
-| Runs | FBRX Endpoint (Ultra, or Basic if you hold the group to it) | **FBRX OS Home** |
+| Runs | FBRX Endpoint (up to Ultra, or Standard if you hold the group to it) | **FBRX OS Home** |
 | Agent | Fabrix with every tool, asking before it changes anything | A learning helper that only talks: no files, apps, websites or commands |
 | Pages | Everything the license gives | Home, the helper, Messages, Calendar, Tasks, Notes, Toolbox, Library, Settings |
 | Defaults | Yours to choose (profiles in FBRX Command) | Presenter-safe mode with a projector, chats offline first; easter eggs, the mesh and the local API locked off |
@@ -57,7 +57,7 @@ within a second, with a short summary of the computer, and can answer from FBRX 
 From a request, the parent's computer can also check how the child's computer is doing, ask its AI, or run a command
 there; the child (or whoever is at it) says yes first, and again for each command. To stop a parent's computer
 receiving requests, open it under **Devices → Configuration** and turn off *Receives the family's requests for help*.
-On Endpoint Basic and FBRX OS Home, Messages takes its place.
+On Endpoint Essentials and Standard and on FBRX OS Home, Messages takes its place.
 
 ## Children and safety
 

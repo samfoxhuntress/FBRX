@@ -36,7 +36,7 @@ export function LicensesPage() {
   return (
     <Page
       title="Licenses"
-      description="Each customer is a tenant with a signed license (product, edition, seats, features, expiry). Computers run FBRX Endpoint Basic until a license turns on Endpoint Ultra; a key that joins the tenant enrolls the computer here on its own. Licenses are verified offline by the app using your public key and delivered automatically to enrolled devices."
+      description="Each customer is a tenant with a signed license (product, edition, seats, features, expiry). Computers open in FBRX Endpoint Essentials and go up to Standard on their own; Ultra comes when they are in this tenant and the license allows it. A key that joins the tenant enrolls the computer here on its own. Licenses are verified offline by the app using your public key and delivered automatically to enrolled devices."
       actions={
         manage && app.tenantId ? (
           <Button variant="primary" icon="plus" onClick={() => setIssuing(true)}>
@@ -154,14 +154,14 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
       }
     >
       <div className="fx-form">
-        <Field label="Product on the computers" help="What FBRX Endpoint turns into when the key is activated (or pushed by this tenant)">
+        <Field label="Product on the computers" help="The most FBRX Endpoint may run with this license. Computers open in Essentials and switch up in Settings; Ultra only in this organization (FBRX Command).">
           <Select
             value={f.tier}
             onChange={(e) => setF({ ...f, tier: e.target.value as Tier | 'auto' })}
             options={[
-              { value: 'auto', label: `By edition (${TIER_NAMES[tierFor(f.edition)]})` },
-              { value: 'ultra', label: TIER_NAMES.ultra },
-              { value: 'basic', label: TIER_NAMES.basic },
+              { value: 'auto', label: `By edition (up to ${TIER_NAMES[tierFor(f.edition)]})` },
+              { value: 'ultra', label: `Up to ${TIER_NAMES.ultra}` },
+              { value: 'basic', label: `Up to ${TIER_NAMES.basic}` },
             ]}
           />
         </Field>

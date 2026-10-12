@@ -112,7 +112,7 @@ export function Shell(props: {
 function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
   const Ico = Icons[item.icon];
   return (
-    <button className={cx('fx-nav-item', active && 'active')} onClick={onClick} aria-current={active ? 'page' : undefined}>
+    <button className={cx('fx-nav-item', active && 'active')} onClick={onClick} aria-current={active ? 'page' : undefined} data-nav={item.id}>
       <Ico />
       <span>{item.label}</span>
       {item.tag && <span className="fx-adv-tag">{item.tag}</span>}

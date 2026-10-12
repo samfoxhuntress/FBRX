@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { AUDIENCE_NAMES, AUTO_UPDATE_MODES, isLearner, AUTO_UPDATE_NAMES, DEFAULT_POLICY, PROFILE_PRESETS, presetApplied, UPDATE_CHANNELS, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_NAMES, type Audience, type AutoUpdateMode, type Vertical } from '@fbrx/shared';
+import { AUDIENCE_NAMES, AUTO_UPDATE_MODES, isLearner, AUTO_UPDATE_NAMES, DEFAULT_POLICY, PROFILE_PRESETS, presetApplied, UPDATE_CHANNELS, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_NAMES, type Audience, type AutoUpdateMode, type Tier, type Vertical } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Input, JsonEditor, Modal, More, Page, Select, Status, Table, TextArea, Toggle, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
 import { QUICK_SETUP_TITLE, QuickSetup, quickSetupDone } from './quick-setup';
 import { SettingsBuilder, type SettingsDraft } from './settings-builder';
+import { tierLimitOptions, tierLimitWords } from './common';
 
 interface Profile {
   id: string;
@@ -24,7 +25,7 @@ interface Group {
   updateChannel: string | null;
   pinnedVersion: string | null;
   audience: Audience | null;
-  tier: 'basic' | 'ultra' | null;
+  tier: Tier | null;
   autoUpdate: AutoUpdateMode | null;
   deviceCount: number;
 }
@@ -40,7 +41,7 @@ interface Tenant {
 }
 
 const VERTICAL_HELP: Record<Vertical, string> = {
-  business: 'Staff computers run FBRX Endpoint Basic or Ultra.',
+  business: 'Staff computers run FBRX Endpoint: they open in Essentials and go up to Standard or Ultra as their group allows.',
   education: 'Staff computers start in classroom mode (presenter-safe with a projector, chats offline first, no jokes), and student computers run FBRX OS Education.',
   home: "Parents' computers run FBRX Endpoint and get the children's requests for help; children's computers run FBRX OS Home with the same protections as students.",
 };
@@ -130,7 +131,7 @@ export function ConfigPage() {
               { key: 'd', header: 'Devices', className: 'num', render: (g) => g.deviceCount },
               { key: 'p', header: 'Profile', render: (g) => profileName(g.profileId) },
               { key: 'a', header: 'Used by', render: (g) => (g.audience ? <span className={`fx-badge${isLearner(g.audience) ? ' accent' : ''}`}>{AUDIENCE_NAMES[g.audience]}</span> : <span className="fx-muted">inherit</span>) },
-              { key: 't', header: 'Edition', render: (g) => (g.audience === 'student' ? 'FBRX OS Education' : g.audience === 'child' ? 'FBRX OS Home' : g.tier === 'basic' ? 'Basic' : <span className="fx-muted">license</span>) },
+              { key: 't', header: 'Edition', render: (g) => (g.audience === 'student' ? 'FBRX OS Education' : g.audience === 'child' ? 'FBRX OS Home' : tierLimitWords(g.tier) ?? <span className="fx-muted">up to the license</span>) },
               { key: 'c', header: 'Channel', render: (g) => g.pinnedVersion ? <span className="fx-badge">pinned {g.pinnedVersion}</span> : g.updateChannel ?? <span className="fx-muted">inherit</span> },
             ]}
           />
@@ -283,8 +284,15 @@ function GroupEditor({ group, vertical, profiles, versions, onClose, onSaved, on
           <Field label="Used by" help={vertical === 'education' ? 'Student computers run FBRX OS Education' : vertical === 'home' ? "Children's computers run FBRX OS Home" : undefined}>
             <Select value={f.audience} onChange={(e) => setF({ ...f, audience: e.target.value as Audience | '' })} options={[{ value: '', label: 'Organization default' }, ...VERTICAL_AUDIENCES[vertical].map((a) => ({ value: a, label: AUDIENCE_NAMES[a] }))]} />
           </Field>
-          <Field label="Edition" help={vertical === 'home' ? "Hold parents' computers to Endpoint Basic if they don't need the IT tools" : 'Hold the group to Endpoint Basic, e.g. teachers on Basic and IT on Ultra'}>
-            <Select value={f.tier} disabled={isLearner((f.audience || null) as Audience | null)} onChange={(e) => setF({ ...f, tier: e.target.value as 'basic' | '' })} options={[{ value: '', label: 'What the license gives' }, { value: 'basic', label: 'Endpoint Basic' }]} />
+          <Field
+            label="Edition"
+            help={
+              vertical === 'home'
+                ? "Computers open in Essentials; people switch up to this in Settings. Ultra is only there when this allows it."
+                : 'Computers open in Essentials; people switch up to this in Settings (teachers up to Standard, IT up to Ultra, say). Ultra is only there when this allows it.'
+            }
+          >
+            <Select value={f.tier} disabled={isLearner((f.audience || null) as Audience | null)} onChange={(e) => setF({ ...f, tier: e.target.value as Tier | '' })} options={tierLimitOptions('Up to what the license allows')} />
           </Field>
           <Field label="New versions">
             <Select value={f.autoUpdate} onChange={(e) => setF({ ...f, autoUpdate: e.target.value as AutoUpdateMode | '' })} options={[{ value: '', label: 'Organization default' }, ...AUTO_UPDATE_MODES.map((m) => ({ value: m, label: AUTO_UPDATE_NAMES[m] }))]} />

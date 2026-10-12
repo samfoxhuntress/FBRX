@@ -8,7 +8,7 @@ product is built on. It comes in two forms, and as an app for the computers you 
 | **FBRX Desktop** | FBRX OS as a whole operating system for computers, with FBRX Endpoint Ultra and FBRX Shield built in. | Planned |
 | **FBRX Server** | FBRX OS for servers: Debian 13 set up the FBRX way, with a web console and one or more **roles** (below): virtual machines, an AI agent on FBRX Mesh, the network's gate and its threat watch. [SERVER.md](SERVER.md) | First stage |
 | **FBRX Virtual** | The hypervisor FBRX Server runs: virtual machines on KVM, their screens, storage, networks, the hardware map and BIOS control. [SERVER.md](SERVER.md) | First stage |
-| **FBRX Endpoint** | The FBRX toolset on top of Windows, macOS or Linux, for organizations and homes that keep their operating system. **Basic** is free; **Ultra** (a license key) unlocks everything. Both come with FBRX Shield. | Alpha 1.9 |
+| **FBRX Endpoint** | The FBRX toolset on top of Windows, macOS or Linux, for organizations and homes that keep their operating system. Every computer opens in **Essentials**; **Standard** is a switch away, and **Ultra** unlocks everything through FBRX Command. Both come with FBRX Shield. | Alpha 1.9 |
 | **FBRX Shield** | FBRX's antivirus, in every FBRX Endpoint and FBRX Desktop, alongside the choice of Microsoft Defender or an antivirus already installed. [SHIELD.md](SHIELD.md) | Alpha |
 | **FBRX Command** | The tenant controller: Work, School and Home tenants, users, licensing and permissions; turns FBRX Endpoints into lightweight device management; controls FBRX Mesh; and (next) governs FBRX Virtual servers. [ADMIN_CONSOLE.md](ADMIN_CONSOLE.md) | Alpha |
 | **FBRX Mesh** | FBRX Endpoints and FBRX Servers talking to one another directly, end-to-end encrypted, with the tenant deciding who may reach whom. **Mesh Assist** lets them lend each other their AI (when one runs out of steps or credits) and lets a controller hand out work. [MESH.md](MESH.md) | Alpha |
@@ -21,7 +21,7 @@ product is built on. It comes in two forms, and as an app for the computers you 
                          FBRX Command (tenants, users, licenses, policy)
                 ┌──────────────┬───────────────┬────────────────┐
            FBRX Endpoint   FBRX Desktop    FBRX Server       FBRX Mesh
-          (Basic / Ultra)                 └ FBRX Virtual ──── virtual machines
+          (Essentials / Standard / Ultra) └ FBRX Virtual ──── virtual machines
                 └── FBRX Shield ─┘              ├ FBRX Gate (routing, firewall)
                                                 └ FBRX MiniDome (network watch) ◄──► FBRX Shield
 ```
@@ -52,7 +52,7 @@ Where this is going, for example:
         ├── fbrx-dc-1  (directory, ai)
         ├── fbrx-files-1 (files, virtual, ai)
         ├── fbrx-gate-1 (gate, minidome, ai) ── the network's edge, watching it
-        └── FBRX Endpoints (Basic / Ultra) and FBRX Desktops
+        └── FBRX Endpoints (Essentials / Standard / Ultra) and FBRX Desktops
 ```
 
 Each server keeps its own policy: a controller's work runs there only because that server gave it the Controller
@@ -62,6 +62,6 @@ permission, and still under that server's rules.
 
 * Say **FBRX Desktop** or **FBRX Server**, "powered by FBRX OS". FBRX OS on its own means the platform.
 * **FBRX Virtual** is the hypervisor (FBRX Server is the operating system it comes with).
-* **FBRX Endpoint Basic** and **FBRX Endpoint Ultra** are the two editions of the app.
+* **FBRX Endpoint Essentials**, **Standard** and **Ultra** are the three editions of the app (Ultra through FBRX Command).
 * Other companies' products are named only to say FBRX works with them (for example "works with Dell iDRAC",
   "Outlook / Microsoft 365 calendars", "Microsoft Defender").

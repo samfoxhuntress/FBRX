@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import type { PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
-import { TIER_NAMES, addressAs, displayVersion, funEnabled } from '@fbrx/shared';
+import { TIER_NAMES, TIER_SHORT, addressAs, displayVersion, funEnabled } from '@fbrx/shared';
 import { Button, FBRX_MARK, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
 import { useConsoleSessions, useCore } from './hooks';
@@ -14,7 +14,8 @@ import { VaultStartPrompt } from './vault-lock';
 import { UpdatePill } from './release';
 import { SpotlightView } from './pages/spotlight';
 import { ClipPicker } from './pages/clip-picker';
-import { LearnerContext, TierContext, UltraOnly, VerticalContext, useLicenseTier } from './edition';
+import { LearnerContext, StandardOnly, TierContext, UltraOnly, VerticalContext, useLicenseTier } from './edition';
+import { Tour, type TourStep } from './tour';
 import { PresenterPill, usePresenter } from './presenter';
 
 // Pages load when first opened, so the app starts with only what the first screen needs.
@@ -147,7 +148,7 @@ function Splash({ tier }: { tier: Tier | undefined }) {
           <path className="splash-letters" d={FBRX_MARK.letters} fillRule="evenodd" />
         </svg>
         <div className="splash-word">FBRX Endpoint</div>
-        <div className="splash-sub">{tier === 'ultra' ? 'Ultra' : tier === 'basic' ? 'Basic' : 'Fabrics Operating System'}</div>
+        <div className="splash-sub">{tier ? TIER_SHORT[tier] : 'Fabrics Operating System'}</div>
       </div>
     </div>
   );
@@ -179,6 +180,19 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   // FBRX Shield's number: findings waiting for a decision.
   const shieldCount = useCore('protection.status', undefined, ['protection.changed', 'shield.detected'], 300_000).data?.shield.open ?? 0;
   const [forceOnboarding, setForceOnboarding] = useState(false);
+  // The Essentials walkthrough: closed for this window once finished or skipped; it waits for the start-up animation.
+  const [tourClosed, setTourClosed] = useState(false);
+  const [tourReady, setTourReady] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setTourReady(true), sessionStorage.getItem('fbrx.splashShown') ? 600 : 2900);
+    // Settings → Edition → Take the tour again.
+    const again = () => setTourClosed(false);
+    window.addEventListener('fbrx:tour', again);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('fbrx:tour', again);
+    };
+  }, []);
   const [collapsed, setCollapsedState] = useState(() => {
     try {
       return localStorage.getItem('fbrx.sidebar') === 'icons';
@@ -344,18 +358,83 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', ultra: true },
     { id: 'lab', label: 'Virtual lab', icon: 'box', section: 'Advanced', ultra: true },
     { id: 'server', label: 'FBRX Server', icon: 'server', section: 'Advanced', ultra: true },
-    // A Basic computer that belongs to an FBRX Command tenant still sees its organization.
-    { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System', ultra: !enrolled },
+    // Every edition sees its organization, or how to join one (Ultra only ever comes through FBRX Command).
+    { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System' },
     { id: 'settings', label: 'Settings', icon: 'settings', section: 'System' },
   ];
-  // Endpoint Basic: the everyday tools and the agent. Ultra adds the rest. Student computers keep only LEARNER_PAGES.
-  const nav = all
-    .filter((i) => (learner ? LEARNER_PAGES.has(i.id) : ultra || !i.ultra))
-    .map(({ ultra: _u, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
-  const groups: NavGroup[] = SECTIONS.map(({ basicHint, learnerHint, ...g }) => ({ ...g, hint: learner && learnerHint ? learnerHint : !ultra && basicHint ? basicHint : g.hint, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
+  // Endpoint Essentials: the everyday pages in one short list (no sections to open). Standard: the everyday tools and
+  // the agent. Ultra adds the rest. Student computers keep only LEARNER_PAGES.
+  const essentials = tier === 'essentials' && !learner;
+  const byId = new Map(all.map((i) => [i.id, i]));
+  const nav: NavItem[] = essentials
+    ? ESSENTIALS_NAV.flatMap(([id, section, label]) => {
+        const item = byId.get(id);
+        if (!item || (id === 'fleet' && !enrolled)) return [];
+        const { ultra: _u, ...rest } = item;
+        return [{ ...rest, section, ...(label ? { label } : {}) }];
+      })
+    : all.filter((i) => (learner ? LEARNER_PAGES.has(i.id) : ultra || !i.ultra)).map(({ ultra: _u, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
+  const groups: NavGroup[] | undefined = essentials
+    ? undefined
+    : SECTIONS.map(({ basicHint, learnerHint, ...g }) => ({ ...g, hint: learner && learnerHint ? learnerHint : !ultra && basicHint ? basicHint : g.hint, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
   const ultraOnly = (title: string, what: string) => <UltraOnly title={title} what={what} />;
 
+  // The Essentials walkthrough, once, on a new computer (after the start-up animation).
+  const tourSteps: TourStep[] = [
+    {
+      title: 'Welcome to FBRX Essentials',
+      body: (
+        <>
+          <p>Everything you need day to day, and nothing you don’t. Here is a quick look around: about a minute.</p>
+          <p className="fx-muted">Esc skips it. Settings → Edition shows it again.</p>
+        </>
+      ),
+    },
+    { target: 'home', title: 'Home', body: 'Your computer at a glance: how it is doing, how much space is left, whether it is protected, and anything that needs you.' },
+    {
+      target: 'agent',
+      title: agentName,
+      body: (
+        <>
+          <p>Ask in plain words: “why is my computer slow?”, “free up some space”, “is this email a scam?”.</p>
+          <p>{agentName} explains what it would do and asks before it changes anything.</p>
+        </>
+      ),
+    },
+    { target: 'alerts', title: 'Alerts', body: 'When something needs you (space running low, a threat stopped, an update waiting), it shows up here.' },
+    { target: 'storage', title: 'Storage', body: 'See what fills your disk and clear out what you don’t need, safely.' },
+    { target: 'shield', title: 'FBRX Shield', body: 'Checks new downloads and keeps threats out. Green means you are protected.' },
+    { target: 'updates', title: 'Updates', body: 'Keeps FBRX and this computer up to date.' },
+    enrolled && helpdeskShown
+      ? { target: 'helpdesk', title: 'Get help', body: 'Something not working? Send it to your IT team from here, and follow the answer.' }
+      : { target: 'library', title: 'How-tos', body: 'Short guides for everyday things: Wi‑Fi, printers, backups, and more.' },
+    {
+      target: 'settings',
+      title: 'Settings',
+      body: (
+        <>
+          <p>Your name, the look, and <b>Edition</b>: switch to Standard there whenever you want more tools, and back any time.</p>
+          <p className="fx-muted">Ultra (expert tools) comes from your organization’s FBRX Command.</p>
+        </>
+      ),
+    },
+    {
+      title: 'You’re all set',
+      body: s.spotlight.enabled ? (
+        <p>
+          One more thing: press <kbd>{s.spotlight.hotkey}</kbd> anywhere to ask {agentName} without opening this window.
+        </p>
+      ) : (
+        <p>Start with {agentName}, or have a look at Home.</p>
+      ),
+    },
+  ];
+  const showTour = essentials && !tourClosed && status.edition?.tourDone === false && tourReady;
+
   const page = (() => {
+    if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && route !== 'home' && !byId.get(route)?.ultra) {
+      return <StandardOnly title={byId.get(route)?.label ?? 'That page'} what={STANDARD_WHAT[route] ?? 'More of the everyday tools.'} />;
+    }
     if (learner && route !== 'home' && !LEARNER_PAGES.has(route)) {
       return <UltraOnly title="That page" what={vertical === 'home' ? 'This computer keeps things simple. Ask a parent if you need something that is not here.' : 'Student computers keep things simple. Ask your teacher or the IT team if you need something that is not here.'} learner />;
     }
@@ -388,7 +467,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'updates':
         return <UpdatesPage />;
       case 'bugs':
-        return ultra ? <BugsPage agentName={agentName} advanced={ultra} /> : ultraOnly('The bug catcher', 'Crash and error logs from Windows and your apps, explained by the agent. In Basic, ask the agent what went wrong, or send it to your organization from Help desk.');
+        return ultra ? <BugsPage agentName={agentName} advanced={ultra} /> : ultraOnly('The bug catcher', 'Crash and error logs from Windows and your apps, explained by the agent. Meanwhile, ask the agent what went wrong, or send it to your organization from Help desk.');
       case 'server':
         return ultra ? <ServerPage /> : ultraOnly('FBRX Server', 'The FBRX Server installer ISO, the bundle for a Debian 13 server you already have, and the guides.');
       case 'lab':
@@ -428,7 +507,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'backup':
         return <BackupPage />;
       case 'fleet':
-        return ultra || enrolled ? <FleetPage /> : ultraOnly('Organization', 'Join your organization’s FBRX Command tenant. A license key from your organization joins it for you.');
+        return <FleetPage />;
       case 'settings':
         return <SettingsPage onRerunSetup={() => setForceOnboarding(true)} />;
       default:
@@ -450,7 +529,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
             </>
           ) : (
             <>
-              FBRX Endpoint <span className={`tier-badge ${tier}`}>{ultra ? 'Ultra' : 'Basic'}</span>
+              FBRX Endpoint <span className={`tier-badge ${tier}`}>{TIER_SHORT[tier]}</span>
             </>
           )
         }
@@ -490,6 +569,15 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         </Suspense>
       </Shell>
       <VaultStartPrompt />
+      {showTour && (
+        <Tour
+          steps={tourSteps}
+          onDone={() => {
+            setTourClosed(true);
+            void call('edition.tourDone', { done: true });
+          }}
+        />
+      )}
     </AgentNameContext.Provider>
     </VerticalContext.Provider>
     </LearnerContext.Provider>
@@ -588,6 +676,40 @@ function TopBar({
  */
 /** What a student's or child's computer (FBRX OS Education or Home) shows. */
 const LEARNER_PAGES = new Set(['home', 'agent', 'messages', 'helpdesk', 'calendar', 'tasks', 'notes', 'toolbox', 'library', 'settings']);
+
+/** Endpoint Essentials: its pages in order, the short list's headings, and plainer names where they help. */
+const ESSENTIALS_NAV: Array<[Route, string, string?]> = [
+  ['home', 'Everyday', 'Home'],
+  ['agent', 'Everyday'],
+  ['alerts', 'Everyday'],
+  ['messages', 'Everyday'],
+  ['helpdesk', 'Everyday', 'Get help'],
+  ['notes', 'Everyday'],
+  ['tasks', 'Everyday'],
+  ['storage', 'Your computer'],
+  ['shield', 'Your computer'],
+  ['updates', 'Your computer'],
+  ['network', 'Your computer'],
+  ['backup', 'Your computer'],
+  ['library', 'Help & settings', 'How-tos'],
+  ['fleet', 'Help & settings'],
+  ['settings', 'Help & settings'],
+];
+const ESSENTIALS_PAGES = new Set<string>(ESSENTIALS_NAV.map(([id]) => id));
+
+/** What a Standard page does, said on its place in Essentials. */
+const STANDARD_WHAT: Partial<Record<Route, string>> = {
+  calendar: 'Your calendar, with your Outlook or Google account if you connect one.',
+  projects: 'Group notes, tasks and chats by project.',
+  snippets: 'Text you type again and again, a shortcut away.',
+  security: 'Windows and macOS security settings, checked and explained.',
+  files: 'Find, preview and tidy files, with the agent to help.',
+  clipboard: 'Everything you copied, with handy transforms (Ctrl+Alt+Z).',
+  toolbox: 'Quick tools: password generator, unit converter, QR codes and more.',
+  runtime: 'Choose the AI model the agent uses, on this computer or in the cloud.',
+  approvals: 'What the agent asked to do, waiting for your yes or no.',
+  vault: 'Saved passwords and keys the agent and connections use, encrypted.',
+};
 
 const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; basicHint?: string; learnerHint?: string; icon: IconName }> = [
   { id: 'bridge', section: 'Command', label: 'Bridge', hint: 'Glass, agent, messages, alerts', learnerHint: 'Home, helper, messages', icon: 'compass' },

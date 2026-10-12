@@ -21,6 +21,8 @@ import {
   VERTICAL_AUDIENCES,
   isLearner,
   productNameFor,
+  parseTier,
+  type Tier,
   type SystemStatus,
   type UpdateStatus,
   type OrgMeshRoster,
@@ -230,6 +232,13 @@ export class Kernel {
     this.approvals = new ApprovalQueue(this.events);
     this.limiter = new RateLimiter(() => this.policy.policy.rateLimits.toolCallsPerMinute);
     this.license = new LicenseService(this.meta, this.platform.licensePublicKeys, this.platform.appVersion, this.platform.devMode, this.events);
+    // The edition a computer starts in: a new one opens in Essentials (with its walkthrough); one set up before
+    // Essentials existed keeps what it had (up to what it may run now).
+    if (this.meta.get<Tier>('edition.chosen') == null) {
+      const tried = this.platform.devMode ? parseTier(process.env.FBRX_EDITION) : null;
+      this.meta.set('edition.chosen', this.platform.devMode ? (tried ?? 'ultra') : this.settings.get().general.onboardingComplete ? 'ultra' : 'essentials');
+      if (this.settings.get().general.onboardingComplete) this.meta.set('edition.tourDone', true);
+    }
     this.registry = new ToolRegistry(this.db);
     this.gate = new ToolGate({
       registry: this.registry,
@@ -1246,6 +1255,7 @@ export class Kernel {
       auditHead: this.audit.headInfo(),
       protection: this.protection.summary(),
       mesh: this.meshIdentityForCommand(),
+      editionTier: lic.tier,
     };
   }
 
@@ -1349,13 +1359,39 @@ export class Kernel {
 
   // ------------------------------------------------------------------------------- command center
 
-  /** What this computer is: Endpoint Basic or Ultra, or FBRX OS Education on a student computer. */
+  /** What this computer is: Endpoint Essentials, Standard or Ultra, or FBRX OS Education on a student computer. */
   edition(): EditionStatus {
     const lic = this.license.status();
     const ed = this.meta.get<DeviceEdition>('fleet.edition');
     const vertical: Vertical = ed?.vertical ?? lic.vertical ?? 'business';
     const audience: Audience = ed?.audience ?? VERTICAL_AUDIENCES[vertical][0];
-    return { tier: lic.tier, vertical, audience, learner: isLearner(audience), productName: productNameFor(lic.tier, vertical, audience) };
+    return {
+      tier: lic.tier,
+      chosen: lic.chosen ?? lic.tier,
+      ceiling: lic.ceiling ?? lic.tier,
+      ceilingReason: lic.ceilingReason ?? 'standalone',
+      enrolled: this.fleet.enrolled,
+      tourDone: !!this.meta.get<boolean>('edition.tourDone'),
+      vertical,
+      audience,
+      learner: isLearner(audience),
+      productName: productNameFor(lic.tier, vertical, audience),
+    };
+  }
+
+  /** The person's choice in Settings → Edition (Essentials or Standard any time; Ultra when FBRX Command allows it). */
+  chooseEdition(tier: Tier, actor: string): EditionStatus {
+    const before = this.license.status().tier;
+    this.license.choose(tier);
+    this.audit.append({ category: 'user', action: 'edition.chosen', actor, target: tier, outcome: 'success', details: { from: before } });
+    return this.edition();
+  }
+
+  /** The Essentials walkthrough was finished or skipped (or is to be shown again). */
+  setTourDone(done: boolean): EditionStatus {
+    this.meta.set('edition.tourDone', done);
+    this.events.emit('license.changed', this.license.status());
+    return this.edition();
   }
 
   /**
@@ -1438,7 +1474,7 @@ export class Kernel {
     throw new Error('This computer has no way to update itself: it was not installed from the repository and has no update feed');
   }
 
-  /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Basic), or null. */
+  /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Essentials or Standard), or null. */
   ultraOnly(what: string): string | null {
     return this.license.status().tier === 'ultra' ? null : `${what} come with ${TIER_NAMES.ultra}`;
   }

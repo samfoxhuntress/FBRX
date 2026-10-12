@@ -1,4 +1,4 @@
-import { TIER_NAMES, type Tier } from './license';
+import { minTier, TIER_NAMES, type Tier } from './license';
 
 /**
  * Who an FBRX organization is and who uses each of its computers.
@@ -6,7 +6,7 @@ import { TIER_NAMES, type Tier } from './license';
  * - **Vertical** (the *kind* of tenant): **Work** (`business`), **School** (`education`: classroom defaults for staff,
  *   student computers possible) or **Home** (`home`: a family, with parents' and children's computers). Chosen when
  *   FBRX Command is set up or a tenant is created, and changeable later.
- * - **Audience**: who uses a computer. Staff (and parents) get FBRX Endpoint Basic or Ultra. Students (and children)
+ * - **Audience**: who uses a computer. Staff (and parents) get FBRX Endpoint (Essentials, Standard or Ultra). Students (and children)
  *   get **FBRX OS Education** (or Home): a narrowed, safe set of tools and a lightweight learning helper.
  *
  * The audience comes from the enrollment token or the computer's group in FBRX Command. A computer may always be
@@ -36,7 +36,7 @@ export const VERTICAL_INFO: Record<Vertical, VerticalInfo> = {
   business: {
     noun: 'company',
     tagline: 'A business, nonprofit or team: staff computers, IT tools and a help desk.',
-    computers: 'Staff on FBRX Endpoint Basic, IT on Endpoint Ultra.',
+    computers: 'Staff on FBRX Endpoint up to Standard, IT up to Endpoint Ultra.',
     example: 'Harbor Lane Design',
     helpers: 'the IT team',
     learner: null,
@@ -44,7 +44,7 @@ export const VERTICAL_INFO: Record<Vertical, VerticalInfo> = {
   education: {
     noun: 'school',
     tagline: 'A school or co-op: classroom mode for teachers, safe student computers, a help desk to IT.',
-    computers: 'Teachers on Basic in classroom mode, IT on Ultra, students on FBRX OS Education.',
+    computers: 'Teachers up to Standard in classroom mode, IT up to Ultra, students on FBRX OS Education.',
     example: 'Hillside Co-op',
     helpers: 'the IT team',
     learner: 'student',
@@ -76,12 +76,12 @@ export function learnerAudienceFor(vertical: Vertical): Audience | null {
 /** The groups FBRX Command's quick setup creates for each kind, each with its own enrollment token. */
 export const KIND_GROUPS: Record<Vertical, Array<{ name: string; description: string; audience: Audience; tier: Tier | null }>> = {
   business: [
-    { name: 'Staff', description: 'Staff computers: FBRX Endpoint Basic', audience: 'staff', tier: 'basic' },
-    { name: 'IT', description: 'IT and administrators: Endpoint Ultra; receives help desk tickets', audience: 'staff', tier: null },
+    { name: 'Staff', description: 'Staff computers: FBRX Endpoint, up to Standard', audience: 'staff', tier: 'basic' },
+    { name: 'IT', description: 'IT and administrators: up to Endpoint Ultra; receives help desk tickets', audience: 'staff', tier: null },
   ],
   education: [
-    { name: 'Teachers', description: 'Staff computers: Endpoint Basic in classroom mode', audience: 'staff', tier: 'basic' },
-    { name: 'IT', description: 'IT and administrators: Endpoint Ultra; receives help desk tickets', audience: 'staff', tier: null },
+    { name: 'Teachers', description: 'Staff computers: up to Endpoint Standard, in classroom mode', audience: 'staff', tier: 'basic' },
+    { name: 'IT', description: 'IT and administrators: up to Endpoint Ultra; receives help desk tickets', audience: 'staff', tier: null },
     { name: 'Students', description: 'Student computers: FBRX OS Education', audience: 'student', tier: null },
   ],
   home: [
@@ -126,9 +126,9 @@ export function productNameFor(tier: Tier, vertical: Vertical, audience: Audienc
   return TIER_NAMES[tier];
 }
 
-/** The edition a group can hold its computers to (never above the organization's license). */
+/** The most a group or a computer may run, as FBRX Command holds it (never above the organization's license). */
 export function narrowTier(licensed: Tier, wanted: Tier | null | undefined): Tier {
-  return wanted === 'basic' ? 'basic' : licensed;
+  return wanted ? minTier(licensed, wanted) : licensed;
 }
 
 /** How a computer installs new versions, as its organization decides in FBRX Command. */
@@ -140,7 +140,7 @@ export const AUTO_UPDATE_NAMES: Record<AutoUpdateMode, string> = { off: 'Off', n
 export interface DeviceEdition {
   vertical: Vertical;
   audience: Audience;
-  /** Hold the computer to Endpoint Basic (null = what the license gives). */
+  /** The most the computer may run: its own setting, else its group's (null = what the license gives). */
   tier: Tier | null;
   helpdesk: { enabled: boolean; receiver: boolean };
   autoUpdate: AutoUpdateMode;
@@ -148,11 +148,19 @@ export interface DeviceEdition {
 
 /** How a computer describes itself (system status, the sidebar, Settings). */
 export interface EditionStatus {
+  /** What runs. */
   tier: Tier;
+  /** What the person chose, and the most this computer may run (the choices above it are locked). */
+  chosen: Tier;
+  ceiling: Tier;
+  ceilingReason: 'standalone' | 'organization' | 'license' | 'learner' | 'development';
+  enrolled: boolean;
+  /** The Essentials walkthrough was finished or skipped. */
+  tourDone: boolean;
   vertical: Vertical;
   audience: Audience;
   learner: boolean;
-  /** "FBRX Endpoint Basic", "FBRX Endpoint Ultra", "FBRX OS Education"… */
+  /** "FBRX Endpoint Essentials", "FBRX Endpoint Standard", "FBRX Endpoint Ultra", "FBRX OS Education"… */
   productName: string;
 }
 

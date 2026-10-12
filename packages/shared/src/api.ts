@@ -478,7 +478,7 @@ export interface SystemStatus {
   services: ServiceStatus[];
   vault: VaultStatus;
   license: LicenseStatus;
-  /** Endpoint Basic or Ultra, or FBRX OS Education on a student computer; the organization kind and who uses it. */
+  /** Endpoint Essentials, Standard or Ultra, or FBRX OS Education on a student computer; the organization kind and who uses it. */
   edition: EditionStatus;
   fleet: FleetStatus;
   runtime: RuntimeStatus;

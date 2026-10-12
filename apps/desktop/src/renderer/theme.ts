@@ -174,12 +174,13 @@ export function resolvedMode(theme: Settings['general']['theme']): 'light' | 'da
 }
 
 /**
- * Applies appearance settings to <html> (presets live in theme.css). Endpoint Basic gets the plain look: light or
- * dark, no theme colors, gradients or textures (those come with Ultra). `tier` is undefined while the license loads.
+ * Applies appearance settings to <html> (presets live in theme.css). Endpoint Essentials and Standard get the plain
+ * look: light or dark, no theme colors, gradients or textures (those come with Ultra). `tier` is undefined while the
+ * license loads.
  */
 export function useAppearance(settings: Settings | undefined, tier: Tier | undefined) {
   const theme = settings?.general.theme ?? 'dark';
-  const basic = tier === 'basic';
+  const basic = !!tier && tier !== 'ultra';
   const a = settings && basic ? { ...settings.appearance, preset: 'graphite' as const, texture: 'none' as const, accent: '' } : settings?.appearance;
   useEffect(() => {
     // Wait for the license, so Basic never flashes the Ultra look (or the other way round).
@@ -189,6 +190,7 @@ export function useAppearance(settings: Settings | undefined, tier: Tier | undef
       const mode = resolvedMode(theme);
       root.dataset.theme = mode;
       root.dataset.edition = basic ? 'basic' : 'ultra';
+      root.dataset.tier = tier;
       root.dataset.preset = a?.preset ?? 'fabrics';
       root.dataset.density = a?.density ?? 'comfortable';
       root.dataset.radius = a?.radius ?? 'rounded';

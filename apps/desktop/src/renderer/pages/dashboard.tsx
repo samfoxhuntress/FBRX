@@ -51,13 +51,15 @@ const HOME_LEARNER_TIPS = [
 const ULTRA_TIPS = [
   'Terminal → FBRX/1 manages FBRX like a switch: try "show system status".',
   'Library → The Lab has power-user how-tos. Goggles recommended.',
+  'Snippets save commands you reuse; the Terminal lists them on the right.',
 ];
+/** Standard and Ultra (pages Essentials leaves out). */
+const STANDARD_TIPS = ['Press Ctrl+Alt+Z for your clipboard history: W and S move, type to search, Enter pastes.'];
+const ESSENTIALS_TIPS = ['Want more tools? Settings → Edition switches to Standard, and back, any time.'];
 const ALL_TIPS = [
   'Press Ctrl+K anywhere for Spotlight: apps, files, settings and quick answers.',
-  'Press Ctrl+Alt+Z for your clipboard history: W and S move, type to search, Enter pastes.',
   'The big red Emergency stop in Settings → Agent halts every AI action at once.',
   'Network Center → Speed is a real speedometer. Patience is rewarded. Impatience more so.',
-  'Snippets save commands you reuse; the Terminal lists them on the right.',
   'Backups are encrypted .fbrxsnap files: restore one on a new PC and carry on.',
   'Ask Fabrix "is this good?" next to most results to get them explained.',
 ];
@@ -158,7 +160,15 @@ function LooseTip({ fun }: { fun: boolean }) {
   const learner = useLearner();
   const tier = useTier();
   const vertical = useVertical();
-  const TIPS = learner ? (vertical === 'home' ? HOME_LEARNER_TIPS : LEARNER_TIPS) : tier === 'ultra' ? [...ALL_TIPS, ...ULTRA_TIPS] : ALL_TIPS;
+  const TIPS = learner
+    ? vertical === 'home'
+      ? HOME_LEARNER_TIPS
+      : LEARNER_TIPS
+    : tier === 'ultra'
+      ? [...ALL_TIPS, ...STANDARD_TIPS, ...ULTRA_TIPS]
+      : tier === 'basic'
+        ? [...ALL_TIPS, ...STANDARD_TIPS]
+        : [...ALL_TIPS, ...ESSENTIALS_TIPS];
   const [tip, setTip] = useState(() => Math.floor(Math.random() * TIPS.length));
   const [clicks, setClicks] = useState(0);
   const [rattle, setRattle] = useState(0);

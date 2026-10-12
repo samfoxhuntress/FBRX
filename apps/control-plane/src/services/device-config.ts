@@ -117,7 +117,7 @@ export function deviceEdition(db: Db, d: any, t: any, g: any): DeviceEdition {
   return {
     vertical,
     audience: resolveAudience(vertical, assigned),
-    tier: oneOf<Tier>(TIERS, g?.tier),
+    tier: oneOf<Tier>(TIERS, d.tier) ?? oneOf<Tier>(TIERS, g?.tier),
     helpdesk: { enabled: Number(t.helpdesk_enabled ?? 1) === 1, receiver: Number(d.helpdesk_receiver ?? 0) === 1 && receivers > 0 },
     autoUpdate: oneOf<AutoUpdateMode>(AUTO_UPDATE_MODES, g?.auto_update) ?? oneOf<AutoUpdateMode>(AUTO_UPDATE_MODES, t.auto_update) ?? 'notify',
   };

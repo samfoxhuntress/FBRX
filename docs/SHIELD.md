@@ -70,7 +70,7 @@ running too.
 
 ### Editions
 
-Endpoint Basic and Ultra both have FBRX Shield's download checks, scans, threat database, rules and quarantine, and
+Every edition (Essentials, Standard and Ultra) has FBRX Shield's download checks, scans, threat database, rules and quarantine, and
 the choice of antivirus. **Endpoint Ultra** adds scheduled scans (a quick scan every day or week) and the second
 engines (ClamAV, VirusTotal). Student and child computers (FBRX OS Education and Home) run the download checks in the
 background without the page; the school or family chooses their antivirus from FBRX Command.

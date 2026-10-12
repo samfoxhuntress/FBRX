@@ -2,10 +2,10 @@
 
 ## Unlocking them: Endpoint Ultra and 418
 
-The easter eggs, the Silly Goose and the trophy case live in **FBRX Endpoint Ultra** (Endpoint Basic has none of
+The easter eggs, the Silly Goose and the trophy case live in **FBRX Endpoint Ultra** (Essentials and Standard have none of
 them), and even there they stay hidden until someone enters **418** as a license key (**Settings → License**). It is
 not a license: it is HTTP status 418, *I'm a teapot*. The locked trophy case in Settings drops the only hint: "The
-key is short and stout." Entered on Endpoint Basic, 418 is remembered, and the easter eggs come out as soon as Ultra
+key is short and stout." Entered on Essentials or Standard, 418 is remembered, and the easter eggs come out as soon as Ultra
 is turned on.
 
 Once unlocked, **Settings → Appearance → Fun extras** appears, with a switch to turn them off again. An organization

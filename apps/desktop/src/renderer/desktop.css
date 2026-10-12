@@ -1615,6 +1615,11 @@ body.spotlight-body {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 12%, var(--surface-1));
 }
+.tier-badge.essentials {
+  border-color: color-mix(in srgb, #2fb6a0 50%, transparent);
+  color: #2fb6a0;
+  background: color-mix(in srgb, #2fb6a0 12%, var(--surface-1));
+}
 .fx-brand-name .tier-badge {
   margin-left: 4px;
 }
@@ -5678,4 +5683,159 @@ html[data-presenting='blur'] .private::selection {
 .srv-doc {
   max-height: 70vh;
   overflow: auto;
+}
+
+/* ---------------------------------------------------------------- the Essentials walkthrough (tour.tsx) */
+.tour {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+}
+.tour-dim {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 12, 20, 0.68);
+  backdrop-filter: blur(2px);
+  animation: tour-in 0.2s ease;
+}
+.tour-spot {
+  position: absolute;
+  border-radius: 10px;
+  box-shadow:
+    0 0 0 9999px rgba(8, 12, 20, 0.68),
+    0 0 0 2px var(--accent),
+    0 0 22px 4px var(--accent-wash);
+  transition:
+    top 0.25s ease,
+    left 0.25s ease,
+    width 0.25s ease,
+    height 0.25s ease;
+  pointer-events: none;
+}
+.tour-card {
+  position: absolute;
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-pop);
+  padding: 18px 18px 14px;
+  animation: tour-in 0.2s ease;
+  transition:
+    top 0.25s ease,
+    left 0.25s ease;
+}
+.tour-card.center {
+  padding: 24px 24px 18px;
+}
+.tour-card h3 {
+  margin: 4px 0 6px;
+  font-size: 17px;
+}
+.tour-card.center h3 {
+  font-size: 20px;
+}
+.tour-body {
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.tour-body p {
+  margin: 0 0 8px;
+}
+.tour-arrow {
+  position: absolute;
+  left: -8px;
+  width: 14px;
+  height: 14px;
+  background: var(--surface-1);
+  border-left: 1px solid var(--border);
+  border-bottom: 1px solid var(--border);
+  transform: rotate(45deg);
+}
+.tour-step-count {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+.tour-dots {
+  display: flex;
+  gap: 5px;
+  margin: 12px 0 10px;
+}
+.tour-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--border);
+}
+.tour-dots span.seen {
+  background: var(--accent-wash);
+}
+.tour-dots span.on {
+  background: var(--accent);
+  width: 16px;
+  border-radius: 3px;
+}
+.tour-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+@keyframes tour-in {
+  from {
+    opacity: 0;
+  }
+}
+:root[data-motion='reduce'] .tour-spot,
+:root[data-motion='reduce'] .tour-card {
+  transition: none;
+  animation: none;
+}
+
+/* ---------------------------------------------------------------- Settings → Edition */
+.ed-choices {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 12px;
+}
+.ed-choice {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
+}
+.ed-choice.current {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent) inset;
+  background: var(--accent-wash);
+}
+.ed-choice.locked {
+  opacity: 0.75;
+}
+.ed-choice h4 {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+}
+.ed-choice ul {
+  margin: 0;
+  padding-left: 18px;
+  color: var(--text-secondary);
+  font-size: 13px;
+  line-height: 1.5;
+}
+.ed-choice .ed-choice-foot {
+  margin-top: auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
 }

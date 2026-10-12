@@ -245,7 +245,7 @@ describe('control plane ⇄ device fleet', () => {
     expect((await full.json()).error.message).toMatch(/seat limit/);
   });
 
-  it('joins its tenant on its own when an Endpoint Basic computer activates a license from FBRX Command', async () => {
+  it('joins its tenant on its own when a computer activates a license from FBRX Command, which unlocks Ultra', async () => {
     const d = await api('POST', '/v1/admin/tenants', { name: 'Customer D' });
     const asD = { 'x-fbrx-tenant': d.id };
     const lic = await api('POST', '/v1/admin/licenses', { edition: 'pro', seats: 3, joinTenant: true }, asD);
@@ -257,9 +257,13 @@ describe('control plane ⇄ device fleet', () => {
     try {
       k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, protection: { shield: { updateSignatures: false } } });
       await k.start();
-      expect(k.license.status().tier).toBe('basic');
+      // A new computer on its own: Essentials, Standard at most.
+      expect(k.license.status()).toMatchObject({ tier: 'essentials', ceiling: 'basic', ceilingReason: 'standalone' });
+      await expect(k.call('edition.choose', { tier: 'ultra' }, USER)).rejects.toThrow(/comes through FBRX Command/);
       const st = (await k.call('license.activate', { key: lic.key }, USER)) as any;
-      expect(st).toMatchObject({ state: 'valid', tier: 'ultra', commandUrl: base });
+      // In the organization, Ultra is there to turn on (the person still chooses).
+      expect(st).toMatchObject({ state: 'valid', tier: 'essentials', ceiling: 'ultra', commandUrl: base });
+      expect(await k.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra' });
       expect(st.message).toMatch(/Joined Customer D/);
       expect(k.fleet.status().tenantName).toBe('Customer D');
       expect(await api('GET', '/v1/admin/devices', undefined, asD)).toHaveLength(1);
@@ -267,7 +271,9 @@ describe('control plane ⇄ device fleet', () => {
       await k.call('fleet.unenroll', {}, USER);
       expect(await k.joinLicenseTenant('test')).toMatchObject({ joined: false });
       expect(k.fleet.enrolled).toBe(false);
-      // The tenant decides the product: an Enterprise license can still run Endpoint Basic.
+      // Out of the organization, Ultra goes with it.
+      expect(k.license.status()).toMatchObject({ tier: 'basic', chosen: 'ultra', ceiling: 'basic' });
+      // The tenant decides the product: an Enterprise license can still allow only Endpoint Standard.
       expect(await api('POST', '/v1/admin/licenses', { edition: 'enterprise', seats: 0, tier: 'basic' }, asD)).toMatchObject({ tier: 'basic', commandUrl: null });
     } finally {
       await k.stop();

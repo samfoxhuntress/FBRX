@@ -33,6 +33,10 @@ export function deviceView(ctx: AppContext, d: any) {
     pinnedVersion: d.pinned_version,
     audience: d.audience ?? null,
     helpdeskReceiver: Number(d.helpdesk_receiver ?? 0) === 1,
+    /** The most it may run, set for this computer (null = its group's). */
+    tier: d.tier ?? null,
+    /** What it runs now, as it last reported (the person's choice under that). */
+    editionTier: s?.editionTier ?? null,
     settingsOverride: parseJson<Record<string, unknown>>(d.settings_override, {}),
     lockedOverride: parseJson<string[]>(d.locked_override, []),
     policyOverride: parseJson<unknown>(d.policy_override, null),

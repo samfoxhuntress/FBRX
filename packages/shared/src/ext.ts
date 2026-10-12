@@ -2,6 +2,7 @@ import type { TrophyState } from './fun';
 import type { VoiceDownloadId } from './settings';
 import type { AssistAction, AssistJob, HelpdeskScope, HelpdeskStatus, TicketCategory, TicketDetail, TicketPriority, TicketStatus, TicketSummary } from './helpdesk';
 import type { EditionStatus } from './editions';
+import type { Tier } from './license';
 import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
 import type { ProtectionState, ProtectionStatus, ScanJob, ScanType, ShieldDetection, ShieldVerdict } from './protection';
 import type { AssistOffer, AssistPriority, AssistSession, AssistTools } from './mesh-assist';
@@ -1111,6 +1112,10 @@ export interface ExtMethods {
   'helpdesk.assistJobs': (p: { ticketId: string }) => AssistJob[];
   /** What this computer is: its edition, organization kind and who uses it. */
   'edition.status': () => EditionStatus;
+  /** Settings → Edition: Essentials or Standard any time; Ultra when FBRX Command allows it (the person only). */
+  'edition.choose': (p: { tier: Tier }) => EditionStatus;
+  /** The Essentials walkthrough was finished or skipped; false shows it again (the person only). */
+  'edition.tourDone': (p: { done: boolean }) => EditionStatus;
   'presenter.status': () => PresenterStatus;
   /** Turn presenter-safe mode on or off now (off also snoozes the automatic switch until the screen is unplugged). */
   'presenter.set': (p: { on: boolean }) => PresenterStatus;
@@ -1287,6 +1292,8 @@ export interface ExtEvents {
 
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
+  'edition.choose',
+  'edition.tourDone',
   'server.copy',
   'server.saved',
   'server.save',
