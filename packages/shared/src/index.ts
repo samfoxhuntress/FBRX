@@ -20,6 +20,8 @@ export * from './editions';
 export * from './mdm';
 export * from './calendar';
 export * from './protection';
+export * from './schedule';
+export * from './time';
 export * from './virtual';
 export * from './mesh-assist';
 export * from './net';

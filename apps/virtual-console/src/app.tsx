@@ -20,6 +20,8 @@ import { GateServicesPage } from './pages/gate-services';
 import { GateTrafficPage } from './pages/gate-traffic';
 import { GateChangesPage } from './pages/gate-changes';
 import { DomePage } from './pages/dome';
+import { TimePage } from './pages/time';
+import { RolesPage } from './pages/roles';
 
 export function App() {
   const [phase, setPhase] = useState<'loading' | 'setup' | 'login' | 'ready'>('loading');
@@ -112,9 +114,11 @@ function Console() {
         ] satisfies NavItem[])
       : []),
     ...(app.has('minidome') ? ([{ id: 'dome', label: 'MiniDome', icon: 'eye', section: 'Gate' }] satisfies NavItem[]) : []),
+    ...(app.has('time') ? ([{ id: 'time', label: 'FBRX Time', icon: 'history', section: 'Server' }] satisfies NavItem[]) : []),
     { id: 'hardware', label: 'Hardware map', icon: 'cpu', section: 'Server' },
     { id: 'server', label: 'Server & BIOS', icon: 'server', section: 'Server' },
     { id: 'mesh', label: 'Mesh & AI', icon: 'sparkles', section: 'Server' },
+    { id: 'roles', label: 'Roles', icon: 'layers', section: 'Server' },
     ...(app.can('admin') ? [{ id: 'access', label: 'Users & audit', icon: 'users', section: 'Access' } as NavItem] : []),
   ];
   // Without virtual machines, the console opens on the gate (or the hardware map).
@@ -151,6 +155,10 @@ function Console() {
         return <ServerPage tab={route.id} />;
       case 'mesh':
         return <MeshAiPage tab={route.id} />;
+      case 'time':
+        return <TimePage tab={route.id} />;
+      case 'roles':
+        return <RolesPage />;
       case 'access':
         return <AccessPage />;
       default:

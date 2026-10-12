@@ -78,7 +78,7 @@ jobs:
       - name: FBRX Virtual against the real hypervisor
         # As root, like FBRX Server, against libvirt's system hypervisor (after the build, so root leaves no files in
         # the way). Software emulation keeps it independent of the runner's KVM.
-        run: sudo -E env "PATH=$PATH" FBRX_TEST_LIBVIRT=1 FBRX_V_DOMAIN_TYPE=qemu npx vitest run apps/virtual/test/libvirt.integration.test.ts
+        run: sudo -E env "PATH=$PATH" FBRX_TEST_LIBVIRT=1 FBRX_V_DOMAIN_TYPE=qemu npx vitest run apps/virtual/test/libvirt.integration.test.ts apps/virtual/test/time.libvirt.integration.test.ts
       - uses: actions/upload-artifact@v4
         with:
           name: fbrx-server-bundle

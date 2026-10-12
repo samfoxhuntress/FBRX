@@ -1,6 +1,6 @@
 {
   "name": "@fbrx/virtual",
-  "version": "0.1.1",
+  "version": "1.0.0",
   "private": true,
   "description": "FBRX Virtual: the hypervisor FBRX Server runs (KVM through libvirt), with server hardware and BIOS management",
   "type": "module",

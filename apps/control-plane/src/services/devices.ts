@@ -64,6 +64,7 @@ export function deviceView(ctx: AppContext, d: any) {
           uptimeSeconds: s.uptimeSeconds,
           services: s.services,
           protection: s.protection ?? null,
+          imageBackup: s.imageBackup ?? null,
         }
       : null,
   };

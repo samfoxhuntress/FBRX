@@ -5,6 +5,7 @@ import type { EditionStatus } from './editions';
 import type { Tier } from './license';
 import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
 import type { ProtectionState, ProtectionStatus, ScanJob, ScanType, ShieldDetection, ShieldVerdict } from './protection';
+import type { ImageBackupConfig, ImageBackupStatus } from './time';
 import type { AssistOffer, AssistPriority, AssistSession, AssistTools } from './mesh-assist';
 import type { MeshNetworkStatus, MeshPathTest } from './net';
 import type { MessagesOverview, MessageState, ThreadMessage } from './messages';
@@ -1144,6 +1145,12 @@ export interface ExtMethods {
   'calendar.sync': (p?: { id?: string }) => CalendarStatus;
   'calendar.create': (p: NewCalendarEvent) => CalendarEvent;
   'calendar.delete': (p: { accountId: string; id: string }) => Deleted;
+  // FBRX Time: an image of the whole computer.
+  'imageBackup.status': () => ImageBackupStatus;
+  /** Sets it up or changes it (asks for administrator once). password: for a network folder; null: none; left out: keep the saved one. */
+  'imageBackup.configure': (p: ImageBackupConfig & { password?: string | null }) => ImageBackupStatus;
+  'imageBackup.run': () => ImageBackupStatus;
+  'imageBackup.remove': () => ImageBackupStatus;
   // Antivirus: what protects this computer, and FBRX Shield.
   'protection.status': (p?: { refresh?: boolean }) => ProtectionStatus;
   /** "auto", "shield", "defender" or "product:<id>". */
@@ -1354,6 +1361,9 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'netenv.remove',
   'netenv.deviceAction',
   'netenv.createVouchers',
+  'imageBackup.configure',
+  'imageBackup.run',
+  'imageBackup.remove',
   'protection.setProvider',
   'protection.scan',
   'protection.cancelScan',

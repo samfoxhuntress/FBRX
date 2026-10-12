@@ -68,6 +68,8 @@ import { calendarTools } from './tools/builtin/calendar-tools';
 import { CalendarService } from './calendar/calendar-service';
 import { Shield } from './protection/shield';
 import { ProtectionService } from './protection/protection-service';
+import { ImageBackupService } from './time/image-backup';
+import { elevated as runElevated, ps as runPs } from './windows/ps';
 import { shieldTools } from './tools/builtin/shield-tools';
 import { helpdeskTools } from './tools/builtin/helpdesk-tools';
 import { NetEnvironments } from './network/environments';
@@ -168,6 +170,8 @@ export class Kernel {
   readonly calendar: CalendarService;
   readonly shield: Shield;
   readonly protection: ProtectionService;
+  /** FBRX Time on this computer: whole-computer images (Windows). */
+  readonly imageBackup: ImageBackupService;
   readonly helpdesk: Helpdesk;
   /** The help desk working on this computer from a ticket it sent. */
   readonly helpdeskAssist: HelpdeskAssistHost;
@@ -473,6 +477,14 @@ export class Kernel {
       setProvider: (provider) => void this.settings.update({ protection: { provider } }),
       dirs: () => this.platform.specialDirs(),
       alert: (rule, title, body, key) => void this.alerts.fire(rule, title, body, { key }).catch((err) => this.log.debug('Alert failed', { rule, error: errorMessage(err) })),
+    });
+    this.imageBackup = new ImageBackupService({
+      platform: process.platform,
+      dir: join(process.env.ProgramData ?? 'C:\\ProgramData', 'FBRX', 'Time'),
+      ps: (script, timeoutMs) => runPs(script, timeoutMs),
+      elevated: (script, o) => runElevated(script, { timeoutMs: o?.timeoutMs }),
+      audit: (action, outcome, details) => this.audit.append({ category: 'system', action, actor: 'user', outcome, details }),
+      log: L('time'),
     });
     this.trophies = new Trophies({ meta: this.meta, events: this.events, enabled: () => funEnabled(this.settings.get(), this.license.status().tier) });
     this.migrator = new Migrator({
@@ -1254,6 +1266,7 @@ export class Kernel {
       runtimeModel: this.runtime.status().modelId,
       auditHead: this.audit.headInfo(),
       protection: this.protection.summary(),
+      imageBackup: this.imageBackup.summary(),
       mesh: this.meshIdentityForCommand(),
       editionTier: lic.tier,
     };
@@ -1287,6 +1300,8 @@ export class Kernel {
         if (p.upload) uploaded = (await this.fleet.uploadSnapshot(info.file, p.label ?? null)).snapshotId;
         return { file: info.name, sizeBytes: info.sizeBytes, snapshotId: info.header?.snapshotId, uploadedSnapshotId: uploaded };
       }
+      case 'backup.image':
+        return this.imageBackup.run('control-plane');
       case 'plugin.install': {
         this.license.require('plugins');
         const file = await this.fleet.download(p.url, p.sha256, `${p.packageId}.tgz`);

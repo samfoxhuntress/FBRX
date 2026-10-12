@@ -14,8 +14,15 @@ With the **gate** role the server routes and protects your network (**FBRX Gate*
 traffic priority and Prefer Mesh, [GATE.md](GATE.md)); with **minidome** it also watches it for threats (**FBRX
 MiniDome**, [MINIDOME.md](MINIDOME.md)). Same console, *Gate* pages.
 
-> First stage (FBRX Virtual 0.1). It runs real virtual machines and is tested against a real hypervisor in CI. Clusters,
-> backups of virtual machines and governance from FBRX Command come later (see [LINEUP.md](LINEUP.md)).
+With the **time** role the server makes image backups (**FBRX Time**, [TIME.md](TIME.md)): its virtual machines on a
+schedule while they run, and the computers that send it their whole-computer images. It checks every image the way a
+restore would: it opens it as a throwaway virtual machine with no network, confirms it starts, then shuts it down and
+deletes it. Same console, *FBRX Time* page.
+
+Roles can be added and turned off later, from the console's *Roles* page or `fbrx-server roles` (below).
+
+> FBRX Server 1.0. It runs real virtual machines and backs them up, and both are tested against a real hypervisor in
+> CI. Clusters and governance from FBRX Command come later (see [LINEUP.md](LINEUP.md)).
 
 ## Install
 
@@ -46,8 +53,8 @@ finishes). Everything it did is in `/var/log/fbrx-server-install.log`.
 ### B. On a Debian 13 server you already have
 
 ```bash
-tar -xzf fbrx-server-0.1.1.tar.gz          # from FBRX Endpoint (Lab → FBRX Server), the CI artifact, or bundle.sh
-sudo bash fbrx-server-0.1.1/install.sh
+tar -xzf fbrx-server-1.0.0.tar.gz          # from FBRX Endpoint (Lab → FBRX Server), the CI artifact, or bundle.sh
+sudo bash fbrx-server-1.0.0/install.sh
 ```
 
 `install.sh` installs QEMU/KVM, libvirt, UEFI firmware (OVMF) and the software TPM (swtpm), Node.js 22 (kept in
@@ -56,7 +63,7 @@ options (for device passthrough, after one reboot) and starts the `fbrx-virtual`
 
 | Option | |
 | --- | --- |
-| `--roles virtual,ai` | What the server does (below). `--roles virtual` installs the hypervisor alone; `--roles gate,minidome,ai` makes a gate without virtual machines. Running the installer again with other roles adds roles, or turns the ai role off (its data stays). |
+| `--roles virtual,ai` | What the server does (below). `--roles virtual` installs the hypervisor alone; `--roles virtual,ai,time` adds image backups; `--roles gate,minidome,ai` makes a gate without virtual machines. Change them later with `fbrx-server roles` or the console's *Roles* page. |
 | `--gate-wan eno1 --gate-lan eno2` | The gate's internet port and the port to your network (gate role; see [GATE.md](GATE.md#install)). Your network avoids the addresses the internet side uses; `--gate-lan-address`, `--gate-wan-address` and `--gate-wan-gateway` choose them yourself. `--gate-manage <cidr\|none>` keeps the console and SSH reachable from a private network on the internet side. |
 | `--reboot` | Restart at the end when a change waits for it (the gate taking its ports, the bridge). |
 | `--bridge eno1` | Makes bridge `br0` on that port so virtual machines sit straight on your network (applies after a reboot). Only for a port set up with DHCP; for a static address, see *Networks* below. |
@@ -74,6 +81,7 @@ helper, so work can go to the right server).
 | `ai` | The FBRX core: the agent, FBRX Mesh and Mesh Assist (`fbrx-core` service) | Default |
 | `gate` | FBRX Gate: routing, firewall, VLANs, DHCP and DNS, VPN, traffic priority ([GATE.md](GATE.md)) | First stage |
 | `minidome` | FBRX MiniDome: threat detection through the gate ([MINIDOME.md](MINIDOME.md)); needs `gate` | First stage |
+| `time` | FBRX Time: image backups of virtual machines and computers, each checked by starting it ([TIME.md](TIME.md)); needs `virtual` | New in 1.0 |
 | `command` | FBRX Command on the server: the tenant's settings and policy, kept with the mesh | Planned |
 | `dns` | Name service for the network | Planned |
 | `directory` | Directory and sign-in for the organization's computers (a domain controller) | Planned |
@@ -81,6 +89,25 @@ helper, so work can go to the right server).
 
 The web console comes with every role (it is FBRX Virtual's service, with or without virtual machines). The installer
 refuses a planned role for now and says so.
+
+### Changing roles
+
+In the console, **Roles** lists every role with what it does: switch the ones you want on or off and choose *Change
+the roles* (administrators). Adding FBRX Gate asks for its two ports first; turning it off warns that the network loses
+its router. From the server's command line:
+
+```
+fbrx-server roles                         this server's roles, and how the last change went
+sudo fbrx-server roles add time           add a role
+sudo fbrx-server roles remove ai          turn one off (its data stays)
+sudo fbrx-server roles set virtual,ai,time   exactly these roles
+```
+
+Both run the copy of the installer the server keeps (`/opt/fbrx-server/bundle`, kept by every install and update
+from 1.0) with the new roles: it installs what an added role needs and stops what a removed one ran, keeping the port,
+the settings and the gate's ports. The console restarts at the end (sign in again if it asks); the run is logged in
+`/var/log/fbrx-server-roles.log` and its last lines show on the *Roles* page. A server on 0.1.x keeps no copy yet:
+update it once (below), or run `install.sh --roles …` from a bundle.
 
 ## Before you install: the server's own settings
 
@@ -264,6 +291,7 @@ talks only to that exact controller, and keeps the password encrypted.
 ```
 fbrx-server status                 where the console is, service and hypervisor state, certificate fingerprint
 fbrx-server doctor [--fix]         every service this server's roles need, on and running; --fix switches on what is off
+fbrx-server roles [add|remove|set] this server's roles, and changing them (above)
 fbrx-server update [check|commit|rollback]   updating FBRX Server (below)
 fbrx-server setup-code             the first-time setup code
 fbrx-server logs [-f]              FBRX Virtual's log
@@ -389,7 +417,7 @@ FBRX_V_ROLES=gate,minidome,ai FBRX_V_GATE=simulated npm run dev:virtual   # a pr
 npm run headless -- run --server --data-dir .fbrx-core-dev --roles virtual,ai --console-token-file .fbrx-core-dev/console.token
 FBRX_V_CORE_TOKEN_FILE=$PWD/.fbrx-core-dev/console.token npm run dev:virtual
 
-scripts/server/bundle.sh && scripts/server/smoke.sh dist/fbrx-server-0.1.1   # the bundle, end to end
+scripts/server/bundle.sh && scripts/server/smoke.sh dist/fbrx-server-1.0.0   # the bundle, end to end
 ```
 
 The code is in `apps/virtual` (service: `drivers/` for libvirt and the simulated hypervisor, `hardware/` for the map,

@@ -83,6 +83,16 @@ export const HeartbeatSchema = z.object({
       })
       .nullable()
       .optional(),
+    /** Whole-computer images (FBRX Time, Windows; FBRX Endpoint 1.9.8+): set up or not, and the last one. */
+    imageBackup: z
+      .object({
+        configured: z.boolean(),
+        lastAt: z.string().nullable(),
+        ok: z.boolean().nullable(),
+        running: z.boolean(),
+      })
+      .nullable()
+      .optional(),
     /** This computer on FBRX Mesh, so FBRX Command can introduce the organization's computers to each other (1.9.5+). */
     mesh: z
       .object({

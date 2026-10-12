@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { DEFAULT_POLICY, TIER_SHORT, UPDATE_CHANNELS, type Tier } from '@fbrx/shared';
 import {
   Button,
@@ -31,7 +31,7 @@ import { api, download } from '../api';
 import { SettingsBuilder, type SettingsDraft } from './settings-builder';
 import { useApp, useQuery } from '../state';
 import { CommandComposer } from './command-composer';
-import { CommandStatus, HealthStatus, audienceHelp, audienceOptions, OnlineStatus, PLATFORM_LABEL, ProtectionCell, ServiceState, SeverityStatus, tierLimitOptions, tierLimitWords, type DeviceSummary } from './common';
+import { CommandStatus, HealthStatus, audienceHelp, audienceOptions, ImageBackupCell, OnlineStatus, PLATFORM_LABEL, ProtectionCell, ServiceState, SeverityStatus, tierLimitOptions, tierLimitWords, type DeviceSummary } from './common';
 
 interface Detail extends DeviceSummary {
   group: { id: string; name: string } | null;
@@ -79,6 +79,11 @@ export function DeviceDetailPage({ id }: { id: string }) {
             {app.can('commands.privileged') && (
               <Button icon="archive" loading={busy === 'backup.create'} onClick={() => void quick('backup.create', { upload: true, label: 'Admin backup' }, 'Backup')}>
                 Back up now
+              </Button>
+            )}
+            {app.can('commands.privileged') && d.health?.imageBackup?.configured && (
+              <Button icon="drive" disabled={d.health.imageBackup.running} loading={busy === 'backup.image'} onClick={() => void quick('backup.image', {}, 'Image backup')}>
+                Image backup now
               </Button>
             )}
             <Button variant="primary" icon="send" onClick={() => setComposer(true)}>
@@ -130,6 +135,7 @@ export function DeviceDetailPage({ id }: { id: string }) {
                   ['Last IP', d.lastIp],
                   ['Enrolled', formatDate(d.enrolledAt)],
                   ['Antivirus', <ProtectionCell p={h?.protection} />],
+                  ...(d.platform === 'win32' ? ([['Whole-computer image', <ImageBackupCell b={h?.imageBackup} />]] as Array<[string, ReactNode]>) : []),
                   ['Vault', h?.vaultState],
                   ['License', h ? `${h.licenseEdition} (${h.licenseState})` : null],
                   ['Local model', h?.runtimeModel ?? 'none'],

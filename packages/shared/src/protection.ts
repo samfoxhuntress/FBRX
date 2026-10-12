@@ -4,6 +4,8 @@
  * runs its scans where it can, and warns when it is off or out of date.
  */
 
+import type { Schedule } from './schedule';
+
 export type ProtectionKind = 'shield' | 'defender' | 'product';
 export type ProtectionState = 'protected' | 'attention' | 'at-risk' | 'unknown';
 
@@ -123,40 +125,5 @@ export const PROTECTION_DEFAULT_FEED = 'https://bazaar.abuse.ch/export/txt/sha25
 
 // ------------------------------------------------------------------------------------- scheduled scans
 
-export type ScanSchedule = 'off' | 'daily' | 'weekly';
-export const SCAN_TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
-export const WEEKDAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'] as const;
-
-/** When a scheduled scan last fell due at or before `now` (local time), or null when the schedule is off. */
-export function lastScanDue(schedule: ScanSchedule, time: string, day: number, now: Date): Date | null {
-  if (schedule === 'off') return null;
-  const [h, m] = (SCAN_TIME_PATTERN.test(time) ? time : '12:00').split(':').map(Number);
-  const at = new Date(now);
-  at.setHours(h, m, 0, 0);
-  if (schedule === 'daily') {
-    if (at > now) at.setDate(at.getDate() - 1);
-    return at;
-  }
-  at.setDate(at.getDate() - ((at.getDay() - day + 7) % 7));
-  if (at > now) at.setDate(at.getDate() - 7);
-  return at;
-}
-
-/** The next time a scheduled scan falls due after `now`, or null when the schedule is off. */
-export function nextScanDue(schedule: ScanSchedule, time: string, day: number, now: Date): Date | null {
-  const last = lastScanDue(schedule, time, day, now);
-  if (!last) return null;
-  const next = new Date(last);
-  next.setDate(next.getDate() + (schedule === 'daily' ? 1 : 7));
-  return next;
-}
-
-/**
- * Whether a scheduled scan should start now: one fell due since the last scheduled scan began. A computer that was off
- * at that time scans when it is next on. With no scheduled scan yet, the first one waits for its time.
- */
-export function scheduledScanDue(schedule: ScanSchedule, time: string, day: number, lastRun: string | null, now: Date): boolean {
-  const due = lastScanDue(schedule, time, day, now);
-  if (!due || !lastRun) return false;
-  return Date.parse(lastRun) < due.getTime();
-}
+export type ScanSchedule = Schedule;
+export { SCHEDULE_TIME_PATTERN as SCAN_TIME_PATTERN, lastDue as lastScanDue, nextDue as nextScanDue, isDue as scheduledScanDue } from './schedule';

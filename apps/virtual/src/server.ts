@@ -41,6 +41,10 @@ import { bmcRoutes } from './routes/bmc';
 import { coreRoutes } from './routes/core';
 import { gateRoutes } from './routes/gate';
 import { domeRoutes } from './routes/dome';
+import { timeRoutes } from './routes/time';
+import { roleRoutes } from './routes/roles';
+import { TimeService } from './time/service';
+import { LibvirtTimeDriver, SimulatedTimeDriver, type TimeDriver } from './time/driver';
 import { ConntrackSensor, DevicesSensor, DnsLogSensor, DomeEngine, DomeStore, SimulatedSensor, type DomeSensor } from '@fbrx/dome/node';
 import type { MeshNetworkComputer } from '@fbrx/shared';
 
@@ -77,6 +81,8 @@ export interface BuildOptions {
   gateApplier?: GateApplier;
   /** FBRX MiniDome listens to these instead (tests). */
   domeSensors?: DomeSensor[];
+  /** FBRX Time works through this (tests). */
+  timeDriver?: TimeDriver;
 }
 
 export function makeHypervisor(config: VirtualConfig): Hypervisor {
@@ -115,6 +121,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     meshMark: new HostMeshMark(db, opts.nft),
     gate: null,
     dome: null,
+    time: null,
     cliToken: randomBytes(32).toString('base64url'),
     log: app.log,
     tls: tls ? { fingerprint: tls.fingerprint, selfSigned: tls.selfSigned, notAfter: tls.notAfter } : null,
@@ -194,6 +201,15 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     }
   }
 
+  // FBRX Time: the time role.
+  if (config.roles.includes('time')) {
+    let time: TimeService | null = null;
+    const driver = opts.timeDriver ?? (config.time.mode === 'libvirt' ? new LibvirtTimeDriver({ uri: config.libvirtUri, facts: (img) => time!.factsOf(img) }) : new SimulatedTimeDriver({ delayMs: 1500 }));
+    time = new TimeService({ db, hv, driver, dir: config.time.dir, shareFile: config.time.shareFile, imagesDir: config.imagesDir, log: (level, msg) => app.log[level](msg) });
+    ctx.time = time;
+    time.start();
+  }
+
   await app.register(helmet, {
     contentSecurityPolicy: {
       directives: {
@@ -244,6 +260,8 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   await coreRoutes(app, ctx);
   await gateRoutes(app, ctx);
   await domeRoutes(app, ctx);
+  await timeRoutes(app, ctx);
+  await roleRoutes(app, ctx);
 
   if (config.consoleDir && existsSync(join(config.consoleDir, 'index.html'))) {
     await app.register(fastifyStatic, { root: config.consoleDir, index: 'index.html' });
@@ -276,6 +294,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     ctx,
     async close() {
       clearInterval(timer);
+      ctx.time?.stop();
       ctx.dome?.stop();
       domeStore?.close();
       ctx.gate?.engine.stop();

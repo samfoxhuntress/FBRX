@@ -7,7 +7,7 @@
 
 # FBRX OS — Fabrics Operating System
 
-> **Alpha 1.9.7 "Bobbin".** FBRX is in alpha testing. Downloads are on the
+> **Alpha 1.9.8 "Bobbin".** FBRX is in alpha testing. Downloads are on the
 > [Releases](https://github.com/samfoxhuntress/FBRX/releases) page; installed copies check this repository's
 > [`release.json`](release.json) and offer new versions in the app.
 
@@ -27,6 +27,11 @@ Server**, powered by FBRX OS, and the products below for the computers you alrea
   computers whose AI helps each other), all changed by commits that undo themselves unless kept, from the console or
   the `fbrx-gate` command line ([docs/GATE.md](docs/GATE.md)). MiniDome watches the network through the gate for
   threats and tells the FBRX computer concerned, where FBRX Shield takes it from there ([docs/MINIDOME.md](docs/MINIDOME.md)).
+* **FBRX Time** — image backups that prove they work. FBRX Server (the **time** role) backs up its virtual machines on
+  a schedule while they run and keeps the images computers send it, and checks every image by starting it as a
+  throwaway virtual machine with no network, then deleting it. FBRX Endpoint makes an image of the whole computer by
+  hand or on a schedule (*Backup & restore → Whole computer*), and FBRX Command starts one on any computer
+  ([docs/TIME.md](docs/TIME.md)). Server roles can be added or changed from the server's console.
 
 * **FBRX Endpoint** — a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is
   governed end to end and an everyday **command center** (dashboard, tasks, notes, Spotlight, a Ctrl+Alt+Z clipboard
@@ -116,9 +121,9 @@ Every version is on the **[Releases](https://github.com/samfoxhuntress/FBRX/rele
 
 | Download | What it is |
 | --- | --- |
-| **Source code (zip)**, `FBRX-1.9.7.zip` | The whole project. Unzip it and run **Install FBRX OS** (below): it builds FBRX OS on your computer with your own license signing key. This is how you install your own copy. |
-| `FBRX-OS-Setup-1.9.7.exe`, `FBRX-OS-1.9.7-arm64.dmg`, `FBRX-OS-1.9.7-x64.dmg` | Ready-made installers built by GitHub. They carry your license key and a publisher signature only when the repository's signing secrets are set ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); otherwise they open in Endpoint Essentials, go up to Standard, and reach Ultra when your FBRX Command allows it. |
-| `fbrx-server-0.1.1-amd64.iso`, `fbrx-server-0.1.1.tar.gz` | FBRX Server: the installer ISO, and the bundle for a Debian 13 server you already have ([docs/SERVER.md](docs/SERVER.md)). |
+| **Source code (zip)**, `FBRX-1.9.8.zip` | The whole project. Unzip it and run **Install FBRX OS** (below): it builds FBRX OS on your computer with your own license signing key. This is how you install your own copy. |
+| `FBRX-OS-Setup-1.9.8.exe`, `FBRX-OS-1.9.8-arm64.dmg`, `FBRX-OS-1.9.8-x64.dmg` | Ready-made installers built by GitHub. They carry your license key and a publisher signature only when the repository's signing secrets are set ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); otherwise they open in Endpoint Essentials, go up to Standard, and reach Ultra when your FBRX Command allows it. |
+| `fbrx-server-1.0.0-amd64.iso`, `fbrx-server-1.0.0.tar.gz` | FBRX Server: the installer ISO, and the bundle for a Debian 13 server you already have ([docs/SERVER.md](docs/SERVER.md)). |
 
 **Code → Download ZIP** on the main page gives the newest work (`FBRX-main.zip`), which can be ahead of the latest
 release. Installed copies are offered releases only.

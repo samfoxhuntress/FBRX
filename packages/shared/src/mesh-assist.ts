@@ -27,7 +27,7 @@ export type AssistTrigger = 'agent' | 'steps' | 'provider' | 'person' | 'control
 export type AssistStatus = 'waiting-approval' | 'queued' | 'running' | 'done' | 'denied' | 'error' | 'cancelled';
 
 /** Server roles a computer announces (FBRX Server runs one or more; more arrive with later products). */
-export const SERVER_ROLES = ['ai', 'virtual', 'command', 'dns', 'directory', 'files', 'gate', 'minidome'] as const;
+export const SERVER_ROLES = ['ai', 'virtual', 'command', 'dns', 'directory', 'files', 'gate', 'minidome', 'time'] as const;
 export type ServerRole = (typeof SERVER_ROLES)[number];
 
 /** A computer's answer to "could you help?". */

@@ -12,7 +12,7 @@ export interface VirtualConfig {
   dataDir: string;
   /** "libvirt" runs real virtual machines; "simulated" pretends (development, demos, tests); "none": no virtual role. */
   driver: 'libvirt' | 'simulated' | 'none';
-  /** What this server does (FBRX Server roles): virtual, ai, gate, minidome. The console shows what is there. */
+  /** What this server does (FBRX Server roles): virtual, ai, gate, minidome, time. The console shows what is there. */
   roles: string[];
   /**
    * FBRX Gate (the gate role): "linux" applies to this system, "simulated" pretends (development). The ports it
@@ -54,6 +54,17 @@ export interface VirtualConfig {
    * API with the console token it writes at every start. Not installed when the token file is missing.
    */
   core: { url: string; tokenFile: string };
+  /**
+   * FBRX Time (the time role): the repository folder for images, the backup folder computers send theirs to (an SMB
+   * share the installer sets up, its sign-in in shareFile), and "simulated" to pretend (development, demos, tests).
+   */
+  time: { dir: string; shareFile: string; mode: 'libvirt' | 'simulated' };
+  /**
+   * Changing this server's roles from the console: fbrx-server (roles set …) runs the copy of the installer the server
+   * keeps (bundleDir), in a job of its own (systemd-run) so it carries on while this console restarts. It writes how it
+   * went to stateDir/roles.env and logFile.
+   */
+  server: { command: string; bundleDir: string; stateDir: string; logFile: string; spawn: 'systemd-run' | 'direct' };
 }
 
 function hasVirsh(): boolean {
@@ -111,6 +122,18 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
     logLevel: (env.FBRX_V_LOG_LEVEL as VirtualConfig['logLevel']) ?? 'info',
     trustProxy: env.FBRX_V_TRUST_PROXY === '1',
     core: { url: (env.FBRX_V_CORE_URL ?? `http://127.0.0.1:${DEFAULT_LOCAL_API_PORT}`).replace(/\/+$/, ''), tokenFile: resolve(env.FBRX_V_CORE_TOKEN_FILE ?? '/var/lib/fbrx-core/console.token') },
+    time: {
+      dir: resolve(env.FBRX_V_TIME_DIR ?? (driver === 'libvirt' ? '/var/lib/fbrx-time' : resolve(dataDir, 'time'))),
+      shareFile: resolve(env.FBRX_V_TIME_SHARE_FILE ?? '/etc/fbrx-time/share.env'),
+      mode: env.FBRX_V_TIME === 'simulated' || env.FBRX_V_TIME === 'libvirt' ? env.FBRX_V_TIME : driver === 'libvirt' ? 'libvirt' : 'simulated',
+    },
+    server: {
+      command: resolve(env.FBRX_V_SERVER_CMD ?? '/usr/local/sbin/fbrx-server'),
+      bundleDir: resolve(env.FBRX_V_BUNDLE_DIR ?? '/opt/fbrx-server/bundle'),
+      stateDir: resolve(env.FBRX_V_SERVER_STATE_DIR ?? '/var/lib/fbrx-server-update'),
+      logFile: resolve(env.FBRX_V_ROLES_LOG ?? '/var/log/fbrx-server-roles.log'),
+      spawn: env.FBRX_V_SPAWN === 'direct' ? 'direct' : 'systemd-run',
+    },
     ...overrides,
   };
 }

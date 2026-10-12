@@ -447,6 +447,24 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return k.netenv.createVouchers(x.id, x);
     },
 
+    // ---------------------------------------------------------------------------------------- FBRX Time
+    'imageBackup.status': () => k.imageBackup.status(),
+    'imageBackup.configure': (p) => {
+      const x = z
+        .object({
+          target: z.string().min(2).max(400),
+          user: z.string().max(200).default(''),
+          password: z.string().max(500).nullable().optional(),
+          schedule: z.enum(['off', 'daily', 'weekly']),
+          time: z.string().max(5),
+          day: z.number().int().min(0).max(6),
+        })
+        .parse(p);
+      return k.imageBackup.configure({ target: x.target, user: x.user, schedule: x.schedule, time: x.time, day: x.day }, x.password);
+    },
+    'imageBackup.run': (_p, ctx) => k.imageBackup.run(ctx.actor),
+    'imageBackup.remove': () => k.imageBackup.remove(),
+
     // ---------------------------------------------------------------------------------------- antivirus
     'protection.status': (p) => k.protection.status(z.object({ refresh: z.boolean().optional() }).optional().parse(p)?.refresh ?? false),
     'protection.setProvider': (p) => k.protection.setProvider(z.object({ provider: z.string().min(1).max(80) }).parse(p).provider),

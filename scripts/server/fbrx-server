@@ -139,6 +139,71 @@ update() {
   esac
 }
 
+# ------------------------------------------------------------------------------------------------- roles
+# fbrx-server roles                       this server's roles, and how the last change went
+# sudo fbrx-server roles add <role> …     adds a role (time, ai, gate, minidome, virtual)
+# sudo fbrx-server roles remove <role>    turns one off (its data stays)
+# sudo fbrx-server roles set <list> …     exactly these roles
+# Runs the copy of the installer the server keeps ($APP/bundle) with the new roles; the console's Roles page does the
+# same. Extra options go to the installer (--gate-wan/--gate-lan for the gate role, --force to turn the gate off).
+BUNDLE_KEEP="$APP/bundle"
+ROLES_STATE="$UPD/roles.env"
+ROLES_LOG=/var/log/fbrx-server-roles.log
+roles_state() {
+  mkdir -p "$UPD"
+  printf 'STATE=%s\nROLES=%s\nSTARTED=%s\nFINISHED=%s\n' "$1" "$2" "$3" "${4:-}" >"$ROLES_STATE"
+}
+roles_apply() {
+  local list=$1 started
+  shift
+  [ -f "$BUNDLE_KEEP/install.sh" ] || { echo "This server keeps no copy of its installer yet: update it once (sudo fbrx-server update check, then update commit), or run install.sh --roles $list from a bundle." >&2; exit 1; }
+  started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  roles_state running "$list" "$started"
+  echo "== $(date -u +%Y-%m-%dT%H:%M:%SZ) roles $(roles) -> $list" >>"$ROLES_LOG"
+  if bash "$BUNDLE_KEEP/install.sh" --bundle "$BUNDLE_KEEP" --roles "$list" "$@" 2>&1 | tee -a "$ROLES_LOG"; then
+    roles_state "done" "$list" "$started" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "Roles now: $(roles | sed 's/,/, /g')"
+  else
+    roles_state failed "$list" "$started" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "The change did not finish: the end of $ROLES_LOG says why. The roles are still $(roles | sed 's/,/, /g')." >&2
+    exit 1
+  fi
+}
+roles_cmd() {
+  local sub=${1:-show} r list
+  shift || true
+  case "$sub" in
+    show)
+      echo "Roles: $(roles | sed 's/,/, /g')"
+      if [ -s "$ROLES_STATE" ]; then echo "Last change: $(sed -n 's/^ROLES=//p' "$ROLES_STATE") ($(sed -n 's/^STATE=//p' "$ROLES_STATE"), $(sed -n 's/^STARTED=//p' "$ROLES_STATE"))"; fi
+      [ -f "$BUNDLE_KEEP/install.sh" ] || echo "To change them from here, update once first (sudo fbrx-server update check, then update commit)."
+      ;;
+    add)
+      need_root "roles add"
+      r=${1:?Which role? (fbrx-server roles add time)}
+      shift
+      if has_role "$r"; then echo "This server already has the $r role."; exit 0; fi
+      roles_apply "$(roles),$r" "$@"
+      ;;
+    remove)
+      need_root "roles remove"
+      r=${1:?Which role? (fbrx-server roles remove time)}
+      shift
+      has_role "$r" || { echo "This server does not have the $r role."; exit 0; }
+      list="$(echo ",$(roles)," | sed "s/,$r,/,/; s/^,//; s/,\$//")"
+      [ -n "$list" ] || { echo "That is its last role: keep at least one." >&2; exit 1; }
+      roles_apply "$list" "$@"
+      ;;
+    set)
+      need_root "roles set"
+      list=${1:?Which roles? (fbrx-server roles set virtual,ai,time)}
+      shift
+      roles_apply "$list" "$@"
+      ;;
+    *) echo "Unknown roles command $sub (fbrx-server roles [add|remove|set] …)" >&2; exit 1 ;;
+  esac
+}
+
 # fbrx-server doctor [--fix] [--quiet]: every service the server's roles need, switched on for the next start and
 # running now; with --fix, the ones that are not are switched on and started.
 doctor() {
@@ -178,6 +243,13 @@ doctor() {
   unit fbrx-virtual.service "the console"
   if has_role virtual; then unit libvirtd.service "the hypervisor (libvirt)"; fi
   if has_role ai; then unit fbrx-core.service "the FBRX core (AI, FBRX Mesh)"; fi
+  if has_role time; then
+    unit smbd.service "FBRX Time's backup folder for computers (SMB)"
+    if [ -f /etc/fbrx-time/share.env ]; then line ok "backup folder" "\\\\$(address || hostname)\\fbrx-time"
+    else line '!!' "backup folder" "no account for computers yet (run install.sh again with the time role)"; bad=$((bad + 1)); fi
+    if command -v qemu-img >/dev/null 2>&1; then line ok "qemu-img" "copies and checks images"
+    else line '!!' "qemu-img" "missing: FBRX Time cannot copy or check images (apt install qemu-utils)"; bad=$((bad + 1)); fi
+  fi
   if has_gate; then
     unit systemd-networkd.service "the gate's ports and VLANs"
     unit dnsmasq.service "DHCP and DNS"
@@ -219,6 +291,7 @@ case "${1:-status}" in
     echo "Service:      $(systemctl is-active fbrx-virtual 2>/dev/null || true)"
     if has_ai; then echo "AI role:      $(systemctl is-active fbrx-core 2>/dev/null || true) (FBRX core: FBRX Mesh on port 47800; Mesh & AI in the console)"; fi
     case ",$(roles)," in *,minidome,*) echo "MiniDome:     watching (findings in the console's MiniDome page)" ;; esac
+    case ",$(roles)," in *,time,*) printf 'FBRX Time:    backups in /var/lib/fbrx-time · computers back up to \\\\%s\\fbrx-time (FBRX Time in the console)\n' "$(address || hostname)" ;; esac
     if has_gate; then echo "Gate:         firewall $(nft list table inet fbrx_gate >/dev/null 2>&1 && echo loaded || echo 'not loaded yet') · DNS and DHCP $(systemctl is-active dnsmasq 2>/dev/null || true) (fbrx-gate status for more)"; fi
     case ",$(roles)," in
       *,virtual,*)
@@ -231,6 +304,7 @@ case "${1:-status}" in
     if [ -s "$DATA/setup-code" ]; then echo "Setup code:   $(cat "$DATA/setup-code")"; fi
     ;;
   doctor) shift; doctor "$@" ;;
+  roles) shift; roles_cmd "$@" ;;
   update) shift; update "$@" ;;
   url) url ;;
   fingerprint) fingerprint ;;
@@ -266,6 +340,9 @@ fbrx-server update check    looks for a newer FBRX Server and gets it ready (dow
                             uses one you brought along)
 fbrx-server update commit   installs it; if it does not come up, the server goes back by itself
 fbrx-server update rollback back to the version before the last update
+fbrx-server roles           this server's roles (virtual, ai, gate, minidome, time)
+fbrx-server roles add <role>      adds one (sudo; the gate also needs --gate-wan <port> --gate-lan <port>)
+fbrx-server roles remove <role>   turns one off; its data stays (the gate also needs --force)
 fbrx-server url             the console's address
 fbrx-server setup-code      the first-time setup code (until someone sets the server up)
 fbrx-server logs [-f]       FBRX Virtual's log

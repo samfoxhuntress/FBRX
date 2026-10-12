@@ -4,6 +4,10 @@ FBRX OS is built so a workstation can be lost, replaced or duplicated without lo
 vault secrets, conversations, agent memory, plugins and their data, connectors, the workspace and (optionally)
 downloaded models all live under one data folder and travel together in one encrypted snapshot.
 
+> This page is about FBRX's own data. An image of the **whole computer** (Windows, the apps, every file), made on a
+> schedule to a drive, a network folder or an FBRX Server and checked by starting it, is **FBRX Time**
+> (*Backup & restore → Whole computer*, [TIME.md](TIME.md)).
+
 ## Snapshots
 
 A snapshot is a single `.fbrxsnap` file:

@@ -30,7 +30,7 @@ GATE_LOG=/var/log/fbrx-gate
 GATE_UNIT=/etc/systemd/system/fbrx-gate-firewall.service
 NODE_MAJOR=22
 # Roles this installer sets up. Planned roles (command, dns, directory, files) come with later releases.
-AVAILABLE_ROLES="virtual ai gate minidome"
+AVAILABLE_ROLES="virtual ai gate minidome time"
 PLANNED_ROLES="command dns directory files"
 
 BUNDLE=""
@@ -70,7 +70,11 @@ Options:
                                 gate     FBRX Gate: this server routes and protects your network (needs --gate-wan
                                          and --gate-lan); the console's Gate pages and the fbrx-gate command
                                 minidome FBRX MiniDome: watches the network through the gate for threats (with gate)
-                              The web console comes with every role.
+                                time     FBRX Time: image backups of virtual machines and computers, each checked by
+                                         starting it as a throwaway machine (with virtual); a backup folder (SMB)
+                                         for computers
+                              The web console comes with every role. The server keeps a copy of this installer, so
+                              roles change later from the console (Roles) or with sudo fbrx-server roles add <role>.
   --gate-wan <nic>            the gate's internet port (from your modem or provider)
   --gate-lan <nic>            the gate's port to your network (it becomes 192.168.1.1 and hands out addresses)
   --gate-lan-address <cidr>   your network's addresses instead, like 192.168.50.1/24 (default: 192.168.1.1/24, or
@@ -141,6 +145,7 @@ has_role() { case ",$ROLE_LIST," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 # Text that is there only with a role: "$(with_role ai ', the FBRX core')".
 with_role() { if has_role "$1"; then printf '%s' "$2"; fi; }
 if has_role minidome && ! has_role gate; then die "FBRX MiniDome watches the network through FBRX Gate: use --roles …,gate,minidome"; fi
+if has_role time && ! has_role virtual; then die "FBRX Time copies and checks images with the hypervisor: use --roles virtual,…,time"; fi
 
 confirm() {
   [ "$YES" -eq 1 ] && return 0
@@ -382,6 +387,10 @@ if has_role gate; then
   # shellcheck disable=SC2086
   apt_install $GATE_PKGS
 fi
+if has_role time; then
+  say "Installing FBRX Time's tools (the backup folder for computers: Samba)"
+  apt_install samba qemu-utils
+fi
 if has_role ai; then
   # The built-in AI runtime (llama.cpp, downloaded from the console's Mesh & AI → Models) needs OpenMP; with a graphics
   # card it runs through Vulkan. NVIDIA cards also need NVIDIA's own driver (Debian's non-free nvidia-driver).
@@ -579,6 +588,54 @@ elif [ -f "$GATE_UNIT" ]; then
   set_env FBRX_V_GATE_FIRST wait
 fi
 
+# ---------------------------------------------------------------------------------------- time role
+
+TIME_DIR=/var/lib/fbrx-time
+TIME_ETC=/etc/fbrx-time
+TIME_SMB=/etc/samba/fbrx-time.conf
+if has_role time; then
+  say "Setting up FBRX Time (images in $TIME_DIR, a backup folder for computers)"
+  mkdir -p "$TIME_DIR/images" "$TIME_DIR/incoming" "$TIME_DIR/lab" "$TIME_ETC"
+  chmod 0755 "$TIME_DIR"
+  chmod 0700 "$TIME_ETC"
+  # Computers sign in to the backup folder with an account of its own (no login on the server).
+  if ! id fbrx-time >/dev/null 2>&1; then useradd --system --no-create-home --home-dir "$TIME_DIR/incoming" --shell /usr/sbin/nologin fbrx-time; fi
+  chown fbrx-time:fbrx-time "$TIME_DIR/incoming"
+  chmod 0770 "$TIME_DIR/incoming"
+  # Its password: made once; the console shows it (and a one-line connection code) to administrators.
+  if [ ! -s "$TIME_ETC/share.env" ]; then
+    TIME_PW="$(head -c 24 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n' | cut -c1-24)"
+    printf 'SHARE_NAME=fbrx-time\nSHARE_USER=fbrx-time\nSHARE_PASSWORD=%s\n' "$TIME_PW" >"$TIME_ETC/share.env"
+  fi
+  chmod 0600 "$TIME_ETC/share.env"
+  TIME_PW="$(sed -n 's/^SHARE_PASSWORD=//p' "$TIME_ETC/share.env")"
+  if command -v smbpasswd >/dev/null; then
+    printf '%s\n%s\n' "$TIME_PW" "$TIME_PW" | smbpasswd -s -a fbrx-time >/dev/null || warn "Could not set the backup folder's password (smbpasswd)"
+    smbpasswd -e fbrx-time >/dev/null 2>&1 || true
+  fi
+  cat >"$TIME_SMB" <<SMB
+# FBRX Time: the folder computers send their image backups to (written by the FBRX Server installer).
+[fbrx-time]
+   comment = FBRX Time backups
+   path = $TIME_DIR/incoming
+   valid users = fbrx-time
+   force user = fbrx-time
+   read only = no
+   browseable = yes
+   create mask = 0660
+   directory mask = 0770
+   smb encrypt = desired
+SMB
+  if [ -f /etc/samba/smb.conf ] && ! grep -q "include = $TIME_SMB" /etc/samba/smb.conf; then
+    printf '\n# FBRX Time\ninclude = %s\n' "$TIME_SMB" >>/etc/samba/smb.conf
+  fi
+elif [ -f "$TIME_SMB" ]; then
+  say "Turning FBRX Time off (its images stay in $TIME_DIR)"
+  rm -f "$TIME_SMB"
+  if [ -f /etc/samba/smb.conf ]; then sed -i "\|^# FBRX Time\$|d; \|^include = $TIME_SMB\$|d" /etc/samba/smb.conf; fi
+  if ! in_chroot; then systemctl reload smbd.service 2>/dev/null || true; fi
+fi
+
 cat >/etc/fbrx-server-release <<EOF
 NAME="FBRX Server"
 VERSION="$VERSION"
@@ -637,6 +694,19 @@ EOF
   fi
 fi
 
+# ------------------------------------------------------------------------------- the installer, kept
+
+# A copy of this bundle stays on the server (without the Node.js archive), so roles can be changed later from the
+# console's Roles page or with sudo fbrx-server roles add <role>, without the bundle at hand.
+if [ "$BUNDLE" != "$APP/bundle" ]; then
+  rm -rf "$APP/bundle.new"
+  mkdir -p "$APP/bundle.new"
+  find "$BUNDLE" -mindepth 1 -maxdepth 1 ! -name 'node-v*' -exec cp -a {} "$APP/bundle.new/" \;
+  rm -rf "$APP/bundle"
+  mv "$APP/bundle.new" "$APP/bundle"
+  chmod -R go-w "$APP/bundle"
+fi
+
 # ------------------------------------------------------------------------------------ screen and motd
 
 [ -f /etc/issue ] && [ ! -f /etc/issue.fbrx-backup ] && cp /etc/issue /etc/issue.fbrx-backup
@@ -679,6 +749,7 @@ systemctl daemon-reload 2>/dev/null || true
 mkdir -p /etc/systemd/system/multi-user.target.wants
 systemctl enable fbrx-virtual.service >/dev/null 2>&1 || ln -sf "$UNIT" /etc/systemd/system/multi-user.target.wants/fbrx-virtual.service
 if has_role ai; then systemctl enable fbrx-core.service >/dev/null 2>&1 || ln -sf "$CORE_UNIT" /etc/systemd/system/multi-user.target.wants/fbrx-core.service; fi
+if has_role time; then systemctl enable smbd.service >/dev/null 2>&1 || true; fi
 if has_role gate; then
   mkdir -p /etc/systemd/system/sysinit.target.wants
   systemctl enable fbrx-gate-firewall.service >/dev/null 2>&1 || ln -sf "$GATE_UNIT" /etc/systemd/system/sysinit.target.wants/fbrx-gate-firewall.service
@@ -700,6 +771,7 @@ if [ "$START" -eq 1 ] && ! in_chroot; then
     systemctl restart dnsmasq.service || warn "dnsmasq did not start (journalctl -u dnsmasq)"
   fi
   if has_role ai; then systemctl restart fbrx-core.service || warn "The FBRX core did not start (journalctl -u fbrx-core)"; fi
+  if has_role time; then systemctl restart smbd.service || warn "Samba did not start: computers cannot reach the backup folder (journalctl -u smbd)"; fi
   systemctl restart fbrx-virtual.service
   say "Starting FBRX Virtual"
   for _ in $(seq 1 30); do
@@ -726,6 +798,7 @@ fi
 note "Your browser warns about the certificate the first time: compare it with fbrx-server fingerprint."
 if has_role ai; then note "Then open Mesh & AI in the console: under Models on this server, download a model that fits and use it (or pick a provider), and pair the server with your other computers."; fi
 if has_role gate; then note "The Gate pages (or fbrx-gate on this server) change networks, VLANs, the firewall, the VPN and Prefer Mesh: edit, review, commit."; fi
+if has_role time; then note "FBRX Time in the console: back up virtual machines on a schedule, and connect computers to the backup folder (its connection code is there).$(with_role gate ' On a gate, let your network reach it: a firewall rule for TCP 445 to the gate.')"; fi
 # Everything that should run, runs (fbrx-server doctor --fix switches on whatever is off).
 if [ "$START" -eq 1 ] && ! in_chroot; then /usr/local/sbin/fbrx-server doctor --quiet || note "sudo fbrx-server doctor --fix switches on what is off."; fi
 if [ "$REBOOT_NEEDED" -eq 1 ]; then

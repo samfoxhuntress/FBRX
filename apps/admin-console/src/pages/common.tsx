@@ -55,7 +55,18 @@ export interface DeviceSummary {
     uptimeSeconds: number;
     services: Array<{ name: string; state: string; message?: string | null }>;
     protection: { provider: string; name: string; state: 'protected' | 'attention' | 'at-risk' | 'unknown'; realtime: boolean | null; threats: number } | null;
+    /** Whole-computer images (FBRX Time), on Windows computers with FBRX Endpoint 1.9.8+. */
+    imageBackup?: { configured: boolean; lastAt: string | null; ok: boolean | null; running: boolean } | null;
   };
+}
+
+/** A computer's whole-computer images (FBRX Time), as its last heartbeat reported them. */
+export function ImageBackupCell({ b }: { b: NonNullable<DeviceSummary['health']>['imageBackup'] | undefined }) {
+  if (!b) return <span className="fx-muted">Not reported</span>;
+  if (b.running) return <Status tone="busy">Making an image</Status>;
+  if (!b.configured) return <span className="fx-muted">Not set up on this computer</span>;
+  if (!b.lastAt) return <Status tone="neutral">Set up · no image yet</Status>;
+  return <Status tone={b.ok ? 'good' : 'critical'}>{b.ok ? `Last image ${timeAgo(b.lastAt)}` : `Failed ${timeAgo(b.lastAt)}`}</Status>;
 }
 
 const PROTECTION_LABEL = { protected: 'Protected', attention: 'Needs attention', 'at-risk': 'At risk', unknown: 'Status unknown' } as const;
