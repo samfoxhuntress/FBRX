@@ -20,6 +20,7 @@ import { Tour, type TourStep } from './tour';
 import { PresenterPill, usePresenter } from './presenter';
 import { ContextMenuHost } from './context-menu';
 import { MacroAddHost } from './macro-add';
+import { FolderRequestHost } from './pages/governance-folders';
 
 // Pages load when first opened, so the app starts with only what the first screen needs.
 const AgentPage = lazy(() => import('./pages/agent').then((m) => ({ default: m.AgentPage })));
@@ -541,6 +542,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     <>
       <ContextMenuHost agentName={agentName} ultra={ultra} essentials={essentials} />
       <MacroAddHost />
+      {!POPOUT && <FolderRequestHost />}
     </>
   );
   if (POPOUT)

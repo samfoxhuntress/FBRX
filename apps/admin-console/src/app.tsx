@@ -8,6 +8,7 @@ import { OverviewPage } from './pages/overview';
 import { DevicesPage } from './pages/devices';
 import { DeviceDetailPage } from './pages/device-detail';
 import { ConfigPage } from './pages/config';
+import { GovernancePage } from './pages/governance';
 import { EnrollmentPage } from './pages/enrollment';
 import { SecretsPage } from './pages/secrets';
 import { ReleasesPage } from './pages/releases';
@@ -96,6 +97,7 @@ function Console() {
     { id: 'events', label: 'Alerts & events', icon: 'activity', section: 'Fleet' },
     ...(app.can('helpdesk.read') ? [{ id: 'helpdesk', label: 'Help desk', icon: 'lifebuoy', section: 'Fleet' } as NavItem] : []),
     ...(app.can('messages.read') ? [{ id: 'messages', label: 'Messages', icon: 'message', section: 'Fleet' } as NavItem] : []),
+    ...(app.can('config.manage') ? [{ id: 'governance', label: 'Governance', icon: 'shield', section: 'Configuration' } as NavItem] : []),
     ...(app.can('config.manage') ? [{ id: 'config', label: 'Profiles & groups', icon: 'settings', section: 'Configuration' } as NavItem] : []),
     ...(app.can('enrollment.manage') ? [{ id: 'enrollment', label: 'Deploy & enroll', icon: 'download', section: 'Configuration' } as NavItem] : []),
     ...(app.can('secrets.manage') ? [{ id: 'secrets', label: 'Credentials', icon: 'key', section: 'Configuration' } as NavItem] : []),
@@ -126,6 +128,8 @@ function Console() {
         return <MessagesPage />;
       case 'config':
         return <ConfigPage />;
+      case 'governance':
+        return <GovernancePage />;
       case 'enrollment':
         return <EnrollmentPage />;
       case 'secrets':

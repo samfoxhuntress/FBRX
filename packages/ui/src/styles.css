@@ -1803,3 +1803,30 @@ pre,
     grid-row: 2;
   }
 }
+
+/* FBRX Command → Governance: profiles on the left, the selected profile's policy on the right. */
+.gov-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .gov-layout {
+    grid-template-columns: 1fr;
+  }
+}
+button.gov-profile {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+button.gov-profile:hover {
+  background: var(--hover, rgba(127, 127, 127, 0.08));
+}
+button.gov-profile.active {
+  background: var(--accent-soft, rgba(127, 127, 127, 0.14));
+}

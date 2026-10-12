@@ -456,6 +456,26 @@ export interface EffectiveSettings {
   locked: string[];
 }
 
+/** The AI asking the person for a folder it may not use yet (Governance → Folders). */
+export interface FolderRequest {
+  id: string;
+  /** The folder asked for, or null when the AI asks the person to pick one. */
+  path: string | null;
+  reason: string;
+  at: string;
+  agentName: string;
+}
+
+export interface FolderAccessStatus {
+  /** Decided by the organization (FBRX Command → Governance): no changes here. */
+  managed: boolean;
+  /** The policy's entries, as written (${HOME}…), what they are on this computer, and a friendly name. */
+  folders: Array<{ entry: string; path: string; label: string | null }>;
+  readOnly: boolean;
+  /** Requests from the AI waiting for an answer. */
+  requests: FolderRequest[];
+}
+
 export interface EffectivePolicy {
   policy: Policy;
   source: 'default' | 'local' | 'managed';
@@ -581,6 +601,12 @@ export interface CoreMethods extends ExtMethods {
   'governance.policy': () => EffectivePolicy;
   'governance.updatePolicy': (p: { policy: Policy }) => EffectivePolicy;
   'governance.removeRememberedRule': (p: { id: string }) => EffectivePolicy;
+  'governance.folders': () => FolderAccessStatus;
+  /** Lets the AI use a folder (picked by the person). */
+  'governance.addFolder': (p: { path: string }) => FolderAccessStatus;
+  'governance.removeFolder': (p: { entry: string }) => FolderAccessStatus;
+  /** Answers the AI's request: a folder (the one asked for, or another), or null to say no. */
+  'governance.answerFolder': (p: { id: string; path: string | null }) => FolderAccessStatus;
   'approvals.list': () => ApprovalRequest[];
   'approvals.resolve': (p: { id: string; decision: 'approve' | 'deny'; remember?: boolean }) => { resolved: boolean };
 
@@ -650,6 +676,7 @@ export interface CoreEvents extends ExtEvents {
   'runtime.download': DownloadProgress;
   'settings.changed': EffectiveSettings;
   'policy.changed': EffectivePolicy;
+  'governance.folderRequest': FolderRequest & { state: 'open' | 'closed' };
   'plugins.changed': PluginInfo[];
   'connectors.changed': ConnectorInfo[];
   'tools.changed': ToolInfo[];

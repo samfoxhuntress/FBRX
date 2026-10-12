@@ -40,6 +40,8 @@ import { SettingsService } from './settings/settings-service';
 import { Vault } from './vault/vault';
 import { AuditLog } from './audit/audit-log';
 import { PolicyEngine } from './governance/policy-engine';
+import { FolderAccess } from './governance/folder-access';
+import { expandPathVars } from './governance/path-guard';
 import { Guardian } from './governance/guardian';
 import { ApprovalQueue } from './governance/approvals';
 import { Redactor } from './governance/redactor';
@@ -48,7 +50,7 @@ import { ToolGate } from './governance/tool-gate';
 import { checkUrl } from './governance/network-guard';
 import { LicenseService } from './license/license-service';
 import { ToolRegistry } from './tools/registry';
-import { fbrxTools, fsTools, memoryTools, netTools, shellTools, systemTools, diskFreeGb } from './tools/builtin';
+import { fbrxTools, folderTools, fsTools, memoryTools, netTools, shellTools, systemTools, diskFreeGb } from './tools/builtin';
 import { pcTools, workspaceTools } from './tools/builtin/command-center-tools';
 import { WorkspaceStore } from './workspace/workspace-store';
 import { SystemMonitor } from './system/system-monitor';
@@ -144,6 +146,8 @@ export class Kernel {
   readonly policy: PolicyEngine;
   readonly guardian = new Guardian();
   readonly approvals: ApprovalQueue;
+  /** The folders the AI may use, and its requests for more (Governance → Folders). */
+  readonly folders: FolderAccess;
   readonly redactor = new Redactor();
   readonly limiter: RateLimiter;
   readonly license: LicenseService;
@@ -235,6 +239,15 @@ export class Kernel {
       this.events,
     );
     this.approvals = new ApprovalQueue(this.events);
+    this.folders = new FolderAccess({
+      policy: this.policy,
+      events: this.events,
+      audit: this.audit,
+      expand: (entry) => expandPathVars(entry, { ...this.platform.specialDirs(), workspace: this.paths.workspace, data: this.paths.root }),
+      agentName: () => this.settings.get().ai.agentName,
+      notify: (title, body) => this.notify({ title, body, level: 'warning', source: 'governance', open: 'governance' }),
+      timeoutSeconds: () => this.policy.policy.approvals.timeoutSeconds,
+    });
     this.limiter = new RateLimiter(() => this.policy.policy.rateLimits.toolCallsPerMinute);
     this.license = new LicenseService(this.meta, this.platform.licensePublicKeys, this.platform.appVersion, this.platform.devMode, this.events);
     // The edition a computer starts in: a new one opens in Essentials (with its walkthrough); one set up before
@@ -889,6 +902,7 @@ export class Kernel {
           ...netTools({ checkUrl: (u) => checkUrl(u, this.policy.policy.network) }),
           ...systemTools({ workspace: ws, notify: (title, body) => this.notify({ title, body, level: 'info', source: 'agent' }) }),
           ...memoryTools(this.db),
+          ...folderTools(this.folders),
           ...fbrxTools({ status: () => this.status(), recentAudit: (n) => this.audit.query({ limit: n }) }),
           ...workspaceTools(this.workspace),
           ...deviceConsoleTools(this.consoles),

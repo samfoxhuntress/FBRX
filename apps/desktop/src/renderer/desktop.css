@@ -5630,6 +5630,20 @@ html[data-presenting='blur'] .private::selection {
   color: var(--text-muted);
   font-size: 11px;
 }
+.gov-folders .fx-list-item {
+  padding-left: 0;
+  padding-right: 0;
+}
+.gov-folder-icon {
+  font-size: 18px;
+}
+.gov-request-path {
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-2, rgba(127, 127, 127, 0.12));
+  word-break: break-all;
+  margin-bottom: 12px;
+}
 .shield-bulk {
   display: flex;
   align-items: center;

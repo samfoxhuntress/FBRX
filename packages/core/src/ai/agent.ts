@@ -308,7 +308,7 @@ export class AgentRuntime {
       `- Date: ${date} (time zone ${tz}); call time.now for the exact time`,
       `- Workstation: ${s.general.deviceName || hostname()} (${platform()} ${arch()})`,
       `- Workspace folder: ${this.d.workspace} (relative paths resolve here)`,
-      `- Folders you may access: ${this.d.allowedRoots().join(', ')}`,
+      `- Folders you may access: ${this.d.allowedRoots().join(', ')}. For a folder outside these (another drive, a network share), call files.request_access: the person picks the folder or says no.`,
       `- Tools available: ${toolCount}`,
       offline
         ? '- This chat is OFFLINE (private and local). Prefer local knowledge and local tools. If you truly need the internet, call the tool anyway: FBRX will ask the user whether this chat may go online.'

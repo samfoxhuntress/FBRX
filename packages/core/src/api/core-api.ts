@@ -27,6 +27,9 @@ const USER_ONLY = new Set<string>([
   'fleet.unenroll',
   'governance.updatePolicy',
   'governance.removeRememberedRule',
+  'governance.addFolder',
+  'governance.removeFolder',
+  'governance.answerFolder',
   'license.activate',
   'license.remove',
   'localapi.info',
@@ -248,6 +251,13 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'governance.policy': () => k.policy.effective(),
     'governance.updatePolicy': (p) => k.policy.updateLocal(z.object({ policy: z.unknown() }).parse(p).policy as never),
     'governance.removeRememberedRule': (p) => k.policy.removeRemembered(IdSchema.parse(p).id),
+    'governance.folders': () => k.folders.status(),
+    'governance.addFolder': (p, ctx) => k.folders.add(z.object({ path: z.string().min(1).max(4096) }).parse(p).path, ctx.actor),
+    'governance.removeFolder': (p, ctx) => k.folders.remove(z.object({ entry: z.string().min(1).max(4096) }).parse(p).entry, ctx.actor),
+    'governance.answerFolder': (p, ctx) => {
+      const x = z.object({ id: z.string().min(1).max(80), path: z.string().min(1).max(4096).nullable() }).parse(p);
+      return k.folders.answer(x.id, x.path, ctx.actor);
+    },
     'approvals.list': () => k.approvals.list(),
     'approvals.resolve': (p, ctx) => {
       const q = z.object({ id: z.string(), decision: z.enum(['approve', 'deny']), remember: z.boolean().optional() }).parse(p);

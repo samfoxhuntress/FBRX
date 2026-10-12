@@ -171,8 +171,7 @@ function ProfileEditor({ profile, onClose, onSaved, onDelete }: { profile: Parti
   const [name, setName] = useState(profile.name ?? '');
   const [description, setDescription] = useState(profile.description ?? '');
   const [draft, setDraft] = useState<SettingsDraft>({ settings: profile.settings ?? {}, locked: profile.locked ?? [] });
-  const [policy, setPolicy] = useState(profile.policy ? JSON.stringify(profile.policy, null, 2) : '');
-  const [ok, setOk] = useState({ s: true, p: true });
+  const [ok, setOk] = useState({ s: true });
   const { busy, run } = useAction();
   const save = () =>
     run(
@@ -183,7 +182,8 @@ function ProfileEditor({ profile, onClose, onSaved, onDelete }: { profile: Parti
           description,
           settings: draft.settings,
           locked: draft.locked,
-          policy: policy.trim() ? JSON.parse(policy) : null,
+          // The policy is written in Governance; a new profile starts with none (each computer's own).
+          ...(profile.id ? {} : { policy: null }),
         }).then(onSaved),
       'Profile saved; devices are syncing',
     );
@@ -200,7 +200,7 @@ function ProfileEditor({ profile, onClose, onSaved, onDelete }: { profile: Parti
             </Button>
           )}
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={busy === 'save'} disabled={!name.trim() || !ok.s || !ok.p} onClick={() => void save()}>
+          <Button variant="primary" loading={busy === 'save'} disabled={!name.trim() || !ok.s} onClick={() => void save()}>
             Save profile
           </Button>
         </>
@@ -216,18 +216,11 @@ function ProfileEditor({ profile, onClose, onSaved, onDelete }: { profile: Parti
           </Field>
         </div>
         <SettingsBuilder value={draft} onChange={setDraft} onJsonValidity={(v) => setOk((o) => (o.s === v ? o : { ...o, s: v }))} />
-        <More label="Governance policy (what the agent may do)">
-          <Field label="Governance policy (JSON)" help="Replaces the computer's own policy: tool rules, folders, network, shell, AI providers, approvals. Empty keeps each computer's own.">
-            <JsonEditor value={policy} onChange={setPolicy} rows={10} onValidity={(v) => setOk((o) => (o.p === v ? o : { ...o, p: v }))} />
-          </Field>
-          {!policy.trim() && (
-            <div>
-              <Button size="sm" onClick={() => setPolicy(JSON.stringify(DEFAULT_POLICY, null, 2))}>
-                Start from the default policy
-              </Button>
-            </div>
-          )}
-        </More>
+        <Callout tone="info">
+          What the AI may do on these computers (folders, the web, the shell, approvals, rules) is this profile's policy, in{' '}
+          <a href={`#/governance/${profile.id ?? ''}`}>Governance</a>
+          {profile.policy ? ': it has one.' : ': it has none yet, so each computer uses its own.'}
+        </Callout>
       </div>
     </Modal>
   );
