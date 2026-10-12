@@ -42,6 +42,7 @@ import { AuditLog } from './audit/audit-log';
 import { PolicyEngine } from './governance/policy-engine';
 import { FolderAccess } from './governance/folder-access';
 import { KnowledgeBase } from './knowledge/knowledge-base';
+import { MemoryService } from './ai/memory';
 import { runDoctor, type DoctorFinding } from './knowledge/doctor';
 import { fbrx1Commands } from './cli/fbrx1';
 import { expandPathVars } from './governance/path-guard';
@@ -153,6 +154,8 @@ export class Kernel {
   readonly folders: FolderAccess;
   /** FBRX's own guides, playbooks and commands, in a local search database (fbrx.help). */
   readonly knowledge: KnowledgeBase;
+  /** What the AI remembers about the person, on this computer only (Settings → Memory). */
+  readonly memory: MemoryService;
   readonly redactor = new Redactor();
   readonly limiter: RateLimiter;
   readonly license: LicenseService;
@@ -253,6 +256,8 @@ export class Kernel {
       notify: (title, body) => this.notify({ title, body, level: 'warning', source: 'governance', open: 'governance' }),
       timeoutSeconds: () => this.policy.policy.approvals.timeoutSeconds,
     });
+    this.memory = new MemoryService({ db: this.db, settings: () => this.settings.get().memory, learner: () => this.edition().learner, events: this.events });
+    this.guardian.setPrivateValues(() => this.memory.privateValues());
     this.knowledge = new KnowledgeBase({ file: join(this.paths.root, 'knowledge.db'), appVersion: this.platform.appVersion, commands: fbrx1Commands, log: L('knowledge') });
     this.limiter = new RateLimiter(() => this.policy.policy.rateLimits.toolCallsPerMinute);
     this.license = new LicenseService(this.meta, this.platform.licensePublicKeys, this.platform.appVersion, this.platform.devMode, this.events);
@@ -307,6 +312,7 @@ export class Kernel {
         return e.learner ? { vertical: e.vertical } : null;
       },
       onConcern: (category) => this.reportConcern(category),
+      memory: { context: (o) => this.memory.context(o), learn: (text) => this.memory.learn(text) },
       assist: {
         canHandoff: (trigger) => this.assist.canHandoff(trigger),
         handoff: (h) => this.assist.handoff(h),
@@ -907,7 +913,7 @@ export class Kernel {
           ...shellTools({ workspace: ws, timeoutSeconds: () => this.policy.policy.shell.timeoutSeconds }),
           ...netTools({ checkUrl: (u) => checkUrl(u, this.policy.policy.network) }),
           ...systemTools({ workspace: ws, notify: (title, body) => this.notify({ title, body, level: 'info', source: 'agent' }) }),
-          ...memoryTools(this.db),
+          ...memoryTools(this.memory),
           ...folderTools(this.folders),
           ...knowledgeTools({ kb: this.knowledge, doctor: () => this.doctor(), fix: (id) => this.applyFix(id) }),
           ...fbrxTools({ status: () => this.status(), recentAudit: (n) => this.audit.query({ limit: n }) }),
@@ -1390,7 +1396,8 @@ export class Kernel {
       case 'update.install':
         return this.installUpdate({ restartNow: !!p.restartNow, source: p.source ?? 'auto' });
       case 'backup.create': {
-        const info = await this.backup.create({ label: p.label, actor: 'control-plane' });
+        // One that goes to FBRX Command leaves out the AI's memory of the person (it never leaves the computer).
+        const info = await this.backup.create({ label: p.label, actor: 'control-plane', withoutMemory: !!p.upload });
         let uploaded: string | null = null;
         if (p.upload) uploaded = (await this.fleet.uploadSnapshot(info.file, p.label ?? null)).snapshotId;
         return { file: info.name, sizeBytes: info.sizeBytes, snapshotId: info.header?.snapshotId, uploadedSnapshotId: uploaded };

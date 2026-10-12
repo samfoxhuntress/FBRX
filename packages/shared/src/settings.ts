@@ -221,6 +221,23 @@ export const SettingsSchema = z.object({
       )
       .max(100),
   }),
+  /**
+   * What the AI remembers about the person (memory.ts), kept on this computer only: the last day of conversations
+   * (short term) and lasting facts (long term). Identity and money numbers are never kept (privacy.ts).
+   */
+  memory: z.object({
+    enabled: z.boolean(),
+    /** The last 24 hours of conversations, in every new chat. */
+    shortTerm: z.boolean(),
+    /** Lasting facts about the person, in every chat. */
+    longTerm: z.boolean(),
+    /** Picks up facts from what the person says ("I live in…", "my email is…"), besides what the AI is told to remember. */
+    learn: z.boolean(),
+    /** Private kinds of fact the person lets it keep (they never leave this computer). */
+    keep: z.object({ address: z.boolean(), location: z.boolean(), contact: z.boolean(), payment: z.boolean(), birthday: z.boolean() }),
+    /** With a cloud AI: general facts go along with the messages (never private ones), or nothing does. */
+    cloud: z.enum(['general', 'none']),
+  }),
   /** Pop-up notifications (notifications.ts): which kinds, where they show and their sound. */
   notifications: z.object({
     enabled: z.boolean(),
@@ -532,6 +549,7 @@ export const DEFAULT_SETTINGS: Settings = {
       { id: 'c-ps', name: 'Lines → PowerShell array', steps: [{ op: 'trimLines' }, { op: 'removeBlank' }, { op: 'dedupe' }, { op: 'wrapLines', a: "'", b: "'" }, { op: 'join', a: ', ' }, { op: 'wrap', a: '@(', b: ')' }] },
     ],
   },
+  memory: { enabled: true, shortTerm: true, longTerm: true, learn: true, keep: { address: true, location: true, contact: true, payment: false, birthday: true }, cloud: 'general' },
   notifications: { enabled: true, show: 'auto', sound: 'fbrx', volume: 0.7, muted: [] },
   presenter: {
     enabled: false,

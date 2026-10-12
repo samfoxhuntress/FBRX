@@ -12,6 +12,7 @@ import { AskButton, EmergencyStop, ProfileFields, saveProfile } from '../widgets
 import { KeyRecorder, MacroSettings } from './settings-macros';
 import { SnippetSettings } from './settings-snippets';
 import { VoiceSettings } from './settings-voice';
+import { MemorySettings } from './settings-memory';
 import { AboutVersion, ReleasePanel } from '../release';
 import { UltraHint, useChooseEdition, useEditionStatus, useLearner, useTier, useVertical } from '../edition';
 
@@ -23,13 +24,14 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'edition' | 'license' | 'api' | 'logs';
+type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'memory' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'edition' | 'license' | 'api' | 'logs';
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
   { id: 'presenting', label: 'Presenting', icon: 'presentation', group: 'You' },
   { id: 'messages', label: 'Messages', icon: 'message', group: 'You' },
   { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
+  { id: 'memory', label: 'Memory', icon: 'brain', group: 'You' },
   { id: 'voice', label: 'Voice', icon: 'mic', group: 'You' },
   { id: 'snippets', label: 'Snippets', icon: 'code', group: 'You', notEssentials: true },
   { id: 'macros', label: 'Macros', icon: 'zap', group: 'You', notEssentials: true },
@@ -93,6 +95,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'presenting' && <PresentingSettings />}
           {tab === 'messages' && <MessagesSettings />}
           {tab === 'agent' && <AgentSettings />}
+          {tab === 'memory' && <MemorySettings />}
           {tab === 'voice' && <VoiceSettings />}
           {tab === 'snippets' && <SnippetSettings />}
           {tab === 'macros' && <MacroSettings />}

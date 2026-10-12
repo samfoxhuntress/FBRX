@@ -150,6 +150,63 @@ started while a project is shown goes into it, and **Projects → Chats** opens 
 never deletes its chats: they go back to the main history. Only the person at the computer can delete chats in bulk
 (not the Local API or FBRX Command).
 
+### What Fabrix remembers
+
+Fabrix keeps a memory of you **on this computer only**, so it knows you whichever AI model you pick (a local one, a
+cloud one, or a different one tomorrow). **Settings → Memory** shows all of it.
+
+* **Short-term memory** is the last 24 hours of chats: what you asked and what it answered. It ages out by itself
+  after a day and goes only to a local AI.
+* **Long-term memory** is lasting facts about you (your name, where you work, the town you live in, what you prefer)
+  and your past chats, which it can search when you ask "what did we say about the printer last month?". It learns
+  facts from what you say ("I live in…", "my email is…"), keeps what you or Fabrix choose to remember, and a newer fact
+  replaces an older one with the same meaning.
+
+You can add a fact, change or forget any of them (right-click one), **Forget everything**, and turn each part off.
+Student and child computers keep no memory at all.
+
+**Never kept**: Social Security and other national ID numbers, driver's license and passport numbers, tax IDs, bank
+account and routing numbers, full payment card numbers and their security codes, and passwords and PINs. FBRX finds
+them by their shape and the words around them and takes them out before anything is saved, whoever asked.
+
+**Private details** (addresses, the town you live in, your email and phone number, your birthday, and payment cards
+by their **last four digits only**, off by default) are kept only when you allow each kind. They go to a local AI
+only: a cloud AI gets the general facts with your message (or nothing, if you choose *Nothing*), never private details
+and never the last 24 hours.
+
+**Nothing personal goes onto the internet.** If Fabrix is about to put an identity or money number into a web search
+or any other online tool ("why does my SSN start with 818?" as a search), FBRX refuses the call before anything is
+sent. A private detail it remembers (your address, your phone number) in an online tool needs your approval first.
+
+### Fabrix knows FBRX
+
+Fabrix has a database of FBRX itself on the computer (`knowledge.db`): this guide and the other FBRX documents,
+troubleshooting playbooks and the FBRX/1 commands. It is rebuilt when FBRX updates. Ask "why is FBRX slow?" or "why
+does the AI keep stopping?" and Fabrix runs a **check-up** (services, the local model and its memory use, the
+database, scans in progress, disk space, FBRX Shield) and explains what it found. Where there is a fix it offers it,
+and it asks you before applying one:
+
+| Fix | What it does |
+| --- | --- |
+| Restart a service | Restarts one FBRX service that has stopped or keeps failing |
+| Stop the scan | Stops a FBRX Shield scan that is slowing the computer |
+| Check the list again | Re-checks FBRX Shield's findings (clears ones that no longer apply) |
+| Unload the model | Gives the local model's memory back to the computer |
+| Smaller conversation memory | Lowers the local model's context size when it does not fit |
+| Tidy the database | Compacts FBRX's database |
+
+### Folders your AI can use
+
+**Governance → Folders your AI can use** lists the only folders Fabrix may read or work in (your home folder and the
+FBRX workspace to begin with). **Add a folder…** picks any other one with the folder picker, such as another drive or a
+network share; the trash button takes one away, and **Read only** lets it look at files but never change them. System
+folders (Windows, Program Files, `/System`, `/etc`…) and FBRX's own data folder can never be added.
+
+When Fabrix needs a folder it does not have, it asks: a window shows which folder and why, and you **Allow this
+folder**, **Choose another folder…** or say **Don't allow**. Nothing is opened until you answer. When FBRX Command
+manages the computer, the folders come from the organization's policy and this card is read-only. The policy as JSON
+is edited in FBRX Command (Governance), not on the computer.
+
 ## Everyday
 
 | Page | What it does |
@@ -561,6 +618,11 @@ Desktop app itself.
 | `calendar.create_event` | write — adds to an Outlook calendar, never invites anyone |
 | `shield.status`, `shield.scan` (report only) | read |
 | `shield.quarantine` | write |
+| `memory.remember`, `memory.forget` | write (FBRX's own data; identity and money numbers are refused) |
+| `memory.recall`, `memory.search_chats` | read |
+| `fbrx.help`, `fbrx.doctor` | read: FBRX's knowledge base and the check-up |
+| `fbrx.fix` | write — asks first |
+| `files.request_access` | read: asks the person for a folder |
 
 ## Local AI without the stutter
 

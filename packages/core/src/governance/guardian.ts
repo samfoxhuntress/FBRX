@@ -1,5 +1,16 @@
-import type { GuardianFinding } from '@fbrx/shared';
+import { findSensitive, type GuardianFinding } from '@fbrx/shared';
 import type { ToolResources, ToolSpec } from '../tools/types';
+
+/** Text as it reads after URL decoding ('+' as a space), whatever is malformed left as it was. */
+function decodeLoosely(s: string): string {
+  return s.replace(/\+/g, ' ').replace(/(?:%[0-9a-f]{2})+/gi, (m) => {
+    try {
+      return decodeURIComponent(m);
+    } catch {
+      return m;
+    }
+  });
+}
 
 interface Detector {
   code: string;
@@ -39,6 +50,12 @@ export type ModelReviewer = (tool: ToolSpec, input: unknown) => Promise<Guardian
  */
 export class Guardian {
   private modelReviewer: ModelReviewer | null = null;
+  /** The person's private details (from memory) that must not go onto the internet. */
+  private privateValues: () => string[] = () => [];
+
+  setPrivateValues(fn: () => string[]) {
+    this.privateValues = fn;
+  }
 
   setModelReviewer(fn: ModelReviewer | null) {
     this.modelReviewer = fn;
@@ -62,6 +79,17 @@ export class Guardian {
     }
     if (INJECTION_MARKERS.some((re) => re.test(serialized))) {
       findings.push({ severity: 'warning', code: 'prompt-injection', message: 'Tool input contains prompt-injection language' });
+    }
+    // What goes onto the internet: never an identity or money number, and the person's private details only if they say so.
+    if (tool.risk === 'network' || tool.source === 'connector' || (resources.urls?.length ?? 0) > 0) {
+      // As a web address would carry it too ("12+Oak+St", "123%2D45%2D6789").
+      const plain = `${serialized}\n${decodeLoosely(serialized)}`;
+      const ids = findSensitive(plain);
+      if (ids.length) findings.push({ severity: 'critical', code: 'personal-id-online', message: `It would send ${ids[0].kind.what} to the internet, which FBRX never does` });
+      const flat = plain.toLowerCase().replace(/\s+/g, ' ');
+      if (this.privateValues().some((v) => flat.includes(v.toLowerCase().replace(/\s+/g, ' ')))) {
+        findings.push({ severity: 'warning', code: 'private-online', message: 'It would send your private details (an address, email, phone or card) to the internet' });
+      }
     }
     return findings;
   }

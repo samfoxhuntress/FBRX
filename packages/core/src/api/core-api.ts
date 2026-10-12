@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AUDIENCES, EXT_USER_ONLY, SECRET_KINDS, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { AUDIENCES, EXT_USER_ONLY, MEMORY_CATEGORIES, SECRET_KINDS, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -28,6 +28,10 @@ const USER_ONLY = new Set<string>([
   'governance.updatePolicy',
   'governance.removeRememberedRule',
   'governance.addFolder',
+  'memory.add',
+  'memory.update',
+  'memory.forget',
+  'memory.forgetAll',
   'governance.removeFolder',
   'governance.answerFolder',
   'license.activate',
@@ -251,6 +255,17 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'governance.policy': () => k.policy.effective(),
     'governance.updatePolicy': (p) => k.policy.updateLocal(z.object({ policy: z.unknown() }).parse(p).policy as never),
     'governance.removeRememberedRule': (p) => k.policy.removeRemembered(IdSchema.parse(p).id),
+    'memory.status': () => k.memory.status(),
+    'memory.add': (p) => {
+      const x = z.object({ content: z.string().min(3).max(1000), category: z.enum(MEMORY_CATEGORIES).optional() }).parse(p);
+      return k.memory.remember({ content: x.content, category: x.category, source: 'person' });
+    },
+    'memory.update': (p) => {
+      const x = z.object({ id: z.string().min(1).max(80), content: z.string().min(3).max(1000) }).parse(p);
+      return k.memory.update(x.id, x.content);
+    },
+    'memory.forget': (p) => ({ ok: k.memory.forget(IdSchema.parse(p).id) }),
+    'memory.forgetAll': () => ({ forgotten: k.memory.forgetAll() }),
     'governance.folders': () => k.folders.status(),
     'governance.addFolder': (p, ctx) => k.folders.add(z.object({ path: z.string().min(1).max(4096) }).parse(p).path, ctx.actor),
     'governance.removeFolder': (p, ctx) => k.folders.remove(z.object({ entry: z.string().min(1).max(4096) }).parse(p).entry, ctx.actor),

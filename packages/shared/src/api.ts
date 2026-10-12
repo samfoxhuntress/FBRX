@@ -6,6 +6,7 @@
  * method is validated and audited by the core before it runs.
  */
 import type { LicenseStatus } from './license';
+import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
 import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
 import type { ExtEvents, ExtMethods } from './ext';
 import type { Settings } from './settings';
@@ -601,6 +602,12 @@ export interface CoreMethods extends ExtMethods {
   'governance.policy': () => EffectivePolicy;
   'governance.updatePolicy': (p: { policy: Policy }) => EffectivePolicy;
   'governance.removeRememberedRule': (p: { id: string }) => EffectivePolicy;
+  /** What the AI remembers about the person (Settings → Memory). */
+  'memory.status': () => MemoryStatus;
+  'memory.add': (p: { content: string; category?: MemoryCategory }) => MemoryEntry;
+  'memory.update': (p: { id: string; content: string }) => MemoryEntry;
+  'memory.forget': (p: { id: string }) => { ok: boolean };
+  'memory.forgetAll': () => { forgotten: number };
   'governance.folders': () => FolderAccessStatus;
   /** Lets the AI use a folder (picked by the person). */
   'governance.addFolder': (p: { path: string }) => FolderAccessStatus;
@@ -677,6 +684,8 @@ export interface CoreEvents extends ExtEvents {
   'settings.changed': EffectiveSettings;
   'policy.changed': EffectivePolicy;
   'governance.folderRequest': FolderRequest & { state: 'open' | 'closed' };
+  /** The AI's memory of the person changed (how many facts it holds now). */
+  'memory.changed': { count: number };
   'plugins.changed': PluginInfo[];
   'connectors.changed': ConnectorInfo[];
   'tools.changed': ToolInfo[];

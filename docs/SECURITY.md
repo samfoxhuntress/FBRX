@@ -144,6 +144,33 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   Agent (`ai.showThinking`). The work budget's step limit is part of the policy (`ai.maxStepsPerRun`), so an
   organization can fix it; the answer length and context sizes are ordinary settings an organization can lock.
 
+## The AI's memory and personal details
+
+The agent's memory (`packages/core/src/ai/memory.ts`, Settings → Memory) lives in FBRX's database on the computer and
+is never synced or sent anywhere. A backup made for FBRX Command leaves it out (and vacuums the copy so nothing of it
+remains in free pages); a backup the person makes, encrypted with their passphrase, keeps it, so moving to a new
+computer keeps it too.
+
+* **Never stored**: national ID / Social Security, driver's license, passport and tax ID numbers, bank account,
+  routing and IBAN numbers, full payment card numbers (13–19 digits passing the Luhn check) and security codes, and
+  passwords, PINs and security answers (`packages/shared/src/privacy.ts`). They are found by shape and nearby words and
+  removed before a fact is saved, whether the person, the agent or the learning step wrote it; the short-term summary
+  of recent chats is scrubbed the same way.
+* **Private kinds** (addresses, location, email and phone, birthday, cards by last four digits) are stored only when
+  the person allows that kind, and are sent only to providers marked local. With a cloud provider the agent gets
+  general facts or nothing (the person's choice), never private facts and never the last 24 hours.
+* **Online tools**: when a tool goes online (network risk, a connector, or a call with URLs), the guardian blocks any
+  identity or money number in its input as **critical** (refused, never sent), and a remembered private value in its
+  input as a **warning** that needs approval.
+* Memory is off on student and child computers. Adding, changing and forgetting memories is for the person at the
+  computer (not the Local API or FBRX Command).
+
+## Folders the AI may use
+
+`filesystem.allowedRoots` is edited from Governance on the computer (local policy only: a managed policy cannot be
+changed there). System folders and FBRX's data folder are refused. The agent's `files.request_access` tool only asks;
+the folder is added when the person picks it in the window, and the request lapses after the approval timeout.
+
 ## Single sign-on to FBRX Command
 
 * Standard OpenID Connect authorization code flow with **PKCE**, `state` and `nonce`; nothing about the sign-in

@@ -43,6 +43,8 @@ export interface CreateSnapshotOptions {
   vaultKey: Buffer | null;
   appVersion: string;
   device: { name: string; hostname: string; platform: string; deviceId: string | null };
+  /** Leave out the AI's memory of the person (a backup that goes to FBRX Command: memory never leaves the computer). */
+  withoutMemory?: boolean;
 }
 
 function walk(dir: string, root: string, out: string[] = []): string[] {
@@ -99,6 +101,18 @@ export async function createSnapshot(o: CreateSnapshotOptions): Promise<Snapshot
   const tgz = join(work, 'payload.tgz');
   try {
     o.db.snapshotTo(join(tree, 'db', 'fbrx.db'));
+    if (o.withoutMemory) {
+      const copy = new Db(join(tree, 'db', 'fbrx.db'));
+      try {
+        if (copy.get("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memories'")) copy.run('DELETE FROM memories');
+        // Nothing of it left in the file's free pages either.
+        copy.exec('VACUUM');
+        copy.exec('PRAGMA journal_mode = DELETE');
+      } finally {
+        copy.close();
+      }
+      for (const x of ['-wal', '-shm']) rmSync(join(tree, 'db', `fbrx.db${x}`), { force: true });
+    }
     const dirs = [...CONTENT_DIRS, ...(o.includeModels ? ['models'] : [])];
     const files: Manifest['files'] = [];
     const dbFile = join(tree, 'db', 'fbrx.db');

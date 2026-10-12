@@ -22,6 +22,8 @@ export * from './calendar';
 export * from './protection';
 export * from './schedule';
 export * from './notifications';
+export * from './privacy';
+export * from './memory';
 export * from './time';
 export * from './virtual';
 export * from './mesh-assist';

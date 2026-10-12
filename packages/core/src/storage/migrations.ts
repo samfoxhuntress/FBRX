@@ -386,6 +386,24 @@ export const MIGRATIONS: Migration[] = [
     // ones paired by hand.
     up: `ALTER TABLE mesh_devices ADD COLUMN source TEXT NOT NULL DEFAULT 'paired';`,
   },
+  {
+    version: 12,
+    name: 'agent-memory',
+    // What the AI remembers about the person: a kind of fact (private kinds never leave the computer), where it came
+    // from, and a key for facts that replace older ones (where they live, their email…).
+    up: `
+      ALTER TABLE memories ADD COLUMN category TEXT NOT NULL DEFAULT 'general';
+      ALTER TABLE memories ADD COLUMN source TEXT NOT NULL DEFAULT 'agent';
+      ALTER TABLE memories ADD COLUMN private INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE memories ADD COLUMN key TEXT;
+      ALTER TABLE memories ADD COLUMN updated_at TEXT;
+      CREATE INDEX memories_key ON memories (key);
+      CREATE TRIGGER memories_au AFTER UPDATE OF content, tags ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, content, tags) VALUES ('delete', old.rowid, old.content, old.tags);
+        INSERT INTO memories_fts(rowid, content, tags) VALUES (new.rowid, new.content, new.tags);
+      END;
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;
