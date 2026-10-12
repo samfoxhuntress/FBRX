@@ -1,7 +1,7 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
 import { TIER_NAMES, TIER_SHORT, addressAs, displayVersion, funEnabled } from '@fbrx/shared';
-import { Button, FBRX_MARK, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
+import { Button, FBRX_MARK, FbrxMark, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
 import { useConsoleSessions, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
@@ -17,6 +17,8 @@ import { ClipPicker } from './pages/clip-picker';
 import { LearnerContext, StandardOnly, TierContext, UltraOnly, VerticalContext, useLicenseTier } from './edition';
 import { Tour, type TourStep } from './tour';
 import { PresenterPill, usePresenter } from './presenter';
+import { ContextMenuHost } from './context-menu';
+import { MacroAddHost } from './macro-add';
 
 // Pages load when first opened, so the app starts with only what the first screen needs.
 const AgentPage = lazy(() => import('./pages/agent').then((m) => ({ default: m.AgentPage })));
@@ -98,7 +100,18 @@ export type Route =
   | 'goose-overlay';
 
 /** Navigates to a page; `to` may carry a sub-path such as `notes/note_123` or `settings/appearance`. */
+/** This window shows one page on its own, beside the main window (opened with "Open in a new window"). */
+export const POPOUT = new URLSearchParams(location.search).has('popout');
+const popoutPage = location.hash.replace(/^#\/?/, '').split('/')[0];
+/** Pages set to open in their own window (Settings → General → Windows); kept up to date by the main window. */
+let ownWindows: Record<string, boolean> = {};
+
 export function navigate(to: string) {
+  const page = to.split('/')[0];
+  // A popped-out page keeps to itself: links to other pages open in the main window.
+  if (POPOUT && page !== popoutPage && bridge.openMain) return bridge.openMain(to);
+  const here = location.hash.replace(/^#\/?/, '').split('/')[0];
+  if (!POPOUT && ownWindows[page] && page !== here && bridge.popOut) return void bridge.popOut(to);
   location.hash = `#/${to}`;
 }
 
@@ -208,8 +221,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       /* remembered for this session only */
     }
   };
-  // First start of this window: show the start-up animation and play the start-up sound once.
-  const [firstStart] = useState(() => !sessionStorage.getItem('fbrx.splashShown'));
+  // First start of this window: show the start-up animation and play the start-up sound once (not in a popped-out page).
+  const [firstStart] = useState(() => !POPOUT && !sessionStorage.getItem('fbrx.splashShown'));
   const startupSound = settings?.settings.appearance.splashSound;
   const soundDone = useRef(false);
   useEffect(() => {
@@ -429,7 +442,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       ),
     },
   ];
-  const showTour = essentials && !tourClosed && status.edition?.tourDone === false && tourReady;
+  const showTour = !POPOUT && essentials && !tourClosed && status.edition?.tourDone === false && tourReady;
+  // Terminal and chat in their own windows (Ultra has the Terminal; the chat is in every edition).
+  ownWindows = POPOUT ? {} : { terminal: ultra && s.windows.terminal, agent: s.windows.agent };
 
   const page = (() => {
     if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && route !== 'home' && !byId.get(route)?.ultra) {
@@ -515,6 +530,36 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     }
   })();
 
+  const hosts = (
+    <>
+      <ContextMenuHost agentName={agentName} ultra={ultra} essentials={essentials} />
+      <MacroAddHost />
+    </>
+  );
+  if (POPOUT)
+    return (
+      <TierContext.Provider value={tier}>
+      <LearnerContext.Provider value={learner}>
+      <VerticalContext.Provider value={vertical}>
+      <AgentNameContext.Provider value={agentName}>
+        <PopoutFrame title={byId.get(route)?.label ?? (route === 'agent' ? agentName : 'FBRX')}>
+          <Suspense
+            fallback={
+              <div style={{ display: 'grid', placeItems: 'center', height: '40vh' }}>
+                <Spinner />
+              </div>
+            }
+          >
+            {page}
+          </Suspense>
+        </PopoutFrame>
+        {hosts}
+      </AgentNameContext.Provider>
+      </VerticalContext.Provider>
+      </LearnerContext.Provider>
+      </TierContext.Provider>
+    );
+
   return (
     <TierContext.Provider value={tier}>
     <LearnerContext.Provider value={learner}>
@@ -569,6 +614,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         </Suspense>
       </Shell>
       <VaultStartPrompt />
+      {hosts}
       {showTour && (
         <Tour
           steps={tourSteps}
@@ -582,6 +628,48 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     </VerticalContext.Provider>
     </LearnerContext.Provider>
     </TierContext.Provider>
+  );
+}
+
+/**
+ * A page in a window of its own: a slim bar with its name, "Side by side" (FBRX on the left, this on the right), "Keep
+ * on top", and the way back to FBRX, over the page itself.
+ */
+function PopoutFrame({ title, children }: { title: string; children: ReactNode }) {
+  const [pinned, setPinned] = useState(false);
+  useEffect(() => {
+    document.body.classList.add('popout');
+    document.title = `${title} · FBRX`;
+  }, [title]);
+  return (
+    <div className="popout-frame">
+      <div className="popout-bar">
+        <span className="popout-title">
+          <FbrxMark size={18} /> {title}
+        </span>
+        <span style={{ flex: 1 }} />
+        <Button size="sm" variant="ghost" icon="sidebar" title="FBRX on the left, this window on the right" onClick={() => void bridge.popOutWindow?.('tile')}>
+          Side by side
+        </Button>
+        <Button
+          size="sm"
+          variant={pinned ? 'primary' : 'ghost'}
+          icon="layers"
+          aria-pressed={pinned}
+          title="Keep this window above other windows"
+          onClick={() => {
+            setPinned(!pinned);
+            void bridge.popOutWindow?.('pin', !pinned);
+          }}
+        >
+          Keep on top
+        </Button>
+        <Button size="sm" variant="ghost" icon="external" title="Bring the main FBRX window forward" onClick={() => void bridge.popOutWindow?.('main')}>
+          FBRX
+        </Button>
+      </div>
+      <div className="fx-content popout-content">{children}</div>
+    </div>
   );
 }
 

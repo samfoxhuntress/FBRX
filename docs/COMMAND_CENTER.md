@@ -55,7 +55,7 @@ and its pages slide out beside it. Counts (unread alerts, waiting approvals) sho
 
 ### Version names
 
-FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.9.6** (or Essentials, or Standard). Each minor version also gets a codename from cloth,
+FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.9.7** (or Essentials, or Standard). Each minor version also gets a codename from cloth,
 fiber to fabric, shown in **Settings → Logs & about**: 1.8 *Spindle*, 1.9 *Bobbin*, then *Shuttle*, *Heddle*, and 2.0
 *Loom* (later *Warp*, *Weft*, *Selvedge*, *Tapestry*).
 
@@ -190,6 +190,32 @@ click one and press new keys to change it, or turn it off:
 | --- | --- | --- |
 | Clipboard history | **Ctrl+Alt+Z** | Opens your recent copies near the pointer, like Windows' Win+V |
 | Spotlight | **Alt+Space** | Search apps, files, settings and quick answers (Ctrl+K inside FBRX) |
+| Presenter-safe mode | **Ctrl+Alt+P** | On and off before you share your screen |
+
+**Your macros** (Settings → Macros) are shortcuts you make: press one in any app and FBRX types its command or text
+where you are (it puts the text on the clipboard, presses paste once you let go of the keys, and puts back what was on
+the clipboard; on a Mac it stays on the clipboard for ⌘V). The quickest way to make one is **Add to macros** on a
+command: the ⚡ button or the right-click menu on commands in Library → FBRX commands, the Terminal's reference panel
+and the FBRX/1 library, or on any text you pick. The dialog takes a name, the text (placeholders as in snippets), the
+keys, and can also offer it as a `/name` snippet in the chat, the Terminal and FBRX/1. A shortcut already used by
+another macro is refused.
+
+### The right-click menu
+
+Right-click works everywhere in FBRX. In a text box: Undo, Cut, Copy, Paste and Select all. On text you picked: Copy,
+Ask Fabrix about it, and Add to macros. On a command: Copy, Add to macros, Put it in the Terminal (Ultra), and on the
+command libraries Run, Type it into an open server console, and Ask Fabrix to explain it. On a page in the sidebar:
+Open, and Open in a new window. Anywhere else, **What's this?** asks Fabrix what that part of FBRX is for, in a few
+plain words (handy in Endpoint Essentials), and **Open this page in a new window** puts the page beside FBRX. Shift and
+right-click skips the menu.
+
+### Pages in their own window
+
+**Pop out** (Terminal) and the ⧉ button by Conversations (the chat) open the page in a window of its own, beside the
+main window, so you can work side by side; right-click any page in the sidebar for the same. The window has **Side by
+side** (FBRX on the left, this window on the right), **Keep on top**, and a way back to the main window. Links to other
+pages open in the main window. In **Settings → General → Windows** the Terminal (Ultra) and the chat can always open in
+their own window.
 
 **The clipboard history** shows what you copied while FBRX was running, newest first:
 
@@ -236,7 +262,7 @@ from harmless noise and suggests what to fix first. **Bug catcher → Show logs 
 
 ### FBRX/1
 
-**Terminal → FBRX/1** manages FBRX OS from a command line in the style of a network operating system (Junos or IOS):
+**Terminal → FBRX/1** manages FBRX OS from a command line in the style of a network operating system:
 `show` reads, `request` acts, and `configure` edits settings as a candidate that only takes effect on `commit`.
 
 ```
@@ -274,7 +300,10 @@ Unique prefixes work (`sh sys st`), **Tab** completes, **?** lists what can come
 output can be piped: `| match <text>`, `| except <text>`, `| count`, `| last <n>`, `| display json`,
 `| display set`. The **FBRX/1 library** next to the console has pre-configured commands and multi-line recipes
 (health check, switch theme, offline-first agent, try-before-you-commit); ▶ runs every line in order, and the
-bookmark on any command you ran saves it as an FBRX/1 snippet that appears under *My snippets*. Every FBRX/1
+bookmark on any command you ran saves it as an FBRX/1 snippet that appears under *My snippets*. Once the FBRX
+commands are found in the Library (*Operator Mode* with fun extras on; straight away with them off), the library also
+has **FBRX Server** and **FBRX Gate**: click one to copy it, or type it into an open server console (Enter stays yours).
+Every FBRX/1
 command, with what it does, is also in **Library → FBRX commands**, next to the FBRX Server and FBRX Gate ones. FBRX/1 is reserved
 for the person at the computer: it is not available over the Local API, the mesh or remote commands, and every
 change goes through the same checks and audit log as the rest of FBRX.

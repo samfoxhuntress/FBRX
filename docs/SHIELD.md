@@ -70,9 +70,12 @@ running too.
 
 ### Editions
 
-Every edition (Essentials, Standard and Ultra) has FBRX Shield's download checks, scans, threat database, rules and quarantine, and
-the choice of antivirus. **Endpoint Ultra** adds scheduled scans (a quick scan every day or week) and the second
-engines (ClamAV, VirusTotal). Student and child computers (FBRX OS Education and Home) run the download checks in the
+Every edition (Essentials, Standard and Ultra) has FBRX Shield's download checks, scans, threat database, rules and
+quarantine, the choice of antivirus, and a **scheduled scan** (Settings on the FBRX Shield page: a quick scan every
+day or every week, at noon). **Endpoint Ultra** chooses when: picking a schedule shows *At what time?* (and *On which
+day?* for a weekly scan). A computer that is off at that time scans when it is next on, and a new or changed schedule
+waits for its next time. Ultra also adds the second engines (ClamAV, VirusTotal). FBRX Command sets
+`protection.shield.schedule`, `scheduleTime` ("21:30") and `scheduleDay` (0 = Sunday) for a group like any setting. Student and child computers (FBRX OS Education and Home) run the download checks in the
 background without the page; the school or family chooses their antivirus from FBRX Command.
 
 ## The agent

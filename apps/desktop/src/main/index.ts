@@ -3,9 +3,9 @@ import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
-import { userInfo } from 'node:os';
+import { hostname, userInfo } from 'node:os';
 import { Kernel, toCoreError } from '@fbrx/core';
-import { MANAGED_PREFERENCES_DOMAIN, PRODUCT_NAME, TIER_NAMES, funEnabled, provisioningFromPreferences } from '@fbrx/shared';
+import { MANAGED_PREFERENCES_DOMAIN, PRODUCT_NAME, TIER_NAMES, expandMacro, funEnabled, provisioningFromPreferences } from '@fbrx/shared';
 import { createElectronPlatform, openExternalSafe } from './platform';
 import { ElectronUpdateController } from './updater';
 import { ClipHistory } from './clip-history';
@@ -31,6 +31,8 @@ let spotlightKey: string | null = null;
 let picker: BrowserWindow | null = null;
 let pickerKey: string | null = null;
 let presenterKey: string | null = null;
+/** Your own macros bound now: shortcut → macro id. */
+const macroKeys = new Map<string, string>();
 /** Whether FBRX's own window had the focus when the clipboard history opened (macOS gives the focus back otherwise). */
 let pickerFromMain = false;
 const pasteKeys = new PasteKeys();
@@ -223,6 +225,83 @@ function createWindow() {
   loadRenderer(win);
 }
 
+/** Pages of FBRX in windows of their own (a terminal, the chat…), by the page they show. */
+const popouts = new Map<string, BrowserWindow>();
+const pageOf = (route: string) => route.split('/')[0];
+
+/**
+ * Opens a page in a window of its own beside the main one, or brings its window forward (and to that route) when the
+ * page already has one. The window shows the page without the sidebar; links to other pages open in the main window.
+ */
+function popOut(route: string) {
+  const page = pageOf(route);
+  const open = popouts.get(page);
+  if (open && !open.isDestroyed()) {
+    if (open.isMinimized()) open.restore();
+    open.show();
+    open.focus();
+    open.webContents.send('fbrx:navigate', route);
+    return;
+  }
+  const area = screen.getDisplayMatching(win?.getBounds() ?? screen.getPrimaryDisplay().bounds).workArea;
+  const width = Math.min(820, Math.round(area.width * 0.45));
+  const height = Math.min(900, area.height - 40);
+  const main = win && !win.isDestroyed() && win.isVisible() ? win.getBounds() : null;
+  // To the right of the main window when there is room, otherwise on the right edge of the screen.
+  const x = main && main.x + main.width + 8 + width <= area.x + area.width ? main.x + main.width + 8 : area.x + area.width - width - 16;
+  const y = main ? Math.max(area.y, main.y) : area.y + 20;
+  const w = new BrowserWindow({
+    x,
+    y,
+    width,
+    height,
+    minWidth: 420,
+    minHeight: 360,
+    title: PRODUCT_NAME,
+    show: false,
+    backgroundColor: '#0d0d0d',
+    icon: asset('icon.png'),
+    webPreferences: {
+      preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      webSecurity: true,
+      spellcheck: true,
+    },
+  });
+  popouts.set(page, w);
+  w.on('closed', () => popouts.get(page) === w && popouts.delete(page));
+  w.once('ready-to-show', () => w.show());
+  w.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalSafe(url);
+    return { action: 'deny' };
+  });
+  w.webContents.on('will-navigate', (e, url) => {
+    if (rendererUrl ? !url.startsWith(rendererUrl) : !url.startsWith('file://')) {
+      e.preventDefault();
+      openExternalSafe(url);
+    }
+  });
+  if (rendererUrl) void w.loadURL(`${rendererUrl}?popout=1#/${route}`);
+  else void w.loadFile(join(app.getAppPath(), 'dist', 'renderer', 'index.html'), { hash: `/${route}`, query: { popout: '1' } });
+}
+
+/** A popped-out window kept on top, or put side by side with the main window (the main one on the left). */
+function arrangePopout(w: BrowserWindow, action: string, on?: boolean) {
+  if (action === 'pin') w.setAlwaysOnTop(!!on, 'floating');
+  else if (action === 'tile') {
+    const area = screen.getDisplayMatching(w.getBounds()).workArea;
+    const right = Math.round(area.width * 0.42);
+    if (!win) createWindow();
+    if (win!.isMaximized()) win!.unmaximize();
+    win!.setBounds({ x: area.x, y: area.y, width: area.width - right, height: area.height });
+    win!.show();
+    w.setBounds({ x: area.x + area.width - right, y: area.y, width: right, height: area.height });
+    w.focus();
+  } else if (action === 'main') showWindow();
+}
+
 function loadRenderer(w: BrowserWindow, hash?: string) {
   if (rendererUrl) void w.loadURL(hash ? `${rendererUrl}#${hash}` : rendererUrl);
   else void w.loadFile(join(app.getAppPath(), 'dist', 'renderer', 'index.html'), hash ? { hash } : undefined);
@@ -297,6 +376,51 @@ function bindMacroKeys() {
   spotlightKey = bindKey(spotlightKey, s?.spotlight.enabled ? s.spotlight.hotkey : null, showSpotlight, 'Spotlight');
   pickerKey = bindKey(pickerKey, s?.clipboard.hotkey || null, showClipPicker, 'Clipboard history');
   presenterKey = bindKey(presenterKey, s?.presenter.hotkey || null, togglePresenting, 'Presenter-safe mode');
+  bindKeyMacros();
+}
+
+/** Your own macros (Settings → Macros): each shortcut types its text into whatever app you are in. */
+function bindKeyMacros() {
+  const builtIn = new Set([spotlightKey, pickerKey, presenterKey]);
+  const want = new Map((kernel?.settings.get().keyMacros ?? []).filter((m) => m.hotkey && !builtIn.has(m.hotkey)).map((m) => [m.hotkey, m.id]));
+  for (const [accel, id] of macroKeys) {
+    if (want.get(accel) === id) continue;
+    globalShortcut.unregister(accel);
+    macroKeys.delete(accel);
+  }
+  for (const [accel, id] of want) {
+    if (macroKeys.has(accel)) continue;
+    try {
+      if (globalShortcut.register(accel, () => void typeMacro(id))) macroKeys.set(accel, id);
+      else kernel?.log.warn('A macro shortcut is taken by another app', { hotkey: accel });
+    } catch (err) {
+      kernel?.log.warn('Invalid macro shortcut', { hotkey: accel, error: (err as Error).message });
+    }
+  }
+}
+
+/**
+ * Types a macro where you are: its text (placeholders filled in) goes on the clipboard and FBRX presses paste once the
+ * shortcut's keys are let go; what was on the clipboard comes back afterwards. Where FBRX can't press keys (a Mac), the
+ * text stays on the clipboard for ⌘V.
+ */
+async function typeMacro(id: string) {
+  const s = kernel?.settings.get();
+  const m = s?.keyMacros.find((x) => x.id === id);
+  if (!s || !m) return;
+  const before = await clipboard.readText();
+  const { text } = expandMacro(m.text, { name: s.profile.name, callMe: s.profile.callMe, host: hostname(), clipboard: before });
+  clipboard.writeText(text);
+  kernel?.audit.append({ category: 'system', action: 'macro.typed', actor, outcome: 'success', details: { macro: m.name, chars: text.length } });
+  if (!pasteKeys.paste({ afterKeysUp: true })) {
+    kernel?.events.emit('notification', { title: m.name, body: `Ready to paste: press ${process.platform === 'darwin' ? '⌘V' : 'Ctrl+V'}.`, level: 'info', source: 'macros' });
+    return;
+  }
+  setTimeout(() => {
+    void clipboard.readText().then(async (now) => {
+      if (now === text) await clipboard.writeText(before);
+    });
+  }, 3000);
 }
 
 /** Presenter-safe mode on or off (its shortcut, the tray). */
@@ -524,6 +648,32 @@ function registerIpc() {
     return true;
   });
   ipcMain.handle('fbrx:copy', (e, text: string) => trusted(e) && typeof text === 'string' && clipboard.writeText(text.slice(0, 1_000_000)));
+  // A page in a window of its own, and arranging it beside the main window.
+  ipcMain.handle('fbrx:popout', (e, route: unknown) => {
+    if (!trusted(e) || typeof route !== 'string' || !/^[a-z][\w-]*(\/[^\s]*)?$/i.test(route) || route.length > 4000) return false;
+    popOut(route);
+    return true;
+  });
+  ipcMain.handle('fbrx:window', (e, action: unknown, on?: unknown) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (!trusted(e) || !w || w === win || typeof action !== 'string') return false;
+    arrangePopout(w, action, on === true);
+    return true;
+  });
+  // The right-click menu's Cut, Copy, Paste and friends, on whatever has the focus in that window.
+  ipcMain.handle('fbrx:edit', (e, action: unknown) => {
+    if (!trusted(e)) return false;
+    const wc = e.sender;
+    if (action === 'cut') wc.cut();
+    else if (action === 'copy') wc.copy();
+    else if (action === 'paste') wc.paste();
+    else if (action === 'pasteAsText') wc.pasteAndMatchStyle();
+    else if (action === 'selectAll') wc.selectAll();
+    else if (action === 'undo') wc.undo();
+    else if (action === 'redo') wc.redo();
+    else return false;
+    return true;
+  });
   ipcMain.handle('fbrx:clip', async (e, action: string, id?: number, on?: boolean) => {
     if (!trusted(e)) return null;
     if (action === 'read') return (await clipboard.readText()).slice(0, 1_000_000);
@@ -615,6 +765,7 @@ async function boot() {
   kernel.setIdleProbe(() => powerMonitor.getSystemIdleTime());
   kernel.events.onAny((name, payload) => {
     win?.webContents.send('fbrx:event', name, payload);
+    for (const p of popouts.values()) if (!p.isDestroyed()) p.webContents.send('fbrx:event', name, payload);
     if (name === 'settings.changed') {
       bindMacroKeys();
       clips.setEnabled(!!kernel?.settings.get().clipboard.history);

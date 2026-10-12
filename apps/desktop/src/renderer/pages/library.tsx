@@ -4,9 +4,12 @@ import { ARTICLES, CATS, type Article } from '../library-data';
 import { LAB_HOWTOS, LAB_SECTIONS, supportPage } from '../lab-data';
 import { bridge, call } from '../client';
 import { navigate } from '../app';
-import { useCore } from '../hooks';
+import { useAgentName, useCore } from '../hooks';
 import { LUKE_1_37, NOTHING_IS_IMPOSSIBLE, unlockTrophy } from '../fun';
 import { STORIES, STORY_TRIGGER, type Story } from '../story-data';
+import { addToMacros } from '../macro-add';
+import { menuFor } from '../context-menu';
+import { askAgent } from '../widgets';
 import { FBRX_CLI_TRIGGER, FBRX_COMMAND_SETS, FBRX_HOWTOS, type FbrxCommand, type FbrxCommandSet } from '../fbrx-command-data';
 
 /** Renders article text, allowing only <kbd> and <code> (everything else stays literal text). */
@@ -174,8 +177,19 @@ function StoryTime({ q, agentName }: { q: string; agentName: string }) {
 /** One command: FBRX/1 ones open in FBRX/1 already typed in; server ones are copied for a device console. */
 function CommandRow({ c, set }: { c: FbrxCommand; set: FbrxCommandSet }) {
   const toast = useToast();
+  const agentName = useAgentName();
+  const copy = () => void navigator.clipboard.writeText(c.cmd).then(() => toast.success('Copied', set.kind === 'fbrx1' ? 'Paste it into FBRX/1.' : "Paste it into the server's console."));
+  const macro = () => addToMacros({ name: c.what, text: c.cmd, slash: true });
   return (
-    <div className="fbrx-cmd">
+    <div
+      className="fbrx-cmd"
+      onContextMenu={menuFor([
+        ...(set.kind === 'fbrx1' ? [{ label: 'Try it in FBRX/1', icon: 'terminal' as const, onSelect: () => navigate(`terminal/fbrx1/${encodeURIComponent(c.cmd)}`) }] : []),
+        { label: 'Copy', icon: 'copy', onSelect: copy },
+        { label: 'Add to macros…', icon: 'zap', onSelect: macro },
+        { label: `Ask ${agentName} to explain it`, icon: 'sparkles', onSelect: () => askAgent(`Explain the FBRX command "${c.cmd}" (${set.title}): what it does, when I would use it, and whether it changes anything.`) },
+      ])}
+    >
       <div className="fbrx-cmd-text">
         <code>{c.cmd}</code>
         <div className="fx-muted">
@@ -183,13 +197,16 @@ function CommandRow({ c, set }: { c: FbrxCommand; set: FbrxCommandSet }) {
           {c.what}
         </div>
       </div>
-      {set.kind === 'fbrx1' ? (
-        <Button size="sm" variant="ghost" icon="terminal" onClick={() => navigate(`terminal/fbrx1/${encodeURIComponent(c.cmd)}`)} title="Opens FBRX/1 with the command typed in; press Enter to run it">
-          Try it
-        </Button>
-      ) : (
-        <Button size="sm" variant="ghost" icon="copy" aria-label={`Copy ${c.cmd}`} onClick={() => void navigator.clipboard.writeText(c.cmd).then(() => toast.success('Copied', 'Paste it into the server\'s console.'))} />
-      )}
+      <div className="fbrx-cmd-actions">
+        {set.kind === 'fbrx1' ? (
+          <Button size="sm" variant="ghost" icon="terminal" onClick={() => navigate(`terminal/fbrx1/${encodeURIComponent(c.cmd)}`)} title="Opens FBRX/1 with the command typed in; press Enter to run it">
+            Try it
+          </Button>
+        ) : (
+          <Button size="sm" variant="ghost" icon="copy" aria-label={`Copy ${c.cmd}`} onClick={copy} />
+        )}
+        <Button size="sm" variant="ghost" icon="zap" aria-label={`Add ${c.cmd} to macros`} title="Add to macros: a shortcut that types it" onClick={macro} />
+      </div>
     </div>
   );
 }

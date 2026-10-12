@@ -2,9 +2,13 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Snippet } from '@fbrx/shared';
 import { Button, Card, Icons, Input, useToast } from '@fbrx/ui';
 import { call } from './client';
-import { useCore } from './hooks';
-import { AskButton } from './widgets';
+import { navigate } from './app';
+import { useAgentName, useConsoleSessions, useCore } from './hooks';
+import { AskButton, askAgent } from './widgets';
 import { useSlashMenu } from './slash-menu';
+import { FBRX_COMMAND_SETS, type FbrxCommand, type FbrxCommandSet } from './fbrx-command-data';
+import { addToMacros } from './macro-add';
+import { menuFor } from './context-menu';
 
 /**
  * FBRX/1: the FBRX management console, in the spirit of a network operating system's CLI. "show" reads, "request"
@@ -100,16 +104,25 @@ const HISTORY_KEY = 'fbrx.fbrx1.history';
 
 type ConsoleApi = { run: (lines: string[]) => void; insert: (text: string) => void };
 
-/** The console with its library beside it. "prefill" types a command in, ready to run (from the Library). */
-export function Fbrx1Panel({ prefill }: { prefill?: string }) {
+/** FBRX Server and FBRX Gate commands: they run on a server, so they go into a device console rather than FBRX/1. */
+const SERVER_SETS = FBRX_COMMAND_SETS.filter((set) => set.kind === 'server');
+
+/**
+ * The console with its library beside it. "prefill" types a command in, ready to run (from the Library). The FBRX
+ * Server and FBRX Gate commands join the library once they are found in the Library (Fun Mode's operator trophy), or
+ * straight away with Fun Mode off, the same as the Library's FBRX commands.
+ */
+export function Fbrx1Panel({ prefill, easterEggs }: { prefill?: string; easterEggs: boolean }) {
   const api = useRef<ConsoleApi | null>(null);
+  const trophies = useCore('fun.trophies', undefined, ['fun.trophy']);
+  const servers = !easterEggs || !!trophies.data?.unlocked.operator;
   useEffect(() => {
     if (prefill) api.current?.insert(prefill);
   }, [prefill]);
   return (
     <div className="term-layout">
       <Fbrx1Console apiRef={api} />
-      <Fbrx1Library onRun={(l) => api.current?.run(l)} onInsert={(t) => api.current?.insert(t)} />
+      <Fbrx1Library servers={servers} onRun={(l) => api.current?.run(l)} onInsert={(t) => api.current?.insert(t)} />
     </div>
   );
 }
@@ -296,16 +309,69 @@ function Fbrx1Console({ apiRef }: { apiRef: { current: ConsoleApi | null } }) {
   );
 }
 
-/** Pre-configured FBRX/1 commands and recipes, plus snippets saved from the console. */
-function Fbrx1Library({ onRun, onInsert }: { onRun: (lines: string[]) => void; onInsert: (text: string) => void }) {
+/** One FBRX Server or FBRX Gate command: copy it, or type it into the open server console (Enter stays yours). */
+function ServerCommandRow({ c, set }: { c: FbrxCommand; set: FbrxCommandSet }) {
+  const toast = useToast();
+  const agentName = useAgentName();
+  const sessions = useConsoleSessions();
+  const open = (sessions.data ?? []).filter((x) => x.state === 'open');
+  const target = open.find((x) => x.profileId === 'fbrx-server' || x.profileId === 'fbrx-gate') ?? open[0];
+  const copy = () => void navigator.clipboard.writeText(c.cmd).then(() => toast.success('Copied', `Paste it into the server's console. ${set.where}`));
+  const type = async () => {
+    if (!target) return;
+    await call('console.write', { id: target.id, data: c.cmd });
+    navigate(`terminal/console/${target.id}`);
+    toast.info('Typed in, not run', `Check it in ${target.label}, then press Enter.`);
+  };
+  const macro = () => addToMacros({ name: c.what, text: c.cmd, slash: true });
+  return (
+    <div
+      className="ref-item"
+      onContextMenu={menuFor([
+        { label: 'Copy', icon: 'copy', onSelect: copy },
+        ...(target ? [{ label: `Type into ${target.label}`, icon: 'terminal' as const, onSelect: () => void type() }] : []),
+        { label: 'Add to macros…', icon: 'zap', onSelect: macro },
+        { label: `Ask ${agentName} to explain it`, icon: 'sparkles', onSelect: () => askAgent(`Explain the ${set.title} command "${c.cmd}": what it does, when I would use it, and whether it changes anything.`) },
+      ])}
+    >
+      <button className="ref-text" onClick={copy} title="Copy it">
+        <span className="ref-title">
+          {c.what}
+          {c.danger && <span className="fbrx-cmd-tag">changes something</span>}
+        </span>
+        <code>{c.cmd}</code>
+      </button>
+      <div className="ref-actions">
+        <Button size="sm" variant="ghost" icon="copy" aria-label={`Copy ${c.cmd}`} title="Copy" onClick={copy} />
+        {target && <Button size="sm" variant="ghost" icon="terminal" aria-label={`Type into ${target.label}`} title={`Type it into ${target.label} (you press Enter)`} onClick={() => void type()} />}
+        <Button size="sm" variant="ghost" icon="zap" aria-label={`Add ${c.cmd} to macros`} title="Add to macros" onClick={macro} />
+      </div>
+    </div>
+  );
+}
+
+/** Pre-configured FBRX/1 commands and recipes, plus snippets saved from the console, and (once found) the server's. */
+function Fbrx1Library({ servers, onRun, onInsert }: { servers: boolean; onRun: (lines: string[]) => void; onInsert: (text: string) => void }) {
+  const agentName = useAgentName();
   const [group, setGroup] = useState(FBRX1_LIBRARY[0].id);
   const [q, setQ] = useState('');
   const snippets = useCore('snippets.list', undefined, ['workspace.changed']);
   const mine = (snippets.data ?? []).filter((x: Snippet) => x.language === 'fbrx1' || x.tags.includes('fbrx1'));
   const s = q.trim().toLowerCase();
   const items = s ? FBRX1_LIBRARY.flatMap((g) => g.items).filter((r) => `${r.title} ${r.what} ${r.lines.join(' ')}`.toLowerCase().includes(s)) : group === 'mine' ? [] : (FBRX1_LIBRARY.find((g) => g.id === group)?.items ?? []);
+  const serverSet = servers ? SERVER_SETS.find((set) => set.id === group) : undefined;
+  const serverHits = servers && s ? SERVER_SETS.flatMap((set) => set.groups.flatMap((g) => g.items.filter((c) => `${c.cmd} ${c.what} ${g.name} ${set.title}`.toLowerCase().includes(s)).map((c) => ({ c, set })))) : [];
   const row = (key: string, title: string, what: string, lines: string[]) => (
-    <div key={key} className="ref-item">
+    <div
+      key={key}
+      className="ref-item"
+      onContextMenu={menuFor([
+        { label: 'Run', icon: 'play', onSelect: () => onRun(lines) },
+        { label: 'Put it in the command line', icon: 'terminal', onSelect: () => onInsert(lines[0]) },
+        { label: 'Add to macros…', icon: 'zap', onSelect: () => addToMacros({ name: title, text: lines.join('\n'), slash: true }) },
+        { label: `Ask ${agentName} to explain it`, icon: 'sparkles', onSelect: () => askAgent(`Explain this FBRX/1 command${lines.length > 1 ? ' recipe' : ''}, in plain language: what it does and whether it changes anything.\n\n${lines.join('\n')}`) },
+      ])}
+    >
       <button className="ref-text" onClick={() => onInsert(lines[0])} title={lines.length > 1 ? 'A recipe: ▶ runs every line in order' : 'Put it in the command line'}>
         <span className="ref-title">
           {title}
@@ -333,11 +399,36 @@ function Fbrx1Library({ onRun, onInsert }: { onRun: (lines: string[]) => void; o
             <button className={`chip${group === 'mine' ? ' on' : ''}`} onClick={() => setGroup('mine')}>
               <Icons.bookmark size={12} /> My snippets{mine.length ? ` (${mine.length})` : ''}
             </button>
+            {servers &&
+              SERVER_SETS.map((set) => {
+                const Ico = Icons[set.icon];
+                return (
+                  <button key={set.id} className={`chip cli-chip${group === set.id ? ' on' : ''}`} onClick={() => setGroup(set.id)} title={set.where}>
+                    <Ico size={12} /> {set.title}
+                  </button>
+                );
+              })}
           </div>
         )}
       </div>
       <div className="term-panel-list">
         {items.map((r) => row(r.title, r.title, r.what, r.lines))}
+        {serverSet && !s && (
+          <>
+            <div className="fx-muted term-panel-note">{serverSet.where} Click one to copy it; the console button types it into an open server console for you to check and run.</div>
+            {serverSet.groups.map((g) => (
+              <div key={g.name}>
+                <div className="term-panel-group">{g.name}</div>
+                {g.items.map((c) => (
+                  <ServerCommandRow key={c.cmd} c={c} set={serverSet} />
+                ))}
+              </div>
+            ))}
+          </>
+        )}
+        {serverHits.map(({ c, set }) => (
+          <ServerCommandRow key={`${set.id}:${c.cmd}`} c={c} set={set} />
+        ))}
         {(group === 'mine' || s) && mine.filter((x) => !s || `${x.title} ${x.content}`.toLowerCase().includes(s)).map((x) => row(x.id, x.title, 'Saved snippet', x.content.split('\n').filter((l) => l.trim())))}
         {group === 'mine' && !s && !mine.length && <div className="fx-muted" style={{ padding: 12, fontSize: 12.5 }}>Save a command from the console with its bookmark button, or add a snippet with the language "fbrx1" in Snippets.</div>}
       </div>

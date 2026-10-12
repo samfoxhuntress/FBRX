@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import type { AvProduct, ProtectionStatus, ScanJob, ShieldDetection } from '@fbrx/shared';
+import { lastScanDue, nextScanDue, scheduledScanDue, type AvProduct, type ProtectionStatus, type ScanJob, type ShieldDetection } from '@fbrx/shared';
 import { decodeProductState } from '../src/protection/products';
 import { isEicar, SCRIPT_RULES, zipEntryNames } from '../src/protection/shield';
 import { makeKernel, tempDir, USER, waitFor } from './helpers';
@@ -118,6 +118,59 @@ describe('Choosing the antivirus', () => {
       st = (await kernel.call('protection.status', { refresh: true }, USER)) as ProtectionStatus;
       expect(st).toMatchObject({ managed: true, active: { kind: 'shield' } });
       await expect(kernel.call('protection.setProvider', { provider: 'auto' }, USER)).rejects.toThrow(/organization chooses/);
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+describe('The scheduled scan', () => {
+  // Monday 12 October 2026, local time.
+  const at = (d: number, h: number, m = 0) => new Date(2026, 9, d, h, m);
+
+  it('runs at the chosen time each day, and catches up after the computer was off', () => {
+    expect(lastScanDue('daily', '21:30', 1, at(12, 22))).toEqual(at(12, 21, 30));
+    expect(lastScanDue('daily', '21:30', 1, at(12, 9))).toEqual(at(11, 21, 30));
+    expect(nextScanDue('daily', '21:30', 1, at(12, 9))).toEqual(at(12, 21, 30));
+    expect(scheduledScanDue('daily', '21:30', 1, at(12, 8).toISOString(), at(12, 21, 31))).toBe(true);
+    expect(scheduledScanDue('daily', '21:30', 1, at(12, 21, 31).toISOString(), at(12, 23))).toBe(false);
+    // Off at 21:30 on Monday, on again Tuesday morning: it scans then.
+    expect(scheduledScanDue('daily', '21:30', 1, at(12, 8).toISOString(), at(13, 7))).toBe(true);
+    expect(lastScanDue('off', '21:30', 1, at(12, 22))).toBeNull();
+  });
+
+  it('runs on the chosen day each week, and waits for its first time', () => {
+    // Wednesdays at 13:00.
+    expect(lastScanDue('weekly', '13:00', 3, at(12, 9))).toEqual(at(7, 13));
+    expect(nextScanDue('weekly', '13:00', 3, at(12, 9))).toEqual(at(14, 13));
+    expect(lastScanDue('weekly', '13:00', 3, at(14, 13))).toEqual(at(14, 13));
+    expect(lastScanDue('weekly', '08:00', 1, at(12, 7))).toEqual(at(5, 8));
+    expect(scheduledScanDue('weekly', '13:00', 3, at(12, 9).toISOString(), at(14, 13, 5))).toBe(true);
+    expect(scheduledScanDue('weekly', '13:00', 3, null, at(14, 13, 5))).toBe(false);
+  });
+
+  it('starts a quick scan at its time in any edition, and a changed schedule waits for its next time', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    const tick = (now: Date) => (kernel.protection as unknown as { scheduled(now: Date): void }).scheduled(now);
+    try {
+      kernel.settings.update({ protection: { shield: { schedule: 'daily', scheduleTime: '09:00' } } });
+      tick(at(12, 8));
+      tick(at(12, 8, 30));
+      expect(await kernel.call('protection.job', undefined, USER)).toBeNull();
+      tick(at(12, 9, 2));
+      expect(await kernel.call('protection.job', undefined, USER)).toMatchObject({ type: 'quick', engine: 'shield' });
+      await kernel.call('protection.cancelScan', undefined, USER);
+      await waitFor(async () => ((await kernel.call('protection.job', undefined, USER)) as ScanJob | null)?.state !== 'running', 10_000);
+
+      // Moved to the evening: today's 09:00 has gone, and nothing runs until 18:00.
+      kernel.settings.update({ protection: { shield: { scheduleTime: '18:00' } } });
+      const before = ((await kernel.call('protection.job', undefined, USER)) as ScanJob).id;
+      tick(at(12, 9, 10));
+      tick(at(12, 17));
+      expect(((await kernel.call('protection.job', undefined, USER)) as ScanJob).id).toBe(before);
+      tick(at(12, 18, 1));
+      expect(((await kernel.call('protection.job', undefined, USER)) as ScanJob).id).not.toBe(before);
+      await kernel.call('protection.cancelScan', undefined, USER);
     } finally {
       await cleanup();
     }

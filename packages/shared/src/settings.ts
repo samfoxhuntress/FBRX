@@ -2,7 +2,7 @@ import { z } from 'zod';
 import type { Tier } from './license';
 import { DEFAULT_LOCAL_API_PORT, DEFAULT_RUNTIME_PORT, UPDATE_CHANNELS } from './constants';
 import { ALERT_CHANNELS } from './ext';
-import { PROTECTION_DEFAULT_FEED } from './protection';
+import { PROTECTION_DEFAULT_FEED, SCAN_TIME_PATTERN } from './protection';
 import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS } from './mesh-assist';
 import { isCidr, MESH_TRAFFIC_CLASSES } from './net';
 
@@ -181,6 +181,28 @@ export const SettingsSchema = z.object({
       }),
     )
     .max(200),
+  /** Pages that open in a window of their own, so they sit beside FBRX (and any other app). */
+  windows: z.object({
+    terminal: z.boolean(),
+    /** The chat with the agent. */
+    agent: z.boolean(),
+  }),
+  /**
+   * Your own macros: a keyboard shortcut that types a command or text into whatever app you are in (FBRX puts it on the
+   * clipboard and pastes it; on a Mac you press ⌘V). Placeholders as in quick snippets. Added in Settings → Macros, or
+   * from a command anywhere in FBRX with "Add to macros".
+   */
+  keyMacros: z
+    .array(
+      z.object({
+        id: z.string().max(40),
+        name: z.string().min(1).max(80),
+        /** An Electron accelerator ("Control+Alt+1"); empty while it has no shortcut yet. */
+        hotkey: z.string().max(60),
+        text: z.string().min(1).max(5000),
+      }),
+    )
+    .max(50),
   clipboard: z.object({
     /** Keep a history of copied text while FBRX runs (in memory only; never written to disk). */
     history: z.boolean(),
@@ -387,8 +409,12 @@ export const SettingsSchema = z.object({
       updateSignatures: z.boolean(),
       /** Where the threat database comes from: a list of SHA-256 fingerprints, one per line. */
       feedUrl: z.string().max(500),
-      /** Endpoint Ultra: a quick scan every day or week. */
+      /** A quick scan every day or week (a computer that was off at the time scans when it is next on). */
       schedule: z.enum(['off', 'daily', 'weekly']),
+      /** When it runs, 24-hour local time ("21:30"). Endpoint Ultra chooses it; other editions run at the default. */
+      scheduleTime: z.string().regex(SCAN_TIME_PATTERN),
+      /** The day a weekly scan runs: 0 = Sunday … 6 = Saturday (Endpoint Ultra chooses it). */
+      scheduleDay: z.number().int().min(0).max(6),
       /** Endpoint Ultra: also scan with ClamAV when it is installed. */
       useClamAV: z.boolean(),
       /** Endpoint Ultra: ask VirusTotal about suspicious files (needs a VIRUSTOTAL_API_KEY in Credentials). */
@@ -485,6 +511,8 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: 'm-ts', trigger: 'stamp', description: 'Date and time stamp', text: '[{datetime}]', scope: 'everywhere' },
     { id: 'm-flush', trigger: 'flushdns', description: 'Flush DNS and renew the address', text: 'ipconfig /flushdns; ipconfig /release; ipconfig /renew', scope: 'terminal' },
   ],
+  keyMacros: [],
+  windows: { terminal: false, agent: false },
   clipboard: {
     history: false,
     hotkey: 'Control+Alt+Z',
@@ -600,6 +628,8 @@ export const DEFAULT_SETTINGS: Settings = {
       updateSignatures: true,
       feedUrl: PROTECTION_DEFAULT_FEED,
       schedule: 'off',
+      scheduleTime: '12:00',
+      scheduleDay: 1,
       useClamAV: true,
       useVirusTotal: false,
       exclusions: [],

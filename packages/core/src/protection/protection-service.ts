@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import {
   isPathLocked,
   newId,
+  scheduledScanDue,
   type AvProduct,
   type ProtectionKind,
   type ProtectionOption,
@@ -32,6 +33,8 @@ import type { Shield } from './shield';
 
 const STATUS_TTL_MS = 60_000;
 const CHECK_EVERY_MS = 30 * 60_000;
+/** Scheduled scans start within this long of their time. */
+const SCHEDULE_CHECK_MS = 2 * 60_000;
 /** Products that are scanners rather than protection (they never become the active antivirus). */
 const SCANNERS_ONLY = new Set(['clamav']);
 
@@ -63,6 +66,7 @@ export class ProtectionService {
   private current: ScanJob | null = null;
   private abort: AbortController | null = null;
   private timer: NodeJS.Timeout | null = null;
+  private schedTimer: NodeJS.Timeout | null = null;
   private kick: NodeJS.Timeout | null = null;
   private running = false;
   private lastProblems = new Set<string>();
@@ -78,13 +82,17 @@ export class ProtectionService {
     this.kick.unref?.();
     this.timer = setInterval(() => this.background(), CHECK_EVERY_MS);
     this.timer.unref?.();
+    this.schedTimer = setInterval(() => this.running && this.scheduled(), SCHEDULE_CHECK_MS);
+    this.schedTimer.unref?.();
   }
 
   stop(): void {
     this.running = false;
     if (this.timer) clearInterval(this.timer);
+    if (this.schedTimer) clearInterval(this.schedTimer);
     if (this.kick) clearTimeout(this.kick);
     this.timer = null;
+    this.schedTimer = null;
     this.kick = null;
     this.abort?.abort();
     this.d.shield.unwatch();
@@ -123,14 +131,27 @@ export class ProtectionService {
     const problems = new Set(st.active.kind === 'defender' && IS_WIN ? [] : st.problems.filter((p) => !p.startsWith('FBRX Shield found')));
     for (const p of problems) if (!this.lastProblems.has(p)) this.d.alert('av_problem', `${st.active.name} needs attention`, p, `${st.active.id}:${p}`);
     this.lastProblems = problems;
-    if (st.shield.full && s.schedule !== 'off' && !this.current) {
-      const last = this.d.meta.get<string>('shield.scheduledAt');
-      const every = s.schedule === 'daily' ? 24 * 3600_000 : 7 * 24 * 3600_000;
-      if (!last || Date.now() - Date.parse(last) > every) {
-        this.d.meta.set('shield.scheduledAt', new Date().toISOString());
-        this.scan({ type: 'quick', engine: 'shield' });
-      }
+    this.scheduled();
+  }
+
+  /**
+   * The scheduled quick scan, in every edition (Endpoint Ultra picks its time and day). Checked every few minutes; a
+   * computer that was off when one fell due scans when it is next on. A new or changed schedule waits for its next time.
+   */
+  private scheduled(now = new Date()): void {
+    const s = this.d.settings().shield;
+    if (s.schedule === 'off' || this.current?.state === 'running') return;
+    const key = `${s.schedule}|${s.scheduleTime}|${s.scheduleDay}`;
+    const last = this.d.meta.get<string>('shield.scheduledAt');
+    if (this.d.meta.get<string>('shield.scheduleKey') !== key || !last) {
+      this.d.meta.set('shield.scheduleKey', key);
+      this.d.meta.set('shield.scheduledAt', now.toISOString());
+      return;
     }
+    if (!scheduledScanDue(s.schedule, s.scheduleTime, s.scheduleDay, last, now)) return;
+    this.d.meta.set('shield.scheduledAt', now.toISOString());
+    this.d.log.info('Starting the scheduled scan', { schedule: s.schedule, time: s.scheduleTime });
+    this.scan({ type: 'quick', engine: 'shield' });
   }
 
   // ------------------------------------------------------------------------------------------- status

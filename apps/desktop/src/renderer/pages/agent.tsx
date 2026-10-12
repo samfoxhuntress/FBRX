@@ -2,10 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentEvent, ApprovalRequest, ChatMessage, ProviderStatus, ToolCallRecord } from '@fbrx/shared';
 import { NATURAL_PREFIX, addressAs, funEnabled } from '@fbrx/shared';
 import { Button, Callout, Card, Icons, Modal, Select, Status, TextArea, useAction, useConfirm, type IconName, FbrxMark } from '@fbrx/ui';
-import { call, onEvent } from '../client';
+import { bridge, call, onEvent } from '../client';
 import { useCore } from '../hooks';
 import { Markdown } from '../markdown';
-import { navigate, routeArg } from '../app';
+import { POPOUT, navigate, routeArg } from '../app';
 import { EmergencyStop, ModelPicker } from '../widgets';
 import { useSlashMenu } from '../slash-menu';
 import { ActivityPanel, ThinkingNote, reduceActivity, type Activity } from '../agent-activity';
@@ -396,7 +396,17 @@ export function AgentPage({ agentName }: { agentName: string }) {
 
   return (
     <div className="agent">
-      <Card className="agent-list" title="Conversations" actions={<Button size="sm" icon="plus" onClick={() => void loadConversation(null)} aria-label="New conversation" />} flush>
+      <Card
+        className="agent-list"
+        title="Conversations"
+        actions={
+          <>
+            {bridge.popOut && !POPOUT && <Button size="sm" variant="ghost" icon="external" aria-label="Open the chat in its own window" title="Open the chat in its own window, to keep it beside your work" onClick={() => void bridge.popOut?.(location.hash.replace(/^#\/?/, '') || 'agent')} />}
+            <Button size="sm" icon="plus" onClick={() => void loadConversation(null)} aria-label="New conversation" />
+          </>
+        }
+        flush
+      >
         <ChatHistory
           chats={convs.data ?? []}
           reload={convs.reload}

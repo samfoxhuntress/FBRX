@@ -24,6 +24,12 @@ interface Bridge {
   spotlightHide?(): void;
   openMain?(route: string): void;
   copyText?(text: string): Promise<void>;
+  /** Opens a page of FBRX in a window of its own, beside the main one (a terminal, the chat…). */
+  popOut?(route: string): Promise<boolean>;
+  /** In a popped-out window: keep it on top, put it beside the main window, or bring the main window forward. */
+  popOutWindow?(action: 'pin' | 'tile' | 'main', on?: boolean): Promise<boolean>;
+  /** Edit commands on what has the focus (the right-click menu). */
+  edit?(action: 'cut' | 'copy' | 'paste' | 'pasteAsText' | 'selectAll' | 'undo' | 'redo'): Promise<boolean>;
   /** The Silly Goose overlay window (Electron only). */
   goose?(action: 'summon' | 'leave' | 'interactive', on?: boolean): Promise<unknown> | void;
   /** The pointer's position (the click-through overlay can't see it), honks and shoos, for the goose. */

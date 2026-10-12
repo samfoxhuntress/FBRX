@@ -300,6 +300,14 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
           {(tier === 'ultra' || enrolled) && <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organization's control plane" />}
         </div>
       </Card>
+      {bridge.popOut && !learner && (
+        <Card title="Windows" subtitle="Open these in a window of their own, to keep them beside FBRX or any other app. Right-click a page in the sidebar to open any page in a new window.">
+          <div className="fx-form">
+            {tier === 'ultra' && <Toggle checked={s.windows.terminal} disabled={L('windows.terminal')} onChange={(v) => void patch({ windows: { terminal: v } })} label="The Terminal opens in its own window" />}
+            <Toggle checked={s.windows.agent} disabled={L('windows.agent')} onChange={(v) => void patch({ windows: { agent: v } })} label={`The chat with ${s.ai.agentName} opens in its own window`} />
+          </div>
+        </Card>
+      )}
       {!learner && <Card title={`${s.ai.agentName}'s behavior`}>
         <div className="fx-form">
           {tier === 'ultra' && (
