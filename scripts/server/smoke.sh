@@ -94,3 +94,17 @@ DOME="$(curl -fs -H "authorization: Bearer $(cat "$WORK/gate/cli.token")" "http:
 [ "$(json 'v.mode + " " + v.settings.enabled' <<<"$DOME")" = "simulated true" ] || fail "FBRX MiniDome is not watching: $DOME"
 echo "OK: FBRX Gate commits, confirms and previews from the bundled command line; FBRX MiniDome watches it"
 
+echo "==> fbrx-server update check (the bundled helper)"
+VERSION_NOW="$(cat "$BUNDLE/VERSION")"
+printf 'VERSION="%s"\n' "$VERSION_NOW" >"$WORK/release"
+upd() { env FBRX_V_DATA_DIR="$WORK/upd-data" FBRX_SERVER_UPDATE_DIR="$WORK/update" FBRX_SERVER_RELEASE_FILE="$WORK/release" "$NODE" "$BUNDLE/fbrx-virtual/cli.mjs" update-check "$@"; }
+mkdir -p "$WORK/upd-data"
+printf '{"server":{"version":"%s","bundle":"https://example.invalid/fbrx-server.tar.gz"}}\n' "$VERSION_NOW" >"$WORK/release.json"
+upd --from "$WORK/release.json" | grep -q 'is up to date' || fail "update check does not see that this version is the newest"
+TARBALL="$(dirname "$BUNDLE")/fbrx-server-$VERSION_NOW.tar.gz"
+if [ -f "$TARBALL" ]; then
+  upd --file "$TARBALL" --force | grep -q "FBRX Server $VERSION_NOW is ready to install" || fail "update check --file did not get the bundle ready"
+  grep -q "^VERSION=$VERSION_NOW\$" "$WORK/update/staged.env" || fail "the staged update is not written down for fbrx-server"
+  [ -f "$(sed -n 's/^BUNDLE=//p' "$WORK/update/staged.env")/install.sh" ] || fail "the staged bundle has no install.sh"
+fi
+echo "OK: fbrx-server update check reads the release list and gets a bundle ready"

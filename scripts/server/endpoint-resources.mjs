@@ -181,6 +181,8 @@ for (const f of files) {
   const p = join(OUT, f.name);
   f.size = statSync(p).size;
   f.sha256 ??= await sha256(p);
+  // Published next to the bundle and the ISO in the release: fbrx-server update check compares the download with it.
+  if (f.kind === 'bundle' || f.kind === 'iso') writeFileSync(`${p}.sha256`, `${f.sha256}  ${f.name}\n`);
 }
 writeFileSync(join(OUT, 'manifest.json'), JSON.stringify({ product: 'FBRX Server', version: VERSION, builtAt: new Date().toISOString(), files }, null, 2));
 const total = files.reduce((n, f) => n + f.size, 0);

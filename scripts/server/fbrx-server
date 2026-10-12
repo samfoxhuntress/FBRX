@@ -25,6 +25,120 @@ roles() { (grep -E '^ROLES=' /etc/fbrx-server-release 2>/dev/null || echo 'ROLES
 need_root() { [ "$(id -u)" -eq 0 ] || { echo "Run this as root (sudo fbrx-server $1)." >&2; exit 1; }; }
 has_role() { case ",$(roles)," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
 
+# ------------------------------------------------------------------------------------------------- update
+# sudo fbrx-server update check     a newer FBRX Server: downloaded, its checksum compared, unpacked (nothing changes yet)
+# sudo fbrx-server update commit    installs it; the previous version is kept, and comes back by itself if the new one
+#                                   does not answer
+# sudo fbrx-server update rollback  back to the previous version
+UPD=/var/lib/fbrx-server-update
+LOG=/var/log/fbrx-server-update.log
+staged_value() { sed -n "s/^$1=//p" "$UPD/staged.env" 2>/dev/null | head -1; }
+version_now() { (sed -n 's/^VERSION="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /etc/fbrx-server-release 2>/dev/null || true) | head -1; }
+healthy() {
+  for _ in $(seq 1 "${1:-60}"); do
+    if curl -fsk "https://127.0.0.1:$(port)/healthz" >/dev/null 2>&1 || curl -fs "http://127.0.0.1:$(port)/healthz" >/dev/null 2>&1; then return 0; fi
+    sleep 1
+  done
+  return 1
+}
+# The parts of FBRX Server an update replaces, copied aside (programs, settings, service files and the databases;
+# virtual disks, ISOs and AI models are not touched by an update and stay where they are).
+save_previous() {
+  local to="$UPD/previous.new"
+  rm -rf "$to"
+  mkdir -p "$to/sbin" "$to/units" "$to/data" "$to/core-data"
+  cp -a "$APP" "$to/app"
+  cp -a /etc/fbrx-server-release "$to/" 2>/dev/null || true
+  cp -a /etc/fbrx-virtual "$to/etc-fbrx-virtual"
+  if [ -d /etc/fbrx-core ]; then cp -a /etc/fbrx-core "$to/etc-fbrx-core"; fi
+  for f in /usr/local/sbin/fbrx-server /usr/local/sbin/fbrx-gate; do if [ -f "$f" ]; then cp -a "$f" "$to/sbin/"; fi; done
+  for f in /etc/systemd/system/fbrx-*.service; do if [ -f "$f" ]; then cp -a "$f" "$to/units/"; fi; done
+  find "$DATA" -maxdepth 1 -type f \( -name '*.db' -o -name '*.db-wal' -o -name '*.db-shm' \) -exec cp -a {} "$to/data/" \;
+  if [ -d /var/lib/fbrx-core ]; then find /var/lib/fbrx-core -maxdepth 1 -type f \( -name '*.db' -o -name '*.db-wal' -o -name '*.db-shm' \) -exec cp -a {} "$to/core-data/" \;; fi
+  version_now >"$to/VERSION"
+  rm -rf "$UPD/previous"
+  mv "$to" "$UPD/previous"
+}
+restore_previous() {
+  local from="$UPD/previous"
+  systemctl stop fbrx-virtual.service 2>/dev/null || true
+  systemctl stop fbrx-core.service 2>/dev/null || true
+  rm -rf "$APP.rollback"
+  cp -a "$from/app" "$APP.rollback"
+  rm -rf "$APP"
+  mv "$APP.rollback" "$APP"
+  if [ -f "$from/fbrx-server-release" ]; then cp -a "$from/fbrx-server-release" /etc/fbrx-server-release; fi
+  rm -rf /etc/fbrx-virtual && cp -a "$from/etc-fbrx-virtual" /etc/fbrx-virtual
+  if [ -d "$from/etc-fbrx-core" ]; then rm -rf /etc/fbrx-core && cp -a "$from/etc-fbrx-core" /etc/fbrx-core; fi
+  cp -a "$from/sbin/." /usr/local/sbin/
+  cp -a "$from/units/." /etc/systemd/system/
+  find "$DATA" -maxdepth 1 -type f \( -name '*.db-wal' -o -name '*.db-shm' \) -delete
+  cp -a "$from/data/." "$DATA/"
+  if [ -d /var/lib/fbrx-core ]; then
+    find /var/lib/fbrx-core -maxdepth 1 -type f \( -name '*.db-wal' -o -name '*.db-shm' \) -delete
+    cp -a "$from/core-data/." /var/lib/fbrx-core/
+  fi
+  systemctl daemon-reload
+  if [ -f /etc/systemd/system/fbrx-core.service ] && systemctl is-enabled --quiet fbrx-core.service 2>/dev/null; then systemctl start fbrx-core.service || true; fi
+  systemctl start fbrx-virtual.service || true
+}
+update() {
+  local sub="${1:-status}"
+  [ $# -eq 0 ] || shift
+  case "$sub" in
+    status)
+      echo "Installed:  FBRX Server $(version_now)"
+      if [ -s "$UPD/staged.env" ]; then echo "Ready:      $(staged_value VERSION) (sudo fbrx-server update commit installs it)"; else echo "Ready:      nothing (sudo fbrx-server update check looks for a newer version)"; fi
+      if [ -f "$UPD/previous/VERSION" ]; then echo "Previous:   $(cat "$UPD/previous/VERSION") (sudo fbrx-server update rollback goes back to it)"; fi
+      ;;
+    check)
+      need_root "update check"
+      mkdir -p "$UPD" && chmod 0700 "$UPD"
+      helper update-check "$@"
+      ;;
+    commit)
+      need_root "update commit"
+      local bundle next now
+      bundle="$(staged_value BUNDLE)"
+      next="$(staged_value VERSION)"
+      now="$(version_now)"
+      if [ -z "$bundle" ] || [ ! -f "$bundle/install.sh" ]; then echo "Nothing is ready to install: sudo fbrx-server update check first." >&2; exit 1; fi
+      echo "Installing FBRX Server $next (this server runs $now). Virtual machines keep running; the console restarts."
+      [ "${1:-}" = "--yes" ] || [ ! -t 0 ] || { read -r -p "Go ahead? [y/N] " answer; [[ "$answer" =~ ^[Yy] ]] || exit 1; }
+      echo "Keeping $now aside (programs, settings and databases) so it can come back"
+      systemctl stop fbrx-virtual.service 2>/dev/null || true
+      systemctl stop fbrx-core.service 2>/dev/null || true
+      save_previous
+      { echo; echo "---- $(date -Is) update $now -> $next"; } >>"$LOG"
+      # The new version's own installer, with this server's roles; it keeps the port, the settings and the gate's ports.
+      if bash "$bundle/install.sh" --bundle "$bundle" --yes --roles "$(roles)" 2>&1 | tee -a "$LOG" && healthy 90; then
+        rm -rf "$UPD/staged" "$UPD/staged.env" "$UPD/staged-notes.json"
+        echo
+        echo "FBRX Server $next is installed (it was $now). sudo fbrx-server update rollback goes back."
+        exit 0
+      fi
+      echo >&2
+      echo "FBRX Server $next did not start properly: going back to $now (what happened is in $LOG)." >&2
+      restore_previous
+      if healthy 60; then echo "Back on FBRX Server $now. $next is still ready (sudo fbrx-server update commit tries again)." >&2; else echo "FBRX Server $now did not answer either: fbrx-server logs and fbrx-server doctor say why." >&2; fi
+      exit 1
+      ;;
+    rollback)
+      need_root "update rollback"
+      [ -d "$UPD/previous/app" ] || { echo "There is no previous version to go back to (it is kept after an update commit)." >&2; exit 1; }
+      local prev
+      prev="$(cat "$UPD/previous/VERSION" 2>/dev/null || echo 'the previous version')"
+      echo "Going back from FBRX Server $(version_now) to $prev. Changes made in the console since the update (users, settings,"
+      echo "gate commits) go back with it; virtual machines keep running."
+      [ "${1:-}" = "--yes" ] || [ ! -t 0 ] || { read -r -p "Go back? [y/N] " answer; [[ "$answer" =~ ^[Yy] ]] || exit 1; }
+      { echo; echo "---- $(date -Is) rollback $(version_now) -> $prev"; } >>"$LOG"
+      restore_previous
+      if healthy 60; then echo "Back on FBRX Server $prev."; else echo "FBRX Server $prev did not answer yet: fbrx-server logs and fbrx-server doctor say why." >&2; exit 1; fi
+      ;;
+    *) echo "fbrx-server update [check [--file <bundle.tar.gz>] [--force] | commit | rollback]" >&2; exit 2 ;;
+  esac
+}
+
 # fbrx-server doctor [--fix] [--quiet]: every service the server's roles need, switched on for the next start and
 # running now; with --fix, the ones that are not are switched on and started.
 doctor() {
@@ -113,9 +227,11 @@ case "${1:-status}" in
         ;;
     esac
     echo "Certificate:  $(fingerprint)"
+    if [ -s "$UPD/staged.env" ]; then echo "Update:       FBRX Server $(staged_value VERSION) is ready (sudo fbrx-server update commit)"; fi
     if [ -s "$DATA/setup-code" ]; then echo "Setup code:   $(cat "$DATA/setup-code")"; fi
     ;;
   doctor) shift; doctor "$@" ;;
+  update) shift; update "$@" ;;
   url) url ;;
   fingerprint) fingerprint ;;
   setup-code)
@@ -145,6 +261,11 @@ case "${1:-status}" in
     cat <<USAGE
 fbrx-server status          what runs, where to open the console, the certificate fingerprint
 fbrx-server doctor [--fix]  checks every service this server needs; --fix switches on and starts what is off
+fbrx-server update          the version installed, one ready to install, the previous one
+fbrx-server update check    looks for a newer FBRX Server and gets it ready (downloaded and checked; --file <bundle>
+                            uses one you brought along)
+fbrx-server update commit   installs it; if it does not come up, the server goes back by itself
+fbrx-server update rollback back to the version before the last update
 fbrx-server url             the console's address
 fbrx-server setup-code      the first-time setup code (until someone sets the server up)
 fbrx-server logs [-f]       FBRX Virtual's log

@@ -40,8 +40,8 @@ BRIDGE=""
 UNINSTALL=0
 PURGE=0
 FORCE=0
-PORT=9443
-ROLES="virtual,ai"
+PORT=""
+ROLES=""
 GATE_WAN=""
 GATE_LAN=""
 GATE_MANAGE=""
@@ -64,7 +64,7 @@ usage() {
 
 Options:
   --bundle <dir|file.tar.gz>  the FBRX Server bundle (default: the folder this script is in)
-  --roles <list>              what this server does, comma separated (default virtual,ai):
+  --roles <list>              what this server does, comma separated (default: the ones it has, or virtual,ai):
                                 virtual  the FBRX Virtual hypervisor: virtual machines (KVM through libvirt)
                                 ai       the FBRX core: an AI agent on FBRX Mesh with Mesh Assist, run from the console
                                 gate     FBRX Gate: this server routes and protects your network (needs --gate-wan
@@ -80,7 +80,7 @@ Options:
   --gate-manage <cidr|none>   a private network on the internet side that may still reach the console and SSH
                               (default: the one the internet port is on now, if private, so you are not shut out)
   --bridge <nic>              make bridge br0 on this network port for virtual machines (applies after a reboot)
-  --port <n>                  the console's port (default 9443)
+  --port <n>                  the console's port (default: the one it has, or 9443)
   --no-start                  install and enable, but do not start (inside an installer)
   --reboot                    restart the server at the end when a change waits for it (the gate taking its ports)
   --yes                       do not ask
@@ -114,6 +114,12 @@ while [ $# -gt 0 ]; do
 done
 
 [ "$(id -u)" -eq 0 ] || die "Run this as root: sudo $0 $*"
+# Run again (an update, another role), the server keeps its port and roles unless new ones are given.
+existing() { (grep -E "^$1=" "$ETC/fbrx-virtual.env" 2>/dev/null || true) | tail -1 | cut -d= -f2-; }
+[ -n "$PORT" ] || PORT="$(existing FBRX_V_PORT)"
+PORT="${PORT:-9443}"
+[ -n "$ROLES" ] || ROLES="$(existing FBRX_V_ROLES)"
+ROLES="${ROLES:-virtual,ai}"
 [[ "$PORT" =~ ^[0-9]{2,5}$ ]] || die "--port must be a number"
 
 # The console (FBRX Virtual's service) comes with every role; the hypervisor only with the virtual role.
@@ -226,7 +232,7 @@ VERSION="$(cat "$BUNDLE/VERSION" 2>/dev/null || echo 0.0.0)"
 
 # ------------------------------------------------------------------------------------------- gate ports
 
-env_value() { (grep -E "^$1=" "$ETC/fbrx-virtual.env" 2>/dev/null || true) | tail -1 | cut -d= -f2-; }
+env_value() { existing "$1"; }
 is_ip() { [[ "$1" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] && [ "${BASH_REMATCH[1]}" -le 255 ] && [ "${BASH_REMATCH[2]}" -le 255 ] && [ "${BASH_REMATCH[3]}" -le 255 ] && [ "${BASH_REMATCH[4]}" -le 255 ]; }
 is_cidr() { is_ip "${1%/*}" && [[ "$1" =~ /([0-9]{1,2})$ ]] && [ "${BASH_REMATCH[1]}" -le 32 ]; }
 ip_int() { local IFS=.; read -r a b c d <<<"$1"; echo $(((a << 24) | (b << 16) | (c << 8) | d)); }

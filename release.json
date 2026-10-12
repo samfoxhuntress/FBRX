@@ -15,5 +15,14 @@
     "Endpoint Ultra adds scheduled scans and second engines (ClamAV, VirusTotal)."
   ],
   "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v1.9.5.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.5"
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.5",
+  "server": {
+    "version": "0.1.0",
+    "released": "2026-10-06",
+    "summary": "FBRX Server: the FBRX Virtual hypervisor, the AI role for the whole mesh, FBRX Gate and FBRX MiniDome.",
+    "notes": [],
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v1.9.5/fbrx-server-0.1.0.tar.gz",
+    "sha256": "d9aeb088327dcf8ffe36f070b0a2d97b076ca790b28a16953fece0d2929d55d3",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.5"
+  }
 }

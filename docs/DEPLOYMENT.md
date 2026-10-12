@@ -130,7 +130,11 @@ unit), users and API keys. Health endpoint: `GET /healthz`.
 
 1. Set the version in `apps/desktop/package.json` and in `release.json` (with its summary and notes), and point
    `release.json`'s `download` at the tag's source zip, `https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v<version>.zip`,
-   and `page` at `https://github.com/samfoxhuntress/FBRX/releases/tag/v<version>`.
+   and `page` at `https://github.com/samfoxhuntress/FBRX/releases/tag/v<version>`. When FBRX Server changed, raise its
+   version in `apps/virtual/package.json` and set `release.json`'s `server` entry: `version`, `summary`, `notes` and
+   `bundle` (`https://github.com/samfoxhuntress/FBRX/releases/download/v<version>/fbrx-server-<server version>.tar.gz`).
+   Its checksum is published next to the bundle (`.sha256`), so `sha256` can stay out; servers find the update with
+   `sudo fbrx-server update check` (see [SERVER.md](SERVER.md#updating-fbrx-server)).
 2. Merge into `main` (the default branch: installed copies read `release.json` from it).
 3. Tag that commit `v<version>` and push the tag, or run the **Release** workflow on `main` (Actions → Release →
    Run workflow) with *channel* `stable` and *Also publish a GitHub release* ticked, which creates the tag itself. It

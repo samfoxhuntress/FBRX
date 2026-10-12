@@ -65,6 +65,8 @@ jobs:
         run: scripts/server/bundle.sh --with-node
       - name: Smoke-test the bundle (the FBRX core in server mode, managed by FBRX Virtual)
         run: scripts/server/smoke.sh "$(ls -d dist/fbrx-server-*/ | head -1)"
+      - name: fbrx-server update commit and rollback (in a throwaway folder)
+        run: scripts/server/test-update.sh
       - name: The ISO's first start on Debian 13 (a fresh Debian root, the install disc still a package source)
         run: |
           sudo apt-get install -y -qq --no-install-recommends debootstrap debian-archive-keyring >/dev/null

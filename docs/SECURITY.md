@@ -266,6 +266,11 @@ tenant, and a deliberate *Disconnect* is respected.
   the SHA-512 in the authenticated feed, as before, and accepts the first signed update.
 * Update feeds are served per device by your control plane over authenticated HTTPS; files carry SHA-512 checksums
   verified by electron-updater.
+* **FBRX Server updates itself only when asked.** `sudo fbrx-server update check` reads the same `release.json`
+  (its `server` entry) and downloads the bundle only from a GitHub release (any host only when the server's
+  administrator names another release list), refuses it unless it matches the SHA-256 in the list or the `.sha256`
+  published next to it, and unpacks it without changing what runs. `update commit` (root) keeps the running version
+  aside, runs the new version's installer, and goes back by itself when the console does not answer afterwards.
 * **New versions offered from the repository.** The desktop app reads `release.json` from the public FBRX repository
   (`raw.githubusercontent.com/samfoxhuntress/FBRX/HEAD/release.json`) a minute and a half after it starts and every
   six hours, only while internet access is allowed and **Check for new versions automatically** is on. A newer

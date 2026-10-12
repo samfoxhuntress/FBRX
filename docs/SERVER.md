@@ -264,6 +264,7 @@ talks only to that exact controller, and keeps the password encrypted.
 ```
 fbrx-server status                 where the console is, service and hypervisor state, certificate fingerprint
 fbrx-server doctor [--fix]         every service this server's roles need, on and running; --fix switches on what is off
+fbrx-server update [check|commit|rollback]   updating FBRX Server (below)
 fbrx-server setup-code             the first-time setup code
 fbrx-server logs [-f]              FBRX Virtual's log
 fbrx-server logs ai [-f]           the FBRX core's log (agent, FBRX Mesh, Mesh Assist)
@@ -273,6 +274,39 @@ fbrx-server users                  who can sign in
 fbrx-server reset-password <user>  a new password for someone locked out
 fbrx-server create-admin [name]    another administrator
 fbrx-gate help                     FBRX Gate's own commands (gate role, see GATE.md)
+```
+
+## Updating FBRX Server
+
+```bash
+sudo fbrx-server update check     # is there a newer FBRX Server? If so: downloaded, checked, unpacked, ready
+sudo fbrx-server update           # what runs, what is ready to install, what came before
+sudo fbrx-server update commit    # install it
+sudo fbrx-server update rollback  # back to the version before the last update
+```
+
+* **check** reads the release list (`release.json` in the FBRX repository, its `server` entry) and, when it names a
+  newer version, downloads the bundle from the GitHub release, compares it with its published SHA-256 (refusing it if
+  they differ, or if there is none) and unpacks it into `/var/lib/fbrx-server-update/staged`. Nothing that runs
+  changes. `--file <fbrx-server-x.y.z.tar.gz>` uses a bundle you brought along instead (a USB stick, or the copy inside
+  FBRX Endpoint's installer); `--force` gets a version ready that is not newer (to repair, or to go back on purpose).
+  `FBRX_SERVER_UPDATE_URL` in `/etc/fbrx-virtual/fbrx-virtual.env` points it at another release list.
+* **commit** keeps the running version aside (its programs, settings, service files and databases; virtual disks,
+  ISOs and AI models are never touched by an update), then runs the new version's own installer with this server's
+  roles, port and settings. Virtual machines keep running and the gate keeps routing; the console and the AI role
+  restart. If the installer fails, or the console does not answer within a minute and a half, the server goes back to
+  the version it had by itself, and the new one stays ready to try again. The whole run is logged in
+  `/var/log/fbrx-server-update.log`.
+* **rollback** puts the kept version back, its databases included (changes made in the console since the update go
+  back with them).
+
+`fbrx-server status` says when an update is ready. A server installed before `update` existed (FBRX Server 0.1.0)
+updates by hand once, then with these commands from then on:
+
+```bash
+curl -fsSLO https://github.com/samfoxhuntress/FBRX/releases/download/v<release>/fbrx-server-<version>.tar.gz
+tar -xzf fbrx-server-<version>.tar.gz
+sudo bash fbrx-server-<version>/install.sh    # keeps the roles, port and settings this server has
 ```
 
 ## Settings

@@ -8,6 +8,7 @@ import { loadConfig } from './config';
 import { CoreLink } from './core-link';
 import { VIRTUAL_MIGRATIONS } from './migrations';
 import { clearSetupCode } from './setup-code';
+import { checkForUpdate, installedVersion, readStaged, DEFAULT_UPDATE_PATHS } from './server-update';
 
 /**
  * Server-side helpers for FBRX Virtual, run on the server itself (fbrx-server reset-password ...): for when nobody can
@@ -48,6 +49,15 @@ try {
     case 'ai':
       await ai(args);
       break;
+    case 'update-check':
+      await updateCheck(args);
+      break;
+    case 'update-staged': {
+      // For fbrx-server update (status): what is staged, one line.
+      const st = readStaged(DEFAULT_UPDATE_PATHS);
+      if (st) console.log(`${st.version}${st.summary ? ` · ${st.summary}` : ''}`);
+      break;
+    }
     default:
       console.log('FBRX Virtual server helpers:\n  users                     list who can sign in\n  reset-password <username> give someone a new password\n  create-admin [username]   add an administrator\n  ai [command]              the models on this server (ai help)');
       process.exitCode = cmd ? 1 : 0;
@@ -57,6 +67,48 @@ try {
   process.exitCode = 1;
 } finally {
   db.close();
+}
+
+// ----------------------------------------------------------------------------------- fbrx-server update
+
+/** fbrx-server update check [--file <bundle>] [--from <release list>] [--force]: gets a newer FBRX Server ready. */
+async function updateCheck(a: string[]): Promise<void> {
+  let file: string | undefined;
+  let manifest = process.env.FBRX_SERVER_UPDATE_URL || undefined;
+  let force = false;
+  for (let i = 0; i < a.length; i++) {
+    if (a[i] === '--file') file = a[++i];
+    else if (a[i] === '--from') manifest = a[++i];
+    else if (a[i] === '--force') force = true;
+    else throw new Error(`Unknown option ${a[i]} (update check [--file <bundle.tar.gz>] [--from <release list>] [--force])`);
+  }
+  const tty = process.stdout.isTTY;
+  let shown = -1;
+  const r = await checkForUpdate({
+    file,
+    manifest,
+    force,
+    anyHost: !!manifest,
+    log: (l) => console.log(l),
+    progress: (got, total) => {
+      if (!tty || !total) return;
+      const pct = Math.floor((got / total) * 100);
+      if (pct !== shown) process.stdout.write(`\r  ${pct}% of ${(total / 1e6).toFixed(0)} MB   `);
+      shown = pct;
+      if (got >= total) process.stdout.write('\n');
+    },
+  });
+  if (r.state === 'current') {
+    console.log(`FBRX Server ${r.installed} is up to date${r.latest !== r.installed ? ` (that bundle is ${r.latest}; --force installs it anyway)` : ''}.`);
+    return;
+  }
+  const s = r.staged;
+  console.log(`\nFBRX Server ${s.version} is ready to install (this server runs ${r.installed})${r.already ? ', downloaded earlier' : ''}.`);
+  if (s.summary) console.log(`  ${s.summary}`);
+  for (const n of s.notes) console.log(`  • ${n}`);
+  console.log(`\nInstall it:   sudo fbrx-server update commit`);
+  console.log('Virtual machines keep running; the console and the AI role restart. If it does not come back, the server goes back to');
+  console.log(`${installedVersion(DEFAULT_UPDATE_PATHS)} by itself; sudo fbrx-server update rollback goes back later too.`);
 }
 
 // ------------------------------------------------------------------------------------------- fbrx-server ai
