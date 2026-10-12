@@ -31,6 +31,7 @@
     "license:issue": "node --import tsx scripts/issue-license.ts",
     "release:publish": "node scripts/publish-release.mjs",
     "verify": "npm run typecheck && npm test",
+    "knowledge": "node scripts/build-knowledge.mjs",
     "plugin:create": "node scripts/create-plugin.mjs",
     "plugin:pack": "node scripts/pack-plugin.mjs",
     "runtime:fetch": "node --import tsx scripts/fetch-llama-runtime.ts",

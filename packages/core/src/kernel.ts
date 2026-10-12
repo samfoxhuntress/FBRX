@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { cpus, freemem, hostname, loadavg, userInfo, platform as osPlatform, arch as osArch, totalmem, uptime as osUptime } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -41,6 +41,9 @@ import { Vault } from './vault/vault';
 import { AuditLog } from './audit/audit-log';
 import { PolicyEngine } from './governance/policy-engine';
 import { FolderAccess } from './governance/folder-access';
+import { KnowledgeBase } from './knowledge/knowledge-base';
+import { runDoctor, type DoctorFinding } from './knowledge/doctor';
+import { fbrx1Commands } from './cli/fbrx1';
 import { expandPathVars } from './governance/path-guard';
 import { Guardian } from './governance/guardian';
 import { ApprovalQueue } from './governance/approvals';
@@ -50,7 +53,7 @@ import { ToolGate } from './governance/tool-gate';
 import { checkUrl } from './governance/network-guard';
 import { LicenseService } from './license/license-service';
 import { ToolRegistry } from './tools/registry';
-import { fbrxTools, folderTools, fsTools, memoryTools, netTools, shellTools, systemTools, diskFreeGb } from './tools/builtin';
+import { fbrxTools, folderTools, fsTools, knowledgeTools, memoryTools, netTools, shellTools, systemTools, diskFreeGb } from './tools/builtin';
 import { pcTools, workspaceTools } from './tools/builtin/command-center-tools';
 import { WorkspaceStore } from './workspace/workspace-store';
 import { SystemMonitor } from './system/system-monitor';
@@ -148,6 +151,8 @@ export class Kernel {
   readonly approvals: ApprovalQueue;
   /** The folders the AI may use, and its requests for more (Governance → Folders). */
   readonly folders: FolderAccess;
+  /** FBRX's own guides, playbooks and commands, in a local search database (fbrx.help). */
+  readonly knowledge: KnowledgeBase;
   readonly redactor = new Redactor();
   readonly limiter: RateLimiter;
   readonly license: LicenseService;
@@ -248,6 +253,7 @@ export class Kernel {
       notify: (title, body) => this.notify({ title, body, level: 'warning', source: 'governance', open: 'governance' }),
       timeoutSeconds: () => this.policy.policy.approvals.timeoutSeconds,
     });
+    this.knowledge = new KnowledgeBase({ file: join(this.paths.root, 'knowledge.db'), appVersion: this.platform.appVersion, commands: fbrx1Commands, log: L('knowledge') });
     this.limiter = new RateLimiter(() => this.policy.policy.rateLimits.toolCallsPerMinute);
     this.license = new LicenseService(this.meta, this.platform.licensePublicKeys, this.platform.appVersion, this.platform.devMode, this.events);
     // The edition a computer starts in: a new one opens in Essentials (with its walkthrough); one set up before
@@ -903,6 +909,7 @@ export class Kernel {
           ...systemTools({ workspace: ws, notify: (title, body) => this.notify({ title, body, level: 'info', source: 'agent' }) }),
           ...memoryTools(this.db),
           ...folderTools(this.folders),
+          ...knowledgeTools({ kb: this.knowledge, doctor: () => this.doctor(), fix: (id) => this.applyFix(id) }),
           ...fbrxTools({ status: () => this.status(), recentAudit: (n) => this.audit.query({ limit: n }) }),
           ...workspaceTools(this.workspace),
           ...deviceConsoleTools(this.consoles),
@@ -1080,7 +1087,75 @@ export class Kernel {
     this.audit.prune(365);
   }
 
+  /** FBRX's check-up of itself (fbrx.doctor). */
+  doctor(): Promise<DoctorFinding[]> {
+    const s = this.settings.get();
+    const rt = this.runtime.status();
+    const p = this.presenterStatus();
+    const rel = this.release.status();
+    const size = (f: string) => {
+      try {
+        return statSync(f).size;
+      } catch {
+        return 0;
+      }
+    };
+    return runDoctor({
+      services: () => this.services.list(),
+      logs: () => this.logSink.tail(400, 'warn'),
+      runtime: () => rt,
+      modelBytes: () => (rt.modelId ? (this.models.get(rt.modelId)?.sizeBytes ?? null) : s.runtime.modelId ? (this.models.get(s.runtime.modelId)?.sizeBytes ?? null) : null),
+      settings: () => s,
+      scanRunning: () => this.protection.job()?.state === 'running',
+      shieldWaiting: () => this.shield.status(null).open,
+      databaseBytes: () => size(this.paths.db) + size(`${this.paths.db}-wal`),
+      diskFreeGb: () => diskFreeGb(this.paths.root),
+      halted: () => !!this.aiHalt(),
+      vaultLocked: () => !this.vault.isUnlocked,
+      presenting: () => p.active,
+      updateAvailable: () => (rel.state === 'available' && rel.latest ? rel.latest.version : null),
+      appVersion: this.platform.appVersion,
+    });
+  }
+
+  /** Applies a fix fbrx.doctor offers (fbrx.fix, after the person agrees). Returns what happened. */
+  async applyFix(id: string): Promise<string> {
+    const svc = /^restart-service:([a-z0-9-]{1,40})$/.exec(id);
+    if (svc) {
+      if (!this.services.get(svc[1])) throw new CoreError('NOT_FOUND', `There is no service called ${svc[1]}`);
+      const st = await this.services.restart(svc[1]);
+      return `Restarted ${st.title}: it is ${st.state}${st.message ? ` (${st.message})` : ''}.`;
+    }
+    switch (id) {
+      case 'cancel-scan':
+        if (this.protection.job()?.state !== 'running') return 'No scan is running.';
+        this.protection.cancel();
+        return 'Stopped the scan. What it found so far is still in FBRX Shield.';
+      case 'recheck-shield': {
+        const r = await this.protection.recheck();
+        return `Cleared ${r.cleared} finding${r.cleared === 1 ? '' : 's'} FBRX Shield no longer flags, and ${r.gone} whose file is gone.`;
+      }
+      case 'unload-model':
+        await this.runtime.stop();
+        return 'Unloaded the local AI model; its memory is free. It loads again the next time the AI is asked something.';
+      case 'lower-context': {
+        const ai = this.settings.get().ai;
+        await this.settings.update({ runtime: { contextSize: 8192 }, ...(ai.ollamaContext > 8192 ? { ai: { ollamaContext: 8192 } } : {}) });
+        return 'Set the local model’s context window to 8,192 tokens. It takes effect the next time the model loads.';
+      }
+      case 'compact-database': {
+        const before = statSync(this.paths.db).size;
+        this.db.exec('PRAGMA wal_checkpoint(TRUNCATE); VACUUM;');
+        const after = statSync(this.paths.db).size;
+        return `Tidied FBRX’s database: ${(before / 1024 ** 2).toFixed(0)} MB → ${(after / 1024 ** 2).toFixed(0)} MB.`;
+      }
+      default:
+        throw new CoreError('INVALID_ARGUMENT', `FBRX has no fix called ${id}`);
+    }
+  }
+
   async stop(): Promise<void> {
+    this.knowledge.close();
     if (!this.started) {
       this.db.close();
       this.logSink.flush();

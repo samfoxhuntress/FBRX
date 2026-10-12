@@ -336,6 +336,21 @@ function applyPipes(text: string, pipes: string[][]): string {
   return lines.join('\n');
 }
 
+/** Every FBRX/1 command with its help, flattened ("show version", "request backup create <label>"). */
+export function fbrx1Commands(): Array<{ command: string; help: string; mode: 'operational' | 'configure' }> {
+  const out: Array<{ command: string; help: string; mode: 'operational' | 'configure' }> = [];
+  const walk = (nodes: Record<string, Node>, prefix: string[], mode: 'operational' | 'configure') => {
+    for (const [word, n] of Object.entries(nodes)) {
+      const path = [...prefix, word];
+      if (n.run || !n.children) out.push({ command: [...path, ...(n.arg ? [`<${n.arg}>`] : [])].join(' '), help: n.help, mode });
+      if (n.children) walk(n.children, path, mode);
+    }
+  };
+  walk(OPERATIONAL, [], 'operational');
+  walk(CONFIG, [], 'configure');
+  return out;
+}
+
 export class Fbrx1Cli {
   private readonly sessions = new Map<string, Session>();
 

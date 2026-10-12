@@ -314,6 +314,10 @@ export class AgentRuntime {
         ? '- This chat is OFFLINE (private and local). Prefer local knowledge and local tools. If you truly need the internet, call the tool anyway: FBRX will ask the user whether this chat may go online.'
         : '- This chat is ONLINE: internet tools are available. Mention the sources you used.',
       '',
+      '## FBRX itself',
+      '- When the person asks about FBRX (how to do something in it, what a setting does, why it is slow, an error, something not working), call fbrx.help (its guides and playbooks, on this computer) and, for trouble, fbrx.doctor (a check-up) before you answer. Explain what you found in plain words.',
+      '- Offer the fixes fbrx.doctor lists; apply one with fbrx.fix only after the person says yes.',
+      '',
       '## Governance',
       '- Every tool call is checked against the organization policy and an independent guardian. Some calls wait for the user to approve them.',
       '- If a call is denied, do not retry it unchanged. Explain what was blocked and offer an alternative.',
