@@ -1,33 +1,45 @@
 {
   "product": "FBRX OS",
   "stage": "Alpha",
-  "version": "1.9.6",
+  "version": "1.9.8",
   "codename": "Bobbin",
   "released": "2026-10-12",
   "importance": "recommended",
-  "summary": "FBRX Endpoint Essentials: new computers start simple, with a short walkthrough. Plus a cooler dark mode with color on the controls, and FBRX Server that updates itself.",
+  "summary": "FBRX Time backs up your whole computer, Fabrix remembers you (on this computer only) and knows FBRX itself, and FBRX has a new golden honey look. Plus FBRX Server 1.0.",
   "notes": [
-    "New computers open in Endpoint Essentials: the everyday pages only, and a short walkthrough of each one. Settings → Edition moves up to Standard whenever you like.",
-    "Endpoint Ultra now comes through FBRX Command: an administrator sets the edition for each computer or group in its device configuration. A computer running Ultra on its own runs Standard after this update until it connects to FBRX Command.",
-    "Computers that were already set up skip the walkthrough and keep the highest edition they are allowed.",
-    "Dark mode is cooler and calmer on the page, with color moved onto the sidebar sections, cards and controls.",
-    "An organization's computers find each other on FBRX Mesh by themselves, and can share the AI running on an FBRX Server.",
-    "FBRX Server 0.1.1 is in the release too: sudo fbrx-server update check and sudo fbrx-server update commit update a server in place, with rollback."
+    "FBRX Time (Backup & restore → Whole computer): an image of the whole computer, by hand or every day or week, to an external drive, a network folder or an FBRX Server, which checks each image by starting it.",
+    "Fabrix remembers you: the last 24 hours of chats and lasting facts, kept on this computer only and shown in Settings → Memory. It never keeps ID numbers, bank details, full card numbers or passwords, and your private details never go to a cloud AI or onto the internet.",
+    "Ask Fabrix why FBRX is slow or acting up: it knows FBRX, runs a check-up and offers a fix, always asking before it applies one.",
+    "Governance: choose the folders your AI may use, including other drives and network shares. Fabrix asks when it needs another one. The policy as text moves to FBRX Command.",
+    "FBRX Shield leaves FBRX's own files alone, sends one alert per scan instead of one per file, and can trust many findings at once. After this update it clears findings that no longer apply by itself.",
+    "Notifications: turn each kind on or off in Alerts → Notifications, hear FBRX's own sound, and get one notification instead of two (in FBRX, in the system's, or both: your choice).",
+    "Right-click menus everywhere, your own macros, and the Terminal, the chat or any page in a window of its own.",
+    "Golden honey is FBRX's color. Settings → Appearance → Sidebar icons puts every icon in one color, or a color for each section.",
+    "FBRX Command shows its version on Releases, checks for new versions of itself and updates in place with Update now. Update it by hand once (run Install FBRX Command from the new FBRX folder) to get this.",
+    "FBRX Server 1.0 is in the release too: image backups checked by starting them, and roles changed from the console."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v1.9.6.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.6",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v1.9.8.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.8",
   "server": {
-    "version": "0.1.1",
+    "version": "1.0.0",
     "released": "2026-10-12",
-    "summary": "FBRX Server updates itself, and FBRX Gate stays clear of the router in front of it.",
+    "summary": "FBRX Server 1.0: image backups that prove they work, and roles you change from the console.",
     "notes": [
-      "sudo fbrx-server update check downloads the newest FBRX Server and checks its checksum; sudo fbrx-server update commit installs it, keeping roles, settings and virtual machines, and goes back by itself if the new version does not start. sudo fbrx-server update rollback returns to the version before.",
-      "sudo fbrx-server doctor checks the server and its roles, and --fix repairs what it safely can.",
-      "FBRX Gate picks a home network that does not clash with the router in front of it, keeps a fixed internet address when the port had one, and can move a network with sudo fbrx-gate renumber.",
-      "The gate turns on the services it needs (address handout, firewall, networking) and says plainly when one is off."
+      "The time role (FBRX Time): backs up the server's virtual machines on a schedule, keeps the images computers send it, and checks every image by starting it as a throwaway virtual machine with no network. Restores an image as a new virtual machine.",
+      "Roles: switch roles on or off from the console's Roles page, or with sudo fbrx-server roles.",
+      "From 0.1.1: sudo fbrx-server update check, then sudo fbrx-server update commit. A 0.1.0 server updates by hand once (see SERVER.md)."
     ],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v1.9.6/fbrx-server-0.1.1.tar.gz",
-    "sha256": "fd53a5c070e9e6bbcd211763f898391330b21389b444119ce7ff7c4975e42edf",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.6"
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v1.9.8/fbrx-server-1.0.0.tar.gz",
+    "sha256": "9b3f286ef963bbfc3698871f2c77d5ac41530c20954edeb2341666ddd8185c9d",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.8"
+  },
+  "command": {
+    "summary": "FBRX Command updates itself, has a Governance page, and can start image backups on your computers.",
+    "notes": [
+      "Releases shows FBRX Command's version and new versions of it: Update now installs one in place, keeping all its data. It checks by itself every six hours.",
+      "Governance: each profile's AI policy (tool rules, the folders the AI may use, the web, AI providers), checked before it is saved.",
+      "Image backup now on a device's page, or the backup.image command for a group or every device (FBRX Time).",
+      "Golden honey look."
+    ]
   }
 }
