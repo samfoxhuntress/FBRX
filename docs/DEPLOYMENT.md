@@ -61,7 +61,19 @@ with `bash`) in the unzipped FBRX folder. It uses the same Node.js bootstrap as 
   router. Windows and macOS ask once whether Node.js may accept connections: allow it.
 * **Only this computer**: plain HTTP on `127.0.0.1:8787`, to try FBRX Command or join FBRX on the same computer.
 
-Run the installer again to update (same data, certificate and setup); `--uninstall` stops FBRX Command and removes
+**New versions.** FBRX Command carries the version of the FBRX release it was installed from (the same number as
+FBRX OS: *FBRX Command 1.9.8* at the bottom of the console). It checks the FBRX release list by itself a minute and a
+half after it starts and every six hours, and shows a newer version on **Releases** (and in a line across the top of
+the console for the platform operator). **Update now** downloads the new FBRX folder over the one it was installed
+from (keeping `.fbrx-keys`, `.fbrx-setup` and `node_modules`), then runs `Install FBRX Command` there on the FBRX
+Command computer: in its own window on Windows, in Terminal on a Mac (press Return), in the background on Linux
+(`logs/update.log`). FBRX Command stops for a few minutes and starts again with all its data. **Skip this version**
+stops the reminder; the switch on the card (or `FBRX_CP_UPDATE_CHECK=off`) turns the checks off. Only the platform
+operator (the account that set FBRX Command up) checks or installs; administrators see the version. FBRX Command
+from before 1.9.8 cannot update itself yet: update it once by hand (below), and from then on Update now works.
+
+Run the installer again to update by hand (same data, certificate and setup): download and unzip the new FBRX zip and
+double-click `Install FBRX Command` in the new folder. `--uninstall` stops FBRX Command and removes
 the program, icons and login item but keeps `data/`; add `--delete-data` to erase it too. Other options: `--port`
 (default 8787; the local console uses the next port), `--yes`, `--no-open`. The installed launcher also works on
 its own: `<folder>/app/node <folder>/app/launcher.mjs open | start | stop | status`. Log: `.fbrx-setup/command-setup.log`;

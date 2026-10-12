@@ -6,7 +6,10 @@ commands, packages, credentials, updates, backups and audit). A license issued h
 paste the key into FBRX Endpoint and it joins the tenant (see [LICENSING.md](LICENSING.md#joining-fbrx-command)). Development: `npm run dev:console` (proxies the API on :8787).
 
 To run it on a computer of your own (a family, a school, a small office), double-click **Install FBRX Command** in
-the FBRX folder; it opens the first-run page when it is done. Hosted setups: [DEPLOYMENT.md](DEPLOYMENT.md#2-control-plane).
+the FBRX folder; it opens the first-run page when it is done. It looks for new versions of itself and shows them on
+**Releases**, where **Update now** installs one in place
+([DEPLOYMENT.md](DEPLOYMENT.md#fbrx-command-on-a-computer-of-your-own)). Hosted setups:
+[DEPLOYMENT.md](DEPLOYMENT.md#2-control-plane).
 
 ## Work, School or Home
 
@@ -41,7 +44,7 @@ license with a kind also sets it. Unattended installs can pick the first tenant'
 | | **Credentials** | Organization secrets scoped to the tenant, a group or a single device; pushed into device vaults as read-only managed secrets; rotate or delete centrally |
 | | **Plugins** | Upload plugin packages (manifest and permissions shown), deploy to devices or groups |
 | | **Backups** | Snapshots uploaded by devices; download, mark as an enrollment template, delete |
-| Platform | **Releases** | Upload installers (or let CI do it), publish to `stable`/`beta`/`dev`, staged rollout percentage |
+| Platform | **Releases** | FBRX Command's own version and new versions of it (**Update now**, **Skip this version**, automatic checks on or off); upload FBRX OS installers (or let CI do it), publish to `stable`/`beta`/`dev`, staged rollout percentage |
 | | **Licenses** | Issue and revoke signed licenses per tenant: the most the computers may run (up to Endpoint Standard or Ultra), the kind (Work, School or Home, which also sets the tenant's kind), seats and expiry, and whether computers that activate the key join the tenant automatically; copy keys for offline activation |
 | | **Tenants** | (superadmin) Create tenants (pick Work, School or Home first, then run its quick setup), see each one's kind, change it, suspend them |
 | Access | **Users & API keys** | Invite users with a role, reset access, create API keys for automation |

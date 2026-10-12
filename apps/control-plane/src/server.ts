@@ -29,16 +29,19 @@ import { ssoRoutes } from './routes/sso';
 import { helpdeskRoutes } from './routes/helpdesk';
 import { chatRoutes } from './routes/chat';
 import { meshRoutes } from './routes/mesh';
+import { commandRoutes } from './routes/command';
+import { CommandUpdater } from './services/command-update';
 import { slugify } from './routes/util';
 import { loadTls } from './tls';
 
+/** The FBRX release FBRX Command was built from (the same version as FBRX OS); from source, the FBRX folder's. */
 function readVersion(): string {
   if (process.env.FBRX_CP_VERSION) return process.env.FBRX_CP_VERSION;
   try {
     let dir = dirname(fileURLToPath(import.meta.url));
     for (let i = 0; i < 5; i++) {
-      const pj = join(dir, 'package.json');
-      if (existsSync(pj)) return JSON.parse(readFileSync(pj, 'utf8')).version;
+      const fbrx = join(dir, 'apps', 'desktop', 'package.json');
+      if (existsSync(fbrx)) return JSON.parse(readFileSync(fbrx, 'utf8')).version;
       dir = dirname(dir);
     }
   } catch {
@@ -129,6 +132,14 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   await app.register(async (scoped) => adminOrgRoutes(scoped, ctx));
   await app.register(async (scoped) => adminFleetRoutes(scoped, ctx));
   await adminAssetRoutes(app, ctx);
+  const updater = new CommandUpdater({
+    version,
+    db,
+    dataDir: config.dataDir,
+    log: (level, msg, data) => app.log[level](data ?? {}, msg),
+  });
+  await app.register(async (scoped) => commandRoutes(scoped, ctx, updater));
+  if (!config.devMode) updater.start();
 
   if (config.adminConsoleDir && existsSync(join(config.adminConsoleDir, 'index.html'))) {
     await app.register(fastifyStatic, { root: config.adminConsoleDir, index: 'index.html' });
@@ -191,6 +202,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     },
     async close() {
       clearInterval(timer);
+      updater.stop();
       ctx.realtime.closeAll();
       if (local) await new Promise<void>((r) => local!.close(() => r()));
       local?.closeAllConnections?.();

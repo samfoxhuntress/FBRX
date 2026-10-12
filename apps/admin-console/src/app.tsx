@@ -12,6 +12,7 @@ import { GovernancePage } from './pages/governance';
 import { EnrollmentPage } from './pages/enrollment';
 import { SecretsPage } from './pages/secrets';
 import { ReleasesPage } from './pages/releases';
+import { CommandUpdateBanner } from './pages/command-update';
 import { PackagesPage } from './pages/packages';
 import { SnapshotsPage } from './pages/snapshots';
 import { LicensesPage } from './pages/licenses';
@@ -195,6 +196,7 @@ function Console() {
         </>
       }
     >
+      <CommandUpdateBanner onOpen={() => go('releases')} />
       {page}
     </Shell>
   );

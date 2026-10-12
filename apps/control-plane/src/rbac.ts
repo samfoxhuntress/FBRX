@@ -29,6 +29,9 @@ export const PERMISSIONS = {
   /** Organization chat: everyone can read the organization-wide conversation; operators and up post to it and remove messages. */
   'messages.read': ['superadmin', 'owner', 'admin', 'operator', 'viewer'],
   'messages.manage': ['superadmin', 'owner', 'admin', 'operator'],
+  /** FBRX Command's own version and new versions of it; installing one is for the platform operator. */
+  'command.read': ['superadmin', 'owner', 'admin'],
+  'command.update': ['superadmin'],
 } as const satisfies Record<string, readonly Role[]>;
 export type Permission = keyof typeof PERMISSIONS;
 

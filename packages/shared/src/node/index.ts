@@ -4,3 +4,4 @@ export * from './db';
 export * from './totp';
 export * from './selfsigned';
 export * from './pinned-tls';
+export { unzip } from './unzip';
