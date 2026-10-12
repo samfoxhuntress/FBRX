@@ -1,4 +1,4 @@
-import type { CoreEventName, CoreEvents, CoreMethod, CoreMethods } from '@fbrx/shared';
+import type { CoreEventName, CoreEvents, CoreMethod, CoreMethods, NotificationEvent } from '@fbrx/shared';
 
 type Result<M extends CoreMethod> = Awaited<ReturnType<CoreMethods[M]>>;
 
@@ -15,6 +15,10 @@ interface Bridge {
   call(method: string, params?: unknown): Promise<unknown>;
   on(cb: (event: string, payload: unknown) => void): () => void;
   onNavigate?(cb: (route: string) => void): () => void;
+  /** A notification for this window to show as a toast (the desktop app picks one place for each). */
+  onToast?(cb: (n: NotificationEvent) => void): () => void;
+  /** Play FBRX's notification sound. */
+  onChime?(cb: (c: { level: NotificationEvent['level']; volume: number }) => void): () => void;
   dialog?(opts: DialogOptions): Promise<string | null>;
   reveal?(path: string): Promise<unknown>;
   openExternal?(url: string): Promise<unknown>;

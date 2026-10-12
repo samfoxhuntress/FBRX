@@ -221,6 +221,16 @@ export const SettingsSchema = z.object({
       )
       .max(100),
   }),
+  /** Pop-up notifications (notifications.ts): which kinds, where they show and their sound. */
+  notifications: z.object({
+    enabled: z.boolean(),
+    /** auto: in FBRX while it is in front, otherwise the system's notification center; app; system; both. */
+    show: z.enum(['auto', 'app', 'system', 'both']),
+    sound: z.enum(['fbrx', 'system', 'off']),
+    volume: z.number().min(0).max(1),
+    /** Kinds turned off (NOTIFICATION_KINDS ids). */
+    muted: z.array(z.string().max(64)).max(64),
+  }),
   /**
    * Presenter-safe mode, for when the screen is on a projector or shared in a meeting: notifications stay quiet,
    * clipboard history is masked, private lists (chats, alerts, credentials, tickets) are blurred, and the goose stays home.
@@ -522,6 +532,7 @@ export const DEFAULT_SETTINGS: Settings = {
       { id: 'c-ps', name: 'Lines → PowerShell array', steps: [{ op: 'trimLines' }, { op: 'removeBlank' }, { op: 'dedupe' }, { op: 'wrapLines', a: "'", b: "'" }, { op: 'join', a: ', ' }, { op: 'wrap', a: '@(', b: ')' }] },
     ],
   },
+  notifications: { enabled: true, show: 'auto', sound: 'fbrx', volume: 0.7, muted: [] },
   presenter: {
     enabled: false,
     auto: false,

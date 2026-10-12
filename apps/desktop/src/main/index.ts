@@ -5,8 +5,8 @@ import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { hostname, userInfo } from 'node:os';
 import { Kernel, toCoreError } from '@fbrx/core';
-import { MANAGED_PREFERENCES_DOMAIN, PRODUCT_NAME, TIER_NAMES, expandMacro, funEnabled, provisioningFromPreferences } from '@fbrx/shared';
-import { createElectronPlatform, openExternalSafe } from './platform';
+import { MANAGED_PREFERENCES_DOMAIN, PRODUCT_NAME, TIER_NAMES, expandMacro, funEnabled, notificationDelivery, notificationKind, provisioningFromPreferences, shouldNotify, type NotificationEvent } from '@fbrx/shared';
+import { createElectronPlatform, openExternalSafe, systemNotification } from './platform';
 import { ElectronUpdateController } from './updater';
 import { ClipHistory } from './clip-history';
 import { PasteKeys } from './paste-keys';
@@ -223,6 +223,36 @@ function createWindow() {
   });
   win.on('closed', () => (win = null));
   loadRenderer(win);
+}
+
+// ------------------------------------------------------------------------------------------- notifications
+
+/** The page a click on a notification opens, when it names none. */
+const NOTIFICATION_PAGE: Record<string, string> = { alerts: 'alerts', approvals: 'approvals', backup: 'backup', calendar: 'calendar', messages: 'messages', helpdesk: 'helpdesk', mesh: 'mesh' };
+
+/**
+ * Shows one notification in one place (Alerts → Notifications): by default a toast inside FBRX while one of its windows
+ * is in front, otherwise the system's notification center, never both. The sound plays once: FBRX's own chime (played
+ * by a window of FBRX, so the system notification stays silent), the system's sound, or none.
+ */
+function deliverNotification(n: NotificationEvent) {
+  const s = kernel?.settings.get().notifications;
+  if (!s) return;
+  const windows = [win, ...popouts.values()].filter((w): w is BrowserWindow => !!w && !w.isDestroyed());
+  const front = windows.find((w) => w.isVisible() && w.isFocused());
+  const main = win && !win.isDestroyed() ? win : null;
+  const d = notificationDelivery(s, n.source, { inFront: !!front, open: !!main });
+  const toastIn = front ?? main;
+  // The chime needs a window to play in; without one, the system's sound stands in.
+  const player = toastIn ?? windows[0] ?? null;
+  const sound = d.sound === 'fbrx' && !player ? 'system' : d.sound;
+  if (d.app && toastIn) toastIn.webContents.send('fbrx:toast', n);
+  if (d.system) {
+    const page = n.open ?? NOTIFICATION_PAGE[notificationKind(n.source)];
+    systemNotification(n, { silent: sound !== 'system', onClick: () => showWindow(page) });
+  }
+  if (sound === 'fbrx') player!.webContents.send('fbrx:chime', { level: n.level, volume: s.volume });
+  else if (sound === 'system' && !d.system) shell.beep();
 }
 
 /** Pages of FBRX in windows of their own (a terminal, the chat…), by the page they show. */
@@ -750,8 +780,7 @@ async function boot() {
   const platform = createElectronPlatform({
     dataDir,
     updates,
-    onNotify: () => undefined,
-    onOpen: (route) => showWindow(route),
+    onNotify: (n) => deliverNotification(n),
     requestRestart: (reason) => {
       quitting = true;
       void kernel?.stop().finally(() => {
@@ -784,8 +813,9 @@ async function boot() {
   });
   kernel.events.on('approval.requested', (r) => {
     const p = kernel?.presenterStatus();
-    if (!win?.isFocused() && !(p?.active && p.hideNotifications)) {
-      platform.notify({ title: 'Approval needed', body: `${r.toolTitle}: ${r.reason}`.slice(0, 200), level: 'warning', source: 'governance' });
+    // In front, FBRX asks in its own window; otherwise a notification says it is waiting.
+    if (!win?.isFocused() && !(p?.active && p.hideNotifications) && shouldNotify(kernel!.settings.get().notifications, 'governance')) {
+      deliverNotification({ title: 'Approval needed', body: `${r.toolTitle}: ${r.reason}`.slice(0, 200), level: 'warning', source: 'governance' });
     }
   });
   await kernel.start();

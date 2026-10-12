@@ -348,6 +348,33 @@ and its threshold changed (**Alerts → Rules**).
 
 Quiet hours hold back desktop and e-mail alerts that are not critical; a cooldown stops the same alert repeating.
 
+### Notifications
+
+**Alerts → Notifications** (1.9.8+) covers everything that pops up, not only alerts:
+
+* **Show notifications**, on or off, and a switch for each kind: alerts, approvals, messages, FBRX Mesh, help desk,
+  your organization, calendar reminders, backups, notes from your AI, macros, FBRX itself and plugins. The alerts and
+  messages switches are the same ones as *Delivery → Desktop* and *Settings → Messages*.
+* **Where they show.** Each notification shows in **one place**:
+  * *Automatic* (the default): inside FBRX while you are using it, otherwise in Windows notifications (Notification
+    Center on a Mac).
+  * *Only in FBRX*: nothing pops up over your other apps.
+  * *Only in Windows notifications*.
+  * *Both*: how it worked before 1.9.8, when every notification showed twice.
+
+  Clicking a Windows notification opens FBRX on the page it is about.
+* **Sound:**
+  * *FBRX sound* (the default): FBRX's own chime, made in the app with no sound file. Its two rising notes are
+    FBRX's; a warning falls, a problem knocks twice, and good news finishes the chord. It has its own volume and a
+    *Hear it* row, and the Windows notification stays silent so you hear one sound.
+  * *Windows sound*.
+  * *No sound*.
+
+  Macros never make a sound.
+* **Send a test notification** waits four seconds, so you can switch to another app and see where it lands.
+
+Presenter-safe mode still holds notifications back while you present.
+
 ## PC care (Windows)
 
 | Page | What it does |

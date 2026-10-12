@@ -1,8 +1,9 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
+import type { NotificationEvent, PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
 import { TIER_NAMES, TIER_SHORT, addressAs, displayVersion, funEnabled } from '@fbrx/shared';
 import { Button, FBRX_MARK, FbrxMark, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
+import { playChime } from './notify-sound';
 import { useConsoleSessions, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
 import { AgentNameContext, EmergencyStop } from './widgets';
@@ -245,25 +246,31 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const presenter = usePresenter();
   const presenting = useRef(presenter);
   presenting.current = presenter;
-  useEffect(
-    () =>
-      onEvent('notification', (n) => {
-        // Presenting: no pop-ups with private text on the projector; the alert inbox still has them.
-        const p = presenting.current;
-        if (p?.active && p.hideNotifications) {
-          if (n.level === 'error') toast.error('FBRX needs your attention', 'Open Alerts when you have finished presenting.');
-          return;
-        }
-        // A message: one click opens the conversation (and none while it is already on screen).
-        if (n.open) {
-          if (location.hash === `#/${n.open}`) return;
-          toast.info(n.title, n.body, { label: 'Open', onClick: () => navigate(n.open!) });
-          return;
-        }
-        toast[n.level === 'error' ? 'error' : n.level === 'warning' ? 'warning' : n.level === 'success' ? 'success' : 'info'](n.title, n.body);
-      }),
-    [toast],
-  );
+  useEffect(() => {
+    const show = (n: NotificationEvent) => {
+      // A message: one click opens the conversation (and none while it is already on screen).
+      if (n.open) {
+        if (location.hash === `#/${n.open}`) return;
+        toast.info(n.title, n.body, { label: 'Open', onClick: () => navigate(n.open!) });
+        return;
+      }
+      toast[n.level === 'error' ? 'error' : n.level === 'warning' ? 'warning' : n.level === 'success' ? 'success' : 'info'](n.title, n.body);
+    };
+    // The desktop app decides where each notification shows (Alerts → Notifications) and sends this window its toasts.
+    if (bridge.onToast) return bridge.onToast(show);
+    // In a browser, every notification the core sends is a toast here.
+    return onEvent('notification', (n) => {
+      // Presenting: no pop-ups with private text on the projector; the alert inbox still has them.
+      const p = presenting.current;
+      if (p?.active && p.hideNotifications) {
+        if (n.level === 'error') toast.error('FBRX needs your attention', 'Open Alerts when you have finished presenting.');
+        return;
+      }
+      show(n);
+    });
+  }, [toast]);
+  // FBRX's notification sound, played here once when the desktop app asks.
+  useEffect(() => bridge.onChime?.((c) => playChime(c.level, c.volume)), []);
   // A badge for the trophy case, with a way to go and look at it.
   useEffect(
     () =>

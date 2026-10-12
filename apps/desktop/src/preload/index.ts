@@ -12,6 +12,18 @@ const api = {
     ipcRenderer.on('fbrx:event', h);
     return () => ipcRenderer.removeListener('fbrx:event', h);
   },
+  /** A notification to show inside this window (the main process picked this window for it). */
+  onToast(cb: (n: { title: string; body: string; level: 'info' | 'success' | 'warning' | 'error'; source: string; open?: string }) => void): () => void {
+    const h = (_e: unknown, n: Parameters<typeof cb>[0]) => cb(n);
+    ipcRenderer.on('fbrx:toast', h);
+    return () => ipcRenderer.removeListener('fbrx:toast', h);
+  },
+  /** Play FBRX's notification sound (once per notification, in one window). */
+  onChime(cb: (c: { level: 'info' | 'success' | 'warning' | 'error'; volume: number }) => void): () => void {
+    const h = (_e: unknown, c: Parameters<typeof cb>[0]) => cb(c);
+    ipcRenderer.on('fbrx:chime', h);
+    return () => ipcRenderer.removeListener('fbrx:chime', h);
+  },
   onNavigate(cb: (route: string) => void): () => void {
     const h = (_e: unknown, route: string) => cb(route);
     ipcRenderer.on('fbrx:navigate', h);

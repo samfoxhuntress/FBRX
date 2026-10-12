@@ -55,12 +55,20 @@ export function macMovedKeychain(): MovedKeychain | null {
   };
 }
 
+/** A notification in the system's notification center (Windows' Action Center, macOS Notification Center). */
+export function systemNotification(n: NotificationEvent, o: { silent: boolean; onClick: () => void }): boolean {
+  if (!Notification.isSupported()) return false;
+  const note = new Notification({ title: n.title, body: n.body, silent: o.silent });
+  note.on('click', o.onClick);
+  note.show();
+  return true;
+}
+
 export function createElectronPlatform(o: {
   dataDir: string;
   updates: UpdateController | null;
+  /** Shows a notification: where and with what sound is the desktop app's choice (deliverNotification). */
   onNotify: (n: NotificationEvent) => void;
-  /** Shows the window on a page (a notification was clicked). */
-  onOpen?: (route: string) => void;
   requestRestart: (reason: string) => void;
 }): PlatformAdapter {
   const resources = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources');
@@ -96,13 +104,7 @@ export function createElectronPlatform(o: {
         return d;
       }
     },
-    notify: (n) => {
-      o.onNotify(n);
-      if (!Notification.isSupported()) return;
-      const note = new Notification({ title: n.title, body: n.body, silent: n.level === 'info' });
-      if (n.open && o.onOpen) note.on('click', () => o.onOpen!(n.open!));
-      note.show();
-    },
+    notify: (n) => o.onNotify(n),
     requestRestart: o.requestRestart,
   };
 }

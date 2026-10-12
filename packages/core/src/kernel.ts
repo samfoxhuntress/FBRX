@@ -9,6 +9,7 @@ import {
   ProvisioningFileSchema,
   addressAs,
   funEnabled,
+  shouldNotify,
   TIER_NAMES,
   type DeviceCommand,
   type Heartbeat,
@@ -756,6 +757,8 @@ export class Kernel {
     this.disposers.push(
       this.events.on('notification', (n) => {
         try {
+          // Notifications switched off, all of them or this kind (Alerts → Notifications).
+          if (!shouldNotify(this.settings.get().notifications, n.source)) return;
           // Presenting: nothing private pops up on the projector. Urgent ones still say that something needs a look.
           const p = this.presenterStatus();
           if (p.active && p.hideNotifications) {
