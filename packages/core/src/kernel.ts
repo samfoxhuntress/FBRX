@@ -460,7 +460,8 @@ export class Kernel {
           return undefined;
         }
       },
-      skip: () => [this.paths.root],
+      // FBRX's own folders: its data, where it is installed and its update cache, and its whole-computer image files.
+      skip: () => [this.paths.root, ...(this.platform.ownDirs?.() ?? []), ...(process.platform === 'win32' ? [join(process.env.ProgramData ?? 'C:\\ProgramData', 'FBRX')] : [])],
       landing: () => {
         const d = this.platform.specialDirs();
         // Never the home folder itself (some systems report it as Downloads).
@@ -478,6 +479,8 @@ export class Kernel {
       setProvider: (provider) => void this.settings.update({ protection: { provider } }),
       dirs: () => this.platform.specialDirs(),
       alert: (rule, title, body, key) => void this.alerts.fire(rule, title, body, { key }).catch((err) => this.log.debug('Alert failed', { rule, error: errorMessage(err) })),
+      resolve: (ids) => ids.forEach((id) => this.alerts.resolve('shield_threat', id)),
+      notify: (title, body) => this.notify({ title, body, level: 'info', source: 'alerts' }),
     });
     this.imageBackup = new ImageBackupService({
       platform: process.platform,

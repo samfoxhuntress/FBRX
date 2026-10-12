@@ -75,6 +75,8 @@ export interface PlatformAdapter {
   /** How AI apps start the FBRX MCP bridge (the app executable in Node mode plus the bridge script). */
   mcpShim?: { command: string; args: string[]; env?: Record<string, string> } | null;
   specialDirs(): SpecialDirs;
+  /** FBRX's own folders outside its data folder (where it is installed, its update cache): never scanned. */
+  ownDirs?(): string[];
   notify(n: NotificationEvent): void;
   /** Ask the shell to restart the core (after restore, update, remote `app.restart`). */
   requestRestart(reason: string): void;

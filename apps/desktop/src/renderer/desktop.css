@@ -5630,6 +5630,18 @@ html[data-presenting='blur'] .private::selection {
   color: var(--text-muted);
   font-size: 11px;
 }
+.shield-bulk {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+.shield-bulk-tip {
+  margin-left: auto;
+  font-size: 12px;
+}
 .shield-file {
   display: grid;
   gap: 2px;

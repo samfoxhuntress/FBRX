@@ -23,7 +23,7 @@ import type { MetaStore } from '../storage/meta';
 import { exec, IS_WIN } from '../windows/ps';
 import * as sec from '../windows/security';
 import { catalogEntry, detectProducts, findExecutable, scanCommand } from './products';
-import type { Shield } from './shield';
+import { SHIELD_ENGINE_VERSION, type Shield } from './shield';
 
 /**
  * What protects this computer: the person's (or organization's) choice of Microsoft Defender, FBRX Shield or an
@@ -48,6 +48,10 @@ export interface ProtectionDeps {
   setProvider: (value: string) => void;
   dirs: () => { home: string; downloads: string; desktop: string };
   alert: (rule: string, title: string, body: string, key: string) => void;
+  /** The alerts for these findings have nothing left to say (they were decided). */
+  resolve?: (ids: string[]) => void;
+  /** Says once what a re-check of the findings cleared. */
+  notify?: (title: string, body: string) => void;
   /** For tests: what is installed. */
   detect?: () => Promise<AvProduct[]>;
 }
@@ -70,6 +74,11 @@ export class ProtectionService {
   private kick: NodeJS.Timeout | null = null;
   private running = false;
   private lastProblems = new Set<string>();
+  /** New downloads tell one by one, three a minute at most; the rest wait for one alert that counts them. */
+  private recentAlerts: number[] = [];
+  private held: ShieldDetection[] = [];
+  private heldTimer: NodeJS.Timeout | null = null;
+  private recheckTimer: NodeJS.Timeout | null = null;
 
   constructor(private readonly d: ProtectionDeps) {}
 
@@ -84,6 +93,28 @@ export class ProtectionService {
     this.timer.unref?.();
     this.schedTimer = setInterval(() => this.running && this.scheduled(), SCHEDULE_CHECK_MS);
     this.schedTimer.unref?.();
+    // After an update that changed the rules, the findings still waiting are looked at again once.
+    if (this.d.meta.get<string>('shield.rechecked') !== SHIELD_ENGINE_VERSION) {
+      this.recheckTimer = setTimeout(() => void this.recheck(true).catch((err) => this.d.log.warn('Re-check of findings failed', { error: errorMessage(err) })), 20_000);
+      this.recheckTimer.unref?.();
+    }
+  }
+
+  /**
+   * Looks at the findings still waiting again with today's rules, and clears the ones FBRX Shield no longer flags
+   * (FBRX's own files, installed packages' code) or whose file is gone.
+   */
+  async recheck(auto = false): Promise<{ cleared: number; gone: number }> {
+    const r = await this.d.shield.recheck();
+    this.d.meta.set('shield.rechecked', SHIELD_ENGINE_VERSION);
+    if (r.ids.length) {
+      this.d.resolve?.(r.ids);
+      this.d.log.info('Re-checked FBRX Shield findings', { cleared: r.cleared, gone: r.gone });
+      if (auto && r.cleared) this.d.notify?.('FBRX Shield cleaned up its list', `${r.cleared.toLocaleString()} ${r.cleared === 1 ? 'finding was' : 'findings were'} FBRX's own files or installed packages, which FBRX Shield no longer flags. Nothing was changed on disk.`);
+      this.d.events.emit('protection.changed', { state: this.cached?.state ?? 'unknown' });
+      if (this.running) void this.status(true).catch(() => undefined);
+    }
+    return { cleared: r.cleared, gone: r.gone };
   }
 
   stop(): void {
@@ -91,9 +122,13 @@ export class ProtectionService {
     if (this.timer) clearInterval(this.timer);
     if (this.schedTimer) clearInterval(this.schedTimer);
     if (this.kick) clearTimeout(this.kick);
+    if (this.heldTimer) clearTimeout(this.heldTimer);
+    if (this.recheckTimer) clearTimeout(this.recheckTimer);
     this.timer = null;
     this.schedTimer = null;
     this.kick = null;
+    this.heldTimer = null;
+    this.recheckTimer = null;
     this.abort?.abort();
     this.d.shield.unwatch();
   }
@@ -373,6 +408,7 @@ export class ProtectionService {
         });
         Object.assign(job, { files: r.files, skipped: r.skipped, found: r.detections.length, detections: r.detections });
         this.d.meta.set('shield.lastScan', { at: new Date().toISOString(), type: p.type, files: r.files, found: r.detections.length });
+        this.scanSummary(job, r.detections);
       } else if (kind === 'defender' && IS_WIN) {
         const r = await sec.scan(p.type, p.path);
         Object.assign(job, { found: r.threatsFound ? 1 : 0, output: r.output.slice(-4000) });
@@ -414,15 +450,71 @@ export class ProtectionService {
     return { ok: true };
   }
 
-  /** A new finding: tell the person, and FBRX Command through the alert channels. */
+  /**
+   * A new finding: tell the person, and FBRX Command through the alert channels. A scan tells once, when it ends
+   * (scanSummary); new downloads tell one by one, three a minute at most.
+   */
   onDetection(d: ShieldDetection): void {
     this.d.events.emit('shield.detected', d);
     if (this.running) void this.status(true).catch(() => undefined);
+    if (d.source === 'scan') return;
+    const now = Date.now();
+    this.recentAlerts = this.recentAlerts.filter((t) => now - t < 60_000);
+    if (this.recentAlerts.length >= 3) {
+      this.held.push(d);
+      if (!this.heldTimer) {
+        this.heldTimer = setTimeout(() => this.flushHeld(), 60_000);
+        this.heldTimer.unref?.();
+      }
+      return;
+    }
+    this.recentAlerts.push(now);
+    this.alertFor(d);
+  }
+
+  private alertFor(d: ShieldDetection): void {
     const where = d.source === 'download' ? 'A new download' : 'A file';
     const what = d.kind === 'suspicious' ? 'looks suspicious' : d.kind === 'test' ? 'is the antivirus test file' : 'is malware';
     const done = d.action === 'quarantined' ? ' It is in quarantine now.' : d.kind === 'suspicious' ? ' Open FBRX Shield to decide what to do.' : ' Open FBRX Shield to quarantine it.';
     this.d.alert('shield_threat', `FBRX Shield: ${d.name}`, `${where} ${what}: ${d.path}. ${d.reason}${done}`, d.id);
   }
+
+  /** The findings held back during a burst, in one alert. */
+  private flushHeld(): void {
+    this.heldTimer = null;
+    const held = this.held;
+    this.held = [];
+    if (!held.length) return;
+    if (held.length === 1) return this.alertFor(held[0]);
+    this.d.alert('shield_threat', `FBRX Shield: ${held.length} more new files need a look`, `${held.length} more new files ${summarize(held)}. Open FBRX Shield to decide what to do.`, `burst:${held[0].id}`);
+  }
+
+  /** One alert for a whole scan. */
+  private scanSummary(job: ScanJob, found: ShieldDetection[]): void {
+    if (!found.length) return;
+    if (found.length === 1) return this.alertFor(found[0]);
+    this.d.alert(
+      'shield_threat',
+      `FBRX Shield found ${found.length.toLocaleString()} items`,
+      `The ${job.type === 'custom' ? '' : `${job.type} `}scan found ${summarize(found)}. Open FBRX Shield to decide what to do: "Trust all suspicious" handles the ones you know in one go.`,
+      `scan:${job.id}`,
+    );
+  }
+}
+
+/** "3 malware (2 in quarantine), 40 suspicious" */
+function summarize(list: ShieldDetection[]): string {
+  const malware = list.filter((d) => d.kind === 'malware');
+  const quarantined = malware.filter((d) => d.action === 'quarantined').length;
+  const suspicious = list.filter((d) => d.kind === 'suspicious').length;
+  const test = list.filter((d) => d.kind === 'test').length;
+  return [
+    malware.length ? `${malware.length} malware${quarantined ? ` (${quarantined} in quarantine)` : ''}` : '',
+    suspicious ? `${suspicious} that look${suspicious === 1 ? 's' : ''} suspicious` : '',
+    test ? `${test} antivirus test file${test === 1 ? '' : 's'}` : '',
+  ]
+    .filter(Boolean)
+    .join(', ');
 }
 
 /** Default folders for scans and download checks. */

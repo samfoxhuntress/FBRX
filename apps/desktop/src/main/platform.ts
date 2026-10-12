@@ -1,6 +1,7 @@
 import { app, Notification, safeStorage, shell } from 'electron';
 import { execFile } from 'node:child_process';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { FileKeychain, defaultSpecialDirs, openMacSafeStorage, type KeychainAdapter, type MovedKeychain, type PlatformAdapter, type UpdateController } from '@fbrx/core';
 import type { NotificationEvent } from '@fbrx/shared';
 
@@ -103,6 +104,19 @@ export function createElectronPlatform(o: {
       } catch {
         return d;
       }
+    },
+    ownDirs: () => {
+      const dirs = [dirname(process.execPath), resources, app.getPath('userData')];
+      // The update cache (electron-updater names it in app-update.yml), under the local app data folder.
+      try {
+        const yml = join(resources, 'app-update.yml');
+        const name = existsSync(yml) ? /^updaterCacheDirName:\s*(\S+)/m.exec(readFileSync(yml, 'utf8'))?.[1] : null;
+        const base = process.platform === 'win32' ? process.env.LOCALAPPDATA : process.platform === 'darwin' ? join(app.getPath('home'), 'Library', 'Caches') : process.env.XDG_CACHE_HOME || join(app.getPath('home'), '.cache');
+        if (name && base) dirs.push(join(base, name.replace(/^["']|["']$/g, '')));
+      } catch {
+        /* no update cache */
+      }
+      return dirs;
     },
     notify: (n) => o.onNotify(n),
     requestRestart: o.requestRestart,

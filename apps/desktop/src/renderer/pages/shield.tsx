@@ -5,6 +5,7 @@ import { call, onEvent, pickFile } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { IS_WINDOWS, navigate } from '../app';
 import { AskButton } from '../widgets';
+import { menuFor } from '../context-menu';
 
 /**
  * Stronghold → FBRX Shield: FBRX's antivirus, and the choice of what protects this computer (FBRX Shield, Microsoft
@@ -252,8 +253,29 @@ function Findings({ agentName }: { agentName: string }) {
   const list = useCore('shield.detections', { limit: 500 }, ['shield.detected', 'protection.changed', 'protection.scan']);
   const { run, busy } = useAction();
   const { confirm, dialog } = useConfirm();
+  const toast = useToast();
   const all = list.data ?? [];
   const rows = view === 'waiting' ? all.filter((d) => d.action === 'open') : view === 'quarantine' ? all.filter((d) => d.action === 'quarantined') : all;
+  const waiting = all.filter((d) => d.action === 'open');
+  const suspicious = waiting.filter((d) => d.kind !== 'malware').length;
+  const parentOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'))) || path;
+  const trustMany = async (o: { folder?: string }) => {
+    const where = o.folder ? ` in ${o.folder}` : '';
+    const ok = await confirm({
+      title: o.folder ? `Trust everything suspicious in ${fileName(o.folder)}?` : `Trust all ${suspicious.toLocaleString()} suspicious files?`,
+      body: `FBRX Shield leaves them where they are and stops reporting them${where}. Anything it calls malware still waits for you, one by one.`,
+      confirmLabel: 'Trust them',
+    });
+    if (!ok) return;
+    const r = await run('allowMany', () => call('shield.allowMany', o));
+    if (r) toast.success(`Trusted ${r.allowed.toLocaleString()} ${r.allowed === 1 ? 'file' : 'files'}`);
+    list.reload();
+  };
+  const recheck = async () => {
+    const r = await run('recheck', () => call('shield.recheck'));
+    if (r) toast.info(r.cleared || r.gone ? `Cleared ${(r.cleared + r.gone).toLocaleString()} from the list` : 'Nothing to clear', r.cleared ? 'FBRX Shield no longer flags them (FBRX’s own files, installed packages).' : r.gone ? 'Their files are gone.' : 'Every file still waiting is still flagged.');
+    list.reload();
+  };
   const act = async (d: ShieldDetection, action: 'quarantine' | 'restore' | 'delete' | 'allow') => {
     if (action === 'delete' && !(await confirm({ title: `Delete ${fileName(d.path)}?`, body: 'It is deleted for good.', danger: true, confirmLabel: 'Delete' }))) return;
     if (action === 'restore' && d.kind !== 'suspicious' && !(await confirm({ title: `Put ${fileName(d.path)} back?`, body: `FBRX Shield thinks this is ${d.kind === 'test' ? 'the antivirus test file' : 'malware'}. Restore it only if you are sure it is safe; FBRX Shield will trust it from now on.`, danger: true, confirmLabel: 'Restore' }))) return;
@@ -278,6 +300,20 @@ function Findings({ agentName }: { agentName: string }) {
       }
       flush
     >
+      {view === 'waiting' && waiting.length > 1 && (
+        <div className="shield-bulk">
+          <span className="fx-muted">{waiting.length.toLocaleString()} waiting</span>
+          {suspicious > 0 && (
+            <Button size="sm" icon="check" loading={busy === 'allowMany'} onClick={() => void trustMany({})}>
+              Trust all suspicious ({suspicious.toLocaleString()})
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" icon="refresh" loading={busy === 'recheck'} onClick={() => void recheck()} title="Look at them again with today's rules">
+            Check the list again
+          </Button>
+          <span className="fx-muted shield-bulk-tip">Right-click a file to trust its whole folder.</span>
+        </div>
+      )}
       <Table
         columns={[
           {
@@ -294,7 +330,14 @@ function Findings({ agentName }: { agentName: string }) {
             key: 'f',
             header: 'File',
             render: (d) => (
-              <div className="shield-file">
+              <div
+                className="shield-file"
+                onContextMenu={menuFor(() =>
+                  d.action === 'open' && d.kind !== 'malware'
+                    ? [{ label: `Trust everything suspicious in ${fileName(parentOf(d.path))}`, icon: 'check', onSelect: () => void trustMany({ folder: parentOf(d.path) }) }]
+                    : [],
+                )}
+              >
                 <span className="mono private" title={d.path}>
                   {d.path}
                 </span>

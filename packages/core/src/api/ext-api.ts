@@ -484,6 +484,15 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       void k.protection.status(true).catch(() => undefined);
       return d;
     },
+    'shield.allowMany': (p) => {
+      const x = z.object({ ids: z.array(z.string().min(1).max(80)).max(5000).optional(), folder: z.string().max(4096).optional() }).parse(p ?? {});
+      const r = k.shield.allowMany(x);
+      for (const id of r.ids) k.alerts.resolve('shield_threat', id);
+      void k.protection.status(true).catch(() => undefined);
+      k.events.emit('protection.changed', { state: k.protection.summary()?.state ?? 'unknown' });
+      return { allowed: r.allowed };
+    },
+    'shield.recheck': () => k.protection.recheck(),
     'shield.updateSignatures': async () => {
       const r = await k.shield.updateSignatures();
       void k.protection.status(true).catch(() => undefined);

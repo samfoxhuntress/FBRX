@@ -1162,6 +1162,10 @@ export interface ExtMethods {
   'protection.job': () => ScanJob | null;
   'shield.detections': (p?: { limit?: number }) => ShieldDetection[];
   'shield.act': (p: { id: string; action: 'quarantine' | 'restore' | 'delete' | 'allow' }) => ShieldDetection;
+  /** Trusts the findings picked, or every suspicious one still waiting (in one folder, if named). Never malware in bulk. */
+  'shield.allowMany': (p: { ids?: string[]; folder?: string }) => { allowed: number };
+  /** Looks at the findings still waiting again with today's rules, and clears the ones it no longer flags. */
+  'shield.recheck': () => { cleared: number; gone: number };
   'shield.updateSignatures': () => { added: number; total: number };
   /** Adds fingerprints from a text file (one SHA-256 per line). */
   'shield.importSignatures': (p: { path: string }) => { added: number; total: number };
@@ -1368,6 +1372,8 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'protection.scan',
   'protection.cancelScan',
   'shield.act',
+  'shield.allowMany',
+  'shield.recheck',
   'shield.updateSignatures',
   'shield.importSignatures',
   'shield.check',
