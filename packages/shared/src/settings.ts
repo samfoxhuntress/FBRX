@@ -151,6 +151,15 @@ export const SettingsSchema = z.object({
     /** How strong the texture is, 0–100 %. Older versions saved subtle / medium / bold. */
     textureStrength: z.preprocess((v) => (typeof v === 'string' ? (({ subtle: 35, medium: 50, bold: 100 }) as Record<string, number>)[v] ?? v : v), z.number().min(0).max(100)),
     radius: z.enum(['sharp', 'rounded', 'soft']),
+    /**
+     * The sidebar's icons: all in the theme's accent (one color, the default), each section in its own color, all in
+     * one color you pick (navIconColor), or plain.
+     */
+    navIcons: z.enum(['accent', 'sections', 'custom', 'plain']),
+    /** The color for navIcons "custom" (#rrggbb). */
+    navIconColor: z.string().regex(/^(#[0-9a-fA-F]{6})?$/),
+    /** How strong the tint behind the sidebar's icons is, 0–100 % (50: as it always was). */
+    navIconStrength: z.number().min(0).max(100),
     reduceMotion: z.boolean(),
     splash: z.boolean(),
     splashSound: z.boolean(),
@@ -524,6 +533,9 @@ export const DEFAULT_SETTINGS: Settings = {
     texture: 'theme',
     textureStrength: 50,
     radius: 'rounded',
+    navIcons: 'accent',
+    navIconColor: '',
+    navIconStrength: 50,
     reduceMotion: false,
     splash: true,
     splashSound: true,

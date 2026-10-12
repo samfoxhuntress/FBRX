@@ -332,6 +332,78 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
   );
 }
 
+const NAV_ICON_STYLES: Array<{ id: Settings['appearance']['navIcons']; label: string; ultra?: boolean }> = [
+  { id: 'accent', label: 'Theme color' },
+  { id: 'sections', label: 'A color for each section' },
+  { id: 'custom', label: 'One color you pick', ultra: true },
+  { id: 'plain', label: 'Plain' },
+];
+const NAV_PREVIEW: Array<{ icon: IconName; sec: string }> = [
+  { icon: 'compass', sec: 'command' },
+  { icon: 'layers', sec: 'workspace' },
+  { icon: 'wrench', sec: 'care' },
+  { icon: 'castle', sec: 'protect' },
+];
+
+/** Settings → Appearance → Sidebar icons: one color for a calm, single-color look, or a color for each section. */
+function NavIconsCard() {
+  const { s, locked, patch } = useSettings();
+  const ultra = useTier() === 'ultra';
+  if (!s) return null;
+  const a = s.appearance;
+  const L = (p: string) => isLocked(locked, p);
+  const mode = resolvedMode(s.general.theme);
+  const picked = a.navIconColor || themeAccent(a, mode);
+  const hueFor = (style: Settings['appearance']['navIcons'], sec: string) =>
+    style === 'accent' ? 'var(--accent)' : style === 'sections' ? `var(--sec-${sec})` : style === 'custom' ? picked : 'var(--text-secondary)';
+  const tint = a.navIconStrength / 50;
+  return (
+    <Card title="Sidebar icons" subtitle="All in one color for a calm look (your theme's, or one you pick), or a color for each section.">
+      <div className="fx-form">
+        <div className="tex-tiles">
+          {NAV_ICON_STYLES.filter((x) => ultra || !x.ultra).map((x) => (
+            <button
+              key={x.id}
+              className={`tex-tile${a.navIcons === x.id ? ' selected' : ''}`}
+              disabled={L('appearance.navIcons')}
+              aria-pressed={a.navIcons === x.id}
+              onClick={() => void patch({ appearance: { navIcons: x.id, ...(x.id === 'custom' && !a.navIconColor ? { navIconColor: picked } : {}) } })}
+            >
+              <span className="nav-icons-preview">
+                {NAV_PREVIEW.map((p) => {
+                  const hue = hueFor(x.id, p.sec);
+                  const Ico = Icons[p.icon];
+                  return (
+                    <span key={p.icon} style={{ color: hue, background: `color-mix(in srgb, ${hue} ${13 * tint}%, var(--surface-2))`, borderColor: `color-mix(in srgb, ${hue} ${28 * tint}%, transparent)` }}>
+                      <Ico size={14} />
+                    </span>
+                  );
+                })}
+              </span>
+              <span className="tex-tile-label">{x.label}</span>
+            </button>
+          ))}
+        </div>
+        {ultra && a.navIcons === 'custom' && (
+          <Field label="Icon color">
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="color" aria-label="Icon color" value={picked} disabled={L('appearance.navIconColor')} onChange={(e) => void patch({ appearance: { navIconColor: e.target.value } })} style={{ width: 44, height: 32, border: 0, background: 'none' }} />
+              <span className="mono">{picked}</span>
+            </div>
+          </Field>
+        )}
+        <Field label={`Tint behind the icons: ${a.navIconStrength === 0 ? 'off' : `${Math.round(a.navIconStrength)}%`}`} help="From just the colored icon to a rich colored tile. 50% is the usual look.">
+          <div className="tex-strength">
+            <span>None</span>
+            <input type="range" min={0} max={100} step={5} disabled={a.navIcons === 'plain' || L('appearance.navIconStrength')} value={a.navIconStrength} onChange={(e) => void patch({ appearance: { navIconStrength: Number(e.target.value) } })} />
+            <span>Rich</span>
+          </div>
+        </Field>
+      </div>
+    </Card>
+  );
+}
+
 function Appearance() {
   const { s, locked, patch } = useSettings();
   const ultra = useTier() === 'ultra';
@@ -409,6 +481,7 @@ function Appearance() {
           </Field>
         </div>
       </Card>}
+      <NavIconsCard />
       <Grid cols={2}>
         <Card title="Layout">
           <div className="fx-form">

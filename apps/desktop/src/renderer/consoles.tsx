@@ -231,7 +231,7 @@ function Screen({ session }: { session: ConsoleSession }) {
       cursorBlink: true,
       scrollback: 5000,
       convertEol: false,
-      theme: { background: '#0c0e11', foreground: '#e3e6ea', cursor: cssVar('--accent', '#f0a530'), selectionBackground: 'rgba(240,165,48,0.35)' },
+      theme: { background: '#0c0e11', foreground: '#e3e6ea', cursor: cssVar('--accent', '#f4b942'), selectionBackground: 'rgba(244,185,66,0.35)' },
     });
     const fit = new FitAddon();
     t.loadAddon(fit);

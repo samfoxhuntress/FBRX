@@ -30,7 +30,7 @@ const TOOLS: Tool[] = [
   { id: 'diff', name: 'Compare text', hint: 'What changed between two versions or lists', examples: [{ label: 'Two guest lists', input: 'Anna\nBen\nChloe\nDavid', extra: 'Anna\nChloe\nDavid\nEmma' }] },
   { id: 'sizes', name: 'Sizes & numbers', hint: 'GB vs GiB, and decimal, hex, binary', examples: [{ label: 'Why 1 TB shows as 931 GB', input: '1 TB' }, { label: 'Hex color part', input: '0xF0' }, { label: 'A big file', input: '4.7 GB' }] },
   { id: 'decide', name: 'Decision maker', hint: 'Flip a coin, roll dice, pick from a list', examples: [{ label: 'Lunch', input: 'Pizza\nSushi\nTacos\nSalad' }] },
-  { id: 'color', name: 'Colors', hint: 'HEX ↔ RGB ↔ HSL', examples: [{ label: 'FBRX amber', input: '#f0a530' }, { label: 'Tropical mango', input: '#ffa23a' }, { label: 'An HSL color', input: 'hsl(200, 80%, 50%)' }] },
+  { id: 'color', name: 'Colors', hint: 'HEX ↔ RGB ↔ HSL', examples: [{ label: 'FBRX honey', input: '#f4b942' }, { label: 'Tropical mango', input: '#ffa23a' }, { label: 'An HSL color', input: 'hsl(200, 80%, 50%)' }] },
   { id: 'time', name: 'Timestamps', hint: 'Unix time ↔ dates', advanced: true, examples: [{ label: 'The 2038 problem', input: '2147483647' }, { label: 'Right now', input: '' }] },
   { id: 'json', name: 'JSON formatter', hint: 'Format, minify and validate JSON', advanced: true, examples: [{ label: 'Settings sample', input: '{"name":"FBRX","features":["agent","mesh"],"limits":{"tabs":12,"geese":1},"enabled":true}' }] },
   { id: 'base64', name: 'Base64', hint: 'Encode and decode text', advanced: true, examples: [{ label: 'Encode', input: 'Hello, FBRX!' }, { label: 'Decode a secret', input: 'SG9uayBob25r' }] },
@@ -269,14 +269,14 @@ function Pane({ id, seed, fun }: { id: string; seed: Example | null; fun: boolea
       return (
         <>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Input className="mono" placeholder="#f0a530, rgb(240,165,48) or hsl(36,86%,56%)" value={input} onChange={(e) => setInput(e.target.value)} />
-            <input type="color" aria-label="Pick a color" value={/^#[0-9a-f]{6}$/i.test(input) ? input : '#f0a530'} onChange={(e) => setInput(e.target.value)} style={{ width: 44, height: 34, border: 0, background: 'none' }} />
+            <Input className="mono" placeholder="#f4b942, rgb(244,185,66) or hsl(40,89%,61%)" value={input} onChange={(e) => setInput(e.target.value)} />
+            <input type="color" aria-label="Pick a color" value={/^#[0-9a-f]{6}$/i.test(input) ? input : '#f4b942'} onChange={(e) => setInput(e.target.value)} style={{ width: 44, height: 34, border: 0, background: 'none' }} />
           </div>
           {buttons([
             [
               'Convert',
               () => {
-                const v = input.trim() || '#f0a530';
+                const v = input.trim() || '#f4b942';
                 let r: number, g: number, b: number;
                 let m: RegExpMatchArray | null;
                 if ((m = v.match(/^#?([0-9a-f]{6})$/i))) {

@@ -8,13 +8,14 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 
 ## Look and feel
 
-**Settings → Appearance** is the theme studio in FBRX Endpoint Ultra (Essentials and Standard have the plain light and dark look, with the layout and behavior options below):
+**Settings → Appearance** is the theme studio in FBRX Endpoint Ultra (Essentials and Standard have the plain light and dark look in FBRX's golden honey, with the sidebar icon, layout and behavior options below):
 
 | Option | Choices |
 | --- | --- |
 | Look | A calm finish in the spirit of Windows 11 and macOS: the system font (Segoe UI Variable on Windows 11), rounded corners, hairline borders, soft shadows, a pill marker for the current page, and a texture that only whispers behind the menu |
-| Theme | Fabrics (amber with a light-grey gradient and a woven texture, the default), Tropical (mango orange with a hibiscus-pink glow and a hint of lagoon teal), Neon Grid (deep night blue with cyan light lines, glowing cards and a grid floor that runs to the horizon), Ember, Midnight, Graphite, Ocean, Forest, Orchid, Paper, High contrast. Each has a light and a dark version; *Mode* follows Windows or is fixed. Every theme except High contrast tints the sidebar, top bar and page with its own gradient glow, and charts use gradient area fills |
+| Theme | Fabrics (FBRX's golden honey, with a honey glow and a woven texture, the default; the FBRX logo stays white on black), Tropical (mango orange with a hibiscus-pink glow and a hint of lagoon teal), Neon Grid (deep night blue with cyan light lines, glowing cards and a grid floor that runs to the horizon), Ember, Midnight, Graphite, Ocean, Forest, Orchid, Paper, High contrast. Each has a light and a dark version; *Mode* follows Windows or is fixed. Every theme except High contrast tints the sidebar, top bar and page with its own gradient glow, and charts use gradient area fills |
 | Accent color | Any color; text on buttons switches between dark and light ink automatically |
+| Sidebar icons | **Theme color** (every section's icon in the theme's accent, for a calm one-color look: honey with Fabrics, blue with Graphite…; the default), **A color for each section**, **One color you pick** (Ultra) or **Plain**, and a **Tint behind the icons** slider from none (just the colored icon) to a rich colored tile |
 | Density | Compact, comfortable, spacious |
 | Corners | Sharp, rounded, soft |
 | Texture | The theme's own (weave for Fabrics, palms for Tropical, a neon grid for Neon Grid, grain for Ember, dots for Midnight, carbon fiber for Graphite, waves for Ocean, linen for Forest…), or pick none, weave (a small basket weave), linen, grain, grid (glowing lines in the accent color), dots, carbon fiber, waves or palms. A **Strength** slider sets how much it shows, from 0 to 100% in steps of 5 (new installs start at a soft 50%; even 100% stays quieter than the old *bold*). Drawn as sharp SVG patterns in the theme's ink on the sidebar, the top bar and the page behind the cards (never behind text in cards) |
@@ -25,11 +26,11 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 
 **Dark mode: a cool page, color on the elements.** In dark mode every theme keeps the page itself cool and quiet
 (slate neutrals, also in the warm themes: Fabrics, Tropical, Ember and Paper keep their accent and glow but not a
-brown page) and puts the color on what you use: each sidebar section has its own color (Bridge blue, Studio violet,
-Pit Stop amber, Workbench teal, Orbit sky, Stronghold green, Lab pink, Control slate; in Essentials, Everyday blue,
-Your computer amber, Help & settings slate) on its icon and on the current page's marker, cards carry a breath of
-the theme's accent, and table heads, buttons, badges and tabs pick it up too. The page's glow is softer than the
-sidebar's. The section colors show in light mode as well; High contrast stays flat.
+brown page) and puts the color on what you use: the sidebar's icons and the current page's marker (in the theme's
+accent, or with *A color for each section*: Bridge blue, Studio violet, Pit Stop amber, Workbench teal, Orbit sky,
+Stronghold green, Lab pink, Control slate; in Essentials, Everyday blue, Your computer amber, Help & settings slate),
+cards carry a breath of the theme's accent, and table heads, buttons, badges and tabs pick it up too. The page's glow
+is softer than the sidebar's. The sidebar colors show in light mode as well; High contrast stays flat.
 
 Chart series and status colors stay on the validated design-system palette in every theme, so charts remain
 readable for color-blind users. Organizations can lock any appearance setting from the admin console.

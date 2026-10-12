@@ -17,11 +17,12 @@
   --grid: #e1e0d9;
   --axis: #c3c2b7;
 
-  --accent: #2a78d6;
-  --accent-hover: #256abf;
+  /* FBRX's golden honey: deep enough on light pages for text (4.8:1), bright on dark ones. */
+  --accent: #946000;
+  --accent-hover: #7a4f00;
   --accent-ink: #ffffff;
-  --accent-wash: rgba(42, 120, 214, 0.1);
-  --focus: rgba(42, 120, 214, 0.45);
+  --accent-wash: rgba(214, 154, 32, 0.13);
+  --focus: rgba(214, 154, 32, 0.45);
 
   /* status: fixed, always paired with an icon + label */
   --good: #0ca30c;
@@ -65,10 +66,11 @@
     --border-strong: rgba(186, 204, 230, 0.2);
     --grid: #252c37;
     --axis: #323a47;
-    --accent: #3987e5;
-    --accent-hover: #5598e7;
-    --accent-wash: rgba(57, 135, 229, 0.16);
-    --focus: rgba(57, 135, 229, 0.55);
+    --accent: #f4b942;
+    --accent-hover: #f8ca6a;
+    --accent-ink: #1a1408;
+    --accent-wash: rgba(244, 185, 66, 0.16);
+    --focus: rgba(244, 185, 66, 0.5);
     --good-text: #0ca30c;
     --warning-text: #fab219;
     --critical-text: #e66767;
@@ -98,10 +100,11 @@
   --border-strong: rgba(186, 204, 230, 0.2);
   --grid: #252c37;
   --axis: #323a47;
-  --accent: #3987e5;
-  --accent-hover: #5598e7;
-  --accent-wash: rgba(57, 135, 229, 0.16);
-  --focus: rgba(57, 135, 229, 0.55);
+  --accent: #f4b942;
+  --accent-hover: #f8ca6a;
+  --accent-ink: #1a1408;
+  --accent-wash: rgba(244, 185, 66, 0.16);
+  --focus: rgba(244, 185, 66, 0.5);
   --good-text: #0ca30c;
   --warning-text: #fab219;
   --critical-text: #e66767;
@@ -127,6 +130,8 @@ body,
   margin: 0;
 }
 body {
+  /* Sliders, checkboxes and radio buttons in the theme's color. */
+  accent-color: var(--accent);
   background: var(--page);
   color: var(--text-primary);
   font-family: var(--font);

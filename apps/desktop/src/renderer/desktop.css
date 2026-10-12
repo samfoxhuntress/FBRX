@@ -6063,3 +6063,23 @@ body.popout .fx-page-header p {
   color: var(--muted);
   flex: none;
 }
+
+/* Settings → Appearance → Sidebar icons: four little sidebar tiles in each style. */
+.nav-icons-preview {
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  align-items: center;
+  height: 56px;
+  border-radius: 8px;
+  background: var(--sidebar);
+  border: 1px solid var(--border);
+}
+.nav-icons-preview > span {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+}

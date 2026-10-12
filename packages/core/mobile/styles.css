@@ -6,7 +6,7 @@
   --line: rgba(246, 226, 196, 0.12);
   --text: #f6f1e9;
   --muted: #a39887;
-  --accent: #f0a530;
+  --accent: #f4b942;
   --accent-ink: #1a1408;
   --good: #3fbf6f;
   --warn: #f2b33d;
@@ -22,7 +22,7 @@
     --line: rgba(27, 22, 16, 0.12);
     --text: #1b1610;
     --muted: #6f6556;
-    --accent: #a35f08;
+    --accent: #946000;
     --accent-ink: #ffffff;
   }
 }
