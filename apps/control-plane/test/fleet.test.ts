@@ -153,14 +153,14 @@ describe('control plane ⇄ device fleet', () => {
     expect(d2.result.auditVerify.ok).toBe(true);
     await expect(api('POST', `/v1/admin/devices/${device.id}/commands`, { type: 'not.a.command' })).rejects.toThrow(/400/);
 
-    // Whole-computer images (FBRX Time) are made on Windows; anywhere else the device says so.
+    // Whole-computer images (FBRX Time): made on Windows once set up there; the device says why it cannot.
     const img = await api('POST', `/v1/admin/devices/${device.id}/commands`, { type: 'backup.image' });
     const i2 = await waitFor(async () => {
       const c = await api('GET', `/v1/admin/commands/${img.id}`);
       return ['succeeded', 'failed'].includes(c.status) ? c : null;
     });
     expect(i2.status).toBe('failed');
-    expect(JSON.stringify(i2.error)).toMatch(/made on Windows/);
+    expect(JSON.stringify(i2.error)).toMatch(process.platform === 'win32' ? /not set up on this computer/ : /made on Windows/);
   });
 
   it('backs up a device to the control plane with the org passphrase', async () => {

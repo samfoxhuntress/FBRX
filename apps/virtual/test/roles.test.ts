@@ -27,7 +27,7 @@ beforeAll(async () => {
   calls = join(dir, 'calls.txt');
   const cmd = join(dir, 'fbrx-server');
   const state = join(dir, 'state');
-  writeFileSync(cmd, `#!/usr/bin/env bash\necho "$*" >>"${calls}"\nprintf 'STATE=done\\nROLES=%s\\nSTARTED=x\\nFINISHED=y\\n' "$3" >"${state}/roles.env"\necho "installer output" >>"${join(dir, 'roles.log')}"\n`);
+  writeFileSync(cmd, `#!/usr/bin/env bash\necho "$*" >>"${calls}"\necho "installer output" >>"${join(dir, 'roles.log')}"\nprintf 'STATE=done\\nROLES=%s\\nSTARTED=x\\nFINISHED=y\\n' "$3" >"${state}/roles.env"\n`);
   chmodSync(cmd, 0o755);
   const config = loadConfig({
     FBRX_V_DATA_DIR: join(dir, 'data'),
@@ -64,7 +64,8 @@ describe('Changing FBRX Server’s roles from the console', () => {
     expect((await req('POST', '/v1/server/roles', admin, { roles: ['virtual', 'ai', 'time'] })).status).toBe(409);
   });
 
-  it('runs fbrx-server roles set for administrators, with what each role needs', async () => {
+  // FBRX Server runs on Linux; the stand-in fbrx-server is a bash script.
+  it.skipIf(process.platform === 'win32')('runs fbrx-server roles set for administrators, with what each role needs', async () => {
     mkdirSync(join(dir, 'bundle'), { recursive: true });
     writeFileSync(join(dir, 'bundle', 'install.sh'), '#!/usr/bin/env bash\n');
     expect((await req('GET', '/v1/server/roles', viewer)).body).toMatchObject({ canChange: true, why: null });
@@ -77,7 +78,8 @@ describe('Changing FBRX Server’s roles from the console', () => {
     expect(r.body).toEqual({ started: true, roles: ['virtual', 'ai', 'time'] });
     await until(() => existsSync(calls));
     expect(readFileSync(calls, 'utf8').trim()).toBe('roles set virtual,ai,time --yes');
-    await until(() => (readFileSync(join(dir, 'state', 'roles.env'), 'utf8').includes('STATE=done')));
+    const stateFile = join(dir, 'state', 'roles.env');
+    await until(() => existsSync(stateFile) && readFileSync(stateFile, 'utf8').includes('STATE=done'));
     const st = (await req('GET', '/v1/server/roles', viewer)).body;
     expect(st.change).toMatchObject({ state: 'done', roles: 'virtual,ai,time', log: expect.stringContaining('installer output') });
 
