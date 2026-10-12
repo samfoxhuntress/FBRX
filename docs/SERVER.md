@@ -57,7 +57,8 @@ options (for device passthrough, after one reboot) and starts the `fbrx-virtual`
 | Option | |
 | --- | --- |
 | `--roles virtual,ai` | What the server does (below). `--roles virtual` installs the hypervisor alone; `--roles gate,minidome,ai` makes a gate without virtual machines. Running the installer again with other roles adds roles, or turns the ai role off (its data stays). |
-| `--gate-wan eno1 --gate-lan eno2` | The gate's internet port and the port to your network (gate role; see [GATE.md](GATE.md#install)). `--gate-manage <cidr\|none>` keeps the console and SSH reachable from a private network on the internet side. |
+| `--gate-wan eno1 --gate-lan eno2` | The gate's internet port and the port to your network (gate role; see [GATE.md](GATE.md#install)). Your network avoids the addresses the internet side uses; `--gate-lan-address`, `--gate-wan-address` and `--gate-wan-gateway` choose them yourself. `--gate-manage <cidr\|none>` keeps the console and SSH reachable from a private network on the internet side. |
+| `--reboot` | Restart at the end when a change waits for it (the gate taking its ports, the bridge). |
 | `--bridge eno1` | Makes bridge `br0` on that port so virtual machines sit straight on your network (applies after a reboot). Only for a port set up with DHCP; for a static address, see *Networks* below. |
 | `--port 9443` | The console's port. |
 | `--uninstall [--purge]` | Takes FBRX Server off again. Virtual machines and their disks, and the ai role's mesh pairings and keys, stay unless `--purge`. |
@@ -262,6 +263,7 @@ talks only to that exact controller, and keeps the password encrypted.
 
 ```
 fbrx-server status                 where the console is, service and hypervisor state, certificate fingerprint
+fbrx-server doctor [--fix]         every service this server's roles need, on and running; --fix switches on what is off
 fbrx-server setup-code             the first-time setup code
 fbrx-server logs [-f]              FBRX Virtual's log
 fbrx-server logs ai [-f]           the FBRX core's log (agent, FBRX Mesh, Mesh Assist)
@@ -296,6 +298,8 @@ fbrx-gate help                     FBRX Gate's own commands (gate role, see GATE
 | `FBRX_V_GATE` | `linux` | `simulated` pretends (nothing on the computer changes). |
 | `FBRX_V_GATE_FIRST` | | `commit`: put the starter configuration in place at the first start (the installer sets it). |
 | `FBRX_V_GATE_MANAGE_WAN` | | A private network on the internet side allowed to reach the console and SSH. |
+| `FBRX_V_GATE_LAN_ADDRESS` | | Your network's addresses in the starter configuration (default: 192.168.1.1/24, or the next free choice clear of the internet side's). |
+| `FBRX_V_GATE_WAN_ADDRESS` / `FBRX_V_GATE_WAN_GATEWAY` | | A fixed internet address in the starter configuration (both, or DHCP). |
 
 `/etc/fbrx-core/fbrx-core.env` (ai role; `sudo systemctl restart fbrx-core` after a change): `FBRX_SERVER_ROLES`, the
 roles this server announces (the installer writes it). Everything else about the core is set from *Mesh & AI*.

@@ -1,5 +1,5 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { hostname } from 'node:os';
+import { hostname, networkInterfaces } from 'node:os';
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
@@ -287,11 +287,24 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   };
 }
 
-/** The configuration a new gate starts from: its ports, this console's port, and the installer's management network. */
-export function gateStarter(config: VirtualConfig): GateConfig {
+/**
+ * The configuration a new gate starts from: its ports, this console's port, the installer's management network, and
+ * your network's addresses clear of the ones the internet port has now (a gate behind a home router that hands out
+ * 192.168.1.x must not use 192.168.1.x itself).
+ */
+export function gateStarter(config: VirtualConfig, nics: NodeJS.Dict<Array<{ family: string | number; cidr: string | null }>> = networkInterfaces()): GateConfig {
   const name = hostname().split('.')[0].toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '') || 'fbrx-gate';
+  const wanNow = (nics[config.gate.wan] ?? []).filter((a) => (a.family === 'IPv4' || a.family === 4) && a.cidr).map((a) => a.cidr!);
   // On a server that also runs virtual machines, they can join the LAN from the start (its virtual switch, br-lan).
-  const c = starterConfig({ hostname: name, wan: config.gate.wan, lan: config.gate.lan, vmSwitch: config.roles.includes('virtual') });
+  const c = starterConfig({
+    hostname: name,
+    wan: config.gate.wan,
+    lan: config.gate.lan,
+    lanAddress: config.gate.lanAddress ?? undefined,
+    avoid: [...wanNow, ...(config.gate.manageFromWan ? [config.gate.manageFromWan] : [])],
+    wanStatic: config.gate.wanStatic,
+    vmSwitch: config.roles.includes('virtual'),
+  });
   c.management.consolePort = config.port;
   if (config.gate.manageFromWan) {
     c.firewall.rules.push({ id: 'manage-from-wan', name: `Manage the gate from ${config.gate.manageFromWan}`, enabled: true, from: 'wan', to: 'gate', proto: 'tcp', ports: `22,${config.port}`, source: config.gate.manageFromWan, action: 'accept', log: false });

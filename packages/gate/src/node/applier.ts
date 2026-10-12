@@ -2,8 +2,8 @@ import { execFile } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { inCidr, intToIPv4, ipv4ToInt } from '@fbrx/shared';
-import { bridgeName, type GateConfig } from '../model';
+import { inCidr, intToIPv4, ipv4ToInt, networkOf } from '@fbrx/shared';
+import { bridgeName, pickLanAddress, type GateConfig } from '../model';
 import { linkNames, type GateRendered } from '../render/index';
 import { NFT_TABLE, WG_IFACE } from '../render/nftables';
 import type { GatePaths } from '../render/paths';
@@ -177,6 +177,12 @@ export class LinuxApplier implements GateApplier {
     return r;
   }
 
+  /** A system service the gate relies on: switched on for the next start, and running now. */
+  private async ensureService(unit: string, what: string): Promise<void> {
+    if ((await this.run('systemctl', ['is-enabled', '--quiet', unit])).code !== 0) await this.run('systemctl', ['enable', unit]);
+    if ((await this.run('systemctl', ['is-active', '--quiet', unit])).code !== 0) await this.must('systemctl', ['start', unit], what);
+  }
+
   private write(file: string, content: string, mode = 0o644) {
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, content, { mode });
@@ -251,6 +257,8 @@ export class LinuxApplier implements GateApplier {
 
     // Ports, VLANs and addresses.
     if (this.o.mode === 'networkd') {
+      // systemd-networkd runs the ports: on, and kept on (Debian installs it switched off).
+      await this.ensureService('systemd-networkd', 'systemd-networkd did not start');
       mkdirSync(this.networkdDir, { recursive: true });
       const keep = new Set(r.networkd.map((f) => f.name));
       for (const f of readdirSync(this.networkdDir)) if (f.startsWith('10-fbrx-') && !keep.has(f)) rmSync(join(this.networkdDir, f));
@@ -285,10 +293,16 @@ export class LinuxApplier implements GateApplier {
     this.write(nft, r.nftables, 0o640);
     await this.must('nft', ['-f', nft], 'The firewall rules');
 
-    // DHCP and DNS.
+    // The firewall is loaded again at every start, before the network comes up.
+    if (this.o.mode === 'networkd') await this.run('systemctl', ['enable', 'fbrx-gate-firewall.service']);
+
+    // DHCP and DNS (switched on for the next start too).
     this.write(this.dnsmasqConf, r.dnsmasq);
     if (this.o.restartDns) await this.o.restartDns(this.dnsmasqConf);
-    else await this.must('systemctl', ['restart', 'dnsmasq'], 'dnsmasq');
+    else {
+      await this.run('systemctl', ['enable', 'dnsmasq']);
+      await this.must('systemctl', ['restart', 'dnsmasq'], 'dnsmasq');
+    }
 
     // Traffic shaping.
     notes.push(...(await this.qos(r, previous)));
@@ -419,6 +433,15 @@ export class LinuxApplier implements GateApplier {
       const routes = (await json<Array<{ gateway?: string; dev?: string }>>('ip', ['-j', 'route', 'show', 'default'])) ?? [];
       live.wan.gateway = routes.find((r) => r.dev === c.wan.interface)?.gateway ?? routes[0]?.gateway ?? null;
       if (!live.wan.address) live.problems.push('The internet port has no address yet');
+      // Behind a router that hands out the same addresses as one of the gate's networks, nothing gets through.
+      const wanCidr = live.interfaces.find((i) => i.name === c.wan.interface)?.addresses[0];
+      const clash = live.wan.address ? c.networks.find((n) => inCidr(live.wan.address!, n.address)) : undefined;
+      if (clash && wanCidr) {
+        const free = pickLanAddress([wanCidr, ...c.networks.filter((n) => n !== clash).map((n) => n.address), ...(c.vpn.enabled ? [c.vpn.address] : [])]);
+        live.problems.push(
+          `The internet port got ${live.wan.address}, inside your network ${clash.name} (${networkOf(clash.address)}): the router in front of the gate uses the same addresses. Move ${clash.name}, like sudo fbrx-gate renumber ${clash.name} ${free} (or under Networks), then commit.`,
+        );
+      }
     }
     try {
       live.leases = parseLeases(readFileSync(join(this.o.paths.varDir, 'dnsmasq.leases'), 'utf8'), c);
@@ -440,6 +463,24 @@ export class LinuxApplier implements GateApplier {
       if (!rootQ) live.problems.push('Traffic shaping is on but not in place');
     }
     live.dns.running = (await this.run('pgrep', ['-x', 'dnsmasq'])).code === 0;
+    if (c && this.o.mode === 'networkd') {
+      if (!live.dns.running) live.problems.push('DHCP and DNS (dnsmasq) are not running: sudo systemctl enable --now dnsmasq (journalctl -u dnsmasq says why it stopped)');
+      if ((await this.run('systemctl', ['is-active', '--quiet', 'systemd-networkd'])).code !== 0) live.problems.push('systemd-networkd is not running, so the ports keep no settings: sudo systemctl enable --now systemd-networkd');
+      try {
+        if (readFileSync('/proc/sys/net/ipv4/ip_forward', 'utf8').trim() === '0') live.problems.push('Routing is off in the kernel (net.ipv4.ip_forward): commit again, or sudo sysctl -w net.ipv4.ip_forward=1');
+      } catch {
+        /* not Linux */
+      }
+      // The system's own network settings must leave the gate's ports alone, or two programs fight over them.
+      try {
+        const ifaces = readFileSync(join(this.root, 'etc/network/interfaces'), 'utf8');
+        for (const i of c.interfaces.filter((x) => x.kind === 'ethernet')) {
+          if (new RegExp(`^\\s*iface\\s+${i.name.replace(/[.]/g, '\\.')}(\\s|$)`, 'm').test(ifaces)) live.problems.push(`/etc/network/interfaces still sets up ${i.name}, which the gate runs: put a # before its lines (auto, iface, address…) and restart`);
+        }
+      } catch {
+        /* no ifupdown */
+      }
+    }
     try {
       live.conntrack = Number(readFileSync('/proc/sys/net/netfilter/nf_conntrack_count', 'utf8').trim());
     } catch {

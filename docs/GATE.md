@@ -42,17 +42,40 @@ sudo bash fbrx-server-0.1.0/install.sh --roles gate,minidome,ai --gate-wan eno1 
 | Option | |
 | --- | --- |
 | `--gate-wan <port>` | The port your modem or provider's box plugs into. |
-| `--gate-lan <port>` | The port to your network. It becomes **192.168.1.1/24** and hands out 192.168.1.100–199. |
+| `--gate-lan <port>` | The port to your network. It becomes **192.168.1.1/24** and hands out 192.168.1.100–199, unless the internet side already uses 192.168.1.x (a home router in front of the gate, say): then the next free one of 192.168.10.1, 192.168.50.1, 192.168.88.1, 10.10.0.1 and 172.20.0.1. The installer says which. |
+| `--gate-lan-address <cidr>` | Your network's addresses, chosen yourself (`192.168.50.1/24`). |
+| `--gate-wan-address <cidr>` `--gate-wan-gateway <ip>` | A fixed internet address (`203.0.113.2/29` via `203.0.113.1`). When the internet port already has a fixed address in `/etc/network/interfaces`, the gate keeps it without these. Otherwise DHCP from the modem or router. |
 | `--gate-manage <cidr\|none>` | A private network on the internet side that may still reach the console and SSH. By default the network the internet port is on during the install (if private), so installing over it does not shut you out. |
+| `--reboot` | Restart at the end when the takeover waits for it (run interactively, the installer asks instead). |
 
 The installer adds nftables, dnsmasq, WireGuard tools and systemd-networkd; moves the two ports from the system's own
 network settings (`/etc/network/interfaces`, kept as `interfaces.fbrx-backup`) to systemd-networkd; loads the firewall
 before the network comes up at every boot (`fbrx-gate-firewall.service`); points the server's own name lookups at the
-gate; and, at the first start, commits the **starter configuration**: the internet by DHCP, your network on the LAN
-port, nothing reachable from the internet. On a running server the takeover waits for a restart.
+gate; switches systemd-networkd, dnsmasq and the firewall service on for every start; and, at the first start, commits
+the **starter configuration**: the internet by DHCP (or the fixed address), your network on the LAN port, nothing
+reachable from the internet. On a running server the takeover waits for a restart (the installer offers it).
 
-Then plug a computer into the LAN port: it gets an address. Open `https://192.168.1.1:9443` and sign in with the setup
-code (`sudo fbrx-server setup-code`).
+Then plug a computer into the LAN port: it gets an address. Open `https://<the gate's address>:9443` (192.168.1.1, or
+the one the installer named; the server's login screen shows it) and sign in with the setup code
+(`sudo fbrx-server setup-code`).
+
+### When something does not work
+
+```bash
+sudo fbrx-server doctor          # every service the roles need: on for the next start, and running now
+sudo fbrx-server doctor --fix    # switches on and starts whatever is off
+sudo fbrx-gate status            # the gate's own view, problems last
+```
+
+Every commit also switches systemd-networkd, dnsmasq and the firewall service on, so a gate keeps working after a
+restart. The problems `fbrx-gate status` (and the Gate page) name, with what to do:
+
+| Problem | |
+| --- | --- |
+| *The internet port got 192.168.1.37, inside your network lan* | The router in front of the gate hands out the same addresses as your network, so nothing gets through. `sudo fbrx-gate renumber lan 192.168.10.1/24` (or change the address under Networks), then `sudo fbrx-gate commit`. Devices get new addresses as their leases renew (restart them to hurry it). |
+| *DHCP and DNS (dnsmasq) are not running* / *systemd-networkd is not running* | `sudo fbrx-server doctor --fix`; `journalctl -u dnsmasq` says why it stopped. |
+| */etc/network/interfaces still sets up eno1* | The system's own network settings and the gate fight over the port. Put a `#` before its lines (auto, iface, address…) and restart. |
+| *The internet port has no address yet* | Cable, modem, or the provider's DHCP; for a fixed address `sudo fbrx-gate wan static <address/size> <gateway>`. |
 
 ## The console
 
@@ -177,6 +200,8 @@ fbrx-gate commit confirmed 5 comment Guest VLAN
 fbrx-gate confirm                        keep it
 fbrx-gate rollback now                   undo the commit on trial
 fbrx-gate rollback 12                    go back to commit 12
+fbrx-gate renumber lan 192.168.50.1/24   move a network: its range, reservations, forwards, rules and names follow
+fbrx-gate wan static 203.0.113.2/29 203.0.113.1    a fixed internet address (wan dhcp: back to DHCP)
 fbrx-gate reset                          throw the edits away
 fbrx-gate history | leases | preview nftables|dnsmasq|networkd
 ```

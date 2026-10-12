@@ -84,6 +84,11 @@ gate commit confirmed 5 comment smoke test | grep -q 'rolls back' || fail "fbrx-
 gate confirm | grep -q 'confirmed' || fail "fbrx-gate confirm"
 gate preview nftables | grep -q 'iifname "eno2.20" ip dscp set af41' || fail "the guest network is not marked for Prefer Mesh in the firewall"
 gate status >/dev/null || fail "fbrx-gate status"
+gate renumber lan 192.168.50.1/24 >/dev/null || fail "fbrx-gate renumber"
+gate show networks lan dhcp start | grep -q '192.168.50.100' || fail "fbrx-gate renumber did not move the range: $(gate show networks lan)"
+gate wan static 203.0.113.2/29 203.0.113.1 >/dev/null || fail "fbrx-gate wan static"
+gate preview networkd | grep -q 'Gateway=203.0.113.1' || fail "the fixed internet address is not in the port settings"
+gate reset >/dev/null
 [ "$(curl -s -o /dev/null -w '%{http_code}' -H "authorization: Bearer $(cat "$WORK/gate/cli.token")" "http://127.0.0.1:$G_PORT/v1/gate")" = "200" ] || fail "the command line's token is not accepted from this computer"
 DOME="$(curl -fs -H "authorization: Bearer $(cat "$WORK/gate/cli.token")" "http://127.0.0.1:$G_PORT/v1/dome")" || fail "FBRX MiniDome does not answer"
 [ "$(json 'v.mode + " " + v.settings.enabled' <<<"$DOME")" = "simulated true" ] || fail "FBRX MiniDome is not watching: $DOME"

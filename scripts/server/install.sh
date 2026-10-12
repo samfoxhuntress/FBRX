@@ -7,7 +7,8 @@
 #   sudo ./install.sh                 from an unpacked FBRX Server bundle (this script sits next to fbrx-virtual/)
 #   sudo ./install.sh --roles virtual hypervisor only, without the AI role
 #   sudo ./install.sh --roles gate,ai --gate-wan eno1 --gate-lan eno2
-#                                     a gate: the internet on eno1, your network on eno2 (192.168.1.1)
+#                                     a gate: the internet on eno1, your network on eno2 (192.168.1.1, or another
+#                                     network when the router in front already uses 192.168.1.x)
 #   sudo ./install.sh --bridge eno1   also put virtual machines straight onto your network through eno1 (after a reboot)
 #   sudo ./install.sh --uninstall     take FBRX Server off again (virtual machines and their disks stay)
 #
@@ -44,6 +45,11 @@ ROLES="virtual,ai"
 GATE_WAN=""
 GATE_LAN=""
 GATE_MANAGE=""
+GATE_LAN_ADDRESS=""
+GATE_WAN_ADDRESS=""
+GATE_WAN_GATEWAY=""
+REBOOT=0
+NO_START=0
 REBOOT_NEEDED=0
 REBOOT_WHY=""
 
@@ -67,11 +73,16 @@ Options:
                               The web console comes with every role.
   --gate-wan <nic>            the gate's internet port (from your modem or provider)
   --gate-lan <nic>            the gate's port to your network (it becomes 192.168.1.1 and hands out addresses)
+  --gate-lan-address <cidr>   your network's addresses instead, like 192.168.50.1/24 (default: 192.168.1.1/24, or
+                              the next free choice when the internet side already uses it)
+  --gate-wan-address <cidr>   a fixed internet address, like 203.0.113.2/29 (default: the one the port is set to now
+  --gate-wan-gateway <ip>     in /etc/network/interfaces when that is fixed, else DHCP from the modem or router)
   --gate-manage <cidr|none>   a private network on the internet side that may still reach the console and SSH
                               (default: the one the internet port is on now, if private, so you are not shut out)
   --bridge <nic>              make bridge br0 on this network port for virtual machines (applies after a reboot)
   --port <n>                  the console's port (default 9443)
   --no-start                  install and enable, but do not start (inside an installer)
+  --reboot                    restart the server at the end when a change waits for it (the gate taking its ports)
   --yes                       do not ask
   --force                     install on something other than Debian 13
   --uninstall [--purge]       remove FBRX Server (--purge also deletes its data: the ISO library, virtual disks and
@@ -87,8 +98,12 @@ while [ $# -gt 0 ]; do
     --gate-wan) GATE_WAN="${2:?--gate-wan needs a network port, like eno1}"; shift 2 ;;
     --gate-lan) GATE_LAN="${2:?--gate-lan needs a network port, like eno2}"; shift 2 ;;
     --gate-manage) GATE_MANAGE="${2:?--gate-manage needs a network like 10.0.0.0/24, or none}"; shift 2 ;;
+    --gate-lan-address) GATE_LAN_ADDRESS="${2:?--gate-lan-address needs an address like 192.168.50.1/24}"; shift 2 ;;
+    --gate-wan-address) GATE_WAN_ADDRESS="${2:?--gate-wan-address needs an address like 203.0.113.2/29}"; shift 2 ;;
+    --gate-wan-gateway) GATE_WAN_GATEWAY="${2:?--gate-wan-gateway needs the gateway address, like 203.0.113.1}"; shift 2 ;;
+    --reboot) REBOOT=1; shift ;;
     --port) PORT="${2:?--port needs a number}"; shift 2 ;;
-    --no-start) START=0; shift ;;
+    --no-start) START=0; NO_START=1; shift ;;
     --yes | -y) YES=1; shift ;;
     --force) FORCE=1; shift ;;
     --uninstall) UNINSTALL=1; shift ;;
@@ -212,6 +227,31 @@ VERSION="$(cat "$BUNDLE/VERSION" 2>/dev/null || echo 0.0.0)"
 # ------------------------------------------------------------------------------------------- gate ports
 
 env_value() { (grep -E "^$1=" "$ETC/fbrx-virtual.env" 2>/dev/null || true) | tail -1 | cut -d= -f2-; }
+is_ip() { [[ "$1" =~ ^([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})\.([0-9]{1,3})$ ]] && [ "${BASH_REMATCH[1]}" -le 255 ] && [ "${BASH_REMATCH[2]}" -le 255 ] && [ "${BASH_REMATCH[3]}" -le 255 ] && [ "${BASH_REMATCH[4]}" -le 255 ]; }
+is_cidr() { is_ip "${1%/*}" && [[ "$1" =~ /([0-9]{1,2})$ ]] && [ "${BASH_REMATCH[1]}" -le 32 ]; }
+ip_int() { local IFS=.; read -r a b c d <<<"$1"; echo $(((a << 24) | (b << 16) | (c << 8) | d)); }
+# Two networks (address/size) share addresses.
+overlaps() {
+  local p=$((${1#*/} < ${2#*/} ? ${1#*/} : ${2#*/}))
+  local mask=$(((0xFFFFFFFF << (32 - p)) & 0xFFFFFFFF))
+  [ $(($(ip_int "${1%/*}") & mask)) -eq $(($(ip_int "${2%/*}") & mask)) ]
+}
+mask_bits() { local n bits=0; n=$(ip_int "$1"); while [ $((n & 0x80000000)) -ne 0 ]; do bits=$((bits + 1)); n=$(((n << 1) & 0xFFFFFFFF)); done; echo "$bits"; }
+# "address/size gateway" of a port set to a fixed address in /etc/network/interfaces (nothing when it uses DHCP).
+static_of() {
+  [ -f /etc/network/interfaces ] || return 0
+  local address netmask gateway
+  read -r address netmask gateway <<<"$(awk -v nic="$1" '
+    $1 == "iface" { inside = ($2 == nic && $3 == "inet" && $4 == "static"); next }
+    $1 ~ /^(auto|allow-|source|mapping)/ { inside = 0 }
+    inside && $1 == "address" { a = $2 } inside && $1 == "netmask" { m = $2 } inside && $1 == "gateway" { g = $2 }
+    END { print (a ? a : "-"), (m ? m : "-"), (g ? g : "-") }' /etc/network/interfaces)"
+  [ "$address" != "-" ] && [ "$gateway" != "-" ] || return 0
+  if [[ "$address" != */* ]]; then
+    if [ "$netmask" != "-" ] && is_ip "$netmask"; then address="$address/$(mask_bits "$netmask")"; else address="$address/24"; fi
+  fi
+  echo "$address $gateway"
+}
 GATE_NEW=0
 if has_role gate; then
   # A gate already set up keeps its ports unless new ones are given.
@@ -238,7 +278,35 @@ if has_role gate; then
     fi
   fi
   [ "$GATE_MANAGE" = "none" ] && GATE_MANAGE=""
-  if [ -n "$GATE_MANAGE" ] && ! [[ "$GATE_MANAGE" =~ ^[0-9]{1,3}(\.[0-9]{1,3}){3}/[0-9]{1,2}$ ]]; then die "--gate-manage needs a network like 10.0.0.0/24 (or none)"; fi
+  if [ -n "$GATE_MANAGE" ] && ! is_cidr "$GATE_MANAGE"; then die "--gate-manage needs a network like 10.0.0.0/24 (or none)"; fi
+
+  # A fixed internet address set in the system's settings goes with the port, so the server keeps it under the gate.
+  [ -n "$GATE_WAN_ADDRESS" ] || GATE_WAN_ADDRESS="$(env_value FBRX_V_GATE_WAN_ADDRESS)"
+  [ -n "$GATE_WAN_GATEWAY" ] || GATE_WAN_GATEWAY="$(env_value FBRX_V_GATE_WAN_GATEWAY)"
+  if [ -z "$GATE_WAN_ADDRESS" ] && [ "$GATE_NEW" -eq 1 ]; then
+    read -r STATIC_ADDRESS STATIC_GATEWAY <<<"$(static_of "$GATE_WAN")"
+    if [ -n "$STATIC_ADDRESS" ] && [ -n "$STATIC_GATEWAY" ]; then
+      GATE_WAN_ADDRESS="$STATIC_ADDRESS"
+      GATE_WAN_GATEWAY="$STATIC_GATEWAY"
+    fi
+  fi
+  if [ -n "$GATE_WAN_ADDRESS" ] || [ -n "$GATE_WAN_GATEWAY" ]; then
+    is_cidr "$GATE_WAN_ADDRESS" || die "--gate-wan-address needs the address with its size, like 203.0.113.2/29"
+    is_ip "$GATE_WAN_GATEWAY" || die "A fixed internet address needs its gateway too: --gate-wan-gateway <the router's address>"
+    overlaps "$GATE_WAN_GATEWAY/32" "$GATE_WAN_ADDRESS" || die "The gateway $GATE_WAN_GATEWAY is not in $GATE_WAN_ADDRESS's network"
+  fi
+
+  # Your network's addresses: clear of the internet side's (a router in front handing out 192.168.1.x, say).
+  [ -n "$GATE_LAN_ADDRESS" ] || GATE_LAN_ADDRESS="$(env_value FBRX_V_GATE_LAN_ADDRESS)"
+  WAN_NOW="${GATE_WAN_ADDRESS:-$(ip -4 -o addr show dev "$GATE_WAN" scope global 2>/dev/null | awk '{print $4; exit}' || true)}"
+  if [ -z "$GATE_LAN_ADDRESS" ]; then
+    for c in 192.168.1.1/24 192.168.10.1/24 192.168.50.1/24 192.168.88.1/24 10.10.0.1/24 172.20.0.1/24; do
+      if { [ -z "$WAN_NOW" ] || ! overlaps "$c" "$WAN_NOW"; } && { [ -z "$GATE_MANAGE" ] || ! overlaps "$c" "$GATE_MANAGE"; }; then GATE_LAN_ADDRESS="$c"; break; fi
+    done
+  fi
+  is_cidr "$GATE_LAN_ADDRESS" || die "--gate-lan-address needs an address with its size, like 192.168.50.1/24"
+  if [ -n "$WAN_NOW" ] && overlaps "$GATE_LAN_ADDRESS" "$WAN_NOW"; then die "Your network ($GATE_LAN_ADDRESS) overlaps the internet side ($WAN_NOW): pick another with --gate-lan-address"; fi
+  GATE_LAN_IP="${GATE_LAN_ADDRESS%/*}"
 fi
 
 say "FBRX Server $VERSION · powered by FBRX OS"
@@ -247,7 +315,8 @@ note "Installs the web console on port $PORT$(with_role virtual ', QEMU/KVM, lib
 if has_role ai; then note "And the FBRX core (ai role): an AI agent on FBRX Mesh (port 47800), run from the console's Mesh & AI page."; fi
 if has_role minidome; then note "And FBRX MiniDome: watches the gate's names, connections and devices for threats (MiniDome in the console)."; fi
 if has_role gate; then
-  note "And FBRX Gate: the internet on $GATE_WAN, your network on $GATE_LAN (192.168.1.1, handing out addresses)."
+  note "And FBRX Gate: the internet on $GATE_WAN${GATE_WAN_ADDRESS:+ (fixed address $GATE_WAN_ADDRESS via $GATE_WAN_GATEWAY)}, your network on $GATE_LAN ($GATE_LAN_IP, handing out addresses)."
+  if [ "$GATE_LAN_ADDRESS" != "192.168.1.1/24" ] && [ -n "$WAN_NOW" ] && overlaps 192.168.1.1/24 "$WAN_NOW"; then note "Not 192.168.1.1: the internet side already uses those addresses ($WAN_NOW)."; fi
   if [ -n "$GATE_MANAGE" ]; then note "The console and SSH stay reachable from $GATE_MANAGE on the internet side (--gate-manage none closes that)."; fi
   if [ "$GATE_NEW" -eq 1 ]; then note "The gate takes $GATE_WAN and $GATE_LAN over from the system's network settings (kept as a backup)."; fi
 fi
@@ -437,6 +506,9 @@ if has_role gate; then
   set_env FBRX_V_GATE_WAN "$GATE_WAN"
   set_env FBRX_V_GATE_LAN "$GATE_LAN"
   set_env FBRX_V_GATE_MANAGE_WAN "$GATE_MANAGE"
+  set_env FBRX_V_GATE_LAN_ADDRESS "$GATE_LAN_ADDRESS"
+  set_env FBRX_V_GATE_WAN_ADDRESS "$GATE_WAN_ADDRESS"
+  set_env FBRX_V_GATE_WAN_GATEWAY "$GATE_WAN_GATEWAY"
   # The first start puts the starter configuration in place (once: later starts apply what was committed).
   set_env FBRX_V_GATE_FIRST commit
   # The question log (MiniDome reads it) is rotated daily. dnsmasq reopens it on USR2 as its own user, so the new file
@@ -459,8 +531,18 @@ EOF
   printf '%s\n' 8021q wireguard sch_cake sch_htb sch_fq_codel ifb act_mirred cls_u32 >/etc/modules-load.d/fbrx-gate.conf
   if ! in_chroot; then for m in 8021q wireguard sch_cake sch_htb ifb act_mirred cls_u32; do modprobe "$m" 2>/dev/null || true; done; fi
   # systemd-networkd runs the gate's ports and VLANs; it leaves routes it did not make alone (libvirt's, others').
-  mkdir -p /etc/systemd/networkd.conf.d
+  mkdir -p /etc/systemd/networkd.conf.d /etc/systemd/network
   printf '%s\n' '[Network]' 'ManageForeignRoutes=no' 'ManageForeignRoutingPolicyRules=no' >/etc/systemd/networkd.conf.d/fbrx-gate.conf
+  # The internet port from the first start on, before FBRX Gate's first commit (which writes the same file and the
+  # rest): the server reaches the internet even if that commit waits, and the start does not hang waiting for a network.
+  WAN_FILE="/etc/systemd/network/10-fbrx-$GATE_WAN.network"
+  if [ ! -f "$WAN_FILE" ]; then
+    {
+      printf '%s\n' '# Made by FBRX Gate from its configuration: changes here are overwritten.' '[Match]' "Name=$GATE_WAN" '' '[Link]' 'MTUBytes=1500' '' '[Network]'
+      if [ -n "$GATE_WAN_ADDRESS" ]; then printf '%s\n' "Address=$GATE_WAN_ADDRESS" "Gateway=$GATE_WAN_GATEWAY" 'IPv6AcceptRA=no' 'LinkLocalAddressing=no'
+      else printf '%s\n' 'DHCP=ipv4' 'IPv6AcceptRA=no' 'LinkLocalAddressing=no' '' '[DHCPv4]' 'UseDNS=no' 'UseNTP=yes'; fi
+    } >"$WAN_FILE"
+  fi
   # The two ports leave the system's own network settings (ifupdown), which are kept as a backup.
   IFACES=/etc/network/interfaces
   if [ -f "$IFACES" ]; then
@@ -560,7 +642,7 @@ if has_role gate; then
 FBRX Server $VERSION · powered by FBRX OS  (\n, \l)
 
 FBRX Gate: the internet on $GATE_WAN, your network on $GATE_LAN.
-Open the console from a computer on your network:  https://192.168.1.1:$PORT
+Open the console from a computer on your network:  https://$GATE_LAN_IP:$PORT
 (or https://\4:$PORT${GATE_MANAGE:+ from $GATE_MANAGE})
 $SIGN_IN
 
@@ -631,11 +713,19 @@ fi
 echo
 say "FBRX Server is installed."
 if has_role gate; then
-  note "Plug a computer into $GATE_LAN: it gets an address. Open https://192.168.1.1:$PORT and sign in with the setup code (fbrx-server setup-code)."
+  note "Plug a computer into $GATE_LAN: it gets an address. Open https://$GATE_LAN_IP:$PORT and sign in with the setup code (fbrx-server setup-code)."
 else
   note "Open https://<this server>:$PORT and sign in with the setup code (fbrx-server setup-code)."
 fi
 note "Your browser warns about the certificate the first time: compare it with fbrx-server fingerprint."
 if has_role ai; then note "Then open Mesh & AI in the console: under Models on this server, download a model that fits and use it (or pick a provider), and pair the server with your other computers."; fi
 if has_role gate; then note "The Gate pages (or fbrx-gate on this server) change networks, VLANs, the firewall, the VPN and Prefer Mesh: edit, review, commit."; fi
-if [ "$REBOOT_NEEDED" -eq 1 ]; then note "Restart the server once (sudo reboot) for ${REBOOT_WHY:-the changes}."; fi
+# Everything that should run, runs (fbrx-server doctor --fix switches on whatever is off).
+if [ "$START" -eq 1 ] && ! in_chroot; then /usr/local/sbin/fbrx-server doctor --quiet || note "sudo fbrx-server doctor --fix switches on what is off."; fi
+if [ "$REBOOT_NEEDED" -eq 1 ]; then
+  note "Restart the server once (sudo reboot) for ${REBOOT_WHY:-the changes}."
+  if [ "$NO_START" -eq 0 ] && ! in_chroot && { [ "$REBOOT" -eq 1 ] || { [ "$YES" -eq 0 ] && [ -t 0 ] && confirm "Restart now?"; }; }; then
+    say "Restarting"
+    systemctl reboot
+  fi
+fi

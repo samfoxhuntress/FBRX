@@ -1,7 +1,10 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { DEFAULT_LOCAL_API_PORT, isCidr, networkOf, parseCidr, VIRTUAL_DEFAULT_PORT } from '@fbrx/shared';
+import { DEFAULT_LOCAL_API_PORT, isCidr, isIPv4, networkOf, parseCidr, VIRTUAL_DEFAULT_PORT } from '@fbrx/shared';
+
+/** An IPv4 address with its network size (192.168.50.1/24), or null. */
+const cidr4 = (s: string | undefined): string | null => (s && s.includes('/') && parseCidr(s)?.family === 4 ? s : null);
 
 export interface VirtualConfig {
   host: string;
@@ -23,6 +26,10 @@ export interface VirtualConfig {
     first: 'commit' | 'wait';
     /** A private network on the internet side allowed to manage the gate (so an install over that side keeps working). */
     manageFromWan: string | null;
+    /** The gate's address in your network, when the installer chose it (else one clear of the internet side's). */
+    lanAddress: string | null;
+    /** A fixed internet address (FBRX_V_GATE_WAN_ADDRESS + FBRX_V_GATE_WAN_GATEWAY), else DHCP. */
+    wanStatic: { address: string; gateway: string } | null;
   };
   libvirtUri: string;
   imagesDir: string;
@@ -83,6 +90,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
       lan: env.FBRX_V_GATE_LAN ?? 'eth1',
       first: env.FBRX_V_GATE_FIRST === 'commit' ? 'commit' : 'wait',
       manageFromWan: env.FBRX_V_GATE_MANAGE_WAN && isCidr(env.FBRX_V_GATE_MANAGE_WAN) && parseCidr(env.FBRX_V_GATE_MANAGE_WAN)?.family === 4 ? networkOf(env.FBRX_V_GATE_MANAGE_WAN) : null,
+      lanAddress: cidr4(env.FBRX_V_GATE_LAN_ADDRESS),
+      wanStatic: cidr4(env.FBRX_V_GATE_WAN_ADDRESS) && isIPv4(env.FBRX_V_GATE_WAN_GATEWAY ?? '') ? { address: env.FBRX_V_GATE_WAN_ADDRESS!, gateway: env.FBRX_V_GATE_WAN_GATEWAY! } : null,
     },
     libvirtUri: env.FBRX_V_LIBVIRT_URI ?? 'qemu:///system',
     imagesDir: resolve(env.FBRX_V_IMAGES_DIR ?? resolve(dataDir, 'images')),
