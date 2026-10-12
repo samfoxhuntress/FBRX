@@ -1,28 +1,33 @@
 {
   "product": "FBRX OS",
   "stage": "Alpha",
-  "version": "1.9.5",
+  "version": "1.9.6",
   "codename": "Bobbin",
-  "released": "2026-10-06",
+  "released": "2026-10-12",
   "importance": "recommended",
-  "summary": "FBRX Shield, FBRX's own antivirus, and the choice of what protects your computer: FBRX Shield, Microsoft Defender, or the antivirus you already have.",
+  "summary": "FBRX Endpoint Essentials: new computers start simple, with a short walkthrough. Plus a cooler dark mode with color on the controls, and FBRX Server that updates itself.",
   "notes": [
-    "FBRX Shield is now FBRX's antivirus: it checks new downloads as they arrive, scans (quick, full or a folder), keeps a threat database of known malware up to date every day, and spots disguised programs, scripts that delete backups or turn off antivirus, risky files from the internet and documents with macros.",
-    "Malware goes into an encrypted quarantine straight away; suspicious files wait for you (quarantine, trust or delete), and Fabrix can explain any finding.",
-    "Choose what protects this computer: FBRX Shield, Microsoft Defender, or an antivirus already installed (Sophos, CrowdStrike, SentinelOne, ESET and more). FBRX shows its status everywhere and warns you when it is off or out of date.",
-    "The sidebar's Shield section is now Stronghold: FBRX Shield, approvals, credentials, governance and backups.",
-    "FBRX Command shows each computer's antivirus and can choose it for a group.",
-    "Endpoint Ultra adds scheduled scans and second engines (ClamAV, VirusTotal)."
+    "New computers open in Endpoint Essentials: the everyday pages only, and a short walkthrough of each one. Settings → Edition moves up to Standard whenever you like.",
+    "Endpoint Ultra now comes through FBRX Command: an administrator sets the edition for each computer or group in its device configuration. A computer running Ultra on its own runs Standard after this update until it connects to FBRX Command.",
+    "Computers that were already set up skip the walkthrough and keep the highest edition they are allowed.",
+    "Dark mode is cooler and calmer on the page, with color moved onto the sidebar sections, cards and controls.",
+    "An organization's computers find each other on FBRX Mesh by themselves, and can share the AI running on an FBRX Server.",
+    "FBRX Server 0.1.1 is in the release too: sudo fbrx-server update check and sudo fbrx-server update commit update a server in place, with rollback."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v1.9.5.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.5",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v1.9.6.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.6",
   "server": {
-    "version": "0.1.0",
-    "released": "2026-10-06",
-    "summary": "FBRX Server: the FBRX Virtual hypervisor, the AI role for the whole mesh, FBRX Gate and FBRX MiniDome.",
-    "notes": [],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v1.9.5/fbrx-server-0.1.0.tar.gz",
-    "sha256": "d9aeb088327dcf8ffe36f070b0a2d97b076ca790b28a16953fece0d2929d55d3",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.5"
+    "version": "0.1.1",
+    "released": "2026-10-12",
+    "summary": "FBRX Server updates itself, and FBRX Gate stays clear of the router in front of it.",
+    "notes": [
+      "sudo fbrx-server update check downloads the newest FBRX Server and checks its checksum; sudo fbrx-server update commit installs it, keeping roles, settings and virtual machines, and goes back by itself if the new version does not start. sudo fbrx-server update rollback returns to the version before.",
+      "sudo fbrx-server doctor checks the server and its roles, and --fix repairs what it safely can.",
+      "FBRX Gate picks a home network that does not clash with the router in front of it, keeps a fixed internet address when the port had one, and can move a network with sudo fbrx-gate renumber.",
+      "The gate turns on the services it needs (address handout, firewall, networking) and says plainly when one is off."
+    ],
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v1.9.6/fbrx-server-0.1.1.tar.gz",
+    "sha256": "fd53a5c070e9e6bbcd211763f898391330b21389b444119ce7ff7c4975e42edf",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.6"
   }
 }
