@@ -379,6 +379,13 @@ export const MIGRATIONS: Migration[] = [
       INSERT INTO message_reads (thread, read_at) VALUES ('mesh:all', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
     `,
   },
+  {
+    version: 11,
+    name: 'org-mesh',
+    // Computers introduced by the organization (FBRX Command), which also decides what they may do here, next to the
+    // ones paired by hand.
+    up: `ALTER TABLE mesh_devices ADD COLUMN source TEXT NOT NULL DEFAULT 'paired';`,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -28,6 +28,7 @@ import { adminAssetRoutes } from './routes/admin-assets';
 import { ssoRoutes } from './routes/sso';
 import { helpdeskRoutes } from './routes/helpdesk';
 import { chatRoutes } from './routes/chat';
+import { meshRoutes } from './routes/mesh';
 import { slugify } from './routes/util';
 import { loadTls } from './tls';
 
@@ -122,6 +123,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   await ssoRoutes(app, ctx);
   await helpdeskRoutes(app, ctx);
   await chatRoutes(app, ctx);
+  await meshRoutes(app, ctx);
   await deviceRoutes(app, ctx);
   await updateRoutes(app, ctx);
   await app.register(async (scoped) => adminOrgRoutes(scoped, ctx));

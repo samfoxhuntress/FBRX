@@ -825,6 +825,8 @@ export interface MeshDevice {
   fingerprint: string;
   pairedAt: string;
   permissions: MeshPermissions;
+  /** "org": introduced by your organization (FBRX Command), which also decides what it may do here. */
+  source?: 'paired' | 'org';
 }
 export interface MeshMessage {
   id: string;
@@ -853,6 +855,8 @@ export interface MeshStatus {
   nearby: Array<{ id: string; name: string; addr: string }>;
   pairing: MeshPairing | null;
   error: string | null;
+  /** Enrolled in FBRX Command: the organization's mesh (its computers are introduced, not paired). */
+  organization?: { organization: string; enabled: boolean; peers: number; syncedAt: string; error: string | null } | null;
 }
 export interface MeshJob {
   jobId: string;

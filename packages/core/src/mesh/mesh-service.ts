@@ -47,6 +47,7 @@ export const MOBILE_PERMISSIONS: MeshPermissions = { status: true, chat: true, a
 // Computers may ask each other's AI for help (each computer's Mesh Assist settings still decide); controllers are chosen by hand.
 export const DESKTOP_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false, network: false };
 const PERMISSION_KEYS = Object.keys(MOBILE_PERMISSIONS) as Array<keyof MeshPermissions>;
+const NO_PERMISSIONS = Object.fromEntries(PERMISSION_KEYS.map((k) => [k, false])) as unknown as MeshPermissions;
 
 const PAIRING_TTL_MS = 5 * 60_000;
 const MAX_PAIR_FAILURES = 5;
@@ -69,6 +70,8 @@ interface DeviceRow {
   addrs: string | null;
   /** Roles it announces (JSON array). */
   roles: string | null;
+  /** "paired" by hand, or "org": introduced by the organization (FBRX Command). */
+  source: 'paired' | 'org';
 }
 
 interface RpcRequest {
@@ -330,6 +333,7 @@ export class MeshService {
       fingerprint: r.id,
       pairedAt: r.paired_at,
       permissions: perms,
+      source: r.source ?? 'paired',
     };
   }
 
@@ -492,8 +496,65 @@ export class MeshService {
     return this.toDevice(this.row(id));
   }
 
+  /** This computer on the mesh, for FBRX Command (the heartbeat), so it can introduce it to the organization. */
+  identity(): { publicKey: string; fingerprint: string; port: number; addresses: string[]; roles: string[] } {
+    const self = this.self;
+    return { publicKey: self.publicKey, fingerprint: self.id, port: this.host.settings().port, addresses: this.addresses().slice(0, 16), roles: (this.host.settings().assist?.roles ?? []).slice(0, 16) };
+  }
+
+  /**
+   * The organization's computers, as FBRX Command introduces them: trusted by the key it vouches for, with the
+   * permissions it decides. Computers paired by hand stay as they are (only their addresses are refreshed); ones the
+   * organization no longer lists are forgotten.
+   */
+  syncOrg(peers: Array<{ name: string; publicKey: string; fingerprint: string; port: number; addresses: string[]; roles: string[]; permissions: Partial<MeshPermissions> }>): { added: number; removed: number } {
+    const self = this.self;
+    const keep = new Set<string>();
+    let added = 0;
+    const now = new Date().toISOString();
+    for (const p of peers) {
+      if (Buffer.from(p.publicKey, 'base64').length !== 32 || fingerprint(p.publicKey) !== p.fingerprint || p.fingerprint === self.id) continue;
+      const addrs = p.addresses.filter((a) => isIP(a)).slice(0, 16);
+      const port = Number.isInteger(p.port) && p.port > 0 && p.port < 65536 ? p.port : null;
+      const roles = p.roles.filter((x) => /^[a-z][a-z0-9-]{0,31}$/.test(x)).slice(0, 16);
+      keep.add(p.fingerprint);
+      const existing = this.db.get<DeviceRow>('SELECT * FROM mesh_devices WHERE id = ?', p.fingerprint);
+      if (existing && existing.source !== 'org') {
+        this.db.run('UPDATE mesh_devices SET addrs = ?, port = COALESCE(port, ?) WHERE id = ?', JSON.stringify(addrs), port, p.fingerprint);
+        continue;
+      }
+      const perms: MeshPermissions = { ...NO_PERMISSIONS };
+      for (const k of PERMISSION_KEYS) if (typeof p.permissions[k] === 'boolean') perms[k] = p.permissions[k]!;
+      if (!existing) added++;
+      this.db.run(
+        `INSERT INTO mesh_devices (id, name, kind, platform, version, public_key, addr, port, last_seen, paired_at, permissions, addrs, roles, source) VALUES (?, ?, 'desktop', '', '', ?, ?, ?, NULL, ?, ?, ?, ?, 'org')
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, public_key = excluded.public_key, addr = COALESCE(mesh_devices.addr, excluded.addr), port = excluded.port, permissions = excluded.permissions, addrs = excluded.addrs, roles = excluded.roles`,
+        p.fingerprint,
+        p.name.slice(0, 80) || 'Computer',
+        p.publicKey,
+        addrs[0] ?? null,
+        port,
+        now,
+        JSON.stringify(perms),
+        JSON.stringify(addrs),
+        JSON.stringify(roles),
+      );
+    }
+    const gone = this.db.all<{ id: string; name: string }>("SELECT id, name FROM mesh_devices WHERE source = 'org'").filter((r) => !keep.has(r.id));
+    for (const r of gone) {
+      this.db.run('DELETE FROM mesh_devices WHERE id = ?', r.id);
+      this.outbox.delete(r.id);
+    }
+    if (added || gone.length) {
+      this.host.audit('org.synced', 'fleet', 'success', { added, removed: gone.length });
+      this.changed();
+    }
+    return { added, removed: gone.length };
+  }
+
   removeDevice(id: string): MeshStatus {
     const r = this.row(id);
+    if (r.source === 'org') throw new CoreError('MANAGED', `${r.name} is part of your organization's mesh; your organization decides who is in it`);
     this.db.run('DELETE FROM mesh_devices WHERE id = ?', id);
     this.outbox.delete(id);
     this.host.audit('device.removed', 'user', 'success', { device: r.name, id });
@@ -503,6 +564,7 @@ export class MeshService {
 
   setPermissions(id: string, patch: Partial<MeshPermissions>): MeshDevice {
     const d = this.toDevice(this.row(id));
+    if (d.source === 'org') throw new CoreError('MANAGED', `Your organization decides what ${d.name} may do here`);
     const next = { ...d.permissions };
     for (const k of PERMISSION_KEYS) if (typeof patch[k] === 'boolean') next[k] = patch[k]!;
     this.db.run('UPDATE mesh_devices SET permissions = ? WHERE id = ?', JSON.stringify(next), id);

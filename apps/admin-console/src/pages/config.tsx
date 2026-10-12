@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { AUDIENCE_NAMES, AUTO_UPDATE_MODES, isLearner, AUTO_UPDATE_NAMES, DEFAULT_POLICY, PROFILE_PRESETS, presetApplied, UPDATE_CHANNELS, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_NAMES, type Audience, type AutoUpdateMode, type Vertical } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Grid, Input, JsonEditor, Modal, More, Page, Select, Table, TextArea, Toggle, timeAgo, useAction, useConfirm } from '@fbrx/ui';
+import { Button, Callout, Card, Empty, Field, Grid, Input, JsonEditor, Modal, More, Page, Select, Status, Table, TextArea, Toggle, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
 import { QUICK_SETUP_TITLE, QuickSetup, quickSetupDone } from './quick-setup';
@@ -102,6 +102,7 @@ export function ConfigPage() {
           </div>
         </Card>
       )}
+      {tenant && <OrgMeshCard />}
       <Grid cols={2}>
         <Card title="Configuration profiles" actions={<Button size="sm" icon="plus" onClick={() => setEditProfile({ name: '', description: '', settings: {}, locked: [], policy: null })}>New profile</Button>} flush>
           <Table
@@ -299,5 +300,86 @@ function GroupEditor({ group, vertical, profiles, versions, onClose, onSaved, on
         </div>
       </div>
     </Modal>
+  );
+}
+
+interface OrgMeshView {
+  meshAuto: boolean;
+  hive: { groups: 'all' | string[] };
+  groups: Array<{ id: string; name: string }>;
+  computers: Array<{ deviceId: string; name: string; group: string | null; online: boolean; meshOn: boolean; roles: string[]; addresses: string[]; lastSeenAt: string | null }>;
+  servers: Array<{ deviceId: string; name: string; group: string | null; online: boolean; meshOn: boolean; roles: string[] }>;
+}
+
+/**
+ * The organization's FBRX Mesh: its computers meet each other without pairing codes (FBRX Command vouches for their
+ * keys), and the organization picks which groups may use its servers' AI (the hive).
+ */
+function OrgMeshCard() {
+  const app = useApp();
+  const mesh = useQuery<OrgMeshView>('/v1/admin/mesh');
+  const { busy, run } = useAction();
+  const m = mesh.data;
+  if (!m) return null;
+  const canEdit = app.can('config.manage');
+  const save = (body: Partial<Pick<OrgMeshView, 'meshAuto' | 'hive'>>, ok: string) => void run('mesh', () => api('PUT', '/v1/admin/mesh', body).then(() => mesh.reload()), ok);
+  const chosen = m.hive.groups === 'all' ? null : new Set(m.hive.groups);
+  const meshed = m.computers.filter((c) => c.meshOn).length;
+  return (
+    <Card
+      title="FBRX Mesh"
+      subtitle="The organization's computers find and trust each other on FBRX Mesh without pairing codes. They see each other, message each other, and borrow a server's AI when theirs is too small, out of steps or not answering."
+      actions={canEdit && <Toggle checked={m.meshAuto} disabled={busy === 'mesh'} onChange={(v) => save({ meshAuto: v }, v ? 'The computers mesh together' : 'The computers no longer mesh together')} label={m.meshAuto ? 'On' : 'Off'} />}
+    >
+      <div className="fx-form">
+        <div className="fx-muted" style={{ fontSize: 12.5 }}>
+          {m.meshAuto ? `${meshed} of ${m.computers.length} computers are on the mesh. Turning this on turns FBRX Mesh on at each computer (unless a profile keeps it off).` : 'Off: computers keep only the ones paired by hand.'}
+        </div>
+        <Field label="Who may use the servers' AI (the hive)" help="Servers with the ai role lend their AI to these groups through Mesh Assist; each server's own Mesh Assist settings still decide whether someone there approves first.">
+          <div className="fx-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            <Button size="sm" variant={chosen ? 'ghost' : 'primary'} disabled={!canEdit} onClick={() => save({ hive: { groups: 'all' } }, 'Every group may use the hive')}>
+              Every group
+            </Button>
+            {m.groups.map((g) => {
+              const on = !!chosen?.has(g.id);
+              return (
+                <Button
+                  key={g.id}
+                  size="sm"
+                  variant={on ? 'primary' : 'ghost'}
+                  icon={on ? 'check' : undefined}
+                  disabled={!canEdit}
+                  onClick={() => {
+                    const next = new Set(chosen ?? []);
+                    if (on) next.delete(g.id);
+                    else next.add(g.id);
+                    save({ hive: { groups: [...next] } }, `${g.name} ${on ? 'no longer uses' : 'may use'} the hive`);
+                  }}
+                >
+                  {g.name}
+                </Button>
+              );
+            })}
+          </div>
+        </Field>
+        {chosen && chosen.size === 0 && <Callout tone="warning">No group is chosen: nobody may use the servers' AI.</Callout>}
+        {m.servers.length ? (
+          <div className="fx-form" style={{ gap: 4 }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>Servers in the hive</div>
+            {m.servers.map((s) => (
+              <div key={s.deviceId} className="fx-row" style={{ gap: 8 }}>
+                <Status tone={s.online && s.meshOn ? 'good' : 'neutral'}>{s.online ? (s.meshOn ? 'on the mesh' : 'mesh off') : 'offline'}</Status>
+                <strong>{s.name}</strong>
+                <span className="fx-muted">{s.roles.join(', ')}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="fx-muted" style={{ fontSize: 12.5 }}>
+            No server with the ai role has joined yet. On FBRX Server, install the ai role and enroll it in this organization (its Mesh & AI page, or sudo fbrx-server ai).
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }

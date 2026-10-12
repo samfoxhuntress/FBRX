@@ -404,4 +404,14 @@ export const CP_MIGRATIONS: Migration[] = [
       ALTER TABLE tenants ADD COLUMN chat_enabled INTEGER NOT NULL DEFAULT 1;
     `,
   },
+  {
+    version: 6,
+    name: 'org-mesh',
+    // The organization's computers mesh together (FBRX Command vouches for their keys); the hive is who may use the
+    // servers' AI ({ groups: "all" | [group ids] }, null = everyone).
+    up: `
+      ALTER TABLE tenants ADD COLUMN mesh_auto INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE tenants ADD COLUMN hive TEXT;
+    `,
+  },
 ];

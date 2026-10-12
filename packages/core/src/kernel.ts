@@ -23,6 +23,7 @@ import {
   productNameFor,
   type SystemStatus,
   type UpdateStatus,
+  type OrgMeshRoster,
 } from '@fbrx/shared';
 import { CoreError, errorMessage, toCoreError } from './errors';
 import { EventBus } from './events';
@@ -78,6 +79,7 @@ import { MeshAssist, runsElevated } from './mesh/mesh-assist';
 import { MeshNetwork } from './mesh/mesh-network';
 import { ServerResources } from './system/server-resources';
 import { SavedServers } from './system/saved-servers';
+import { OrgMesh } from './mesh/org-mesh';
 import { meshTools } from './tools/builtin/mesh-tools';
 import { AiCoordination } from './aicoord/aicoord';
 import { ConversationStore } from './ai/conversations';
@@ -177,6 +179,7 @@ export class Kernel {
   readonly release: ReleaseChecker;
   readonly cli: Fbrx1Cli;
   readonly mesh: MeshService;
+  readonly orgMesh: OrgMesh;
   readonly assist: MeshAssist;
   /** Prefer Mesh: mesh networks, priority marking and path tests. */
   readonly meshNetwork: MeshNetwork;
@@ -346,6 +349,7 @@ export class Kernel {
       onMessage: (msg) => {
         this.helpdesk.onPush(msg);
         this.messages.onPush(msg);
+        if (msg.type === 'mesh.roster') void this.orgMesh.sync();
       },
     });
     this.helpdesk = new Helpdesk({
@@ -564,6 +568,26 @@ export class Kernel {
       notify: (title, body, open) => this.notify({ title, body, level: 'info', source: 'messages', open }),
     });
     this.serverResources = new ServerResources(this.platform.resourcesDir, () => this.platform.specialDirs().downloads);
+    this.orgMesh = new OrgMesh({
+      enrolled: () => this.fleet.enrolled,
+      roster: () => this.fleet.request<OrgMeshRoster>('GET', '/v1/device/mesh/roster'),
+      syncPeers: (peers) => this.mesh.syncOrg(peers),
+      meshEnabled: () => this.settings.get().mesh.enabled,
+      enableMesh: () => {
+        try {
+          this.settings.update({ mesh: { enabled: true } });
+          this.audit.append({ category: 'mesh', action: 'org.enabled', actor: 'fleet', outcome: 'success', details: {} });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      log: L('org-mesh'),
+    });
+    // Joining or leaving an organization, or reconnecting to it: look at its mesh again.
+    this.events.on('fleet.changed', (f) => {
+      if (f.state === 'online' || f.state === 'unenrolled') void this.orgMesh.sync();
+    });
     this.servers = new SavedServers({
       meta: this.meta,
       audit: (action, details) => this.audit.append({ category: 'server', action, actor: 'user', outcome: 'success', details }),
@@ -1007,6 +1031,7 @@ export class Kernel {
     // Look for new versions in the FBRX repository (the desktop app only; servers and tests don't).
     if (this.platform.shell === 'desktop') this.release.start();
     this.messages.start();
+    this.orgMesh.start();
     // A provisioning file (IT deployment) goes first; a license that names an FBRX Command tenant joins after it.
     void this.applyProvisioning()
       .catch((err) => this.log.error('Provisioning failed', { error: errorMessage(err) }))
@@ -1023,6 +1048,7 @@ export class Kernel {
     this.started = false;
     this.release.stop();
     this.messages.stop();
+    this.orgMesh.stop();
     this.terminal.killAll();
     this.consoles.closeAll();
     this.migrator.cancelAll();
@@ -1219,6 +1245,7 @@ export class Kernel {
       runtimeModel: this.runtime.status().modelId,
       auditHead: this.audit.headInfo(),
       protection: this.protection.summary(),
+      mesh: { enabled: this.settings.get().mesh.enabled, running: this.mesh.running, ...this.mesh.identity() },
     };
   }
 

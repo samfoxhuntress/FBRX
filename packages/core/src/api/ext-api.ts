@@ -701,7 +701,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     },
 
     // ------------------------------------------------------------------------------------------ mesh
-    'mesh.status': () => k.mesh.status(),
+    'mesh.status': () => ({ ...k.mesh.status(), organization: k.orgMesh.state() }),
     'mesh.setEnabled': async (p) => {
       k.settings.update({ mesh: { enabled: z.object({ enabled: z.boolean() }).parse(p).enabled } });
       await k.services.reconcile();

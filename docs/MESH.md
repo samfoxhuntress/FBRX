@@ -154,6 +154,28 @@ the phone's browser storage for the FBRX Mobile page.
 
 ## Organizations
 
-The mesh is per person. Administrators can switch it off for a tenant or group by locking `mesh.enabled` to `false`
-in managed settings (and Mesh Assist on its own with the `mesh.assist.*` settings); device pairing, requests and
-permission changes are written to the audit log (`category: mesh`).
+**An organization's computers mesh by themselves.** Every computer enrolled in FBRX Command reports its mesh key,
+port, addresses and server roles in its heartbeat. FBRX Command hands each computer a roster of the organization's
+other computers, and because it vouches for their keys over the enrolled connection, they trust each other without
+pairing codes. FBRX Mesh turns itself on at each computer (unless a profile locks `mesh.enabled` off). The roster
+comes again whenever a computer joins, moves or changes roles (FBRX Command nudges every online computer), when a
+computer reconnects, and every ten minutes.
+
+What the organization's computers may do on each other is the organization's choice, not each computer's:
+
+| | |
+| --- | --- |
+| See each other and message | Always (messages only while Messages is on for the organization) |
+| Borrow a server's AI (Mesh Assist) | On a server with the **ai** role, for the groups the **hive** allows (every group by default) |
+| Network protection | A server with the **minidome** role may warn the others about threats it sees |
+| The agent, approvals, tasks, control, controller | Never through the organization; pair by hand for those |
+
+In FBRX Command: *Profiles & groups → FBRX Mesh*: the computers mesh together (on or off), and *Who may use the
+servers' AI*: every group, or the groups chosen. Changes reach online computers at once. On each computer the
+organization's computers show *from your organization* on the Mesh page; they cannot be removed or given more
+rights there, and leaving the organization (or the organization turning its mesh off) forgets them. Computers and
+phones paired by hand stay as they are.
+
+The mesh is otherwise per person. Administrators can switch it off for a tenant or group by locking `mesh.enabled` to
+`false` in managed settings (and Mesh Assist on its own with the `mesh.assist.*` settings); device pairing, the
+organization's introductions, requests and permission changes are written to the audit log (`category: mesh`).
