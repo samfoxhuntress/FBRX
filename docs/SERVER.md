@@ -46,8 +46,8 @@ finishes). Everything it did is in `/var/log/fbrx-server-install.log`.
 ### B. On a Debian 13 server you already have
 
 ```bash
-tar -xzf fbrx-server-0.1.0.tar.gz          # from FBRX Endpoint (Lab → FBRX Server), the CI artifact, or bundle.sh
-sudo bash fbrx-server-0.1.0/install.sh
+tar -xzf fbrx-server-0.1.1.tar.gz          # from FBRX Endpoint (Lab → FBRX Server), the CI artifact, or bundle.sh
+sudo bash fbrx-server-0.1.1/install.sh
 ```
 
 `install.sh` installs QEMU/KVM, libvirt, UEFI firmware (OVMF) and the software TPM (swtpm), Node.js 22 (kept in
@@ -304,10 +304,15 @@ sudo fbrx-server update rollback  # back to the version before the last update
 updates by hand once, then with these commands from then on:
 
 ```bash
-curl -fsSLO https://github.com/samfoxhuntress/FBRX/releases/download/v<release>/fbrx-server-<version>.tar.gz
-tar -xzf fbrx-server-<version>.tar.gz
-sudo bash fbrx-server-<version>/install.sh    # keeps the roles, port and settings this server has
+curl -fsSLO https://github.com/samfoxhuntress/FBRX/releases/download/v1.9.6/fbrx-server-0.1.1.tar.gz
+curl -fsSLO https://github.com/samfoxhuntress/FBRX/releases/download/v1.9.6/fbrx-server-0.1.1.tar.gz.sha256
+sha256sum -c fbrx-server-0.1.1.tar.gz.sha256  # says OK, or stop here
+tar -xzf fbrx-server-0.1.1.tar.gz
+sudo bash fbrx-server-0.1.1/install.sh        # keeps the roles, port and settings this server has
+sudo fbrx-server doctor
 ```
+
+No new ISO is needed for this, or for any update: the ISO is only for a server's first install.
 
 ## Settings
 
@@ -384,7 +389,7 @@ FBRX_V_ROLES=gate,minidome,ai FBRX_V_GATE=simulated npm run dev:virtual   # a pr
 npm run headless -- run --server --data-dir .fbrx-core-dev --roles virtual,ai --console-token-file .fbrx-core-dev/console.token
 FBRX_V_CORE_TOKEN_FILE=$PWD/.fbrx-core-dev/console.token npm run dev:virtual
 
-scripts/server/bundle.sh && scripts/server/smoke.sh dist/fbrx-server-0.1.0   # the bundle, end to end
+scripts/server/bundle.sh && scripts/server/smoke.sh dist/fbrx-server-0.1.1   # the bundle, end to end
 ```
 
 The code is in `apps/virtual` (service: `drivers/` for libvirt and the simulated hypervisor, `hardware/` for the map,

@@ -7,7 +7,7 @@
 
 # FBRX OS — Fabrics Operating System
 
-> **Alpha 1.9.5 "Bobbin".** FBRX is in alpha testing. Downloads are on the
+> **Alpha 1.9.6 "Bobbin".** FBRX is in alpha testing. Downloads are on the
 > [Releases](https://github.com/samfoxhuntress/FBRX/releases) page; installed copies check this repository's
 > [`release.json`](release.json) and offer new versions in the app.
 
@@ -116,9 +116,9 @@ Every version is on the **[Releases](https://github.com/samfoxhuntress/FBRX/rele
 
 | Download | What it is |
 | --- | --- |
-| **Source code (zip)**, `FBRX-1.9.5.zip` | The whole project. Unzip it and run **Install FBRX OS** (below): it builds FBRX OS on your computer with your own license signing key. This is how you install your own copy. |
-| `FBRX-OS-Setup-1.9.5.exe`, `FBRX-OS-1.9.5-arm64.dmg`, `FBRX-OS-1.9.5-x64.dmg` | Ready-made installers built by GitHub. They carry your license key and a publisher signature only when the repository's signing secrets are set ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); otherwise they open in Endpoint Essentials, go up to Standard, and reach Ultra when your FBRX Command allows it. |
-| `fbrx-server-0.1.0-amd64.iso`, `fbrx-server-0.1.0.tar.gz` | FBRX Server: the installer ISO, and the bundle for a Debian 13 server you already have ([docs/SERVER.md](docs/SERVER.md)). |
+| **Source code (zip)**, `FBRX-1.9.6.zip` | The whole project. Unzip it and run **Install FBRX OS** (below): it builds FBRX OS on your computer with your own license signing key. This is how you install your own copy. |
+| `FBRX-OS-Setup-1.9.6.exe`, `FBRX-OS-1.9.6-arm64.dmg`, `FBRX-OS-1.9.6-x64.dmg` | Ready-made installers built by GitHub. They carry your license key and a publisher signature only when the repository's signing secrets are set ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); otherwise they open in Endpoint Essentials, go up to Standard, and reach Ultra when your FBRX Command allows it. |
+| `fbrx-server-0.1.1-amd64.iso`, `fbrx-server-0.1.1.tar.gz` | FBRX Server: the installer ISO, and the bundle for a Debian 13 server you already have ([docs/SERVER.md](docs/SERVER.md)). |
 
 **Code → Download ZIP** on the main page gives the newest work (`FBRX-main.zip`), which can be ahead of the latest
 release. Installed copies are offered releases only.

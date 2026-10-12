@@ -36,7 +36,7 @@ On FBRX Server (the ISO installs the virtual and ai roles; add the gate afterwar
 ```bash
 sudo /opt/fbrx-installer/install.sh --roles virtual,ai,gate --gate-wan eno1 --gate-lan eno2
 # or, a dedicated gate with MiniDome:
-sudo bash fbrx-server-0.1.0/install.sh --roles gate,minidome,ai --gate-wan eno1 --gate-lan eno2
+sudo bash fbrx-server-0.1.1/install.sh --roles gate,minidome,ai --gate-wan eno1 --gate-lan eno2
 ```
 
 | Option | |
