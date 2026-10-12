@@ -62,7 +62,8 @@ const render = (s) =>
 if (process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1]) {
   const next = render(sections());
   if (process.argv.includes('--check')) {
-    const cur = existsSync(OUT) ? readFileSync(OUT, 'utf8') : '';
+    // A Windows checkout may have turned the file's line endings into CRLF.
+    const cur = existsSync(OUT) ? readFileSync(OUT, 'utf8').replace(/\r\n/g, '\n') : '';
     if (cur !== next) {
       console.error('packages/core/src/knowledge/docs.generated.ts is out of date: run npm run knowledge');
       process.exit(1);
