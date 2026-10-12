@@ -255,3 +255,11 @@ jobs:
           ARGS=(--dir dist-release --version "${{ needs.meta.outputs.version }}" --channel "${{ needs.meta.outputs.channel }}" --rollout "${{ inputs.rollout || '100' }}")
           if [[ "${{ inputs.publish }}" == "true" ]]; then ARGS+=(--publish); fi
           node scripts/publish-release.mjs "${ARGS[@]}"
+
+  # FBRX-OS.zip: the FBRX folder as a simply named download (see fbrx-os-download.yml).
+  fbrx-os-download:
+    needs: [meta, publish]
+    if: github.ref_type == 'tag' || inputs.release
+    uses: ./.github/workflows/fbrx-os-download.yml
+    with:
+      tag: v${{ needs.meta.outputs.version }}
