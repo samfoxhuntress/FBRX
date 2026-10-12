@@ -13,7 +13,7 @@ one click away and committed like any other change.
 ## Install
 
 ```bash
-sudo bash fbrx-server-0.1.1/install.sh --roles gate,minidome,ai --gate-wan eno1 --gate-lan eno2
+sudo bash fbrx-server-1.0.0/install.sh --roles gate,minidome,ai --gate-wan eno1 --gate-lan eno2
 ```
 
 MiniDome needs the gate role. The installer adds `conntrack` (to follow new connections) and rotates the gate's question

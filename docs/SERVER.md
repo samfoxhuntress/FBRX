@@ -332,13 +332,15 @@ sudo fbrx-server update rollback  # back to the version before the last update
 updates by hand once, then with these commands from then on:
 
 ```bash
-curl -fsSLO https://github.com/samfoxhuntress/FBRX/releases/download/v1.9.6/fbrx-server-0.1.1.tar.gz
-curl -fsSLO https://github.com/samfoxhuntress/FBRX/releases/download/v1.9.6/fbrx-server-0.1.1.tar.gz.sha256
-sha256sum -c fbrx-server-0.1.1.tar.gz.sha256  # says OK, or stop here
-tar -xzf fbrx-server-0.1.1.tar.gz
-sudo bash fbrx-server-0.1.1/install.sh        # keeps the roles, port and settings this server has
+curl -fsSLO https://github.com/samfoxhuntress/FBRX/releases/download/v1.9.8/fbrx-server-1.0.0.tar.gz
+curl -fsSLO https://github.com/samfoxhuntress/FBRX/releases/download/v1.9.8/fbrx-server-1.0.0.tar.gz.sha256
+sha256sum -c fbrx-server-1.0.0.tar.gz.sha256  # says OK, or stop here
+tar -xzf fbrx-server-1.0.0.tar.gz
+sudo bash fbrx-server-1.0.0/install.sh        # keeps the roles, port and settings this server has
 sudo fbrx-server doctor
 ```
+
+A server on 0.1.1 or later needs none of this: `sudo fbrx-server update check`, then `sudo fbrx-server update commit`.
 
 No new ISO is needed for this, or for any update: the ISO is only for a server's first install.
 
