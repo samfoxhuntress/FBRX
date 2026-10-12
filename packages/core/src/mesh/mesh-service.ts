@@ -508,12 +508,14 @@ export class MeshService {
    * organization no longer lists are forgotten.
    */
   syncOrg(peers: Array<{ name: string; publicKey: string; fingerprint: string; port: number; addresses: string[]; roles: string[]; permissions: Partial<MeshPermissions> }>): { added: number; removed: number } {
-    const self = this.self;
+    // This computer's own key only when there is someone to compare it with (forgetting needs none, and it may be
+    // locked away in the vault).
+    const me = peers.length ? this.self.id : '';
     const keep = new Set<string>();
     let added = 0;
     const now = new Date().toISOString();
     for (const p of peers) {
-      if (Buffer.from(p.publicKey, 'base64').length !== 32 || fingerprint(p.publicKey) !== p.fingerprint || p.fingerprint === self.id) continue;
+      if (Buffer.from(p.publicKey, 'base64').length !== 32 || fingerprint(p.publicKey) !== p.fingerprint || p.fingerprint === me) continue;
       const addrs = p.addresses.filter((a) => isIP(a)).slice(0, 16);
       const port = Number.isInteger(p.port) && p.port > 0 && p.port < 65536 ? p.port : null;
       const roles = p.roles.filter((x) => /^[a-z][a-z0-9-]{0,31}$/.test(x)).slice(0, 16);

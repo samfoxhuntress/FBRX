@@ -58,7 +58,11 @@ export class OrgMesh {
 
   private async run(): Promise<void> {
     if (!this.d.enrolled()) {
-      this.d.syncPeers([]);
+      try {
+        this.d.syncPeers([]);
+      } catch (e) {
+        this.d.log.debug('Organization mesh not cleared', { error: errorMessage(e) });
+      }
       this.last = null;
       return;
     }

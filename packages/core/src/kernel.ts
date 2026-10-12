@@ -1245,8 +1245,17 @@ export class Kernel {
       runtimeModel: this.runtime.status().modelId,
       auditHead: this.audit.headInfo(),
       protection: this.protection.summary(),
-      mesh: { enabled: this.settings.get().mesh.enabled, running: this.mesh.running, ...this.mesh.identity() },
+      mesh: this.meshIdentityForCommand(),
     };
+  }
+
+  /** This computer's mesh identity for FBRX Command; none while its key is out of reach (a locked vault). */
+  private meshIdentityForCommand(): { enabled: boolean; running: boolean; publicKey: string; fingerprint: string; port: number; addresses: string[]; roles: string[] } | null {
+    try {
+      return { enabled: this.settings.get().mesh.enabled, running: this.mesh.running, ...this.mesh.identity() };
+    } catch {
+      return null;
+    }
   }
 
   /** Executes a command sent by an administrator from the control plane. */

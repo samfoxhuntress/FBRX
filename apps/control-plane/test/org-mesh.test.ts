@@ -100,9 +100,9 @@ describe("an organization's computers mesh together", () => {
     const [staff, itGroup] = setup.groups as Array<{ group: { id: string; name: string }; token: string }>;
     expect([staff.group.name, itGroup.group.name]).toEqual(['Staff', 'IT']);
     staffGroup = staff.group.id;
-    desk = await computer('Front desk', staff.token, 47861);
-    it1 = await computer('IT laptop', itGroup.token, 47862);
-    rack = await computer('rack-server', itGroup.token, 47863, ['virtual', 'ai']);
+    desk = await computer('Front desk', staff.token, 47881);
+    it1 = await computer('IT laptop', itGroup.token, 47882);
+    rack = await computer('rack-server', itGroup.token, 47883, ['virtual', 'ai']);
 
     for (const k of [desk, it1, rack]) await waitFor(() => k.settings.get().mesh.enabled && k.mesh.running);
     await waitFor(() => peers(desk).length === 2 && peers(it1).length === 2 && peers(rack).length === 2, 30_000);
