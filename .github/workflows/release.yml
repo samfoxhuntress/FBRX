@@ -5,6 +5,11 @@
 #
 # Trigger: push a tag like v1.2.0 (v1.2.0-beta.1 goes to the beta channel), or run it manually.
 #
+# A manual run can build only the Windows or only the macOS installers (installers), for example when GitHub has no
+# macOS runners for a while: the release publishes with what was built (FBRX-OS.zip always has both setups). Add the
+# others later by running it again on the release's tag (Use workflow from: v<version>) with them picked: they join
+# the same release, same version.
+#
 # Repository secrets (all optional; unsigned builds are produced when signing secrets are missing):
 #   FBRX_LICENSE_PUBLIC_KEY      PEM from `npm run keys:generate` (embedded so installs verify licenses offline)
 #   FBRX_MS_CLIENT_ID            (a variable or secret) Microsoft Entra app (client) ID built in for Outlook / Microsoft 365
@@ -45,6 +50,11 @@ on:
         description: Also publish a GitHub release and create its v<version> tag on this commit (a pushed tag does this by itself)
         type: boolean
         default: false
+      installers:
+        description: Ready-made installers to build. The release publishes with these; run again with the others to add them to the same release (same version)
+        type: choice
+        options: [all, Windows, macOS]
+        default: all
 
 permissions:
   contents: write
@@ -56,6 +66,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       channel: ${{ steps.v.outputs.channel }}
+      desktop: ${{ steps.v.outputs.desktop }}
     steps:
       - uses: actions/checkout@v5
       - id: v
@@ -65,7 +76,12 @@ jobs:
           [[ -z "$V" ]] && V=$(node -p "require('./apps/desktop/package.json').version")
           C="${{ inputs.channel }}"; [[ -z "$C" ]] && { [[ "$V" == *-* ]] && C=beta || C=stable; }
           echo "version=$V" >> "$GITHUB_OUTPUT"; echo "channel=$C" >> "$GITHUB_OUTPUT"
-          echo "Building FBRX OS $V for the $C channel"
+          # The ready-made installers to build (all of them unless a manual run picks one).
+          D='[{"name":"macOS","os":"macos-latest","platform":"darwin","arches":"arm64,x64","package":"package:mac"},{"name":"Windows","os":"windows-latest","platform":"win32","arches":"x64,arm64","package":"package:win"}]'
+          P="${{ inputs.installers }}"
+          if [[ -n "$P" && "$P" != "all" ]]; then D=$(jq -c --arg p "$P" 'map(select(.name == $p))' <<<"$D"); fi
+          echo "desktop=$D" >> "$GITHUB_OUTPUT"
+          echo "Building FBRX OS $V for the $C channel; installers: $(jq -r 'map(.name) | join(", ")' <<<"$D")"
 
   # FBRX Server travels inside FBRX Endpoint for now: the installer ISO, the server bundle and the guides are built
   # first and packed into the macOS and Windows installers (scripts/server/endpoint-resources.mjs).
@@ -103,17 +119,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: macOS
-            os: macos-latest
-            platform: darwin
-            arches: arm64,x64
-            package: package:mac
-          - name: Windows
-            os: windows-latest
-            platform: win32
-            arches: x64,arm64
-            package: package:win
+        include: ${{ fromJSON(needs.meta.outputs.desktop) }}
     env:
       FBRX_LICENSE_PUBLIC_KEY: ${{ secrets.FBRX_LICENSE_PUBLIC_KEY }}
       FBRX_MS_CLIENT_ID: ${{ vars.FBRX_MS_CLIENT_ID || secrets.FBRX_MS_CLIENT_ID }}
