@@ -74,6 +74,17 @@ describe('device guides', () => {
   });
 });
 
+/**
+ * The fake switch's host key. ssh2's own generator makes an ed25519 key that ssh2 then cannot read about once in 250
+ * tries ("Malformed OpenSSH private key"), so keep the first one it can.
+ */
+function hostKey() {
+  for (;;) {
+    const key = utils.generateKeyPairSync('ed25519');
+    if (!(utils.parseKey(key.private) instanceof Error)) return key;
+  }
+}
+
 /** A tiny SSH "switch": user admin / secret, prints a banner and answers `show version`. */
 function sshDevice(hostKey: string) {
   const server = new Server({ hostKeys: [hostKey] }, (client) => {
@@ -108,7 +119,7 @@ function sshDevice(hostKey: string) {
 
 describe('device console', () => {
   it('pins the SSH host key, logs in, types commands and lets the agent read and send', async () => {
-    const key = utils.generateKeyPairSync('ed25519');
+    const key = hostKey();
     const dev = await sshDevice(key.private);
     const { kernel, cleanup } = await makeKernel();
     try {

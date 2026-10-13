@@ -58,6 +58,16 @@ export interface BuiltServer {
   close(): Promise<void>;
 }
 
+/**
+ * Idle connections stay open 72 seconds, as Fastify sets for servers it makes itself (with serverFactory it does not).
+ * Node's own 5 seconds races computers that reuse a connection after a busy moment: the server closes it just as the
+ * next request goes out, and that request fails ("fetch failed", ECONNRESET).
+ */
+function keepAlive(server: Server): Server {
+  server.keepAliveTimeout = 72_000;
+  return server;
+}
+
 export async function buildServer(config: Config): Promise<BuiltServer> {
   mkdirSync(config.dataDir, { recursive: true });
   const tls = loadTls(config);
@@ -69,7 +79,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     // One request handler for the main server (HTTPS when FBRX Command has a certificate) and the local listener.
     serverFactory: (h) => {
       handler = h;
-      return (tls ? createHttpsServer({ key: tls.key, cert: tls.cert }, h) : createHttpServer(h)) as Server;
+      return keepAlive((tls ? createHttpsServer({ key: tls.key, cert: tls.cert }, h) : createHttpServer(h)) as Server);
     },
   }) as unknown as FastifyInstance;
   let local: Server | null = null;
@@ -190,7 +200,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     ctx,
     listenLocal(port: number) {
       return new Promise<number>((resolve, reject) => {
-        const s = createHttpServer((req, res) => handler!(req, res));
+        const s = keepAlive(createHttpServer((req, res) => handler!(req, res)));
         // Live updates in the console: hand WebSocket upgrades to the main server's handler.
         s.on('upgrade', (req, socket, head) => app.server.emit('upgrade', req, socket, head));
         s.once('error', reject);
