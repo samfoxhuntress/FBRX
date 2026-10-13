@@ -60,6 +60,8 @@ jobs:
           ls "$SRV"/fbrx-server-*.tar.gz
           test -f "$SRV/docs/SERVER.md"
           codesign --verify --deep --strict "/Applications/FBRX OS.app"
+      - name: The AI runtime is built in
+        run: ls -la "/Applications/FBRX OS.app/Contents/Resources/runtime/"*/ && find "/Applications/FBRX OS.app/Contents/Resources/runtime" -name llama-server -type f | grep .
       - name: The app is installed, signed for this Mac, and activates its license on first start
         run: |
           APP="/Applications/FBRX OS.app"
@@ -138,13 +140,14 @@ jobs:
           if (Test-Path "$data\fbrx-license.key.rejected") { throw "The license was rejected" }
           if (Test-Path "$data\fbrx-license.key") { throw "The app did not pick up its license" }
           if (-not (Get-Process -Name 'FBRX OS' -ErrorAction SilentlyContinue)) { throw "The app is not running" }
-      - name: The FBRX Server installer ISO, bundle and guides came along
+      - name: The FBRX Server installer ISO, bundle and guides came along, and the AI runtime is built in
         shell: pwsh
         run: |
           $srv = Join-Path $env:LOCALAPPDATA 'Programs\FBRX OS\resources\server'
           Get-ChildItem -Recurse $srv | Format-Table FullName, Length
           foreach ($f in 'manifest.json', 'fbrx-server-ci-amd64.iso', 'docs\SERVER.md') { if (-not (Test-Path (Join-Path $srv $f))) { throw "$f is missing from the installed FBRX Server resources" } }
           if (-not (Get-ChildItem $srv -Filter 'fbrx-server-*.tar.gz')) { throw "The server bundle is missing" }
+          if (-not (Get-ChildItem (Join-Path $env:LOCALAPPDATA 'Programs\FBRX OS\resources\runtime') -Recurse -Filter 'llama-server.exe')) { throw "The AI runtime is not built in" }
           $version = (Get-Content apps/desktop/package.json -Raw | ConvertFrom-Json).version
           $setup = Get-Item "apps/desktop/release/$version/FBRX-OS-Setup-$version.exe"
           "Setup.exe: $([math]::Round($setup.Length / 1MB)) MB"

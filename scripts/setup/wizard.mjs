@@ -106,7 +106,7 @@ async function step(title, fn) {
   try {
     const result = await fn({ setDetail: (d) => (detail = d) });
     if (timer) clearInterval(timer);
-    process.stdout.write(process.stdout.isTTY ? `\r\x1b[2K${OK} ${label} ${dim(elapsed(started))}${result?.note ? `  ${dim(result.note)}` : ''}\n` : `${OK} ${title}\n`);
+    process.stdout.write(process.stdout.isTTY ? `\r\x1b[2K${OK} ${label} ${dim(elapsed(started))}${result?.note ? `  ${dim(result.note)}` : ''}\n` : `${OK} ${title}${result?.note ? `  (${result.note})` : ''}\n`);
     return result;
   } catch (err) {
     if (timer) clearInterval(timer);
