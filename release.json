@@ -1,25 +1,23 @@
 {
   "product": "FBRX OS",
   "stage": "Alpha",
-  "version": "1.9.8",
+  "version": "1.9.9",
   "codename": "Bobbin",
-  "released": "2026-10-12",
+  "released": "2026-10-13",
   "importance": "recommended",
-  "summary": "FBRX Time backs up your whole computer, Fabrix remembers you (on this computer only) and knows FBRX itself, and FBRX has a new golden honey look. Plus FBRX Server 1.0.",
+  "summary": "Your own AI from the first minute: installing asks nothing, and FBRX opens straight into a chat with an AI that runs on your computer.",
   "notes": [
-    "FBRX Time (Backup & restore → Whole computer): an image of the whole computer, by hand or every day or week, to an external drive, a network folder or an FBRX Server, which checks each image by starting it.",
-    "Fabrix remembers you: the last 24 hours of chats and lasting facts, kept on this computer only and shown in Settings → Memory. It never keeps ID numbers, bank details, full card numbers or passwords, and your private details never go to a cloud AI or onto the internet.",
-    "Ask Fabrix why FBRX is slow or acting up: it knows FBRX, runs a check-up and offers a fix, always asking before it applies one.",
-    "Governance: choose the folders your AI may use, including other drives and network shares. Fabrix asks when it needs another one. The policy as text moves to FBRX Command.",
-    "FBRX Shield leaves FBRX's own files alone, sends one alert per scan instead of one per file, and can trust many findings at once. After this update it clears findings that no longer apply by itself.",
-    "Notifications: turn each kind on or off in Alerts → Notifications, hear FBRX's own sound, and get one notification instead of two (in FBRX, in the system's, or both: your choice).",
-    "Right-click menus everywhere, your own macros, and the Terminal, the chat or any page in a window of its own.",
-    "Golden honey is FBRX's color. Settings → Appearance → Sidebar icons puts every icon in one color, or a color for each section.",
-    "FBRX Command shows its version on Releases, checks for new versions of itself and updates in place with Update now. Update it by hand once (run Install FBRX Command from the new FBRX folder) to get this.",
-    "FBRX Server 1.0 is in the release too: image backups checked by starting them, and roles changed from the console."
+    "Install FBRX OS asks nothing: it builds the AI into FBRX and downloads a small AI model (about 1 GB) while it works, so the first thing you see is a chat with your own AI.",
+    "Installed with the Setup file or the Mac download? FBRX gets its AI the first time it opens and shows the progress in the chat, with Try again if the internet drops.",
+    "The first start is one screen: what Fabrix should call you, then Start chatting. Restoring a backup and joining your organization are a click away there.",
+    "Essentials is now your AI on its own: the chat, its memory and voice, AI models and Settings. Storage, FBRX Shield, notes, tasks and the rest are in Standard, one switch away in Settings → Edition.",
+    "AI models is in Essentials and Standard.",
+    "The easter eggs now come with every edition, once you find the key.",
+    "Already using FBRX without an AI? AI models has the small starter model, one click.",
+    "On a Mac: the ready-made .dmg follows soon. Until then, Install FBRX OS.command in FBRX-OS.zip installs or updates to 1.9.9."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v1.9.8.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.8",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v1.9.9.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.9",
   "server": {
     "version": "1.0.0",
     "released": "2026-10-12",
@@ -34,12 +32,9 @@
     "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.8"
   },
   "command": {
-    "summary": "FBRX Command updates itself, has a Governance page, and can start image backups on your computers.",
+    "summary": "Steadier connections with your computers.",
     "notes": [
-      "Releases shows FBRX Command's version and new versions of it: Update now installs one in place, keeping all its data. It checks by itself every six hours.",
-      "Governance: each profile's AI policy (tool rules, the folders the AI may use, the web, AI providers), checked before it is saved.",
-      "Image backup now on a device's page, or the backup.image command for a group or every device (FBRX Time).",
-      "Golden honey look."
+      "FBRX Command keeps a computer's connection open longer between requests, so a busy computer no longer sees the odd failed request (enrolling, check-ins)."
     ]
   }
 }
