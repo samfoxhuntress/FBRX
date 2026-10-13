@@ -28,15 +28,15 @@ type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' 
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
-  { id: 'presenting', label: 'Presenting', icon: 'presentation', group: 'You' },
-  { id: 'messages', label: 'Messages', icon: 'message', group: 'You' },
+  { id: 'presenting', label: 'Presenting', icon: 'presentation', group: 'You', notEssentials: true },
+  { id: 'messages', label: 'Messages', icon: 'message', group: 'You', notEssentials: true },
   { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
   { id: 'memory', label: 'Memory', icon: 'brain', group: 'You' },
   { id: 'voice', label: 'Voice', icon: 'mic', group: 'You' },
   { id: 'snippets', label: 'Snippets', icon: 'code', group: 'You', notEssentials: true },
   { id: 'macros', label: 'Macros', icon: 'zap', group: 'You', notEssentials: true },
   { id: 'spotlight', label: 'Spotlight', icon: 'search', group: 'You' },
-  { id: 'trophies', label: 'Trophy case', icon: 'trophy', group: 'You', ultra: true },
+  { id: 'trophies', label: 'Trophy case', icon: 'trophy', group: 'You' },
   { id: 'updates', label: 'Updates', icon: 'download', group: 'This computer' },
   { id: 'edition', label: 'Edition', icon: 'layers', group: 'This computer' },
   { id: 'license', label: 'License', icon: 'key', group: 'This computer' },
@@ -157,15 +157,15 @@ function EditionCard() {
 }
 
 const TIER_BLURB: Record<Tier, string> = {
-  essentials: 'The everyday pages and the agent, in a short and simple list.',
+  essentials: 'Your own AI on this computer, and nothing else: the chat, its memory and voice, and the AI models.',
   basic: 'The everyday tools and the agent, with a simple light or dark look.',
   ultra: 'Everything is on: expert tool sets, Mesh, AI coordination, connections and plugins, and every theme.',
 };
 
 const TIER_POINTS: Record<Tier, string[]> = {
-  essentials: ['Home, the agent, alerts and messages', 'Storage, FBRX Shield, updates and backups', 'Notes, tasks and how-tos', 'A short sidebar, and a walkthrough'],
-  basic: ['Everything in Essentials', 'Calendar, projects, files, clipboard and snippets', 'The toolbox, security checks and AI models', 'Approvals, saved credentials and macros'],
-  ultra: ['Everything in Standard', 'Terminal, Task Manager, the virtual lab and FBRX Server', 'Mesh & phone, AI coordination, connections and plugins', 'The theme studio, and the easter eggs'],
+  essentials: ['Your AI, ready to chat, running on this computer', 'Chat history, memory and voice', 'AI models: a bigger one, or another AI', 'A short sidebar, and a walkthrough'],
+  basic: ['Everything in Essentials', 'FBRX Glass, alerts, messages, notes, tasks and calendar', 'Storage, FBRX Shield, updates, network and backups', 'Files, the toolbox, approvals, credentials and macros'],
+  ultra: ['Everything in Standard', 'Terminal, Task Manager, the virtual lab and FBRX Server', 'Mesh & phone, AI coordination, connections and plugins', 'The theme studio and every look'],
 };
 
 /**
@@ -230,7 +230,7 @@ function EditionSettings() {
           </div>
         )}
       </Card>
-      <Card title="The walkthrough" subtitle="A one-minute look around the Essentials pages.">
+      <Card title="The walkthrough" subtitle="A short look around Essentials: your AI, its models and Settings.">
         {ed.tier === 'essentials' ? (
           <Button
             icon="compass"
@@ -508,7 +508,7 @@ function Appearance() {
           </div>
         </Card>
       </Grid>
-      {ultra && a.funUnlocked && <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and the Silly Goose. Nothing here touches your files or settings.">
+      {a.funUnlocked && <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and the Silly Goose. Nothing here touches your files or settings.">
         <div className="fx-form">
           <Toggle checked={a.easterEggs} disabled={L('appearance.easterEggs')} onChange={(v) => void patch({ appearance: { easterEggs: v } })} label="Easter eggs and jokes" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -927,21 +927,19 @@ function License() {
   if (!l || !s) return null;
   const ultra = l.tier === 'ultra';
   const activate = () => {
-    // 418: not a license at all, just a teapot. It unlocks the easter eggs, which live in Endpoint Ultra.
+    // 418: not a license at all, just a teapot. It unlocks the easter eggs, in every edition.
     if (key === '418') {
       setKey('');
       if (s.appearance.funUnlocked && s.appearance.easterEggs) {
-        toast.info('Still a teapot', ultra ? 'Short and stout, and already unlocked.' : 'Short and stout, and already unlocked. They come out with Endpoint Ultra.');
+        toast.info('Still a teapot', 'Short and stout, and already unlocked.');
         return;
       }
       void patch({ appearance: { funUnlocked: true, easterEggs: true } }).then(() =>
         toast.custom({
           title: '418 I\'m a teapot',
-          body: ultra
-            ? 'Short and stout, and now unlocked: easter eggs, the Silly Goose and the Trophy case. Have fun.'
-            : 'Short and stout, and now unlocked. The easter eggs come out as soon as Endpoint Ultra is on.',
+          body: 'Short and stout, and now unlocked: easter eggs, the Silly Goose and the Trophy case. Have fun.',
           icon: <TrophyBadge id="teapot" found size={36} />,
-          ...(ultra ? { action: { label: 'Open the trophy case', onClick: () => navigate('settings/trophies') } } : {}),
+          action: { label: 'Open the trophy case', onClick: () => navigate('settings/trophies') },
         }),
       );
       return;

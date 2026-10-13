@@ -251,6 +251,21 @@ export interface RuntimeStatus {
   problem?: 'gpu-memory' | 'memory' | 'damaged' | 'unsupported' | 'other' | null;
 }
 
+/** The model a new computer starts with, ready before the first question (small and quick: about 1 GB). */
+export const STARTER_MODEL_ID = 'qwen2.5-1.5b-instruct-q4km';
+
+/** Getting the AI ready on a new computer: the built-in runtime and the starter model (ai.starter). */
+export interface StarterAiStatus {
+  /** not-needed: someone chose an AI already (another model, another provider). */
+  state: 'idle' | 'preparing' | 'ready' | 'failed' | 'not-needed';
+  step: 'runtime' | 'model' | 'starting' | null;
+  receivedBytes: number;
+  totalBytes: number;
+  message: string | null;
+  modelId: string;
+  modelName: string;
+}
+
 export interface CatalogModel {
   id: string;
   name: string;
@@ -594,6 +609,10 @@ export interface CoreMethods extends ExtMethods {
   'runtime.downloads': () => DownloadProgress[];
   /** Makes a model this computer's AI: the built-in runtime on, the model selected, the local provider the default. */
   'runtime.useModel': (p: { modelId: string }) => RuntimeStatus;
+  /** The AI ready on a new computer (the built-in runtime and the starter model). */
+  'ai.starter': () => StarterAiStatus;
+  /** Gets it ready now (again, after a failure, or after it was turned down). */
+  'ai.prepareStarter': () => StarterAiStatus;
 
   'tools.list': () => ToolInfo[];
   'tools.setEnabled': (p: { name: string; enabled: boolean }) => ToolInfo;
@@ -681,6 +700,7 @@ export interface CoreEvents extends ExtEvents {
   'audit.appended': AuditEntry;
   'runtime.changed': RuntimeStatus;
   'runtime.download': DownloadProgress;
+  'ai.starter': StarterAiStatus;
   'settings.changed': EffectiveSettings;
   'policy.changed': EffectivePolicy;
   'governance.folderRequest': FolderRequest & { state: 'open' | 'closed' };

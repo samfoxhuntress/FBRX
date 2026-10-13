@@ -22,13 +22,13 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 | Text and interface size | 85–130 % |
 | Motion and start-up | Reduce motion; start-up animation (the FBRX logo stitched in) and start-up sound (from the FBRX intro, on by default, with a Listen button) |
 | Effects | Auto, Full or Lite. Lite turns off frosted glass, glows and decorative animation; Auto picks Lite on computers with four or fewer processor threads or 4 GB of memory |
-| Fun extras | Endpoint Ultra (see [EASTER_EGGS.md](EASTER_EGGS.md), spoilers): easter eggs and jokes, the Silly Goose's occasional visits, a *Release the goose* button and the **Trophy case**. An organization can lock fun extras off |
+| Fun extras | Every edition, once unlocked (see [EASTER_EGGS.md](EASTER_EGGS.md), spoilers): easter eggs and jokes, the Silly Goose's occasional visits, a *Release the goose* button and the **Trophy case**. An organization can lock fun extras off |
 
 **Dark mode: a cool page, color on the elements.** In dark mode every theme keeps the page itself cool and quiet
 (slate neutrals, also in the warm themes: Fabrics, Tropical, Ember and Paper keep their accent and glow but not a
 brown page) and puts the color on what you use: the sidebar's icons and the current page's marker (in the theme's
 accent, or with *A color for each section*: Bridge blue, Studio violet, Pit Stop amber, Workbench teal, Orbit sky,
-Stronghold green, Lab pink, Control slate; in Essentials, Everyday blue, Your computer amber, Help & settings slate),
+Stronghold green, Lab pink, Control slate; in Essentials, Your AI blue, Help & settings slate),
 cards carry a breath of the theme's accent, and table heads, buttons, badges and tabs pick it up too. The page's glow
 is softer than the sidebar's. The sidebar colors show in light mode as well; High contrast stays flat.
 
@@ -62,21 +62,26 @@ fiber to fabric, shown in **Settings → Logs & about**: 1.8 *Spindle*, 1.9 *Bob
 
 ### FBRX Endpoint Essentials, Standard and Ultra
 
-The desktop app comes in three editions. Every new computer opens in **Essentials** and walks its person through the
-app; **Settings → Edition** switches between them (nothing saved goes away), up to what the computer may run:
+The desktop app comes in three editions. Every new computer opens in **Essentials**: your own AI and nothing else,
+ready on the first screen (see *The first start* below). **Settings → Edition** switches between them (nothing saved
+goes away), up to what the computer may run:
 
 | | **Essentials** | **Standard** | **Ultra** |
 | --- | --- | --- | --- |
 | How you get it | Where every new computer starts | Settings → Edition (anyone), or *Switch to Standard* on a Standard page | Settings → Edition, once **FBRX Command** allows it: the computer is in an organization whose license allows Ultra, and neither its group nor the computer itself is held lower |
-| Pages | A short, flat list: Home, Fabrix, alerts, messages, the help desk (in an organization), notes, tasks, storage, FBRX Shield, updates, Network Center, backup, How-tos (the Library) and Settings | Everything in Essentials, plus calendar, projects, snippets, security, files, clipboard (with Ctrl+Alt+Z history), Toolbox, AI models, approvals, credentials and macros, in the branded sidebar sections | Everything in Standard |
+| Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, the help desk (in an organization) and Settings. Home is the chat | Everything in Essentials, plus FBRX Glass, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Standard |
 | IT and expert tool sets | — | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX Server, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools, adapters and **network environments (UniFi)**, device consoles, the developer tools in the Toolbox, The Lab in the Library, the agent's work budget, logs, update channels, the Local API |
-| Connect | — | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance |
+| Connect | AI models | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance |
 | Look | Light, dark or follow the computer: plain | The same | The theme studio: eleven themes, accent colors, gradients and textures (with a strength slider) |
-| Fun | — | — | Easter eggs, the Silly Goose and the trophy case, once unlocked with the secret key (see EASTER_EGGS.md, spoilers) |
+| Fun | Easter eggs, the Silly Goose and the trophy case, once unlocked with the secret key (see EASTER_EGGS.md, spoilers) | The same | The same |
 
 **The walkthrough.** On a new computer, after setup, Essentials dims the window and lights up one page at a time:
-Home, Fabrix, alerts, storage, FBRX Shield, updates, the help desk (or How-tos), and Settings → Edition, ending with
-the Spotlight shortcut. Enter or → goes on, ← back, Esc skips; *Take the tour again* is in Settings → Edition.
+Fabrix, AI models and Settings (memory, voice, and the edition for when you want more), ending with the Spotlight
+shortcut. Enter or → goes on, ← back, Esc skips; *Take the tour again* is in Settings → Edition.
+
+**Notifications in Essentials** are only the ones about the AI and the computer's safety: approvals, the AI,
+the watchdog, messages from your organization and the help desk, and new FBRX versions. Standard and Ultra show the
+rest (alerts, storage, FBRX Shield and so on) as set in **Settings → Notifications**.
 
 **What may be unlocked.** On its own, a computer goes up to Standard: Ultra comes only through FBRX Command (a
 license key alone no longer turns it on). In an organization, the most a computer may run is what the license allows
@@ -90,10 +95,29 @@ Logs & about**, and in FBRX Command next to each device's version. A computer se
 the edition it had (up to what it may run now). Developers can try the lighter editions in a development build with
 `FBRX_EDITION=essentials` or `FBRX_EDITION=standard`.
 
+### The first start: straight to your AI
+
+A new computer's first experience is a conversation, not a setup form:
+
+- **Install FBRX OS** (the from-source installer) asks nothing. While it builds the app it downloads the starter
+  model, **Qwen2.5 1.5B Instruct** (about 1 GB, Apache-2.0), into the app's models folder, and builds the AI runtime
+  (llama.cpp's `llama-server`) into the app. When FBRX OS opens, the model is picked up and the AI starts.
+- **The ready-made installers** (the release's Setup.exe and .dmg, or a shared installer) download the same model
+  when FBRX OS first opens; the chat shows the progress ("Getting your AI ready") and a *Try again* button if the
+  internet drops.
+- **One screen** then asks only what Fabrix should call you (optional) and opens the chat with **Start chatting**.
+  Moving from another computer (*Restore its backup*) and *Join my organization* are links on the same screen. The
+  rest waits until you want it: a vault recovery passphrase (Credentials), another AI (AI models), the computer's name
+  (Settings).
+
+The starter is only ever set up by itself on a new computer where nobody chose an AI: picking another model or AI is
+never overruled, a removed starter is not downloaded again by itself, and a computer set up before this existed is not
+sent a gigabyte unasked (*AI models* has it, one click). `Install FBRX OS --no-ai` leaves the model out entirely.
+
 ### Your name
 
-FBRX asks your name during setup (or once on FBRX Glass, for computers set up before it asked) and what it should call
-you: "Samuel", called "Sam" or "Sir". FBRX Glass greets you by it and Fabrix addresses you that way. Change it in
+FBRX asks what it should call you on the first screen (or once on FBRX Glass, for computers set up before it asked):
+"Samuel", called "Sam" or "Sir". FBRX Glass greets you by it and Fabrix addresses you that way. Change it in
 **Settings → General → You**.
 
 ### Ask the agent about anything

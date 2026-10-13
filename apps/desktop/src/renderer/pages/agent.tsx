@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentEvent, ApprovalRequest, ChatMessage, ProviderStatus, ToolCallRecord } from '@fbrx/shared';
+import type { AgentEvent, ApprovalRequest, ChatMessage, ProviderStatus, StarterAiStatus, ToolCallRecord } from '@fbrx/shared';
 import { NATURAL_PREFIX, addressAs, funEnabled } from '@fbrx/shared';
 import { Button, Callout, Card, Icons, Modal, Select, Status, TextArea, useAction, useConfirm, type IconName, FbrxMark } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
-import { useCore } from '../hooks';
+import { useCore, useStarterAi } from '../hooks';
 import { Markdown } from '../markdown';
 import { POPOUT, navigate, routeArg } from '../app';
 import { EmergencyStop, ModelPicker } from '../widgets';
@@ -141,10 +141,61 @@ function ToolCard({ c, approval }: { c: ToolCallRecord; approval: ApprovalReques
   );
 }
 
+const mb = (n: number) => `${Math.round(n / 1024 ** 2)} MB`;
+
+/** The AI getting ready on a new computer (the starter model, downloaded once), or what stopped it. */
+function StarterAiCard({ st }: { st: StarterAiStatus | null }) {
+  const { run, busy } = useAction();
+  if (!st || (st.state !== 'preparing' && st.state !== 'failed')) return null;
+  if (st.state === 'failed') {
+    return (
+      <div className="starter-ai" role="status">
+        <b>Your AI is not ready yet</b>
+        <span className="fx-secondary">
+          {st.modelName} could not be downloaded{st.message ? ` (${st.message})` : ''}. Check the internet connection and try again, or pick another AI under AI models.
+        </span>
+        <div className="fx-actions" style={{ justifyContent: 'center' }}>
+          <Button size="sm" variant="primary" icon="refresh" loading={busy === 'retry'} onClick={() => void run('retry', () => call('ai.prepareStarter'))}>
+            Try again
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => navigate('runtime')}>
+            AI models
+          </Button>
+        </div>
+      </div>
+    );
+  }
+  const pct = st.totalBytes ? Math.min(100, Math.round((st.receivedBytes / st.totalBytes) * 100)) : 0;
+  return (
+    <div className="starter-ai" role="status">
+      <b>Getting your AI ready</b>
+      <span className="fx-secondary">
+        {st.step === 'runtime'
+          ? 'Setting up the part that runs AI on this computer…'
+          : st.step === 'model'
+            ? `Downloading ${st.modelName}, a small AI that runs right here on this computer (about 1 GB, only once).`
+            : 'Starting your AI…'}
+      </span>
+      {st.step !== 'starting' && (
+        <div className="voice-dl" style={{ width: '100%' }}>
+          <div className="voice-dl-bar">
+            <div style={{ width: `${pct}%` }} />
+          </div>
+          <span className="fx-muted">{st.totalBytes ? `${mb(st.receivedBytes)} of ${mb(st.totalBytes)}` : `${pct}%`}</span>
+        </div>
+      )}
+      <span className="fx-muted" style={{ fontSize: 12.5 }}>
+        You can look around meanwhile; the chat answers as soon as this is done.
+      </span>
+    </div>
+  );
+}
+
 export function AgentPage({ agentName }: { agentName: string }) {
   const convs = useCore('ai.conversations.list', undefined, []);
   const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed']);
   const settings = useCore('settings.get', undefined, ['settings.changed']);
+  const starter = useStarterAi();
   const tier = useTier();
   // Student computers: just the conversation (the school picks the model; the helper has no internet tools).
   const learner = useLearner();
@@ -425,15 +476,17 @@ export function AgentPage({ agentName }: { agentName: string }) {
       </Card>
       <Card className="agent-main" flush>
         <div className="agent-thread" ref={thread} aria-live="polite">
+          {!!visible.length && <StarterAiCard st={starter} />}
           {!visible.length && !streaming && (
             <div className="msg" style={{ marginTop: '8vh', alignItems: 'center', textAlign: 'center' }}>
               <FbrxMark className="fx-brand-mark" size={48} />
               <h2>
                 Hi{addressAs(settings.data?.settings) ? ` ${addressAs(settings.data?.settings)}` : ''}, I'm {agentName}. What should we do?
               </h2>
+              <StarterAiCard st={starter} />
               <p className="fx-secondary" style={{ maxWidth: 560 }}>
-                I work with your files, apps, PC and network. Every action is checked by your governance policy, and anything that changes something waits for your approval.
-                {offline ? ' This chat is offline: I will ask before using the internet.' : ' This chat is online: I may use internet tools.'}
+                I work with your computer. Ask me anything! Every action can be checked and governed within the FBRX app.
+                {offline ? ' Chats start offline, I will ask before using the internet.' : ' This chat is online: I may use internet tools.'} Let’s start with something simple:
               </p>
               <div className="choice-grid" style={{ width: '100%', marginTop: 8 }}>
                 {STARTERS.map((st) => {

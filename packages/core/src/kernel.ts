@@ -10,11 +10,13 @@ import {
   addressAs,
   funEnabled,
   shouldNotify,
+  essentialsNotifies,
   TIER_NAMES,
   type DeviceCommand,
   type Heartbeat,
   type NotificationEvent,
   type PresenterStatus,
+  type RuntimeStatus,
   type Audience,
   type DeviceEdition,
   type EditionStatus,
@@ -95,6 +97,7 @@ import { meshTools } from './tools/builtin/mesh-tools';
 import { AiCoordination } from './aicoord/aicoord';
 import { ConversationStore } from './ai/conversations';
 import { ModelManager } from './ai/runtime/model-manager';
+import { StarterAi } from './ai/runtime/starter';
 import { LocalRuntime } from './ai/runtime/local-runtime';
 import { ProviderManager } from './ai/provider-manager';
 import { AgentRuntime } from './ai/agent';
@@ -111,7 +114,7 @@ import { ServiceManager } from './services/service-manager';
 import { buildCoreApi, isReadOnly, isUserOnly, scrubParams, type CallContext } from './api/core-api';
 import { buildExtApi } from './api/ext-api';
 import { installConsoleGuard } from './windows/hide-consoles';
-import { ReleaseChecker } from './updates/release-check';
+import { INSTALL_SOURCE_FILE, ReleaseChecker } from './updates/release-check';
 import { pinnedAgent, pinnedFetch } from './util/pinned-tls';
 
 export interface KernelOptions {
@@ -163,6 +166,7 @@ export class Kernel {
   readonly gate: ToolGate;
   readonly conversations: ConversationStore;
   readonly models: ModelManager;
+  readonly starter: StarterAi;
   readonly runtime: LocalRuntime;
   readonly providers: ProviderManager;
   readonly agent: AgentRuntime;
@@ -291,6 +295,7 @@ export class Kernel {
       log: L('runtime'),
       events: this.events,
     });
+    this.starter = new StarterAi({ models: this.models, runtime: this.runtime, settings: () => this.settings.get(), meta: this.meta, events: this.events, log: L('starter-ai'), use: (id) => this.useLocalModel(id) });
     this.providers = new ProviderManager({ settings: this.settings, vault: this.vault, policy: this.policy, license: this.license, runtime: this.runtime });
     this.agent = new AgentRuntime({
       store: this.conversations,
@@ -699,7 +704,7 @@ export class Kernel {
       settings: () => this.settings.get(),
       monitor: this.monitor,
       workspace: this.workspace,
-      notify: (title, body, level) => this.notify({ title, body, level, source: 'alerts' }),
+      notify: (title, body, level, ruleId) => this.notify({ title, body, level, source: ruleId === 'update_available' ? 'updates' : 'alerts', open: ruleId === 'update_available' ? 'settings/updates' : 'alerts' }),
       toMobile: (a) => this.mesh.pushAlert(a),
       toOrganisation: (a) => {
         if (!this.fleet.enrolled) return false;
@@ -787,6 +792,9 @@ export class Kernel {
         try {
           // Notifications switched off, all of them or this kind (Alerts → Notifications).
           if (!shouldNotify(this.settings.get().notifications, n.source)) return;
+          // Endpoint Essentials (the AI on its own): nothing about pages it does not have.
+          const e = this.edition();
+          if (e.tier === 'essentials' && !e.learner && !essentialsNotifies(n.source)) return;
           // Presenting: nothing private pops up on the projector. Urgent ones still say that something needs a look.
           const p = this.presenterStatus();
           if (p.active && p.hideNotifications) {
@@ -1076,6 +1084,15 @@ export class Kernel {
     });
   }
 
+  /** "Install FBRX OS --no-ai" (its own test runs, for one) leaves the AI to whoever opens the app. */
+  private starterAiWanted(): boolean {
+    try {
+      return (JSON.parse(readFileSync(join(this.paths.root, INSTALL_SOURCE_FILE), 'utf8')) as { starterAi?: boolean }).starterAi !== false;
+    } catch {
+      return true;
+    }
+  }
+
   async start(): Promise<void> {
     await this.services.startAll();
     this.services.startWatchdog();
@@ -1084,6 +1101,8 @@ export class Kernel {
     this.applyLicenseFile();
     // Look for new versions in the FBRX repository (the desktop app only; servers and tests don't).
     if (this.platform.shell === 'desktop') this.release.start();
+    // A new computer's AI, ready before the first question (the starter model, picked up or downloaded once).
+    if (this.platform.shell === 'desktop' && this.starterAiWanted()) void this.starter.prepare({ auto: true });
     this.messages.start();
     this.orgMesh.start();
     // A provisioning file (IT deployment) goes first; a license that names an FBRX Command tenant joins after it.
@@ -1477,6 +1496,19 @@ export class Kernel {
   // ------------------------------------------------------------------------------- command center
 
   /** What this computer is: Endpoint Essentials, Standard or Ultra, or FBRX OS Education on a student computer. */
+  /** Makes an installed model the one the agent uses, with the built-in runtime as the default AI, and starts it. */
+  async useLocalModel(modelId: string): Promise<RuntimeStatus> {
+    if (!this.models.get(modelId)) throw new CoreError('NOT_FOUND', 'Model is not installed');
+    const ai = this.settings.get().ai;
+    const local = ai.providers.find((x) => x.type === 'local-runtime');
+    if (!local) throw new CoreError('UNAVAILABLE', 'This computer has no built-in runtime provider');
+    this.settings.update({ runtime: { enabled: true, modelId }, ai: { providers: ai.providers.map((x) => (x.id === local.id ? { ...x, enabled: true } : x)), defaultProvider: local.id, defaultModel: '' } });
+    if (this.runtime.isRunning) await this.runtime.stop();
+    // Starts now when the runtime is there (otherwise at the first question, once it is installed).
+    if (this.runtime.status().state === 'stopped') await this.runtime.start().catch(() => undefined);
+    return this.runtime.status();
+  }
+
   edition(): EditionStatus {
     const lic = this.license.status();
     const ed = this.meta.get<DeviceEdition>('fleet.edition');

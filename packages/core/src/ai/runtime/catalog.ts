@@ -63,7 +63,7 @@ export const MODEL_CATALOG: CatalogModel[] = [
     url: `${HF}/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q4_K_M.gguf`,
     sha256: null,
     license: 'Apache-2.0',
-    description: 'Smallest option for constrained machines; limited tool use.',
+    description: 'The starter every new computer gets: small and quick. Good for everyday questions; pick a bigger model for harder work.',
     tier: 'small',
     toolCalling: true,
   },

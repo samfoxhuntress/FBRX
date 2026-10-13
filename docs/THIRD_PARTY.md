@@ -1,3 +1,12 @@
+# The built-in AI
+
+| Component | Used for | License | Where |
+| --- | --- | --- | --- |
+| [llama.cpp](https://github.com/ggml-org/llama.cpp) (`llama-server`) | Running AI models on the computer | MIT | Official release builds, bundled with the app (or downloaded by it), run as their own program |
+| [Qwen2.5 1.5B Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct), GGUF by [bartowski](https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF) | The starter model every new computer gets | Apache-2.0 | Downloaded from Hugging Face by Install FBRX OS or on first start; not bundled |
+
+Other models in **AI models** are downloaded only when someone picks them, under their own licenses (shown beside each).
+
 # Third-party components in voice
 
 Voice in FBRX OS runs entirely on the computer with these components. Models are downloaded on request from Hugging

@@ -45,6 +45,8 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
 
 const KIND_OF_SOURCE: Record<string, string> = {
   alerts: 'alerts',
+  // A new version of FBRX: an alert like the others, with its own source so Essentials can still show it.
+  updates: 'alerts',
   governance: 'approvals',
   messages: 'messages',
   mesh: 'mesh',
@@ -60,6 +62,15 @@ const KIND_OF_SOURCE: Record<string, string> = {
 /** The kind a notification's source belongs to (a plugin's own id counts as plugins). */
 export function notificationKind(source: string): string {
   return KIND_OF_SOURCE[source] ?? 'plugins';
+}
+
+/**
+ * Endpoint Essentials is the AI on its own: what pops up there is about the AI, FBRX itself, the organization and new
+ * versions. Everything else (storage, antivirus, messages…) waits for Standard, where its pages are.
+ */
+const ESSENTIALS_SOURCES = new Set(['governance', 'agent', 'watchdog', 'administrator', 'helpdesk', 'updates']);
+export function essentialsNotifies(source: string): boolean {
+  return ESSENTIALS_SOURCES.has(source);
 }
 
 /** Kinds that never make a sound (you just did the thing yourself). */

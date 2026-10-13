@@ -682,11 +682,12 @@ export const DEFAULT_SETTINGS: Settings = {
 export const PROTECTED_SETTING_PATHS: readonly string[] = [];
 
 /**
- * Fun extras live in FBRX Endpoint Ultra, stay hidden until someone enters 418 as a license key, and can be switched
- * off again (an organization can lock them off).
+ * Fun extras come with every edition (Essentials, Standard and Ultra), stay hidden until someone enters 418 as a
+ * license key (Settings → License; student computers have no License page), and can be switched off again (an
+ * organization can lock them off). `tier` is undefined while the license loads.
  */
 export function funEnabled(s: Pick<Settings, 'appearance'> | null | undefined, tier: Tier | null | undefined): boolean {
-  return !!s && tier === 'ultra' && s.appearance.funUnlocked && s.appearance.easterEggs;
+  return !!s && !!tier && s.appearance.funUnlocked && s.appearance.easterEggs;
 }
 
 /** What to call the user: their chosen form of address, else their first name, else null. */

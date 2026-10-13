@@ -215,17 +215,11 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       const rt = k.runtime.installState();
       return [...k.models.recentDownloads(), ...(rt ? [rt] : [])];
     },
-    'runtime.useModel': async (p) => {
-      const { modelId } = z.object({ modelId: z.string() }).parse(p);
-      if (!k.models.get(modelId)) throw new CoreError('NOT_FOUND', 'Model is not installed');
-      const ai = k.settings.get().ai;
-      const local = ai.providers.find((x) => x.type === 'local-runtime');
-      if (!local) throw new CoreError('UNAVAILABLE', 'This computer has no built-in runtime provider');
-      k.settings.update({ runtime: { enabled: true, modelId }, ai: { providers: ai.providers.map((x) => (x.id === local.id ? { ...x, enabled: true } : x)), defaultProvider: local.id, defaultModel: '' } });
-      if (k.runtime.isRunning) await k.runtime.stop();
-      // Starts now when the runtime is there (otherwise at the first question, once it is installed).
-      if (k.runtime.status().state === 'stopped') await k.runtime.start().catch(() => undefined);
-      return k.runtime.status();
+    'runtime.useModel': async (p) => k.useLocalModel(z.object({ modelId: z.string() }).parse(p).modelId),
+    'ai.starter': () => k.starter.status(),
+    'ai.prepareStarter': () => {
+      void k.starter.prepare({ auto: false });
+      return k.starter.status();
     },
     'runtime.selectModel': async (p) => {
       const { modelId } = z.object({ modelId: z.string() }).parse(p);

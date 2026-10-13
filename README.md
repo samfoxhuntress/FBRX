@@ -142,30 +142,36 @@ Downloads folder, offers to unzip it to `%USERPROFILE%\FBRX` (or a folder you ty
 | Mac | **`Install FBRX OS.command`** | System Settings → Privacy & Security → **Open Anyway**. Or open Terminal, type `bash ` and drag the file in, then press Enter |
 | Windows | **`Install FBRX OS.cmd`** | **More info → Run anyway** |
 
-The installer asks for your name or company (it goes on your license), then does everything else, in about
-10–20 minutes the first time:
+There is nothing to answer. The installer does everything, in about 15–20 minutes the first time (about 2 GB of
+downloads), and when it is done FBRX OS opens straight into a chat with your own AI, running on your computer:
 
 1. downloads a private copy of Node.js if this computer doesn't have a recent one (nothing is installed system-wide),
-2. installs the project's dependencies,
-3. creates your license signing key (in `.fbrx-keys/`, with a copy in `~/.fbrx-keys`), which you should **back up**:
-   it signs every license you sell,
-4. builds FBRX OS for this exact machine (Apple silicon or Intel, x64 or ARM),
-5. installs it in Applications (Mac) or for your user with Start menu and desktop shortcuts (Windows),
-6. issues you an Enterprise license that activates automatically, and opens the app.
+2. downloads what FBRX OS is made of (the project's dependencies),
+3. builds FBRX OS for this exact machine (Apple silicon or Intel, x64 or ARM), with the AI runtime (llama.cpp's
+   `llama-server`) inside, and creates your license signing key (in `.fbrx-keys/`, with a copy in `~/.fbrx-keys`),
+   which you should **back up**: it signs every license you sell,
+4. gets your AI ready: the starter model, Qwen2.5 1.5B Instruct (about 1 GB), downloads meanwhile into FBRX OS's data
+   folder (only on a computer that doesn't have FBRX OS yet),
+5. installs it in Applications (Mac) or for your user with Start menu and desktop shortcuts (Windows), with an
+   Enterprise license in your name (this computer's user) that activates automatically, and opens the app.
 
 To update later, choose **Update now** when FBRX OS offers a new version (Settings → Updates), or download the new
 version into the same place and run the installer again; your data, settings and keys are kept, and a running FBRX OS
-is closed for you. Options: `--yes` (no questions), `--name "Acme Ltd"`,
-`--no-launch`, `--allow-downgrade`. The full log is in `.fbrx-setup/setup.log`.
+is closed for you. Options: `--name "Acme Ltd"` (the name on your license), `--no-launch`, `--no-ai` (leave the model
+to the app), `--allow-downgrade`. The full log is in `.fbrx-setup/setup.log`.
+
+**Giving FBRX OS to someone who isn't technical?** Send them a ready-made installer instead of the folder: the
+release's `FBRX-OS-Setup-….exe` or `.dmg`, or one made for them (below). They double-click it, there is no terminal
+window and no build, and FBRX OS downloads its AI when it first opens, showing the progress in the chat.
 
 ### Sending FBRX OS to someone else (Windows)
 
-Run `Install FBRX OS.cmd` and choose **2 — Make an installer to send to someone else**. Enter their name to build a
-trial license into the installer (30 days by default; Enterprise features, then the free Community features), or
-leave it blank to send an update to someone who is already set up. The result is one file in the `Share` folder,
+Open a Command Prompt in the FBRX folder and run `"Install FBRX OS.cmd" --share`. Enter their name to build a trial
+license into the installer (30 days by default; Enterprise features, then the free Community features), or leave it
+blank to send an update to someone who is already set up (`--for "Alex" --days 30 --yes` skips the questions). The result is one file in the `Share` folder,
 for example `Share\FBRX-OS-Setup-1.6.0-for-Alex.exe`, plus a short *How to install* note to send along.
 
-On their PC they double-click it. A new install asks the usual questions. If FBRX OS is already there, Setup opens on
+On their PC they double-click it. A new install opens FBRX OS straight to the chat while its AI downloads. If FBRX OS is already there, Setup opens on
 a choice instead:
 
 * **Upgrade** (when the file is newer) — installs it and keeps all their data, settings, license and paired devices,

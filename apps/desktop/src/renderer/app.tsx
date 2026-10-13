@@ -406,36 +406,33 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       title: 'Welcome to FBRX Essentials',
       body: (
         <>
-          <p>Everything you need day to day, and nothing you don’t. Here is a quick look around: about a minute.</p>
+          <p>Your own AI, running on this computer. Here is a quick look around: well under a minute.</p>
           <p className="fx-muted">Esc skips it. Settings → Edition shows it again.</p>
         </>
       ),
     },
-    { target: 'home', title: 'Home', body: 'Your computer at a glance: how it is doing, how much space is left, whether it is protected, and anything that needs you.' },
     {
       target: 'agent',
       title: agentName,
       body: (
         <>
-          <p>Ask in plain words: “why is my computer slow?”, “free up some space”, “is this email a scam?”.</p>
-          <p>{agentName} explains what it would do and asks before it changes anything.</p>
+          <p>Ask anything in plain words: “help me write a thank-you note”, “why is my computer slow?”, “explain this error”.</p>
+          <p>Chats start offline, and {agentName} asks before it uses the internet or changes anything. Your earlier chats are kept here too.</p>
         </>
       ),
     },
-    { target: 'alerts', title: 'Alerts', body: 'When something needs you (space running low, a threat stopped, an update waiting), it shows up here.' },
-    { target: 'storage', title: 'Storage', body: 'See what fills your disk and clear out what you don’t need, safely.' },
-    { target: 'shield', title: 'FBRX Shield', body: 'Checks new downloads and keeps threats out. Green means you are protected.' },
-    { target: 'updates', title: 'Updates', body: 'Keeps FBRX and this computer up to date.' },
-    enrolled && helpdeskShown
-      ? { target: 'helpdesk', title: 'Get help', body: 'Something not working? Send it to your IT team from here, and follow the answer.' }
-      : { target: 'library', title: 'How-tos', body: 'Short guides for everyday things: Wi‑Fi, printers, backups, and more.' },
+    {
+      target: 'runtime',
+      title: 'AI models',
+      body: 'The AI runs on this computer, starting with a small, quick model. Pick a bigger one here when you want more, or connect another AI.',
+    },
     {
       target: 'settings',
       title: 'Settings',
       body: (
         <>
-          <p>Your name, the look, and <b>Edition</b>: switch to Standard there whenever you want more tools, and back any time.</p>
-          <p className="fx-muted">Ultra (expert tools) comes from your organization’s FBRX Command.</p>
+          <p><b>Memory</b> (what {agentName} remembers about you, on this computer only), <b>Voice</b> (talk instead of typing) and the look.</p>
+          <p className="fx-muted"><b>Edition</b>: switch to Standard whenever you want everyday tools too (storage, antivirus, notes…), and back any time.</p>
         </>
       ),
     },
@@ -446,7 +443,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
           One more thing: press <kbd>{s.spotlight.hotkey}</kbd> anywhere to ask {agentName} without opening this window.
         </p>
       ) : (
-        <p>Start with {agentName}, or have a look at Home.</p>
+        <p>Say hello to {agentName}.</p>
       ),
     },
   ];
@@ -455,7 +452,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   ownWindows = POPOUT ? {} : { terminal: ultra && s.windows.terminal, agent: s.windows.agent };
 
   const page = (() => {
-    if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && route !== 'home' && !byId.get(route)?.ultra) {
+    // Essentials opens on the chat: it is the AI on its own.
+    if (essentials && route === 'home') return <AgentPage agentName={agentName} />;
+    if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && !byId.get(route)?.ultra) {
       return <StandardOnly title={byId.get(route)?.label ?? 'That page'} what={STANDARD_WHAT[route] ?? 'More of the everyday tools.'} />;
     }
     if (learner && route !== 'home' && !LEARNER_PAGES.has(route)) {
@@ -594,7 +593,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         groups={groups}
         collapsed={collapsed}
         onCollapsedChange={setCollapsed}
-        active={route}
+        active={essentials && route === 'home' ? 'agent' : route}
         onNavigate={(id) => navigate(id)}
         topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} defaultProvider={s.ai.defaultProvider} defaultModel={s.ai.defaultModel} presenter={presenter} learner={learner} />}
         footer={
@@ -774,21 +773,15 @@ function TopBar({
 /** What a student's or child's computer (FBRX OS Education or Home) shows. */
 const LEARNER_PAGES = new Set(['home', 'agent', 'messages', 'helpdesk', 'calendar', 'tasks', 'notes', 'toolbox', 'library', 'settings']);
 
-/** Endpoint Essentials: its pages in order, the short list's headings, and plainer names where they help. */
+/**
+ * Endpoint Essentials is the AI on its own: the chat (with its history), the AI models, and Settings (memory, voice,
+ * Spotlight, the edition). An organization's computer also gets its help desk and the Organization page. Its pages in
+ * order, the short list's headings, and plainer names where they help.
+ */
 const ESSENTIALS_NAV: Array<[Route, string, string?]> = [
-  ['home', 'Everyday', 'Home'],
-  ['agent', 'Everyday'],
-  ['alerts', 'Everyday'],
-  ['messages', 'Everyday'],
-  ['helpdesk', 'Everyday', 'Get help'],
-  ['notes', 'Everyday'],
-  ['tasks', 'Everyday'],
-  ['storage', 'Your computer'],
-  ['shield', 'Your computer'],
-  ['updates', 'Your computer'],
-  ['network', 'Your computer'],
-  ['backup', 'Your computer'],
-  ['library', 'Help & settings', 'How-tos'],
+  ['agent', 'Your AI'],
+  ['runtime', 'Your AI', 'AI models'],
+  ['helpdesk', 'Help & settings', 'Get help'],
   ['fleet', 'Help & settings'],
   ['settings', 'Help & settings'],
 ];
@@ -796,16 +789,26 @@ const ESSENTIALS_PAGES = new Set<string>(ESSENTIALS_NAV.map(([id]) => id));
 
 /** What a Standard page does, said on its place in Essentials. */
 const STANDARD_WHAT: Partial<Record<Route, string>> = {
+  home: 'FBRX Glass: your computer at a glance, how it is doing and anything that needs you.',
+  alerts: 'What FBRX keeps an eye on (space running low, a threat stopped, an update waiting), in one place.',
+  messages: 'Chat with your other devices and your organization’s computers.',
   calendar: 'Your calendar, with your Outlook or Google account if you connect one.',
+  tasks: 'Your to-do list, with reminders.',
+  notes: 'Quick notes, kept on this computer.',
   projects: 'Group notes, tasks and chats by project.',
   snippets: 'Text you type again and again, a shortcut away.',
+  storage: 'See what fills your disk and clear out what you don’t need, safely.',
   security: 'Windows and macOS security settings, checked and explained.',
+  updates: 'Keeps this computer’s apps and system up to date.',
+  network: 'Your connection: speed, Wi‑Fi and the devices on your network.',
   files: 'Find, preview and tidy files, with the agent to help.',
   clipboard: 'Everything you copied, with handy transforms (Ctrl+Alt+Z).',
   toolbox: 'Quick tools: password generator, unit converter, QR codes and more.',
-  runtime: 'Choose the AI model the agent uses, on this computer or in the cloud.',
+  library: 'Short guides for everyday things: Wi‑Fi, printers, backups, and more.',
+  shield: 'FBRX Shield, the antivirus: checks new downloads and keeps threats out.',
   approvals: 'What the agent asked to do, waiting for your yes or no.',
   vault: 'Saved passwords and keys the agent and connections use, encrypted.',
+  backup: 'Snapshots of FBRX and images of the whole computer, to move or restore it.',
 };
 
 const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; basicHint?: string; learnerHint?: string; icon: IconName }> = [

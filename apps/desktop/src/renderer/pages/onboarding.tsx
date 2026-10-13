@@ -1,48 +1,44 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import type { SnapshotHeader, SystemStatus } from '@fbrx/shared';
-import { Button, Callout, Card, Field, Input, Status, formatBytes, useAction, FbrxMark } from '@fbrx/ui';
+import { Button, Card, Field, Input, Status, useAction, FbrxMark } from '@fbrx/ui';
 import { call, pickFile } from '../client';
-import { useCore } from '../hooks';
+import { useAgentName, useStarterAi } from '../hooks';
 import { RestoreModal } from './backup';
-import { ProfileFields } from '../widgets';
 import { JoinForm } from '../join';
 
-type Step = 'welcome' | 'vault' | 'ai' | 'org' | 'done';
-const STEPS: Step[] = ['welcome', 'vault', 'ai', 'org', 'done'];
-
+/**
+ * First start: one screen, then the chat. The AI is already getting ready by itself (the starter model, which
+ * "Install FBRX OS" usually downloaded before the app even opened), so the only question is an optional name.
+ * Everything else waits until someone wants it: a vault recovery passphrase (Vault), another AI (AI models),
+ * this computer's name (Settings). Moving from another computer (restore a backup) and joining an organization's
+ * FBRX Command are a click away here.
+ */
 export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: () => void }) {
-  const [step, setStep] = useState<Step>('welcome');
-  const [name, setName] = useState(status.deviceName);
-  const [profile, setProfile] = useState({ name: '', callMe: '' });
-  const [pass, setPass] = useState({ a: '', b: '' });
-  const [ai, setAi] = useState<'local' | 'ollama' | 'anthropic' | 'skip'>('local');
-  const [apiKey, setApiKey] = useState('');
+  const agentName = useAgentName();
+  const starter = useStarterAi();
+  const [name, setName] = useState('');
+  const [joining, setJoining] = useState(false);
   const [restore, setRestore] = useState<{ file: string; header: SnapshotHeader } | null>(null);
-  const catalog = useCore('runtime.catalog');
-  const providers = useCore('ai.providers');
   const { run, busy } = useAction();
-  const idx = STEPS.indexOf(step);
-  const next = () => setStep(STEPS[idx + 1]);
-  const ollamaUp = providers.data?.find((p) => p.id === 'ollama')?.available;
-  const recommended = catalog.data?.[0];
 
-  useEffect(() => {
-    if (status.fleet.state !== 'unenrolled' && step === 'org') next();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [step]);
+  const finish = () =>
+    run('start', async () => {
+      const n = name.trim();
+      await call('settings.update', { patch: { general: { onboardingComplete: true }, ...(n ? { profile: { name: n, callMe: '' } } : {}) } });
+      location.hash = '#/agent';
+      onDone();
+    });
 
-  const finishAi = async () => {
-    if (ai === 'local' && status.runtime.state === 'not-installed') await call('runtime.installRuntime').catch(() => undefined);
-    if (ai === 'local' && recommended) await call('runtime.download', { modelId: recommended.id }).catch(() => undefined);
-    if (ai === 'local') await call('settings.update', { patch: { runtime: { modelId: recommended?.id ?? '' }, ai: { defaultProvider: 'local' } } });
-    if (ai === 'ollama') await call('settings.update', { patch: { ai: { defaultProvider: 'ollama' } } });
-    if (ai === 'anthropic') {
-      await call('vault.set', { name: 'ANTHROPIC_API_KEY', value: apiKey, kind: 'api-key', description: 'Anthropic Claude' });
-      const s = await call('settings.get');
-      await call('settings.update', { patch: { ai: { defaultProvider: 'anthropic', defaultModel: 'claude-opus-5-5', providers: s.settings.ai.providers.map((p) => (p.id === 'anthropic' ? { ...p, enabled: true } : p)) } } });
-    }
-    next();
-  };
+  const ai =
+    !starter || starter.state === 'not-needed' ? null : starter.state === 'ready' ? (
+      <Status tone="good">Your AI is ready: {starter.modelName}, on this computer</Status>
+    ) : starter.state === 'failed' ? (
+      <Status tone="warning">Your AI is not downloaded yet; the chat helps you get it</Status>
+    ) : (
+      <Status tone="busy">
+        Getting your AI ready{starter.step === 'model' && starter.totalBytes ? ` (${Math.round((starter.receivedBytes / starter.totalBytes) * 100)}%)` : '…'}
+      </Status>
+    );
 
   return (
     <div className="onboard">
@@ -50,26 +46,51 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
         <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 14 }}>
           <FbrxMark className="fx-brand-mark" size={34} />
           <div>
-            <div className="fx-brand-name">FBRX Endpoint</div>
+            <div className="fx-brand-name">FBRX OS</div>
             <div className="fx-brand-sub">Fabrics Operating System</div>
           </div>
         </div>
-        <div className="steps" aria-hidden="true">
-          {STEPS.map((s, i) => (
-            <span key={s} className={i <= idx ? 'done' : ''} />
-          ))}
-        </div>
         <Card>
-          {step === 'welcome' && (
+          {joining ? (
             <div className="fx-form">
-              <h1>Welcome to your workstation's operating layer</h1>
-              <p className="fx-secondary">FBRX gives you a private AI agent that can work with your files, apps and systems — governed by clear rules, audited end to end, and backed up so you can move to any computer.</p>
-              <ProfileFields name={profile.name} callMe={profile.callMe} onChange={setProfile} autoFocus />
-              <Field label="Name this workstation">
-                <Input value={name} onChange={(e) => setName(e.target.value)} />
+              <h1>Connect to your organization</h1>
+              <p className="fx-secondary">If your company, school or family runs FBRX Command, connect so it can look after updates, settings and backups, and answer your requests for help.</p>
+              <JoinForm
+                showDeviceName={false}
+                onJoined={() => void finish()}
+                studentNote="It becomes FBRX OS Education (at a school) or FBRX OS Home (in a family): a simpler set of tools and a safe learning helper."
+                extraActions={
+                  <Button variant="ghost" onClick={() => setJoining(false)}>
+                    Back
+                  </Button>
+                }
+              />
+            </div>
+          ) : (
+            <form
+              className="fx-form"
+              onSubmit={(e) => {
+                e.preventDefault();
+                void finish();
+              }}
+            >
+              <h1>Hi! Meet {agentName}, your own AI</h1>
+              <p className="fx-secondary" style={{ margin: 0 }}>
+                It runs right here on this computer, so your chats stay private. It can help with your files, apps and settings, and it asks before it uses the internet or changes anything.
+              </p>
+              {ai}
+              <Field label={`What should ${agentName} call you?`} help="Optional. You can change it later in Settings.">
+                <Input value={name} maxLength={60} placeholder="Your name" autoFocus onChange={(e) => setName(e.target.value)} />
               </Field>
-              <div className="fx-actions" style={{ justifyContent: 'space-between' }}>
+              <div className="fx-actions" style={{ justifyContent: 'flex-end' }}>
+                <Button type="submit" variant="primary" icon="sparkles" loading={busy === 'start'}>
+                  Start chatting
+                </Button>
+              </div>
+              <div className="onboard-more">
                 <Button
+                  size="sm"
+                  variant="ghost"
                   icon="upload"
                   loading={busy === 'restore'}
                   onClick={async () => {
@@ -79,106 +100,15 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
                     if (header) setRestore({ file, header });
                   }}
                 >
-                  Restore from a backup…
+                  Moving from another computer? Restore its backup
                 </Button>
-                <Button variant="primary" loading={busy === 'n'} onClick={() => void run('n', () => call('settings.update', { patch: { general: { deviceName: name }, profile: { name: profile.name.trim(), callMe: profile.callMe.trim() } } }).then(next))}>
-                  Continue
-                </Button>
-              </div>
-              <p className="fx-muted" style={{ fontSize: 13, margin: 0 }}>Moving from another computer? Restore its snapshot and FBRX picks up exactly where it left off.</p>
-            </div>
-          )}
-          {step === 'vault' && (
-            <div className="fx-form">
-              <h1>Protect your credentials</h1>
-              <p className="fx-secondary">Your vault is already encrypted and locked to this computer's keychain. A recovery passphrase lets you unlock it anywhere if the keychain is ever reset.</p>
-              <Field label="Recovery passphrase" help="At least 10 characters — keep it in your password manager">
-                <Input type="password" value={pass.a} onChange={(e) => setPass({ ...pass, a: e.target.value })} autoComplete="new-password" />
-              </Field>
-              <Field label="Confirm" error={pass.b && pass.a !== pass.b ? 'Does not match' : undefined}>
-                <Input type="password" value={pass.b} onChange={(e) => setPass({ ...pass, b: e.target.value })} autoComplete="new-password" />
-              </Field>
-              <div className="fx-actions" style={{ justifyContent: 'flex-end' }}>
-                <Button variant="ghost" onClick={next}>
-                  Skip for now
-                </Button>
-                <Button variant="primary" loading={busy === 'v'} disabled={pass.a.length < 10 || pass.a !== pass.b} onClick={() => void run('v', () => call('vault.initialize', { recoveryPassphrase: pass.a }).then(next))}>
-                  Save passphrase
-                </Button>
-              </div>
-            </div>
-          )}
-          {step === 'ai' && (
-            <div className="fx-form">
-              <h1>Choose how the agent thinks</h1>
-              <div className="choice-grid">
-                <button className={`choice${ai === 'local' ? ' selected' : ''}`} onClick={() => setAi('local')}>
-                  <strong>Private, on this computer</strong>
-                  <span className="fx-secondary" style={{ fontSize: 13 }}>Download {recommended ? `${recommended.name} (${formatBytes(recommended.sizeBytes)})` : 'a model'} for the built-in runtime. Nothing leaves your machine.</span>
-                  {status.runtime.state === 'not-installed' && <Status tone="info">The runtime downloads automatically</Status>}
-                </button>
-                <button className={`choice${ai === 'ollama' ? ' selected' : ''}`} onClick={() => setAi('ollama')}>
-                  <strong>Ollama</strong>
-                  <span className="fx-secondary" style={{ fontSize: 13 }}>Use models you already run with Ollama.</span>
-                  {ollamaUp ? <Status tone="good">Detected</Status> : <Status tone="neutral">Not detected</Status>}
-                </button>
-                <button className={`choice${ai === 'anthropic' ? ' selected' : ''}`} onClick={() => setAi('anthropic')}>
-                  <strong>Claude (Anthropic)</strong>
-                  <span className="fx-secondary" style={{ fontSize: 13 }}>Frontier reasoning in the cloud with your API key. Policy can restrict it.</span>
-                </button>
-              </div>
-              {ai === 'anthropic' && (
-                <Field label="Anthropic API key" help="Stored encrypted in your vault as ANTHROPIC_API_KEY">
-                  <Input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value.trim())} placeholder="sk-ant-…" autoComplete="off" />
-                </Field>
-              )}
-              <div className="fx-actions" style={{ justifyContent: 'flex-end' }}>
-                <Button variant="ghost" onClick={next}>
-                  Decide later
-                </Button>
-                <Button variant="primary" loading={busy === 'a'} disabled={ai === 'anthropic' && !apiKey} onClick={() => void run('a', finishAi)}>
-                  Continue
-                </Button>
-              </div>
-            </div>
-          )}
-          {step === 'org' && (
-            <div className="fx-form">
-              <h1>Connect to your organization</h1>
-              <p className="fx-secondary">Optional. If your company, school or family runs FBRX Command, connect so it can look after updates, settings and backups, and answer your requests for help.</p>
-              <JoinForm
-                showDeviceName={false}
-                onJoined={next}
-                studentNote="It becomes FBRX OS Education (at a school) or FBRX OS Home (in a family): a simpler set of tools and a safe learning helper."
-                extraActions={
-                  <Button variant="ghost" onClick={next}>
-                    Use standalone
+                {status.fleet.state === 'unenrolled' && (
+                  <Button size="sm" variant="ghost" icon="users" onClick={() => setJoining(true)}>
+                    Join my organization
                   </Button>
-                }
-              />
-            </div>
-          )}
-          {step === 'done' && (
-            <div className="fx-form">
-              <h1>You're set</h1>
-              <Callout tone="good">FBRX is running. Try asking the agent to summarize this workstation's health, or connect your first app under Connections.</Callout>
-              <p className="fx-secondary">Tip: create a snapshot under Backup & restore before you change computers — it brings everything with you.</p>
-              <div className="fx-actions" style={{ justifyContent: 'flex-end' }}>
-                <Button
-                  variant="primary"
-                  loading={busy === 'd'}
-                  onClick={() =>
-                    void run('d', async () => {
-                      await call('settings.update', { patch: { general: { onboardingComplete: true } } });
-                      location.hash = '#/home';
-                      onDone();
-                    })
-                  }
-                >
-                  Open FBRX Endpoint
-                </Button>
+                )}
               </div>
-            </div>
+            </form>
           )}
         </Card>
       </div>

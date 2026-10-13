@@ -26,12 +26,14 @@ export const EDITION_FEATURES: Record<Edition, Feature[]> = {
 
 /**
  * The three FBRX Endpoint editions, lightest first.
- * - **Essentials**: where every new computer starts. The everyday pages, the agent, and a walkthrough.
- * - **Standard** (`basic`, its id from when it was called Basic): the rest of the everyday tools. Anyone may switch to
- *   it in Settings → Edition.
- * - **Ultra**: expert tool sets, Mesh and AI coordination, connections and plugins, the theme studio and the easter
- *   eggs. It unlocks only through FBRX Command: the organization's license allows it, and nothing holds the computer
- *   or its group below it.
+ * - **Essentials**: where every new computer starts. The AI on its own: the chat, the AI models and Settings, and a
+ *   walkthrough.
+ * - **Standard** (`basic`, its id from when it was called Basic): the everyday tools as well. Anyone may switch to it in
+ *   Settings → Edition.
+ * - **Ultra**: expert tool sets, Mesh and AI coordination, connections and plugins, and the theme studio. It unlocks
+ *   only through FBRX Command: the organization's license allows it, and nothing holds the computer or its group
+ *   below it.
+ * The easter eggs come with every edition, once 418 unlocks them.
  */
 export const TIERS = ['essentials', 'basic', 'ultra'] as const;
 export type Tier = (typeof TIERS)[number];

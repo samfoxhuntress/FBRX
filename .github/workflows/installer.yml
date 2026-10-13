@@ -1,5 +1,6 @@
 # Runs the double-click installer exactly as a user would on a fresh Mac and Windows PC: downloads a private
-# Node.js, installs dependencies, builds, installs and licenses the app. Then opens the installed app to prove it
+# Node.js, installs dependencies, builds the app with the AI runtime inside, installs and licenses it (--no-ai: the
+# starter model's gigabyte is left out here; its download is tested in packages/core/test/starter-ai.test.ts). Then opens the installed app to prove it
 # starts and activates its license, and runs the installer a second time over the running app (the update path).
 # On Windows it also checks Setup's maintenance switches and the "make an installer to send" package.
 # "Install FBRX Command" is run the same way on Linux, macOS and Windows: install, update in place, remove.
@@ -33,6 +34,8 @@ permissions:
 env:
   FBRX_FORCE_PORTABLE_NODE: "1"
   FBRX_NO_PAUSE: "1"
+  # The AI runtime download asks GitHub for the llama.cpp release; signed in, it is not rate limited.
+  GITHUB_TOKEN: ${{ github.token }}
 
 jobs:
   macos:
@@ -47,7 +50,7 @@ jobs:
           shasum -a 256 fbrx-server-ci-amd64.iso > fbrx-server-ci-amd64.iso.sha256
           zip -q ~/Downloads/fbrx-server-iso.zip fbrx-server-ci-amd64.iso fbrx-server-ci-amd64.iso.sha256
       - name: Run "Install FBRX OS.command"
-        run: bash "Install FBRX OS.command" --yes --name "CI Runner" --no-launch
+        run: bash "Install FBRX OS.command" --name "CI Runner" --no-launch --no-ai
       - name: The FBRX Server installer ISO, bundle and guides came along
         run: |
           SRV="/Applications/FBRX OS.app/Contents/Resources/server"
@@ -75,7 +78,7 @@ jobs:
           pgrep -x "FBRX OS"
       - name: Running the installer again updates the app while it is open
         run: |
-          bash "Install FBRX OS.command" --yes --name "CI Runner" --no-launch
+          bash "Install FBRX OS.command" --name "CI Runner" --no-launch --no-ai
           test -d "/Applications/FBRX OS.app"
           if pgrep -x "FBRX OS"; then echo "The installer did not close the running app"; exit 1; fi
       - if: failure()
@@ -118,7 +121,7 @@ jobs:
         env:
           FBRX_UNZIP_YES: '1'
           FBRX_UNZIP_TO: ${{ github.workspace }}
-        run: call "%TEMP%\0f8fad5b-d9cb-469f-a165-70867728950e_FBRX-test (2).zip.d47\FBRX-test\Install FBRX OS.cmd" --yes --name "CI Runner" --no-launch
+        run: call "%TEMP%\0f8fad5b-d9cb-469f-a165-70867728950e_FBRX-test (2).zip.d47\FBRX-test\Install FBRX OS.cmd" --name "CI Runner" --no-launch --no-ai
       - name: The app is installed and activates its license on first start
         shell: pwsh
         run: |
@@ -147,7 +150,7 @@ jobs:
           "Setup.exe: $([math]::Round($setup.Length / 1MB)) MB"
       - name: Running the installer again updates the app while it is open
         shell: cmd
-        run: call "Install FBRX OS.cmd" --yes --name "CI Runner" --no-launch
+        run: call "Install FBRX OS.cmd" --name "CI Runner" --no-launch --no-ai
       - name: The installer asked the app to quit properly, and everything was kept
         shell: pwsh
         run: |

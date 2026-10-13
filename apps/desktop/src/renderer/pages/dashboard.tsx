@@ -3,7 +3,7 @@ import type { CalendarEvent, ProtectionState, SystemLive, SystemStatus } from '@
 import { TIER_NAMES, TROPHIES, displayVersion } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Grid, Icons, KeyValue, LineChart, Meter, StatTile, Status, formatBytes, formatDuration, timeAgo, useAction, type IconName } from '@fbrx/ui';
 import { call, onEvent, openExternal } from '../client';
-import { useCore } from '../hooks';
+import { useCore, useStarterAi } from '../hooks';
 import { navigate } from '../app';
 import { dashboardQuip, unlockTrophy } from '../fun';
 import { AskButton, NamePrompt } from '../widgets';
@@ -247,6 +247,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
   const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed']);
   const updates = useCore('updates.status', undefined, ['updates.changed']);
   const aiReady = providers.data?.some((p) => p.available);
+  const starter = useStarterAi();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const quip = easterEggs ? dashboardQuip({ uptimeSeconds: cur?.uptime ?? status.uptimeSeconds, battery: cur?.battery ?? null }) : null;
@@ -371,10 +372,17 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
               : 'Enter your vault passphrase to use them.'}
         </Callout>
       )}
-      {providers.data && !aiReady && (
-        <Callout tone="info" title={`Give ${agentName} a brain`} actions={<Button size="sm" onClick={() => navigate('runtime')}>Choose a model</Button>}>
-          Download a local model to run fully offline, connect Ollama, or add a Claude API key.
+      {starter?.state === 'preparing' ? (
+        <Callout tone="info" title={`Getting ${agentName} ready`} actions={<Button size="sm" onClick={() => navigate('agent')}>Open the chat</Button>}>
+          Downloading {starter.modelName}, a small AI that runs on this computer (about 1 GB, only once){starter.step === 'model' && starter.totalBytes ? `: ${Math.round((starter.receivedBytes / starter.totalBytes) * 100)}%` : ''}.
         </Callout>
+      ) : (
+        providers.data &&
+        !aiReady && (
+          <Callout tone="info" title={`Give ${agentName} a brain`} actions={<Button size="sm" onClick={() => navigate('runtime')}>Choose a model</Button>}>
+            Download a local model to run fully offline, connect Ollama, or add a Claude API key.
+          </Callout>
+        )
       )}
       {status.pendingApprovals > 0 && (
         <Callout tone="warning" title={`${status.pendingApprovals} action(s) need your approval`} actions={<Button size="sm" variant="primary" onClick={() => navigate('approvals')}>Review</Button>}>

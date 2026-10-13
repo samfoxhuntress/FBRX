@@ -56,6 +56,30 @@ export class ModelManager {
       }));
   }
 
+  /**
+   * Catalog models whose file is already in the models folder but not recorded ("Install FBRX OS" downloads the
+   * starter model there while it builds the app): recorded now, with their checksum. Unfinished (.part) files are not.
+   */
+  async adopt(): Promise<InstalledModel[]> {
+    const adopted: InstalledModel[] = [];
+    for (const entry of MODEL_CATALOG) {
+      const fileName = basename(new URL(entry.url).pathname);
+      const file = join(this.dir, fileName);
+      if (!existsSync(file) || this.db.get('SELECT 1 FROM models WHERE id = ?', entry.id)) continue;
+      const size = (await stat(file)).size;
+      // Far smaller than the model: not a whole file.
+      if (size < entry.sizeBytes * 0.9) continue;
+      const sha256 = await sha256File(file);
+      if (entry.sha256 && entry.sha256 !== sha256) {
+        this.log.warn('A model file in the models folder does not match its checksum; left alone', { model: entry.id });
+        continue;
+      }
+      this.db.run('INSERT OR REPLACE INTO models (id, name, file, size_bytes, sha256, source, installed_at) VALUES (?,?,?,?,?,?,?)', entry.id, entry.name, fileName, size, sha256, 'catalog', new Date().toISOString());
+      adopted.push(this.get(entry.id)!);
+    }
+    return adopted;
+  }
+
   get(id: string): InstalledModel | undefined {
     return this.installed().find((m) => m.id === id);
   }

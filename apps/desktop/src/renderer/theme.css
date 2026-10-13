@@ -1417,12 +1417,11 @@
 /* Sections by name (the grouped sidebar) and by heading (Essentials' short list). */
 .fx-group[data-group='bridge'],
 [data-section='Command'],
-[data-section='Everyday'] { --hue: var(--sec-command); }
+[data-section='Your AI'] { --hue: var(--sec-command); }
 .fx-group[data-group='studio'],
 [data-section='Workspace'] { --hue: var(--sec-workspace); }
 .fx-group[data-group='pitstop'],
-[data-section='PC care'],
-[data-section='Your computer'] { --hue: var(--sec-care); }
+[data-section='PC care'] { --hue: var(--sec-care); }
 .fx-group[data-group='workbench'],
 [data-section='Utilities'] { --hue: var(--sec-utilities); }
 .fx-group[data-group='orbit'],

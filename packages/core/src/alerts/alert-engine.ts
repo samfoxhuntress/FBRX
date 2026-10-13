@@ -54,7 +54,7 @@ export interface AlertEngineDeps {
   settings: () => Settings;
   monitor: SystemMonitor;
   workspace: WorkspaceStore;
-  notify: (title: string, body: string, level: 'info' | 'warning' | 'error') => void;
+  notify: (title: string, body: string, level: 'info' | 'warning' | 'error', ruleId: string) => void;
   /** Pushes an alert to paired phones; returns how many received it. */
   toMobile: (alert: AlertItem) => number;
   /** Forwards an alert to the organization's control plane; false when not enrolled. */
@@ -217,7 +217,7 @@ export class AlertEngine {
     };
     if (routes.has('desktop') && ch.desktop) {
       if (quiet) out.desktop = 'held (quiet hours)';
-      else await attempt('desktop', () => (this.d.notify(a.title, a.body, a.severity === 'critical' ? 'error' : a.severity === 'warning' ? 'warning' : 'info'), 'ok'));
+      else await attempt('desktop', () => (this.d.notify(a.title, a.body, a.severity === 'critical' ? 'error' : a.severity === 'warning' ? 'warning' : 'info', a.ruleId), 'ok'));
     }
     if (routes.has('mobile') && ch.mobile) await attempt('mobile', () => `${this.d.toMobile(a)} device(s)`);
     if (routes.has('organisation') && ch.organisation) await attempt('organisation', () => (this.d.toOrganisation(a) ? 'ok' : 'not enrolled'));
@@ -277,7 +277,7 @@ export class AlertEngine {
       let result = 'ok';
       if (channel === 'webhook') result = await this.sendWebhook(a);
       else if (channel === 'email') result = await this.sendEmail(a);
-      else if (channel === 'desktop') this.d.notify(a.title, a.body, 'info');
+      else if (channel === 'desktop') this.d.notify(a.title, a.body, 'info', a.ruleId);
       else if (channel === 'mobile') result = `${this.d.toMobile(a)} device(s) reached`;
       else if (channel === 'organisation') result = this.d.toOrganisation(a) ? 'sent to the control plane' : 'this device is not enrolled';
       else if (channel === 'inbox') await this.fire('test', a.title, a.body, { force: true });

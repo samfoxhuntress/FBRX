@@ -246,7 +246,7 @@ describe('chat eggs', () => {
     expect(chatEgg('Laugh it up, fuzzball', persona, r)).toMatchObject({ persona: null, trophies: ['fuzzball'] });
   });
 
-  it('stays out of the way in Endpoint Basic, and in Ultra until 418 unlocks it', async () => {
+  it('stays out of the way in every edition until 418 unlocks it, then works in all of them', async () => {
     const keys = generateSigningKeyPair();
     const { kernel, cleanup } = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem] });
     const llm = await mockOpenAI(() => ({ text: 'Plain answer.' }));
@@ -254,23 +254,20 @@ describe('chat eggs', () => {
       kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
       const events: AgentEvent[] = [];
       kernel.events.on('agent', (e) => events.push(e));
+      // Not Ultra: a computer that never joined FBRX Command.
+      expect(kernel.license.status().tier).not.toBe('ultra');
       await kernel.call('ai.chat', { message: "Chewie, we're home" }, USER);
       await waitFor(() => events.some((e) => e.type === 'run.completed'));
       expect(llm.requests).toHaveLength(1);
-      const key = signLicense({ v: 1, lid: 'lic_u', tenantId: 't', customer: 'Acme', edition: 'pro', seats: 1, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null }, keys.privateKeyPem);
-      expect(await kernel.call('license.activate', { key }, USER)).toMatchObject({ state: 'valid' });
-      // Ultra comes through FBRX Command: as if this computer had joined its organization.
-      kernel.meta.set('fleet.deviceId', 'dev_test');
-      kernel.license.refresh();
-      expect(await kernel.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra' });
-      await kernel.call('ai.chat', { message: "Chewie, we're home" }, USER);
-      await waitFor(() => events.filter((e) => e.type === 'run.completed').length >= 2);
-      expect(llm.requests).toHaveLength(2);
       kernel.settings.update({ appearance: { funUnlocked: true } });
       const r = (await kernel.call('ai.chat', { message: "Chewie, we're home" }, USER)) as any;
       expect(kernel.conversations.get(r.conversationId).messages.at(-1)!.content).toMatch(/^Rrrrrrr-ghghghghgh!/);
       expect(kernel.trophies.has('chewie')).toBe(true);
-      expect(llm.requests).toHaveLength(2);
+      expect(llm.requests).toHaveLength(1);
+      // Switched off again (or locked off by an organization): back to plain answers.
+      kernel.settings.update({ appearance: { easterEggs: false } });
+      await kernel.call('ai.chat', { message: "Chewie, we're home" }, USER);
+      await waitFor(() => llm.requests.length === 2);
     } finally {
       await llm.close();
       await cleanup();

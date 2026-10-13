@@ -369,21 +369,14 @@
   padding: 24px;
 }
 .onboard-card {
-  width: min(720px, 100%);
+  width: min(560px, 100%);
 }
-.steps {
+.onboard-more {
   display: flex;
-  gap: 6px;
-  margin-bottom: 18px;
-}
-.steps span {
-  height: 4px;
-  flex: 1;
-  border-radius: 999px;
-  background: var(--surface-3);
-}
-.steps span.done {
-  background: var(--accent);
+  flex-wrap: wrap;
+  gap: 4px 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
 }
 .lock-note {
   display: inline-flex;
@@ -4132,6 +4125,19 @@ html.goose-mode #root {
   height: 100%;
   background: var(--accent);
   transition: width 0.25s ease;
+}
+.starter-ai {
+  display: grid;
+  gap: 8px;
+  justify-items: center;
+  width: 100%;
+  max-width: 560px;
+  margin: 4px auto 8px;
+  padding: 14px 16px;
+  border-radius: var(--radius);
+  border: 1px solid color-mix(in srgb, var(--accent) 40%, transparent);
+  background: var(--accent-wash);
+  text-align: center;
 }
 .voice-dl-error {
   font-size: 12px;

@@ -7,9 +7,9 @@ import { navigate } from './app';
 
 /**
  * FBRX Endpoint Essentials, Standard or Ultra (see TIERS in @fbrx/shared). Every new computer opens in Essentials: the
- * everyday pages and a walkthrough. Standard adds the rest of the everyday tools; anyone switches to it in Settings →
- * Edition, or from a page that is in Standard. Ultra (expert tool sets, Mesh, AI coordination, connections and
- * plugins, the theme studio and the easter eggs) is there to turn on only when FBRX Command allows it.
+ * AI on its own (the chat, the AI models, Settings) and a walkthrough. Standard adds the everyday tools; anyone
+ * switches to it in Settings → Edition, or from a page that is in Standard. Ultra (expert tool sets, Mesh, AI
+ * coordination, connections and plugins, the theme studio) is there to turn on only when FBRX Command allows it.
  */
 export const TierContext = createContext<Tier>('basic');
 
@@ -85,7 +85,7 @@ export function StandardOnly({ title, what }: { title: string; what: string }) {
             <p className="fx-muted">
               {held
                 ? heldBy
-                : 'Essentials keeps FBRX to the everyday things. Standard adds the rest of the tools, and you can switch back any time.'}
+                : 'Essentials is your AI on its own. Standard adds the everyday tools, and you can switch back any time.'}
             </p>
             <div className="fx-actions">
               {!held && (
