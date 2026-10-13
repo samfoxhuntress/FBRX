@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { closeSync, existsSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync } from 'node:fs';
+import { closeSync, existsSync, ftruncateSync, mkdirSync, mkdtempSync, openSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -12,6 +12,10 @@ import { makeKernel, USER } from './helpers';
 
 const entry = MODEL_CATALOG.find((m) => m.id === STARTER_MODEL_ID)!;
 const fileName = new URL(entry.url).pathname.split('/').pop()!;
+const CATALOG_SIZE = entry.sizeBytes;
+// A few megabytes stand in for the gigabyte: picking up a model reads all of it for its checksum, which takes a while
+// on a CI computer (this test file runs on its own, so the catalog is changed for it alone).
+entry.sizeBytes = 4_000_000;
 
 /** A model file of the right size without writing a gigabyte (sparse). */
 function placeModel(dir: string) {
@@ -119,7 +123,7 @@ describe('The AI ready before the first question', () => {
 
   it('"Install FBRX OS" downloads the same model, to where the app looks, and carries on after a broken-off download', async () => {
     const mod = await import(pathToFileURL(join(__dirname, '..', '..', '..', 'scripts', 'setup', 'starter-model.mjs')).href);
-    expect(mod.STARTER_MODEL).toMatchObject({ url: entry.url, sizeBytes: entry.sizeBytes });
+    expect(mod.STARTER_MODEL).toMatchObject({ url: entry.url, sizeBytes: CATALOG_SIZE });
 
     const body = randomBytes(300_000);
     const ranges: string[] = [];
@@ -127,29 +131,34 @@ describe('The AI ready before the first question', () => {
     const server = createServer((req, res) => {
       const range = /bytes=(\d+)-/.exec(req.headers.range ?? '');
       ranges.push(req.headers.range ?? 'none');
-      if (first) {
-        // The connection drops part of the way.
-        first = false;
-        res.writeHead(200, { 'content-length': body.length });
-        res.write(body.subarray(0, 120_000), () => res.destroy());
-        return;
-      }
       const from = range ? Number(range[1]) : 0;
       res.writeHead(range ? 206 : 200, { 'content-length': body.length - from });
+      if (first) {
+        // This time the connection drops part of the way.
+        first = false;
+        res.write(body.subarray(from, from + 50_000), () => res.destroy());
+        return;
+      }
       res.end(body.subarray(from));
     });
     await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
     const dir = mkdtempSync(join(tmpdir(), 'fbrx-starter-'));
     try {
+      // What an earlier run left: the first 100 000 bytes.
+      const models = join(dir, 'models');
+      mkdirSync(models, { recursive: true });
+      writeFileSync(join(models, `${fileName}.part`), body.subarray(0, 100_000));
       const progress: { got?: number; total?: number } = {};
       const url = `http://127.0.0.1:${(server.address() as AddressInfo).port}/model.gguf`;
-      const file = await mod.downloadStarterModel(join(dir, 'models'), progress, { url, retryMs: 10 });
-      expect(file).toBe(join(dir, 'models', fileName));
+      const file = await mod.downloadStarterModel(models, progress, { url, retryMs: 10 });
+      expect(file).toBe(join(models, fileName));
       expect(readFileSync(file).equals(body)).toBe(true);
       expect(existsSync(`${file}.part`)).toBe(false);
-      expect(ranges[0]).toBe('none');
+      // It carried on from what was there, and again after the dropped connection (from at least as far).
+      expect(ranges.length).toBe(2);
+      expect(ranges[0]).toBe('bytes=100000-');
       expect(ranges[1]).toMatch(/^bytes=\d+-$/);
-      expect(Number(ranges[1].slice(6, -1))).toBeGreaterThan(0);
+      expect(Number(ranges[1].slice(6, -1))).toBeGreaterThanOrEqual(100_000);
       expect(progress).toMatchObject({ got: body.length, total: body.length });
     } finally {
       server.close();
