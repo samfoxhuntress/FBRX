@@ -31,6 +31,10 @@ import { chatRoutes } from './routes/chat';
 import { meshRoutes } from './routes/mesh';
 import { commandRoutes } from './routes/command';
 import { accountRoutes } from './routes/accounts';
+import { billingAdminRoutes } from './routes/billing-admin';
+import { stripeOf } from './billing/stripe';
+import { scheduleSeatSync, syncSeats, syncTenantLicense } from './billing/tenant-billing';
+import { tenantScope } from './auth';
 import { CommandUpdater } from './services/command-update';
 import { slugify } from './routes/util';
 import { loadTls } from './tls';
@@ -132,6 +136,12 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     return reply.status(status).send({ error: { code: status === 429 ? 'RATE_LIMITED' : 'ERROR', message: status >= 500 ? 'Internal server error' : (err as Error).message } });
   });
 
+  // An organization's computers changed (their editions, their groups, members): its plan's seats follow.
+  app.addHook('onResponse', async (req, reply) => {
+    if (req.method === 'GET' || reply.statusCode >= 400 || !req.principal || !/^\/v1\/admin\/(devices|groups|members)\b/.test(req.url)) return;
+    const tenantId = tenantScope(req);
+    if (tenantId) scheduleSeatSync(ctx, stripeOf(config.cloud), tenantId);
+  });
   app.get('/healthz', { logLevel: 'warn' }, async () => ({ ok: true, version }));
   await authRoutes(app, ctx);
   await ssoRoutes(app, ctx);
@@ -144,6 +154,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   await app.register(async (scoped) => adminFleetRoutes(scoped, ctx));
   await adminAssetRoutes(app, ctx);
   await accountRoutes(app, ctx);
+  await app.register(async (scoped) => billingAdminRoutes(scoped, ctx));
   const updater = new CommandUpdater({
     version,
     db,
@@ -164,7 +175,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   }
 
   // First-run: bootstrap from env, or require a setup token.
-  const users = Number(db.get<{ n: number }>('SELECT COUNT(*) AS n FROM users')?.n ?? 0);
+  const users = Number(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM users WHERE role = 'superadmin'")?.n ?? 0);
   if (users === 0 && config.bootstrapAdmin) {
     const b = config.bootstrapAdmin;
     const now = new Date().toISOString();
@@ -196,6 +207,19 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   };
   const timer = setInterval(sweep, 60_000);
   timer.unref();
+  // Organizations in the cloud: their licenses follow their plans (renewals, ends), and the seats their computers.
+  const reconcile = () => {
+    for (const t of db.all<{ id: string }>("SELECT id FROM tenants WHERE billing = 'cloud' AND status = 'active'")) {
+      try {
+        syncTenantLicense(ctx, t.id);
+      } catch (err) {
+        app.log.warn({ err, tenant: t.id }, 'Could not bring the organization license up to date');
+      }
+      void syncSeats(ctx, stripeOf(config.cloud), t.id).catch((err) => app.log.warn({ err, tenant: t.id }, 'Could not update the plan with the computers'));
+    }
+  };
+  const billingTimer = setInterval(reconcile, 15 * 60_000);
+  billingTimer.unref();
 
   return {
     app,
@@ -214,6 +238,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     },
     async close() {
       clearInterval(timer);
+      clearInterval(billingTimer);
       updater.stop();
       ctx.realtime.closeAll();
       if (local) await new Promise<void>((r) => local!.close(() => r()));

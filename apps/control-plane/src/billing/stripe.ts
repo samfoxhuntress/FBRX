@@ -159,3 +159,13 @@ export function subscriptionItems(sub: StripeSubscription): Array<{ itemId: stri
       return { itemId: i.id, productId: i.price.lookup_key!, quantity: i.quantity ?? 1, periodEnd: end ? new Date(end * 1000).toISOString() : null };
     });
 }
+
+const instances = new WeakMap<object, Stripe>();
+
+/** The one Stripe client for this FBRX Command (null until Stripe is set up). */
+export function stripeOf(cloud: CloudConfig): Stripe | null {
+  if (!cloud.stripe) return null;
+  let s = instances.get(cloud.stripe);
+  if (!s) instances.set(cloud.stripe, (s = new Stripe(cloud.stripe)));
+  return s;
+}

@@ -44,7 +44,7 @@ month; the product ids are the Stripe price lookup keys and the App Store / Goog
 | **FBRX Command tenant** | — | $54.99 | `fbrx_command_tenant_monthly` |
 | **FBRX Server** (coming soon) | $100 once: the installer ISO stays on the account or tenant | The same | `fbrx_server_iso` |
 
-A tenant's bill is the FBRX Command plan plus each computer at its edition's tenant price (`tenantMonthlyTotal`).
+A tenant's bill is the FBRX Command plan plus each computer at its edition's tenant price (`tenantMonthlyTotal`); in the cloud, FBRX Command counts the computers and keeps Stripe in step (ACCOUNTS.md).
 
 **Computers from before 2.0.** Standard was free on a computer on its own until 2.0. A computer set up before keeps
 it, free, for `FREE_GRACE_DAYS` (30) days after it first starts 2.0, then runs Essentials unless Standard or Ultra

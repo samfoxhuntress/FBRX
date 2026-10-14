@@ -32,6 +32,9 @@ export const PERMISSIONS = {
   /** FBRX Command's own version and new versions of it; installing one is for the platform operator. */
   'command.read': ['superadmin', 'owner', 'admin'],
   'command.update': ['superadmin'],
+  /** The organization's FBRX Command plan (cloud): owners pay; admins see what it comes to. */
+  'billing.read': ['superadmin', 'owner', 'admin'],
+  'billing.manage': ['superadmin', 'owner'],
 } as const satisfies Record<string, readonly Role[]>;
 export type Permission = keyof typeof PERMISSIONS;
 

@@ -58,6 +58,28 @@ Black Hole there.
 | `DELETE /v1/admin/members/:accountId` | Removes a member |
 | `POST /v1/accounts/memberships/:tenantId/enroll` | (The account) a one-time enrollment token for this computer |
 
+## An organization's FBRX Command in the cloud
+
+Anyone with an FBRX account can start an FBRX Command for their organization (Settings → FBRX account → **Start an
+FBRX Command** in FBRX, or `POST /v1/accounts/tenants` `{ name, kind }`). They own it, sign in to its console with
+the account's email and password, and are a member on Essentials. Nothing is charged until the owner starts the plan:
+
+* **Billing** (owners pay; admins see it): **Start the FBRX Command plan** opens Stripe Checkout for the
+  $54.99-a-month plan; **Manage billing** opens the Stripe portal. The page shows what a month comes to: the plan, and
+  each computer at its edition's tenant price, counted from the editions the organization gives (Members, Devices,
+  Profiles & groups): Standard $3.99 and Ultra $9.59 (20% off), Black Hole $24.99 (an add-on at full price),
+  Essentials free. Student and child computers run the learner edition on Standard and count as Standard.
+* The plan's per-computer items in Stripe follow the computers by themselves (a few seconds after a change, and every
+  quarter of an hour), prorated by Stripe.
+* While the plan runs, FBRX Command holds one license for the organization that allows everything; each computer runs
+  what it was given, and **Essentials when nobody gave it anything**. Without the plan (not started, or ended), every
+  computer runs Essentials.
+* **Members** gives editions to people (above); **FBRX Server is coming** shows on Billing and the Overview: a
+  one-time $100 purchase, not on sale yet, whose installer will stay on the FBRX Command or the account for good.
+
+Organizations the operator sets up by hand (Tenants, `billing = manual`) keep working as before, with the licenses
+the operator issues. The operator sees every account under **FBRX accounts**.
+
 ## Setting up
 
 ### Accounts

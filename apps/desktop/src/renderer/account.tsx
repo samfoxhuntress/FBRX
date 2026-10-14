@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { EDITION_PLANS, TIER_NAMES, TIER_SHORT, atLeast, formatPrice, type AccountStatus, type Tier } from '@fbrx/shared';
+import { COMMAND_PLAN, EDITION_PLANS, TENANT_DISCOUNT, TIER_NAMES, TIER_SHORT, atLeast, formatPrice, type AccountStatus, type Tier } from '@fbrx/shared';
 import { Button, Card, Field, Input, KeyValue, Status, formatDate, useAction } from '@fbrx/ui';
 import { call, openExternal } from './client';
 import { useCore } from './hooks';
@@ -139,6 +139,7 @@ export function AccountSettings() {
           </p>
         )}
       </Card>
+      {account.memberships.length === 0 && <StartOrganization />}
       {account.memberships.length > 0 && (
         <Card title="Your organizations" subtitle="Organizations that gave your account an edition. Join this computer to one and it runs that edition, looked after by its FBRX Command.">
           <div className="fx-form">
@@ -168,5 +169,50 @@ export function AccountSettings() {
         </Card>
       )}
     </>
+  );
+}
+
+/** Starts an FBRX Command for the person's organization: they own it, and its console opens in the browser. */
+function StartOrganization() {
+  const [open, setOpen] = useState(false);
+  const [f, setF] = useState<{ name: string; kind: 'business' | 'education' | 'home' }>({ name: '', kind: 'business' });
+  const { run, busy } = useAction();
+  return (
+    <Card title="Run FBRX for your organization" subtitle={`FBRX Command looks after your company’s, school’s or family’s computers: ${formatPrice(COMMAND_PLAN.monthly)} a month, each computer at its edition with ${Math.round(TENANT_DISCOUNT * 100)}% off, Essentials computers free.`}>
+      {open ? (
+        <form
+          className="fx-form"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run('org', () => call('account.startOrganization', f).then((r) => openExternal(r.consoleUrl)), 'Your FBRX Command is ready: its console opens in your browser');
+          }}
+        >
+          <Field label="Organization name">
+            <Input value={f.name} maxLength={120} onChange={(e) => setF({ ...f, name: e.target.value })} />
+          </Field>
+          <Field label="Kind">
+            <div className="seg" role="group">
+              {(['business', 'education', 'home'] as const).map((k) => (
+                <button key={k} type="button" className={f.kind === k ? 'on' : ''} onClick={() => setF({ ...f, kind: k })}>
+                  {k === 'business' ? 'Work' : k === 'education' ? 'School' : 'Home'}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <div className="fx-actions">
+            <Button type="submit" variant="primary" loading={busy === 'org'} disabled={!f.name.trim()}>
+              Start my FBRX Command
+            </Button>
+            <Button variant="ghost" onClick={() => setOpen(false)}>
+              Cancel
+            </Button>
+          </div>
+        </form>
+      ) : (
+        <Button size="sm" icon="globe" onClick={() => setOpen(true)}>
+          Start an FBRX Command
+        </Button>
+      )}
+    </Card>
   );
 }

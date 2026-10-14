@@ -204,6 +204,13 @@ export class AccountService {
     return this.status();
   }
 
+  /** Starts an FBRX Command for the person's organization; they own it and sign in to its console with this account. */
+  async startOrganization(p: { name: string; kind: 'business' | 'education' | 'home' }): Promise<{ consoleUrl: string; tenantId: string }> {
+    const r = await this.request<{ consoleUrl: string; tenantId: string }>('POST', '/v1/accounts/tenants', p, this.requireToken());
+    await this.refresh();
+    return r;
+  }
+
   memberships(): AccountMembership[] {
     return this.status().memberships;
   }

@@ -10,9 +10,11 @@ import { adminAuth, requirePerm, requireTenant } from '../auth';
 import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized } from '../errors';
 import { PasswordSchema } from './auth';
 import { accountEntitlements, accountLicense, accountTier, endOtherItems, entitlementView, handledBefore, isValid, markHandled, recordPurchase } from '../billing/entitlements';
-import { Stripe, StripeError, stripeStatus, subscriptionItems, type StripeEvent, type StripeSubscription } from '../billing/stripe';
+import { StripeError, stripeOf, stripeStatus, subscriptionItems, type StripeEvent, type StripeSubscription } from '../billing/stripe';
 import { AppleError, appleStatus, verifyAppleJws, type AppleNotification, type AppleRenewal, type AppleTransaction } from '../billing/apple';
 import { GoogleError, GooglePlay, playStatus, type PlaySubscription } from '../billing/google';
+import { scheduleSeatSync, syncTenantLicense } from '../billing/tenant-billing';
+import { slugify } from './util';
 
 /**
  * FBRX accounts and what they buy (FBRX Command in the cloud).
@@ -102,7 +104,7 @@ function personalProduct(productId: string) {
 export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
   const cloud = ctx.config.cloud;
   const auth = accountAuth(ctx);
-  const stripe = cloud.stripe ? new Stripe(cloud.stripe) : null;
+  const stripe = stripeOf(cloud);
   const play = cloud.google ? new GooglePlay(cloud.google) : null;
 
   app.get('/v1/plans', async (): Promise<PlansInfo & { editions: typeof EDITION_PLANS; command: typeof COMMAND_PLAN; server: typeof SERVER_OFFER }> => ({
@@ -220,6 +222,29 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     return { serverUrl: ctx.config.publicUrl, token, fingerprint: ctx.tls?.selfSigned ? ctx.tls.fingerprint : null, tenantName: m.name, tier: m.tier };
   });
 
+  /**
+   * Starts an organization's own FBRX Command (in the cloud): the account becomes its owner (signing in to the console
+   * with the account's password) and a member on Essentials. Nothing is charged until the owner starts the plan in
+   * Billing; until then its computers run Essentials.
+   */
+  app.post('/v1/accounts/tenants', { preHandler: auth, config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => {
+    if (!cloud.publicSignup) throw forbidden('This FBRX Command does not take new organizations');
+    const body = z.object({ name: z.string().trim().min(1).max(120), kind: z.enum(['business', 'education', 'home']).default('business') }).parse(req.body);
+    const a = req.account!;
+    if (ctx.db.get('SELECT id FROM users WHERE email = ?', a.email)) throw conflict('That email already signs in to an FBRX Command console');
+    const now = new Date().toISOString();
+    const tenantId = ids.tenant();
+    let slug = slugify(body.name);
+    if (ctx.db.get('SELECT id FROM tenants WHERE slug = ?', slug)) slug = `${slug}-${tenantId.slice(-6)}`;
+    ctx.db.tx(() => {
+      ctx.db.run("INSERT INTO tenants (id, name, slug, contact_email, vertical, billing, created_at, updated_at) VALUES (?,?,?,?,?,'cloud',?,?)", tenantId, body.name, slug, a.email, body.kind, now, now);
+      ctx.db.run("INSERT INTO users (id, tenant_id, email, name, password_hash, role, account_id, created_at, updated_at) VALUES (?,?,?,?,'','owner',?,?,?)", ids.user(), tenantId, a.email, a.name, a.id, now, now);
+      ctx.db.run("INSERT INTO tenant_members (tenant_id, account_id, tier, created_at) VALUES (?,?,'essentials',?)", tenantId, a.id, now);
+    });
+    ctx.audit.record({ ...accountActor(a, req), tenantId }, 'tenant.created', { type: 'tenant', id: tenantId, tenantId }, { name: body.name, kind: body.kind, billing: 'cloud' });
+    return { tenantId, consoleUrl: ctx.config.publicUrl, email: a.email };
+  });
+
   // ------------------------------------------------------------------------------------------- Stripe
   const needStripe = () => {
     if (!stripe) throw new HttpError(503, 'Card payments are not set up on this FBRX Command', 'UNAVAILABLE');
@@ -282,6 +307,11 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     const items = subscriptionItems(sub);
     for (const i of items) recordPurchase(ctx, { source: 'stripe', externalId: sub.id, productId: i.productId, status, periodEnd: i.periodEnd, quantity: i.quantity, accountId: tenantId ? null : accountId, tenantId });
     endOtherItems(ctx, 'stripe', sub.id, items.map((i) => i.productId));
+    // An organization's plan: its license follows, and (once it starts) its computers are counted in.
+    if (tenantId) {
+      syncTenantLicense(ctx, tenantId);
+      scheduleSeatSync(ctx, stripe, tenantId, 0);
+    }
   }
 
   // The webhook is signed over the exact bytes Stripe sent, so this route keeps the raw body.

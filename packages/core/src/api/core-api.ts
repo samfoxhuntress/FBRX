@@ -41,6 +41,7 @@ const USER_ONLY = new Set<string>([
   'account.checkout',
   'account.portal',
   'account.join',
+  'account.startOrganization',
   'localapi.info',
   'localapi.rotateToken',
   'plugins.install',
@@ -357,6 +358,7 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'account.refresh': () => k.account.refresh(),
     'account.checkout': (p) => k.account.checkout(z.object({ productId: z.string().max(80) }).parse(p).productId),
     'account.portal': () => k.account.portal(),
+    'account.startOrganization': (p) => k.account.startOrganization(z.object({ name: z.string().trim().min(1).max(120), kind: z.enum(['business', 'education', 'home']) }).parse(p)),
     'account.join': (p, ctx) => k.account.join(z.object({ tenantId: z.string().min(1).max(80) }).parse(p).tenantId, ctx.actor),
 
     'updates.status': () => k.updateStatus(),

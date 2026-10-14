@@ -12,6 +12,8 @@ import { resolveDeviceConfig } from '../services/device-config';
 import { parseJson } from './util';
 import { commandView, processCommandResult, processHeartbeat, recordDeviceEvent, takePendingCommands } from '../services/devices';
 import { storeStream } from '../services/storage';
+import { stripeOf } from '../billing/stripe';
+import { scheduleSeatSync } from '../billing/tenant-billing';
 
 /** Reads the plaintext, authenticated header of a .fbrxsnap without decrypting it. */
 export function snapshotHeader(file: string): Record<string, unknown> | null {
@@ -109,6 +111,7 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
       { type: 'device', id: deviceId },
       { hostname: f.hostname, platform: f.platform, appVersion: f.appVersion, token: t.label, group: group?.name, audience, previousDeviceId: body.previousDeviceId },
     );
+    scheduleSeatSync(ctx, stripeOf(ctx.config.cloud), t.tenant_id);
     ctx.webhooks.emit(t.tenant_id, 'device.enrolled', { deviceId, name: f.name, hostname: f.hostname, platform: f.platform, appVersion: f.appVersion });
     ctx.realtime.emitAdmin({ type: 'device.online', deviceId, tenantId: t.tenant_id });
     const res: EnrollResponse = {

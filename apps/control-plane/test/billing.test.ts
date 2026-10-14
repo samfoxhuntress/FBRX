@@ -38,6 +38,18 @@ function fakeStripe() {
     if (url.pathname === '/v1/customers') return json({ id: 'cus_1' });
     if (url.pathname === '/v1/checkout/sessions') return json({ id: 'cs_1', url: 'https://checkout.example/cs_1' });
     if (url.pathname === '/v1/billing_portal/sessions') return json({ url: 'https://billing.example/portal' });
+    if (url.pathname === '/v1/subscription_items' && req.method === 'POST') {
+      const f = new URLSearchParams(body);
+      const sub = subscriptions.get(f.get('subscription')!);
+      const item = { id: `si_${sub.items.data.length + 1}`, quantity: Number(f.get('quantity')), price: { id: f.get('price'), lookup_key: f.get('price')!.replace(/^price_/, '') } };
+      sub.items.data.push(item);
+      return json(item);
+    }
+    const si = /^\/v1\/subscription_items\/(.+)$/.exec(url.pathname);
+    if (si && req.method === 'POST') {
+      for (const sub of subscriptions.values()) for (const i of sub.items.data) if (i.id === si[1]) i.quantity = Number(new URLSearchParams(body).get('quantity'));
+      return json({ id: si[1] });
+    }
     const m = /^\/v1\/subscriptions\/(.+)$/.exec(url.pathname);
     if (m && req.method === 'GET') return json(subscriptions.get(m[1]!));
     if (m && req.method === 'DELETE') return json({ id: m[1], status: 'canceled' });
@@ -230,6 +242,57 @@ describe('FBRX accounts and what they buy', () => {
     // The notification says nothing about the state: FBRX asks Play.
     expect((await push({ packageName: 'com.fbrx.app', subscriptionNotification: { notificationType: 13, purchaseToken: 'tok-1-abcdef', subscriptionId: 'fbrx_standard_monthly' } })).json).toEqual({ received: true });
     expect((await ok('GET', '/v1/accounts/me', undefined, token)).tier).toBe('essentials');
+  });
+
+  it('runs an organization’s FBRX Command plan: each computer at its edition, Black Hole as an add-on, Essentials free', async () => {
+    const owner = await ok('POST', '/v1/accounts/signup', { email: 'owner@river.example', name: 'Riv', password: PASSWORD });
+    const t = await ok('POST', '/v1/accounts/tenants', { name: 'River Design', kind: 'business' }, owner.token);
+    // The owner signs in to the console with the account's password.
+    expect((await call('POST', '/v1/auth/login', { email: 'owner@river.example', password: 'not-the-password' })).status).toBe(401);
+    const { token: admin, user } = await ok('POST', '/v1/auth/login', { email: 'owner@river.example', password: PASSWORD });
+    expect(user).toMatchObject({ role: 'owner', tenantId: t.tenantId });
+    expect((await ok('GET', '/v1/accounts/me', undefined, owner.token)).memberships).toEqual([{ tenantId: t.tenantId, tenantName: 'River Design', tier: 'essentials' }]);
+    expect((await ok('GET', '/v1/admin/billing', undefined, admin)).plan).toMatchObject({ billing: 'cloud', active: false, monthly: 5499 });
+
+    // Three computers join; one is given Ultra, one Black Hole.
+    const { token: enroll } = await ok('POST', '/v1/admin/enrollment-tokens', { label: 'Everyone' }, admin);
+    const devices: Array<{ deviceId: string; deviceToken: string }> = [];
+    for (const n of [1, 2, 3]) {
+      devices.push(await ok('POST', '/v1/enroll', { token: enroll, protocolVersion: 1, device: { name: `pc-${n}`, hostname: `pc-${n}`, platform: 'win32', arch: 'x64', osVersion: '11', appVersion: '2.0.0', machineId: `m-${n}` } }));
+    }
+    await ok('PATCH', `/v1/admin/devices/${devices[0]!.deviceId}`, { tier: 'ultra' }, admin);
+    await ok('PATCH', `/v1/admin/devices/${devices[1]!.deviceId}`, { tier: 'blackhole' }, admin);
+    const config = (i: number) => ok('GET', '/v1/device/config', undefined, devices[i]!.deviceToken);
+    // No plan yet: every computer runs Essentials.
+    expect((await config(1)).edition.tier).toBe('essentials');
+
+    const checkout = await ok('POST', '/v1/admin/billing/checkout', {}, admin);
+    expect(checkout.url).toBe('https://checkout.example/cs_1');
+    const session = decodeURIComponent(stripe.calls.filter((c) => c.path === '/v1/checkout/sessions').at(-1)!.body);
+    expect(session).toContain('line_items[0][price]=price_fbrx_command_tenant_monthly');
+    expect(session).toContain(`metadata][fbrx_tenant]=${t.tenantId}`);
+
+    const end = Math.floor(Date.now() / 1000) + 30 * 86400;
+    stripe.subscriptions.set('sub_t', { id: 'sub_t', customer: 'cus_1', status: 'active', metadata: { fbrx_tenant: t.tenantId }, items: { data: [{ id: 'si_cmd', quantity: 1, current_period_end: end, price: { id: 'p', lookup_key: 'fbrx_command_tenant_monthly' } }] } });
+    await stripeEvent({ id: 'evt_t1', type: 'checkout.session.completed', data: { object: { mode: 'subscription', subscription: 'sub_t' } } });
+    // The plan runs: the organization's license allows everything, each computer runs what it was given.
+    expect((await config(0)).edition.tier).toBe('ultra');
+    expect((await config(1)).edition.tier).toBe('blackhole');
+    expect((await config(2)).edition.tier).toBe('essentials');
+    const lic = licenseStatusFrom((await config(1)).license, [cp.ctx.keys.licensePublicPem], 'managed', 2);
+    expect(lic).toMatchObject({ state: 'valid', tier: 'blackhole', edition: 'enterprise' });
+    // The plan counts the computers by itself: Ultra at 20% off, Black Hole at full price, Essentials free.
+    await new Promise((r) => setTimeout(r, 300));
+    expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).plan).toMatchObject({ active: true, computers: { essentials: 1, basic: 0, ultra: 1, blackhole: 1 }, monthly: 5499 + 959 + 2499 });
+    const items = stripe.subscriptions.get('sub_t').items.data.map((i: any) => `${i.price.lookup_key}=${i.quantity}`);
+    expect(items.sort()).toEqual(['fbrx_blackhole_tenant_monthly=1', 'fbrx_command_tenant_monthly=1', 'fbrx_ultra_tenant_monthly=1']);
+    await ok('PATCH', `/v1/admin/devices/${devices[2]!.deviceId}`, { tier: 'ultra' }, admin);
+    expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).changed).toEqual(['fbrx_ultra_tenant_monthly=2']);
+
+    // The plan ends: the license goes, and the computers run Essentials.
+    await stripeEvent({ id: 'evt_t2', type: 'customer.subscription.deleted', data: { object: { ...stripe.subscriptions.get('sub_t'), status: 'canceled' } } });
+    expect((await config(1)).edition.tier).toBe('essentials');
+    expect((await config(1)).license).toBeNull();
   });
 
   it('lets the platform operator give an edition, and people delete their account', async () => {

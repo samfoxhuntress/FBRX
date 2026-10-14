@@ -495,4 +495,14 @@ export const CP_MIGRATIONS: Migration[] = [
       ALTER TABLE devices ADD COLUMN account_id TEXT;
     `,
   },
+  {
+    version: 10,
+    name: 'cloud-tenants',
+    // billing: 'manual' (the operator issues licenses) or 'cloud' (the organization pays for its FBRX Command plan and
+    // its computers). A console user made for an FBRX account signs in with the account's password.
+    up: `
+      ALTER TABLE tenants ADD COLUMN billing TEXT NOT NULL DEFAULT 'manual';
+      ALTER TABLE users ADD COLUMN account_id TEXT;
+    `,
+  },
 ];

@@ -683,6 +683,8 @@ export interface CoreMethods extends ExtMethods {
   'account.portal': () => { url: string };
   /** Joins this computer to an organization the account belongs to, at the edition it gives the account. */
   'account.join': (p: { tenantId: string }) => AccountStatus;
+  /** Starts an FBRX Command for the person's organization (in the cloud); answers with its console's address. */
+  'account.startOrganization': (p: { name: string; kind: 'business' | 'education' | 'home' }) => { consoleUrl: string; tenantId: string };
 
   'updates.status': () => UpdateStatus;
   'updates.check': () => UpdateStatus;
