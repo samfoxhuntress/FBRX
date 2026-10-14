@@ -1,4 +1,4 @@
-import { minTier, TIER_NAMES, type Tier } from './license';
+import { minTier, TIER_NAMES, type CeilingReason, type Tier } from './license';
 
 /**
  * Who an FBRX organization is and who uses each of its computers.
@@ -6,7 +6,7 @@ import { minTier, TIER_NAMES, type Tier } from './license';
  * - **Vertical** (the *kind* of tenant): **Work** (`business`), **School** (`education`: classroom defaults for staff,
  *   student computers possible) or **Home** (`home`: a family, with parents' and children's computers). Chosen when
  *   FBRX Command is set up or a tenant is created, and changeable later.
- * - **Audience**: who uses a computer. Staff (and parents) get FBRX Endpoint (Essentials, Standard or Ultra). Students (and children)
+ * - **Audience**: who uses a computer. Staff (and parents) get FBRX Endpoint (Essentials, Standard, Ultra or Black Hole). Students (and children)
  *   get **FBRX OS Education** (or Home): a narrowed, safe set of tools and a lightweight learning helper.
  *
  * The audience comes from the enrollment token or the computer's group in FBRX Command. A computer may always be
@@ -36,7 +36,7 @@ export const VERTICAL_INFO: Record<Vertical, VerticalInfo> = {
   business: {
     noun: 'company',
     tagline: 'A business, nonprofit or team: staff computers, IT tools and a help desk.',
-    computers: 'Staff on FBRX Endpoint up to Standard, IT up to Endpoint Ultra.',
+    computers: 'Staff on FBRX Endpoint up to Standard, IT up to Black Hole (as the license allows).',
     example: 'Harbor Lane Design',
     helpers: 'the IT team',
     learner: null,
@@ -44,7 +44,7 @@ export const VERTICAL_INFO: Record<Vertical, VerticalInfo> = {
   education: {
     noun: 'school',
     tagline: 'A school or co-op: classroom mode for teachers, safe student computers, a help desk to IT.',
-    computers: 'Teachers up to Standard in classroom mode, IT up to Ultra, students on FBRX OS Education.',
+    computers: 'Teachers up to Standard in classroom mode, IT up to Black Hole, students on FBRX OS Education.',
     example: 'Hillside Co-op',
     helpers: 'the IT team',
     learner: 'student',
@@ -77,11 +77,11 @@ export function learnerAudienceFor(vertical: Vertical): Audience | null {
 export const KIND_GROUPS: Record<Vertical, Array<{ name: string; description: string; audience: Audience; tier: Tier | null }>> = {
   business: [
     { name: 'Staff', description: 'Staff computers: FBRX Endpoint, up to Standard', audience: 'staff', tier: 'basic' },
-    { name: 'IT', description: 'IT and administrators: up to Endpoint Ultra; receives help desk tickets', audience: 'staff', tier: null },
+    { name: 'IT', description: 'IT and administrators: up to Black Hole, as the license allows; receives help desk tickets', audience: 'staff', tier: null },
   ],
   education: [
     { name: 'Teachers', description: 'Staff computers: up to Endpoint Standard, in classroom mode', audience: 'staff', tier: 'basic' },
-    { name: 'IT', description: 'IT and administrators: up to Endpoint Ultra; receives help desk tickets', audience: 'staff', tier: null },
+    { name: 'IT', description: 'IT and administrators: up to Black Hole, as the license allows; receives help desk tickets', audience: 'staff', tier: null },
     { name: 'Students', description: 'Student computers: FBRX OS Education', audience: 'student', tier: null },
   ],
   home: [
@@ -153,14 +153,16 @@ export interface EditionStatus {
   /** What the person chose, and the most this computer may run (the choices above it are locked). */
   chosen: Tier;
   ceiling: Tier;
-  ceilingReason: 'standalone' | 'organization' | 'license' | 'learner' | 'development';
+  ceilingReason: CeilingReason;
+  /** Until when Standard stays free on this computer, after an update from before 2.0. */
+  graceUntil: string | null;
   enrolled: boolean;
   /** The Essentials walkthrough was finished or skipped. */
   tourDone: boolean;
   vertical: Vertical;
   audience: Audience;
   learner: boolean;
-  /** "FBRX Endpoint Essentials", "FBRX Endpoint Standard", "FBRX Endpoint Ultra", "FBRX OS Education"… */
+  /** "FBRX Endpoint Essentials", "FBRX Endpoint Standard", "FBRX Endpoint Black Hole", "FBRX OS Education"… */
   productName: string;
 }
 

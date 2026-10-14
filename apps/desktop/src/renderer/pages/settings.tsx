@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import type { DeepPartial, Settings, Texture } from '@fbrx/shared';
-import { AUDIENCE_NAMES, TIER_NAMES, TIER_SHORT, UPDATE_CHANNELS, displayVersion, funEnabled, tierRank, type Tier } from '@fbrx/shared';
+import { AUDIENCE_NAMES, EDITION_PLANS, TIERS, TIER_NAMES, TIER_SHORT, UPDATE_CHANNELS, atLeast, displayVersion, formatPrice, funEnabled, tierRank, type Tier } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
@@ -14,7 +14,7 @@ import { SnippetSettings } from './settings-snippets';
 import { VoiceSettings } from './settings-voice';
 import { MemorySettings } from './settings-memory';
 import { AboutVersion, ReleasePanel } from '../release';
-import { UltraHint, useChooseEdition, useEditionStatus, useLearner, useTier, useVertical } from '../edition';
+import { UltraHint, graceLine, howToGet, useAtLeast, useChooseEdition, useEditionStatus, useLearner, useTier, useVertical } from '../edition';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -51,7 +51,7 @@ const sectionFromRoute = (): SectionId | null => (SECTIONS.some((x) => x.id === 
 
 export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   const tier = useTier();
-  const ultra = tier === 'ultra';
+  const ultra = atLeast(tier, 'ultra');
   const funUnlocked = useCore('settings.get', undefined, ['settings.changed']).data?.settings.appearance.funUnlocked ?? false;
   const learner = useLearner();
   const vertical = useVertical();
@@ -134,7 +134,6 @@ function EditionCard() {
       </div>
     );
   }
-  const ultra = l.tier === 'ultra';
   const by = l.source === 'managed' ? `Set by ${fleet?.tenantName ?? 'your organization'} (FBRX Command)` : l.source === 'development' ? 'Development build' : l.customer ? `Licensed to ${l.customer}` : null;
   const more = ed && tierRank(ed.ceiling) > tierRank(l.tier);
   return (
@@ -158,19 +157,30 @@ function EditionCard() {
 
 const TIER_BLURB: Record<Tier, string> = {
   essentials: 'Your own AI on this computer, and nothing else: the chat, its memory and voice, and the AI models.',
-  basic: 'The everyday tools and the agent, with a simple light or dark look.',
-  ultra: 'Everything is on: expert tool sets, Mesh, AI coordination, connections and plugins, and every theme.',
+  basic: 'The everyday tools and the agent, its controls, and a simple light or dark look.',
+  ultra: 'The expert tool sets, Mesh, AI coordination, connections and plugins, and every theme.',
+  blackhole: 'Everything is on: the whole Library, network environments, the FBRX Server page and every expert tool.',
 };
 
 const TIER_POINTS: Record<Tier, string[]> = {
   essentials: ['Your AI, ready to chat, running on this computer', 'Chat history, memory and voice', 'AI models: a bigger one, or another AI', 'A short sidebar, and a walkthrough'],
-  basic: ['Everything in Essentials', 'FBRX Glass, alerts, messages, notes, tasks and calendar', 'Storage, FBRX Shield, updates, network and backups', 'Files, the toolbox, approvals, credentials and macros'],
-  ultra: ['Everything in Standard', 'Terminal, Task Manager, the virtual lab and FBRX Server', 'Mesh & phone, AI coordination, connections and plugins', 'The theme studio and every look'],
+  basic: ['Everything in Essentials', 'Your AI’s controls: steps, answer length, how much it keeps in mind', 'FBRX Glass, alerts, messages, notes, tasks and calendar', 'Storage, FBRX Shield, updates, network, backups, files and the toolbox'],
+  ultra: ['Everything in Standard', 'Terminal, Task Manager and the virtual lab', 'Mesh & phone, AI coordination, connections and plugins', 'The theme studio and every look'],
+  blackhole: ['Everything in Ultra', 'The whole Library: The Lab and every FBRX command', 'Network environments (UniFi consoles) in Network Center', 'The FBRX Server page, for the people who run your servers'],
 };
 
+/** "$4.99 a month", "Free", "$24.99 a month, through FBRX Command". */
+function priceLine(t: Tier): ReactNode {
+  const p = EDITION_PLANS[t];
+  if (p.monthly === 0) return 'Free';
+  if (p.monthly == null) return <>{formatPrice(p.tenantMonthly)} <small>a month per computer, through FBRX Command</small></>;
+  return <>{formatPrice(p.monthly)} <small>a month, or {formatPrice(p.tenantMonthly)} through FBRX Command</small></>;
+}
+
 /**
- * Settings → Edition: Essentials (where a new computer starts), Standard (anyone switches to it) and Ultra (there to
- * turn on only when FBRX Command allows it), with why a choice is locked and the walkthrough again.
+ * Settings → Edition: Essentials (free, where a new computer starts), Standard and Ultra (bought, or through an
+ * organization's FBRX Command) and Black Hole (only through FBRX Command), with why a choice is locked and the
+ * walkthrough again.
  */
 function EditionSettings() {
   const ed = useEditionStatus();
@@ -179,16 +189,20 @@ function EditionSettings() {
   const why =
     ed.ceilingReason === 'development'
       ? 'Development build: every edition can be turned on.'
-      : ed.ceilingReason === 'standalone'
-        ? 'On its own, this computer goes up to Standard. Ultra comes from FBRX Command: when your organization adds this computer and allows it, Ultra unlocks here.'
-        : ed.ceilingReason === 'organization'
-          ? `Your organization (FBRX Command) lets this computer go up to ${TIER_SHORT[ed.ceiling]}.`
-          : `Your organization's license allows up to ${TIER_SHORT[ed.ceiling]}.`;
+      : ed.ceilingReason === 'grace'
+        ? `${graceLine(ed)} Standard is ${formatPrice(EDITION_PLANS.basic.monthly ?? 0)} a month after that; Essentials stays free.`
+        : ed.ceilingReason === 'standalone'
+          ? 'On its own, this computer runs Essentials for free. Standard and Ultra are bought on your FBRX account or with a license key (Settings → License), or come through your organization’s FBRX Command. Black Hole comes only through FBRX Command.'
+          : ed.ceilingReason === 'organization'
+            ? `Your organization (FBRX Command) lets this computer go up to ${TIER_SHORT[ed.ceiling]}.`
+            : ed.enrolled
+              ? `Your organization's license allows up to ${TIER_SHORT[ed.ceiling]}.`
+              : `Your license allows up to ${TIER_SHORT[ed.ceiling]}. Black Hole comes only through an organization's FBRX Command.`;
   return (
     <>
       <Card title="Edition" subtitle="How much of FBRX this computer shows. Switch any time: nothing you saved goes away.">
         <div className="ed-choices">
-          {(['essentials', 'basic', 'ultra'] as Tier[]).map((t) => {
+          {TIERS.map((t) => {
             const current = ed.tier === t;
             const locked = tierRank(t) > tierRank(ed.ceiling);
             return (
@@ -196,6 +210,7 @@ function EditionSettings() {
                 <h4>
                   {TIER_SHORT[t]} {locked && <Icons.lock size={13} />}
                 </h4>
+                <div className="ed-price">{priceLine(t)}</div>
                 <ul>
                   {TIER_POINTS[t].map((p) => (
                     <li key={p}>{p}</li>
@@ -206,7 +221,7 @@ function EditionSettings() {
                     <Status tone="good">On now</Status>
                   ) : locked ? (
                     <span className="fx-muted" style={{ fontSize: 12.5 }}>
-                      {t === 'ultra' && !ed.enrolled ? 'Comes from FBRX Command' : 'Not allowed on this computer'}
+                      {howToGet(t, ed)}
                     </span>
                   ) : (
                     <Button size="sm" variant={tierRank(t) > tierRank(ed.tier) ? 'primary' : undefined} loading={busy === t} onClick={() => void choose(t)}>
@@ -222,8 +237,11 @@ function EditionSettings() {
           {why}
           {ed.chosen !== ed.tier && tierRank(ed.chosen) > tierRank(ed.tier) && <> You chose {TIER_SHORT[ed.chosen]}; it runs {TIER_SHORT[ed.tier]} until that is allowed.</>}
         </p>
-        {!ed.enrolled && ed.ceilingReason === 'standalone' && (
+        {!ed.enrolled && (ed.ceilingReason === 'standalone' || ed.ceilingReason === 'grace') && (
           <div className="fx-actions" style={{ marginTop: 10 }}>
+            <Button size="sm" icon="key" onClick={() => navigate('settings/license')}>
+              Enter a license key
+            </Button>
             <Button size="sm" icon="globe" onClick={() => navigate('fleet')}>
               Join your organization
             </Button>
@@ -300,25 +318,25 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
           </Field>
           <Toggle checked={s.general.launchAtLogin} disabled={L('general.launchAtLogin')} onChange={(v) => void patch({ general: { launchAtLogin: v } })} label="Start FBRX when I sign in" />
           <Toggle checked={s.general.minimizeToTray} disabled={L('general.minimizeToTray')} onChange={(v) => void patch({ general: { minimizeToTray: v } })} label="Keep running in the tray when the window is closed" />
-          {(tier === 'ultra' || enrolled) && <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organization's control plane" />}
+          {(atLeast(tier, 'ultra') || enrolled) && <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organization's control plane" />}
         </div>
       </Card>
       {bridge.popOut && !learner && (
         <Card title="Windows" subtitle="Open these in a window of their own, to keep them beside FBRX or any other app. Right-click a page in the sidebar to open any page in a new window.">
           <div className="fx-form">
-            {tier === 'ultra' && <Toggle checked={s.windows.terminal} disabled={L('windows.terminal')} onChange={(v) => void patch({ windows: { terminal: v } })} label="The Terminal opens in its own window" />}
+            {atLeast(tier, 'ultra') && <Toggle checked={s.windows.terminal} disabled={L('windows.terminal')} onChange={(v) => void patch({ windows: { terminal: v } })} label="The Terminal opens in its own window" />}
             <Toggle checked={s.windows.agent} disabled={L('windows.agent')} onChange={(v) => void patch({ windows: { agent: v } })} label={`The chat with ${s.ai.agentName} opens in its own window`} />
           </div>
         </Card>
       )}
       {!learner && <Card title={`${s.ai.agentName}'s behavior`}>
         <div className="fx-form">
-          {tier === 'ultra' && (
+          {atLeast(tier, 'ultra') && (
             <Field label={<>Creativity (temperature): {s.ai.temperature} <Locked show={L('ai.temperature')} /></>} help="Lower is more precise. Ignored by models that manage this themselves.">
               <input type="range" min={0} max={1} step={0.05} disabled={L('ai.temperature')} value={s.ai.temperature} onChange={(e) => void patch({ ai: { temperature: Number(e.target.value) } })} />
             </Field>
           )}
-          <Field label={<>Agent instructions <Locked show={L('ai.systemPrompt')} /></>} help={tier === 'ultra' ? 'Standing instructions included in every conversation' : 'Included in every conversation. Add anything it should always know, such as "I teach 4th grade; keep answers short."'}>
+          <Field label={<>Agent instructions <Locked show={L('ai.systemPrompt')} /></>} help={atLeast(tier, 'ultra') ? 'Standing instructions included in every conversation' : 'Included in every conversation. Add anything it should always know, such as "I teach 4th grade; keep answers short."'}>
             <TextArea rows={8} disabled={L('ai.systemPrompt')} defaultValue={s.ai.systemPrompt} onBlur={(e) => e.target.value !== s.ai.systemPrompt && void patch({ ai: { systemPrompt: e.target.value } })} />
           </Field>
           <div>
@@ -348,7 +366,7 @@ const NAV_PREVIEW: Array<{ icon: IconName; sec: string }> = [
 /** Settings → Appearance → Sidebar icons: one color for a calm, single-color look, or a color for each section. */
 function NavIconsCard() {
   const { s, locked, patch } = useSettings();
-  const ultra = useTier() === 'ultra';
+  const ultra = useAtLeast('ultra');
   if (!s) return null;
   const a = s.appearance;
   const L = (p: string) => isLocked(locked, p);
@@ -406,7 +424,7 @@ function NavIconsCard() {
 
 function Appearance() {
   const { s, locked, patch } = useSettings();
-  const ultra = useTier() === 'ultra';
+  const ultra = useAtLeast('ultra');
   if (!s) return null;
   const a = s.appearance;
   const mode = resolvedMode(s.general.theme);
@@ -684,7 +702,9 @@ const RESOURCE_HELP = {
 function AgentSettings() {
   const { s, locked, patch } = useSettings();
   const [name, setName] = useState<string | null>(null);
-  const ultra = useTier() === 'ultra';
+  const ultra = useAtLeast('ultra');
+  // The AI's controls (unloading when idle, its work budget) come with Standard.
+  const standard = useAtLeast('basic');
   if (!s) return null;
   const L = (p: string) => isLocked(locked, p);
   return (
@@ -712,7 +732,7 @@ function AgentSettings() {
               ))}
             </div>
           </Field>
-          {ultra && <Field label={<>Unload the local model when idle <Locked show={L('runtime.idleStopMinutes')} /></>} help="Gives its memory back to the computer; it loads again with the next question (a few seconds).">
+          {standard && <Field label={<>Unload the local model when idle <Locked show={L('runtime.idleStopMinutes')} /></>} help="Gives its memory back to the computer; it loads again with the next question (a few seconds).">
             <Select
               value={String(s.runtime.idleStopMinutes)}
               disabled={L('runtime.idleStopMinutes')}
@@ -727,10 +747,19 @@ function AgentSettings() {
           </Field>}
         </div>
       </Card>
-      {ultra && (
+      {standard ? (
         <div style={{ gridColumn: '1 / -1' }}>
           <WorkBudget />
         </div>
+      ) : (
+        <Card title="Your AI’s controls" subtitle="Come with Standard">
+          <p className="fx-muted" style={{ margin: '0 0 10px' }}>
+            How many steps {s.ai.agentName} takes on a task, how long its answers may be, how much of a conversation it keeps in mind, and unloading the model when idle.
+          </p>
+          <Button size="sm" icon="layers" onClick={() => navigate('settings/edition')}>
+            See Standard
+          </Button>
+        </Card>
       )}
       <Card title={ultra ? 'Models and permissions' : 'AI model'}>
         <div className="fx-form">
@@ -864,7 +893,7 @@ function SpotlightSettings() {
 function Updates() {
   const { data: u } = useCore('updates.status', undefined, ['updates.changed']);
   const { s, locked, patch } = useSettings();
-  const ultra = useTier() === 'ultra';
+  const ultra = useAtLeast('ultra');
   const { run, busy } = useAction();
   if (!u || !s) return null;
   const release = (
@@ -925,7 +954,6 @@ function License() {
   const { run, busy } = useAction();
   const toast = useToast();
   if (!l || !s) return null;
-  const ultra = l.tier === 'ultra';
   const activate = () => {
     // 418: not a license at all, just a teapot. It unlocks the easter eggs, in every edition.
     if (key === '418') {
@@ -949,7 +977,7 @@ function License() {
       () =>
         call('license.activate', { key }).then((r) => {
           setKey('');
-          toast.success(r.tier === 'ultra' ? 'Welcome to Endpoint Ultra' : 'License activated', r.message ?? (r.tier === 'ultra' ? 'Every tool and theme is on.' : undefined));
+          toast.success(atLeast(r.ceiling ?? r.tier, 'ultra') ? 'License activated: Ultra is there to turn on' : 'License activated', r.message ?? (atLeast(r.ceiling ?? r.tier, 'ultra') ? 'Settings → Edition turns it on.' : undefined));
         }),
     );
   };
@@ -971,7 +999,7 @@ function License() {
         />
         {l.message && <Callout tone="info">{l.message}</Callout>}
       </Card>
-      <Card title={ultra ? 'Change the license key' : 'Upgrade to Endpoint Ultra'} subtitle={ultra ? 'Enrolled devices receive their license automatically' : 'Paste the license key from your organization or from FBRX. If it belongs to an FBRX Command tenant, this computer joins it too.'}>
+      <Card title={l.state === 'valid' ? 'Change the license key' : 'Enter a license key'} subtitle={l.source === 'managed' ? 'Computers in an organization receive their license automatically' : 'Paste the license key you bought or got from your organization. If it belongs to an FBRX Command tenant, this computer joins it too.'}>
         <div className="fx-form">
           <TextArea code rows={4} value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder="FBRX1.…" />
           <div className="fx-actions">
@@ -1043,7 +1071,7 @@ curl -N "${i.url}/v1/events?token=$FBRX_TOKEN"`}</pre>
 }
 
 function Logs() {
-  const ultra = useTier() === 'ultra';
+  const ultra = useAtLeast('ultra');
   const status = useCore('system.status');
   const [info, setInfo] = useState<{ version: string; dataDir: string; packaged: boolean } | null>(null);
   if (!info && bridge.appInfo) void bridge.appInfo().then((x) => x && setInfo(x));

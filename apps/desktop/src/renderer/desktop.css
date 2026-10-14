@@ -1625,6 +1625,12 @@ body.spotlight-body {
   color: #2fb6a0;
   background: color-mix(in srgb, #2fb6a0 12%, var(--surface-1));
 }
+/* Black Hole: a dark pill with a violet edge, the same in light and dark themes. */
+.tier-badge.blackhole {
+  border-color: color-mix(in srgb, #8a6cff 60%, transparent);
+  color: #ddd2ff;
+  background: radial-gradient(circle at 25% 50%, #000 0 30%, #1d1533 75%);
+}
 .fx-brand-name .tier-badge {
   margin-left: 4px;
 }
@@ -1655,6 +1661,10 @@ body.spotlight-body {
   border-radius: 12px;
   color: var(--accent);
   background: var(--accent-wash);
+}
+.ultra-only-icon.blackhole {
+  color: #ddd2ff;
+  background: radial-gradient(circle at 50% 50%, #000 0 30%, #2a1f4a 75%);
 }
 .ultra-hint {
   display: flex;
@@ -5902,6 +5912,14 @@ html[data-presenting='blur'] .private::selection {
   color: var(--text-secondary);
   font-size: 13px;
   line-height: 1.5;
+}
+.ed-choice .ed-price {
+  font-weight: 700;
+  font-size: 13px;
+}
+.ed-choice .ed-price small {
+  font-weight: 500;
+  color: var(--text-secondary);
 }
 .ed-choice .ed-choice-foot {
   margin-top: auto;

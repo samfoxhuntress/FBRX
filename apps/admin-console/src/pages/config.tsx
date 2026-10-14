@@ -41,7 +41,7 @@ interface Tenant {
 }
 
 const VERTICAL_HELP: Record<Vertical, string> = {
-  business: 'Staff computers run FBRX Endpoint: they open in Essentials and go up to Standard or Ultra as their group allows.',
+  business: 'Staff computers run FBRX Endpoint: they open in Essentials and go up to Standard, Ultra or Black Hole as their group allows.',
   education: 'Staff computers start in classroom mode (presenter-safe with a projector, chats offline first, no jokes), and student computers run FBRX OS Education.',
   home: "Parents' computers run FBRX Endpoint and get the children's requests for help; children's computers run FBRX OS Home with the same protections as students.",
 };
@@ -281,8 +281,8 @@ function GroupEditor({ group, vertical, profiles, versions, onClose, onSaved, on
             label="Edition"
             help={
               vertical === 'home'
-                ? "Computers open in Essentials; people switch up to this in Settings. Ultra is only there when this allows it."
-                : 'Computers open in Essentials; people switch up to this in Settings (teachers up to Standard, IT up to Ultra, say). Ultra is only there when this allows it.'
+                ? "Computers open in Essentials; people switch up to this in Settings. Black Hole is only there when this allows it."
+                : 'Computers open in Essentials; people switch up to this in Settings (teachers up to Standard, IT up to Black Hole, say). Black Hole is only there when this allows it.'
             }
           >
             <Select value={f.tier} disabled={isLearner((f.audience || null) as Audience | null)} onChange={(e) => setF({ ...f, tier: e.target.value as Tier | '' })} options={tierLimitOptions('Up to what the license allows')} />

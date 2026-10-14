@@ -25,33 +25,40 @@ export const EDITION_FEATURES: Record<Edition, Feature[]> = {
 };
 
 /**
- * The three FBRX Endpoint editions, lightest first.
- * - **Essentials**: where every new computer starts. The AI on its own: the chat, the AI models and Settings, and a
- *   walkthrough.
- * - **Standard** (`basic`, its id from when it was called Basic): the everyday tools as well. Anyone may switch to it in
- *   Settings → Edition.
- * - **Ultra**: expert tool sets, Mesh and AI coordination, connections and plugins, and the theme studio. It unlocks
- *   only through FBRX Command: the organization's license allows it, and nothing holds the computer or its group
- *   below it.
+ * The four FBRX Endpoint editions, lightest first (prices in plans.ts).
+ * - **Essentials** (free): where every new computer starts. The AI on its own: the chat, the AI models and Settings,
+ *   and a walkthrough. It joins an organization's FBRX Command for free.
+ * - **Standard** (`basic`, its id from when it was called Basic): the everyday tools, and the first edition with the
+ *   AI's controls (its work budget: steps, answer length, how much of a conversation it keeps in mind).
+ * - **Ultra**: expert tool sets, Mesh and AI coordination, connections and plugins, and the theme studio. Bought on its
+ *   own (an FBRX account) or through an organization's FBRX Command.
+ * - **Black Hole** (`blackhole`): everything, for the people who run an organization's FBRX Command or an FBRX Server:
+ *   the whole Library, network environments (UniFi) in Network Center, the FBRX Server page. Only as an add-on in an
+ *   FBRX Command tenant.
  * The easter eggs come with every edition, once 418 unlocks them.
  */
-export const TIERS = ['essentials', 'basic', 'ultra'] as const;
+export const TIERS = ['essentials', 'basic', 'ultra', 'blackhole'] as const;
 export type Tier = (typeof TIERS)[number];
-export const TIER_NAMES: Record<Tier, string> = { essentials: 'FBRX Endpoint Essentials', basic: 'FBRX Endpoint Standard', ultra: 'FBRX Endpoint Ultra' };
-/** "Essentials", "Standard", "Ultra" (badges, buttons). */
-export const TIER_SHORT: Record<Tier, string> = { essentials: 'Essentials', basic: 'Standard', ultra: 'Ultra' };
+export const TIER_NAMES: Record<Tier, string> = { essentials: 'FBRX Endpoint Essentials', basic: 'FBRX Endpoint Standard', ultra: 'FBRX Endpoint Ultra', blackhole: 'FBRX Endpoint Black Hole' };
+/** "Essentials", "Standard", "Ultra", "Black Hole" (badges, buttons). */
+export const TIER_SHORT: Record<Tier, string> = { essentials: 'Essentials', basic: 'Standard', ultra: 'Ultra', blackhole: 'Black Hole' };
 /** What a license key can grant (a license never asks for Essentials: that is the person's choice). */
-export const LICENSE_TIERS = ['basic', 'ultra'] as const;
+export const LICENSE_TIERS = ['basic', 'ultra', 'blackhole'] as const;
 
 export const tierRank = (t: Tier): number => TIERS.indexOf(t);
 /** The lighter of two editions. */
 export const minTier = (a: Tier, b: Tier): Tier => (tierRank(a) <= tierRank(b) ? a : b);
-/** Accepts an edition's id or name (essentials, standard, basic, ultra), e.g. from FBRX_EDITION. */
+/** The fuller of two editions. */
+export const maxTier = (a: Tier, b: Tier): Tier => (tierRank(a) >= tierRank(b) ? a : b);
+/** Whether an edition includes what `min` has (Black Hole has everything Ultra has, and so on). */
+export const atLeast = (t: Tier | null | undefined, min: Tier): boolean => !!t && tierRank(t) >= tierRank(min);
+/** Accepts an edition's id or name (essentials, standard, basic, ultra, black hole), e.g. from FBRX_EDITION. */
 export function parseTier(raw: string | null | undefined): Tier | null {
-  const v = String(raw ?? '').trim().toLowerCase();
+  const v = String(raw ?? '').trim().toLowerCase().replace(/[\s_-]+/g, '');
   if (v === 'essentials' || v === 'essential') return 'essentials';
   if (v === 'standard' || v === 'basic') return 'basic';
   if (v === 'ultra') return 'ultra';
+  if (v === 'blackhole') return 'blackhole';
   return null;
 }
 
@@ -96,6 +103,9 @@ export type LicensePayload = z.infer<typeof LicensePayloadSchema>;
 
 export const LICENSE_PREFIX = 'FBRX1';
 
+/** Why a computer may run no more than it does (see LicenseStatus.ceiling). */
+export type CeilingReason = 'standalone' | 'grace' | 'organization' | 'license' | 'learner' | 'development';
+
 export interface LicenseStatus {
   state: 'unlicensed' | 'valid' | 'expired' | 'invalid' | 'development';
   edition: Edition;
@@ -103,9 +113,15 @@ export interface LicenseStatus {
   tier: Tier;
   /** The edition the person chose in Settings → Edition (Essentials on a new computer). */
   chosen?: Tier;
-  /** The most this computer may run, and why: on its own (Standard), or what FBRX Command allows. */
+  /**
+   * The most this computer may run, and why: on its own, Essentials (`standalone`), Standard for a while after an update
+   * from before 2.0 (`grace`) or what was bought (`license`, up to Ultra); in an organization, what its license allows
+   * (`license`) held lower by FBRX Command (`organization`).
+   */
   ceiling?: Tier;
-  ceilingReason?: 'standalone' | 'organization' | 'license' | 'learner' | 'development';
+  ceilingReason?: CeilingReason;
+  /** Until when Standard stays free on this computer (`grace`). */
+  graceUntil?: string | null;
   customer: string | null;
   tenantId: string | null;
   licenseId: string | null;

@@ -24,8 +24,8 @@ describe('trophy case', () => {
     }
     const { kernel, cleanup } = await makeKernel();
     try {
-      expect(kernel.license.status().tier).toBe('ultra');
-      // Ultra alone is not enough: they stay hidden until someone enters 418.
+      expect(kernel.license.status().tier).toBe('blackhole');
+      // The fullest edition alone is not enough: they stay hidden until someone enters 418.
       expect(await kernel.call('fun.unlock', { id: 'loom' }, USER)).toEqual({ unlocked: false, golden: false });
       kernel.settings.update({ appearance: { funUnlocked: true } });
       const events: any[] = [];

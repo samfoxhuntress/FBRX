@@ -36,7 +36,7 @@ export function LicensesPage() {
   return (
     <Page
       title="Licenses"
-      description="Each customer is a tenant with a signed license (product, edition, seats, features, expiry). Computers open in FBRX Endpoint Essentials and go up to Standard on their own; Ultra comes when they are in this tenant and the license allows it. A key that joins the tenant enrolls the computer here on its own. Licenses are verified offline by the app using your public key and delivered automatically to enrolled devices."
+      description="Each customer is a tenant with a signed license (product, edition, seats, features, expiry). Computers open in FBRX Endpoint Essentials, free. A license key goes up to Ultra on a computer on its own; Black Hole comes only when the computer is in this tenant and the license allows it. A key that joins the tenant enrolls the computer here on its own. Licenses are verified offline by the app using your public key and delivered automatically to enrolled devices."
       actions={
         manage && app.tenantId ? (
           <Button variant="primary" icon="plus" onClick={() => setIssuing(true)}>
@@ -154,12 +154,13 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
       }
     >
       <div className="fx-form">
-        <Field label="Product on the computers" help="The most FBRX Endpoint may run with this license. Computers open in Essentials and switch up in Settings; Ultra only in this organization (FBRX Command).">
+        <Field label="Product on the computers" help="The most FBRX Endpoint may run with this license. Computers open in Essentials and switch up in Settings. Black Hole works only in this organization (FBRX Command); on a computer on its own, the license goes up to Ultra.">
           <Select
             value={f.tier}
             onChange={(e) => setF({ ...f, tier: e.target.value as Tier | 'auto' })}
             options={[
               { value: 'auto', label: `By edition (up to ${TIER_NAMES[tierFor(f.edition)]})` },
+              { value: 'blackhole', label: `Up to ${TIER_NAMES.blackhole}` },
               { value: 'ultra', label: `Up to ${TIER_NAMES.ultra}` },
               { value: 'basic', label: `Up to ${TIER_NAMES.basic}` },
             ]}

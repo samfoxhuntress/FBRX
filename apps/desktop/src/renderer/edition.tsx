@@ -1,15 +1,17 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import { TIER_NAMES, TIER_SHORT, type EditionStatus, type Tier, type Vertical } from '@fbrx/shared';
+import { EDITION_PLANS, TIER_NAMES, TIER_SHORT, atLeast, formatPrice, type EditionStatus, type Tier, type Vertical } from '@fbrx/shared';
 import { Button, Card, Icons, useToast } from '@fbrx/ui';
 import { useCore } from './hooks';
 import { call } from './client';
 import { navigate } from './app';
 
 /**
- * FBRX Endpoint Essentials, Standard or Ultra (see TIERS in @fbrx/shared). Every new computer opens in Essentials: the
- * AI on its own (the chat, the AI models, Settings) and a walkthrough. Standard adds the everyday tools; anyone
- * switches to it in Settings → Edition, or from a page that is in Standard. Ultra (expert tool sets, Mesh, AI
- * coordination, connections and plugins, the theme studio) is there to turn on only when FBRX Command allows it.
+ * FBRX Endpoint Essentials, Standard, Ultra or Black Hole (see TIERS in @fbrx/shared, prices in plans.ts). Every new
+ * computer opens in Essentials, free: the AI on its own (the chat, the AI models, Settings) and a walkthrough.
+ * Standard adds the everyday tools and the AI's controls; Ultra the expert tool sets, Mesh, AI coordination,
+ * connections and plugins and the theme studio. Both are bought (an FBRX account or a license key) or come through an
+ * organization's FBRX Command. Black Hole (everything: the whole Library, network environments, the FBRX Server page)
+ * comes only through FBRX Command.
  */
 export const TierContext = createContext<Tier>('basic');
 
@@ -38,6 +40,30 @@ export function useLicenseTier(): Tier | undefined {
 }
 
 export const ULTRA = TIER_NAMES.ultra;
+
+/** Whether this computer runs at least `min` (Black Hole has everything Ultra has, and so on). */
+export function useAtLeast(min: Tier): boolean {
+  return atLeast(useTier(), min);
+}
+
+/**
+ * How this computer could get `tier`, in a sentence: it may already (turn it on), its organization decides, it is
+ * bought, or (Black Hole) it comes only through an organization.
+ */
+export function howToGet(tier: Tier, ed: EditionStatus | null): string {
+  const plan = EDITION_PLANS[tier];
+  if (ed && atLeast(ed.ceiling, tier)) return `${TIER_SHORT[tier]} is allowed on this computer: turn it on and it is there.`;
+  if (ed?.ceilingReason === 'organization' || ed?.enrolled) return `Your organization keeps this computer on ${TIER_SHORT[ed.ceiling]} for now (in FBRX Command). Ask your IT team if you need ${TIER_SHORT[tier]}.`;
+  if (plan.monthly == null) return `${TIER_SHORT[tier]} comes only through an organization's FBRX Command, for the people who run it and its FBRX Servers.`;
+  return `${TIER_SHORT[tier]} is ${formatPrice(plan.monthly)} a month on your FBRX account, or comes through your organization's FBRX Command.`;
+}
+
+/** "Standard stays free on this computer until November 13, 2026…" after an update from before 2.0, else null. */
+export function graceLine(ed: EditionStatus | null): string | null {
+  if (ed?.ceilingReason !== 'grace' || !ed.graceUntil) return null;
+  const until = new Date(ed.graceUntil).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+  return `${TIER_SHORT[ed.ceiling]} stays free on this computer until ${until}, as a thank-you for using FBRX before 2.0.`;
+}
 
 /** What this computer runs, may run, and why (Settings → Edition, the walkthrough). */
 export function useEditionStatus(): EditionStatus | null {
@@ -69,7 +95,6 @@ export function StandardOnly({ title, what }: { title: string; what: string }) {
   const ed = useEditionStatus();
   const { choose, busy } = useChooseEdition();
   const held = ed?.ceiling === 'essentials';
-  const heldBy = ed?.ceilingReason === 'organization' ? 'Your organization keeps this computer on Essentials. Ask your IT team if you need more.' : 'This computer is kept on Essentials.';
   return (
     <div className="ultra-only">
       <Card>
@@ -83,9 +108,7 @@ export function StandardOnly({ title, what }: { title: string; what: string }) {
             </h2>
             <p className="fx-muted">{what}</p>
             <p className="fx-muted">
-              {held
-                ? heldBy
-                : 'Essentials is your AI on its own. Standard adds the everyday tools, and you can switch back any time.'}
+              {held ? howToGet('basic', ed) : 'Essentials is your AI on its own. Standard adds the everyday tools, and you can switch back any time.'}
             </p>
             <div className="fx-actions">
               {!held && (
@@ -104,8 +127,8 @@ export function StandardOnly({ title, what }: { title: string; what: string }) {
   );
 }
 
-/** Where an Ultra page would be, in Essentials or Standard: what it does and how to get it. */
-export function UltraOnly({ title, what, learner }: { title: string; what: string; learner?: boolean }) {
+/** Where an Ultra (or Black Hole) page would be, in a lighter edition: what it does and how to get it. */
+export function UltraOnly({ title, what, learner, need = 'ultra' }: { title: string; what: string; learner?: boolean; need?: 'ultra' | 'blackhole' }) {
   const ed = useEditionStatus();
   const { choose, busy } = useChooseEdition();
   if (learner) {
@@ -130,30 +153,24 @@ export function UltraOnly({ title, what, learner }: { title: string; what: strin
       </div>
     );
   }
-  const allowed = ed?.ceiling === 'ultra';
+  const allowed = atLeast(ed?.ceiling, need);
   return (
     <div className="ultra-only">
       <Card>
         <div className="ultra-only-body">
-          <span className="ultra-only-icon" aria-hidden>
-            <Icons.sparkles size={22} />
+          <span className={`ultra-only-icon${need === 'blackhole' ? ' blackhole' : ''}`} aria-hidden>
+            {need === 'blackhole' ? <Icons.layers size={22} /> : <Icons.sparkles size={22} />}
           </span>
           <div>
             <h2>
-              {title} is part of {ULTRA}
+              {title} is part of {TIER_NAMES[need]}
             </h2>
             <p className="fx-muted">{what}</p>
-            <p className="fx-muted">
-              {allowed
-                ? 'Your organization allows Ultra on this computer: turn it on and it is there.'
-                : ed?.enrolled
-                  ? `Your organization keeps this computer on ${TIER_SHORT[ed.ceiling]} for now (in FBRX Command). Ask your IT team if you need Ultra.`
-                  : 'Ultra comes from FBRX Command: once your organization adds this computer and allows Ultra, you turn it on in Settings → Edition.'}
-            </p>
+            <p className="fx-muted">{howToGet(need, ed)}</p>
             <div className="fx-actions">
               {allowed ? (
-                <Button variant="primary" icon="sparkles" loading={busy === 'ultra'} onClick={() => void choose('ultra')}>
-                  Turn on Ultra
+                <Button variant="primary" icon="sparkles" loading={busy === need} onClick={() => void choose(need)}>
+                  Turn on {TIER_SHORT[need]}
                 </Button>
               ) : !ed?.enrolled ? (
                 <Button variant="primary" icon="globe" onClick={() => navigate('fleet')}>
@@ -171,13 +188,13 @@ export function UltraOnly({ title, what, learner }: { title: string; what: strin
   );
 }
 
-/** A short line under a screen that has more in Ultra. */
-export function UltraHint({ children }: { children: ReactNode }) {
+/** A short line under a screen that has more in Ultra (or in another edition, `tier`). */
+export function UltraHint({ children, tier = 'ultra' }: { children: ReactNode; tier?: Tier }) {
   return (
     <div className="ultra-hint">
       <Icons.sparkles size={13} /> <span>{children}</span>{' '}
       <button className="link-btn" onClick={() => navigate('settings/edition')}>
-        About Ultra
+        About {TIER_SHORT[tier]}
       </button>
     </div>
   );

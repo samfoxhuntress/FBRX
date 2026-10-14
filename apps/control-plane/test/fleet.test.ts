@@ -266,9 +266,9 @@ describe('control plane ⇄ device fleet', () => {
     try {
       k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, protection: { shield: { updateSignatures: false } } });
       await k.start();
-      // A new computer on its own: Essentials, Standard at most.
-      expect(k.license.status()).toMatchObject({ tier: 'essentials', ceiling: 'basic', ceilingReason: 'standalone' });
-      await expect(k.call('edition.choose', { tier: 'ultra' }, USER)).rejects.toThrow(/comes through FBRX Command/);
+      // A new computer on its own: Essentials, free (Standard and Ultra are bought).
+      expect(k.license.status()).toMatchObject({ tier: 'essentials', ceiling: 'essentials', ceilingReason: 'standalone' });
+      await expect(k.call('edition.choose', { tier: 'ultra' }, USER)).rejects.toThrow(/\$11\.99 a month/);
       const st = (await k.call('license.activate', { key: lic.key }, USER)) as any;
       // In the organization, Ultra is there to turn on (the person still chooses).
       expect(st).toMatchObject({ state: 'valid', tier: 'essentials', ceiling: 'ultra', commandUrl: base });
@@ -280,8 +280,8 @@ describe('control plane ⇄ device fleet', () => {
       await k.call('fleet.unenroll', {}, USER);
       expect(await k.joinLicenseTenant('test')).toMatchObject({ joined: false });
       expect(k.fleet.enrolled).toBe(false);
-      // Out of the organization, Ultra goes with it.
-      expect(k.license.status()).toMatchObject({ tier: 'basic', chosen: 'ultra', ceiling: 'basic' });
+      // Out of the organization, Ultra goes with it: the organization's license counts only there.
+      expect(k.license.status()).toMatchObject({ tier: 'essentials', chosen: 'ultra', ceiling: 'essentials', ceilingReason: 'standalone' });
       // The tenant decides the product: an Enterprise license can still allow only Endpoint Standard.
       expect(await api('POST', '/v1/admin/licenses', { edition: 'enterprise', seats: 0, tier: 'basic' }, asD)).toMatchObject({ tier: 'basic', commandUrl: null });
     } finally {

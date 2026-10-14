@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Snippet } from '@fbrx/shared';
+import { atLeast, type Snippet } from '@fbrx/shared';
 import { Button, Card, Icons, Input, useToast } from '@fbrx/ui';
 import { call } from './client';
 import { navigate } from './app';
@@ -9,6 +9,7 @@ import { useSlashMenu } from './slash-menu';
 import { FBRX_COMMAND_SETS, type FbrxCommand, type FbrxCommandSet } from './fbrx-command-data';
 import { addToMacros } from './macro-add';
 import { menuFor } from './context-menu';
+import { useLicenseTier } from './edition';
 
 /**
  * FBRX/1: the FBRX management console, in the spirit of a network operating system's CLI. "show" reads, "request"
@@ -109,13 +110,11 @@ const SERVER_SETS = FBRX_COMMAND_SETS.filter((set) => set.kind === 'server');
 
 /**
  * The console with its library beside it. "prefill" types a command in, ready to run (from the Library). The FBRX
- * Server and FBRX Gate commands join the library once they are found in the Library (Fun Mode's operator trophy), or
- * straight away with Fun Mode off, the same as the Library's FBRX commands.
+ * Server and FBRX Gate commands join the library in Black Hole, the same as the Library's FBRX commands.
  */
-export function Fbrx1Panel({ prefill, easterEggs }: { prefill?: string; easterEggs: boolean }) {
+export function Fbrx1Panel({ prefill }: { prefill?: string }) {
   const api = useRef<ConsoleApi | null>(null);
-  const trophies = useCore('fun.trophies', undefined, ['fun.trophy']);
-  const servers = !easterEggs || !!trophies.data?.unlocked.operator;
+  const servers = atLeast(useLicenseTier(), 'blackhole');
   useEffect(() => {
     if (prefill) api.current?.insert(prefill);
   }, [prefill]);

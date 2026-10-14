@@ -843,13 +843,14 @@ function Adapters() {
 
 const NET_TABS: Tab[] = ['overview', 'environments', 'trace', 'devices', 'speed', 'wifi', 'bluetooth', 'printers', 'tools', 'adapters'];
 
-export function NetworkPage({ advanced, easterEggs }: { advanced: boolean; easterEggs: boolean }) {
+export function NetworkPage({ advanced, everything, easterEggs }: { advanced: boolean; everything: boolean; easterEggs: boolean }) {
   // network/speed, network/printers… open that tab directly.
   const [tab, setTab] = useState<Tab>(() => (NET_TABS.includes(routeArg() as Tab) ? (routeArg() as Tab) : 'overview'));
-  // Endpoint Essentials and Standard keep the everyday tabs; Ultra adds the IT ones and the network environments.
-  const all: Array<{ id: Tab; label: ReactNode; ultra?: boolean }> = [
+  // Endpoint Essentials and Standard keep the everyday tabs; Ultra adds the IT ones, Black Hole the network
+  // environments (UniFi consoles).
+  const all: Array<{ id: Tab; label: ReactNode; ultra?: boolean; blackhole?: boolean }> = [
     { id: 'overview', label: 'Overview' },
-    { id: 'environments', label: advancedLabel('Environments'), ultra: true },
+    { id: 'environments', label: advancedLabel('Environments', true), ultra: true, blackhole: true },
     { id: 'trace', label: 'Ping & trace', ultra: true },
     { id: 'devices', label: 'Devices', ultra: true },
     { id: 'speed', label: 'Speed' },
@@ -859,12 +860,13 @@ export function NetworkPage({ advanced, easterEggs }: { advanced: boolean; easte
     { id: 'tools', label: 'Tools', ultra: true },
     ...(IS_WINDOWS ? [{ id: 'adapters' as const, label: advancedLabel('Adapters'), ultra: true }] : []),
   ];
-  const tabs = all.filter((t) => advanced || !t.ultra);
+  const tabs = all.filter((t) => (advanced || !t.ultra) && (everything || !t.blackhole)).map(({ ultra: _u, blackhole: _b, ...t }) => t);
   const shown = tabs.some((t) => t.id === tab) ? tab : 'overview';
   return (
     <Page title="Network Center" description={advanced ? 'See how this PC connects, what else is on your network, and what is slowing things down.' : 'See how this computer connects and what is slowing things down.'}>
       <Tabs tabs={tabs} active={shown} onChange={setTab} />
-      {!advanced && shown === 'overview' && <UltraHint>Network scans, device consoles and attaching your school or office network (UniFi) come with Endpoint Ultra.</UltraHint>}
+      {!advanced && shown === 'overview' && <UltraHint>Network scans and device consoles come with Endpoint Ultra.</UltraHint>}
+      {advanced && !everything && shown === 'overview' && <UltraHint tier="blackhole">Attaching your school or office network (a UniFi console) comes with Black Hole, through your organization’s FBRX Command.</UltraHint>}
       {shown === 'overview' && <Overview />}
       {shown === 'environments' && <Environments />}
       {shown === 'trace' && <Trace />}

@@ -25,28 +25,42 @@ describe('licensing', () => {
         { v: 1, lid: 'lic_1', tenantId: 't', customer: 'Acme', edition: 'enterprise', seats: 5, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null },
         keys.privateKeyPem,
       );
-      // A new computer opens in Essentials; on its own it may go up to Standard.
-      expect(kernel.license.status()).toMatchObject({ tier: 'essentials', chosen: 'essentials', ceiling: 'basic', ceilingReason: 'standalone' });
-      expect(kernel.edition()).toMatchObject({ productName: 'FBRX Endpoint Essentials', tourDone: false });
+      // A new computer opens in Essentials, free; on its own, Standard and Ultra are bought.
+      expect(kernel.license.status()).toMatchObject({ tier: 'essentials', chosen: 'essentials', ceiling: 'essentials', ceilingReason: 'standalone', graceUntil: null });
+      expect(kernel.edition()).toMatchObject({ productName: 'FBRX Endpoint Essentials', tourDone: false, graceUntil: null });
+      await expect(kernel.call('edition.choose', { tier: 'basic' }, USER)).rejects.toThrow(/FBRX Endpoint Standard is \$4\.99 a month/);
       const status = (await kernel.call('license.activate', { key }, USER)) as any;
-      // The license turns on its features; Ultra still comes only through FBRX Command.
-      expect(status).toMatchObject({ state: 'valid', edition: 'enterprise', tier: 'essentials', ceiling: 'basic', commandUrl: null });
+      // A license (one bought for this computer) turns on its features and goes up to Ultra; Black Hole comes only
+      // through an organization.
+      expect(status).toMatchObject({ state: 'valid', edition: 'enterprise', tier: 'essentials', ceiling: 'ultra', ceilingReason: 'license', commandUrl: null });
       await waitFor(() => kernel.services.get('plugins')?.state === 'running');
-      await expect(kernel.call('edition.choose', { tier: 'ultra' }, USER)).rejects.toThrow(/comes through FBRX Command/);
+      await expect(kernel.call('edition.choose', { tier: 'blackhole' }, USER)).rejects.toThrow(/comes only through an organization's FBRX Command/);
       expect(await kernel.call('edition.choose', { tier: 'basic' }, USER)).toMatchObject({ tier: 'basic', productName: 'FBRX Endpoint Standard' });
+      expect(await kernel.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra', productName: 'FBRX Endpoint Ultra' });
       // Only the person at the computer chooses.
       await expect(kernel.call('edition.choose', { tier: 'essentials' }, { origin: 'api', actor: 'localapi:x' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
       await kernel.call('license.remove', {}, USER);
       await waitFor(() => kernel.services.get('plugins')?.state === 'disabled');
-      expect(kernel.license.status().tier).toBe('basic');
+      expect(kernel.license.status()).toMatchObject({ tier: 'essentials', chosen: 'ultra', ceiling: 'essentials' });
 
       // In an organization (FBRX Command): what its license allows, held lower for the computer or its group.
       kernel.meta.set('fleet.deviceId', 'dev_test');
       const sign = (over: object) => signLicense({ v: 1, lid: 'lic_t', tenantId: 't', customer: 'Acme', edition: 'enterprise', seats: 5, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null, ...over }, keys.privateKeyPem);
       expect(await kernel.call('license.activate', { key: sign({ edition: 'community' }) }, USER)).toMatchObject({ ceiling: 'basic', ceilingReason: 'license' });
       expect(await kernel.call('license.activate', { key: sign({ tier: 'basic' }) }, USER)).toMatchObject({ edition: 'enterprise', ceiling: 'basic' });
-      expect(await kernel.call('license.activate', { key: sign({ edition: 'community', tier: 'ultra' }) }, USER)).toMatchObject({ ceiling: 'ultra', tier: 'basic' });
+      expect(await kernel.call('license.activate', { key: sign({ edition: 'community', tier: 'ultra' }) }, USER)).toMatchObject({ ceiling: 'ultra', tier: 'ultra' });
+      await expect(kernel.call('edition.choose', { tier: 'blackhole' }, USER)).rejects.toThrow(/license allows up to FBRX Endpoint Ultra/);
+      // Black Hole: only in an organization whose license allows it.
+      expect(await kernel.call('license.activate', { key: sign({ tier: 'blackhole' }) }, USER)).toMatchObject({ ceiling: 'blackhole', tier: 'ultra' });
+      expect(await kernel.call('edition.choose', { tier: 'blackhole' }, USER)).toMatchObject({ tier: 'blackhole', productName: 'FBRX Endpoint Black Hole' });
+      expect(kernel.ultraOnly('Mesh')).toBeNull();
+      expect(kernel.blackHoleOnly('Network environments')).toBeNull();
+      // The same license on a computer on its own goes up to Ultra.
+      kernel.meta.delete('fleet.deviceId');
+      expect(kernel.license.refresh()).toMatchObject({ tier: 'ultra', chosen: 'blackhole', ceiling: 'ultra', ceilingReason: 'license' });
+      expect(kernel.blackHoleOnly('Network environments')).toMatch(/come with FBRX Endpoint Black Hole/);
+      kernel.meta.set('fleet.deviceId', 'dev_test');
       expect(await kernel.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra' });
       kernel.meta.set('fleet.edition', { vertical: 'business', audience: 'staff', tier: 'essentials', helpdesk: { enabled: true, receiver: false }, autoUpdate: 'notify' });
       expect(kernel.license.refresh()).toMatchObject({ tier: 'essentials', chosen: 'ultra', ceiling: 'essentials', ceilingReason: 'organization' });
@@ -63,16 +77,25 @@ describe('licensing', () => {
   it('keeps the edition of a computer set up before Essentials existed', async () => {
     const dataDir = tempDir();
     const first = await makeKernel({ dataDir, devMode: false });
-    // As a computer from before: set up, and no edition chosen yet.
+    // As a computer from before: set up, and no edition chosen yet (nor anything from 2.0).
     first.kernel.settings.update({ general: { onboardingComplete: true } });
     first.kernel.meta.delete('edition.chosen');
     first.kernel.meta.delete('edition.tourDone');
+    first.kernel.meta.delete('edition.v2');
     await first.cleanup();
     const again = await makeKernel({ dataDir, devMode: false, keychain: first.keychain });
     try {
-      // It keeps the most it may run (on its own, Standard) and is not walked through the app again.
-      expect(again.kernel.license.status()).toMatchObject({ chosen: 'ultra', tier: 'basic', ceiling: 'basic' });
-      expect(again.kernel.edition().tourDone).toBe(true);
+      // It keeps the most it ran on its own (Standard), free for 30 days, and is not walked through the app again.
+      const st = again.kernel.license.status();
+      expect(st).toMatchObject({ chosen: 'ultra', tier: 'basic', ceiling: 'basic', ceilingReason: 'grace' });
+      expect(Date.parse(st.graceUntil!) - Date.now()).toBeGreaterThan(29 * 86_400_000);
+      expect(again.kernel.edition()).toMatchObject({ tourDone: true, ceilingReason: 'grace', graceUntil: st.graceUntil });
+      // Then Essentials, unless Standard is bought.
+      again.kernel.meta.set('edition.grace', { tier: 'basic', until: new Date(Date.now() - 1000).toISOString() });
+      expect(again.kernel.license.refresh()).toMatchObject({ tier: 'essentials', ceiling: 'essentials', ceilingReason: 'standalone', graceUntil: null });
+      // It was given once: starting again does not give it again.
+      again.kernel.license.beginGrace(true);
+      expect(again.kernel.license.refresh()).toMatchObject({ tier: 'essentials' });
     } finally {
       await again.cleanup();
       rmSync(dataDir, { recursive: true, force: true });

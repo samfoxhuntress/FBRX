@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { CalendarEvent, ProtectionState, SystemLive, SystemStatus } from '@fbrx/shared';
-import { TIER_NAMES, TROPHIES, displayVersion } from '@fbrx/shared';
+import { TIER_NAMES, TROPHIES, atLeast, displayVersion } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Grid, Icons, KeyValue, LineChart, Meter, StatTile, Status, formatBytes, formatDuration, timeAgo, useAction, type IconName } from '@fbrx/ui';
 import { call, onEvent, openExternal } from '../client';
 import { useCore, useStarterAi } from '../hooks';
@@ -164,7 +164,7 @@ function LooseTip({ fun }: { fun: boolean }) {
     ? vertical === 'home'
       ? HOME_LEARNER_TIPS
       : LEARNER_TIPS
-    : tier === 'ultra'
+    : atLeast(tier, 'ultra')
       ? [...ALL_TIPS, ...STANDARD_TIPS, ...ULTRA_TIPS]
       : tier === 'basic'
         ? [...ALL_TIPS, ...STANDARD_TIPS]

@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import type { Settings, Texture, ThemePreset, Tier } from '@fbrx/shared';
+import { atLeast, type Settings, type Texture, type ThemePreset, type Tier } from '@fbrx/shared';
 
 /** Swatch colors for the preset picker: [page, sidebar, accent, glow] for light and dark. */
 export const PRESETS: Array<{ id: ThemePreset; name: string; light: [string, string, string, string?]; dark: [string, string, string, string?]; texture: Exclude<Texture, 'theme'> }> = [
@@ -180,7 +180,7 @@ export function resolvedMode(theme: Settings['general']['theme']): 'light' | 'da
  */
 export function useAppearance(settings: Settings | undefined, tier: Tier | undefined) {
   const theme = settings?.general.theme ?? 'dark';
-  const basic = !!tier && tier !== 'ultra';
+  const basic = !!tier && !atLeast(tier, 'ultra');
   const a = settings && basic ? { ...settings.appearance, preset: 'graphite' as const, texture: 'none' as const, accent: '' } : settings?.appearance;
   useEffect(() => {
     // Wait for the license, so Basic never flashes the Ultra look (or the other way round).

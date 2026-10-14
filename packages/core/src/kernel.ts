@@ -12,6 +12,7 @@ import {
   shouldNotify,
   essentialsNotifies,
   TIER_NAMES,
+  atLeast,
   type DeviceCommand,
   type Heartbeat,
   type NotificationEvent,
@@ -266,12 +267,15 @@ export class Kernel {
     this.limiter = new RateLimiter(() => this.policy.policy.rateLimits.toolCallsPerMinute);
     this.license = new LicenseService(this.meta, this.platform.licensePublicKeys, this.platform.appVersion, this.platform.devMode, this.events);
     // The edition a computer starts in: a new one opens in Essentials (with its walkthrough); one set up before
-    // Essentials existed keeps what it had (up to what it may run now).
+    // Essentials existed keeps what it had (up to what it may run now). One set up before 2.0 keeps Standard, free, for
+    // a while (Standard is bought from 2.0).
+    const setUpBefore = this.meta.get<Tier>('edition.chosen') != null || this.settings.get().general.onboardingComplete;
     if (this.meta.get<Tier>('edition.chosen') == null) {
       const tried = this.platform.devMode ? parseTier(process.env.FBRX_EDITION) : null;
-      this.meta.set('edition.chosen', this.platform.devMode ? (tried ?? 'ultra') : this.settings.get().general.onboardingComplete ? 'ultra' : 'essentials');
+      this.meta.set('edition.chosen', this.platform.devMode ? (tried ?? 'blackhole') : this.settings.get().general.onboardingComplete ? 'ultra' : 'essentials');
       if (this.settings.get().general.onboardingComplete) this.meta.set('edition.tourDone', true);
     }
+    this.license.beginGrace(setUpBefore && !this.platform.devMode);
     this.registry = new ToolRegistry(this.db);
     this.gate = new ToolGate({
       registry: this.registry,
@@ -463,7 +467,7 @@ export class Kernel {
       internet: () => this.internetAllowed(),
     });
     this.net = new NetDiag({ db: this.db, events: this.events, vendors: this.vendors, internet: () => this.internetAllowed() });
-    this.netenv = new NetEnvironments({ meta: this.meta, vault: this.vault, events: this.events, log: L('netenv'), unavailable: () => this.ultraOnly('Network environments') });
+    this.netenv = new NetEnvironments({ meta: this.meta, vault: this.vault, events: this.events, log: L('netenv'), unavailable: () => this.blackHoleOnly('Network environments') });
     this.calendar = new CalendarService({
       db: this.db,
       vault: this.vault,
@@ -927,7 +931,7 @@ export class Kernel {
           ...fbrxTools({ status: () => this.status(), recentAudit: (n) => this.audit.query({ limit: n }) }),
           ...workspaceTools(this.workspace),
           ...deviceConsoleTools(this.consoles),
-          ...netEnvTools(this.netenv, () => this.ultraOnly('Network environments')),
+          ...netEnvTools(this.netenv, () => this.blackHoleOnly('Network environments')),
           ...calendarTools(this.calendar),
           ...shieldTools(this.protection, this.shield),
           ...meshTools(this.assist, () => {
@@ -1519,6 +1523,7 @@ export class Kernel {
       chosen: lic.chosen ?? lic.tier,
       ceiling: lic.ceiling ?? lic.tier,
       ceilingReason: lic.ceilingReason ?? 'standalone',
+      graceUntil: lic.graceUntil ?? null,
       enrolled: this.fleet.enrolled,
       tourDone: !!this.meta.get<boolean>('edition.tourDone'),
       vertical,
@@ -1528,7 +1533,7 @@ export class Kernel {
     };
   }
 
-  /** The person's choice in Settings → Edition (Essentials or Standard any time; Ultra when FBRX Command allows it). */
+  /** The person's choice in Settings → Edition (anything up to what this computer may run). */
   chooseEdition(tier: Tier, actor: string): EditionStatus {
     const before = this.license.status().tier;
     this.license.choose(tier);
@@ -1625,7 +1630,12 @@ export class Kernel {
 
   /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Essentials or Standard), or null. */
   ultraOnly(what: string): string | null {
-    return this.license.status().tier === 'ultra' ? null : `${what} come with ${TIER_NAMES.ultra}`;
+    return atLeast(this.license.status().tier, 'ultra') ? null : `${what} come with ${TIER_NAMES.ultra}`;
+  }
+
+  /** Why a Black Hole feature cannot be used on this computer (it runs a lighter edition), or null. */
+  blackHoleOnly(what: string): string | null {
+    return atLeast(this.license.status().tier, 'blackhole') ? null : `${what} come with ${TIER_NAMES.blackhole}, through your organization's FBRX Command`;
   }
 
   /** False when the organization's network policy blocks every internet host. */

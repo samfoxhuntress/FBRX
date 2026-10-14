@@ -387,7 +387,7 @@ function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
           </Field>
           <Field
             label="Edition"
-            help={`It opens in Essentials; whoever uses it switches up to this in Settings → Edition. Ultra is only there when this (and the license) allows it.${d.editionTier ? ` Runs ${TIER_SHORT[d.editionTier]} now.` : ''}`}
+            help={`It opens in Essentials; whoever uses it switches up to this in Settings → Edition. Black Hole is only there when this (and the license) allows it.${d.editionTier ? ` Runs ${TIER_SHORT[d.editionTier]} now.` : ''}`}
           >
             <Select
               disabled={!canConfig || audience === 'student' || audience === 'child'}

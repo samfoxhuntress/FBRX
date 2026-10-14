@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { NotificationEvent, PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
-import { TIER_NAMES, TIER_SHORT, addressAs, displayVersion, funEnabled } from '@fbrx/shared';
+import { TIER_NAMES, TIER_SHORT, addressAs, atLeast, displayVersion, funEnabled } from '@fbrx/shared';
 import { Button, FBRX_MARK, FbrxMark, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
 import { playChime } from './notify-sound';
@@ -286,7 +286,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     [toast],
   );
   const tier: Tier = status?.license.tier ?? 'basic';
-  const ultra = tier === 'ultra';
+  const ultra = atLeast(tier, 'ultra');
+  const blackhole = atLeast(tier, 'blackhole');
   const fun = funEnabled(settings?.settings, tier);
   useEffect(() => {
     if (status) document.title = status.edition?.productName ?? TIER_NAMES[tier];
@@ -341,7 +342,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const vertical = status.edition?.vertical ?? 'business';
   const helpdeskShown = vertical !== 'home' || ultra;
 
-  const all: Array<NavItem & { ultra?: boolean }> = [
+  const all: Array<NavItem & { ultra?: boolean; blackhole?: boolean }> = [
     { id: 'home', label: 'FBRX Glass', icon: 'dashboard', section: 'Command' },
     { id: 'agent', label: agentName, icon: 'sparkles', section: 'Command' },
     { id: 'alerts', label: 'Alerts', icon: 'bell', count: alertCounts?.unread, section: 'Command' },
@@ -378,23 +379,25 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'backup', label: 'Backup & restore', icon: 'archive', section: 'Protect' },
     { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', ultra: true },
     { id: 'lab', label: 'Virtual lab', icon: 'box', section: 'Advanced', ultra: true },
-    { id: 'server', label: 'FBRX Server', icon: 'server', section: 'Advanced', ultra: true },
-    // Every edition sees its organization, or how to join one (Ultra only ever comes through FBRX Command).
+    { id: 'server', label: 'FBRX Server', icon: 'server', section: 'Advanced', ultra: true, blackhole: true },
+    // Every edition sees its organization, or how to join one (Black Hole only ever comes through FBRX Command).
     { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System' },
     { id: 'settings', label: 'Settings', icon: 'settings', section: 'System' },
   ];
   // Endpoint Essentials: the everyday pages in one short list (no sections to open). Standard: the everyday tools and
-  // the agent. Ultra adds the rest. Student computers keep only LEARNER_PAGES.
+  // the agent. Ultra adds the expert ones, Black Hole the FBRX Server page. Student computers keep only LEARNER_PAGES.
   const essentials = tier === 'essentials' && !learner;
   const byId = new Map(all.map((i) => [i.id, i]));
   const nav: NavItem[] = essentials
     ? ESSENTIALS_NAV.flatMap(([id, section, label]) => {
         const item = byId.get(id);
         if (!item || (id === 'fleet' && !enrolled)) return [];
-        const { ultra: _u, ...rest } = item;
+        const { ultra: _u, blackhole: _b, ...rest } = item;
         return [{ ...rest, section, ...(label ? { label } : {}) }];
       })
-    : all.filter((i) => (learner ? LEARNER_PAGES.has(i.id) : ultra || !i.ultra)).map(({ ultra: _u, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
+    : all
+        .filter((i) => (learner ? LEARNER_PAGES.has(i.id) : (ultra || !i.ultra) && (blackhole || !i.blackhole)))
+        .map(({ ultra: _u, blackhole: _b, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
   const groups: NavGroup[] | undefined = essentials
     ? undefined
     : SECTIONS.map(({ basicHint, learnerHint, ...g }) => ({ ...g, hint: learner && learnerHint ? learnerHint : !ultra && basicHint ? basicHint : g.hint, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
@@ -491,11 +494,11 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'bugs':
         return ultra ? <BugsPage agentName={agentName} advanced={ultra} /> : ultraOnly('The bug catcher', 'Crash and error logs from Windows and your apps, explained by the agent. Meanwhile, ask the agent what went wrong, or send it to your organization from Help desk.');
       case 'server':
-        return ultra ? <ServerPage /> : ultraOnly('FBRX Server', 'The FBRX Server installer ISO, the bundle for a Debian 13 server you already have, and the guides.');
+        return blackhole ? <ServerPage /> : <UltraOnly need="blackhole" title="FBRX Server" what="The FBRX Server installer ISO, the bundle for a Debian 13 server you already have, and the guides." />;
       case 'lab':
         return ultra ? <LabPage /> : ultraOnly('The virtual lab', 'Test machines in Hyper-V or Windows Sandbox, with capacity gauges and one-click starts.');
       case 'network':
-        return <NetworkPage advanced={ultra} easterEggs={fun} />;
+        return <NetworkPage advanced={ultra} everything={blackhole} easterEggs={fun} />;
       case 'files':
         return <FilesPage />;
       case 'processes':
@@ -509,7 +512,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'toolbox':
         return <ToolboxPage advanced={ultra} easterEggs={fun} />;
       case 'library':
-        return <LibraryPage agentName={agentName} advanced={ultra} easterEggs={fun} />;
+        return <LibraryPage agentName={agentName} everything={blackhole} easterEggs={fun} />;
       case 'mesh':
         return ultra ? <MeshPage /> : ultraOnly('Mesh & phone', 'Link your computers and your phone over an encrypted mesh, and reach FBRX from anywhere.');
       case 'aicoord':

@@ -11,6 +11,7 @@ import { addToMacros } from '../macro-add';
 import { menuFor } from '../context-menu';
 import { askAgent } from '../widgets';
 import { FBRX_CLI_TRIGGER, FBRX_COMMAND_SETS, FBRX_HOWTOS, type FbrxCommand, type FbrxCommandSet } from '../fbrx-command-data';
+import { UltraOnly } from '../edition';
 
 /** Renders article text, allowing only <kbd> and <code> (everything else stays literal text). */
 function Rich({ text, agentName }: { text: string; agentName: string }) {
@@ -295,7 +296,12 @@ function FbrxCommands({ q, agentName }: { q: string; agentName: string }) {
   );
 }
 
-export function LibraryPage({ agentName, advanced, easterEggs }: { agentName: string; advanced: boolean; easterEggs: boolean }) {
+/**
+ * `everything` (Black Hole): the whole Library, The Lab and the FBRX command library included. Talking to the search like
+ * a switch still finds the command library (Fun Mode's Operator Mode trophy, in any edition); in a lighter edition it
+ * says where the commands are.
+ */
+export function LibraryPage({ agentName, everything, easterEggs }: { agentName: string; everything: boolean; easterEggs: boolean }) {
   const [cat, setCat] = useState<string | null>(null);
   const [q, setQ] = useState('');
   const [open, setOpen] = useState<Article | null>(null);
@@ -303,9 +309,8 @@ export function LibraryPage({ agentName, advanced, easterEggs }: { agentName: st
   const storyAsked = easterEggs && STORY_TRIGGER.test(q.trim());
   const storiesFound = easterEggs && (!!trophies.data?.unlocked.stories || storyAsked);
   const verse = easterEggs && NOTHING_IS_IMPOSSIBLE.test(q);
-  // Ultra: the FBRX command library. In Fun Mode it hides until someone talks to the search like a switch.
-  const cliAsked = advanced && FBRX_CLI_TRIGGER.test(q.trim());
-  const cliFound = advanced && (!easterEggs || !!trophies.data?.unlocked.operator || cliAsked);
+  const cliAsked = (everything || easterEggs) && FBRX_CLI_TRIGGER.test(q.trim());
+  const cliFound = everything;
   useEffect(() => {
     if (!storyAsked) return;
     unlockTrophy('stories');
@@ -329,7 +334,7 @@ export function LibraryPage({ agentName, advanced, easterEggs }: { agentName: st
         <button className={`chip${!cat ? ' on' : ''}`} onClick={() => setCat(null)}>
           All
         </button>
-        {advanced && (
+        {everything && (
           <button className={`chip lab-chip${cat === 'lab' ? ' on' : ''}`} onClick={() => setCat('lab')} title="Advanced how-tos and official downloads">
             <Icons.flask size={13} /> The Lab
           </button>
@@ -354,10 +359,12 @@ export function LibraryPage({ agentName, advanced, easterEggs }: { agentName: st
         })}
       </div>
       {verse && <Callout tone="good">{LUKE_1_37}</Callout>}
-      {cat === 'lab' && advanced && !q.trim() ? (
+      {cat === 'lab' && everything && !q.trim() ? (
         <TheLab agentName={agentName} />
       ) : cat === 'fbrx-cli' && cliFound ? (
         <FbrxCommands q={q} agentName={agentName} />
+      ) : cat === 'fbrx-cli' ? (
+        <UltraOnly need="blackhole" title="The FBRX command library" what="Every FBRX/1, FBRX Server and FBRX Gate command, explained, ready to run in the Terminal or to copy." />
       ) : cat === 'stories' && storiesFound ? (
         <StoryTime q={q} agentName={agentName} />
       ) : open ? (

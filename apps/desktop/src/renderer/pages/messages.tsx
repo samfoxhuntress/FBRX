@@ -4,7 +4,7 @@ import { Button, Callout, Card, Empty, Icons, InfoTip, Input, Modal, Page, Spinn
 import { call, onEvent } from '../client';
 import { useCore } from '../hooks';
 import { navigate, routeArg } from '../app';
-import { useLearner, useTier, useVertical } from '../edition';
+import { useAtLeast, useLearner, useVertical } from '../edition';
 
 /**
  * Messages: chat with your other computers and your phone (FBRX Mesh, end to end) and with the computers in your
@@ -15,7 +15,7 @@ export function MessagesPage() {
   const [picked, setPicked] = useState<string | null>(() => routeArg());
   const [query, setQuery] = useState('');
   const [starting, setStarting] = useState(false);
-  const ultra = useTier() === 'ultra';
+  const ultra = useAtLeast('ultra');
   const learner = useLearner();
   const home = useVertical() === 'home';
 

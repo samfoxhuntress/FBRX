@@ -48,7 +48,7 @@ section to open its pages (one at a time; the section of the page you are on ope
 | **Workbench** | Files, Task Manager, Clipboard, Copy & migrate, Toolbox, Library |
 | **Orbit** | Mesh & phone, AI models, AI coordination, Connections, Tools & plugins |
 | **Stronghold** | FBRX Shield (antivirus), Approvals, Credentials, Governance, Backup & restore |
-| **Lab** | Terminal, Virtual lab (Endpoint Ultra) |
+| **Lab** | Terminal, Virtual lab (Endpoint Ultra), FBRX Server (Black Hole) |
 | **Control** | Organization, Settings |
 
 **Collapse** at the bottom folds the sidebar down to the section icons (remembered on this computer); click an icon
@@ -56,44 +56,52 @@ and its pages slide out beside it. Counts (unread alerts, waiting approvals) sho
 
 ### Version names
 
-FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.9.9** (or Essentials, or Standard). Each minor version also gets a codename from cloth,
+FBRX is in alpha: versions read **FBRX Endpoint Ultra Alpha 1.9.9** (or Essentials, Standard or Black Hole). Each minor version also gets a codename from cloth,
 fiber to fabric, shown in **Settings → Logs & about**: 1.8 *Spindle*, 1.9 *Bobbin*, then *Shuttle*, *Heddle*, and 2.0
 *Loom* (later *Warp*, *Weft*, *Selvedge*, *Tapestry*).
 
-### FBRX Endpoint Essentials, Standard and Ultra
+### FBRX Endpoint Essentials, Standard, Ultra and Black Hole
 
-The desktop app comes in three editions. Every new computer opens in **Essentials**: your own AI and nothing else,
-ready on the first screen (see *The first start* below). **Settings → Edition** switches between them (nothing saved
-goes away), up to what the computer may run:
+The desktop app comes in four editions. Every new computer opens in **Essentials**, free: your own AI and nothing
+else, ready on the first screen (see *The first start* below). **Settings → Edition** switches between them (nothing
+saved goes away), up to what the computer may run. Prices are in US dollars, per month (see LICENSING.md, *Prices*):
 
-| | **Essentials** | **Standard** | **Ultra** |
-| --- | --- | --- | --- |
-| How you get it | Where every new computer starts | Settings → Edition (anyone), or *Switch to Standard* on a Standard page | Settings → Edition, once **FBRX Command** allows it: the computer is in an organization whose license allows Ultra, and neither its group nor the computer itself is held lower |
-| Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, the help desk (in an organization) and Settings. Home is the chat | Everything in Essentials, plus FBRX Glass, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Standard |
-| IT and expert tool sets | — | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX Server, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools, adapters and **network environments (UniFi)**, device consoles, the developer tools in the Toolbox, The Lab in the Library, the agent's work budget, logs, update channels, the Local API |
-| Connect | AI models | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance |
-| Look | Light, dark or follow the computer: plain | The same | The theme studio: eleven themes, accent colors, gradients and textures (with a strength slider) |
-| Fun | Easter eggs, the Silly Goose and the trophy case, once unlocked with the secret key (see EASTER_EGGS.md, spoilers) | The same | The same |
+| | **Essentials** | **Standard** | **Ultra** | **Black Hole** |
+| --- | --- | --- | --- | --- |
+| Price | Free, and free in an organization | $4.99, or $3.99 through FBRX Command | $11.99, or $9.59 through FBRX Command | $24.99 per computer, only through FBRX Command |
+| How you get it | Where every new computer starts | Bought on your FBRX account or with a license key, or through your organization's FBRX Command | The same | Only as an add-on in an organization's FBRX Command: for the people who run it and its FBRX Servers |
+| Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, the help desk (in an organization) and Settings. Home is the chat | Everything in Essentials, plus FBRX Glass, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Standard | Everything in Ultra, plus the FBRX Server page |
+| Your AI's controls | — | The agent's work budget (steps per task, longest answer, how much of a conversation it keeps in mind) and unloading the model when idle | The same, plus the temperature | The same |
+| IT and expert tool sets | — | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools and adapters, device consoles, the developer tools in the Toolbox, logs, update channels, the Local API | Everything in Ultra, plus **network environments (UniFi consoles)** in Network Center and the whole Library: **The Lab** and the **FBRX command library** (FBRX/1, FBRX Server and FBRX Gate commands, also in Terminal → FBRX/1), always there |
+| Connect | AI models | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance | The same |
+| Look | Light, dark or follow the computer: plain | The same | The theme studio: eleven themes, accent colors, gradients and textures (with a strength slider) | The same |
+| Fun | Easter eggs, the Silly Goose and the trophy case, once unlocked with the secret key (see EASTER_EGGS.md, spoilers) | The same | The same | The same |
 
 **The walkthrough.** On a new computer, after setup, Essentials dims the window and lights up one page at a time:
 Fabrix, AI models and Settings (memory, voice, and the edition for when you want more), ending with the Spotlight
 shortcut. Enter or → goes on, ← back, Esc skips; *Take the tour again* is in Settings → Edition.
 
 **Notifications in Essentials** are only the ones about the AI and the computer's safety: approvals, the AI,
-the watchdog, messages from your organization and the help desk, and new FBRX versions. Standard and Ultra show the
+the watchdog, messages from your organization and the help desk, and new FBRX versions. Standard and up show the
 rest (alerts, storage, FBRX Shield and so on) as set in **Settings → Notifications**.
 
-**What may be unlocked.** On its own, a computer goes up to Standard: Ultra comes only through FBRX Command (a
-license key alone no longer turns it on). In an organization, the most a computer may run is what the license allows
-(Community up to Standard; Pro and Enterprise up to Ultra; a license can name it), held lower by its group in
-FBRX Command (*Profiles & groups → Edition*) or by the computer itself (*Devices → a device → Configuration →
-Edition*): **Essentials only**, **Up to Standard** or **Up to Ultra**. A page from a higher edition opens a short card
-that says what it does and how to get it: *Switch to Standard* in one click, or for Ultra *Turn on Ultra* when it is
-allowed and *Join your organization* when it is not. Student computers run **FBRX OS Education** (see EDUCATION.md).
-The edition shows beside the name in the sidebar, at the top of **Settings**, in the window title, under **Settings →
-Logs & about**, and in FBRX Command next to each device's version. A computer set up before Essentials existed keeps
-the edition it had (up to what it may run now). Developers can try the lighter editions in a development build with
-`FBRX_EDITION=essentials` or `FBRX_EDITION=standard`.
+**What may be unlocked.** On its own, a computer runs Essentials for free. Standard and Ultra are bought: on the
+person's FBRX account, or with a license key (Settings → License); a license that belongs to an organization (it
+names its FBRX Command) counts only in that organization. Black Hole comes only through FBRX Command. In an
+organization, the most a computer may run is what the license allows (Community up to Standard; Pro and Enterprise up
+to Ultra; a license can name it, Black Hole included), held lower by its group in FBRX Command (*Profiles & groups →
+Edition*) or by the computer itself (*Devices → a device → Configuration → Edition*): **Essentials only**, **Up to
+Standard**, **Up to Ultra** or **Up to Black Hole**. A page from a higher edition opens a short card that says what it
+does and how to get it: *Switch to Standard* in one click when it is allowed, *Turn on Ultra* (or Black Hole) when it
+is allowed, and otherwise its price and *Join your organization*. Student computers run **FBRX OS Education** (see
+EDUCATION.md). The edition shows beside the name in the sidebar, at the top of **Settings**, in the window title,
+under **Settings → Logs & about**, and in FBRX Command next to each device's version.
+
+**Computers from before 2.0.** Until 2.0, Standard was free on a computer on its own. A computer set up before keeps
+Standard, free, for **30 days** after it first starts 2.0 (Settings → Edition says until when); then it runs
+Essentials unless Standard or Ultra is bought. A computer set up before Essentials existed keeps the edition it had
+(up to what it may run now). Developers can try the lighter editions in a development build (which otherwise runs
+Black Hole) with `FBRX_EDITION=essentials`, `standard` or `ultra`.
 
 ### The first start: straight to your AI
 
