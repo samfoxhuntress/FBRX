@@ -103,6 +103,11 @@ export interface MeshHost {
   keyPair: () => KeyPair;
   mobileDir: string | null;
   status: () => Promise<unknown>;
+  /** What the phone's Home shows: the computer's edition, its AI, and the notes from FBRX (essentials-home.ts). */
+  home?: () => Promise<unknown>;
+  /** The AI models on this computer, and switching to one (a phone that may ask the AI may pick its model). */
+  models?: () => Promise<unknown>;
+  useModel?: (id: string, by: string) => Promise<unknown>;
   approvals: () => ApprovalRequest[];
   resolveApproval: (id: string, decision: 'approve' | 'deny', by: string) => boolean;
   requestApproval: (deviceName: string, prompt: string, deviceId: string) => Promise<boolean>;
@@ -964,8 +969,17 @@ export class MeshService {
           items: items.filter((i) => (i.type === 'alert' ? d.permissions.alerts : i.type === 'message' ? d.permissions.chat : true)),
           approvals: d.permissions.approve ? this.approvalsFor(d.id) : [],
           jobs: [...this.jobs.values()].filter((j) => j.deviceId === d.id).map(publicJob),
+          home: this.host.home ? await this.host.home() : null,
         };
       }
+      case 'models':
+        need('ask');
+        if (!this.host.models) throw new CoreError('UNAVAILABLE', 'Not on this computer');
+        return this.host.models();
+      case 'models.use':
+        need('ask');
+        if (!this.host.useModel) throw new CoreError('UNAVAILABLE', 'Not on this computer');
+        return this.host.useModel(String(p.id ?? ''), actor);
       case 'chat.send': {
         need('chat');
         if (this.host.acceptMessages && !this.host.acceptMessages()) throw new CoreError('FORBIDDEN', 'Messages are turned off on this computer');

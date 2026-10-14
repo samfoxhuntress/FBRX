@@ -6120,3 +6120,74 @@ body.popout .fx-page-header p {
   border-radius: var(--radius);
   background: var(--surface-2);
 }
+
+/* Essentials Home: the split-flap board, and notes from FBRX below it. */
+.home-notes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+  position: relative;
+}
+.home-notes-title {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+.home-note {
+  position: relative;
+  display: flex;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+}
+.home-note.upgrade {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
+  background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 9%, var(--surface-1)), var(--surface-1) 70%);
+}
+.home-note-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--accent);
+  background: var(--accent-wash);
+}
+.home-note-body {
+  min-width: 0;
+  flex: 1;
+}
+.home-note h3 {
+  margin: 0 0 4px;
+  font-size: 14.5px;
+  padding-right: 18px;
+}
+.home-note p {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.home-note-close {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  padding: 4px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.home-note-close:hover {
+  color: var(--text-primary);
+  background: var(--surface-2);
+}

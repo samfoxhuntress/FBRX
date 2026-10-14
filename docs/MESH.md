@@ -36,6 +36,12 @@ under this computer's policy: each risky tool call still waits for an approval.
 the home screen. It shows status, alerts, tasks, messages and waiting approvals, lets you ask the agent, and can
 make the phone ring (*Find my phone*). It refreshes while open; phones are not woken in the background.
 
+When the computer runs **Endpoint Essentials**, FBRX Mobile is as simple as the computer: **Home** is the split-flap
+board (a greeting, the date, whether the AI is ready) and a few notes from FBRX: tips and tricks (each can be
+dismissed), **AI models** (the models on the computer, and *Use* to switch to one, for a phone that may ask the AI)
+and what Standard and Ultra add. Its tabs are Home, Ask, AI (and Approve when something waits). The notes are the
+same ones as on the computer's Home (`packages/shared/src/essentials-home.ts`).
+
 ## Mesh Assist: computers lending each other their AI
 
 When the agent on one computer runs out of room, another computer on the mesh finishes the job, and the two can talk

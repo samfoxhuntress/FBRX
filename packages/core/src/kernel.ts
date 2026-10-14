@@ -12,6 +12,8 @@ import {
   shouldNotify,
   essentialsNotifies,
   TIER_NAMES,
+  homeBoard,
+  notesFor,
   atLeast,
   type DeviceCommand,
   type Heartbeat,
@@ -582,6 +584,27 @@ export class Kernel {
       keyPair: () => this.meshKeyPair(),
       mobileDir: this.platform.meshMobileDir ?? null,
       status: () => this.meshStatusSummary(),
+      home: async () => {
+        const st = this.settings.get();
+        const tier = this.license.status().tier;
+        const model = this.models.installed().find((m) => m.id === st.runtime.modelId) ?? null;
+        const aiReady = (await this.providers.status().catch(() => [])).some((p) => p.available);
+        return {
+          tier,
+          agentName: st.ai.agentName,
+          aiReady,
+          modelName: model?.name ?? null,
+          board: homeBoard({ name: addressAs(st), agentName: st.ai.agentName, aiReady, deviceName: this.deviceName(), tier }),
+          notes: notesFor({ tier, agentName: st.ai.agentName, modelName: model?.name ?? null, paired: true }),
+        };
+      },
+      models: async () => ({ current: this.settings.get().runtime.modelId || null, installed: this.models.installed().map((m) => ({ id: m.id, name: m.name, sizeBytes: m.sizeBytes })) }),
+      useModel: async (id, by) => {
+        if (!this.models.installed().some((m) => m.id === id)) throw new CoreError('NOT_FOUND', 'That model is not on this computer');
+        await this.useLocalModel(id);
+        this.audit.append({ category: 'user', action: 'runtime.useModel', actor: by, target: id, outcome: 'success' });
+        return { current: id };
+      },
       approvals: () => this.approvals.list(),
       resolveApproval: (id, decision, by) => this.approvals.resolve(id, decision, by),
       requestApproval: async (deviceName, prompt, deviceId) => {

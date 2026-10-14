@@ -10,7 +10,8 @@
   var STORE = 'fbrx.mobile.v1';
   var ALPHA = /[^0-9A-HJKMNP-TV-Z]/g;
   var app = document.getElementById('app');
-  var state = { tab: 'home', status: null, approvals: [], jobs: {}, alerts: [], messages: [], tasks: [], online: false, unread: 0, error: null, perms: {} };
+  var state = { tab: 'home', status: null, approvals: [], jobs: {}, alerts: [], messages: [], tasks: [], online: false, unread: 0, error: null, perms: {}, home: null, models: null };
+  var DISMISSED = 'fbrx.mobile.dismissed';
   var cfg = load();
   var pollTimer = null;
   var alarm = null;
@@ -163,6 +164,7 @@
         state.perms = r.permissions || {};
         if (r.name && r.name !== cfg.desktopName) save(Object.assign({}, cfg, { desktopName: r.name }));
         state.approvals = r.approvals || [];
+        state.home = r.home || null;
         (r.jobs || []).forEach(function (j) { state.jobs[j.jobId] = Object.assign(state.jobs[j.jobId] || {}, j); });
         (r.items || []).forEach(handleItem);
         render();
@@ -233,16 +235,30 @@
     if (!cfg) return renderPair();
     var t = state.tab;
     var html = '<div class="row brand"><div class="mark"></div><div><h1>' + esc(cfg.desktopName) + '</h1><div class="muted"><span class="dot ' + (state.online ? 'ok' : 'bad') + '"></span> ' + (state.online ? 'Connected' : 'Not reachable') + (state.error && !state.online ? ' · ' + esc(state.error) : '') + '</div></div></div>';
-    if (t === 'home') html += viewHome();
+    if (t === 'home') html += essentials() ? viewEssentialsHome() : viewHome();
+    if (t === 'models') html += viewModels();
     if (t === 'ask') html += viewAsk();
     if (t === 'approvals') html += viewApprovals();
     if (t === 'tasks') html += viewTasks();
     if (t === 'alerts') html += viewAlerts();
     html += tabs();
     app.innerHTML = html;
+    mountBoard();
     bind();
   }
+  /** The computer runs Endpoint Essentials: Home is the split-flap board and notes from FBRX, no dashboard. */
+  function essentials() {
+    return !!state.home && state.home.tier === 'essentials';
+  }
   function tabs() {
+    if (essentials()) {
+      var few = [['home', 'Home', 0], ['ask', 'Ask', 0]];
+      if (state.approvals.length) few.push(['approvals', 'Approve', state.approvals.length]);
+      few.push(['models', 'AI', 0]);
+      return '<nav class="tabs">' + few.map(function (i) {
+        return '<button data-tab="' + i[0] + '" class="' + (state.tab === i[0] ? 'on' : '') + '">' + i[1] + (i[2] ? '<span class="badge">' + i[2] + '</span>' : '') + '</button>';
+      }).join('') + '</nav>';
+    }
     var items = [
       ['home', 'Home', 0],
       ['ask', 'Ask', 0],
@@ -276,6 +292,96 @@
     out += '<h2>This phone</h2><div class="card"><div class="muted">Fingerprint</div><div class="mono">' + cfg.myId.slice(0, 16).toUpperCase().match(/.{4}/g).join(' ') + '</div><div class="muted" style="margin-top:6px">Computer ' + cfg.desktopId.slice(0, 16).toUpperCase().match(/.{4}/g).join(' ') + '</div><div style="margin-top:10px"><button class="danger" data-act="forget">Forget this computer</button></div></div>';
     return out;
   }
+  // ------------------------------------------------------------------------- Essentials Home
+  function dismissed() {
+    try {
+      return JSON.parse(localStorage.getItem(DISMISSED) || '[]');
+    } catch (e) {
+      return [];
+    }
+  }
+  function viewEssentialsHome() {
+    var h = state.home;
+    var gone = dismissed();
+    var notes = (h.notes || []).filter(function (n) { return gone.indexOf(n.id) < 0; });
+    var out = '<div class="flapwrap" id="flapwrap"></div>';
+    out += '<button class="primary wide" data-tab="ask">Ask ' + esc(h.agentName) + '</button>';
+    out += '<h2>From FBRX</h2>';
+    out += notes.map(function (n) {
+      return '<div class="card note ' + esc(n.kind) + '">' +
+        ((n.kind === 'tip' || n.kind === 'welcome') ? '<button class="x" data-dismiss="' + esc(n.id) + '" aria-label="Dismiss">×</button>' : '') +
+        '<b>' + esc(n.title) + '</b><div class="muted">' + esc(n.body) + '</div>' +
+        (n.action ? '<div class="note-act"><button' + (n.kind === 'upgrade' ? ' class="primary"' : '') + ' data-note="' + esc(n.action.to) + '">' + esc(n.action.label) + '</button></div>' : '') +
+        '</div>';
+    }).join('');
+    return out;
+  }
+  function viewModels() {
+    if (!state.perms.ask) return '<div class="card muted">This phone is not allowed to use the AI. Change it on the computer under Mesh &amp; phone.</div>';
+    var m = state.models;
+    if (!m) return '<h2>AI models</h2><div class="card muted">Loading…</div><span data-load="models"></span>';
+    return '<h2>AI models on your computer</h2><div class="card">' + (m.installed.map(function (x) {
+      var on = x.id === m.current;
+      return '<div class="item row"><div class="spacer"><div>' + esc(x.name) + '</div><div class="muted">' + (x.sizeBytes / 1e9).toFixed(1) + ' GB' + (on ? ' · in use' : '') + '</div></div>' + (on ? '<span class="dot ok"></span>' : '<button data-use="' + esc(x.id) + '">Use</button>') + '</div>';
+    }).join('') || '<div class="muted">No models yet.</div>') + '</div><p class="muted">A bigger model answers better, a smaller one is quicker. Get more on your computer, in AI models.</p>';
+  }
+
+  // The split-flap board: one board for the whole visit (render() rebuilds the page; the board moves along).
+  var CHARSET = ' ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789.,:;-+%/#!?&@()';
+  var COLS = 16;
+  var LINES = 2;
+  var board = null;
+  function fitRows(rows) {
+    var out = [];
+    for (var r = 0; r < LINES; r++) {
+      var t = String(rows[r] || '').toUpperCase().replace(/[^ A-Z0-9.,:;\-+%\/#!?&@()]/g, ' ').slice(0, COLS);
+      var pad = Math.floor((COLS - t.length) / 2);
+      out.push((new Array(pad + 1).join(' ') + t + new Array(COLS + 1).join(' ')).slice(0, COLS));
+    }
+    return out.join('');
+  }
+  function mountBoard() {
+    var host = document.getElementById('flapwrap');
+    if (!host) return;
+    if (!board) {
+      var el = document.createElement('div');
+      el.className = 'flap';
+      el.setAttribute('aria-live', 'polite');
+      var cells = [];
+      for (var i = 0; i < COLS * LINES; i++) {
+        var c = document.createElement('span');
+        c.textContent = ' ';
+        el.appendChild(c);
+        cells.push(c);
+      }
+      board = { el: el, cells: cells, shown: new Array(COLS * LINES + 1).join(' ').split(''), target: '', msg: 0, tick: null };
+      showMessage();
+      setInterval(function () { board.msg++; showMessage(); }, 6500);
+    }
+    host.appendChild(board.el);
+  }
+  function showMessage() {
+    var msgs = (state.home && state.home.board) || [['FBRX', 'HOME']];
+    board.target = fitRows(msgs[board.msg % msgs.length]);
+    board.el.setAttribute('aria-label', board.target.replace(/\s+/g, ' ').trim());
+    var start = Date.now();
+    clearInterval(board.tick);
+    board.tick = setInterval(function () {
+      var busy = false;
+      for (var i = 0; i < board.cells.length; i++) {
+        var want = board.target[i];
+        if (board.shown[i] === want) continue;
+        busy = true;
+        // Column by column, like the boards in a station.
+        if (Date.now() - start < (i % COLS) * 35) continue;
+        var k = CHARSET.indexOf(board.shown[i]);
+        board.shown[i] = CHARSET[(k + 1) % CHARSET.length];
+        board.cells[i].textContent = board.shown[i];
+      }
+      if (!busy) clearInterval(board.tick);
+    }, 40);
+  }
+
   function stat(label, value) {
     return '<div class="stat"><span class="muted">' + label + '</span><b>' + esc(value) + '</b></div>';
   }
@@ -320,6 +426,29 @@
         var id = b.getAttribute('data-approve') || b.getAttribute('data-deny');
         b.disabled = true;
         rpc('approvals.resolve', { id: id, decision: b.hasAttribute('data-approve') ? 'approve' : 'deny' }).then(sync, fail);
+      };
+    });
+    Array.prototype.forEach.call(app.querySelectorAll('[data-dismiss]'), function (b) {
+      b.onclick = function () {
+        var gone = dismissed();
+        gone.push(b.getAttribute('data-dismiss'));
+        try { localStorage.setItem(DISMISSED, JSON.stringify(gone)); } catch (e) { /* private mode */ }
+        render();
+      };
+    });
+    Array.prototype.forEach.call(app.querySelectorAll('[data-note]'), function (b) {
+      b.onclick = function () {
+        var to = b.getAttribute('data-note');
+        if (to === 'agent') state.tab = 'ask';
+        else if (to === 'models') state.tab = 'models';
+        else if (to === 'edition') return banner('The editions', 'On your computer: Settings → Edition shows Standard and Ultra and what they add. Sign in to your FBRX account there to buy one.');
+        render();
+      };
+    });
+    Array.prototype.forEach.call(app.querySelectorAll('[data-use]'), function (b) {
+      b.onclick = function () {
+        b.disabled = true;
+        rpc('models.use', { id: b.getAttribute('data-use') }).then(function () { loadData('models', true); banner('Done', 'Your computer uses that model now.'); }, fail);
       };
     });
     Array.prototype.forEach.call(app.querySelectorAll('[data-done]'), function (b) {
@@ -368,6 +497,7 @@
     if (what === 'status') rpc('status').then(function (s) { state.status = s; render(); }, fail);
     if (what === 'tasks') rpc('tasks.list').then(function (t) { state.tasks = t; render(); }, fail);
     if (what === 'alerts') rpc('alerts.list').then(function (a) { state.alerts = a; render(); }, function () {});
+    if (what === 'models') rpc('models').then(function (m) { state.models = m; render(); }, fail);
   }
   function fail(e) {
     banner('Something went wrong', e.message);

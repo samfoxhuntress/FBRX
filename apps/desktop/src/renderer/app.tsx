@@ -44,6 +44,7 @@ const FilesPage = lazy(() => import('./pages/files').then((m) => ({ default: m.F
 const ProcessesPage = lazy(() => import('./pages/processes').then((m) => ({ default: m.ProcessesPage })));
 const TerminalPage = lazy(() => import('./pages/terminal').then((m) => ({ default: m.TerminalPage })));
 const ToolboxPage = lazy(() => import('./pages/toolbox').then((m) => ({ default: m.ToolboxPage })));
+const EssentialsHome = lazy(() => import('./pages/essentials-home').then((m) => ({ default: m.EssentialsHome })));
 const LibraryPage = lazy(() => import('./pages/library').then((m) => ({ default: m.LibraryPage })));
 const AlertsPage = lazy(() => import('./pages/alerts').then((m) => ({ default: m.AlertsPage })));
 const StoragePage = lazy(() => import('./pages/storage').then((m) => ({ default: m.StoragePage })));
@@ -455,8 +456,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   ownWindows = POPOUT ? {} : { terminal: ultra && s.windows.terminal, agent: s.windows.agent };
 
   const page = (() => {
-    // Essentials opens on the chat: it is the AI on its own.
-    if (essentials && route === 'home') return <AgentPage agentName={agentName} />;
+    // Essentials Home: the split-flap board and a few notes from FBRX (no dashboard).
+    if (essentials && route === 'home') return <EssentialsHome status={status} agentName={agentName} who={addressAs(s)} />;
     if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && !byId.get(route)?.ultra) {
       return <StandardOnly title={byId.get(route)?.label ?? 'That page'} what={STANDARD_WHAT[route] ?? 'More of the everyday tools.'} />;
     }
@@ -596,7 +597,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         groups={groups}
         collapsed={collapsed}
         onCollapsedChange={setCollapsed}
-        active={essentials && route === 'home' ? 'agent' : route}
+        active={route}
         onNavigate={(id) => navigate(id)}
         topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} defaultProvider={s.ai.defaultProvider} defaultModel={s.ai.defaultModel} presenter={presenter} learner={learner} />}
         footer={
@@ -782,6 +783,7 @@ const LEARNER_PAGES = new Set(['home', 'agent', 'messages', 'helpdesk', 'calenda
  * order, the short list's headings, and plainer names where they help.
  */
 const ESSENTIALS_NAV: Array<[Route, string, string?]> = [
+  ['home', 'Your AI', 'Home'],
   ['agent', 'Your AI'],
   ['runtime', 'Your AI', 'AI models'],
   ['helpdesk', 'Help & settings', 'Get help'],
