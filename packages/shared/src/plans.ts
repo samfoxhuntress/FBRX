@@ -126,3 +126,19 @@ export function tenantMonthlyTotal(computers: Partial<Record<Tier, number>>): nu
   for (const [tier, n] of Object.entries(computers) as Array<[Tier, number]>) total += EDITION_PLANS[tier].tenantMonthly * Math.max(0, n);
   return total;
 }
+
+/** What a product id (Stripe lookup key, store product id) sells. */
+export type ProductInfo =
+  | { kind: 'edition'; tier: Tier; tenant: boolean }
+  | { kind: 'command' }
+  | { kind: 'server' };
+
+export function productById(id: string): ProductInfo | null {
+  for (const p of Object.values(EDITION_PLANS)) {
+    if (p.productId === id) return { kind: 'edition', tier: p.tier, tenant: false };
+    if (p.tenantProductId === id) return { kind: 'edition', tier: p.tier, tenant: true };
+  }
+  if (id === COMMAND_PLAN.productId) return { kind: 'command' };
+  if (id === SERVER_OFFER.productId) return { kind: 'server' };
+  return null;
+}

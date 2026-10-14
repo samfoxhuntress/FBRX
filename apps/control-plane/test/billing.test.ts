@@ -1,0 +1,249 @@
+import { createHmac, generateKeyPairSync } from 'node:crypto';
+import { createServer, type IncomingMessage, type Server } from 'node:http';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { AddressInfo } from 'node:net';
+import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { licenseStatusFrom } from '@fbrx/shared/node';
+import { buildServer, type BuiltServer } from '../src/server';
+import { loadConfig } from '../src/config';
+import { appleLikeChain, signJws } from './cert-chain';
+
+const PASSWORD = 'A-long-enough-password-1';
+const WEBHOOK_SECRET = 'whsec_test_secret';
+const RTDN_TOKEN = 'rtdn-secret-token';
+
+const readBody = (req: IncomingMessage) => new Promise<string>((r) => {
+  let b = '';
+  req.on('data', (c) => (b += c));
+  req.on('end', () => r(b));
+});
+const listen = (s: Server) => new Promise<string>((r) => s.listen(0, '127.0.0.1', () => r(`http://127.0.0.1:${(s.address() as AddressInfo).port}`)));
+
+/** Just enough of Stripe: prices by lookup key, customers, Checkout, subscriptions. */
+function fakeStripe() {
+  const calls: Array<{ method: string; path: string; body: string }> = [];
+  const subscriptions = new Map<string, any>();
+  const server = createServer(async (req, res) => {
+    const body = await readBody(req);
+    const url = new URL(req.url!, 'http://x');
+    calls.push({ method: req.method!, path: url.pathname, body: body || url.search });
+    const json = (o: unknown, status = 200) => {
+      res.writeHead(status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(o));
+    };
+    if (req.headers.authorization !== 'Bearer sk_test_123') return json({ error: { message: 'bad key' } }, 401);
+    if (url.pathname === '/v1/prices') return json({ data: [{ id: `price_${url.searchParams.get('lookup_keys[]')}` }] });
+    if (url.pathname === '/v1/customers') return json({ id: 'cus_1' });
+    if (url.pathname === '/v1/checkout/sessions') return json({ id: 'cs_1', url: 'https://checkout.example/cs_1' });
+    if (url.pathname === '/v1/billing_portal/sessions') return json({ url: 'https://billing.example/portal' });
+    const m = /^\/v1\/subscriptions\/(.+)$/.exec(url.pathname);
+    if (m && req.method === 'GET') return json(subscriptions.get(m[1]!));
+    if (m && req.method === 'DELETE') return json({ id: m[1], status: 'canceled' });
+    json({ error: { message: `no route ${url.pathname}` } }, 404);
+  });
+  return { server, calls, subscriptions };
+}
+
+/** Just enough of Google: the OAuth token endpoint and purchases.subscriptionsv2. */
+function fakeGoogle() {
+  const purchases = new Map<string, any>();
+  const acknowledged: string[] = [];
+  const server = createServer(async (req, res) => {
+    const body = await readBody(req);
+    const json = (o: unknown, status = 200) => {
+      res.writeHead(status, { 'content-type': 'application/json' });
+      res.end(JSON.stringify(o));
+    };
+    if (req.url === '/token') return new URLSearchParams(body).get('assertion') ? json({ access_token: 'ya29.test', expires_in: 3600 }) : json({ error: 'invalid_grant' }, 400);
+    if (req.headers.authorization !== 'Bearer ya29.test') return json({ error: { message: 'unauthenticated' } }, 401);
+    const get = /\/applications\/com\.fbrx\.app\/purchases\/subscriptionsv2\/tokens\/(.+)$/.exec(req.url!);
+    if (get) return purchases.has(get[1]!) ? json(purchases.get(get[1]!)) : json({ error: { message: 'not found' } }, 404);
+    const ack = /\/purchases\/subscriptions\/(.+)\/tokens\/(.+):acknowledge$/.exec(req.url!);
+    if (ack) {
+      acknowledged.push(decodeURIComponent(ack[2]!));
+      return json({});
+    }
+    json({ error: { message: 'no route' } }, 404);
+  });
+  return { server, purchases, acknowledged };
+}
+
+describe('FBRX accounts and what they buy', () => {
+  let cp: BuiltServer;
+  let base: string;
+  let dataDir: string;
+  const stripe = fakeStripe();
+  const google = fakeGoogle();
+  const chain = appleLikeChain();
+
+  const call = async (method: string, path: string, body?: unknown, token?: string, headers: Record<string, string> = {}) => {
+    const res = await fetch(`${base}${path}`, {
+      method,
+      headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...headers },
+      body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
+    });
+    return { status: res.status, json: (await res.json().catch(() => ({}))) as any };
+  };
+  const ok = async (method: string, path: string, body?: unknown, token?: string) => {
+    const r = await call(method, path, body, token);
+    if (r.status >= 400) throw new Error(`${r.status} ${JSON.stringify(r.json)}`);
+    return r.json;
+  };
+  const stripeEvent = (event: object, secret = WEBHOOK_SECRET) => {
+    const body = JSON.stringify(event);
+    const t = Math.floor(Date.now() / 1000);
+    const sig = createHmac('sha256', secret).update(`${t}.${body}`).digest('hex');
+    return call('POST', '/v1/billing/stripe/webhook', body, undefined, { 'stripe-signature': `t=${t},v1=${sig}` });
+  };
+
+  beforeAll(async () => {
+    const stripeUrl = await listen(stripe.server);
+    const googleUrl = await listen(google.server);
+    const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
+    dataDir = mkdtempSync(join(tmpdir(), 'fbrx-billing-'));
+    cp = await buildServer(
+      loadConfig(
+        {},
+        {
+          dataDir,
+          port: 0,
+          host: '127.0.0.1',
+          logLevel: 'silent',
+          setupToken: 'setup-token-123',
+          adminConsoleDir: null,
+          cloud: {
+            publicSignup: true,
+            returnUrl: 'https://fbrx.example/account',
+            stripe: { secretKey: 'sk_test_123', webhookSecret: WEBHOOK_SECRET, apiBase: stripeUrl },
+            apple: { bundleId: 'com.fbrx.app', rootCertificates: [chain.root.pem] },
+            google: {
+              packageName: 'com.fbrx.app',
+              serviceAccount: { clientEmail: 'play@fbrx.iam.example', privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(), tokenUri: `${googleUrl}/token` },
+              rtdnToken: RTDN_TOKEN,
+              apiBase: googleUrl,
+            },
+          },
+        },
+      ),
+    );
+    await cp.app.listen({ port: 0, host: '127.0.0.1' });
+    base = `http://127.0.0.1:${(cp.app.server.address() as AddressInfo).port}`;
+  });
+
+  afterAll(async () => {
+    await cp.close();
+    stripe.server.close();
+    google.server.close();
+    rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('publishes the price list and the ways to pay', async () => {
+    const plans = await ok('GET', '/v1/plans');
+    expect(plans).toMatchObject({ publicSignup: true, payments: { stripe: true, apple: true, google: true }, command: { monthly: 5499 }, server: { available: false, price: 10000 } });
+    expect(plans.editions.ultra).toMatchObject({ monthly: 1199, tenantMonthly: 959, productId: 'fbrx_ultra_monthly' });
+  });
+
+  it('makes an account, signs in, and signs computers up to nothing until something is bought', async () => {
+    const made = await ok('POST', '/v1/accounts/signup', { email: 'sam@example.com', name: 'Sam', password: PASSWORD, device: 'sam-laptop' });
+    expect(made.account).toMatchObject({ email: 'sam@example.com', tier: 'essentials', entitlements: [] });
+    expect((await call('POST', '/v1/accounts/signup', { email: 'SAM@example.com', name: 'Sam', password: PASSWORD })).status).toBe(409);
+    expect((await call('POST', '/v1/accounts/login', { email: 'sam@example.com', password: 'nope-nope-nope' })).status).toBe(401);
+    const { token } = await ok('POST', '/v1/accounts/login', { email: 'sam@example.com', password: PASSWORD, device: 'sam-phone' });
+    expect(await ok('GET', '/v1/accounts/license', undefined, token)).toEqual({ key: null, tier: 'essentials', expiresAt: null });
+    // An account token is not an FBRX Command console session.
+    expect((await call('GET', '/v1/admin/devices', undefined, token)).status).toBe(401);
+    expect((await call('GET', '/v1/accounts/me')).status).toBe(401);
+  });
+
+  it('sells Ultra with Stripe Checkout, follows the subscription by webhook, and signs a license up to Ultra', async () => {
+    const { token } = await ok('POST', '/v1/accounts/login', { email: 'sam@example.com', password: PASSWORD });
+    expect((await call('POST', '/v1/billing/checkout', { productId: 'fbrx_blackhole_tenant_monthly' }, token)).status).toBe(400);
+    const checkout = await ok('POST', '/v1/billing/checkout', { productId: 'fbrx_ultra_monthly' }, token);
+    expect(checkout.url).toBe('https://checkout.example/cs_1');
+    const session = decodeURIComponent(stripe.calls.find((c) => c.path === '/v1/checkout/sessions')!.body);
+    expect(session).toContain('line_items[0][price]=price_fbrx_ultra_monthly');
+    expect(session).toContain('mode=subscription');
+    expect(session).toMatch(/metadata\]\[fbrx_account\]=acc_/);
+
+    const me = await ok('GET', '/v1/accounts/me', undefined, token);
+    const end = Math.floor(Date.now() / 1000) + 30 * 86400;
+    const sub = { id: 'sub_1', customer: 'cus_1', status: 'active', metadata: { fbrx_account: me.id }, items: { data: [{ id: 'si_1', quantity: 1, current_period_end: end, price: { id: 'price_x', lookup_key: 'fbrx_ultra_monthly' } }] } };
+    // Only Stripe can send these.
+    expect((await stripeEvent({ id: 'evt_0', type: 'customer.subscription.created', data: { object: sub } }, 'whsec_wrong')).status).toBe(400);
+    expect((await stripeEvent({ id: 'evt_1', type: 'customer.subscription.created', data: { object: sub } })).json).toEqual({ received: true });
+    expect((await stripeEvent({ id: 'evt_1', type: 'customer.subscription.created', data: { object: sub } })).json).toMatchObject({ duplicate: true });
+
+    expect(await ok('GET', '/v1/accounts/me', undefined, token)).toMatchObject({ tier: 'ultra', billingPortal: true, entitlements: [{ productId: 'fbrx_ultra_monthly', source: 'stripe', status: 'active', valid: true }] });
+    const lic = await ok('GET', '/v1/accounts/license', undefined, token);
+    expect(lic.tier).toBe('ultra');
+    // A real license for this computer: up to Ultra, no organization in it, a few days past the period paid for.
+    const st = licenseStatusFrom(lic.key, [cp.ctx.keys.licensePublicPem], 'local', 2);
+    expect(st).toMatchObject({ state: 'valid', tier: 'ultra', edition: 'pro', commandUrl: null, customer: 'Sam' });
+    expect(Date.parse(st.expiresAt!) - end * 1000).toBeGreaterThan(2 * 86_400_000);
+    expect((await call('POST', '/v1/billing/checkout', { productId: 'fbrx_standard_monthly' }, token)).status).toBe(409);
+
+    // Payment failed: still counts while Stripe retries. Then it ends.
+    await stripeEvent({ id: 'evt_2', type: 'customer.subscription.updated', data: { object: { ...sub, status: 'past_due' } } });
+    expect((await ok('GET', '/v1/accounts/me', undefined, token)).tier).toBe('ultra');
+    await stripeEvent({ id: 'evt_3', type: 'customer.subscription.deleted', data: { object: { ...sub, status: 'canceled' } } });
+    expect((await ok('GET', '/v1/accounts/me', undefined, token)).tier).toBe('essentials');
+    // Checkout finished: FBRX reads the subscription from Stripe.
+    stripe.subscriptions.set('sub_2', { ...sub, id: 'sub_2', items: { data: [{ ...sub.items.data[0], price: { id: 'p', lookup_key: 'fbrx_standard_monthly' } }] } });
+    await stripeEvent({ id: 'evt_4', type: 'checkout.session.completed', data: { object: { mode: 'subscription', subscription: 'sub_2' } } });
+    expect((await ok('GET', '/v1/accounts/me', undefined, token)).tier).toBe('basic');
+    expect((await ok('POST', '/v1/billing/portal', {}, token)).url).toBe('https://billing.example/portal');
+  });
+
+  it('takes App Store purchases, checked against the Apple root, and follows the App Store notifications', async () => {
+    const { token, account } = await ok('POST', '/v1/accounts/signup', { email: 'ios@example.com', name: 'Ira', password: PASSWORD });
+    const appToken = cp.ctx.db.get<{ app_account_token: string }>('SELECT app_account_token FROM accounts WHERE id = ?', account.id)!.app_account_token;
+    const tx = { bundleId: 'com.fbrx.app', productId: 'fbrx_ultra_monthly', transactionId: '2000001', originalTransactionId: '1000001', appAccountToken: appToken, expiresDate: Date.now() + 30 * 86_400_000 };
+    expect(await ok('POST', '/v1/billing/apple/transactions', { signedTransaction: signJws(tx, chain) }, token)).toMatchObject({ tier: 'ultra' });
+    // Signed by anyone else, or bought by another account: refused.
+    expect((await call('POST', '/v1/billing/apple/transactions', { signedTransaction: signJws(tx, appleLikeChain()) }, token)).status).toBe(400);
+    const tampered = signJws(tx, chain).split('.');
+    tampered[1] = Buffer.from(JSON.stringify({ ...tx, productId: 'fbrx_ultra_monthly', expiresDate: Date.now() + 9e12 })).toString('base64url');
+    expect((await call('POST', '/v1/billing/apple/transactions', { signedTransaction: tampered.join('.') }, token)).status).toBe(400);
+    const other = await ok('POST', '/v1/accounts/signup', { email: 'thief@example.com', name: 'T', password: PASSWORD });
+    expect((await call('POST', '/v1/billing/apple/transactions', { signedTransaction: signJws(tx, chain) }, other.token)).status).toBe(403);
+    expect((await call('POST', '/v1/billing/apple/transactions', { signedTransaction: signJws({ ...tx, appAccountToken: undefined }, chain) }, other.token)).status).toBe(403);
+    // A refund ends it.
+    const refund = { notificationType: 'REFUND', notificationUUID: 'n-1', data: { bundleId: 'com.fbrx.app', signedTransactionInfo: signJws({ ...tx, revocationDate: Date.now() }, chain) } };
+    expect(await ok('POST', '/v1/billing/apple/notifications', { signedPayload: signJws(refund, chain) })).toEqual({ received: true });
+    expect((await ok('GET', '/v1/accounts/me', undefined, token)).tier).toBe('essentials');
+  });
+
+  it('takes Google Play purchases, acknowledges them, and follows Play notifications', async () => {
+    const { token, account } = await ok('POST', '/v1/accounts/signup', { email: 'droid@example.com', name: 'Dee', password: PASSWORD });
+    const purchase = { subscriptionState: 'SUBSCRIPTION_STATE_ACTIVE', acknowledgementState: 'ACKNOWLEDGEMENT_STATE_PENDING', lineItems: [{ productId: 'fbrx_standard_monthly', expiryTime: new Date(Date.now() + 30 * 86_400_000).toISOString() }], externalAccountIdentifiers: { obfuscatedExternalAccountId: account.id } };
+    google.purchases.set('tok-1-abcdef', purchase);
+    expect(await ok('POST', '/v1/billing/google/purchases', { productId: 'fbrx_standard_monthly', purchaseToken: 'tok-1-abcdef' }, token)).toMatchObject({ tier: 'basic' });
+    expect(google.acknowledged).toEqual(['tok-1-abcdef']);
+    const other = await ok('POST', '/v1/accounts/signup', { email: 'droid2@example.com', name: 'E', password: PASSWORD });
+    expect((await call('POST', '/v1/billing/google/purchases', { productId: 'fbrx_standard_monthly', purchaseToken: 'tok-1-abcdef' }, other.token)).status).toBe(403);
+
+    const push = (data: object, t = RTDN_TOKEN, id = 'm-1') => call('POST', `/v1/billing/google/rtdn?token=${t}`, { message: { data: Buffer.from(JSON.stringify(data)).toString('base64'), messageId: id } });
+    expect((await push({ packageName: 'com.fbrx.app' }, 'wrong')).status).toBe(403);
+    google.purchases.set('tok-1-abcdef', { ...purchase, subscriptionState: 'SUBSCRIPTION_STATE_EXPIRED', acknowledgementState: 'ACKNOWLEDGEMENT_STATE_ACKNOWLEDGED' });
+    // The notification says nothing about the state: FBRX asks Play.
+    expect((await push({ packageName: 'com.fbrx.app', subscriptionNotification: { notificationType: 13, purchaseToken: 'tok-1-abcdef', subscriptionId: 'fbrx_standard_monthly' } })).json).toEqual({ received: true });
+    expect((await ok('GET', '/v1/accounts/me', undefined, token)).tier).toBe('essentials');
+  });
+
+  it('lets the platform operator give an edition, and people delete their account', async () => {
+    const setup = await ok('POST', '/v1/setup', { setupToken: 'setup-token-123', organization: 'FBRX', name: 'Op', email: 'op@fbrx.example', password: PASSWORD });
+    expect(setup.ok).toBe(true);
+    const { token: admin } = await ok('POST', '/v1/auth/login', { email: 'op@fbrx.example', password: PASSWORD });
+    const list = await ok('GET', '/v1/admin/accounts?q=droid@', undefined, admin);
+    expect(list).toHaveLength(1);
+    expect(await ok('POST', `/v1/admin/accounts/${list[0].id}/grant`, { tier: 'ultra', days: 14 }, admin)).toMatchObject({ tier: 'ultra' });
+
+    const { token } = await ok('POST', '/v1/accounts/login', { email: 'sam@example.com', password: PASSWORD });
+    expect((await call('DELETE', '/v1/accounts/me', { password: 'wrong-wrong-wrong' }, token)).status).toBe(401);
+    expect(await ok('DELETE', '/v1/accounts/me', { password: PASSWORD }, token)).toMatchObject({ ok: true, note: null });
+    expect(stripe.calls.some((c) => c.method === 'DELETE' && c.path === '/v1/subscriptions/sub_2')).toBe(true);
+    expect((await call('GET', '/v1/accounts/me', undefined, token)).status).toBe(401);
+  });
+});

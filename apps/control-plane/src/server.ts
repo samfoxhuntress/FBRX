@@ -30,6 +30,7 @@ import { helpdeskRoutes } from './routes/helpdesk';
 import { chatRoutes } from './routes/chat';
 import { meshRoutes } from './routes/mesh';
 import { commandRoutes } from './routes/command';
+import { accountRoutes } from './routes/accounts';
 import { CommandUpdater } from './services/command-update';
 import { slugify } from './routes/util';
 import { loadTls } from './tls';
@@ -142,6 +143,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   await app.register(async (scoped) => adminOrgRoutes(scoped, ctx));
   await app.register(async (scoped) => adminFleetRoutes(scoped, ctx));
   await adminAssetRoutes(app, ctx);
+  await accountRoutes(app, ctx);
   const updater = new CommandUpdater({
     version,
     db,

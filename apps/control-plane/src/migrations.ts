@@ -420,4 +420,68 @@ export const CP_MIGRATIONS: Migration[] = [
     // The most a computer may run (essentials, basic = Standard, ultra), over its group's; null = its group's.
     up: `ALTER TABLE devices ADD COLUMN tier TEXT;`,
   },
+  {
+    version: 8,
+    name: 'accounts-billing',
+    // FBRX accounts (people, in the cloud), their sign-ins on computers and phones, what they bought (entitlements, one
+    // per subscription item or store purchase) and which organizations they belong to. billing_events makes each
+    // provider notification count once.
+    up: `
+      CREATE TABLE accounts (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        app_account_token TEXT NOT NULL UNIQUE,
+        stripe_customer_id TEXT UNIQUE,
+        failed_logins INTEGER NOT NULL DEFAULT 0,
+        locked_until TEXT,
+        last_login_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE account_sessions (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        label TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        last_seen_at TEXT,
+        revoked_at TEXT
+      );
+      CREATE TABLE entitlements (
+        id TEXT PRIMARY KEY,
+        account_id TEXT REFERENCES accounts(id) ON DELETE CASCADE,
+        tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE,
+        product_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        tier TEXT,
+        source TEXT NOT NULL,
+        external_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        period_end TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (source, external_id, product_id)
+      );
+      CREATE INDEX cp_entitlements_account ON entitlements (account_id);
+      CREATE INDEX cp_entitlements_tenant ON entitlements (tenant_id);
+      CREATE TABLE tenant_members (
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        tier TEXT NOT NULL DEFAULT 'essentials',
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (tenant_id, account_id)
+      );
+      CREATE TABLE billing_events (
+        id TEXT PRIMARY KEY,
+        source TEXT NOT NULL,
+        type TEXT NOT NULL,
+        received_at TEXT NOT NULL
+      );
+      ALTER TABLE tenants ADD COLUMN stripe_customer_id TEXT;
+    `,
+  },
 ];

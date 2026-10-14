@@ -1,5 +1,5 @@
 import { resolve } from 'node:path';
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { DEFAULT_CONTROL_PLANE_PORT, parseVertical, type Vertical } from '@fbrx/shared';
 
 export interface Config {
@@ -27,6 +27,58 @@ export interface Config {
   maxUploadBytes: number;
   logLevel: 'fatal' | 'error' | 'warn' | 'info' | 'debug' | 'trace' | 'silent';
   devMode: boolean;
+  /** FBRX accounts and payments (FBRX Command in the cloud). */
+  cloud: CloudConfig;
+}
+
+/**
+ * FBRX Command in the cloud: anyone may make an FBRX account (publicSignup), and accounts buy editions through the
+ * payment providers that are set up. Each provider is null until its keys are there.
+ */
+export interface CloudConfig {
+  publicSignup: boolean;
+  /** Where Checkout and the billing portal send people back to (the website's account page). */
+  returnUrl: string;
+  /** Stripe Checkout (cards, and the Apple Pay and Google Pay wallets where Stripe offers them). */
+  stripe: { secretKey: string; webhookSecret: string; apiBase: string } | null;
+  /** App Store purchases in the iPhone and iPad app (StoreKit 2 signed transactions, App Store Server Notifications V2). */
+  apple: { bundleId: string; rootCertificates: string[] } | null;
+  /** Google Play purchases in the Android app (Play Developer API, real-time developer notifications). */
+  google: { packageName: string; serviceAccount: { clientEmail: string; privateKey: string; tokenUri: string }; rtdnToken: string; apiBase: string } | null;
+}
+
+function readPems(paths: string | undefined): string[] {
+  return (paths ?? '')
+    .split(',')
+    .map((p) => p.trim())
+    .filter(Boolean)
+    .map((p) => {
+      const raw = readFileSync(resolve(p));
+      // Apple publishes its root as DER (.cer); PEM works too.
+      return raw.includes('-----BEGIN') ? raw.toString('utf8') : `-----BEGIN CERTIFICATE-----\n${raw.toString('base64').match(/.{1,64}/g)!.join('\n')}\n-----END CERTIFICATE-----\n`;
+    });
+}
+
+export function loadCloudConfig(env: NodeJS.ProcessEnv, publicUrl: string): CloudConfig {
+  const sa = env.FBRX_GOOGLE_SERVICE_ACCOUNT ? JSON.parse(readFileSync(resolve(env.FBRX_GOOGLE_SERVICE_ACCOUNT), 'utf8')) : null;
+  return {
+    publicSignup: env.FBRX_CP_PUBLIC_SIGNUP === '1',
+    returnUrl: (env.FBRX_CP_ACCOUNT_URL ?? `${publicUrl}/account`).replace(/\/+$/, ''),
+    stripe:
+      env.FBRX_STRIPE_SECRET_KEY && env.FBRX_STRIPE_WEBHOOK_SECRET
+        ? { secretKey: env.FBRX_STRIPE_SECRET_KEY, webhookSecret: env.FBRX_STRIPE_WEBHOOK_SECRET, apiBase: (env.FBRX_STRIPE_API_BASE ?? 'https://api.stripe.com').replace(/\/+$/, '') }
+        : null,
+    apple: env.FBRX_APPLE_BUNDLE_ID && env.FBRX_APPLE_ROOT_CA ? { bundleId: env.FBRX_APPLE_BUNDLE_ID, rootCertificates: readPems(env.FBRX_APPLE_ROOT_CA) } : null,
+    google:
+      env.FBRX_GOOGLE_PACKAGE_NAME && sa && env.FBRX_GOOGLE_RTDN_TOKEN
+        ? {
+            packageName: env.FBRX_GOOGLE_PACKAGE_NAME,
+            serviceAccount: { clientEmail: sa.client_email, privateKey: sa.private_key, tokenUri: sa.token_uri ?? 'https://oauth2.googleapis.com/token' },
+            rtdnToken: env.FBRX_GOOGLE_RTDN_TOKEN,
+            apiBase: (env.FBRX_GOOGLE_API_BASE ?? 'https://androidpublisher.googleapis.com').replace(/\/+$/, ''),
+          }
+        : null,
+  };
 }
 
 function findConsoleDir(): string | null {
@@ -71,6 +123,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
     maxUploadBytes: Number(env.FBRX_CP_MAX_UPLOAD_MB ?? 4096) * 1024 * 1024,
     logLevel: (env.FBRX_CP_LOG_LEVEL as Config['logLevel']) ?? 'info',
     devMode: env.FBRX_DEV_MODE === '1',
+    cloud: loadCloudConfig(env, (env.FBRX_CP_PUBLIC_URL ?? `http://localhost:${port}`).replace(/\/+$/, '')),
     ...overrides,
   };
   return cfg;

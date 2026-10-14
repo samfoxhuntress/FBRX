@@ -1,0 +1,441 @@
+import { randomUUID } from 'node:crypto';
+import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { SignJWT, jwtVerify } from 'jose';
+import { z } from 'zod';
+import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIER_SHORT, atLeast, productById, type AccountView, type PlansInfo } from '@fbrx/shared';
+import { hashPassword, safeEqual, verifyPassword } from '@fbrx/shared/node';
+import type { AppContext } from '../context';
+import { ids } from '../context';
+import { adminAuth, requirePerm } from '../auth';
+import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized } from '../errors';
+import { PasswordSchema } from './auth';
+import { accountEntitlements, accountLicense, accountTier, endOtherItems, entitlementView, handledBefore, isValid, markHandled, recordPurchase } from '../billing/entitlements';
+import { Stripe, StripeError, stripeStatus, subscriptionItems, type StripeEvent, type StripeSubscription } from '../billing/stripe';
+import { AppleError, appleStatus, verifyAppleJws, type AppleNotification, type AppleRenewal, type AppleTransaction } from '../billing/apple';
+import { GoogleError, GooglePlay, playStatus, type PlaySubscription } from '../billing/google';
+
+/**
+ * FBRX accounts and what they buy (FBRX Command in the cloud).
+ *
+ * - Anyone signs up (when FBRX_CP_PUBLIC_SIGNUP=1) with an email and a password; the app on a computer or a phone signs
+ *   in and keeps a long-lived account token, and fetches the account's license with it (GET /v1/accounts/license).
+ * - On the website and on computers, editions are bought with Stripe Checkout (cards, Apple Pay, Google Pay); in the
+ *   phone apps, with the App Store or Google Play (their rules: purchases made in an app go through the store). Every
+ *   purchase lands in the same entitlements, so whatever an account bought anywhere signs in everywhere.
+ */
+
+const ISSUER = 'fbrx-accounts';
+const ACCOUNT_TOKEN_DAYS = 90;
+
+interface AccountRow {
+  id: string;
+  email: string;
+  name: string;
+  password_hash: string;
+  status: string;
+  app_account_token: string;
+  stripe_customer_id: string | null;
+  failed_logins: number;
+  locked_until: string | null;
+  created_at: string;
+}
+
+declare module 'fastify' {
+  interface FastifyRequest {
+    account?: AccountRow;
+    accountSessionId?: string;
+    rawBody?: string;
+  }
+}
+
+export function accountView(ctx: AppContext, a: AccountRow): AccountView {
+  return {
+    id: a.id,
+    email: a.email,
+    name: a.name,
+    tier: accountTier(ctx, a.id).tier,
+    entitlements: accountEntitlements(ctx, a.id).map(entitlementView),
+    billingPortal: !!a.stripe_customer_id && !!ctx.config.cloud.stripe,
+    createdAt: a.created_at,
+  };
+}
+
+async function issueAccountToken(ctx: AppContext, account: AccountRow, label: string) {
+  const sid = ids.accountSession();
+  const now = new Date();
+  const expires = new Date(now.getTime() + ACCOUNT_TOKEN_DAYS * 86_400_000);
+  ctx.db.run('INSERT INTO account_sessions (id, account_id, label, created_at, expires_at, last_seen_at) VALUES (?,?,?,?,?,?)', sid, account.id, label.slice(0, 120), now.toISOString(), expires.toISOString(), now.toISOString());
+  const token = await new SignJWT({ sid }).setProtectedHeader({ alg: 'HS256' }).setSubject(account.id).setIssuedAt().setIssuer(ISSUER).setExpirationTime(Math.floor(expires.getTime() / 1000)).sign(ctx.keys.jwt);
+  return { token, expiresAt: expires.toISOString() };
+}
+
+function accountAuth(ctx: AppContext) {
+  return async (req: FastifyRequest) => {
+    const h = req.headers.authorization;
+    if (!h?.startsWith('Bearer ')) throw unauthorized('Sign in to your FBRX account');
+    try {
+      const { payload } = await jwtVerify(h.slice(7).trim(), ctx.keys.jwt, { issuer: ISSUER, algorithms: ['HS256'] });
+      const s = ctx.db.get<{ id: string; expires_at: string }>('SELECT id, expires_at FROM account_sessions WHERE id = ? AND revoked_at IS NULL', String(payload.sid ?? ''));
+      const a = ctx.db.get<AccountRow>("SELECT * FROM accounts WHERE id = ? AND status = 'active'", String(payload.sub ?? ''));
+      if (!s || s.expires_at < new Date().toISOString() || !a) throw new Error('gone');
+      ctx.db.run('UPDATE account_sessions SET last_seen_at = ? WHERE id = ?', new Date().toISOString(), s.id);
+      req.account = a;
+      req.accountSessionId = s.id;
+    } catch {
+      throw unauthorized('Your FBRX account sign-in has ended. Sign in again.');
+    }
+  };
+}
+
+const accountActor = (a: AccountRow, req: FastifyRequest) => ({ type: 'account' as const, id: a.id, label: a.email, tenantId: null, ip: req.ip });
+
+/** A product an account may buy for itself: Standard or Ultra, the personal plans. */
+function personalProduct(productId: string) {
+  const p = productById(productId);
+  if (!p || p.kind !== 'edition' || p.tenant) throw badRequest('That is not an edition you can buy for yourself (Standard or Ultra)');
+  return p;
+}
+
+export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
+  const cloud = ctx.config.cloud;
+  const auth = accountAuth(ctx);
+  const stripe = cloud.stripe ? new Stripe(cloud.stripe) : null;
+  const play = cloud.google ? new GooglePlay(cloud.google) : null;
+
+  app.get('/v1/plans', async (): Promise<PlansInfo & { editions: typeof EDITION_PLANS; command: typeof COMMAND_PLAN; server: typeof SERVER_OFFER }> => ({
+    editions: EDITION_PLANS,
+    command: COMMAND_PLAN,
+    server: SERVER_OFFER,
+    publicSignup: cloud.publicSignup,
+    payments: { stripe: !!stripe, apple: !!cloud.apple, google: !!play },
+  }));
+
+  // ------------------------------------------------------------------------------------------- accounts
+  app.post('/v1/accounts/signup', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+    if (!cloud.publicSignup) throw forbidden('This FBRX Command does not take new accounts');
+    const body = z.object({ email: z.string().email().max(200), name: z.string().trim().min(1).max(120), password: PasswordSchema, device: z.string().max(120).default('') }).parse(req.body);
+    if (ctx.db.get('SELECT id FROM accounts WHERE email = ?', body.email.trim())) throw conflict('There is already an FBRX account with that email. Sign in instead.');
+    const now = new Date().toISOString();
+    const id = ids.account();
+    ctx.db.run(
+      'INSERT INTO accounts (id, email, name, password_hash, app_account_token, created_at, updated_at) VALUES (?,?,?,?,?,?,?)',
+      id,
+      body.email.trim(),
+      body.name,
+      await hashPassword(body.password),
+      randomUUID(),
+      now,
+      now,
+    );
+    const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE id = ?', id)!;
+    ctx.audit.record(accountActor(a, req), 'account.created', { type: 'account', id });
+    return { ...(await issueAccountToken(ctx, a, body.device)), account: accountView(ctx, a) };
+  });
+
+  app.post('/v1/accounts/login', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+    const body = z.object({ email: z.string().max(200), password: z.string().max(200), device: z.string().max(120).default('') }).parse(req.body);
+    const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE email = ?', body.email.trim());
+    const fail = () => unauthorized('Wrong email or password');
+    if (!a || a.status !== 'active') throw fail();
+    if (a.locked_until && a.locked_until > new Date().toISOString()) throw unauthorized('Too many tries: wait a quarter of an hour and try again');
+    if (!(await verifyPassword(body.password, a.password_hash))) {
+      const fails = Number(a.failed_logins) + 1;
+      ctx.db.run('UPDATE accounts SET failed_logins = ?, locked_until = ? WHERE id = ?', fails, fails >= 10 ? new Date(Date.now() + 15 * 60_000).toISOString() : null, a.id);
+      throw fail();
+    }
+    ctx.db.run('UPDATE accounts SET failed_logins = 0, locked_until = NULL, last_login_at = ? WHERE id = ?', new Date().toISOString(), a.id);
+    ctx.audit.record(accountActor(a, req), 'account.login', { type: 'account', id: a.id }, { device: body.device });
+    return { ...(await issueAccountToken(ctx, a, body.device)), account: accountView(ctx, a) };
+  });
+
+  app.post('/v1/accounts/logout', { preHandler: auth }, async (req) => {
+    ctx.db.run('UPDATE account_sessions SET revoked_at = ? WHERE id = ?', new Date().toISOString(), req.accountSessionId!);
+    return { ok: true };
+  });
+
+  app.get('/v1/accounts/me', { preHandler: auth }, async (req) => accountView(ctx, req.account!));
+
+  /** The license this account signs a computer up to (null key with nothing bought). Computers fetch it again as it ends. */
+  app.get('/v1/accounts/license', { preHandler: auth }, async (req) => accountLicense(ctx, req.account!));
+
+  app.post('/v1/accounts/password', { preHandler: auth }, async (req) => {
+    const body = z.object({ current: z.string().max(200), password: PasswordSchema }).parse(req.body);
+    const a = req.account!;
+    if (!(await verifyPassword(body.current, a.password_hash))) throw unauthorized('Your current password is not right');
+    ctx.db.run('UPDATE accounts SET password_hash = ?, updated_at = ? WHERE id = ?', await hashPassword(body.password), new Date().toISOString(), a.id);
+    // Signed out everywhere else.
+    ctx.db.run('UPDATE account_sessions SET revoked_at = ? WHERE account_id = ? AND id != ? AND revoked_at IS NULL', new Date().toISOString(), a.id, req.accountSessionId!);
+    ctx.audit.record(accountActor(a, req), 'account.password', { type: 'account', id: a.id });
+    return { ok: true };
+  });
+
+  /**
+   * Deletes the account (the stores require that an app which makes accounts can delete them too). Subscriptions bought
+   * with Stripe end now; ones bought in the App Store or Google Play are ended in the store's subscription settings.
+   */
+  app.delete('/v1/accounts/me', { preHandler: auth }, async (req) => {
+    const body = z.object({ password: z.string().max(200) }).parse(req.body ?? {});
+    const a = req.account!;
+    if (!(await verifyPassword(body.password, a.password_hash))) throw unauthorized('Your password is not right');
+    const owned = accountEntitlements(ctx, a.id).filter((e) => isValid(e));
+    if (stripe) for (const subId of new Set(owned.filter((e) => e.source === 'stripe').map((e) => e.external_id))) await stripe.cancel(subId).catch(() => undefined);
+    const stores = [...new Set(owned.filter((e) => e.source === 'apple' || e.source === 'google').map((e) => e.source))];
+    ctx.db.run('DELETE FROM accounts WHERE id = ?', a.id);
+    ctx.audit.record(accountActor(a, req), 'account.deleted', { type: 'account', id: a.id });
+    return {
+      ok: true,
+      note: stores.length ? `Your ${stores.map((s) => (s === 'apple' ? 'App Store' : 'Google Play')).join(' and ')} subscription is not ended by this: end it in the store's subscription settings.` : null,
+    };
+  });
+
+  // ------------------------------------------------------------------------------------------- Stripe
+  const needStripe = () => {
+    if (!stripe) throw new HttpError(503, 'Card payments are not set up on this FBRX Command', 'UNAVAILABLE');
+    return stripe;
+  };
+  const stripeCall = async <T>(fn: () => Promise<T>): Promise<T> => {
+    try {
+      return await fn();
+    } catch (e) {
+      if (e instanceof StripeError) throw new HttpError(502, e.message, 'PAYMENT_PROVIDER');
+      throw e;
+    }
+  };
+
+  async function stripeCustomer(a: AccountRow): Promise<string> {
+    if (a.stripe_customer_id) return a.stripe_customer_id;
+    const c = await needStripe().createCustomer({ email: a.email, name: a.name, metadata: { fbrx_account: a.id } });
+    ctx.db.run('UPDATE accounts SET stripe_customer_id = ?, updated_at = ? WHERE id = ?', c.id, new Date().toISOString(), a.id);
+    return c.id;
+  }
+
+  app.post('/v1/billing/checkout', { preHandler: auth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+    const body = z.object({ productId: z.string().max(80) }).parse(req.body);
+    const product = personalProduct(body.productId);
+    const a = req.account!;
+    const s = needStripe();
+    const now = accountTier(ctx, a.id).tier;
+    if (atLeast(now, product.tier)) throw conflict(`Your FBRX account already has ${TIER_SHORT[now]}`);
+    if (accountEntitlements(ctx, a.id).some((e) => e.source === 'stripe' && e.kind === 'edition' && !e.tenant_id && isValid(e))) {
+      throw conflict('You already have a plan: change it in Manage billing');
+    }
+    const customer = await stripeCall(() => stripeCustomer(a));
+    const session = await stripeCall(() =>
+      s.checkout({
+        customer,
+        items: [{ productId: body.productId, quantity: 1 }],
+        successUrl: `${cloud.returnUrl}?checkout=done&session={CHECKOUT_SESSION_ID}`,
+        cancelUrl: `${cloud.returnUrl}?checkout=canceled`,
+        reference: a.id,
+        metadata: { fbrx_account: a.id },
+      }),
+    );
+    ctx.audit.record(accountActor(a, req), 'billing.checkout', { type: 'account', id: a.id }, { productId: body.productId, tier: product.tier });
+    return { url: session.url, id: session.id };
+  });
+
+  app.post('/v1/billing/portal', { preHandler: auth }, async (req) => {
+    const a = req.account!;
+    if (!a.stripe_customer_id) throw badRequest('Nothing was bought with this account on the website or a computer yet');
+    const p = await stripeCall(() => needStripe().portal({ customer: a.stripe_customer_id!, returnUrl: cloud.returnUrl }));
+    return { url: p.url };
+  });
+
+  /** Brings one Stripe subscription's items into the entitlements (an account's, or an organization's). */
+  async function syncStripeSubscription(sub: StripeSubscription) {
+    const meta = sub.metadata ?? {};
+    const accountId = meta.fbrx_account ?? ctx.db.get<{ id: string }>('SELECT id FROM accounts WHERE stripe_customer_id = ?', sub.customer)?.id ?? null;
+    const tenantId = meta.fbrx_tenant ?? ctx.db.get<{ id: string }>('SELECT id FROM tenants WHERE stripe_customer_id = ?', sub.customer)?.id ?? null;
+    const status = stripeStatus(sub.status);
+    const items = subscriptionItems(sub);
+    for (const i of items) recordPurchase(ctx, { source: 'stripe', externalId: sub.id, productId: i.productId, status, periodEnd: i.periodEnd, quantity: i.quantity, accountId: tenantId ? null : accountId, tenantId });
+    endOtherItems(ctx, 'stripe', sub.id, items.map((i) => i.productId));
+  }
+
+  // The webhook is signed over the exact bytes Stripe sent, so this route keeps the raw body.
+  await app.register(async (scoped) => {
+    scoped.removeContentTypeParser('application/json');
+    scoped.addContentTypeParser('application/json', { parseAs: 'string' }, (req, body, done) => {
+      (req as FastifyRequest).rawBody = body as string;
+      try {
+        done(null, JSON.parse(body as string));
+      } catch (e) {
+        done(e as Error, undefined);
+      }
+    });
+    scoped.post('/v1/billing/stripe/webhook', async (req, reply) => {
+      const s = needStripe();
+      let event: StripeEvent;
+      try {
+        event = s.verifyWebhook(req.rawBody ?? '', req.headers['stripe-signature'] as string | undefined);
+      } catch (e) {
+        return reply.status(400).send({ error: { code: 'INVALID_SIGNATURE', message: (e as Error).message } });
+      }
+      if (handledBefore(ctx, 'stripe', event.id)) return { received: true, duplicate: true };
+      const o = event.data.object;
+      if (event.type.startsWith('customer.subscription.')) await stripeCall(() => syncStripeSubscription(o as StripeSubscription));
+      else if (event.type === 'checkout.session.completed' && o.mode === 'subscription' && typeof o.subscription === 'string') {
+        await stripeCall(async () => syncStripeSubscription(await s.subscription(o.subscription)));
+      } else if (event.type.startsWith('invoice.')) {
+        const subId = typeof o.subscription === 'string' ? o.subscription : o.parent?.subscription_details?.subscription;
+        if (typeof subId === 'string') await stripeCall(async () => syncStripeSubscription(await s.subscription(subId)));
+      }
+      markHandled(ctx, 'stripe', event.id, event.type);
+      return { received: true };
+    });
+  });
+
+  // ------------------------------------------------------------------------------------------- App Store
+  const needApple = () => {
+    if (!cloud.apple) throw new HttpError(503, 'App Store purchases are not set up on this FBRX Command', 'UNAVAILABLE');
+    return cloud.apple;
+  };
+  const verifyApple = <T>(jws: string): T => {
+    try {
+      return verifyAppleJws<T>(jws, needApple());
+    } catch (e) {
+      if (e instanceof AppleError) throw badRequest(e.message);
+      throw e;
+    }
+  };
+
+  /** The iPhone or iPad app sends the transaction StoreKit gave it after a purchase (or a restore). */
+  app.post('/v1/billing/apple/transactions', { preHandler: auth }, async (req) => {
+    const body = z.object({ signedTransaction: z.string().max(20_000) }).parse(req.body);
+    const t = verifyApple<AppleTransaction>(body.signedTransaction);
+    const a = req.account!;
+    if (t.bundleId !== needApple().bundleId) throw badRequest('That purchase is for another app');
+    personalProduct(t.productId);
+    if (t.appAccountToken && t.appAccountToken.toLowerCase() !== a.app_account_token.toLowerCase()) throw forbidden('That purchase belongs to another FBRX account');
+    const owner = ctx.db.get<{ account_id: string | null }>("SELECT account_id FROM entitlements WHERE source = 'apple' AND external_id = ?", t.originalTransactionId);
+    if (owner?.account_id && owner.account_id !== a.id) throw forbidden('That purchase belongs to another FBRX account');
+    const { status, periodEnd } = appleStatus(t);
+    recordPurchase(ctx, { source: 'apple', externalId: t.originalTransactionId, productId: t.productId, status, periodEnd, accountId: a.id });
+    return accountView(ctx, a);
+  });
+
+  /** App Store Server Notifications V2 (set this URL in App Store Connect). */
+  app.post('/v1/billing/apple/notifications', async (req) => {
+    const body = z.object({ signedPayload: z.string().max(100_000) }).parse(req.body);
+    const n = verifyApple<AppleNotification>(body.signedPayload);
+    if (handledBefore(ctx, 'apple', n.notificationUUID)) return { received: true, duplicate: true };
+    if (n.data?.bundleId && n.data.bundleId !== needApple().bundleId) throw badRequest('That notification is for another app');
+    if (n.data?.signedTransactionInfo) {
+      const t = verifyApple<AppleTransaction>(n.data.signedTransactionInfo);
+      const renewal = n.data.signedRenewalInfo ? verifyApple<AppleRenewal>(n.data.signedRenewalInfo) : undefined;
+      const product = productById(t.productId);
+      if (product) {
+        const accountId =
+          ctx.db.get<{ account_id: string | null }>("SELECT account_id FROM entitlements WHERE source = 'apple' AND external_id = ?", t.originalTransactionId)?.account_id ??
+          (t.appAccountToken ? ctx.db.get<{ id: string }>('SELECT id FROM accounts WHERE app_account_token = ? COLLATE NOCASE', t.appAccountToken)?.id : null) ??
+          null;
+        const { status, periodEnd } = appleStatus(t, { type: n.notificationType, subtype: n.subtype }, renewal);
+        recordPurchase(ctx, { source: 'apple', externalId: t.originalTransactionId, productId: t.productId, status, periodEnd, accountId });
+      }
+    }
+    markHandled(ctx, 'apple', n.notificationUUID, n.notificationType);
+    return { received: true };
+  });
+
+  // ------------------------------------------------------------------------------------------- Google Play
+  const needPlay = () => {
+    if (!play) throw new HttpError(503, 'Google Play purchases are not set up on this FBRX Command', 'UNAVAILABLE');
+    return play;
+  };
+  const playCall = async <T>(fn: () => Promise<T>): Promise<T> => {
+    try {
+      return await fn();
+    } catch (e) {
+      if (e instanceof GoogleError) throw new HttpError(502, e.message, 'PAYMENT_PROVIDER');
+      throw e;
+    }
+  };
+
+  /** Records a Play subscription (and ends the one it replaced, after an upgrade or a downgrade). */
+  async function syncPlay(purchaseToken: string, sub: PlaySubscription, accountId: string | null) {
+    const status = playStatus(sub.subscriptionState);
+    if (sub.linkedPurchaseToken) ctx.db.run("UPDATE entitlements SET status = 'expired', updated_at = ? WHERE source = 'google' AND external_id = ?", new Date().toISOString(), sub.linkedPurchaseToken);
+    const known = sub.lineItems.filter((i) => productById(i.productId));
+    for (const i of known) {
+      recordPurchase(ctx, { source: 'google', externalId: purchaseToken, productId: i.productId, status, periodEnd: i.expiryTime ?? null, accountId });
+      if (sub.acknowledgementState === 'ACKNOWLEDGEMENT_STATE_PENDING' && (status === 'active' || status === 'grace')) await needPlay().acknowledge(i.productId, purchaseToken);
+    }
+  }
+
+  /** The Android app sends the purchase token Play Billing gave it. */
+  app.post('/v1/billing/google/purchases', { preHandler: auth }, async (req) => {
+    const body = z.object({ productId: z.string().max(80), purchaseToken: z.string().min(10).max(4000) }).parse(req.body);
+    personalProduct(body.productId);
+    const a = req.account!;
+    const sub = await playCall(() => needPlay().subscription(body.purchaseToken));
+    if (!sub.lineItems.some((i) => i.productId === body.productId)) throw badRequest('That purchase is for another product');
+    const external = sub.externalAccountIdentifiers?.obfuscatedExternalAccountId;
+    if (external && external !== a.id) throw forbidden('That purchase belongs to another FBRX account');
+    const owner = ctx.db.get<{ account_id: string | null }>("SELECT account_id FROM entitlements WHERE source = 'google' AND external_id = ?", body.purchaseToken);
+    if (owner?.account_id && owner.account_id !== a.id) throw forbidden('That purchase belongs to another FBRX account');
+    await playCall(() => syncPlay(body.purchaseToken, sub, a.id));
+    return accountView(ctx, a);
+  });
+
+  /** Real-time developer notifications, pushed by Cloud Pub/Sub to …/rtdn?token=<FBRX_GOOGLE_RTDN_TOKEN>. */
+  app.post('/v1/billing/google/rtdn', async (req, reply) => {
+    const p = needPlay();
+    const token = String((req.query as Record<string, string>)?.token ?? '');
+    if (!safeEqual(token, cloud.google!.rtdnToken)) return reply.status(403).send({ error: { code: 'FORBIDDEN', message: 'Wrong token' } });
+    const body = z.object({ message: z.object({ data: z.string(), messageId: z.string().optional(), message_id: z.string().optional() }) }).parse(req.body);
+    const messageId = body.message.messageId ?? body.message.message_id ?? '';
+    if (messageId && handledBefore(ctx, 'google', messageId)) return { received: true, duplicate: true };
+    const data = JSON.parse(Buffer.from(body.message.data, 'base64').toString('utf8')) as { packageName?: string; subscriptionNotification?: { notificationType: number; purchaseToken: string; subscriptionId?: string } };
+    if (data.packageName && data.packageName !== cloud.google!.packageName) throw badRequest('That notification is for another app');
+    const n = data.subscriptionNotification;
+    if (n) {
+      // Never what the notification says: what Play says about the purchase now.
+      const sub = await playCall(() => p.subscription(n.purchaseToken));
+      const accountId =
+        ctx.db.get<{ account_id: string | null }>("SELECT account_id FROM entitlements WHERE source = 'google' AND external_id = ?", n.purchaseToken)?.account_id ??
+        ctx.db.get<{ id: string }>('SELECT id FROM accounts WHERE id = ?', sub.externalAccountIdentifiers?.obfuscatedExternalAccountId ?? '')?.id ??
+        null;
+      await playCall(() => syncPlay(n.purchaseToken, sub, accountId));
+    }
+    if (messageId) markHandled(ctx, 'google', messageId, n ? `subscription.${n.notificationType}` : 'other');
+    return { received: true };
+  });
+
+  // ------------------------------------------------------------------------------------------- the platform operator
+  await app.register(async (admin) => {
+    admin.addHook('preHandler', adminAuth(ctx));
+    admin.get('/v1/admin/accounts', async (req) => {
+      requirePerm(req, 'tenants.manage');
+      const q = String((req.query as Record<string, string>)?.q ?? '').trim();
+      const rows = q ? ctx.db.all<AccountRow>('SELECT * FROM accounts WHERE email LIKE ? OR name LIKE ? ORDER BY created_at DESC LIMIT 200', `%${q}%`, `%${q}%`) : ctx.db.all<AccountRow>('SELECT * FROM accounts ORDER BY created_at DESC LIMIT 200');
+      return rows.map((a) => ({ ...accountView(ctx, a), status: a.status }));
+    });
+    /** Gives an account an edition (support, a promotion), for a number of days or with no end. */
+    admin.post('/v1/admin/accounts/:id/grant', async (req) => {
+      const p = requirePerm(req, 'tenants.manage');
+      const body = z.object({ tier: z.enum(['basic', 'ultra']), days: z.number().int().min(1).max(3650).nullable().default(30) }).parse(req.body);
+      const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE id = ?', (req.params as { id: string }).id);
+      if (!a) throw notFound('No such account');
+      recordPurchase(ctx, {
+        source: 'grant',
+        externalId: `grant_${randomUUID()}`,
+        productId: EDITION_PLANS[body.tier].productId!,
+        status: 'active',
+        periodEnd: body.days ? new Date(Date.now() + body.days * 86_400_000).toISOString() : null,
+        accountId: a.id,
+      });
+      ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId: null, ip: req.ip }, 'account.granted', { type: 'account', id: a.id }, body);
+      return accountView(ctx, a);
+    });
+    admin.post('/v1/admin/accounts/:id/status', async (req) => {
+      const p = requirePerm(req, 'tenants.manage');
+      const body = z.object({ status: z.enum(['active', 'disabled']) }).parse(req.body);
+      const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE id = ?', (req.params as { id: string }).id);
+      if (!a) throw notFound('No such account');
+      ctx.db.run('UPDATE accounts SET status = ?, updated_at = ? WHERE id = ?', body.status, new Date().toISOString(), a.id);
+      if (body.status === 'disabled') ctx.db.run('UPDATE account_sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL', new Date().toISOString(), a.id);
+      ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId: null, ip: req.ip }, `account.${body.status}`, { type: 'account', id: a.id });
+      return { ok: true };
+    });
+  });
+}

@@ -70,4 +70,7 @@ export const ids = {
   ticket: () => newId('tkt'),
   ticketMessage: () => newId('tkm'),
   chatMessage: () => newId('chm'),
+  account: () => newId('acc'),
+  accountSession: () => newId('acs'),
+  entitlement: () => newId('ent'),
 };
