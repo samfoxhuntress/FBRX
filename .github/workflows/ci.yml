@@ -34,12 +34,13 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
-      - name: Build admin console, control plane, desktop and FBRX Virtual bundles
+      - name: Build admin console, control plane, desktop, FBRX Virtual bundles and the website
         run: |
           npm run build -w @fbrx/admin-console
           npm run build -w @fbrx/control-plane
           npm run build -w @fbrx/desktop
           npm run build:server
+          npm run build -w @fbrx/website
       - name: Pack example plugin
         run: node scripts/pack-plugin.mjs plugins/example-toolkit
 

@@ -44,7 +44,7 @@ describe('signing in on a computer with an FBRX account', () => {
   beforeAll(async () => {
     dataDir = mkdtempSync(join(tmpdir(), 'fbrx-acct-'));
     cp = await buildServer(
-      loadConfig({}, { dataDir, port: 0, host: '127.0.0.1', logLevel: 'silent', setupToken: 'setup-token-123', adminConsoleDir: null, heartbeatSeconds: 10, cloud: { publicSignup: true, returnUrl: 'https://fbrx.example/account', stripe: null, apple: null, google: null } }),
+      loadConfig({}, { dataDir, port: 0, host: '127.0.0.1', logLevel: 'silent', setupToken: 'setup-token-123', adminConsoleDir: null, heartbeatSeconds: 10, cloud: { publicSignup: true, returnUrl: 'https://fbrx.example/account', websiteOrigins: [], stripe: null, apple: null, google: null } }),
     );
     await cp.app.listen({ port: 0, host: '127.0.0.1' });
     base = `http://127.0.0.1:${(cp.app.server.address() as AddressInfo).port}`;

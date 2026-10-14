@@ -847,7 +847,7 @@ export function NetworkPage({ advanced, everything, easterEggs }: { advanced: bo
   // network/speed, network/printers… open that tab directly.
   const [tab, setTab] = useState<Tab>(() => (NET_TABS.includes(routeArg() as Tab) ? (routeArg() as Tab) : 'overview'));
   // Endpoint Essentials and Standard keep the everyday tabs; Ultra adds the IT ones, Black Hole the network
-  // environments (UniFi consoles).
+  // environments (network controllers).
   const all: Array<{ id: Tab; label: ReactNode; ultra?: boolean; blackhole?: boolean }> = [
     { id: 'overview', label: 'Overview' },
     { id: 'environments', label: advancedLabel('Environments', true), ultra: true, blackhole: true },
@@ -866,7 +866,7 @@ export function NetworkPage({ advanced, everything, easterEggs }: { advanced: bo
     <Page title="Network Center" description={advanced ? 'See how this PC connects, what else is on your network, and what is slowing things down.' : 'See how this computer connects and what is slowing things down.'}>
       <Tabs tabs={tabs} active={shown} onChange={setTab} />
       {!advanced && shown === 'overview' && <UltraHint>Network scans and device consoles come with Endpoint Ultra.</UltraHint>}
-      {advanced && !everything && shown === 'overview' && <UltraHint tier="blackhole">Attaching your school or office network (a UniFi console) comes with Black Hole, through your organization’s FBRX Command.</UltraHint>}
+      {advanced && !everything && shown === 'overview' && <UltraHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole, through your organization’s FBRX Command.</UltraHint>}
       {shown === 'overview' && <Overview />}
       {shown === 'environments' && <Environments />}
       {shown === 'trace' && <Trace />}

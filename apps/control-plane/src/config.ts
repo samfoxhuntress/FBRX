@@ -39,6 +39,8 @@ export interface CloudConfig {
   publicSignup: boolean;
   /** Where Checkout and the billing portal send people back to (the website's account page). */
   returnUrl: string;
+  /** The website's origins (https://fbrx.example): they may call the account and billing API from the browser. */
+  websiteOrigins: string[];
   /** Stripe Checkout (cards, and the Apple Pay and Google Pay wallets where Stripe offers them). */
   stripe: { secretKey: string; webhookSecret: string; apiBase: string } | null;
   /** App Store purchases in the iPhone and iPad app (StoreKit 2 signed transactions, App Store Server Notifications V2). */
@@ -64,6 +66,7 @@ export function loadCloudConfig(env: NodeJS.ProcessEnv, publicUrl: string): Clou
   return {
     publicSignup: env.FBRX_CP_PUBLIC_SIGNUP === '1',
     returnUrl: (env.FBRX_CP_ACCOUNT_URL ?? `${publicUrl}/account`).replace(/\/+$/, ''),
+    websiteOrigins: (env.FBRX_CP_WEBSITE_ORIGINS ?? '').split(',').map((o) => o.trim().replace(/\/+$/, '')).filter(Boolean),
     stripe:
       env.FBRX_STRIPE_SECRET_KEY && env.FBRX_STRIPE_WEBHOOK_SECRET
         ? { secretKey: env.FBRX_STRIPE_SECRET_KEY, webhookSecret: env.FBRX_STRIPE_WEBHOOK_SECRET, apiBase: (env.FBRX_STRIPE_API_BASE ?? 'https://api.stripe.com').replace(/\/+$/, '') }

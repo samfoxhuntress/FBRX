@@ -16,7 +16,7 @@ The desktop app is **FBRX Endpoint**, in four editions (see COMMAND_CENTER.md fo
   adapters, device consoles, developer tools, the Local API), Mesh and AI coordination, connections, tools and
   plugins, governance, and the theme studio with its gradients and textures.
 * **FBRX Endpoint Black Hole** (`blackhole`) — everything: Ultra plus the whole Library (The Lab and the FBRX command
-  library), network environments (UniFi consoles) in Network Center and the FBRX Server page. For the people who run
+  library), network environments in Network Center and the FBRX Server page. For the people who run
   an organization's FBRX Command and its FBRX Servers, and only through FBRX Command.
 
 The easter eggs come with every edition, once their secret key unlocks them.

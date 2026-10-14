@@ -128,6 +128,7 @@ describe('FBRX accounts and what they buy', () => {
           cloud: {
             publicSignup: true,
             returnUrl: 'https://fbrx.example/account',
+            websiteOrigins: ['https://fbrx.example'],
             stripe: { secretKey: 'sk_test_123', webhookSecret: WEBHOOK_SECRET, apiBase: stripeUrl },
             apple: { bundleId: 'com.fbrx.app', rootCertificates: [chain.root.pem] },
             google: {
@@ -149,6 +150,15 @@ describe('FBRX accounts and what they buy', () => {
     stripe.server.close();
     google.server.close();
     rmSync(dataDir, { recursive: true, force: true });
+  });
+
+  it('lets the website (its own origin) call the account API, and nothing else', async () => {
+    const pre = await fetch(`${base}/v1/accounts/login`, { method: 'OPTIONS', headers: { origin: 'https://fbrx.example', 'access-control-request-method': 'POST', 'access-control-request-headers': 'content-type' } });
+    expect(pre.status).toBe(204);
+    expect(pre.headers.get('access-control-allow-origin')).toBe('https://fbrx.example');
+    expect((await fetch(`${base}/v1/plans`, { headers: { origin: 'https://fbrx.example' } })).headers.get('access-control-allow-origin')).toBe('https://fbrx.example');
+    expect((await fetch(`${base}/v1/plans`, { headers: { origin: 'https://evil.example' } })).headers.get('access-control-allow-origin')).toBeNull();
+    expect((await fetch(`${base}/v1/admin/devices`, { headers: { origin: 'https://fbrx.example' } })).headers.get('access-control-allow-origin')).toBeNull();
   });
 
   it('publishes the price list and the ways to pay', async () => {

@@ -169,7 +169,7 @@ const TIER_POINTS: Record<Tier, string[]> = {
   essentials: ['Your AI, ready to chat, running on this computer', 'Chat history, memory and voice', 'AI models: a bigger one, or another AI', 'A short sidebar, and a walkthrough'],
   basic: ['Everything in Essentials', 'Your AI’s controls: steps, answer length, how much it keeps in mind', 'FBRX Glass, alerts, messages, notes, tasks and calendar', 'Storage, FBRX Shield, updates, network, backups, files and the toolbox'],
   ultra: ['Everything in Standard', 'Terminal, Task Manager and the virtual lab', 'Mesh & phone, AI coordination, connections and plugins', 'The theme studio and every look'],
-  blackhole: ['Everything in Ultra', 'The whole Library: The Lab and every FBRX command', 'Network environments (UniFi consoles) in Network Center', 'The FBRX Server page, for the people who run your servers'],
+  blackhole: ['Everything in Ultra', 'The whole Library: The Lab and every FBRX command', 'Network environments: your office or school network’s controller, in Network Center', 'The FBRX Server page, for the people who run your servers'],
 };
 
 /** "$4.99 a month", "Free", "$24.99 a month, through FBRX Command". */

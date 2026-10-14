@@ -136,6 +136,18 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     return reply.status(status).send({ error: { code: status === 429 ? 'RATE_LIMITED' : 'ERROR', message: status >= 500 ? 'Internal server error' : (err as Error).message } });
   });
 
+  // The website (its own origin) calls the account and billing API from the browser: CORS for those routes only.
+  const websiteApi = /^\/v1\/(plans|accounts(\/|$)|billing\/(checkout|portal)$)/;
+  app.addHook('onRequest', async (req, reply) => {
+    const origin = req.headers.origin;
+    if (!origin || !config.cloud.websiteOrigins.includes(origin) || !websiteApi.test(req.url.split('?')[0]!)) return;
+    reply.header('access-control-allow-origin', origin);
+    reply.header('vary', 'Origin');
+    reply.header('access-control-allow-headers', 'authorization, content-type');
+    reply.header('access-control-allow-methods', 'GET, POST, DELETE, OPTIONS');
+    reply.header('access-control-max-age', '600');
+    if (req.method === 'OPTIONS') return reply.status(204).send();
+  });
   // An organization's computers changed (their editions, their groups, members): its plan's seats follow.
   app.addHook('onResponse', async (req, reply) => {
     if (req.method === 'GET' || reply.statusCode >= 400 || !req.principal || !/^\/v1\/admin\/(devices|groups|members)\b/.test(req.url)) return;
