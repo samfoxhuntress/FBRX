@@ -39,6 +39,24 @@ export interface AccountView {
   entitlements: EntitlementView[];
   /** Can open the billing portal (has bought through Stripe). */
   billingPortal: boolean;
+  /** The organizations (FBRX Command tenants) the account belongs to, and the edition each gives it. */
+  memberships: AccountMembership[];
+  createdAt: string;
+}
+
+export interface AccountMembership {
+  tenantId: string;
+  tenantName: string;
+  tier: Tier;
+}
+
+/** A member of an organization, as its FBRX Command shows them. */
+export interface MemberView {
+  accountId: string;
+  email: string;
+  name: string;
+  tier: Tier;
+  devices: number;
   createdAt: string;
 }
 
@@ -53,4 +71,24 @@ export interface AccountLicense {
 export interface PlansInfo {
   publicSignup: boolean;
   payments: { stripe: boolean; apple: boolean; google: boolean };
+}
+
+/** The FBRX account this computer is signed in to (Settings → Account). */
+export interface AccountStatus {
+  signedIn: boolean;
+  /** The FBRX Command the account lives on ("" until one is known: then the sign-in asks for its address). */
+  server: string;
+  email: string | null;
+  name: string | null;
+  /** The edition the account's own purchases give (Essentials with none). */
+  tier: Tier;
+  /** Until when the account's license on this computer runs (it is renewed by itself well before). */
+  licenseUntil: string | null;
+  memberships: AccountMembership[];
+  /** Whether the account can buy and manage plans from this computer (the website's way: Stripe). */
+  canBuy: boolean;
+  billingPortal: boolean;
+  lastSyncAt: string | null;
+  /** Why the last renewal did not work (the internet, or the sign-in ended). */
+  error: string | null;
 }

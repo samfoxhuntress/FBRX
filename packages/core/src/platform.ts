@@ -65,6 +65,8 @@ export interface PlatformAdapter {
   licensePublicKeys: string[];
   /** Microsoft app (client) ID for signing in to Outlook / Microsoft 365 calendars. Embedded at build time, if any. */
   microsoftClientId?: string | null;
+  /** The FBRX Command that FBRX accounts live on (FBRX's cloud). Embedded at build time, if any; otherwise the sign-in asks. */
+  accountServer?: string | null;
   /** Run plugins under the Node permission model. Disable only for debugging. */
   sandboxPlugins: boolean;
   updates: UpdateController | null;

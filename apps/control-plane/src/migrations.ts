@@ -484,4 +484,15 @@ export const CP_MIGRATIONS: Migration[] = [
       ALTER TABLE tenants ADD COLUMN stripe_customer_id TEXT;
     `,
   },
+  {
+    version: 9,
+    name: 'account-devices',
+    // A member signing in on a computer enrolls it with a one-time token carrying the edition their organization gave
+    // them; the computer remembers whose it is.
+    up: `
+      ALTER TABLE enrollment_tokens ADD COLUMN tier TEXT;
+      ALTER TABLE enrollment_tokens ADD COLUMN account_id TEXT;
+      ALTER TABLE devices ADD COLUMN account_id TEXT;
+    `,
+  },
 ];

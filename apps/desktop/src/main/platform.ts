@@ -8,6 +8,8 @@ import type { NotificationEvent } from '@fbrx/shared';
 declare const __FBRX_LICENSE_PUBKEYS__: string[];
 /** Microsoft app (client) ID for Outlook / Microsoft 365 calendars, from FBRX_MS_CLIENT_ID at build time. */
 declare const __FBRX_MS_CLIENT_ID__: string;
+/** The FBRX Command FBRX accounts live on (FBRX's cloud), embedded at build time. */
+declare const __FBRX_ACCOUNT_SERVER__: string;
 
 /** Vault key protection via the OS keychain (macOS Keychain, Windows DPAPI, libsecret on Linux). */
 export class ElectronKeychain implements KeychainAdapter {
@@ -86,6 +88,7 @@ export function createElectronPlatform(o: {
     pluginWorkerPath: join(workerDir, 'plugin-worker.mjs'),
     licensePublicKeys: keys,
     microsoftClientId: (typeof __FBRX_MS_CLIENT_ID__ !== 'undefined' && __FBRX_MS_CLIENT_ID__) || process.env.FBRX_MS_CLIENT_ID || null,
+    accountServer: (typeof __FBRX_ACCOUNT_SERVER__ !== 'undefined' && __FBRX_ACCOUNT_SERVER__) || process.env.FBRX_ACCOUNT_SERVER || null,
     sandboxPlugins: process.env.FBRX_PLUGIN_SANDBOX !== '0',
     updates: o.updates,
     meshMobileDir: join(workerDir, 'mobile'),

@@ -6107,3 +6107,16 @@ body.popout .fx-page-header p {
   border-radius: 8px;
   border: 1px solid var(--border);
 }
+
+/* Settings → FBRX account: an organization the account belongs to. */
+.account-org {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--surface-2);
+}

@@ -97,6 +97,11 @@ is allowed, and otherwise its price and *Join your organization*. Student comput
 EDUCATION.md). The edition shows beside the name in the sidebar, at the top of **Settings**, in the window title,
 under **Settings → Logs & about**, and in FBRX Command next to each device's version.
 
+**FBRX accounts.** Settings → **FBRX account** signs in to an FBRX account (or makes one): the computer turns on what
+the account bought, wherever it was bought, and a member of an organization can join the computer to it at the
+edition the organization gave them. Signed in, the locked editions in Settings → Edition have a **Get** button that
+opens the checkout in the browser. See ACCOUNTS.md.
+
 **Computers from before 2.0.** Until 2.0, Standard was free on a computer on its own. A computer set up before keeps
 Standard, free, for **30 days** after it first starts 2.0 (Settings → Edition says until when); then it runs
 Essentials unless Standard or Ultra is bought. A computer set up before Essentials existed keeps the edition it had

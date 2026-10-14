@@ -108,6 +108,7 @@ import { PluginHost } from './plugins/plugin-host';
 import { ConnectorHub } from './connectors/hub';
 import { BackupService } from './backup/backup-service';
 import { applyStagedRestore, stageRestore } from './backup/snapshot';
+import { AccountService } from './account/account-service';
 import { FleetAgent } from './fleet/fleet-agent';
 import { deviceFacts } from './fleet/machine';
 import { LocalApiServer } from './localapi/local-api';
@@ -175,6 +176,7 @@ export class Kernel {
   readonly connectors: ConnectorHub;
   readonly backup: BackupService;
   readonly fleet: FleetAgent;
+  readonly account: AccountService;
   readonly localApi: LocalApiServer;
   readonly services: ServiceManager;
   readonly workspace: WorkspaceStore;
@@ -399,6 +401,17 @@ export class Kernel {
         this.messages.onPush(msg);
         if (msg.type === 'mesh.roster') void this.orgMesh.sync();
       },
+    });
+    this.account = new AccountService({
+      meta: this.meta,
+      vault: this.vault,
+      license: this.license,
+      audit: this.audit,
+      events: this.events,
+      log: L('account'),
+      defaultServer: this.platform.accountServer ?? '',
+      deviceName: () => this.deviceName(),
+      enroll: (serverUrl, token, fingerprint, actor) => this.fleet.enroll(serverUrl, token, undefined, actor, undefined, fingerprint ?? undefined),
     });
     this.helpdesk = new Helpdesk({
       fleet: this.fleet,
@@ -1109,6 +1122,8 @@ export class Kernel {
     if (this.platform.shell === 'desktop' && this.starterAiWanted()) void this.starter.prepare({ auto: true });
     this.messages.start();
     this.orgMesh.start();
+    // The FBRX account's license, renewed now and every few hours (when someone signed in).
+    this.account.start();
     // A provisioning file (IT deployment) goes first; a license that names an FBRX Command tenant joins after it.
     void this.applyProvisioning()
       .catch((err) => this.log.error('Provisioning failed', { error: errorMessage(err) }))
@@ -1192,6 +1207,7 @@ export class Kernel {
     }
     this.started = false;
     this.release.stop();
+    this.account.stop();
     this.messages.stop();
     this.orgMesh.stop();
     this.terminal.killAll();

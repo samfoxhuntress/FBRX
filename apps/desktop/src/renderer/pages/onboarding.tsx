@@ -5,19 +5,21 @@ import { call, pickFile } from '../client';
 import { useAgentName, useStarterAi } from '../hooks';
 import { RestoreModal } from './backup';
 import { JoinForm } from '../join';
+import { AccountSignInForm } from '../account';
 
 /**
  * First start: one screen, then the chat. The AI is already getting ready by itself (the starter model, which
  * "Install FBRX OS" usually downloaded before the app even opened), so the only question is an optional name.
  * Everything else waits until someone wants it: a vault recovery passphrase (Vault), another AI (AI models),
  * this computer's name (Settings). Moving from another computer (restore a backup) and joining an organization's
- * FBRX Command are a click away here.
+ * FBRX Command are a click away here, and so is signing in to an FBRX account (which brings what it bought).
  */
 export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: () => void }) {
   const agentName = useAgentName();
   const starter = useStarterAi();
   const [name, setName] = useState('');
   const [joining, setJoining] = useState(false);
+  const [signingIn, setSigningIn] = useState(false);
   const [restore, setRestore] = useState<{ file: string; header: SnapshotHeader } | null>(null);
   const { run, busy } = useAction();
 
@@ -51,7 +53,20 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
           </div>
         </div>
         <Card>
-          {joining ? (
+          {signingIn ? (
+            <div className="fx-form">
+              <h1>Sign in to your FBRX account</h1>
+              <p className="fx-secondary">Whatever your account has (bought on the website, another computer or your phone) comes on here too.</p>
+              <AccountSignInForm
+                onDone={() => void finish()}
+                extraActions={
+                  <Button variant="ghost" onClick={() => setSigningIn(false)}>
+                    Back
+                  </Button>
+                }
+              />
+            </div>
+          ) : joining ? (
             <div className="fx-form">
               <h1>Connect to your organization</h1>
               <p className="fx-secondary">If your company, school or family runs FBRX Command, connect so it can look after updates, settings and backups, and answer your requests for help.</p>
@@ -101,6 +116,9 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
                   }}
                 >
                   Moving from another computer? Restore its backup
+                </Button>
+                <Button size="sm" variant="ghost" icon="user" onClick={() => setSigningIn(true)}>
+                  I have an FBRX account
                 </Button>
                 {status.fleet.state === 'unenrolled' && (
                   <Button size="sm" variant="ghost" icon="users" onClick={() => setJoining(true)}>

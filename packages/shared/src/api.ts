@@ -6,6 +6,7 @@
  * method is validated and audited by the core before it runs.
  */
 import type { LicenseStatus } from './license';
+import type { AccountStatus } from './accounts';
 import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
 import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
 import type { ExtEvents, ExtMethods } from './ext';
@@ -671,6 +672,17 @@ export interface CoreMethods extends ExtMethods {
   'license.status': () => LicenseStatus;
   'license.activate': (p: { key: string }) => LicenseStatus;
   'license.remove': () => LicenseStatus;
+  'account.status': () => AccountStatus;
+  /** Signs in to an FBRX account (or makes one, `create`), and turns on what it bought. */
+  'account.signIn': (p: { server?: string; email: string; password: string; name?: string; create?: boolean }) => AccountStatus;
+  'account.signOut': () => AccountStatus;
+  'account.refresh': () => AccountStatus;
+  /** A page to buy Standard or Ultra (Stripe Checkout), to open in the browser. */
+  'account.checkout': (p: { productId: string }) => { url: string };
+  /** The billing portal: change the plan or the card, invoices, cancel. */
+  'account.portal': () => { url: string };
+  /** Joins this computer to an organization the account belongs to, at the edition it gives the account. */
+  'account.join': (p: { tenantId: string }) => AccountStatus;
 
   'updates.status': () => UpdateStatus;
   'updates.check': () => UpdateStatus;
@@ -711,6 +723,7 @@ export interface CoreEvents extends ExtEvents {
   'tools.changed': ToolInfo[];
   'fleet.changed': FleetStatus;
   'license.changed': LicenseStatus;
+  'account.changed': AccountStatus;
   'updates.changed': UpdateStatus;
   'release.changed': ReleaseCheck;
   notification: NotificationEvent;

@@ -129,7 +129,8 @@ export interface LicenseStatus {
   expiresAt: string | null;
   features: string[];
   message: string | null;
-  source: 'none' | 'local' | 'managed' | 'development';
+  /** Where the license came from: typed in (local), the organization's FBRX Command (managed), the person's FBRX account. */
+  source: 'none' | 'local' | 'managed' | 'account' | 'development';
   /** The FBRX Command address this license joins, if it names one. */
   commandUrl: string | null;
   /** Education or Home licenses (null = business). */

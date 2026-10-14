@@ -14,6 +14,7 @@ import { SnippetSettings } from './settings-snippets';
 import { VoiceSettings } from './settings-voice';
 import { MemorySettings } from './settings-memory';
 import { AboutVersion, ReleasePanel } from '../release';
+import { AccountSettings, BuyButtons, useAccount } from '../account';
 import { UltraHint, graceLine, howToGet, useAtLeast, useChooseEdition, useEditionStatus, useLearner, useTier, useVertical } from '../edition';
 
 function Locked({ show }: { show: boolean }) {
@@ -24,7 +25,7 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'memory' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'edition' | 'license' | 'api' | 'logs';
+type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'memory' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'api' | 'logs';
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
@@ -38,6 +39,7 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: str
   { id: 'spotlight', label: 'Spotlight', icon: 'search', group: 'You' },
   { id: 'trophies', label: 'Trophy case', icon: 'trophy', group: 'You' },
   { id: 'updates', label: 'Updates', icon: 'download', group: 'This computer' },
+  { id: 'account', label: 'FBRX account', icon: 'user', group: 'This computer' },
   { id: 'edition', label: 'Edition', icon: 'layers', group: 'This computer' },
   { id: 'license', label: 'License', icon: 'key', group: 'This computer' },
   { id: 'api', label: 'Local API', icon: 'link', group: 'For experts', ultra: true },
@@ -102,6 +104,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'spotlight' && <SpotlightSettings />}
           {tab === 'trophies' && <Trophies />}
           {tab === 'updates' && <Updates />}
+          {tab === 'account' && <AccountSettings />}
           {tab === 'edition' && <EditionSettings />}
           {tab === 'license' && <License />}
           {tab === 'api' && <LocalApi />}
@@ -184,6 +187,7 @@ function priceLine(t: Tier): ReactNode {
  */
 function EditionSettings() {
   const ed = useEditionStatus();
+  const account = useAccount();
   const { choose, busy } = useChooseEdition();
   if (!ed) return null;
   const why =
@@ -219,6 +223,8 @@ function EditionSettings() {
                 <div className="ed-choice-foot">
                   {current ? (
                     <Status tone="good">On now</Status>
+                  ) : locked && account?.signedIn && account.canBuy && !ed.enrolled && EDITION_PLANS[t].sold === 'personal' && !atLeast(account.tier, t) ? (
+                    <BuyButtons account={account} only={[t]} short />
                   ) : locked ? (
                     <span className="fx-muted" style={{ fontSize: 12.5 }}>
                       {howToGet(t, ed)}
@@ -237,8 +243,13 @@ function EditionSettings() {
           {why}
           {ed.chosen !== ed.tier && tierRank(ed.chosen) > tierRank(ed.tier) && <> You chose {TIER_SHORT[ed.chosen]}; it runs {TIER_SHORT[ed.tier]} until that is allowed.</>}
         </p>
-        {!ed.enrolled && (ed.ceilingReason === 'standalone' || ed.ceilingReason === 'grace') && (
+        {!ed.enrolled && ed.ceilingReason !== 'development' && (
           <div className="fx-actions" style={{ marginTop: 10 }}>
+            {!account?.signedIn && (
+              <Button size="sm" variant="primary" icon="user" onClick={() => navigate('settings/account')}>
+                Sign in to your FBRX account
+              </Button>
+            )}
             <Button size="sm" icon="key" onClick={() => navigate('settings/license')}>
               Enter a license key
             </Button>
@@ -992,7 +1003,7 @@ function License() {
             ['Licensed to', l.customer ?? '—'],
             ['Seats', l.seats === 0 ? 'Unlimited' : l.seats ?? '—'],
             ['Expires', l.expiresAt ? formatDate(l.expiresAt) : l.state === 'valid' ? 'Never' : '—'],
-            ['Source', { managed: 'Your organization (FBRX Command)', local: 'License key on this device', development: 'Development build', none: '—' }[l.source]],
+            ['Source', { managed: 'Your organization (FBRX Command)', local: 'License key on this device', account: 'Your FBRX account', development: 'Development build', none: '—' }[l.source]],
             ...(l.commandUrl ? [['FBRX Command', <span className="mono">{l.commandUrl}</span>] as [string, ReactNode]] : []),
             ['Features', l.features.join(', ')],
           ]}

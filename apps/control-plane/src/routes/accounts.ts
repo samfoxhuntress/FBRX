@@ -2,11 +2,11 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { SignJWT, jwtVerify } from 'jose';
 import { z } from 'zod';
-import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIER_SHORT, atLeast, productById, type AccountView, type PlansInfo } from '@fbrx/shared';
-import { hashPassword, safeEqual, verifyPassword } from '@fbrx/shared/node';
+import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIERS, TIER_SHORT, atLeast, productById, type AccountView, type MemberView, type PlansInfo, type Tier } from '@fbrx/shared';
+import { hashPassword, randomToken, safeEqual, sha256Hex, verifyPassword } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
-import { adminAuth, requirePerm } from '../auth';
+import { adminAuth, requirePerm, requireTenant } from '../auth';
 import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized } from '../errors';
 import { PasswordSchema } from './auth';
 import { accountEntitlements, accountLicense, accountTier, endOtherItems, entitlementView, handledBefore, isValid, markHandled, recordPurchase } from '../billing/entitlements';
@@ -56,6 +56,9 @@ export function accountView(ctx: AppContext, a: AccountRow): AccountView {
     tier: accountTier(ctx, a.id).tier,
     entitlements: accountEntitlements(ctx, a.id).map(entitlementView),
     billingPortal: !!a.stripe_customer_id && !!ctx.config.cloud.stripe,
+    memberships: ctx.db
+      .all<{ tenant_id: string; name: string; tier: Tier }>("SELECT m.tenant_id, t.name, m.tier FROM tenant_members m JOIN tenants t ON t.id = m.tenant_id WHERE m.account_id = ? AND t.status = 'active' ORDER BY t.name", a.id)
+      .map((m) => ({ tenantId: m.tenant_id, tenantName: m.name, tier: m.tier })),
     createdAt: a.created_at,
   };
 }
@@ -186,6 +189,35 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
       ok: true,
       note: stores.length ? `Your ${stores.map((s) => (s === 'apple' ? 'App Store' : 'Google Play')).join(' and ')} subscription is not ended by this: end it in the store's subscription settings.` : null,
     };
+  });
+
+  /**
+   * Joins a computer to an organization the account belongs to: a one-time enrollment token (fifteen minutes) that
+   * carries the edition the organization gave this member, so the computer runs it as soon as it joins.
+   */
+  app.post('/v1/accounts/memberships/:tenantId/enroll', { preHandler: auth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+    const a = req.account!;
+    const tenantId = (req.params as { tenantId: string }).tenantId;
+    const m = ctx.db.get<{ tier: Tier; name: string }>("SELECT m.tier, t.name FROM tenant_members m JOIN tenants t ON t.id = m.tenant_id WHERE m.tenant_id = ? AND m.account_id = ? AND t.status = 'active'", tenantId, a.id);
+    if (!m) throw forbidden('Your FBRX account is not a member of that organization');
+    const token = randomToken('fbrx_enr');
+    ctx.db.run(
+      'INSERT INTO enrollment_tokens (id, tenant_id, group_id, label, prefix, token_hash, max_uses, expires_at, created_by, created_at, tier, account_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+      ids.enrollment(),
+      tenantId,
+      null,
+      `Sign-in: ${a.email}`,
+      token.slice(0, 15),
+      sha256Hex(token),
+      1,
+      new Date(Date.now() + 15 * 60_000).toISOString(),
+      `account:${a.id}`,
+      new Date().toISOString(),
+      m.tier,
+      a.id,
+    );
+    ctx.audit.record({ ...accountActor(a, req), tenantId }, 'account.enroll', { type: 'tenant', id: tenantId, tenantId }, { tier: m.tier });
+    return { serverUrl: ctx.config.publicUrl, token, fingerprint: ctx.tls?.selfSigned ? ctx.tls.fingerprint : null, tenantName: m.name, tier: m.tier };
   });
 
   // ------------------------------------------------------------------------------------------- Stripe
@@ -404,6 +436,60 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
   // ------------------------------------------------------------------------------------------- the platform operator
   await app.register(async (admin) => {
     admin.addHook('preHandler', adminAuth(ctx));
+
+    // An organization's members: FBRX accounts it gives an edition to. They sign in on any computer and it joins the
+    // organization at that edition (Essentials members cost nothing).
+    const memberView = (tenantId: string, r: { account_id: string; email: string; name: string; tier: Tier; created_at: string }): MemberView => ({
+      accountId: r.account_id,
+      email: r.email,
+      name: r.name,
+      tier: r.tier,
+      devices: Number(ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM devices WHERE tenant_id = ? AND account_id = ? AND status = 'active'", tenantId, r.account_id)?.n ?? 0),
+      createdAt: r.created_at,
+    });
+    const members = (tenantId: string) =>
+      ctx.db.all<{ account_id: string; email: string; name: string; tier: Tier; created_at: string }>('SELECT m.account_id, a.email, a.name, m.tier, m.created_at FROM tenant_members m JOIN accounts a ON a.id = m.account_id WHERE m.tenant_id = ? ORDER BY a.name', tenantId);
+    admin.get('/v1/admin/members', async (req) => {
+      requirePerm(req, 'users.manage');
+      const tenantId = requireTenant(req);
+      return members(tenantId).map((r) => memberView(tenantId, r));
+    });
+    admin.post('/v1/admin/members', async (req) => {
+      const p = requirePerm(req, 'users.manage');
+      const tenantId = requireTenant(req);
+      const body = z.object({ email: z.string().email(), tier: z.enum(TIERS).default('essentials') }).parse(req.body);
+      const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE email = ?', body.email.trim());
+      if (!a) throw notFound('There is no FBRX account with that email yet: ask them to make one, then add them');
+      if (ctx.db.get('SELECT 1 FROM tenant_members WHERE tenant_id = ? AND account_id = ?', tenantId, a.id)) throw conflict(`${a.email} is already a member`);
+      ctx.db.run('INSERT INTO tenant_members (tenant_id, account_id, tier, created_at) VALUES (?,?,?,?)', tenantId, a.id, body.tier, new Date().toISOString());
+      ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId, ip: req.ip }, 'member.added', { type: 'account', id: a.id, tenantId }, { tier: body.tier });
+      return memberView(tenantId, members(tenantId).find((m) => m.account_id === a.id)!);
+    });
+    /** Changes a member's edition, on the computers they already joined too. */
+    admin.patch('/v1/admin/members/:accountId', async (req) => {
+      const p = requirePerm(req, 'users.manage');
+      const tenantId = requireTenant(req);
+      const accountId = (req.params as { accountId: string }).accountId;
+      const body = z.object({ tier: z.enum(TIERS) }).parse(req.body);
+      if (!ctx.db.get('SELECT 1 FROM tenant_members WHERE tenant_id = ? AND account_id = ?', tenantId, accountId)) throw notFound('No such member');
+      ctx.db.run('UPDATE tenant_members SET tier = ? WHERE tenant_id = ? AND account_id = ?', body.tier, tenantId, accountId);
+      ctx.db.run('UPDATE devices SET tier = ? WHERE tenant_id = ? AND account_id = ?', body.tier, tenantId, accountId);
+      ctx.bumpConfig(tenantId);
+      ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId, ip: req.ip }, 'member.updated', { type: 'account', id: accountId, tenantId }, body);
+      return memberView(tenantId, members(tenantId).find((m) => m.account_id === accountId)!);
+    });
+    admin.delete('/v1/admin/members/:accountId', async (req) => {
+      const p = requirePerm(req, 'users.manage');
+      const tenantId = requireTenant(req);
+      const accountId = (req.params as { accountId: string }).accountId;
+      ctx.db.run('DELETE FROM tenant_members WHERE tenant_id = ? AND account_id = ?', tenantId, accountId);
+      // Their computers stay in the organization, on Essentials, until someone removes them.
+      ctx.db.run("UPDATE devices SET tier = 'essentials' WHERE tenant_id = ? AND account_id = ?", tenantId, accountId);
+      ctx.bumpConfig(tenantId);
+      ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId, ip: req.ip }, 'member.removed', { type: 'account', id: accountId, tenantId });
+      return { ok: true };
+    });
+
     admin.get('/v1/admin/accounts', async (req) => {
       requirePerm(req, 'tenants.manage');
       const q = String((req.query as Record<string, string>)?.q ?? '').trim();

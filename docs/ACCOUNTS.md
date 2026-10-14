@@ -25,6 +25,39 @@ one as the subscription renews and a refund reaches them in time.
 
 Black Hole is never sold to an account: it is an add-on in an FBRX Command tenant (LICENSING.md).
 
+## On a computer
+
+**Settings → FBRX account** (or *I have an FBRX account* on the first screen) signs in, or makes a new account. The
+computer brings the account's license and turns that edition on by itself ("whatever the account has"); it renews the
+license every six hours while FBRX runs, and when the account's purchase ends, the computer goes back to what it had
+(Essentials on its own). Signed in, **Get Standard** and **Get Ultra** open the checkout in the browser, and **Manage
+billing** opens the Stripe portal; Settings → Edition offers the same on the locked editions. Signing out takes the
+account's license away again. The account token is kept in the vault, like the computer's FBRX Command credential.
+
+Which FBRX Command accounts live on is built into the app (`FBRX_ACCOUNT_SERVER` when building, or in the environment);
+when none is, the sign-in asks for its address.
+
+A license from an organization (FBRX Command, *managed*) always wins over an account's; between a key typed into
+Settings → License and an account's, the fuller one counts.
+
+## Organizations and members
+
+An organization's FBRX Command gives editions to people, not just computers: a **member** is an FBRX account the
+organization added, with the edition it gives that person (`POST /v1/admin/members` `{ email, tier }`; Essentials
+members cost nothing). A member who signs in on any computer sees the organization under **Your organizations** and
+**Join this computer**: the computer enrolls with a one-time token (fifteen minutes) that carries the member's edition,
+and turns it on. When the organization changes a member's edition, the computers they joined follow it; removing a
+member leaves their computers in the organization on Essentials. This is how an admin signs in on any computer and gets
+Black Hole there.
+
+| | |
+| --- | --- |
+| `GET /v1/admin/members` | The organization's members, their editions and how many computers each joined |
+| `POST /v1/admin/members` `{ email, tier }` | Adds an account (it must exist) |
+| `PATCH /v1/admin/members/:accountId` `{ tier }` | Changes a member's edition, on their computers too |
+| `DELETE /v1/admin/members/:accountId` | Removes a member |
+| `POST /v1/accounts/memberships/:tenantId/enroll` | (The account) a one-time enrollment token for this computer |
+
 ## Setting up
 
 ### Accounts

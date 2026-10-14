@@ -25,9 +25,13 @@ export class LicenseService {
     const major = parseSemver(this.appVersion)?.major ?? 1;
     const managed = this.meta.get<string>('license.managed');
     const local = this.meta.get<string>('license.local');
-    let status = managed
-      ? licenseStatusFrom(managed, this.publicKeys, 'managed', major)
-      : licenseStatusFrom(local, this.publicKeys, 'local', major);
+    const account = this.meta.get<string>('license.account');
+    // The organization's license wins; otherwise the fuller of a key typed in and the one the person's FBRX account gives.
+    let status = managed ? licenseStatusFrom(managed, this.publicKeys, 'managed', major) : licenseStatusFrom(local, this.publicKeys, 'local', major);
+    if (!managed && account) {
+      const fromAccount = licenseStatusFrom(account, this.publicKeys, 'account', major);
+      if (fromAccount.state === 'valid' && (status.state !== 'valid' || tierRank(fromAccount.tier) > tierRank(status.tier))) status = fromAccount;
+    }
     // Development builds may run Black Hole with everything on, unless FBRX_EDITION asks to try a lighter edition
     // (then they start there, like a computer on its own that may run it).
     const asked = this.devMode ? parseTier(process.env.FBRX_EDITION) : null;
@@ -135,6 +139,13 @@ export class LicenseService {
 
   remove(): LicenseStatus {
     this.meta.delete('license.local');
+    return this.changed();
+  }
+
+  /** The license the person's FBRX account gives this computer (null when they sign out or bought nothing). */
+  applyAccount(key: string | null): LicenseStatus {
+    if (key) this.meta.set('license.account', key);
+    else this.meta.delete('license.account');
     return this.changed();
   }
 
