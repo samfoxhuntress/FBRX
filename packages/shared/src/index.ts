@@ -3,6 +3,7 @@ export * from './ids';
 export * from './semver';
 export * from './json';
 export * from './settings';
+export * from './thinking';
 export * from './policy';
 export * from './license';
 export * from './commands';

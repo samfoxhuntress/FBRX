@@ -514,7 +514,7 @@ export class AgentRuntime {
           content = `${content}${content ? '\n\n' : ''}_${finish.message}_`;
           calls.length = 0;
         } else if (finish.finishReason === 'length' && !calls.length) {
-          const note = `_The answer reached the length limit and was cut off. Raise **Longest answer** in Settings → Agent, or say "continue"._`;
+          const note = `_The answer reached the length limit and was cut off. Say "continue" for the rest._`;
           content = `${content}${content ? '\n\n' : ''}${note}`;
           this.emit({ type: 'message.delta', runId, conversationId, messageId, delta: `\n\n${note}` });
         }
@@ -604,7 +604,7 @@ export class AgentRuntime {
         if (handed && 'answer' in handed) finalAnswer = handed.answer;
         else {
           const tried = handed && 'failed' in handed ? ` (No other computer could take it over: ${handed.failed}.)` : '';
-          const note = `I've used all ${maxSteps} steps one task may take and stopped before finishing.${tried} Say **continue** and I'll pick up where I left off, or raise **Steps per task** in Settings → Agent.`;
+          const note = `I've used all ${maxSteps} steps one task may take and stopped before finishing.${tried} Say **continue** and I'll pick up where I left off. For big jobs, choose **Thorough** in Settings → Agent → Thinking.`;
           const msg = this.d.store.append(conversationId, { role: 'assistant', content: note, providerId: config.id, model });
           const { providerData: _p, ...shown } = msg;
           this.emit({ type: 'message.completed', runId, conversationId, message: shown });

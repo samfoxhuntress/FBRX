@@ -370,7 +370,7 @@ function RuntimeFix({ problem, modelId, busy, run }: { problem: string | null; m
             Update the runtime
           </Button>
         )}
-        {(problem === 'memory' || problem === 'gpu-memory') && <span className="fx-muted" style={{ fontSize: 12.5 }}>A smaller model (Qwen3 8B, say) fits more computers; Settings → Agent → How hard the AI may work can also free memory.</span>}
+        {(problem === 'memory' || problem === 'gpu-memory') && <span className="fx-muted" style={{ fontSize: 12.5 }}>A smaller model (Qwen3 8B, say) fits more computers, and Everyday in Settings → Agent → Thinking needs less memory than Thorough.</span>}
         <span className="fx-spacer" />
         <Button size="sm" variant="ghost" onClick={async () => setLines(lines ? null : await call('runtime.logs'))}>
           {lines ? 'Hide' : 'Show'} what the runtime said

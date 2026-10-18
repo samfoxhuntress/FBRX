@@ -1,8 +1,9 @@
 import { z } from 'zod';
-import { AUDIENCES, EXT_USER_ONLY, MEMORY_CATEGORIES, SECRET_KINDS, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { AUDIENCES, EXT_USER_ONLY, MEMORY_CATEGORIES, SECRET_KINDS, THINKING_LEVELS, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
+import { setThinkingLevel } from '../ai/thinking';
 
 export interface CallContext {
   origin: InvocationOrigin;
@@ -23,6 +24,7 @@ const USER_ONLY = new Set<string>([
   'backup.restore',
   'ai.conversations.deleteMany',
   'ai.conversations.cleanup',
+  'ai.setThinking',
   'fleet.enroll',
   'fleet.unenroll',
   'governance.updatePolicy',
@@ -162,6 +164,7 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     },
     'ai.cancel': (p) => ({ cancelled: k.agent.cancel(z.object({ runId: z.string() }).parse(p).runId) }),
     'ai.runs': () => k.agent.activities(),
+    'ai.setThinking': (p) => setThinkingLevel(z.object({ level: z.enum(THINKING_LEVELS) }).parse(p).level, { policy: k.policy, settings: k.settings }),
     'ai.conversations.list': (p) => k.conversations.list(z.object({ projectId: z.string().max(64).optional() }).parse(p ?? {})),
     // The messages and the run in progress together, so the chat can carry on from exactly here with the run's events.
     'ai.conversations.get': (p) => {

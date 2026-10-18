@@ -24,6 +24,7 @@ const TIPS: Array<Omit<EssentialsNote, 'kind'>> = [
   { id: 'tip-voice', title: 'Talk instead of typing', body: 'Settings → Voice: speak to {agent} and hear its answers, with a voice you pick.' },
   { id: 'tip-spotlight', title: 'Spotlight, from anywhere', body: 'Press Ctrl+K (⌘K on a Mac) for apps, files, settings and quick answers.' },
   { id: 'tip-stop', title: 'One button stops it all', body: 'The emergency stop halts every AI action at once: in the chat, the tray menu and Settings → Agent.' },
+  { id: 'tip-thinking', title: 'Big job? Let {agent} work longer', body: 'Settings → Agent → Thinking: Quick for small questions, Everyday for most things, Thorough for big jobs with many steps.' },
 ];
 
 /** Every note there is (for the website and tests); notesFor picks the ones to show. */
@@ -59,14 +60,14 @@ export function notesFor(o: { tier: Tier; agentName: string; modelName?: string 
       id: 'upgrade-standard',
       kind: 'upgrade',
       title: `More with Standard, ${formatPrice(std.monthly!)} a month`,
-      body: `Your AI’s controls (how long it works, how long its answers are, how much it keeps in mind), plus notes, tasks, calendar, alerts, storage and backups.`,
+      body: 'FBRX Glass, notes, tasks, calendar, alerts, storage, FBRX Shield and backups, beside your AI.',
       action: { label: 'See the editions', to: 'edition' },
     });
     notes.push({
       id: 'upgrade-ultra',
       kind: 'upgrade',
       title: `Everything for experts with Ultra, ${formatPrice(ultra.monthly!)} a month`,
-      body: 'Terminal, Task Manager, the virtual lab, your phone and computers together, AI coordination and every look.',
+      body: 'Your AI fine-tuned (steps, answer length, how much it keeps in mind), Terminal, Task Manager, the virtual lab, your phone and computers together, and every look.',
       action: { label: 'See the editions', to: 'edition' },
     });
   }

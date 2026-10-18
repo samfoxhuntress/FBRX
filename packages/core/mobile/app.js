@@ -595,7 +595,7 @@
     if (offers.length) {
       out += '<h2>Editions</h2>' + offers.map(function (p) {
         return '<div class="card note upgrade"><b>' + esc(NAMES[p.tier]) + '</b><div class="muted">' + esc(p.summary) + '</div>' +
-          '<ul class="muted perks">' + (p.highlights || []).map(function (h) { return '<li>' + esc(h) + '</li>'; }).join('') + '</ul>' +
+          '<ul class="muted perks">' + (p.points || []).map(function (h) { return '<li>' + esc(h) + '</li>'; }).join('') + '</ul>' +
           '<div class="note-act"><button class="primary" data-buy="' + esc(p.productId) + '"' + (account.busy ? ' disabled' : '') + '>Get ' + esc(NAMES[p.tier]) + ', ' + esc(priceOf(p)) + ' a month</button></div>' +
           '<div class="muted fine">Renews every month until you cancel it in ' + (NATIVE.platform === 'ios' ? 'your Apple Account’s subscriptions' : 'Google Play’s subscriptions') + '.</div></div>';
       }).join('');

@@ -7,11 +7,12 @@ import { navigate } from './app';
 
 /**
  * FBRX Endpoint Essentials, Standard, Ultra or Black Hole (see TIERS in @fbrx/shared, prices in plans.ts). Every new
- * computer opens in Essentials, free: the AI on its own (the chat, the AI models, Settings) and a walkthrough.
- * Standard adds the everyday tools and the AI's controls; Ultra the expert tool sets, Mesh, AI coordination,
- * connections and plugins and the theme studio. Both are bought (an FBRX account or a license key) or come through an
- * organization's FBRX Command. Black Hole (everything: the whole Library, network environments, the FBRX Server page)
- * comes only through FBRX Command.
+ * computer opens in Essentials, free: the AI on its own (the chat, the AI models, Settings) and a walkthrough. Every
+ * edition picks how much the AI does on a task (Settings → Agent → Thinking). Standard adds the everyday tools; Ultra
+ * the expert tool sets, the AI's work budget part by part, Mesh, AI coordination, connections and plugins and the
+ * theme studio. Both are bought (an FBRX account or a license key) or come through an organization's FBRX Command.
+ * Black Hole (everything: the whole Library, network environments, the FBRX Server page) comes only through FBRX
+ * Command.
  */
 export const TierContext = createContext<Tier>('basic');
 

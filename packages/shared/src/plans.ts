@@ -1,4 +1,4 @@
-import type { Tier } from './license';
+import { TIERS, TIER_SHORT, type Tier } from './license';
 
 /**
  * FBRX's prices: one list for the app, FBRX Command, the website and the billing service. US dollars, amounts in cents,
@@ -37,7 +37,9 @@ export interface EditionPlan {
   productId: string | null;
   /** The same in a tenant (its own price, with the discount where there is one). */
   tenantProductId: string | null;
+  /** One line: what the edition is for. */
   summary: string;
+  /** What it adds to the edition before it (editionPoints puts the two together). */
   highlights: string[];
 }
 
@@ -50,7 +52,7 @@ export const EDITION_PLANS: Record<Tier, EditionPlan> = {
     productId: null,
     tenantProductId: null,
     summary: 'Your own AI on your computer, free.',
-    highlights: ['The chat, its memory and voice', 'AI models that run on your computer', 'Joins your organization for free'],
+    highlights: ['The chat, its memory and voice', 'AI models on your computer, working Quick, Everyday or Thorough', 'Joins your organization for free'],
   },
   basic: {
     tier: 'basic',
@@ -59,8 +61,8 @@ export const EDITION_PLANS: Record<Tier, EditionPlan> = {
     sold: 'personal',
     productId: 'fbrx_standard_monthly',
     tenantProductId: 'fbrx_standard_tenant_monthly',
-    summary: 'The everyday tools, and control over your AI.',
-    highlights: ['Your AI’s controls: steps, answer length, how much it keeps in mind', 'Alerts, notes, tasks, calendar and messages', 'Storage, FBRX Shield, updates, network and backups'],
+    summary: 'The everyday tools, beside your AI.',
+    highlights: ['FBRX Glass, alerts, notes, tasks, calendar and messages', 'Storage, FBRX Shield, updates, network and backups', 'Files, the clipboard history, the toolbox and how-tos'],
   },
   ultra: {
     tier: 'ultra',
@@ -69,8 +71,8 @@ export const EDITION_PLANS: Record<Tier, EditionPlan> = {
     sold: 'personal',
     productId: 'fbrx_ultra_monthly',
     tenantProductId: 'fbrx_ultra_tenant_monthly',
-    summary: 'Expert tools, your devices together, and every look.',
-    highlights: ['Terminal, Task Manager, virtual lab and IT tools', 'Mesh with your computers and phone, AI coordination', 'Connections, plugins and the theme studio'],
+    summary: 'Expert tools, your AI fine-tuned, your devices together, and every look.',
+    highlights: ['Your AI fine-tuned: steps, answer length, how much it keeps in mind', 'Terminal, Task Manager, the virtual lab and IT tools', 'Mesh, AI coordination, plugins and the theme studio'],
   },
   blackhole: {
     tier: 'blackhole',
@@ -80,7 +82,7 @@ export const EDITION_PLANS: Record<Tier, EditionPlan> = {
     productId: null,
     tenantProductId: 'fbrx_blackhole_tenant_monthly',
     summary: 'Everything, for the people who run your FBRX Command and FBRX Servers.',
-    highlights: ['Everything in Ultra', 'The whole Library, FBRX commands included', 'Network environments in Network Center and the FBRX Server page'],
+    highlights: ['The whole Library, FBRX commands included', 'Network environments in Network Center', 'The FBRX Server page'],
   },
 };
 
@@ -107,7 +109,13 @@ export const SERVER_OFFER = {
   highlights: ['Virtual machines, image backups checked by starting them', 'AI for your whole organization', 'One purchase, the installer is yours to keep'],
 };
 
-/** "$4.99", "$0" (free), "$100". */
+/** What an edition has, as a list of editions shows it: everything in the one before it, then what it adds. */
+export function editionPoints(t: Tier): string[] {
+  const before = TIERS[TIERS.indexOf(t) - 1];
+  return before ? [`Everything in ${TIER_SHORT[before]}`, ...EDITION_PLANS[t].highlights] : EDITION_PLANS[t].highlights;
+}
+
+/** "$4.99", "Free", "$100". */
 export function formatPrice(cents: number): string {
   if (cents === 0) return 'Free';
   const d = cents / 100;

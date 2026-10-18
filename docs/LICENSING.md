@@ -9,12 +9,14 @@ backups, webhooks and audit trail. What a customer's computers may do is decided
 The desktop app is **FBRX Endpoint**, in four editions (see COMMAND_CENTER.md for what each shows):
 
 * **FBRX Endpoint Essentials** (free) — where every new computer starts: the AI on its own (the chat, the AI models
-  and Settings), with a walkthrough. It joins an organization's FBRX Command for free.
-* **FBRX Endpoint Standard** (`basic` in licenses and the API) — the everyday tools, and the first edition with the
-  AI's controls (its work budget and unloading the model when idle).
+  and Settings, where it works Quick, Everyday or Thorough) and a walkthrough. It joins an organization's FBRX
+  Command for free.
+* **FBRX Endpoint Standard** (`basic` in licenses and the API) — the everyday tools, and unloading the local model
+  when idle.
 * **FBRX Endpoint Ultra** — expert tool sets (Terminal, FBRX/1, virtual lab, disks and partitions, Defender settings,
-  adapters, device consoles, developer tools, the Local API), Mesh and AI coordination, connections, tools and
-  plugins, governance, and the theme studio with its gradients and textures.
+  adapters, device consoles, developer tools, the Local API), the AI's work budget part by part (steps, answer length,
+  how much it keeps in mind), Mesh and AI coordination, connections, tools and plugins, governance, and the theme
+  studio with its gradients and textures.
 * **FBRX Endpoint Black Hole** (`blackhole`) — everything: Ultra plus the whole Library (The Lab and the FBRX command
   library), network environments in Network Center and the FBRX Server page. For the people who run
   an organization's FBRX Command and its FBRX Servers, and only through FBRX Command.

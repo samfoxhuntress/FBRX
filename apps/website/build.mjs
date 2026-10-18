@@ -10,7 +10,7 @@
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COMMAND_PLAN, EDITION_PLANS, ESSENTIALS_TIPS, FREE_GRACE_DAYS, SERVER_OFFER, TENANT_DISCOUNT, TIER_SHORT, formatPrice } from '@fbrx/shared';
+import { COMMAND_PLAN, EDITION_PLANS, ESSENTIALS_TIPS, FREE_GRACE_DAYS, SERVER_OFFER, TENANT_DISCOUNT, TIER_SHORT, editionPoints, formatPrice } from '@fbrx/shared';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, 'dist');
@@ -85,7 +85,7 @@ const editionCard = (t, cta) => {
   <h3>${TIER_SHORT[t]}</h3>
   <div class="price">${price}</div>
   <p>${esc(p.summary)}</p>
-  <ul>${p.highlights.map((h) => `<li>${esc(h)}</li>`).join('')}</ul>
+  <ul>${editionPoints(t).map((h) => `<li>${esc(h)}</li>`).join('')}</ul>
   ${cta}
 </article>`;
 };
@@ -131,7 +131,7 @@ page({
 </section>
 <section class="wrap features">
   <div class="feature"><h3>Private by default</h3><p>The AI runs on your computer. Chats start offline, and nothing leaves without you saying so.</p></div>
-  <div class="feature"><h3>Grows with you</h3><p>Essentials is the AI on its own, free. Standard adds the everyday tools and your AI’s controls; Ultra the expert ones.</p></div>
+  <div class="feature"><h3>Grows with you</h3><p>Essentials is the AI on its own, free, working as hard as you like. Standard adds the everyday tools; Ultra the expert ones, and your AI fine-tuned.</p></div>
   <div class="feature"><h3>One account, every device</h3><p>Buy once with your FBRX account and sign in on your computers and your phone: each one turns on what you have.</p></div>
 </section>
 <section class="wrap">

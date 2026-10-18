@@ -9,6 +9,7 @@ import type { LicenseStatus } from './license';
 import type { AccountStatus } from './accounts';
 import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
 import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
+import type { ThinkingBudget, ThinkingLevel } from './thinking';
 import type { ExtEvents, ExtMethods } from './ext';
 import type { Settings } from './settings';
 import type { UpdateChannel } from './constants';
@@ -613,6 +614,8 @@ export interface CoreMethods extends ExtMethods {
   'ai.cancel': (p: { runId: string }) => { cancelled: boolean };
   /** What every run in progress is doing right now. */
   'ai.runs': () => RunActivity[];
+  /** How much the agent does on one task (a thinking level): its whole work budget at once (thinking.ts). */
+  'ai.setThinking': (p: { level: ThinkingLevel }) => ThinkingBudget;
   /** projectId: only that project's chats ("none": chats in no project). */
   'ai.conversations.list': (p?: { projectId?: string | 'none' }) => ConversationSummary[];
   'ai.conversations.get': (p: { id: string }) => OpenConversation;

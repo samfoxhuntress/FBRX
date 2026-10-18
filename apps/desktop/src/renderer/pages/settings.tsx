@@ -1,6 +1,28 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { DeepPartial, Settings, Texture } from '@fbrx/shared';
-import { AUDIENCE_NAMES, EDITION_PLANS, TIERS, TIER_NAMES, TIER_SHORT, UPDATE_CHANNELS, atLeast, displayVersion, formatPrice, funEnabled, tierRank, type Tier } from '@fbrx/shared';
+import type { DeepPartial, EffectivePolicy, Settings, Texture } from '@fbrx/shared';
+import {
+  AUDIENCE_NAMES,
+  EDITION_PLANS,
+  THINKING_BUDGETS,
+  THINKING_LEVELS,
+  THINKING_NAMES,
+  THINKING_SETTINGS,
+  TIERS,
+  TIER_NAMES,
+  TIER_SHORT,
+  UPDATE_CHANNELS,
+  atLeast,
+  displayVersion,
+  editionPoints,
+  formatPrice,
+  funEnabled,
+  thinkingBudget,
+  thinkingLevelOf,
+  tierRank,
+  withSteps,
+  type ThinkingLevel,
+  type Tier,
+} from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
@@ -147,7 +169,7 @@ function EditionCard() {
           {ed && ed.vertical !== 'business' && <span className="tier-badge student" style={{ marginLeft: 6 }}>{ed.vertical === 'home' ? 'Home' : 'Education'}</span>}
         </div>
         <div className="fx-muted" style={{ fontSize: 12.5 }}>
-          {TIER_BLURB[l.tier]}
+          {EDITION_PLANS[l.tier].summary}
           {by && <> · {by}</>}
         </div>
       </div>
@@ -157,20 +179,6 @@ function EditionCard() {
     </div>
   );
 }
-
-const TIER_BLURB: Record<Tier, string> = {
-  essentials: 'Your own AI on this computer, and nothing else: the chat, its memory and voice, and the AI models.',
-  basic: 'The everyday tools and the agent, its controls, and a simple light or dark look.',
-  ultra: 'The expert tool sets, Mesh, AI coordination, connections and plugins, and every theme.',
-  blackhole: 'Everything is on: the whole Library, network environments, the FBRX Server page and every expert tool.',
-};
-
-const TIER_POINTS: Record<Tier, string[]> = {
-  essentials: ['Your AI, ready to chat, running on this computer', 'Chat history, memory and voice', 'AI models: a bigger one, or another AI', 'A short sidebar, and a walkthrough'],
-  basic: ['Everything in Essentials', 'Your AI’s controls: steps, answer length, how much it keeps in mind', 'FBRX Glass, alerts, messages, notes, tasks and calendar', 'Storage, FBRX Shield, updates, network, backups, files and the toolbox'],
-  ultra: ['Everything in Standard', 'Terminal, Task Manager and the virtual lab', 'Mesh & phone, AI coordination, connections and plugins', 'The theme studio and every look'],
-  blackhole: ['Everything in Ultra', 'The whole Library: The Lab and every FBRX command', 'Network environments: your office or school network’s controller, in Network Center', 'The FBRX Server page, for the people who run your servers'],
-};
 
 /** "$4.99 a month", "Free", "$24.99 a month, through FBRX Command". */
 function priceLine(t: Tier): ReactNode {
@@ -216,7 +224,7 @@ function EditionSettings() {
                 </h4>
                 <div className="ed-price">{priceLine(t)}</div>
                 <ul>
-                  {TIER_POINTS[t].map((p) => (
+                  {editionPoints(t).map((p) => (
                     <li key={p}>{p}</li>
                   ))}
                 </ul>
@@ -714,7 +722,7 @@ function AgentSettings() {
   const { s, locked, patch } = useSettings();
   const [name, setName] = useState<string | null>(null);
   const ultra = useAtLeast('ultra');
-  // The AI's controls (unloading when idle, its work budget) come with Standard.
+  // Unloading the local model when idle comes with Standard; how much the agent does on a task is in every edition (Thinking).
   const standard = useAtLeast('basic');
   if (!s) return null;
   const L = (p: string) => isLocked(locked, p);
@@ -758,20 +766,9 @@ function AgentSettings() {
           </Field>}
         </div>
       </Card>
-      {standard ? (
-        <div style={{ gridColumn: '1 / -1' }}>
-          <WorkBudget />
-        </div>
-      ) : (
-        <Card title="Your AI’s controls" subtitle="Come with Standard">
-          <p className="fx-muted" style={{ margin: '0 0 10px' }}>
-            How many steps {s.ai.agentName} takes on a task, how long its answers may be, how much of a conversation it keeps in mind, and unloading the model when idle.
-          </p>
-          <Button size="sm" icon="layers" onClick={() => navigate('settings/edition')}>
-            See Standard
-          </Button>
-        </Card>
-      )}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Thinking />
+      </div>
       <Card title={ultra ? 'Models and permissions' : 'AI model'}>
         <div className="fx-form">
           <p className="fx-muted" style={{ margin: 0 }}>{ultra ? <>Choose which AI model {s.ai.agentName} uses in AI models, and what it may do without asking in Governance.</> : <>Choose which AI model {s.ai.agentName} uses. {s.ai.agentName} always asks before it changes anything on this computer.</>}</p>
@@ -790,6 +787,46 @@ function AgentSettings() {
   );
 }
 
+const THINKING_HELP: Record<ThinkingLevel, string> = {
+  quick: `Small jobs and quick answers: up to ${THINKING_BUDGETS.quick.steps} steps a task, so it checks in with you sooner.`,
+  everyday: `Everyday tasks: up to ${THINKING_BUDGETS.everyday.steps} steps a task. Recommended.`,
+  thorough: `Big jobs and long documents: up to ${THINKING_BUDGETS.thorough.steps} steps a task, and a local model keeps twice as much in mind (about 1 GB more memory).`,
+};
+
+/**
+ * How much the agent does on one task. Every edition picks a level (Quick, Everyday or Thorough); Ultra and Black Hole
+ * also set each part of it on its own, which makes the level Custom.
+ */
+function Thinking() {
+  const { s, locked, patch } = useSettings();
+  const pol = useCore('governance.policy', undefined, ['policy.changed']);
+  const ultra = useAtLeast('ultra');
+  const { run, busy } = useAction();
+  if (!s || !pol.data) return null;
+  const L = (p: string) => isLocked(locked, p);
+  const name = s.ai.agentName;
+  // An organization that sets any part of it sets the level too.
+  const managed = pol.data.source === 'managed' || THINKING_SETTINGS.some(L);
+  const level = thinkingLevelOf(thinkingBudget(pol.data.policy, s));
+  return (
+    <Card title="Thinking" subtitle={`How much ${name} may do on one task, and how much of the conversation it keeps in mind.`}>
+      <div className="fx-form">
+        <Field label={<>How much {name} does on one task <Locked show={managed} /></>} help={level === 'custom' ? 'Custom: set part by part below. Pick a level to go back to one.' : THINKING_HELP[level]}>
+          <div className="seg" role="group" aria-label={`How much ${name} does on one task`}>
+            {THINKING_LEVELS.map((l) => (
+              <button key={l} className={level === l ? 'on' : ''} disabled={managed || !!busy} onClick={() => void run(l, () => call('ai.setThinking', { level: l }), `Thinking: ${THINKING_NAMES[l]}, up to ${THINKING_BUDGETS[l].steps} steps a task`)}>
+                {THINKING_NAMES[l]}
+              </button>
+            ))}
+          </div>
+        </Field>
+        {ultra ? <WorkBudget policy={pol.data} /> : <UltraHint>Ultra sets each part on its own: steps per task, the longest answer, and how much a local model keeps in mind.</UltraHint>}
+        <Toggle checked={s.ai.showThinking} disabled={L('ai.showThinking')} onChange={(v) => void patch({ ai: { showThinking: v } })} label={`Show what ${name} is thinking and doing while it works`} />
+      </div>
+    </Card>
+  );
+}
+
 const ANSWER_LENGTHS = [
   { value: '0', label: 'Automatic (the model decides)' },
   { value: '2048', label: 'Short (2,000 tokens, about 1,500 words)' },
@@ -803,77 +840,70 @@ const ctxLabel = (n: number) => `${n / 1024}K tokens${n === 8192 ? ' (default)' 
 // Rough extra memory for the conversation itself (the KV cache of a typical 7–8B model).
 const ctxMemory = (n: number) => (n <= 8192 ? 'about 1 GB extra memory' : n <= 16384 ? 'about 2 GB' : n <= 32768 ? 'about 4 GB' : n <= 65536 ? 'about 8 GB' : 'about 16 GB');
 
-/** How much the agent may do in one task: steps, answer length and how much of the conversation a local model keeps in mind. */
-function WorkBudget() {
+/** Each part of the work budget on its own (Ultra and Black Hole): steps, answer length and how much a local model keeps in mind. */
+function WorkBudget({ policy }: { policy: EffectivePolicy }) {
   const { s, locked, patch } = useSettings();
-  const pol = useCore('governance.policy', undefined, ['policy.changed']);
   const providers = useCore('ai.providers', undefined, ['settings.changed']);
-  const [steps, setSteps] = useState<number | null>(null);
+  const [moving, setMoving] = useState<number | null>(null);
   const { run } = useAction();
   if (!s) return null;
   const L = (p: string) => isLocked(locked, p);
-  const managedPolicy = pol.data?.source === 'managed';
-  const maxSteps = pol.data?.policy.ai.maxStepsPerRun ?? 30;
-  const shownSteps = steps ?? maxSteps;
+  const policyManaged = policy.source === 'managed';
+  const steps = policy.policy.ai.maxStepsPerRun;
+  const shownSteps = moving ?? steps;
   const saveSteps = (n: number) => {
-    if (!pol.data || n === maxSteps) return;
-    const next = structuredClone(pol.data.policy);
-    next.ai.maxStepsPerRun = n;
-    next.ai.maxToolCallsPerRun = Math.max(next.ai.maxToolCallsPerRun, n * 3);
-    void run('steps', () => call('governance.updatePolicy', { policy: next }), `${s.ai.agentName} may now take up to ${n} steps per task`).then(() => setSteps(null));
+    if (n === steps) return;
+    void run('steps', () => call('governance.updatePolicy', { policy: withSteps(policy.policy, n) }), `${s.ai.agentName} may now take up to ${n} steps per task`).then(() => setMoving(null));
   };
   const hasOllama = (providers.data ?? []).some((p) => p.type === 'ollama' && p.enabled);
   return (
-    <Card title="Work budget" subtitle={`How much ${s.ai.agentName} may do before it stops to check in. Raise these for big jobs; lower them to keep answers quick and the computer light.`}>
-      <div className="budget-grid">
-        <Field
-          label={
-            <>
-              Steps per task <span className="budget-value">{shownSteps}</span> {managedPolicy && <Locked show />}
-            </>
-          }
-          help={`A step is one round of thinking and using tools. When ${s.ai.agentName} runs out, it says so and you can tell it to continue.`}
-        >
-          <input
-            type="range"
-            min={5}
-            max={100}
-            step={1}
-            value={shownSteps}
-            disabled={managedPolicy || !pol.data}
-            aria-label="Steps per task"
-            onChange={(e) => setSteps(Number(e.target.value))}
-            onPointerUp={() => steps !== null && saveSteps(steps)}
-            onKeyUp={() => steps !== null && saveSteps(steps)}
-          />
-        </Field>
-        <Field label={<>Longest answer <Locked show={L('ai.maxOutputTokens')} /></>} help="The most the model may write in one reply. Long code or reports need more; a token is about three quarters of a word.">
-          <Select value={String(s.ai.maxOutputTokens)} disabled={L('ai.maxOutputTokens')} onChange={(e) => void patch({ ai: { maxOutputTokens: Number(e.target.value) } })} options={ANSWER_LENGTHS} />
-        </Field>
-        <Field
-          label={<>Memory of the built-in model <Locked show={L('runtime.contextSize')} /></>}
-          help={`How much of the conversation (including tool results) the built-in model keeps in mind. More lets it work on bigger tasks but uses ${ctxMemory(s.runtime.contextSize)}. The model reloads to apply it.`}
-        >
+    <div className="budget-grid">
+      <Field
+        label={
+          <>
+            Steps per task <span className="budget-value">{shownSteps}</span> <Locked show={policyManaged} />
+          </>
+        }
+        help={`A step is one round of thinking and using tools. When ${s.ai.agentName} runs out, it says so and you can tell it to continue.`}
+      >
+        <input
+          type="range"
+          min={5}
+          max={100}
+          step={1}
+          value={shownSteps}
+          disabled={policyManaged}
+          aria-label="Steps per task"
+          onChange={(e) => setMoving(Number(e.target.value))}
+          onPointerUp={() => moving !== null && saveSteps(moving)}
+          onKeyUp={() => moving !== null && saveSteps(moving)}
+        />
+      </Field>
+      <Field label={<>Longest answer <Locked show={L('ai.maxOutputTokens')} /></>} help="The most the model may write in one reply. Long code or reports need more; a token is about three quarters of a word.">
+        <Select value={String(s.ai.maxOutputTokens)} disabled={L('ai.maxOutputTokens')} onChange={(e) => void patch({ ai: { maxOutputTokens: Number(e.target.value) } })} options={ANSWER_LENGTHS} />
+      </Field>
+      <Field
+        label={<>Memory of the built-in model <Locked show={L('runtime.contextSize')} /></>}
+        help={`How much of the conversation (including tool results) the built-in model keeps in mind. More lets it work on bigger tasks but uses ${ctxMemory(s.runtime.contextSize)}. The model reloads to apply it.`}
+      >
+        <Select
+          value={String(s.runtime.contextSize)}
+          disabled={L('runtime.contextSize')}
+          onChange={(e) => void patch({ runtime: { contextSize: Number(e.target.value) } })}
+          options={[...new Set([...CONTEXTS, s.runtime.contextSize])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: ctxLabel(n) }))}
+        />
+      </Field>
+      {hasOllama && (
+        <Field label={<>Memory of Ollama models <Locked show={L('ai.ollamaContext')} /></>} help="Ollama's own setting is often 4K, which a long task fills quickly. 32K suits most tool-using work on a 16 GB computer.">
           <Select
-            value={String(s.runtime.contextSize)}
-            disabled={L('runtime.contextSize')}
-            onChange={(e) => void patch({ runtime: { contextSize: Number(e.target.value) } })}
-            options={[...new Set([...CONTEXTS, s.runtime.contextSize])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: ctxLabel(n) }))}
+            value={String(s.ai.ollamaContext)}
+            disabled={L('ai.ollamaContext')}
+            onChange={(e) => void patch({ ai: { ollamaContext: Number(e.target.value) } })}
+            options={[{ value: '0', label: "Ollama's setting" }, ...CONTEXTS.map((n) => ({ value: String(n), label: `${n / 1024}K tokens` }))]}
           />
         </Field>
-        {hasOllama && (
-          <Field label={<>Memory of Ollama models <Locked show={L('ai.ollamaContext')} /></>} help="Ollama's own setting is often 4K, which a long task fills quickly. 32K suits most tool-using work on a 16 GB computer.">
-            <Select
-              value={String(s.ai.ollamaContext)}
-              disabled={L('ai.ollamaContext')}
-              onChange={(e) => void patch({ ai: { ollamaContext: Number(e.target.value) } })}
-              options={[{ value: '0', label: "Ollama's setting" }, ...CONTEXTS.map((n) => ({ value: String(n), label: `${n / 1024}K tokens` }))]}
-            />
-          </Field>
-        )}
-        <Toggle checked={s.ai.showThinking} disabled={L('ai.showThinking')} onChange={(v) => void patch({ ai: { showThinking: v } })} label={`Show what ${s.ai.agentName} is thinking and doing while it works`} />
-      </div>
-    </Card>
+      )}
+    </div>
   );
 }
 

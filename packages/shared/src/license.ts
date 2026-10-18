@@ -26,12 +26,13 @@ export const EDITION_FEATURES: Record<Edition, Feature[]> = {
 
 /**
  * The four FBRX Endpoint editions, lightest first (prices in plans.ts).
- * - **Essentials** (free): where every new computer starts. The AI on its own: the chat, the AI models and Settings,
- *   and a walkthrough. It joins an organization's FBRX Command for free.
- * - **Standard** (`basic`, its id from when it was called Basic): the everyday tools, and the first edition with the
- *   AI's controls (its work budget: steps, answer length, how much of a conversation it keeps in mind).
- * - **Ultra**: expert tool sets, Mesh and AI coordination, connections and plugins, and the theme studio. Bought on its
- *   own (an FBRX account) or through an organization's FBRX Command.
+ * - **Essentials** (free): where every new computer starts. The AI on its own: the chat, the AI models and Settings
+ *   (how much the AI does on a task among them: Quick, Everyday or Thorough), and a walkthrough. It joins an
+ *   organization's FBRX Command for free.
+ * - **Standard** (`basic`, its id from when it was called Basic): the everyday tools.
+ * - **Ultra**: expert tool sets, the AI's work budget part by part (steps, answer length, how much of a conversation it
+ *   keeps in mind), Mesh and AI coordination, connections and plugins, and the theme studio. Bought on its own (an FBRX
+ *   account) or through an organization's FBRX Command.
  * - **Black Hole** (`blackhole`): everything, for the people who run an organization's FBRX Command or an FBRX Server:
  *   the whole Library, network environments (UniFi) in Network Center, the FBRX Server page. Only as an add-on in an
  *   FBRX Command tenant.

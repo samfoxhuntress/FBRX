@@ -14,7 +14,7 @@ const here = join(dirname(fileURLToPath(import.meta.url)), '..');
 const root = join(here, '..', '..');
 const www = join(here, 'www');
 const require = createRequire(import.meta.url);
-const { EDITION_PLANS } = await import(join(root, 'packages', 'shared', 'src', 'plans.ts'));
+const { EDITION_PLANS, editionPoints } = await import(join(root, 'packages', 'shared', 'src', 'plans.ts'));
 const version = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8')).version;
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`The stores take versions like 2.0.0, not ${version} (store/mobile/package.json)`);
 
@@ -35,8 +35,8 @@ writeFileSync(join(www, 'index.html'), html.replace('<script src="app.js"></scri
 
 const accountServer = (process.env.FBRX_ACCOUNT_SERVER ?? '').replace(/\/+$/, '');
 const products = ['basic', 'ultra'].map((tier) => {
-  const { productId, monthly, summary, highlights } = EDITION_PLANS[tier];
-  return { tier, productId, monthly, summary, highlights };
+  const { productId, monthly, summary } = EDITION_PLANS[tier];
+  return { tier, productId, monthly, summary, points: editionPoints(tier) };
 });
 // The App Store wants the terms of use and the privacy policy one tap away from the subscriptions (docs/STORES.md).
 const terms = process.env.FBRX_TERMS_URL ?? '';

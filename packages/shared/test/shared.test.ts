@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compareSemver, deepMerge, isPathLocked, satisfies, newId, decodeLicenseUnverified, parseVertical, productNameFor, resolveAudience, KIND_GROUPS, VERTICALS, VERTICAL_AUDIENCES, type LicensePayload } from '../src';
-import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIERS, atLeast, formatPrice, maxTier, parseTier, priceOf, tenantMonthlyTotal } from '../src';
+import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIERS, atLeast, editionPoints, formatPrice, maxTier, parseTier, priceOf, tenantMonthlyTotal } from '../src';
+import { DEFAULT_POLICY, DEFAULT_SETTINGS, THINKING_BUDGETS, thinkingBudget, thinkingLevelOf } from '../src';
 import { generateSigningKeyPair, hashPassword, licenseStatusFrom, openString, sealString, signLicense, verifyLicense, verifyPassword } from '../src/node';
 import { randomBytes } from 'node:crypto';
 
@@ -148,5 +149,21 @@ describe('kinds of tenant (Work, School, Home)', () => {
       for (const g of KIND_GROUPS[v]) expect(VERTICAL_AUDIENCES[v]).toContain(g.audience);
     }
     expect(KIND_GROUPS.home.map((g) => g.name)).toEqual(['Parents', 'Children']);
+  });
+});
+
+describe('thinking levels and the editions list', () => {
+  it('starts every computer at Everyday, and tells a fine-tuned budget apart', () => {
+    expect(thinkingLevelOf(thinkingBudget(DEFAULT_POLICY, DEFAULT_SETTINGS))).toBe('everyday');
+    expect(thinkingLevelOf({ ...THINKING_BUDGETS.thorough, steps: 61 })).toBe('custom');
+    // Each level asks a little more than the one before.
+    expect(THINKING_BUDGETS.quick.steps).toBeLessThan(THINKING_BUDGETS.everyday.steps);
+    expect(THINKING_BUDGETS.everyday.steps).toBeLessThan(THINKING_BUDGETS.thorough.steps);
+  });
+
+  it('lists each edition as everything in the one before, then what it adds', () => {
+    expect(editionPoints('essentials')).toEqual(EDITION_PLANS.essentials.highlights);
+    expect(editionPoints('ultra')).toEqual(['Everything in Standard', ...EDITION_PLANS.ultra.highlights]);
+    expect(editionPoints('blackhole')[0]).toBe('Everything in Ultra');
   });
 });

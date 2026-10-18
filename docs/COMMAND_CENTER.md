@@ -71,7 +71,7 @@ saved goes away), up to what the computer may run. Prices are in US dollars, per
 | Price | Free, and free in an organization | $4.99, or $3.99 through FBRX Command | $11.99, or $9.59 through FBRX Command | $24.99 per computer, only through FBRX Command |
 | How you get it | Where every new computer starts | Bought on your FBRX account or with a license key, or through your organization's FBRX Command | The same | Only as an add-on in an organization's FBRX Command: for the people who run it and its FBRX Servers |
 | Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, the help desk (in an organization) and Settings. **Home** is the split-flap board and a few notes from FBRX: tips, the AI models, and what Standard and Ultra add (no dashboard) | Everything in Essentials, plus FBRX Glass, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Standard | Everything in Ultra, plus the FBRX Server page |
-| Your AI's controls | — | The agent's work budget (steps per task, longest answer, how much of a conversation it keeps in mind) and unloading the model when idle | The same, plus the temperature | The same |
+| How much the AI does on a task | **Thinking**: Quick, Everyday or Thorough (see *Thinking* below), and whether it shows what it is doing | The same, and unloading the local model when idle | The same, and each part on its own: steps per task, longest answer, how much the built-in and Ollama models keep in mind, and the temperature | The same |
 | IT and expert tool sets | — | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools and adapters, device consoles, the developer tools in the Toolbox, logs, update channels, the Local API | Everything in Ultra, plus **network environments** (your network controller) in Network Center and the whole Library: **The Lab** and the **FBRX command library** (FBRX/1, FBRX Server and FBRX Gate commands, also in Terminal → FBRX/1), always there |
 | Connect | AI models | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance | The same |
 | Look | Light, dark or follow the computer: plain | The same | The theme studio: eleven themes, accent colors, gradients and textures (with a strength slider) | The same |
@@ -176,7 +176,7 @@ using and on what, waiting for your approval, writing the answer), the step it i
 the time so far and the tokens used, a list of the finished steps, and its thinking as it streams in, for models that
 share it (recent Claude models, and local models with a reasoning mode such as DeepSeek R1, Qwen 3 or gpt-oss, through llama.cpp,
 Ollama, vLLM or OpenRouter). The thinking stays folded under each answer as **How Fabrix thought about it**. It is
-for you to read (it is not added to the conversation the model sees as text) and can be turned off in **Settings → Agent → Work budget**.
+for you to read (it is not added to the conversation the model sees as text) and can be turned off in **Settings → Agent → Thinking**.
 
 Fabrix keeps working when you go to another page. The chats it is working in say **Working** in the history,
 **Fabrix working** in the top bar opens the chat, and coming back to Fabrix opens the chat you left, with everything it
@@ -702,17 +702,30 @@ choice:
 
 Windows copies signed by a publisher only install updates signed by the same publisher (see DEPLOYMENT.md → Signing).
 
-## Work budget
+## Thinking
 
-**Settings → Agent → Work budget** sets how much one task may do:
+**Settings → Agent → Thinking** sets how much Fabrix does on one task, in every edition:
+
+| Level | For | Steps per task | What a local model keeps in mind |
+| --- | --- | --- | --- |
+| **Quick** | Small jobs and quick answers; it checks in with you sooner | 10 | 8K tokens |
+| **Everyday** (where every computer starts) | Everyday tasks | 30 | 8K tokens (Ollama: its own setting) |
+| **Thorough** | Big jobs and long documents | 60 | 16K tokens (about 1 GB more memory) |
+
+Every level leaves the length of an answer to the model. A step is one round of thinking and using tools; when Fabrix
+uses them all it says so, and *continue* goes on. The steps are kept in the policy (with up to three tool calls a
+step), so an organization can set them; when it sets any part, the levels are locked. **Show what Fabrix is thinking
+and doing** turns the live activity panel and the thinking notes on or off.
+
+**Ultra and Black Hole** also set each part on its own, which makes the level **Custom** (picking a level puts it
+all back):
 
 | Setting | What it does | Default |
 | --- | --- | --- |
-| Steps per task | One step is a round of thinking and tool use. Fabrix says when it used them all; say *continue* to go on. Saved to the policy (raises tool calls per task to three per step), so an organization can fix it. | 30 |
-| Longest answer | The most the model may write in one reply. A cut-off answer says so and points here. | Automatic (64K tokens for Claude, the server's own limit for other models) |
+| Steps per task | 5 to 100. | 30 |
+| Longest answer | The most the model may write in one reply. A cut-off answer says so. | Automatic (64K tokens for Claude, the server's own limit for other models) |
 | Memory of the built-in model | The built-in runtime's context window, 4K to 128K tokens, with the memory it needs. | 8K |
 | Memory of Ollama models | Ollama's context window (`num_ctx`); Ollama's own setting is often 4K. | Ollama's setting |
-| Show what Fabrix is thinking and doing | The live activity panel and thinking notes. | On |
 
 ## AI models
 
