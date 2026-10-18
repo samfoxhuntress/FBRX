@@ -1,10 +1,12 @@
 import { arch, hostname, platform } from 'node:os';
 import {
   addressAs,
+  foldRunActivity,
   newId,
   type AgentEvent,
   type AgentPhase,
   type InvocationOrigin,
+  type RunActivity,
   type TokenUsage,
   type ToolCallRecord,
   type Vertical,
@@ -94,6 +96,8 @@ const UNTRUSTED_PREFIX =
  */
 export class AgentRuntime {
   private readonly runs = new Map<string, ActiveRun>();
+  /** What each run is doing right now, by run id (kept from its first event to its last). */
+  private readonly activity = new Map<string, RunActivity>();
 
   /** Chats the agent is answering in right now (not to be deleted from under it). */
   busyConversations(): Set<string> {
@@ -142,6 +146,16 @@ export class AgentRuntime {
 
   get activeCount(): number {
     return this.runs.size;
+  }
+
+  /** What every run in progress is doing right now. */
+  activities(): RunActivity[] {
+    return [...this.activity.values()];
+  }
+
+  /** What the run answering in this conversation is doing right now, if one is. */
+  activityIn(conversationId: string): RunActivity | null {
+    return [...this.activity.values()].find((a) => a.conversationId === conversationId) ?? null;
   }
 
   /** Starts a run and returns immediately; progress streams as `agent` events. */
@@ -231,7 +245,18 @@ export class AgentRuntime {
   }
 
   private emit(e: AgentEvent) {
-    this.d.events.emit('agent', e);
+    this.d.events.emit('agent', e.runId === null ? e : this.track(e, e.runId));
+  }
+
+  /** Gives a run's event the run's next sequence number and folds it into what the run is doing. */
+  private track(e: AgentEvent, runId: string): AgentEvent {
+    const before = this.activity.get(runId) ?? null;
+    const stamped = { ...e, seq: (before?.seq ?? 0) + 1 };
+    const after = foldRunActivity(before, stamped);
+    if (after) this.activity.set(runId, after);
+    else this.activity.delete(runId);
+    if (!before !== !after) this.d.events.emit('agent.runs', this.activities().map(({ runId: id, conversationId }) => ({ runId: id, conversationId })));
+    return stamped;
   }
 
   private availableTools(limits?: ChatParams['limits']): ToolSpec[] {
@@ -521,8 +546,10 @@ export class AgentRuntime {
         for (let i = 0; i < calls.length; i++) {
           const call = calls[i];
           const rec = records[i];
+          // Kept in the conversation as it changes, so a chat opened in the middle of the run shows where each call is.
           const update = (patch: Partial<ToolCallRecord>) => {
             Object.assign(rec, patch);
+            this.d.store.updateToolCalls(messageId, records);
             this.emit({ type: 'tool.updated', runId, conversationId, messageId, call: { ...rec } });
           };
           let output: string;
@@ -568,7 +595,6 @@ export class AgentRuntime {
           this.d.store.append(conversationId, { role: 'tool', content: output, toolCallId: call.id, toolName: rec.name });
           unanswered = unanswered.filter((u) => u.id !== call.id);
         }
-        this.d.store.updateToolCalls(messageId, records);
       }
 
       if (stoppedAtLimit) {

@@ -2478,7 +2478,7 @@ html.goose-mode #root {
   width: auto;
   min-width: 150px;
 }
-.fx-topbar > .model-pill:not(.console-pill) {
+.fx-topbar > .model-pill:not(.console-pill):not(.working-pill) {
   flex-shrink: 1;
   min-width: 90px;
   overflow: hidden;
@@ -6190,4 +6190,25 @@ body.popout .fx-page-header p {
 .home-note-close:hover {
   color: var(--text-primary);
   background: var(--surface-2);
+}
+
+/* A chat the agent is answering in right now (the history list) */
+.chat-busy {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--accent);
+  font-weight: 600;
+}
+.chat-busy .fx-spinner {
+  width: 9px;
+  height: 9px;
+}
+/* The agent at work (top bar): opens the chat it is working in */
+.working-pill {
+  color: var(--accent);
+}
+.working-pill .fx-spinner {
+  width: 11px;
+  height: 11px;
 }

@@ -178,6 +178,11 @@ share it (recent Claude models, and local models with a reasoning mode such as D
 Ollama, vLLM or OpenRouter). The thinking stays folded under each answer as **How Fabrix thought about it**. It is
 for you to read (it is not added to the conversation the model sees as text) and can be turned off in **Settings → Agent → Work budget**.
 
+Fabrix keeps working when you go to another page. The chats it is working in say **Working** in the history,
+**Fabrix working** in the top bar opens the chat, and coming back to Fabrix opens the chat you left, with everything it
+has done so far (FBRX keeps each task's progress until it finishes, so the chat picks up exactly where it is). A chat
+opened in its own window shows it too.
+
 ### Your chat history
 
 The **⋯** next to a chat renames it, adds it to a project (or a new one), takes it out again, or deletes it. **Select**

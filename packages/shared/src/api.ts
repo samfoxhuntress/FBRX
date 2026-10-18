@@ -194,6 +194,11 @@ export interface Conversation extends ConversationSummary {
   messages: ChatMessage[];
 }
 
+/** A conversation as the chat opens it: its messages, and what the agent is doing in it right now. */
+export interface OpenConversation extends Conversation {
+  run: RunActivity | null;
+}
+
 export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
@@ -202,7 +207,11 @@ export interface TokenUsage {
 /** "mesh": another computer's agent is taking over or being consulted (Mesh Assist). */
 export type AgentPhase = 'model' | 'thinking' | 'writing' | 'tool' | 'approval' | 'reading' | 'mesh';
 
-export type AgentEvent =
+/**
+ * Events of a run carry its sequence number (seq, from 1), so what someone saw of a run can be put together exactly from
+ * its RunActivity and the events after it.
+ */
+export type AgentEvent = { seq?: number } & (
   | { type: 'run.started'; runId: string; conversationId: string; providerId: string; model: string }
   | { type: 'message.delta'; runId: string; conversationId: string; messageId: string; delta: string }
   | { type: 'thinking.delta'; runId: string; conversationId: string; messageId: string; delta: string }
@@ -213,7 +222,37 @@ export type AgentEvent =
   | { type: 'run.completed'; runId: string; conversationId: string; steps: number; usage: TokenUsage }
   | { type: 'run.failed'; runId: string; conversationId: string; error: string }
   | { type: 'run.cancelled'; runId: string; conversationId: string }
-  | { type: 'mode.changed'; runId: string | null; conversationId: string; offline: boolean };
+  | { type: 'mode.changed'; runId: string | null; conversationId: string; offline: boolean }
+);
+
+/** One step of a run, as the activity panel lists it. */
+export interface RunStep {
+  phase: AgentPhase;
+  detail: string;
+  at: number;
+}
+
+/**
+ * What a run is doing right now: its steps, its thinking and the answer it is writing. The core keeps one for each run
+ * while it works (foldRunActivity over the run's events), so a chat opened in the middle of a run shows it too.
+ */
+export interface RunActivity {
+  runId: string;
+  conversationId: string;
+  /** The sequence number of the last event in it. */
+  seq: number;
+  startedAt: number;
+  /** The steps so far, the current one last. */
+  steps: RunStep[];
+  step: number;
+  maxSteps: number;
+  usage: TokenUsage;
+  /** The thinking behind the reply being written (it starts over with each reply). */
+  thinking: string;
+  thinkingFor: string | null;
+  /** The reply being written, until it is complete. */
+  reply: { messageId: string; text: string } | null;
+}
 
 export interface ProviderStatus {
   id: string;
@@ -572,9 +611,11 @@ export interface CoreMethods extends ExtMethods {
   'ai.models': (p: { providerId: string }) => ModelInfo[];
   'ai.chat': (p: { conversationId?: string; message: string; providerId?: string; model?: string; offline?: boolean }) => { runId: string; conversationId: string };
   'ai.cancel': (p: { runId: string }) => { cancelled: boolean };
+  /** What every run in progress is doing right now. */
+  'ai.runs': () => RunActivity[];
   /** projectId: only that project's chats ("none": chats in no project). */
   'ai.conversations.list': (p?: { projectId?: string | 'none' }) => ConversationSummary[];
-  'ai.conversations.get': (p: { id: string }) => Conversation;
+  'ai.conversations.get': (p: { id: string }) => OpenConversation;
   'ai.conversations.rename': (p: { id: string; title: string }) => ConversationSummary;
   'ai.conversations.delete': (p: { id: string }) => { deleted: boolean };
   /** Deletes several chats at once (a chat the agent is still answering in is skipped). */
@@ -707,6 +748,8 @@ export type CoreResult<M extends CoreMethod> = ReturnType<CoreMethods[M]>;
 
 export interface CoreEvents extends ExtEvents {
   agent: AgentEvent;
+  /** The runs in progress, each time one starts or ends. */
+  'agent.runs': Array<Pick<RunActivity, 'runId' | 'conversationId'>>;
   'approval.requested': ApprovalRequest;
   'approval.resolved': { id: string; decision: 'approve' | 'deny' | 'expired'; by: string };
   'service.changed': ServiceStatus;
@@ -739,6 +782,7 @@ export const AGENT_SCOPE_METHODS: readonly CoreMethod[] = [
   'ai.models',
   'ai.chat',
   'ai.cancel',
+  'ai.runs',
   'ai.conversations.list',
   'ai.conversations.get',
   'tools.list',

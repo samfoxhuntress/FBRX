@@ -8,6 +8,7 @@ export * from './license';
 export * from './commands';
 export * from './protocol';
 export * from './api';
+export * from './agent-activity';
 export * from './ext';
 export * from './devices';
 export * from './fun';

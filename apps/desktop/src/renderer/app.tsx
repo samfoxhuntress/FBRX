@@ -102,13 +102,13 @@ export type Route =
   | 'goose'
   | 'goose-overlay';
 
-/** Navigates to a page; `to` may carry a sub-path such as `notes/note_123` or `settings/appearance`. */
 /** This window shows one page on its own, beside the main window (opened with "Open in a new window"). */
 export const POPOUT = new URLSearchParams(location.search).has('popout');
 const popoutPage = location.hash.replace(/^#\/?/, '').split('/')[0];
 /** Pages set to open in their own window (Settings → General → Windows); kept up to date by the main window. */
 let ownWindows: Record<string, boolean> = {};
 
+/** Navigates to a page; `to` may carry a sub-path such as `notes/note_123` or `settings/appearance`. */
 export function navigate(to: string) {
   const page = to.split('/')[0];
   // A popped-out page keeps to itself: links to other pages open in the main window.
@@ -121,6 +121,12 @@ export function navigate(to: string) {
 /** The part of the route after the page name (`notes/abc` → `abc`). */
 export function routeArg(): string | null {
   return location.hash.replace(/^#\/?/, '').split('/').slice(1).join('/') || null;
+}
+
+/** Opens the chat the agent is working in (the first one, when it works in several). */
+async function openWorkingChat() {
+  const [first] = await call('ai.runs');
+  navigate(first ? `agent/chat/${encodeURIComponent(first.conversationId)}` : 'agent');
 }
 
 function useRoute(): Route {
@@ -183,7 +189,7 @@ export function App() {
 
 function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeof useCore<'settings.get'>>['data'] }) {
   const toast = useToast();
-  const { data: status } = useCore('system.status', undefined, ['service.changed', 'vault.changed', 'fleet.changed', 'license.changed', 'approval.requested', 'approval.resolved', 'runtime.changed', 'ai.halted'], 15_000);
+  const { data: status } = useCore('system.status', undefined, ['service.changed', 'vault.changed', 'fleet.changed', 'license.changed', 'approval.requested', 'approval.resolved', 'runtime.changed', 'ai.halted', 'agent.runs'], 15_000);
   const { data: trophies } = useCore('fun.trophies', undefined, ['fun.trophy']);
   const { data: alertCounts } = useCore('alerts.counts', undefined, ['alerts.changed'], 60_000);
   // The Help desk tab's number: new tickets in the queue on a receiver, tickets waiting on you everywhere else.
@@ -748,7 +754,12 @@ function TopBar({
           {openConsoles} console{openConsoles > 1 ? 's' : ''}
         </button>
       )}
-      {status.activeRuns > 0 && <Status tone="busy">{agentName} working</Status>}
+      {status.activeRuns > 0 && (
+        <button className="model-pill working-pill" onClick={() => void openWorkingChat()} title={`See what ${agentName} is doing`}>
+          <span className="fx-spinner" aria-hidden />
+          {agentName} working
+        </button>
+      )}
       {status.pendingApprovals > 0 && (
         <Button size="sm" variant="primary" icon="shield" onClick={() => navigate('approvals')}>
           {status.pendingApprovals} approval{status.pendingApprovals > 1 ? 's' : ''} waiting

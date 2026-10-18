@@ -3,8 +3,8 @@ import type { AddressInfo } from 'node:net';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROVIDERS, type AgentEvent } from '@fbrx/shared';
-import { makeKernel, tempDir, USER } from './helpers';
+import { DEFAULT_PROVIDERS, foldRunActivity, type AgentEvent, type OpenConversation, type RunActivity } from '@fbrx/shared';
+import { makeKernel, tempDir, USER, waitFor } from './helpers';
 import { mockOpenAI } from './mock-llm';
 import { ThinkSplitter } from '../src/ai/providers/think';
 import { describeCall } from '../src/ai/agent';
@@ -97,6 +97,59 @@ describe('agent activity and work budget', () => {
       expect(last.message.content).toMatch(/continue/);
       expect(events.some((e) => e.type === 'run.completed')).toBe(true);
     } finally {
+      await llm.close();
+      await cleanup();
+    }
+  });
+});
+
+describe('a chat opened in the middle of a run', () => {
+  /** A run's activity without its times (the core and a chat fold the same events at different moments). */
+  const shape = (a: RunActivity | null) => a && { ...a, startedAt: 0, steps: a.steps.map((st) => ({ ...st, at: 0 })) };
+
+  it('comes with the run, which the run\'s numbered events carry on from exactly', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    const llm = await mockOpenAI((_b, turn) =>
+      turn === 0 ? { reasoning: 'I will add it. ', tool: { name: 'workspace__add_task', args: { title: 'Milk' } } } : turn === 1 ? { tool: { name: 'workspace__add_task', args: { title: 'Eggs' } } } : { text: 'Added both.' },
+    );
+    const events: AgentEvent[] = [];
+    const off = kernel.events.on('agent', (e: AgentEvent) => events.push(e));
+    const waitingApproval = () => waitFor(() => kernel.approvals.list()[0] ?? null);
+    try {
+      useMock(kernel, llm.url);
+      // Adding a task asks first here, so the run waits for each approval.
+      const policy = structuredClone(kernel.policy.policy);
+      policy.rules = policy.rules.filter((r) => r.id !== 'builtin-workspace');
+      kernel.policy.updateLocal(policy);
+      const { conversationId } = (await kernel.call('ai.chat', { message: 'Add milk and eggs to my list' }, USER)) as { conversationId: string };
+      const first = await waitingApproval();
+
+      // Opened while it waits for approval: the messages so far, where the tool call is, and what the run is doing.
+      const open = (await kernel.call('ai.conversations.get', { id: conversationId }, USER)) as OpenConversation;
+      expect(open.run).toMatchObject({ conversationId, thinking: 'I will add it. ', step: 1 });
+      expect(open.run!.steps.at(-1)).toMatchObject({ phase: 'approval', detail: expect.stringMatching(/Add task/) });
+      expect(open.messages.find((m) => m.toolCalls?.length)?.toolCalls?.[0].status).toBe('awaiting-approval');
+      expect((await kernel.call('ai.runs', undefined, USER)) as RunActivity[]).toEqual([open.run]);
+      // The run's events are numbered 1, 2, 3…, and the core's activity is just those events folded together.
+      expect(events.map((e) => e.seq)).toEqual(events.map((_, i) => i + 1));
+      expect(shape(events.reduce(foldRunActivity, null))).toEqual(shape(open.run));
+
+      await kernel.call('approvals.resolve', { id: first.id, decision: 'approve' }, USER);
+      const second = await waitingApproval();
+      // A chat that opened back then and has heard every event since (and some before) is where the core is now.
+      const caughtUp = events.reduce(foldRunActivity, open.run);
+      expect(shape(caughtUp)).toEqual(shape(kernel.agent.activityIn(conversationId)));
+      expect(caughtUp!.step).toBe(2);
+
+      await kernel.call('approvals.resolve', { id: second.id, decision: 'approve' }, USER);
+      await waitFor(() => events.some((e) => e.type === 'run.completed'));
+      const after = (await kernel.call('ai.conversations.get', { id: conversationId }, USER)) as OpenConversation;
+      expect(after.run).toBeNull();
+      expect(after.messages.at(-1)?.content).toBe('Added both.');
+      expect(after.messages.flatMap((m) => m.toolCalls ?? []).map((c) => c.status)).toEqual(['succeeded', 'succeeded']);
+      expect(await kernel.call('ai.runs', undefined, USER)).toEqual([]);
+    } finally {
+      off();
       await llm.close();
       await cleanup();
     }

@@ -8,7 +8,8 @@ import { Markdown } from '../markdown';
 import { POPOUT, navigate, routeArg } from '../app';
 import { EmergencyStop, ModelPicker } from '../widgets';
 import { useSlashMenu } from '../slash-menu';
-import { ActivityPanel, ThinkingNote, reduceActivity, type Activity } from '../agent-activity';
+import { ActivityPanel, ThinkingNote } from '../agent-activity';
+import { NEW_CHAT, foldChat, openedChat, type ChatView } from '../chat-state';
 import { StreamReader, prefetchSpeech, say, speakable, stopSpeaking, warmNaturalVoice } from '../voice/voice';
 import { acknowledgement } from '../voice/acknowledge';
 import { startThinkingSound, stopThinkingSound } from '../voice/thinking-sound';
@@ -191,6 +192,26 @@ function StarterAiCard({ st }: { st: StarterAiStatus | null }) {
   );
 }
 
+const OPEN_CHAT_KEY = 'fbrx.chat.open';
+
+/** The chat that was open when you left the page, so coming back opens it again (in this window). */
+function rememberedChat(): string | null {
+  try {
+    return sessionStorage.getItem(OPEN_CHAT_KEY);
+  } catch {
+    return null;
+  }
+}
+
+function rememberChat(id: string | null) {
+  try {
+    if (id) sessionStorage.setItem(OPEN_CHAT_KEY, id);
+    else sessionStorage.removeItem(OPEN_CHAT_KEY);
+  } catch {
+    /* storage unavailable */
+  }
+}
+
 export function AgentPage({ agentName }: { agentName: string }) {
   const convs = useCore('ai.conversations.list', undefined, []);
   const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed']);
@@ -204,9 +225,16 @@ export function AgentPage({ agentName }: { agentName: string }) {
   const [chatFilter, setChatFilter] = useState<ChatFilter>('all');
   const filterRef = useRef(chatFilter);
   filterRef.current = chatFilter;
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [streaming, setStreaming] = useState<{ messageId: string; text: string } | null>(null);
-  const [activeRun, setActiveRun] = useState<{ runId: string; conversationId: string } | null>(null);
+  // The open chat's messages and the agent's live activity in it (chat-state.ts).
+  const [chat, setChat] = useState<ChatView>(NEW_CHAT);
+  const run = chat.run;
+  // A message is on its way (until the chat shows the agent's run for it).
+  const [sending, setSending] = useState(false);
+  const busy = sending || !!run;
+  const busyRef = useRef(busy);
+  busyRef.current = busy;
+  // Every chat the agent is answering in, to mark them in the history.
+  const [busyChats, setBusyChats] = useState<ReadonlySet<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState('');
   const composerRef = useRef<HTMLTextAreaElement>(null);
@@ -216,15 +244,11 @@ export function AgentPage({ agentName }: { agentName: string }) {
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [offline, setOffline] = useState(true);
   const thread = useRef<HTMLDivElement>(null);
-  const runRef = useRef(activeRun);
-  runRef.current = activeRun;
-  const selectedRef = useRef(selected);
-  selectedRef.current = selected;
-  // Events can arrive before ai.chat's reply; adopt the run while a send is in flight.
-  const sending = useRef(false);
-  const activeRunDone = useRef(new Set<string>());
+  // The chat on screen (or being opened), for the event handler; set as soon as a chat is picked.
+  const shown = useRef<string | null>(null);
+  // While a chat opens, its events wait here and fold in on top of what the core answered.
+  const opening = useRef<{ id: string; events: AgentEvent[] } | null>(null);
   const { confirm, dialog } = useConfirm();
-  const [activity, setActivity] = useState<Activity | null>(null);
   const s = settings.data?.settings;
   const showThinking = s?.ai.showThinking ?? true;
   // Voice: replies read aloud as they stream in, and the microphone / hands-free conversation in the composer.
@@ -247,12 +271,12 @@ export function AgentPage({ agentName }: { agentName: string }) {
     if (v.acknowledge) say(nextAck.current ?? acknowledgement(v.voiceName, addressAs(settings.data?.settings) || null), v);
     nextAck.current = null;
     // The soft thinking sound starts straight away (quietly, under the "I heard you") and stops when the answer does.
-    setTimeout(() => thinkingWanted.current && (sending.current || runRef.current) && startThinkingSound(), 300);
+    setTimeout(() => thinkingWanted.current && busyRef.current && startThinkingSound(), 300);
   };
   const voice = useVoiceChat({
     settings: s,
     onText: (text, send_) => {
-      if (send_ && !runRef.current) {
+      if (send_ && !busyRef.current) {
         acknowledge();
         void send(text);
       } else setInput((cur) => (cur.trim() ? `${cur.trimEnd()} ${text}` : text));
@@ -289,83 +313,73 @@ export function AgentPage({ agentName }: { agentName: string }) {
     if (selected) await call('ai.conversations.setOffline', { id: selected, offline: next }).catch(() => setOffline(!next));
   };
 
-  const loadConversation = async (id: string | null) => {
+  /** Opens a chat (null: a new one) with its messages and whatever the agent is doing in it right now. */
+  const openChat = async (id: string | null) => {
     setSelected(id);
-    setStreaming(null);
+    shown.current = id;
+    rememberChat(id);
     setError(null);
+    opening.current = null;
     if (!id) {
+      setChat(NEW_CHAT);
       setOffline(defaultOffline);
-      return setMessages([]);
+      return;
     }
-    const c = await call('ai.conversations.get', { id });
-    setMessages(c.messages);
-    setOffline(c.offline);
-    if (c.providerId) setProviderId(c.providerId);
+    const pending = { id, events: [] as AgentEvent[] };
+    opening.current = pending;
+    try {
+      const c = await call('ai.conversations.get', { id });
+      if (opening.current !== pending) return;
+      setChat(pending.events.reduce(foldChat, openedChat(c)));
+      setOffline(c.offline);
+      if (c.providerId) setProviderId(c.providerId);
+    } catch {
+      // Deleted in the meantime: a new chat instead.
+      if (opening.current === pending) void openChat(null);
+    } finally {
+      if (opening.current === pending) opening.current = null;
+    }
   };
 
   useEffect(() => {
     void call('approvals.list').then(setApprovals);
+    const markBusy = (runs: Array<{ conversationId: string }>) => setBusyChats(new Set(runs.map((r) => r.conversationId)));
+    void call('ai.runs').then(markBusy);
     const offs = [
+      // A run started or ended: the history shows which chats are busy, and the chats in their new order.
+      onEvent('agent.runs', (runs) => {
+        markBusy(runs);
+        convs.reload();
+      }),
       onEvent('approval.requested', (r) => setApprovals((a) => [...a, r])),
       onEvent('approval.resolved', (r) => setApprovals((a) => a.filter((x) => x.id !== r.id))),
       onEvent('agent', (e: AgentEvent) => {
         if (e.type === 'mode.changed') {
-          if (e.conversationId === selectedRef.current) setOffline(e.offline);
+          if (e.conversationId === shown.current) setOffline(e.offline);
           return;
         }
-        if (sending.current && !runRef.current) {
-          runRef.current = { runId: e.runId, conversationId: e.conversationId };
-          setActiveRun(runRef.current);
-        }
-        const mine = runRef.current?.runId === e.runId || e.conversationId === selectedRef.current;
-        if (!mine) {
-          if (e.type === 'run.completed' || e.type === 'run.failed') convs.reload();
-          return;
-        }
-        setActivity((a) => reduceActivity(a, e));
+        const waiting = opening.current;
+        if (waiting?.id === e.conversationId) waiting.events.push(e);
+        else setChat((v) => (v.conversationId === e.conversationId ? foldChat(v, e) : v));
+        if (e.conversationId !== shown.current) return;
+        const ended = e.type === 'run.completed' || e.type === 'run.failed' || e.type === 'run.cancelled';
         // The thinking sound stops when the answer starts, when it needs your approval, or when it ends.
-        if (e.type === 'message.delta' || (e.type === 'run.progress' && (e.phase === 'writing' || e.phase === 'approval')) || e.type === 'run.completed' || e.type === 'run.failed' || e.type === 'run.cancelled') stopThinking();
-        switch (e.type) {
-          case 'run.started':
-            setActiveRun({ runId: e.runId, conversationId: e.conversationId });
-            break;
-          case 'message.delta':
-            setStreaming((s) => (s && s.messageId === e.messageId ? { ...s, text: s.text + e.delta } : { messageId: e.messageId, text: e.delta }));
-            if (streamText.current.id !== e.messageId) {
-              streamText.current = { id: e.messageId, text: '' };
-              reader.current.reset();
-            }
-            streamText.current.text += e.delta;
-            if (speakRef.current) reader.current.update(streamText.current.text);
-            break;
-          case 'message.completed':
-            setStreaming(null);
-            setMessages((m) => [...m.filter((x) => x.id !== e.message.id), e.message]);
-            if (speakRef.current && e.message.role === 'assistant') {
-              if (streamText.current.id !== e.message.id) reader.current.reset();
-              reader.current.finish(e.message.content);
-            }
-            streamText.current = { id: '', text: '' };
-            break;
-          case 'tool.updated':
-            setMessages((m) => m.map((x) => (x.id === e.messageId ? { ...x, toolCalls: (x.toolCalls ?? []).map((c) => (c.id === e.call.id ? e.call : c)) } : x)));
-            break;
-          case 'run.completed':
-          case 'run.cancelled':
-            activeRunDone.current.add(e.runId);
-            setActiveRun(null);
-            setStreaming(null);
-            convs.reload();
-            if (e.type === 'run.completed') replyFinishedRef.current();
-            break;
-          case 'run.failed':
-            activeRunDone.current.add(e.runId);
-            setActiveRun(null);
-            setStreaming(null);
-            setError(e.error);
-            convs.reload();
-            break;
-        }
+        if (e.type === 'message.delta' || (e.type === 'run.progress' && (e.phase === 'writing' || e.phase === 'approval')) || ended) stopThinking();
+        if (e.type === 'message.delta') {
+          if (streamText.current.id !== e.messageId) {
+            streamText.current = { id: e.messageId, text: '' };
+            reader.current.reset();
+          }
+          streamText.current.text += e.delta;
+          if (speakRef.current) reader.current.update(streamText.current.text);
+        } else if (e.type === 'message.completed') {
+          if (speakRef.current && e.message.role === 'assistant') {
+            if (streamText.current.id !== e.message.id) reader.current.reset();
+            reader.current.finish(e.message.content);
+          }
+          streamText.current = { id: '', text: '' };
+        } else if (e.type === 'run.completed') replyFinishedRef.current();
+        else if (e.type === 'run.failed') setError(e.error);
       }),
     ];
     return () => offs.forEach((o) => o());
@@ -374,13 +388,14 @@ export function AgentPage({ agentName }: { agentName: string }) {
 
   // New messages glide into view; streamed text follows instantly, and only while you are at the bottom (so
   // scrolling up to read something earlier isn't interrupted).
+  const reply = run?.reply ?? null;
   useEffect(() => {
     thread.current?.scrollTo({ top: thread.current.scrollHeight, behavior: 'smooth' });
-  }, [messages]);
+  }, [chat.messages]);
   useEffect(() => {
     const el = thread.current;
-    if (el && streaming && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
-  }, [streaming]);
+    if (el && reply && el.scrollHeight - el.scrollTop - el.clientHeight < 160) el.scrollTop = el.scrollHeight;
+  }, [reply]);
 
   // Prompts handed over by other pages (sessionStorage) or by Spotlight (#/agent/ask/<text>).
   const sendRef = useRef<(t: string) => void>(() => undefined);
@@ -390,58 +405,60 @@ export function AgentPage({ agentName }: { agentName: string }) {
       sessionStorage.removeItem('fbrx.agentDraft');
       setInput(draft);
     }
-    const pick = () => {
+    // first: the page has just opened, so with nothing asked for it reopens the chat you left.
+    const pick = (first: boolean) => {
       const arg = routeArg();
       // From Projects: show that project's chats.
       if (arg?.startsWith('project/')) {
         setChatFilter(decodeURIComponent(arg.slice(8)));
         navigate('agent');
-        void loadConversation(null);
-        return;
-      }
-      if (arg?.startsWith('ask/')) {
+        void openChat(null);
+      } else if (arg?.startsWith('ask/')) {
         const text = decodeURIComponent(arg.slice(4));
         navigate('agent');
-        void loadConversation(null).then(() => setTimeout(() => sendRef.current(text), 50));
-      }
+        void openChat(null).then(() => setTimeout(() => sendRef.current(text), 50));
+      } else if (arg?.startsWith('chat/')) {
+        navigate('agent');
+        void openChat(decodeURIComponent(arg.slice(5)));
+      } else if (first) void openChat(rememberedChat());
     };
-    pick();
-    window.addEventListener('hashchange', pick);
-    return () => window.removeEventListener('hashchange', pick);
+    pick(true);
+    const onHash = () => pick(false);
+    window.addEventListener('hashchange', onHash);
+    return () => window.removeEventListener('hashchange', onHash);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const send = async (text = input) => {
     const message = text.trim();
-    if (!message || activeRun) return;
+    if (!message || busyRef.current) return;
     setError(null);
     setInput('');
-    const optimistic: ChatMessage = { id: `local-${Date.now()}`, role: 'user', content: message, createdAt: new Date().toISOString() };
-    setMessages((m) => [...m, optimistic]);
-    sending.current = true;
+    setSending(true);
+    const local: ChatMessage = { id: `local-${Date.now()}`, role: 'user', content: message, createdAt: new Date().toISOString() };
+    setChat((v) => ({ ...v, messages: [...v.messages, local] }));
     try {
       const r = await call('ai.chat', { conversationId: selected ?? undefined, message, providerId: providerId || undefined, model: model || undefined, offline: selected ? undefined : offline });
-      // A fast run may already have finished before this reply arrived.
-      if (!activeRunDone.current.has(r.runId)) setActiveRun(r);
       // Your wingman shows up in person, too.
       if (/^talk\s+to\s+me,?\s+goose\W*$/i.test(message) && funEnabled(settings.data?.settings, tier)) summonGoose();
+      // The chat as it is now, with the agent already at work in it (a new chat gets its id here).
+      await openChat(r.conversationId);
       if (!selected) {
-        setSelected(r.conversationId);
         const f = filterRef.current;
         if (f !== 'all' && f !== 'none' && !learner) await call('ai.conversations.setProject', { id: r.conversationId, projectId: f }).catch(() => undefined);
         convs.reload();
       }
     } catch (err) {
-      setMessages((m) => m.filter((x) => x.id !== optimistic.id));
+      setChat((v) => ({ ...v, messages: v.messages.filter((x) => x.id !== local.id) }));
       setInput(message);
       setError((err as Error).message);
     } finally {
-      sending.current = false;
+      setSending(false);
     }
   };
 
   sendRef.current = (t: string) => void send(t);
-  const visible = useMemo(() => messages.filter((m) => m.role === 'user' || m.role === 'assistant'), [messages]);
+  const visible = useMemo(() => chat.messages.filter((m) => m.role === 'user' || m.role === 'assistant'), [chat.messages]);
   const usable = (providers.data ?? []).filter((p) => p.enabled && !p.blockedByPolicy);
   const currentProvider = usable.find((p) => p.id === providerId) as ProviderStatus | undefined;
 
@@ -452,8 +469,8 @@ export function AgentPage({ agentName }: { agentName: string }) {
         title="Conversations"
         actions={
           <>
-            {bridge.popOut && !POPOUT && <Button size="sm" variant="ghost" icon="external" aria-label="Open the chat in its own window" title="Open the chat in its own window, to keep it beside your work" onClick={() => void bridge.popOut?.(location.hash.replace(/^#\/?/, '') || 'agent')} />}
-            <Button size="sm" icon="plus" onClick={() => void loadConversation(null)} aria-label="New conversation" />
+            {bridge.popOut && !POPOUT && <Button size="sm" variant="ghost" icon="external" aria-label="Open the chat in its own window" title="Open the chat in its own window, to keep it beside your work" onClick={() => void bridge.popOut?.(selected ? `agent/chat/${encodeURIComponent(selected)}` : 'agent')} />}
+            <Button size="sm" icon="plus" onClick={() => void openChat(null)} aria-label="New conversation" />
           </>
         }
         flush
@@ -462,11 +479,11 @@ export function AgentPage({ agentName }: { agentName: string }) {
           chats={convs.data ?? []}
           reload={convs.reload}
           selected={selected}
-          busyId={activeRun?.conversationId ?? null}
+          busy={busyChats}
           learner={learner}
           filter={chatFilter}
           setFilter={setChatFilter}
-          onOpen={(id) => void loadConversation(id)}
+          onOpen={(id) => void openChat(id)}
         />
         {!learner && (
           <div className="agent-list-foot">
@@ -477,7 +494,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
       <Card className="agent-main" flush>
         <div className="agent-thread" ref={thread} aria-live="polite">
           {!!visible.length && <StarterAiCard st={starter} />}
-          {!visible.length && !streaming && (
+          {!visible.length && !reply && (
             <div className="msg" style={{ marginTop: '8vh', alignItems: 'center', textAlign: 'center' }}>
               <FbrxMark className="fx-brand-mark" size={48} />
               <h2>
@@ -517,14 +534,14 @@ export function AgentPage({ agentName }: { agentName: string }) {
             m.role === 'user' ? (
               <div key={m.id} className="msg msg-mine">
                 <UserMessage text={m.content} />
-                <MessageActions text={m.content} onEdit={() => setInput(m.content)} onRerun={activeRun ? undefined : () => void send(m.content)} />
+                <MessageActions text={m.content} onEdit={() => setInput(m.content)} onRerun={busy ? undefined : () => void send(m.content)} />
               </div>
             ) : (
               <div key={m.id} className="msg">
                 {showThinking && m.thinking && <ThinkingNote text={m.thinking} agentName={agentName} />}
                 {m.content && <Markdown text={m.content} />}
                 {(m.toolCalls ?? []).map((c) => (
-                  <ToolCard key={c.id} c={c} approval={approvals.find((a) => a.runId === activeRun?.runId && a.tool === c.name)} />
+                  <ToolCard key={c.id} c={c} approval={approvals.find((a) => a.runId === run?.runId && a.tool === c.name)} />
                 ))}
                 <div className="msg-meta">
                   {m.model && <span>{m.model}</span>}
@@ -533,17 +550,17 @@ export function AgentPage({ agentName }: { agentName: string }) {
               </div>
             ),
           )}
-          {streaming && (
+          {reply && (
             <div className="msg">
-              <Markdown text={streaming.text} />
+              <Markdown text={reply.text} />
             </div>
           )}
-          {activeRun && activity && (
+          {run && (
             <div className="msg">
-              <ActivityPanel activity={activity} agentName={agentName} showThinking={showThinking} />
+              <ActivityPanel activity={run} agentName={agentName} showThinking={showThinking} />
             </div>
           )}
-          {activeRun && !activity && !streaming && (
+          {sending && !run && (
             <div className="msg">
               <span className="typing" aria-label="Agent is working">
                 <span />
@@ -589,7 +606,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
           <TextArea
             ref={composerRef}
             value={input}
-            placeholder={activeRun ? `${agentName} is working…` : learner ? `Ask ${agentName} a question — Enter to send` : `Ask ${agentName} to do something — Enter to send, Shift+Enter for a new line, / for snippets`}
+            placeholder={busy ? `${agentName} is working…` : learner ? `Ask ${agentName} a question — Enter to send` : `Ask ${agentName} to do something — Enter to send, Shift+Enter for a new line, / for snippets`}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (slash.onKeyDown(e)) return;
@@ -635,7 +652,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
               {currentProvider && !currentProvider.available && <span className="fx-muted" style={{ fontSize: 12 }}>{currentProvider.message}</span>}
             </div>}
             <div className="composer-actions">
-              {selected && !activeRun && (
+              {selected && !busy && (
                 <Button
                   size="sm"
                   variant="ghost"
@@ -644,7 +661,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
                   onClick={async () => {
                     if (await confirm({ title: 'Delete this conversation?', danger: true, confirmLabel: 'Delete' })) {
                       await call('ai.conversations.delete', { id: selected });
-                      void loadConversation(null);
+                      void openChat(null);
                       convs.reload();
                     }
                   }}
@@ -672,13 +689,13 @@ export function AgentPage({ agentName }: { agentName: string }) {
                   <Icons.mic size={17} />
                 </button>
               </div>
-              {activeRun ? (
+              {run ? (
                 <Button
                   icon="stop"
                   onClick={() => {
                     stopSpeaking();
                     stopThinking();
-                    void call('ai.cancel', { runId: activeRun.runId });
+                    void call('ai.cancel', { runId: run.runId });
                   }}
                 >
                   Stop

@@ -114,7 +114,7 @@ export class LocalApiServer {
     if (!this.sseClients.size) return;
     const data = `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
     for (const c of this.sseClients) {
-      if ((c as ServerResponse & { fbrxScope?: Scope }).fbrxScope === 'agent' && !['agent', 'approval.requested', 'approval.resolved'].includes(event)) continue;
+      if ((c as ServerResponse & { fbrxScope?: Scope }).fbrxScope === 'agent' && !['agent', 'agent.runs', 'approval.requested', 'approval.resolved'].includes(event)) continue;
       c.write(data);
     }
   }

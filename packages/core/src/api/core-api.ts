@@ -161,8 +161,13 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       return k.agent.runToCompletion({ ...q, origin: ctx.origin, actor: ctx.actor });
     },
     'ai.cancel': (p) => ({ cancelled: k.agent.cancel(z.object({ runId: z.string() }).parse(p).runId) }),
+    'ai.runs': () => k.agent.activities(),
     'ai.conversations.list': (p) => k.conversations.list(z.object({ projectId: z.string().max(64).optional() }).parse(p ?? {})),
-    'ai.conversations.get': (p) => k.conversations.get(IdSchema.parse(p).id),
+    // The messages and the run in progress together, so the chat can carry on from exactly here with the run's events.
+    'ai.conversations.get': (p) => {
+      const { id } = IdSchema.parse(p);
+      return { ...k.conversations.get(id), run: k.agent.activityIn(id) };
+    },
     'ai.conversations.rename': (p) => {
       const q = z.object({ id: z.string(), title: z.string() }).parse(p);
       return k.conversations.rename(q.id, q.title);
