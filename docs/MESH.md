@@ -124,7 +124,8 @@ allow it, per paired server.
 
 1. **Mesh & phone → Add a device → Show a code on this computer** shows a QR code and a 20-character one-time code (100 bits), valid for five
    minutes.
-2. A phone scans the QR code (it contains the computer's address, the code and the computer's key fingerprint);
+2. A phone scans the QR code (it contains the computer's address, the code and the computer's key fingerprint), with
+   the camera (FBRX Mobile opens in the browser) or with **Scan the code** in the FBRX app ([STORES.md](STORES.md));
    another computer uses **Add a device → Enter a code from another computer** (or **Join** beside it under *FBRX
    computers nearby*) and types the code.
 3. The joining device creates its own X25519 key pair and sends its public key with

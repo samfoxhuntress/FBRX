@@ -76,12 +76,17 @@ export interface AppleNotification {
   notificationType: string;
   subtype?: string;
   notificationUUID: string;
-  data?: { bundleId?: string; signedTransactionInfo?: string; signedRenewalInfo?: string; status?: number };
+  data?: { bundleId?: string; environment?: string; signedTransactionInfo?: string; signedRenewalInfo?: string; status?: number };
 }
 
 /** The renewal info's grace period, when a renewal failed and the App Store is still trying (JWSRenewalInfoDecodedPayload). */
 export interface AppleRenewal {
   gracePeriodExpiresDate?: number;
+}
+
+/** A purchase made in TestFlight, the sandbox or Xcode: nothing was charged. */
+export function appleTestPurchase(environment: string | undefined): boolean {
+  return !!environment && environment !== 'Production';
 }
 
 /** A transaction's state: revoked (refunded) ends it, otherwise it counts until it expires. */

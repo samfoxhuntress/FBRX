@@ -39,6 +39,8 @@ export interface AccountView {
   entitlements: EntitlementView[];
   /** Can open the billing portal (has bought through Stripe). */
   billingPortal: boolean;
+  /** The UUID the iPhone and iPad app gives the App Store with each purchase, so the purchase finds this account. */
+  appAccountToken: string;
   /** The organizations (FBRX Command tenants) the account belongs to, and the edition each gives it. */
   memberships: AccountMembership[];
   createdAt: string;

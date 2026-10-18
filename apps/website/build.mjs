@@ -63,7 +63,7 @@ ${body}
 </main>
 <footer>
   <div class="foot-brand">${logo}<span>FBRX</span></div>
-  <p>FBRX is in alpha: new versions arrive often, and the app updates itself.</p>
+  <p>FBRX 2.0 is in beta: new versions arrive often, and the app updates itself.</p>
   <p><a href="pricing.html">Pricing</a> · <a href="account.html">Account</a> · <a href="https://github.com/samfoxhuntress/FBRX">Source and docs</a></p>
 </footer>
 ${scripts.map((s) => `<script src="${s}"></script>`).join('\n')}
@@ -117,7 +117,7 @@ page({
   body: `<section class="hero">
   <div class="wrap two">
     <div>
-      <span class="eyebrow">FBRX 2.0</span>
+      <span class="eyebrow">FBRX 2.0 Beta</span>
       <h1>Your own AI, on your computer.</h1>
       <p class="lead">FBRX puts a private AI assistant right on your computer. Your chats stay there, and it asks before it uses the internet or changes anything. Free to start.</p>
       <div class="ctas">
@@ -210,7 +210,8 @@ ${serverSection}
   <details><summary>Where does my AI run?</summary><p>On your computer. ${esc(ESSENTIALS_TIPS.find((t) => t.id === 'tip-offline')?.body.replace('{agent}', 'It') ?? '')}</p></details>
   <details><summary>Can I switch editions?</summary><p>Any time, in Settings → Edition. Nothing you saved goes away when you switch down.</p></details>
   <details><summary>I used FBRX before 2.0. What changes?</summary><p>Standard used to be free on a computer on its own. If yours ran FBRX before 2.0, Standard stays free on it for ${FREE_GRACE_DAYS} days after it updates; after that it runs Essentials unless you choose Standard or Ultra.</p></details>
-  <details><summary>How do I pay?</summary><p>On this site and in FBRX on your computer: by card, or with the wallet on your phone or computer when checkout offers it. In the phone apps, through the app store. It all goes to one FBRX account, so what you buy anywhere works everywhere you sign in.</p></details>
+  <details><summary>How do I pay?</summary><p>On this site and in FBRX on your computer: by card, or with the wallet on your phone or computer when checkout offers it. In the phone apps, through the app store, once they leave beta. It all goes to one FBRX account, so what you buy anywhere works everywhere you sign in.</p></details>
+  <details><summary>What does beta mean?</summary><p>FBRX 2.0 is finished enough to use every day, and still changing quickly: new versions arrive often and install by themselves. Tell us what breaks, right from the app. Prices are the ones above.</p></details>
   <details><summary>What is Black Hole?</summary><p>${esc(EDITION_PLANS.blackhole.summary)} It is an add-on in FBRX Command, ${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} a month per computer, and comes on wherever its person signs in.</p></details>
 </section>`,
 });

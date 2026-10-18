@@ -70,6 +70,8 @@ export interface PlatformAdapter {
   /** Run plugins under the Node permission model. Disable only for debugging. */
   sandboxPlugins: boolean;
   updates: UpdateController | null;
+  /** Installed from an app store, which keeps it up to date: FBRX never updates itself. */
+  store?: boolean;
   /** Folder with the FBRX Mobile web app served to paired phones. */
   meshMobileDir?: string | null;
   /** The IEEE MAC vendor registry shipped with the app (gzip, see network/vendors.ts). */

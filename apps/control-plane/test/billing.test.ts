@@ -130,12 +130,13 @@ describe('FBRX accounts and what they buy', () => {
             returnUrl: 'https://fbrx.example/account',
             websiteOrigins: ['https://fbrx.example'],
             stripe: { secretKey: 'sk_test_123', webhookSecret: WEBHOOK_SECRET, apiBase: stripeUrl },
-            apple: { bundleId: 'com.fbrx.app', rootCertificates: [chain.root.pem] },
+            apple: { bundleId: 'com.fbrx.app', rootCertificates: [chain.root.pem], allowSandbox: false },
             google: {
               packageName: 'com.fbrx.app',
               serviceAccount: { clientEmail: 'play@fbrx.iam.example', privateKey: privateKey.export({ type: 'pkcs8', format: 'pem' }).toString(), tokenUri: `${googleUrl}/token` },
               rtdnToken: RTDN_TOKEN,
               apiBase: googleUrl,
+              allowTest: false,
             },
           },
         },
@@ -222,7 +223,9 @@ describe('FBRX accounts and what they buy', () => {
     const { token, account } = await ok('POST', '/v1/accounts/signup', { email: 'ios@example.com', name: 'Ira', password: PASSWORD });
     const appToken = cp.ctx.db.get<{ app_account_token: string }>('SELECT app_account_token FROM accounts WHERE id = ?', account.id)!.app_account_token;
     const tx = { bundleId: 'com.fbrx.app', productId: 'fbrx_ultra_monthly', transactionId: '2000001', originalTransactionId: '1000001', appAccountToken: appToken, expiresDate: Date.now() + 30 * 86_400_000 };
-    expect(await ok('POST', '/v1/billing/apple/transactions', { signedTransaction: signJws(tx, chain) }, token)).toMatchObject({ tier: 'ultra' });
+    // Bought in TestFlight or the sandbox: nothing was charged, so nothing turns on.
+    expect((await call('POST', '/v1/billing/apple/transactions', { signedTransaction: signJws({ ...tx, environment: 'Sandbox' }, chain) }, token)).status).toBe(400);
+    expect(await ok('POST', '/v1/billing/apple/transactions', { signedTransaction: signJws({ ...tx, environment: 'Production' }, chain) }, token)).toMatchObject({ tier: 'ultra' });
     // Signed by anyone else, or bought by another account: refused.
     expect((await call('POST', '/v1/billing/apple/transactions', { signedTransaction: signJws(tx, appleLikeChain()) }, token)).status).toBe(400);
     const tampered = signJws(tx, chain).split('.');
@@ -245,6 +248,9 @@ describe('FBRX accounts and what they buy', () => {
     expect(google.acknowledged).toEqual(['tok-1-abcdef']);
     const other = await ok('POST', '/v1/accounts/signup', { email: 'droid2@example.com', name: 'E', password: PASSWORD });
     expect((await call('POST', '/v1/billing/google/purchases', { productId: 'fbrx_standard_monthly', purchaseToken: 'tok-1-abcdef' }, other.token)).status).toBe(403);
+    // A license tester's purchase costs nothing: it turns nothing on.
+    google.purchases.set('tok-test-abcdef', { ...purchase, testPurchase: {} });
+    expect((await call('POST', '/v1/billing/google/purchases', { productId: 'fbrx_standard_monthly', purchaseToken: 'tok-test-abcdef' }, token)).status).toBe(400);
 
     const push = (data: object, t = RTDN_TOKEN, id = 'm-1') => call('POST', `/v1/billing/google/rtdn?token=${t}`, { message: { data: Buffer.from(JSON.stringify(data)).toString('base64'), messageId: id } });
     expect((await push({ packageName: 'com.fbrx.app' }, 'wrong')).status).toBe(403);

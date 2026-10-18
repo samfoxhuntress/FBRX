@@ -11,7 +11,7 @@ import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized } fr
 import { PasswordSchema } from './auth';
 import { accountEntitlements, accountLicense, accountTier, endOtherItems, entitlementView, handledBefore, isValid, markHandled, recordPurchase } from '../billing/entitlements';
 import { StripeError, stripeOf, stripeStatus, subscriptionItems, type StripeEvent, type StripeSubscription } from '../billing/stripe';
-import { AppleError, appleStatus, verifyAppleJws, type AppleNotification, type AppleRenewal, type AppleTransaction } from '../billing/apple';
+import { AppleError, appleStatus, appleTestPurchase, verifyAppleJws, type AppleNotification, type AppleRenewal, type AppleTransaction } from '../billing/apple';
 import { GoogleError, GooglePlay, playStatus, type PlaySubscription } from '../billing/google';
 import { scheduleSeatSync, syncTenantLicense } from '../billing/tenant-billing';
 import { slugify } from './util';
@@ -28,6 +28,7 @@ import { slugify } from './util';
 
 const ISSUER = 'fbrx-accounts';
 const ACCOUNT_TOKEN_DAYS = 90;
+const TEST_PURCHASE = 'That purchase was made in a test copy of the app, so nothing was charged and it does not turn on an edition.';
 
 interface AccountRow {
   id: string;
@@ -58,6 +59,7 @@ export function accountView(ctx: AppContext, a: AccountRow): AccountView {
     tier: accountTier(ctx, a.id).tier,
     entitlements: accountEntitlements(ctx, a.id).map(entitlementView),
     billingPortal: !!a.stripe_customer_id && !!ctx.config.cloud.stripe,
+    appAccountToken: a.app_account_token,
     memberships: ctx.db
       .all<{ tenant_id: string; name: string; tier: Tier }>("SELECT m.tenant_id, t.name, m.tier FROM tenant_members m JOIN tenants t ON t.id = m.tenant_id WHERE m.account_id = ? AND t.status = 'active' ORDER BY t.name", a.id)
       .map((m) => ({ tenantId: m.tenant_id, tenantName: m.name, tier: m.tier })),
@@ -367,6 +369,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     const t = verifyApple<AppleTransaction>(body.signedTransaction);
     const a = req.account!;
     if (t.bundleId !== needApple().bundleId) throw badRequest('That purchase is for another app');
+    if (appleTestPurchase(t.environment) && !needApple().allowSandbox) throw badRequest(TEST_PURCHASE);
     personalProduct(t.productId);
     if (t.appAccountToken && t.appAccountToken.toLowerCase() !== a.app_account_token.toLowerCase()) throw forbidden('That purchase belongs to another FBRX account');
     const owner = ctx.db.get<{ account_id: string | null }>("SELECT account_id FROM entitlements WHERE source = 'apple' AND external_id = ?", t.originalTransactionId);
@@ -382,6 +385,10 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     const n = verifyApple<AppleNotification>(body.signedPayload);
     if (handledBefore(ctx, 'apple', n.notificationUUID)) return { received: true, duplicate: true };
     if (n.data?.bundleId && n.data.bundleId !== needApple().bundleId) throw badRequest('That notification is for another app');
+    if (appleTestPurchase(n.data?.environment) && !needApple().allowSandbox) {
+      markHandled(ctx, 'apple', n.notificationUUID, `${n.notificationType} (test)`);
+      return { received: true };
+    }
     if (n.data?.signedTransactionInfo) {
       const t = verifyApple<AppleTransaction>(n.data.signedTransactionInfo);
       const renewal = n.data.signedRenewalInfo ? verifyApple<AppleRenewal>(n.data.signedRenewalInfo) : undefined;
@@ -431,6 +438,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     const a = req.account!;
     const sub = await playCall(() => needPlay().subscription(body.purchaseToken));
     if (!sub.lineItems.some((i) => i.productId === body.productId)) throw badRequest('That purchase is for another product');
+    if (sub.testPurchase && !cloud.google!.allowTest) throw badRequest(TEST_PURCHASE);
     const external = sub.externalAccountIdentifiers?.obfuscatedExternalAccountId;
     if (external && external !== a.id) throw forbidden('That purchase belongs to another FBRX account');
     const owner = ctx.db.get<{ account_id: string | null }>("SELECT account_id FROM entitlements WHERE source = 'google' AND external_id = ?", body.purchaseToken);
@@ -453,6 +461,10 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     if (n) {
       // Never what the notification says: what Play says about the purchase now.
       const sub = await playCall(() => p.subscription(n.purchaseToken));
+      if (sub.testPurchase && !cloud.google!.allowTest) {
+        if (messageId) markHandled(ctx, 'google', messageId, `subscription.${n.notificationType} (test)`);
+        return { received: true };
+      }
       const accountId =
         ctx.db.get<{ account_id: string | null }>("SELECT account_id FROM entitlements WHERE source = 'google' AND external_id = ?", n.purchaseToken)?.account_id ??
         ctx.db.get<{ id: string }>('SELECT id FROM accounts WHERE id = ?', sub.externalAccountIdentifiers?.obfuscatedExternalAccountId ?? '')?.id ??

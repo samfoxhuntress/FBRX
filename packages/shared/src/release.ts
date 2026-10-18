@@ -1,7 +1,12 @@
 import { parseSemver } from './semver';
 
-/** Release stage shown with the version everywhere ("FBRX OS Alpha 1.8.1"). */
-export const RELEASE_STAGE = 'Alpha';
+/** Release stage shown with the version everywhere ("FBRX OS Beta 2.0.0"): 1.x was the Alpha, 2.x is the Beta. */
+export function stageFor(version: string): string {
+  return (parseSemver(version)?.major ?? 0) >= 2 ? 'Beta' : 'Alpha';
+}
+
+/** A copy installed from an app store is updated by that store, never by FBRX itself. */
+export const STORE_UPDATES = 'The store you installed FBRX from keeps it up to date';
 
 /** The public repository FBRX OS is downloaded from. */
 export const RELEASE_REPO = 'samfoxhuntress/FBRX';
@@ -15,8 +20,6 @@ export const RELEASE_MANIFEST_URL = `https://raw.githubusercontent.com/${RELEASE
 export const CODENAMES: Record<string, { name: string; meaning: string }> = {
   '1.8': { name: 'Spindle', meaning: 'where every thread begins: the spindle twists loose fiber into yarn' },
   '1.9': { name: 'Bobbin', meaning: 'holds the thread, wound and ready for the loom' },
-  '1.10': { name: 'Shuttle', meaning: 'carries the thread across the cloth, back and forth' },
-  '1.11': { name: 'Heddle', meaning: 'lifts the threads so the shuttle can pass between them' },
   '2.0': { name: 'Loom', meaning: 'where all the threads come together as fabric' },
   '2.1': { name: 'Warp', meaning: 'the strong threads held tight along the loom' },
   '2.2': { name: 'Weft', meaning: 'the thread woven through the warp, row by row' },
@@ -29,9 +32,10 @@ export function codenameFor(version: string): { name: string; meaning: string } 
   return v ? (CODENAMES[`${v.major}.${v.minor}`] ?? null) : null;
 }
 
-/** "Alpha 1.8.1". */
+/** "Alpha 1.8.1", "Beta 2.0.0". */
 export function displayVersion(version: string): string {
-  return `${RELEASE_STAGE} ${version.replace(/^v/, '')}`;
+  const v = version.replace(/^v/, '');
+  return `${stageFor(v)} ${v}`;
 }
 
 /** The release manifest (release.json at the root of the repository). */
@@ -60,5 +64,7 @@ export interface ReleaseCheck {
   skipped: boolean;
   /** FBRX knows the folder it was installed from, so it can update itself. */
   canInstall: boolean;
+  /** Installed from an app store, which keeps it up to date: FBRX does not look for new versions itself. */
+  store: boolean;
   installing: { phase: 'downloading' | 'unpacking' | 'starting' | 'started' | 'failed'; pct: number | null; message: string | null } | null;
 }

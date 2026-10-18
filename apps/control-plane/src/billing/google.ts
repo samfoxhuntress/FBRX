@@ -21,6 +21,8 @@ export interface PlaySubscription {
   linkedPurchaseToken?: string;
   lineItems: Array<{ productId: string; expiryTime?: string }>;
   externalAccountIdentifiers?: { obfuscatedExternalAccountId?: string };
+  /** Present when a license tester bought it: nothing was charged. */
+  testPurchase?: object;
 }
 
 export class GooglePlay {

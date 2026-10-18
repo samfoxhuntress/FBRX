@@ -91,6 +91,8 @@ export function createElectronPlatform(o: {
     accountServer: (typeof __FBRX_ACCOUNT_SERVER__ !== 'undefined' && __FBRX_ACCOUNT_SERVER__) || process.env.FBRX_ACCOUNT_SERVER || null,
     sandboxPlugins: process.env.FBRX_PLUGIN_SANDBOX !== '0',
     updates: o.updates,
+    // An MSIX package from the Microsoft Store: the Store updates it.
+    store: !!process.windowsStore,
     meshMobileDir: join(workerDir, 'mobile'),
     vendorDbFile: join(workerDir, 'oui-vendors.tsv.gz'),
     mcpShim: { command: process.execPath, args: [join(workerDir, 'fbrx-mcp.mjs')], env: { ELECTRON_RUN_AS_NODE: '1' } },

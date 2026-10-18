@@ -773,10 +773,13 @@ function registerIpc() {
 }
 
 async function boot() {
-  const updates = new ElectronUpdateController(() => {
-    const u = kernel?.settings.get().updates;
-    return { autoDownload: u?.autoDownload ?? true, autoInstall: u?.autoInstall ?? false, channel: u?.channel ?? 'stable' };
-  });
+  // A copy from the Microsoft Store is updated by the Store, never by FBRX.
+  const updates = process.windowsStore
+    ? null
+    : new ElectronUpdateController(() => {
+        const u = kernel?.settings.get().updates;
+        return { autoDownload: u?.autoDownload ?? true, autoInstall: u?.autoInstall ?? false, channel: u?.channel ?? 'stable' };
+      });
   const platform = createElectronPlatform({
     dataDir,
     updates,
@@ -826,7 +829,7 @@ async function boot() {
   kernel.settings.onChange((s) => app.isPackaged && app.setLoginItemSettings({ openAtLogin: s.settings.general.launchAtLogin, args: ['--hidden'] }));
   // Check shortly after launch and then every few hours, so machines that live in the tray still pick up releases.
   const checkUpdates = () => {
-    if (kernel?.fleet.enrolled) void updates.check();
+    if (kernel?.fleet.enrolled) void updates?.check();
   };
   setTimeout(checkUpdates, 15_000);
   setInterval(checkUpdates, UPDATE_CHECK_INTERVAL_MS).unref();

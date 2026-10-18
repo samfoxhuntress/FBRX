@@ -43,10 +43,17 @@ export interface CloudConfig {
   websiteOrigins: string[];
   /** Stripe Checkout (cards, and the Apple Pay and Google Pay wallets where Stripe offers them). */
   stripe: { secretKey: string; webhookSecret: string; apiBase: string } | null;
-  /** App Store purchases in the iPhone and iPad app (StoreKit 2 signed transactions, App Store Server Notifications V2). */
-  apple: { bundleId: string; rootCertificates: string[] } | null;
-  /** Google Play purchases in the Android app (Play Developer API, real-time developer notifications). */
-  google: { packageName: string; serviceAccount: { clientEmail: string; privateKey: string; tokenUri: string }; rtdnToken: string; apiBase: string } | null;
+  /**
+   * App Store purchases in the iPhone and iPad app (StoreKit 2 signed transactions, App Store Server Notifications V2).
+   * Purchases in test builds (TestFlight, the sandbox) cost nothing, so they turn nothing on unless allowSandbox is set
+   * (FBRX_APPLE_SANDBOX=1, for a test FBRX Command only).
+   */
+  apple: { bundleId: string; rootCertificates: string[]; allowSandbox: boolean } | null;
+  /**
+   * Google Play purchases in the Android app (Play Developer API, real-time developer notifications). Purchases by
+   * license testers cost nothing either: allowTest (FBRX_GOOGLE_TEST_PURCHASES=1) is for a test FBRX Command only.
+   */
+  google: { packageName: string; serviceAccount: { clientEmail: string; privateKey: string; tokenUri: string }; rtdnToken: string; apiBase: string; allowTest: boolean } | null;
 }
 
 function readPems(paths: string | undefined): string[] {
@@ -71,7 +78,7 @@ export function loadCloudConfig(env: NodeJS.ProcessEnv, publicUrl: string): Clou
       env.FBRX_STRIPE_SECRET_KEY && env.FBRX_STRIPE_WEBHOOK_SECRET
         ? { secretKey: env.FBRX_STRIPE_SECRET_KEY, webhookSecret: env.FBRX_STRIPE_WEBHOOK_SECRET, apiBase: (env.FBRX_STRIPE_API_BASE ?? 'https://api.stripe.com').replace(/\/+$/, '') }
         : null,
-    apple: env.FBRX_APPLE_BUNDLE_ID && env.FBRX_APPLE_ROOT_CA ? { bundleId: env.FBRX_APPLE_BUNDLE_ID, rootCertificates: readPems(env.FBRX_APPLE_ROOT_CA) } : null,
+    apple: env.FBRX_APPLE_BUNDLE_ID && env.FBRX_APPLE_ROOT_CA ? { bundleId: env.FBRX_APPLE_BUNDLE_ID, rootCertificates: readPems(env.FBRX_APPLE_ROOT_CA), allowSandbox: env.FBRX_APPLE_SANDBOX === '1' } : null,
     google:
       env.FBRX_GOOGLE_PACKAGE_NAME && sa && env.FBRX_GOOGLE_RTDN_TOKEN
         ? {
@@ -79,6 +86,7 @@ export function loadCloudConfig(env: NodeJS.ProcessEnv, publicUrl: string): Clou
             serviceAccount: { clientEmail: sa.client_email, privateKey: sa.private_key, tokenUri: sa.token_uri ?? 'https://oauth2.googleapis.com/token' },
             rtdnToken: env.FBRX_GOOGLE_RTDN_TOKEN,
             apiBase: (env.FBRX_GOOGLE_API_BASE ?? 'https://androidpublisher.googleapis.com').replace(/\/+$/, ''),
+            allowTest: env.FBRX_GOOGLE_TEST_PURCHASES === '1',
           }
         : null,
   };

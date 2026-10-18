@@ -80,7 +80,7 @@ function Pairing({ onClose }: { onClose: () => void }) {
           {p.qrDataUrl && <img src={p.qrDataUrl} alt="Pairing QR code" width={220} height={220} />}
           <div className="pair-steps">
             <p>
-              <strong>Phone:</strong> on the same Wi-Fi, scan the code with the camera and open the link. FBRX Mobile opens and pairs itself.
+              <strong>Phone:</strong> on the same Wi-Fi, scan the code with the FBRX app (Scan the code), or with the camera and open the link. It pairs itself.
             </p>
             <p>
               <strong>Another FBRX computer:</strong> open Mesh &amp; phone there, choose <em>Add a device → Enter a code</em>, and type:

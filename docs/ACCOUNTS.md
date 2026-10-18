@@ -25,6 +25,9 @@ one as the subscription renews and a refund reaches them in time.
 
 Black Hole is never sold to an account: it is an add-on in an FBRX Command tenant (LICENSING.md).
 
+The phone apps themselves (building them, the products in each store, the store rules they follow) are in
+[STORES.md](STORES.md).
+
 ## On a computer
 
 **Settings → FBRX account** (or *I have an FBRX account* on the first screen) signs in, or makes a new account. The
@@ -124,6 +127,7 @@ A subscription that fails to renew keeps counting while Stripe retries (`past_du
 | --- | --- |
 | `FBRX_APPLE_BUNDLE_ID` | The app's bundle id |
 | `FBRX_APPLE_ROOT_CA` | The path of `AppleRootCA-G3.cer` (DER or PEM; several, comma-separated) |
+| `FBRX_APPLE_SANDBOX` | `1` turns on what TestFlight and sandbox purchases buy. They cost nothing, so only on a test FBRX Command |
 
 The app makes each purchase with the account's **app account token** (a UUID FBRX keeps per account) and sends the
 signed transaction to `POST /v1/billing/apple/transactions`. FBRX checks the certificate chain in the signature against
@@ -144,6 +148,7 @@ reads anything; a purchase made with another account's token, or already claimed
 | `FBRX_GOOGLE_PACKAGE_NAME` | The Android app's package name |
 | `FBRX_GOOGLE_SERVICE_ACCOUNT` | The path of the service account's JSON key |
 | `FBRX_GOOGLE_RTDN_TOKEN` | A long random secret for the push URL |
+| `FBRX_GOOGLE_TEST_PURCHASES` | `1` turns on what license testers buy. They cost nothing, so only on a test FBRX Command |
 
 The app buys with the account's id as the obfuscated account id and sends the purchase token to
 `POST /v1/billing/google/purchases`. FBRX asks the Play Developer API what the purchase is (never the app, never the

@@ -7,6 +7,7 @@ import {
   decodeLicenseUnverified,
   PRODUCT_NAME,
   ProvisioningFileSchema,
+  STORE_UPDATES,
   addressAs,
   funEnabled,
   shouldNotify,
@@ -557,6 +558,7 @@ export class Kernel {
       internet: () => this.internetAllowed(),
       notify: (title, body, version) => this.alerts.fire('update_available', title, body, { key: version }),
       quiet: () => !this.presenterStatus().active && this.agent.activeCount === 0 && this.idleSeconds() >= 300,
+      store: !!this.platform.store,
     });
     // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
     this.cli = new Fbrx1Cli({
@@ -1322,7 +1324,11 @@ export class Kernel {
         progressPct: null,
         channel: this.settings.get().updates.channel,
         feedUrl: null,
-        message: this.platform.shell === 'headless' ? 'Headless installs are updated by redeploying the package' : 'Updates are not available in development builds',
+        message: this.platform.store
+          ? STORE_UPDATES
+          : this.platform.shell === 'headless'
+            ? 'Headless installs are updated by redeploying the package'
+            : 'Updates are not available in development builds',
       }
     );
   }
@@ -1651,6 +1657,7 @@ export class Kernel {
    * release feed from FBRX Command use it; computers installed from the GitHub repository download and run the installer.
    */
   private async installUpdate(p: { restartNow: boolean; source: 'auto' | 'command' | 'repository' }): Promise<unknown> {
+    if (this.platform.store) throw new Error(STORE_UPDATES);
     const feed = this.platform.updates;
     if (p.source !== 'repository' && feed && feed.status().feedUrl) {
       const st = await feed.check();

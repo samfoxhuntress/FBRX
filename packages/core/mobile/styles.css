@@ -299,3 +299,50 @@ button.wide {
 .note-act {
   margin-top: 8px;
 }
+
+/* The store app: pairing by address or code, and the FBRX account. */
+button.small {
+  padding: 6px 12px;
+  font-size: 13px;
+  flex: none;
+}
+.stack {
+  display: grid;
+  gap: 8px;
+}
+.center {
+  text-align: center;
+}
+.fine {
+  font-size: 12px;
+  margin-top: 6px;
+}
+.acct-list {
+  margin-top: 8px;
+}
+.perks {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.typed {
+  margin-top: 12px;
+}
+.typed summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.typed input {
+  margin-top: 8px;
+}
+a {
+  color: var(--accent);
+}
+.ed {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
+}

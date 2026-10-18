@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
-import { RELEASE_MANIFEST_URL, compareSemver, isValidSemver, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
+import { RELEASE_MANIFEST_URL, STORE_UPDATES, compareSemver, isValidSemver, stageFor, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
@@ -20,17 +20,20 @@ import { unzip } from '../util/unzip';
  * exactly what the person would otherwise do by hand. The installer closes FBRX, updates it and reopens it.
  */
 
-const ManifestSchema = z.object({
-  version: z.string().refine(isValidSemver, 'not a version'),
-  stage: z.string().max(40).default('Alpha'),
-  codename: z.string().max(60).default(''),
-  released: z.string().max(40).default(''),
-  importance: z.enum(['optional', 'recommended', 'important']).default('recommended'),
-  summary: z.string().max(600).default(''),
-  notes: z.array(z.string().max(400)).max(40).default([]),
-  download: z.string().url(),
-  page: z.string().url(),
-});
+const ManifestSchema = z
+  .object({
+    version: z.string().refine(isValidSemver, 'not a version'),
+    stage: z.string().max(40).optional(),
+    codename: z.string().max(60).default(''),
+    released: z.string().max(40).default(''),
+    importance: z.enum(['optional', 'recommended', 'important']).default('recommended'),
+    summary: z.string().max(600).default(''),
+    notes: z.array(z.string().max(400)).max(40).default([]),
+    download: z.string().url(),
+    page: z.string().url(),
+  })
+  // Alpha for 1.x, Beta for 2.x, when release.json does not say.
+  .transform((m) => ({ ...m, stage: m.stage ?? stageFor(m.version) }));
 
 /** Written by the setup wizard into the data folder: where FBRX was installed from. */
 export const INSTALL_SOURCE_FILE = 'install-source.json';
@@ -54,6 +57,8 @@ export interface ReleaseCheckerDeps {
   launchInstaller?: (root: string) => string;
   /** A good moment to install by itself (nobody presenting, the agent idle, the computer not in use). */
   quiet?: () => boolean;
+  /** Installed from an app store: the store updates FBRX, so it never looks for new versions itself. */
+  store?: boolean;
 }
 
 export class ReleaseChecker {
@@ -62,7 +67,7 @@ export class ReleaseChecker {
   private busy: Promise<ReleaseCheck> | null = null;
 
   constructor(private readonly d: ReleaseCheckerDeps) {
-    this.state = { state: 'idle', currentVersion: d.appVersion, latest: null, checkedAt: null, message: null, skipped: false, canInstall: false, installing: null };
+    this.state = { state: 'idle', currentVersion: d.appVersion, latest: null, checkedAt: null, message: null, skipped: false, canInstall: false, store: !!d.store, installing: null };
   }
 
   private get manifestUrl(): string {
@@ -71,6 +76,7 @@ export class ReleaseChecker {
 
   start(): void {
     this.stop();
+    if (this.d.store) return;
     const tick = () => {
       if (this.d.settings().updates.checkRepo && this.d.internet()) void this.check().catch(() => undefined);
     };
@@ -90,6 +96,7 @@ export class ReleaseChecker {
   }
 
   status(): ReleaseCheck {
+    if (this.d.store) return { ...this.state, state: 'off', canInstall: false, message: STORE_UPDATES };
     const off = !this.d.settings().updates.checkRepo && this.state.state === 'idle';
     return { ...this.state, state: off ? 'off' : this.state.state, skipped: !!this.state.latest && this.d.settings().updates.skipVersion === this.state.latest.version, canInstall: !!this.installRoot() };
   }
@@ -101,6 +108,7 @@ export class ReleaseChecker {
 
   /** Looks at release.json in the repository. */
   check(): Promise<ReleaseCheck> {
+    if (this.d.store) return Promise.resolve(this.status());
     this.busy ??= this.run().finally(() => (this.busy = null));
     return this.busy;
   }
