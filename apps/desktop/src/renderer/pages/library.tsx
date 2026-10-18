@@ -297,9 +297,9 @@ function FbrxCommands({ q, agentName }: { q: string; agentName: string }) {
 }
 
 /**
- * `everything` (Black Hole): the whole Library, The Lab and the FBRX command library included. Talking to the search like
- * a switch still finds the command library (Fun Mode's Operator Mode trophy, in any edition); in a lighter edition it
- * says where the commands are.
+ * `everything` (Black Hole): the whole Library, The Lab and the FBRX command library included. Talking to the search
+ * like a switch still finds the command library (Fun Mode's Operator Mode trophy, in any edition); in a lighter edition
+ * it says where the commands are.
  */
 export function LibraryPage({ agentName, everything, easterEggs }: { agentName: string; everything: boolean; easterEggs: boolean }) {
   const [cat, setCat] = useState<string | null>(null);
@@ -310,7 +310,6 @@ export function LibraryPage({ agentName, everything, easterEggs }: { agentName: 
   const storiesFound = easterEggs && (!!trophies.data?.unlocked.stories || storyAsked);
   const verse = easterEggs && NOTHING_IS_IMPOSSIBLE.test(q);
   const cliAsked = (everything || easterEggs) && FBRX_CLI_TRIGGER.test(q.trim());
-  const cliFound = everything;
   useEffect(() => {
     if (!storyAsked) return;
     unlockTrophy('stories');
@@ -339,7 +338,7 @@ export function LibraryPage({ agentName, everything, easterEggs }: { agentName: 
             <Icons.flask size={13} /> The Lab
           </button>
         )}
-        {cliFound && (
+        {everything && (
           <button className={`chip cli-chip${cat === 'fbrx-cli' ? ' on' : ''}`} onClick={() => setCat('fbrx-cli')} title="FBRX/1, FBRX Server and FBRX Gate commands">
             <Icons.terminal size={13} /> FBRX commands
           </button>
@@ -361,7 +360,7 @@ export function LibraryPage({ agentName, everything, easterEggs }: { agentName: 
       {verse && <Callout tone="good">{LUKE_1_37}</Callout>}
       {cat === 'lab' && everything && !q.trim() ? (
         <TheLab agentName={agentName} />
-      ) : cat === 'fbrx-cli' && cliFound ? (
+      ) : cat === 'fbrx-cli' && everything ? (
         <FbrxCommands q={q} agentName={agentName} />
       ) : cat === 'fbrx-cli' ? (
         <UltraOnly need="blackhole" title="The FBRX command library" what="Every FBRX/1, FBRX Server and FBRX Gate command, explained, ready to run in the Terminal or to copy." />

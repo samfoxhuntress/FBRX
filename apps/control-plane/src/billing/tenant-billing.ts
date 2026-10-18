@@ -1,9 +1,10 @@
-import { EDITION_PLANS, TIERS, tenantMonthlyTotal, type Tier } from '@fbrx/shared';
+import { EDITION_PLANS, LEARNER_TIER, TIERS, isLearner, licenseEditionFor, tenantMonthlyTotal, type TenantPlanView, type Tier } from '@fbrx/shared';
 import type { Db } from '@fbrx/shared/node';
 import { signLicense } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
-import { LICENSE_SLACK_DAYS, isValid } from './entitlements';
+import { givenEdition } from '../services/device-config';
+import { LICENSE_SLACK_DAYS, isValid, planEntitlement } from './entitlements';
 import type { Stripe } from './stripe';
 
 /**
@@ -16,59 +17,35 @@ import type { Stripe } from './stripe';
  * Organizations FBRX Command's operator set up by hand (`billing = 'manual'`) keep the licenses the operator issues.
  */
 
-export interface TenantPlanView {
-  billing: 'manual' | 'cloud';
-  active: boolean;
-  periodEnd: string | null;
-  status: string | null;
-  /** Computers at each edition (what the organization gives them). */
-  computers: Record<Tier, number>;
-  /** What a month comes to, in cents: the plan and the computers. */
-  monthly: number;
-  /** Can open the Stripe billing portal. */
-  portal: boolean;
-}
-
-/** The plan's purchase (the FBRX Command plan item), if any. */
-function commandEntitlement(db: Db, tenantId: string) {
-  return db.get<{ external_id: string; status: string; period_end: string | null; source: string }>(
-    "SELECT external_id, status, period_end, source FROM entitlements WHERE tenant_id = ? AND kind = 'command' ORDER BY updated_at DESC LIMIT 1",
-    tenantId,
-  );
-}
-
-export function cloudPlanActive(db: Db, tenantId: string): boolean {
-  const e = commandEntitlement(db, tenantId);
-  return !!e && isValid({ status: e.status as never, period_end: e.period_end });
-}
-
-/** How many of the organization's active computers run each edition (what they are given; Essentials when nothing). */
+/**
+ * How many of the organization's active computers run each edition: what each is given, as its configuration gives it
+ * (device-config.ts), with learner computers on LEARNER_TIER and Essentials for the rest.
+ */
 export function computersByTier(db: Db, tenantId: string): Record<Tier, number> {
   const out = Object.fromEntries(TIERS.map((t) => [t, 0])) as Record<Tier, number>;
-  const rows = db.all<{ tier: string | null; gtier: string | null; audience: string | null; gaudience: string | null }>(
-    "SELECT d.tier, g.tier AS gtier, d.audience, g.audience AS gaudience FROM devices d LEFT JOIN groups g ON g.id = d.group_id WHERE d.tenant_id = ? AND d.status = 'active'",
+  const tenant = db.get<{ vertical: string | null }>('SELECT vertical FROM tenants WHERE id = ?', tenantId);
+  const rows = db.all<{ tier: string | null; audience: string | null; gtier: string | null; gaudience: string | null }>(
+    "SELECT d.tier, d.audience, g.tier AS gtier, g.audience AS gaudience FROM devices d LEFT JOIN groups g ON g.id = d.group_id WHERE d.tenant_id = ? AND d.status = 'active'",
     tenantId,
   );
   for (const r of rows) {
-    const learner = ['student', 'child'].includes(r.audience ?? r.gaudience ?? '');
-    // Student and child computers run the learner edition on Standard.
-    const t = (learner ? 'basic' : ((r.tier ?? r.gtier) as Tier | null)) ?? 'essentials';
-    out[(TIERS as readonly string[]).includes(t) ? t : 'essentials'] += 1;
+    const { audience, tier } = givenEdition(tenant ?? {}, r, { tier: r.gtier, audience: r.gaudience });
+    out[isLearner(audience) ? LEARNER_TIER : (tier ?? 'essentials')] += 1;
   }
   return out;
 }
 
 export function tenantPlanView(ctx: AppContext, tenantId: string): TenantPlanView {
   const t = ctx.db.get<{ billing: string | null; stripe_customer_id: string | null }>('SELECT billing, stripe_customer_id FROM tenants WHERE id = ?', tenantId);
-  const e = commandEntitlement(ctx.db, tenantId);
+  const e = planEntitlement(ctx.db, tenantId);
   const computers = computersByTier(ctx.db, tenantId);
   return {
     billing: t?.billing === 'cloud' ? 'cloud' : 'manual',
-    active: cloudPlanActive(ctx.db, tenantId),
+    active: !!e && isValid(e),
     periodEnd: e?.period_end ?? null,
     status: e?.status ?? null,
     computers,
-    monthly: tenantMonthlyTotal({ basic: computers.basic, ultra: computers.ultra, blackhole: computers.blackhole }),
+    monthly: tenantMonthlyTotal(computers),
     portal: !!t?.stripe_customer_id && !!ctx.config.cloud.stripe,
   };
 }
@@ -83,8 +60,8 @@ export function syncTenantLicense(ctx: AppContext, tenantId: string): void {
   if (!t || t.billing !== 'cloud') return;
   const now = new Date();
   const current = ctx.db.get<{ id: string; expires_at: string | null }>("SELECT id, expires_at FROM licenses WHERE tenant_id = ? AND created_by = 'billing' AND revoked_at IS NULL ORDER BY issued_at DESC LIMIT 1", tenantId);
-  const e = commandEntitlement(ctx.db, tenantId);
-  if (!cloudPlanActive(ctx.db, tenantId) || !e) {
+  const e = planEntitlement(ctx.db, tenantId);
+  if (!e || !isValid(e)) {
     if (current) {
       ctx.db.run('UPDATE licenses SET revoked_at = ? WHERE id = ?', now.toISOString(), current.id);
       ctx.bumpConfig(tenantId);
@@ -94,8 +71,9 @@ export function syncTenantLicense(ctx: AppContext, tenantId: string): void {
   const expiresAt = e.period_end ? new Date(Date.parse(e.period_end) + LICENSE_SLACK_DAYS * 86_400_000).toISOString() : null;
   if (current && current.expires_at === expiresAt) return;
   const id = ids.license();
+  const edition = licenseEditionFor('blackhole');
   const key = signLicense(
-    { v: 1, lid: id, tenantId, customer: t.name, edition: 'enterprise', seats: 0, features: [], issuedAt: now.toISOString(), expiresAt, maxMajorVersion: null, tier: 'blackhole', ...(t.vertical === 'education' || t.vertical === 'home' ? { vertical: t.vertical } : {}) },
+    { v: 1, lid: id, tenantId, customer: t.name, edition, seats: 0, features: [], issuedAt: now.toISOString(), expiresAt, maxMajorVersion: null, tier: 'blackhole', ...(t.vertical === 'education' || t.vertical === 'home' ? { vertical: t.vertical } : {}) },
     ctx.keys.licensePrivatePem,
   );
   ctx.db.tx(() => {
@@ -105,7 +83,7 @@ export function syncTenantLicense(ctx: AppContext, tenantId: string): void {
       id,
       tenantId,
       t.name,
-      'enterprise',
+      edition,
       0,
       '[]',
       now.toISOString(),
@@ -125,8 +103,8 @@ export function syncTenantLicense(ctx: AppContext, tenantId: string): void {
  */
 export async function syncSeats(ctx: AppContext, stripe: Stripe | null, tenantId: string): Promise<{ changed: string[] }> {
   const t = ctx.db.get<{ billing: string | null }>('SELECT billing FROM tenants WHERE id = ?', tenantId);
-  const e = commandEntitlement(ctx.db, tenantId);
-  if (!stripe || t?.billing !== 'cloud' || !e || e.source !== 'stripe' || !cloudPlanActive(ctx.db, tenantId)) return { changed: [] };
+  const e = planEntitlement(ctx.db, tenantId);
+  if (!stripe || t?.billing !== 'cloud' || !e || e.source !== 'stripe' || !isValid(e)) return { changed: [] };
   const sub = await stripe.subscription(e.external_id);
   const computers = computersByTier(ctx.db, tenantId);
   const changed: string[] = [];

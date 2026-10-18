@@ -19,8 +19,8 @@ const NOTE_ICON: Record<EssentialsNote['kind'], IconName> = { welcome: 'sparkles
 const ROUTE: Record<NonNullable<EssentialsNote['action']>['to'], string> = { agent: 'agent', models: 'runtime', edition: 'settings/edition', pair: 'settings/account' };
 
 /**
- * Home in Endpoint Essentials: no dashboard, just the split-flap board and a few notes from FBRX: tips and tricks, the AI
- * models, and what Standard and Ultra add. The same notes are on the phone (FBRX Mobile).
+ * Home in Endpoint Essentials: no dashboard, just the split-flap board and a few notes from FBRX: tips and tricks, the
+ * AI models, and what Standard and Ultra add. The same notes are on the phone (FBRX Mobile).
  */
 export function EssentialsHome({ status, agentName, who }: { status: SystemStatus; agentName: string; who: string | null }) {
   const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed']);

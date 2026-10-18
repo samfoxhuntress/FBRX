@@ -2,17 +2,17 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { SignJWT, jwtVerify } from 'jose';
 import { z } from 'zod';
-import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIERS, TIER_SHORT, atLeast, productById, type AccountView, type MemberView, type PlansInfo, type Tier } from '@fbrx/shared';
+import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIERS, TIER_SHORT, VERTICALS, atLeast, productById, type AccountView, type MemberView, type PlansInfo, type Tier } from '@fbrx/shared';
 import { hashPassword, randomToken, safeEqual, sha256Hex, verifyPassword } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
 import { adminAuth, requirePerm, requireTenant } from '../auth';
 import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized } from '../errors';
 import { PasswordSchema } from './auth';
-import { accountEntitlements, accountLicense, accountTier, endOtherItems, entitlementView, handledBefore, isValid, markHandled, recordPurchase } from '../billing/entitlements';
-import { StripeError, stripeOf, stripeStatus, subscriptionItems, type StripeEvent, type StripeSubscription } from '../billing/stripe';
-import { AppleError, appleStatus, appleTestPurchase, verifyAppleJws, type AppleNotification, type AppleRenewal, type AppleTransaction } from '../billing/apple';
-import { GoogleError, GooglePlay, playStatus, type PlaySubscription } from '../billing/google';
+import { accountEntitlements, accountLicense, accountTier, endPurchase, entitlementView, handledBefore, isValid, markHandled, purchaseOwner, recordPurchase } from '../billing/entitlements';
+import { requireStripe, stripeOf, stripeStatus, subscriptionItems, type StripeEvent, type StripeSubscription } from '../billing/stripe';
+import { appleStatus, appleTestPurchase, verifyAppleJws, type AppleNotification, type AppleRenewal, type AppleTransaction } from '../billing/apple';
+import { GooglePlay, playStatus, type PlaySubscription } from '../billing/google';
 import { scheduleSeatSync, syncTenantLicense } from '../billing/tenant-billing';
 import { slugify } from './util';
 
@@ -162,7 +162,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get('/v1/accounts/me', { preHandler: auth }, async (req) => accountView(ctx, req.account!));
 
-  /** The license this account signs a computer up to (null key with nothing bought). Computers fetch it again as it ends. */
+  /** The license this account signs a computer up to (no key with nothing bought), fetched again before it ends. */
   app.get('/v1/accounts/license', { preHandler: auth }, async (req) => accountLicense(ctx, req.account!));
 
   app.post('/v1/accounts/password', { preHandler: auth }, async (req) => {
@@ -231,7 +231,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
    */
   app.post('/v1/accounts/tenants', { preHandler: auth, config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => {
     if (!cloud.publicSignup) throw forbidden('This FBRX Command does not take new organizations');
-    const body = z.object({ name: z.string().trim().min(1).max(120), kind: z.enum(['business', 'education', 'home']).default('business') }).parse(req.body);
+    const body = z.object({ name: z.string().trim().min(1).max(120), kind: z.enum(VERTICALS).default('business') }).parse(req.body);
     const a = req.account!;
     if (ctx.db.get('SELECT id FROM users WHERE email = ?', a.email)) throw conflict('That email already signs in to an FBRX Command console');
     const now = new Date().toISOString();
@@ -248,22 +248,9 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   // ------------------------------------------------------------------------------------------- Stripe
-  const needStripe = () => {
-    if (!stripe) throw new HttpError(503, 'Card payments are not set up on this FBRX Command', 'UNAVAILABLE');
-    return stripe;
-  };
-  const stripeCall = async <T>(fn: () => Promise<T>): Promise<T> => {
-    try {
-      return await fn();
-    } catch (e) {
-      if (e instanceof StripeError) throw new HttpError(502, e.message, 'PAYMENT_PROVIDER');
-      throw e;
-    }
-  };
-
   async function stripeCustomer(a: AccountRow): Promise<string> {
     if (a.stripe_customer_id) return a.stripe_customer_id;
-    const c = await needStripe().createCustomer({ email: a.email, name: a.name, metadata: { fbrx_account: a.id } });
+    const c = await requireStripe(cloud).createCustomer({ email: a.email, name: a.name, metadata: { fbrx_account: a.id } });
     ctx.db.run('UPDATE accounts SET stripe_customer_id = ?, updated_at = ? WHERE id = ?', c.id, new Date().toISOString(), a.id);
     return c.id;
   }
@@ -272,23 +259,20 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     const body = z.object({ productId: z.string().max(80) }).parse(req.body);
     const product = personalProduct(body.productId);
     const a = req.account!;
-    const s = needStripe();
+    const s = requireStripe(cloud);
     const now = accountTier(ctx, a.id).tier;
     if (atLeast(now, product.tier)) throw conflict(`Your FBRX account already has ${TIER_SHORT[now]}`);
     if (accountEntitlements(ctx, a.id).some((e) => e.source === 'stripe' && e.kind === 'edition' && !e.tenant_id && isValid(e))) {
       throw conflict('You already have a plan: change it in Manage billing');
     }
-    const customer = await stripeCall(() => stripeCustomer(a));
-    const session = await stripeCall(() =>
-      s.checkout({
-        customer,
-        items: [{ productId: body.productId, quantity: 1 }],
-        successUrl: `${cloud.returnUrl}?checkout=done&session={CHECKOUT_SESSION_ID}`,
-        cancelUrl: `${cloud.returnUrl}?checkout=canceled`,
-        reference: a.id,
-        metadata: { fbrx_account: a.id },
-      }),
-    );
+    const session = await s.checkout({
+      customer: await stripeCustomer(a),
+      items: [{ productId: body.productId, quantity: 1 }],
+      successUrl: `${cloud.returnUrl}?checkout=done&session={CHECKOUT_SESSION_ID}`,
+      cancelUrl: `${cloud.returnUrl}?checkout=canceled`,
+      reference: a.id,
+      metadata: { fbrx_account: a.id },
+    });
     ctx.audit.record(accountActor(a, req), 'billing.checkout', { type: 'account', id: a.id }, { productId: body.productId, tier: product.tier });
     return { url: session.url, id: session.id };
   });
@@ -296,7 +280,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
   app.post('/v1/billing/portal', { preHandler: auth }, async (req) => {
     const a = req.account!;
     if (!a.stripe_customer_id) throw badRequest('Nothing was bought with this account on the website or a computer yet');
-    const p = await stripeCall(() => needStripe().portal({ customer: a.stripe_customer_id!, returnUrl: cloud.returnUrl }));
+    const p = await requireStripe(cloud).portal({ customer: a.stripe_customer_id, returnUrl: cloud.returnUrl });
     return { url: p.url };
   });
 
@@ -308,7 +292,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     const status = stripeStatus(sub.status);
     const items = subscriptionItems(sub);
     for (const i of items) recordPurchase(ctx, { source: 'stripe', externalId: sub.id, productId: i.productId, status, periodEnd: i.periodEnd, quantity: i.quantity, accountId: tenantId ? null : accountId, tenantId });
-    endOtherItems(ctx, 'stripe', sub.id, items.map((i) => i.productId));
+    endPurchase(ctx, 'stripe', sub.id, items.map((i) => i.productId));
     // An organization's plan: its license follows, and (once it starts) its computers are counted in.
     if (tenantId) {
       syncTenantLicense(ctx, tenantId);
@@ -328,7 +312,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
       }
     });
     scoped.post('/v1/billing/stripe/webhook', async (req, reply) => {
-      const s = needStripe();
+      const s = requireStripe(cloud);
       let event: StripeEvent;
       try {
         event = s.verifyWebhook(req.rawBody ?? '', req.headers['stripe-signature'] as string | undefined);
@@ -337,31 +321,30 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
       }
       if (handledBefore(ctx, 'stripe', event.id)) return { received: true, duplicate: true };
       const o = event.data.object;
-      if (event.type.startsWith('customer.subscription.')) await stripeCall(() => syncStripeSubscription(o as StripeSubscription));
+      if (event.type.startsWith('customer.subscription.')) await syncStripeSubscription(o as StripeSubscription);
       else if (event.type === 'checkout.session.completed' && o.mode === 'subscription' && typeof o.subscription === 'string') {
-        await stripeCall(async () => syncStripeSubscription(await s.subscription(o.subscription)));
+        await syncStripeSubscription(await s.subscription(o.subscription));
       } else if (event.type.startsWith('invoice.')) {
         const subId = typeof o.subscription === 'string' ? o.subscription : o.parent?.subscription_details?.subscription;
-        if (typeof subId === 'string') await stripeCall(async () => syncStripeSubscription(await s.subscription(subId)));
+        if (typeof subId === 'string') await syncStripeSubscription(await s.subscription(subId));
       }
       markHandled(ctx, 'stripe', event.id, event.type);
       return { received: true };
     });
   });
 
+  /** A store purchase recorded for another account is not this one's to claim. */
+  const assertNotOthers = (source: 'apple' | 'google', externalId: string, accountId: string) => {
+    const owner = purchaseOwner(ctx, source, externalId);
+    if (owner && owner !== accountId) throw forbidden('That purchase belongs to another FBRX account');
+  };
+
   // ------------------------------------------------------------------------------------------- App Store
   const needApple = () => {
     if (!cloud.apple) throw new HttpError(503, 'App Store purchases are not set up on this FBRX Command', 'UNAVAILABLE');
     return cloud.apple;
   };
-  const verifyApple = <T>(jws: string): T => {
-    try {
-      return verifyAppleJws<T>(jws, needApple());
-    } catch (e) {
-      if (e instanceof AppleError) throw badRequest(e.message);
-      throw e;
-    }
-  };
+  const verifyApple = <T>(jws: string): T => verifyAppleJws<T>(jws, needApple());
 
   /** The iPhone or iPad app sends the transaction StoreKit gave it after a purchase (or a restore). */
   app.post('/v1/billing/apple/transactions', { preHandler: auth }, async (req) => {
@@ -372,8 +355,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     if (appleTestPurchase(t.environment) && !needApple().allowSandbox) throw badRequest(TEST_PURCHASE);
     personalProduct(t.productId);
     if (t.appAccountToken && t.appAccountToken.toLowerCase() !== a.app_account_token.toLowerCase()) throw forbidden('That purchase belongs to another FBRX account');
-    const owner = ctx.db.get<{ account_id: string | null }>("SELECT account_id FROM entitlements WHERE source = 'apple' AND external_id = ?", t.originalTransactionId);
-    if (owner?.account_id && owner.account_id !== a.id) throw forbidden('That purchase belongs to another FBRX account');
+    assertNotOthers('apple', t.originalTransactionId, a.id);
     const { status, periodEnd } = appleStatus(t);
     recordPurchase(ctx, { source: 'apple', externalId: t.originalTransactionId, productId: t.productId, status, periodEnd, accountId: a.id });
     return accountView(ctx, a);
@@ -395,7 +377,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
       const product = productById(t.productId);
       if (product) {
         const accountId =
-          ctx.db.get<{ account_id: string | null }>("SELECT account_id FROM entitlements WHERE source = 'apple' AND external_id = ?", t.originalTransactionId)?.account_id ??
+          purchaseOwner(ctx, 'apple', t.originalTransactionId) ??
           (t.appAccountToken ? ctx.db.get<{ id: string }>('SELECT id FROM accounts WHERE app_account_token = ? COLLATE NOCASE', t.appAccountToken)?.id : null) ??
           null;
         const { status, periodEnd } = appleStatus(t, { type: n.notificationType, subtype: n.subtype }, renewal);
@@ -411,19 +393,11 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!play) throw new HttpError(503, 'Google Play purchases are not set up on this FBRX Command', 'UNAVAILABLE');
     return play;
   };
-  const playCall = async <T>(fn: () => Promise<T>): Promise<T> => {
-    try {
-      return await fn();
-    } catch (e) {
-      if (e instanceof GoogleError) throw new HttpError(502, e.message, 'PAYMENT_PROVIDER');
-      throw e;
-    }
-  };
 
   /** Records a Play subscription (and ends the one it replaced, after an upgrade or a downgrade). */
   async function syncPlay(purchaseToken: string, sub: PlaySubscription, accountId: string | null) {
     const status = playStatus(sub.subscriptionState);
-    if (sub.linkedPurchaseToken) ctx.db.run("UPDATE entitlements SET status = 'expired', updated_at = ? WHERE source = 'google' AND external_id = ?", new Date().toISOString(), sub.linkedPurchaseToken);
+    if (sub.linkedPurchaseToken) endPurchase(ctx, 'google', sub.linkedPurchaseToken);
     const known = sub.lineItems.filter((i) => productById(i.productId));
     for (const i of known) {
       recordPurchase(ctx, { source: 'google', externalId: purchaseToken, productId: i.productId, status, periodEnd: i.expiryTime ?? null, accountId });
@@ -436,14 +410,13 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     const body = z.object({ productId: z.string().max(80), purchaseToken: z.string().min(10).max(4000) }).parse(req.body);
     personalProduct(body.productId);
     const a = req.account!;
-    const sub = await playCall(() => needPlay().subscription(body.purchaseToken));
+    const sub = await needPlay().subscription(body.purchaseToken);
     if (!sub.lineItems.some((i) => i.productId === body.productId)) throw badRequest('That purchase is for another product');
     if (sub.testPurchase && !cloud.google!.allowTest) throw badRequest(TEST_PURCHASE);
     const external = sub.externalAccountIdentifiers?.obfuscatedExternalAccountId;
     if (external && external !== a.id) throw forbidden('That purchase belongs to another FBRX account');
-    const owner = ctx.db.get<{ account_id: string | null }>("SELECT account_id FROM entitlements WHERE source = 'google' AND external_id = ?", body.purchaseToken);
-    if (owner?.account_id && owner.account_id !== a.id) throw forbidden('That purchase belongs to another FBRX account');
-    await playCall(() => syncPlay(body.purchaseToken, sub, a.id));
+    assertNotOthers('google', body.purchaseToken, a.id);
+    await syncPlay(body.purchaseToken, sub, a.id);
     return accountView(ctx, a);
   });
 
@@ -460,16 +433,16 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     const n = data.subscriptionNotification;
     if (n) {
       // Never what the notification says: what Play says about the purchase now.
-      const sub = await playCall(() => p.subscription(n.purchaseToken));
+      const sub = await p.subscription(n.purchaseToken);
       if (sub.testPurchase && !cloud.google!.allowTest) {
         if (messageId) markHandled(ctx, 'google', messageId, `subscription.${n.notificationType} (test)`);
         return { received: true };
       }
       const accountId =
-        ctx.db.get<{ account_id: string | null }>("SELECT account_id FROM entitlements WHERE source = 'google' AND external_id = ?", n.purchaseToken)?.account_id ??
+        purchaseOwner(ctx, 'google', n.purchaseToken) ??
         ctx.db.get<{ id: string }>('SELECT id FROM accounts WHERE id = ?', sub.externalAccountIdentifiers?.obfuscatedExternalAccountId ?? '')?.id ??
         null;
-      await playCall(() => syncPlay(n.purchaseToken, sub, accountId));
+      await syncPlay(n.purchaseToken, sub, accountId);
     }
     if (messageId) markHandled(ctx, 'google', messageId, n ? `subscription.${n.notificationType}` : 'other');
     return { received: true };

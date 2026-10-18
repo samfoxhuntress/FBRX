@@ -1,4 +1,5 @@
-import { parseSemver } from './semver';
+import { z } from 'zod';
+import { isValidSemver, parseSemver } from './semver';
 
 /** Release stage shown with the version everywhere ("FBRX OS Beta 2.0.0"): 1.x was the Alpha, 2.x is the Beta. */
 export function stageFor(version: string): string {
@@ -38,7 +39,27 @@ export function displayVersion(version: string): string {
   return `${stageFor(v)} ${v}`;
 }
 
-/** The release manifest (release.json at the root of the repository). */
+/**
+ * release.json at the root of the repository, as FBRX OS and FBRX Command read it: what it leaves out gets its default,
+ * and the stage follows the version (stageFor) unless it names one.
+ */
+export const ReleaseManifestSchema = z
+  .object({
+    version: z.string().refine(isValidSemver, 'not a version'),
+    stage: z.string().max(40).optional(),
+    codename: z.string().max(60).default(''),
+    released: z.string().max(40).default(''),
+    importance: z.enum(['optional', 'recommended', 'important']).default('recommended'),
+    summary: z.string().max(600).default(''),
+    notes: z.array(z.string().max(400)).max(40).default([]),
+    download: z.string().url(),
+    page: z.string().url(),
+    /** What is new in FBRX Command itself, when the release says so. */
+    command: z.object({ summary: z.string().max(600).default(''), notes: z.array(z.string().max(400)).max(40).default([]) }).optional(),
+  })
+  .transform((m) => ({ ...m, stage: m.stage ?? stageFor(m.version) }));
+
+/** A release, as FBRX OS shows it (release.json without what is only for FBRX Command). */
 export interface ReleaseInfo {
   version: string;
   stage: string;

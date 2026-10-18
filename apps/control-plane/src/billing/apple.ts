@@ -1,6 +1,7 @@
 import { X509Certificate, createPublicKey, verify as verifySignature } from 'node:crypto';
 import type { EntitlementStatus } from '@fbrx/shared';
 import type { CloudConfig } from '../config';
+import { HttpError } from '../errors';
 
 /**
  * App Store purchases (StoreKit 2). The iPhone and iPad app sends the signed transaction it got from StoreKit, and the
@@ -12,7 +13,12 @@ import type { CloudConfig } from '../config';
  */
 type AppleConfig = NonNullable<CloudConfig['apple']>;
 
-export class AppleError extends Error {}
+/** A signed App Store payload that does not check out: the request was wrong. */
+export class AppleError extends HttpError {
+  constructor(message: string) {
+    super(400, message, 'INVALID_ARGUMENT');
+  }
+}
 
 /** Apple's marker extensions: on the receipt-signing leaf, and on the WWDR intermediate. */
 const LEAF_OID = '1.2.840.113635.100.6.11.1';
@@ -79,7 +85,7 @@ export interface AppleNotification {
   data?: { bundleId?: string; environment?: string; signedTransactionInfo?: string; signedRenewalInfo?: string; status?: number };
 }
 
-/** The renewal info's grace period, when a renewal failed and the App Store is still trying (JWSRenewalInfoDecodedPayload). */
+/** The grace period while the App Store tries a failed renewal again (JWSRenewalInfoDecodedPayload). */
 export interface AppleRenewal {
   gracePeriodExpiresDate?: number;
 }

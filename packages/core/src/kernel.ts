@@ -586,20 +586,7 @@ export class Kernel {
       keyPair: () => this.meshKeyPair(),
       mobileDir: this.platform.meshMobileDir ?? null,
       status: () => this.meshStatusSummary(),
-      home: async () => {
-        const st = this.settings.get();
-        const tier = this.license.status().tier;
-        const model = this.models.installed().find((m) => m.id === st.runtime.modelId) ?? null;
-        const aiReady = (await this.providers.status().catch(() => [])).some((p) => p.available);
-        return {
-          tier,
-          agentName: st.ai.agentName,
-          aiReady,
-          modelName: model?.name ?? null,
-          board: homeBoard({ name: addressAs(st), agentName: st.ai.agentName, aiReady, deviceName: this.deviceName(), tier }),
-          notes: notesFor({ tier, agentName: st.ai.agentName, modelName: model?.name ?? null, paired: true }),
-        };
-      },
+      home: () => this.meshHome(),
       models: async () => ({ current: this.settings.get().runtime.modelId || null, installed: this.models.installed().map((m) => ({ id: m.id, name: m.name, sizeBytes: m.sizeBytes })) }),
       useModel: async (id, by) => {
         if (!this.models.installed().some((m) => m.id === id)) throw new CoreError('NOT_FOUND', 'That model is not on this computer');
@@ -1725,6 +1712,22 @@ export class Kernel {
       pendingApprovals: st.pendingApprovals,
       alerts: this.alerts.counts(),
       openTasks: this.workspace.listTasks().filter((t) => t.status !== 'done').length,
+    };
+  }
+
+  /** What a paired phone's Home shows: this computer's edition and AI, the split-flap board and the notes from FBRX. */
+  private async meshHome() {
+    const st = this.settings.get();
+    const tier = this.license.status().tier;
+    const modelName = this.models.installed().find((m) => m.id === st.runtime.modelId)?.name ?? null;
+    const aiReady = (await this.providers.status().catch(() => [])).some((p) => p.available);
+    return {
+      tier,
+      agentName: st.ai.agentName,
+      aiReady,
+      modelName,
+      board: homeBoard({ name: addressAs(st), agentName: st.ai.agentName, aiReady, deviceName: this.deviceName(), tier }),
+      notes: notesFor({ tier, agentName: st.ai.agentName, modelName, paired: true }),
     };
   }
 

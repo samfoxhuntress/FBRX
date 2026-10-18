@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
-import { RELEASE_MANIFEST_URL, STORE_UPDATES, compareSemver, isValidSemver, stageFor, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
+import { RELEASE_MANIFEST_URL, ReleaseManifestSchema, STORE_UPDATES, compareSemver, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
@@ -19,21 +19,6 @@ import { unzip } from '../util/unzip';
  * newer version, and, when asked, downloads the new version into the same folder and starts the installer there,
  * exactly what the person would otherwise do by hand. The installer closes FBRX, updates it and reopens it.
  */
-
-const ManifestSchema = z
-  .object({
-    version: z.string().refine(isValidSemver, 'not a version'),
-    stage: z.string().max(40).optional(),
-    codename: z.string().max(60).default(''),
-    released: z.string().max(40).default(''),
-    importance: z.enum(['optional', 'recommended', 'important']).default('recommended'),
-    summary: z.string().max(600).default(''),
-    notes: z.array(z.string().max(400)).max(40).default([]),
-    download: z.string().url(),
-    page: z.string().url(),
-  })
-  // Alpha for 1.x, Beta for 2.x, when release.json does not say.
-  .transform((m) => ({ ...m, stage: m.stage ?? stageFor(m.version) }));
 
 /** Written by the setup wizard into the data folder: where FBRX was installed from. */
 export const INSTALL_SOURCE_FILE = 'install-source.json';
@@ -119,7 +104,8 @@ export class ReleaseChecker {
     try {
       const res = await fetch(this.manifestUrl, { headers: { 'user-agent': `FBRX-OS/${this.d.appVersion}`, 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(20_000) });
       if (!res.ok) throw new Error(`The release list answered ${res.status}`);
-      const latest: ReleaseInfo = ManifestSchema.parse(await res.json());
+      // What is new in FBRX Command is for FBRX Command.
+      const { command: _command, ...latest } = ReleaseManifestSchema.parse(await res.json());
       const newer = compareSemver(latest.version, this.d.appVersion) > 0;
       this.set({ state: newer ? 'available' : 'current', latest, checkedAt: new Date().toISOString(), message: null });
       this.d.log.info('Checked for a new version', { current: this.d.appVersion, latest: latest.version });

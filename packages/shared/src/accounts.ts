@@ -1,8 +1,9 @@
 import type { Tier } from './license';
+import type { ProductInfo } from './plans';
 
 /**
- * FBRX accounts: one per person, held by FBRX Command in the cloud. An account keeps what its person bought (Standard or
- * Ultra, through Stripe on the website and the computer, or the App Store / Google Play on the phone), and signs any
+ * FBRX accounts: one per person, held by FBRX Command in the cloud. An account keeps what its person bought (Standard
+ * or Ultra, through Stripe on the website and the computer, or the App Store / Google Play on the phone), and signs any
  * computer or phone they sign in on up to that edition. In an organization, FBRX Command hands out the editions.
  */
 
@@ -11,15 +12,15 @@ export const PURCHASE_SOURCES = ['stripe', 'apple', 'google', 'grant'] as const;
 export type PurchaseSource = (typeof PURCHASE_SOURCES)[number];
 
 /**
- * A purchase's state. `active` and `grace` (a payment failed; the store is still trying) count; so does `canceled` until
- * the period it paid for ends. `pending`: not paid yet. `expired`: over, refunded or revoked.
+ * A purchase's state. `active` and `grace` (a payment failed; the store is still trying) count; so does `canceled`
+ * until the period it paid for ends. `pending`: not paid yet. `expired`: over, refunded or revoked.
  */
 export type EntitlementStatus = 'pending' | 'active' | 'grace' | 'canceled' | 'expired';
 
 export interface EntitlementView {
   id: string;
   productId: string;
-  kind: 'edition' | 'command' | 'server';
+  kind: ProductInfo['kind'];
   tier: Tier | null;
   source: PurchaseSource;
   status: EntitlementStatus;
@@ -67,6 +68,21 @@ export interface AccountLicense {
   key: string | null;
   tier: Tier;
   expiresAt: string | null;
+}
+
+/** An organization's FBRX Command plan in the cloud, as its console shows it (GET /v1/admin/billing). */
+export interface TenantPlanView {
+  /** `manual`: the operator of this FBRX Command issues its licenses; `cloud`: it pays for its plan. */
+  billing: 'manual' | 'cloud';
+  active: boolean;
+  periodEnd: string | null;
+  status: EntitlementStatus | null;
+  /** Computers at each edition (what the organization gives them). */
+  computers: Record<Tier, number>;
+  /** What a month comes to, in cents: the plan and the computers. */
+  monthly: number;
+  /** Can open the Stripe billing portal. */
+  portal: boolean;
 }
 
 /** GET /v1/plans: the price list and which ways to pay this FBRX Command offers. */

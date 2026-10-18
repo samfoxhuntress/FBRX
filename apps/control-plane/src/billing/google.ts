@@ -1,6 +1,7 @@
 import { SignJWT, importPKCS8 } from 'jose';
 import type { EntitlementStatus } from '@fbrx/shared';
 import type { CloudConfig } from '../config';
+import { PaymentProviderError } from '../errors';
 
 /**
  * Google Play purchases. The Android app sends the purchase token Play Billing gave it; FBRX asks the Play Developer
@@ -10,7 +11,7 @@ import type { CloudConfig } from '../config';
  */
 type GoogleConfig = NonNullable<CloudConfig['google']>;
 
-export class GoogleError extends Error {}
+export class GoogleError extends PaymentProviderError {}
 
 const SCOPE = 'https://www.googleapis.com/auth/androidpublisher';
 

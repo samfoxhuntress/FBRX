@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
 import { EDITION_PLANS, TIER_NAMES, TIER_SHORT, atLeast, formatPrice, type EditionStatus, type Tier, type Vertical } from '@fbrx/shared';
-import { Button, Card, Icons, useToast } from '@fbrx/ui';
+import { Button, Card, Icons, formatDay, useToast } from '@fbrx/ui';
 import { useCore } from './hooks';
 import { call } from './client';
 import { navigate } from './app';
@@ -62,8 +62,7 @@ export function howToGet(tier: Tier, ed: EditionStatus | null): string {
 /** "Standard stays free on this computer until November 13, 2026…" after an update from before 2.0, else null. */
 export function graceLine(ed: EditionStatus | null): string | null {
   if (ed?.ceilingReason !== 'grace' || !ed.graceUntil) return null;
-  const until = new Date(ed.graceUntil).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
-  return `${TIER_SHORT[ed.ceiling]} stays free on this computer until ${until}, as a thank-you for using FBRX before 2.0.`;
+  return `${TIER_SHORT[ed.ceiling]} stays free on this computer until ${formatDay(ed.graceUntil)}, as a thank-you for using FBRX before 2.0.`;
 }
 
 /** What this computer runs, may run, and why (Settings → Edition, the walkthrough). */

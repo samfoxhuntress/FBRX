@@ -349,7 +349,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const vertical = status.edition?.vertical ?? 'business';
   const helpdeskShown = vertical !== 'home' || ultra;
 
-  const all: Array<NavItem & { ultra?: boolean; blackhole?: boolean }> = [
+  const all: Array<NavItem & { need?: Tier }> = [
     { id: 'home', label: 'FBRX Glass', icon: 'dashboard', section: 'Command' },
     { id: 'agent', label: agentName, icon: 'sparkles', section: 'Command' },
     { id: 'alerts', label: 'Alerts', icon: 'bell', count: alertCounts?.unread, section: 'Command' },
@@ -366,27 +366,27 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'storage', label: 'Storage', icon: 'drive', section: 'PC care' },
     { id: 'security', label: 'Security', icon: 'lock', section: 'PC care' },
     { id: 'updates', label: 'Updates', icon: 'download', section: 'PC care' },
-    { id: 'bugs', label: 'Bug catcher', icon: 'bug', section: 'PC care', ultra: true },
+    { id: 'bugs', label: 'Bug catcher', icon: 'bug', section: 'PC care', need: 'ultra' },
     { id: 'network', label: 'Network Center', icon: 'network', section: 'PC care' },
     { id: 'files', label: 'Files', icon: 'folder', section: 'Utilities' },
-    { id: 'processes', label: 'Task Manager', icon: 'activity', section: 'Utilities', ultra: true },
+    { id: 'processes', label: 'Task Manager', icon: 'activity', section: 'Utilities', need: 'ultra' },
     { id: 'clipboard', label: 'Clipboard', icon: 'clipboard', section: 'Utilities' },
-    { id: 'migrate', label: 'Copy & migrate', icon: 'copy', section: 'Utilities', ultra: true },
+    { id: 'migrate', label: 'Copy & migrate', icon: 'copy', section: 'Utilities', need: 'ultra' },
     { id: 'toolbox', label: 'Toolbox', icon: 'toolbox', section: 'Utilities' },
     { id: 'library', label: 'Library', icon: 'book', section: 'Utilities' },
-    { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect', ultra: true },
+    { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect', need: 'ultra' },
     { id: 'runtime', label: 'AI models', icon: 'cpu', section: 'Connect' },
-    { id: 'aicoord', label: 'AI coordination', icon: 'zap', section: 'Connect', ultra: true },
-    { id: 'connections', label: 'Connections', icon: 'link', section: 'Connect', ultra: true },
-    { id: 'tools', label: 'Tools & plugins', icon: 'wrench', section: 'Connect', ultra: true },
+    { id: 'aicoord', label: 'AI coordination', icon: 'zap', section: 'Connect', need: 'ultra' },
+    { id: 'connections', label: 'Connections', icon: 'link', section: 'Connect', need: 'ultra' },
+    { id: 'tools', label: 'Tools & plugins', icon: 'wrench', section: 'Connect', need: 'ultra' },
     { id: 'shield', label: 'FBRX Shield', icon: 'shield', count: shieldCount || undefined, section: 'Protect' },
     { id: 'approvals', label: 'Approvals', icon: 'check', count: status.pendingApprovals, section: 'Protect' },
     { id: 'vault', label: 'Credentials', icon: 'key', section: 'Protect' },
-    { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect', ultra: true },
+    { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect', need: 'ultra' },
     { id: 'backup', label: 'Backup & restore', icon: 'archive', section: 'Protect' },
-    { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', ultra: true },
-    { id: 'lab', label: 'Virtual lab', icon: 'box', section: 'Advanced', ultra: true },
-    { id: 'server', label: 'FBRX Server', icon: 'server', section: 'Advanced', ultra: true, blackhole: true },
+    { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', need: 'ultra' },
+    { id: 'lab', label: 'Virtual lab', icon: 'box', section: 'Advanced', need: 'ultra' },
+    { id: 'server', label: 'FBRX Server', icon: 'server', section: 'Advanced', need: 'blackhole' },
     // Every edition sees its organization, or how to join one (Black Hole only ever comes through FBRX Command).
     { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System' },
     { id: 'settings', label: 'Settings', icon: 'settings', section: 'System' },
@@ -399,12 +399,12 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     ? ESSENTIALS_NAV.flatMap(([id, section, label]) => {
         const item = byId.get(id);
         if (!item || (id === 'fleet' && !enrolled)) return [];
-        const { ultra: _u, blackhole: _b, ...rest } = item;
+        const { need: _n, ...rest } = item;
         return [{ ...rest, section, ...(label ? { label } : {}) }];
       })
     : all
-        .filter((i) => (learner ? LEARNER_PAGES.has(i.id) : (ultra || !i.ultra) && (blackhole || !i.blackhole)))
-        .map(({ ultra: _u, blackhole: _b, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
+        .filter((i) => (learner ? LEARNER_PAGES.has(i.id) : !i.need || atLeast(tier, i.need)))
+        .map(({ need: _n, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
   const groups: NavGroup[] | undefined = essentials
     ? undefined
     : SECTIONS.map(({ basicHint, learnerHint, ...g }) => ({ ...g, hint: learner && learnerHint ? learnerHint : !ultra && basicHint ? basicHint : g.hint, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
@@ -464,7 +464,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const page = (() => {
     // Essentials Home: the split-flap board and a few notes from FBRX (no dashboard).
     if (essentials && route === 'home') return <EssentialsHome status={status} agentName={agentName} who={addressAs(s)} />;
-    if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && !byId.get(route)?.ultra) {
+    if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && !byId.get(route)?.need) {
       return <StandardOnly title={byId.get(route)?.label ?? 'That page'} what={STANDARD_WHAT[route] ?? 'More of the everyday tools.'} />;
     }
     if (learner && route !== 'home' && !LEARNER_PAGES.has(route)) {

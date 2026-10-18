@@ -1,4 +1,4 @@
-import { atLeast, tierRank, type AccountLicense, type AccountMembership, type AccountStatus, type AccountView, type Tier } from '@fbrx/shared';
+import { atLeast, tierRank, type AccountLicense, type AccountStatus, type AccountView, type Tier, type Vertical } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
 import type { Vault } from '../vault/vault';
@@ -11,6 +11,8 @@ import type { Logger } from '../logger';
 const TOKEN_SECRET = 'fbrx.account.token';
 /** How often the account's license is renewed while FBRX runs. */
 const REFRESH_MS = 6 * 3600_000;
+/** What this computer keeps about the account, forgotten at sign-out (the FBRX Command address stays for next time). */
+const ACCOUNT_META = ['account.id', 'account.view', 'account.tier', 'account.licenseUntil', 'account.lastSyncAt', 'account.error', 'account.canBuy'];
 
 export interface AccountDeps {
   meta: MetaStore;
@@ -122,7 +124,7 @@ export class AccountService {
       /* locked */
     }
     const email = this.status().email;
-    for (const k of ['account.id', 'account.view', 'account.licenseUntil', 'account.lastSyncAt', 'account.error', 'account.canBuy', 'account.tier']) this.d.meta.delete(k);
+    for (const k of ACCOUNT_META) this.d.meta.delete(k);
     this.d.license.applyAccount(null);
     this.stop();
     this.d.audit.append({ category: 'license', action: 'account.signedOut', actor, target: email ?? undefined, outcome: 'success' });
@@ -131,8 +133,8 @@ export class AccountService {
   }
 
   /**
-   * Renews the account's license and what it knows about the account. `adopt`: turn the account's edition on (at sign-in,
-   * and whenever the account gets more than it had); otherwise what the person chose stays.
+   * Renews the account's license and what it knows about the account. `adopt`: turn the account's edition on (at
+   * sign-in, and whenever the account gets more than it had); otherwise what the person chose stays.
    */
   async refresh(opts: { adopt?: boolean } = {}): Promise<AccountStatus> {
     const token = this.token();
@@ -205,14 +207,10 @@ export class AccountService {
   }
 
   /** Starts an FBRX Command for the person's organization; they own it and sign in to its console with this account. */
-  async startOrganization(p: { name: string; kind: 'business' | 'education' | 'home' }): Promise<{ consoleUrl: string; tenantId: string }> {
+  async startOrganization(p: { name: string; kind: Vertical }): Promise<{ consoleUrl: string; tenantId: string }> {
     const r = await this.request<{ consoleUrl: string; tenantId: string }>('POST', '/v1/accounts/tenants', p, this.requireToken());
     await this.refresh();
     return r;
-  }
-
-  memberships(): AccountMembership[] {
-    return this.status().memberships;
   }
 
   private requireToken(): string {

@@ -2,9 +2,9 @@ import { EDITION_PLANS, formatPrice } from './plans';
 import type { Tier } from './license';
 
 /**
- * Home in Endpoint Essentials, on the computer and on the phone: no dashboard, just the split-flap board and a few notes
- * from FBRX itself: tips and tricks, the AI models, and what the editions above add. One list, so the computer and the
- * phone say the same things.
+ * Home in Endpoint Essentials, on the computer and on the phone: no dashboard, just the split-flap board and a few
+ * notes from FBRX itself: tips and tricks, the AI models, and what the editions above add. One list, so the computer
+ * and the phone say the same things.
  */
 export type EssentialsNoteKind = 'welcome' | 'tip' | 'models' | 'upgrade';
 
@@ -17,7 +17,8 @@ export interface EssentialsNote {
   action?: { label: string; to: 'agent' | 'models' | 'edition' | 'pair' };
 }
 
-const TIPS: Array<Omit<EssentialsNote, 'kind'>> = [
+/** Every tip there is (the website shows them too); notesFor picks two a day. */
+export const ESSENTIALS_TIPS: Array<Omit<EssentialsNote, 'kind'>> = [
   { id: 'tip-ask', title: 'Ask in your own words', body: '“Help me write a thank-you note”, “why is my computer slow?”, “explain this error”: no special phrasing needed.', action: { label: 'Ask now', to: 'agent' } },
   { id: 'tip-offline', title: 'Your chats stay here', body: 'Chats start offline. {agent} asks before it uses the internet or changes anything on your computer.' },
   { id: 'tip-memory', title: '{agent} can remember', body: 'Tell it “remember that I teach 4th grade” and it keeps that in mind. Settings → Memory shows what it knows, and forgets on request.' },
@@ -26,9 +27,6 @@ const TIPS: Array<Omit<EssentialsNote, 'kind'>> = [
   { id: 'tip-stop', title: 'One button stops it all', body: 'The emergency stop halts every AI action at once: in the chat, the tray menu and Settings → Agent.' },
   { id: 'tip-thinking', title: 'Big job? Let {agent} work longer', body: 'Settings → Agent → Thinking: Quick for small questions, Everyday for most things, Thorough for big jobs with many steps.' },
 ];
-
-/** Every note there is (for the website and tests); notesFor picks the ones to show. */
-export const ESSENTIALS_TIPS = TIPS;
 
 /**
  * The notes for Home: a welcome the first days, two tips that change each day, the AI models, and (in Essentials) what
@@ -39,9 +37,9 @@ export function notesFor(o: { tier: Tier; agentName: string; modelName?: string 
   const fill = (s: string) => s.replace(/\{agent\}/g, o.agentName);
   const day = Math.floor(now.getTime() / 86_400_000);
   const notes: EssentialsNote[] = [];
-  if (o.firstDays) notes.push({ id: 'welcome', kind: 'welcome', title: `Welcome to FBRX`, body: fill('{agent} is your own AI, running on your computer. Ask it anything; it explains as it goes.'), action: { label: 'Start a chat', to: 'agent' } });
+  if (o.firstDays) notes.push({ id: 'welcome', kind: 'welcome', title: 'Welcome to FBRX', body: fill('{agent} is your own AI, running on your computer. Ask it anything; it explains as it goes.'), action: { label: 'Start a chat', to: 'agent' } });
   for (const i of [0, 1]) {
-    const t = TIPS[(day * 2 + i) % TIPS.length]!;
+    const t = ESSENTIALS_TIPS[(day * 2 + i) % ESSENTIALS_TIPS.length]!;
     notes.push({ ...t, kind: 'tip', title: fill(t.title), body: fill(t.body) });
   }
   notes.push({

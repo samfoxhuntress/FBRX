@@ -1,16 +1,17 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import { productById, type EntitlementStatus } from '@fbrx/shared';
 import type { CloudConfig } from '../config';
+import { HttpError, PaymentProviderError } from '../errors';
 
 /**
  * Stripe, over its HTTPS API (form-encoded requests, JSON answers): Checkout for buying (cards, and the Apple Pay and
- * Google Pay wallets, which Checkout offers by itself once they are on in the Stripe Dashboard), the customer portal for
- * changing or ending a plan, and webhooks for what happened. Prices are found by their lookup key, which is the product
- * id in plans.ts, so the price list in Stripe and in FBRX stay one list.
+ * Google Pay wallets, which Checkout offers by itself once they are on in the Stripe Dashboard), the customer portal
+ * for changing or ending a plan, and webhooks for what happened. Prices are found by their lookup key, which is the
+ * product id in plans.ts, so the price list in Stripe and in FBRX stay one list.
  */
 type StripeConfig = NonNullable<CloudConfig['stripe']>;
 
-export class StripeError extends Error {}
+export class StripeError extends PaymentProviderError {}
 
 /** a[b][0][c]=… form encoding, as Stripe takes it. */
 export function formEncode(obj: Record<string, unknown>, prefix = ''): string {
@@ -93,13 +94,15 @@ export class Stripe {
     return this.request('POST', `/v1/subscription_items/${encodeURIComponent(itemId)}`, { quantity, proration_behavior: 'create_prorations' });
   }
 
-  addItem(subscription: string, productId: string, quantity: number) {
-    return this.priceFor(productId).then((price) => this.request<{ id: string }>('POST', '/v1/subscription_items', { subscription, price, quantity, proration_behavior: 'create_prorations' }));
+  /** Adds an edition's per-computer item to a tenant subscription. */
+  async addItem(subscription: string, productId: string, quantity: number) {
+    const price = await this.priceFor(productId);
+    return this.request<{ id: string }>('POST', '/v1/subscription_items', { subscription, price, quantity, proration_behavior: 'create_prorations' });
   }
 
   /**
-   * Checks a webhook's Stripe-Signature header (t=…,v1=…): an HMAC-SHA256 of "t.body" with the endpoint's signing secret,
-   * no older than five minutes. Returns the parsed event.
+   * Checks a webhook's Stripe-Signature header (t=…,v1=…): an HMAC-SHA256 of "t.body" with the endpoint's signing
+   * secret, no older than five minutes. Returns the parsed event.
    */
   verifyWebhook(rawBody: string, header: string | undefined, now = Date.now()): StripeEvent {
     if (!header) throw new StripeError('No Stripe-Signature header');
@@ -150,7 +153,7 @@ export function stripeStatus(status: string): EntitlementStatus {
   }
 }
 
-/** Each FBRX product in a subscription, with how many and until when (newer API versions keep the period on the item). */
+/** Each FBRX product in a subscription: how many, and until when (newer API versions keep the period on the item). */
 export function subscriptionItems(sub: StripeSubscription): Array<{ itemId: string; productId: string; quantity: number; periodEnd: string | null }> {
   return sub.items.data
     .filter((i) => i.price.lookup_key && productById(i.price.lookup_key))
@@ -167,5 +170,12 @@ export function stripeOf(cloud: CloudConfig): Stripe | null {
   if (!cloud.stripe) return null;
   let s = instances.get(cloud.stripe);
   if (!s) instances.set(cloud.stripe, (s = new Stripe(cloud.stripe)));
+  return s;
+}
+
+/** The Stripe client, for something only Stripe does. */
+export function requireStripe(cloud: CloudConfig): Stripe {
+  const s = stripeOf(cloud);
+  if (!s) throw new HttpError(503, 'Card payments are not set up on this FBRX Command', 'UNAVAILABLE');
   return s;
 }

@@ -6,8 +6,9 @@ import { minTier, TIER_NAMES, type CeilingReason, type Tier } from './license';
  * - **Vertical** (the *kind* of tenant): **Work** (`business`), **School** (`education`: classroom defaults for staff,
  *   student computers possible) or **Home** (`home`: a family, with parents' and children's computers). Chosen when
  *   FBRX Command is set up or a tenant is created, and changeable later.
- * - **Audience**: who uses a computer. Staff (and parents) get FBRX Endpoint (Essentials, Standard, Ultra or Black Hole). Students (and children)
- *   get **FBRX OS Education** (or Home): a narrowed, safe set of tools and a lightweight learning helper.
+ * - **Audience**: who uses a computer. Staff (and parents) get FBRX Endpoint (Essentials, Standard, Ultra or Black
+ *   Hole). Students (and children) get **FBRX OS Education** (or Home): a narrowed, safe set of tools and a lightweight
+ *   learning helper.
  *
  * The audience comes from the enrollment token or the computer's group in FBRX Command. A computer may always be
  * narrowed to a student computer when it joins, never widened.
@@ -105,6 +106,9 @@ export const VERTICAL_AUDIENCES: Record<Vertical, readonly Audience[]> = {
 export function isLearner(audience: Audience | null | undefined): boolean {
   return audience === 'student' || audience === 'child';
 }
+
+/** The edition a learner computer runs, whatever it was given (and what it counts as on an organization's plan). */
+export const LEARNER_TIER: Tier = 'basic';
 
 /**
  * The audience a computer ends up with: a token or group that says "student" (or "child") always wins, and any computer

@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react';
-import { COMMAND_PLAN, EDITION_PLANS, TENANT_DISCOUNT, TIER_NAMES, TIER_SHORT, atLeast, formatPrice, type AccountStatus, type Tier } from '@fbrx/shared';
-import { Button, Card, Field, Input, KeyValue, Status, formatDate, useAction } from '@fbrx/ui';
+import { COMMAND_PLAN, EDITION_PLANS, TENANT_DISCOUNT, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, type AccountStatus, type Tier, type Vertical } from '@fbrx/shared';
+import { Button, Card, Field, Input, KeyValue, Status, formatDate, formatDay, useAction } from '@fbrx/ui';
 import { call, openExternal } from './client';
 import { useCore } from './hooks';
 
@@ -117,7 +117,7 @@ export function AccountSettings() {
         <KeyValue
           items={[
             ['Edition', <span className={`tier-badge ${account.tier}`}>{account.tier === 'essentials' ? 'Essentials (nothing bought yet)' : TIER_NAMES[account.tier]}</span>],
-            ['Renews by itself', account.licenseUntil ? `Runs until ${new Date(account.licenseUntil).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}` : '—'],
+            ['Renews by itself', account.licenseUntil ? `Runs until ${formatDay(account.licenseUntil)}` : '—'],
             ['Last checked', account.lastSyncAt ? formatDate(account.lastSyncAt) : '—'],
           ]}
         />
@@ -175,7 +175,7 @@ export function AccountSettings() {
 /** Starts an FBRX Command for the person's organization: they own it, and its console opens in the browser. */
 function StartOrganization() {
   const [open, setOpen] = useState(false);
-  const [f, setF] = useState<{ name: string; kind: 'business' | 'education' | 'home' }>({ name: '', kind: 'business' });
+  const [f, setF] = useState<{ name: string; kind: Vertical }>({ name: '', kind: 'business' });
   const { run, busy } = useAction();
   return (
     <Card title="Run FBRX for your organization" subtitle={`FBRX Command looks after your company’s, school’s or family’s computers: ${formatPrice(COMMAND_PLAN.monthly)} a month, each computer at its edition with ${Math.round(TENANT_DISCOUNT * 100)}% off, Essentials computers free.`}>
@@ -191,10 +191,10 @@ function StartOrganization() {
             <Input value={f.name} maxLength={120} onChange={(e) => setF({ ...f, name: e.target.value })} />
           </Field>
           <Field label="Kind">
-            <div className="seg" role="group">
-              {(['business', 'education', 'home'] as const).map((k) => (
+            <div className="seg" role="group" aria-label="Kind">
+              {VERTICALS.map((k) => (
                 <button key={k} type="button" className={f.kind === k ? 'on' : ''} onClick={() => setF({ ...f, kind: k })}>
-                  {k === 'business' ? 'Work' : k === 'education' ? 'School' : 'Home'}
+                  {VERTICAL_NAMES[k]}
                 </button>
               ))}
             </div>

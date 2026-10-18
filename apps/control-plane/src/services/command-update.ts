@@ -5,7 +5,7 @@ import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
-import { RELEASE_MANIFEST_URL, compareSemver, isValidSemver, stageFor } from '@fbrx/shared';
+import { RELEASE_MANIFEST_URL, ReleaseManifestSchema, compareSemver } from '@fbrx/shared';
 import { type Db, unzip } from '@fbrx/shared/node';
 
 /**
@@ -17,22 +17,6 @@ import { type Db, unzip } from '@fbrx/shared/node';
  * that computer's keys and setup files) and starts "Install FBRX Command" there, which stops FBRX Command, rebuilds
  * it and starts it again. Its data (database, keys, certificate, uploads) is never touched.
  */
-
-const ManifestSchema = z
-  .object({
-    version: z.string().refine(isValidSemver, 'not a version'),
-    stage: z.string().max(40).optional(),
-    released: z.string().max(40).default(''),
-    importance: z.enum(['optional', 'recommended', 'important']).default('recommended'),
-    summary: z.string().max(600).default(''),
-    notes: z.array(z.string().max(400)).max(40).default([]),
-    download: z.string().url(),
-    page: z.string().url(),
-    /** What is new in FBRX Command itself, when the release says so. */
-    command: z.object({ summary: z.string().max(600).default(''), notes: z.array(z.string().max(400)).max(40).default([]) }).optional(),
-  })
-  // Alpha for 1.x, Beta for 2.x, when release.json does not say.
-  .transform((m) => ({ ...m, stage: m.stage ?? stageFor(m.version) }));
 
 export interface CommandRelease {
   version: string;
@@ -181,7 +165,7 @@ export class CommandUpdater {
     try {
       const res = await (this.d.fetch ?? fetch)(this.manifestUrl, { headers: { 'user-agent': `FBRX-Command/${this.d.version}`, 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(20_000) });
       if (!res.ok) throw new Error(`The release list answered ${res.status}`);
-      const m = ManifestSchema.parse(await res.json());
+      const m = ReleaseManifestSchema.parse(await res.json());
       const latest: CommandRelease = {
         version: m.version,
         stage: m.stage,

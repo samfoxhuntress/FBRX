@@ -1,19 +1,12 @@
 import { useState } from 'react';
-import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TENANT_DISCOUNT, TIERS, TIER_NAMES, TIER_SHORT, formatPrice, type AccountView, type MemberView, type Tier } from '@fbrx/shared';
-import { Button, Card, Empty, Field, Grid, Input, Modal, Page, Select, StatTile, Status, Table, useAction, useConfirm } from '@fbrx/ui';
+import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TENANT_DISCOUNT, TIERS, TIER_NAMES, TIER_SHORT, formatPrice, type AccountView, type MemberView, type TenantPlanView, type Tier } from '@fbrx/shared';
+import { Button, Card, Empty, Field, Grid, Input, Modal, Page, Select, StatTile, Status, Table, formatDay, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
 
 interface BillingInfo {
-  plan: {
-    billing: 'manual' | 'cloud';
-    active: boolean;
-    periodEnd: string | null;
-    status: string | null;
-    computers: Record<Tier, number>;
-    monthly: number;
-    portal: boolean;
-  };
+  plan: TenantPlanView;
+  /** Payments are set up on this FBRX Command. */
   payments: boolean;
 }
 
@@ -80,7 +73,7 @@ export function BillingPage() {
             <StatTile
               label="The FBRX Command plan"
               value={p.active ? 'Running' : 'Not started'}
-              foot={p.active ? (p.status === 'grace' ? <Status tone="warning">A payment failed: update your card in Manage billing</Status> : `Renews ${p.periodEnd ? new Date(p.periodEnd).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' }) : ''}`) : 'Until it starts, every computer runs Essentials'}
+              foot={p.active ? (p.status === 'grace' ? <Status tone="warning">A payment failed: update your card in Manage billing</Status> : `Renews ${formatDay(p.periodEnd)}`) : 'Until it starts, every computer runs Essentials'}
             />
             <StatTile label="A month comes to" value={formatPrice(p.monthly)} foot={`The plan, and ${lines.reduce((n, l) => n + l.n, 0)} computers at a paid edition`} />
             <StatTile label="Essentials computers" value={p.computers.essentials} foot="Free, as many as you like" />
@@ -256,7 +249,7 @@ export function AccountsPage() {
         >
           <div className="fx-form">
             <Field label="Edition">
-              <Select value={grant.tier} options={[{ value: 'basic', label: 'Standard' }, { value: 'ultra', label: 'Ultra' }]} onChange={(e) => setGrant({ ...grant, tier: e.target.value as 'basic' | 'ultra' })} />
+              <Select value={grant.tier} options={(['basic', 'ultra'] as const).map((t) => ({ value: t, label: TIER_SHORT[t] }))} onChange={(e) => setGrant({ ...grant, tier: e.target.value as 'basic' | 'ultra' })} />
             </Field>
             <Field label="For how many days" help="Empty: no end.">
               <Input type="number" min={1} value={grant.days} onChange={(e) => setGrant({ ...grant, days: e.target.value })} />

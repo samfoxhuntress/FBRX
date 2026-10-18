@@ -1,5 +1,5 @@
-import { maxTier, productById, type AccountLicense, type EntitlementStatus, type EntitlementView, type PurchaseSource, type Tier } from '@fbrx/shared';
-import { signLicense } from '@fbrx/shared/node';
+import { licenseEditionFor, maxTier, productById, type AccountLicense, type EntitlementStatus, type EntitlementView, type PurchaseSource, type Tier } from '@fbrx/shared';
+import { signLicense, type Db } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
 
@@ -17,7 +17,7 @@ export const LICENSE_MAX_DAYS = 35;
 
 export interface PurchaseUpdate {
   source: PurchaseSource;
-  /** The provider's id for the purchase: Stripe subscription, the App Store original transaction, the Play purchase token. */
+  /** The provider's id: the Stripe subscription, the App Store original transaction or the Play purchase token. */
   externalId: string;
   productId: string;
   status: EntitlementStatus;
@@ -32,7 +32,7 @@ interface Row {
   account_id: string | null;
   tenant_id: string | null;
   product_id: string;
-  kind: 'edition' | 'command' | 'server';
+  kind: EntitlementView['kind'];
   tier: Tier | null;
   source: PurchaseSource;
   external_id: string;
@@ -95,21 +95,33 @@ export function recordPurchase(ctx: AppContext, u: PurchaseUpdate): EntitlementV
   return entitlementView(row);
 }
 
-/** Ends every purchase of one provider id except the products still in it (a subscription item that was removed). */
-export function endOtherItems(ctx: AppContext, source: PurchaseSource, externalId: string, keep: string[]) {
-  const rows = ctx.db.all<Row>('SELECT * FROM entitlements WHERE source = ? AND external_id = ?', source, externalId);
-  for (const r of rows) if (!keep.includes(r.product_id) && r.status !== 'expired') ctx.db.run("UPDATE entitlements SET status = 'expired', updated_at = ? WHERE id = ?", new Date().toISOString(), r.id);
+/**
+ * Ends a provider's purchase: every product in it but the ones it still has (a subscription item that was removed), or
+ * all of it (a store subscription that another replaced).
+ */
+export function endPurchase(ctx: AppContext, source: PurchaseSource, externalId: string, keep: string[] = []) {
+  const now = new Date().toISOString();
+  const rows = ctx.db.all<Row>("SELECT * FROM entitlements WHERE source = ? AND external_id = ? AND status != 'expired'", source, externalId);
+  for (const r of rows) if (!keep.includes(r.product_id)) ctx.db.run("UPDATE entitlements SET status = 'expired', updated_at = ? WHERE id = ?", now, r.id);
+}
+
+/** The account a provider's purchase was recorded for, if it was. */
+export function purchaseOwner(ctx: AppContext, source: PurchaseSource, externalId: string): string | null {
+  return ctx.db.get<{ account_id: string | null }>('SELECT account_id FROM entitlements WHERE source = ? AND external_id = ? AND account_id IS NOT NULL', source, externalId)?.account_id ?? null;
 }
 
 export function accountEntitlements(ctx: AppContext, accountId: string): Row[] {
   return ctx.db.all<Row>('SELECT * FROM entitlements WHERE account_id = ? ORDER BY created_at', accountId);
 }
 
-/** The edition an account's own purchases give (Essentials with none), and until when. Black Hole is never bought on an account. */
+/** Black Hole is never bought on an account: one there (a grant, say) counts as Ultra. */
+const onAccount = (t: Tier): Tier => (t === 'blackhole' ? 'ultra' : t);
+
+/** The edition an account's own purchases give (Essentials with none), and until when. */
 export function accountTier(ctx: AppContext, accountId: string): { tier: Tier; until: string | null } {
   const owned = accountEntitlements(ctx, accountId).filter((e) => e.kind === 'edition' && e.tier && !e.tenant_id && isValid(e));
-  const tier = owned.reduce<Tier>((t, e) => maxTier(t, e.tier === 'blackhole' ? 'ultra' : e.tier!), 'essentials');
-  const best = owned.filter((e) => (e.tier === 'blackhole' ? 'ultra' : e.tier) === tier);
+  const tier = owned.reduce<Tier>((t, e) => maxTier(t, onAccount(e.tier!)), 'essentials');
+  const best = owned.filter((e) => onAccount(e.tier!) === tier);
   // No end at all (a grant without one) wins; otherwise the latest end.
   const until = best.some((e) => !e.period_end) ? null : best.reduce<string | null>((u, e) => (!u || e.period_end! > u ? e.period_end : u), null);
   return { tier, until };
@@ -132,7 +144,7 @@ export function accountLicense(ctx: AppContext, account: { id: string; email: st
       lid: `lic_${account.id}`,
       tenantId: 'personal',
       customer: account.name || account.email,
-      edition: tier === 'ultra' ? 'pro' : 'community',
+      edition: licenseEditionFor(tier),
       seats: 0,
       features: [],
       issuedAt: new Date().toISOString(),
@@ -143,6 +155,20 @@ export function accountLicense(ctx: AppContext, account: { id: string; email: st
     ctx.keys.licensePrivatePem,
   );
   return { key, tier, expiresAt };
+}
+
+/** An organization's FBRX Command plan: its latest purchase, if it has one. */
+export function planEntitlement(db: Db, tenantId: string) {
+  return db.get<{ external_id: string; source: PurchaseSource; status: EntitlementStatus; period_end: string | null }>(
+    "SELECT external_id, source, status, period_end FROM entitlements WHERE tenant_id = ? AND kind = 'command' ORDER BY updated_at DESC LIMIT 1",
+    tenantId,
+  );
+}
+
+/** Whether an organization's FBRX Command plan counts right now. */
+export function cloudPlanActive(db: Db, tenantId: string): boolean {
+  const e = planEntitlement(db, tenantId);
+  return !!e && isValid(e);
 }
 
 /** Whether a provider's notification was handled already (they retry, and may send the same one twice). */

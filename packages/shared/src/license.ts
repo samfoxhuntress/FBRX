@@ -68,6 +68,14 @@ export function tierFor(edition: Edition, claim?: Tier | null): Tier {
   return claim ?? (edition === 'community' ? 'basic' : 'ultra');
 }
 
+/**
+ * The license edition (its features) a key for an edition carries: Community up to Standard, Pro for Ultra, Enterprise
+ * for Black Hole (tierFor the other way round).
+ */
+export function licenseEditionFor(tier: Tier): Edition {
+  return tier === 'blackhole' ? 'enterprise' : tier === 'ultra' ? 'pro' : 'community';
+}
+
 /** The FBRX Command tenant a license belongs to: the device joins it on its own when the key is activated. */
 export const LicenseCommandSchema = z.object({
   /** The tenant's FBRX Command address (https://…). */
@@ -115,9 +123,9 @@ export interface LicenseStatus {
   /** The edition the person chose in Settings → Edition (Essentials on a new computer). */
   chosen?: Tier;
   /**
-   * The most this computer may run, and why: on its own, Essentials (`standalone`), Standard for a while after an update
-   * from before 2.0 (`grace`) or what was bought (`license`, up to Ultra); in an organization, what its license allows
-   * (`license`) held lower by FBRX Command (`organization`).
+   * The most this computer may run, and why: on its own, Essentials (`standalone`), Standard for a while after an
+   * update from before 2.0 (`grace`) or what was bought (`license`, up to Ultra); in an organization, what its license
+   * allows (`license`) held lower by FBRX Command (`organization`).
    */
   ceiling?: Tier;
   ceilingReason?: CeilingReason;
@@ -130,7 +138,7 @@ export interface LicenseStatus {
   expiresAt: string | null;
   features: string[];
   message: string | null;
-  /** Where the license came from: typed in (local), the organization's FBRX Command (managed), the person's FBRX account. */
+  /** Where the license came from: typed in (local), the organization's FBRX Command (managed) or the FBRX account. */
   source: 'none' | 'local' | 'managed' | 'account' | 'development';
   /** The FBRX Command address this license joins, if it names one. */
   commandUrl: string | null;

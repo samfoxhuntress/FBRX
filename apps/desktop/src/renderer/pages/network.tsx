@@ -848,19 +848,19 @@ export function NetworkPage({ advanced, everything, easterEggs }: { advanced: bo
   const [tab, setTab] = useState<Tab>(() => (NET_TABS.includes(routeArg() as Tab) ? (routeArg() as Tab) : 'overview'));
   // Endpoint Essentials and Standard keep the everyday tabs; Ultra adds the IT ones, Black Hole the network
   // environments (network controllers).
-  const all: Array<{ id: Tab; label: ReactNode; ultra?: boolean; blackhole?: boolean }> = [
+  const all: Array<{ id: Tab; label: ReactNode; need?: 'ultra' | 'blackhole' }> = [
     { id: 'overview', label: 'Overview' },
-    { id: 'environments', label: advancedLabel('Environments', true), ultra: true, blackhole: true },
-    { id: 'trace', label: 'Ping & trace', ultra: true },
-    { id: 'devices', label: 'Devices', ultra: true },
+    { id: 'environments', label: advancedLabel('Environments', true), need: 'blackhole' },
+    { id: 'trace', label: 'Ping & trace', need: 'ultra' },
+    { id: 'devices', label: 'Devices', need: 'ultra' },
     { id: 'speed', label: 'Speed' },
     { id: 'wifi', label: 'Wi-Fi' },
     { id: 'bluetooth', label: 'Bluetooth' },
     { id: 'printers', label: 'Printers' },
-    { id: 'tools', label: 'Tools', ultra: true },
-    ...(IS_WINDOWS ? [{ id: 'adapters' as const, label: advancedLabel('Adapters'), ultra: true }] : []),
+    { id: 'tools', label: 'Tools', need: 'ultra' },
+    ...(IS_WINDOWS ? [{ id: 'adapters' as const, label: advancedLabel('Adapters'), need: 'ultra' as const }] : []),
   ];
-  const tabs = all.filter((t) => (advanced || !t.ultra) && (everything || !t.blackhole)).map(({ ultra: _u, blackhole: _b, ...t }) => t);
+  const tabs = all.filter((t) => !t.need || (t.need === 'ultra' ? advanced : everything)).map(({ need: _n, ...t }) => t);
   const shown = tabs.some((t) => t.id === tab) ? tab : 'overview';
   return (
     <Page title="Network Center" description={advanced ? 'See how this PC connects, what else is on your network, and what is slowing things down.' : 'See how this computer connects and what is slowing things down.'}>

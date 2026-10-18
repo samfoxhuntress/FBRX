@@ -1,4 +1,4 @@
-import { ALL_FEATURES, EDITION_PLANS, FEATURES, FREE_GRACE_DAYS, formatPrice, isLearner, maxTier, minTier, narrowTier, parseSemver, parseTier, TIER_NAMES, TIER_SHORT, tierRank, type CeilingReason, type DeviceEdition, type Feature, type LicenseStatus, type Tier } from '@fbrx/shared';
+import { ALL_FEATURES, EDITION_PLANS, FEATURES, FREE_GRACE_DAYS, LEARNER_TIER, formatPrice, isLearner, maxTier, minTier, narrowTier, parseSemver, parseTier, TIER_NAMES, TIER_SHORT, tierRank, type CeilingReason, type DeviceEdition, type Feature, type LicenseStatus, type Tier } from '@fbrx/shared';
 import { licenseStatusFrom, verifyLicense } from '@fbrx/shared/node';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
@@ -26,7 +26,7 @@ export class LicenseService {
     const managed = this.meta.get<string>('license.managed');
     const local = this.meta.get<string>('license.local');
     const account = this.meta.get<string>('license.account');
-    // The organization's license wins; otherwise the fuller of a key typed in and the one the person's FBRX account gives.
+    // The organization's license wins; otherwise the fuller of a key typed in and the FBRX account's.
     let status = managed ? licenseStatusFrom(managed, this.publicKeys, 'managed', major) : licenseStatusFrom(local, this.publicKeys, 'local', major);
     if (!managed && account) {
       const fromAccount = licenseStatusFrom(account, this.publicKeys, 'account', major);
@@ -53,7 +53,7 @@ export class LicenseService {
     //   account) goes up to Ultra. A license that belongs to an organization (it names its FBRX Command) counts only
     //   there. Black Hole comes only through an organization.
     // - A computer set up before 2.0 keeps Standard, free, for a while after it updates (see beginGrace).
-    // Student and child computers always run the learner edition on Standard.
+    // Student and child computers always run the learner edition, on Standard (LEARNER_TIER).
     const ed = this.meta.get<DeviceEdition>('fleet.edition');
     const enrolled = !!this.meta.get<string>('fleet.deviceId');
     let ceiling: Tier = status.tier;
@@ -76,7 +76,7 @@ export class LicenseService {
       ceiling = narrowTier(ceiling, ed.tier);
       reason = 'organization';
     }
-    if (ed && isLearner(ed.audience)) return (this.cached = { ...status, tier: 'basic', chosen: 'basic', ceiling: 'basic', ceilingReason: 'learner', graceUntil: null });
+    if (ed && isLearner(ed.audience)) return (this.cached = { ...status, tier: LEARNER_TIER, chosen: LEARNER_TIER, ceiling: LEARNER_TIER, ceilingReason: 'learner', graceUntil: null });
     // What the person chose (Essentials on a new computer; see Kernel's first start), never above the ceiling.
     const chosen = this.meta.get<Tier>('edition.chosen') ?? (this.devMode ? (tryTier ?? 'blackhole') : 'essentials');
     this.cached = { ...status, tier: minTier(chosen, ceiling), chosen, ceiling, ceilingReason: reason, graceUntil };

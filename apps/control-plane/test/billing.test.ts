@@ -304,6 +304,10 @@ describe('FBRX accounts and what they buy', () => {
     expect(items.sort()).toEqual(['fbrx_blackhole_tenant_monthly=1', 'fbrx_command_tenant_monthly=1', 'fbrx_ultra_tenant_monthly=1']);
     await ok('PATCH', `/v1/admin/devices/${devices[2]!.deviceId}`, { tier: 'ultra' }, admin);
     expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).changed).toEqual(['fbrx_ultra_tenant_monthly=2']);
+    // A computer still marked as a student's (from when this was a school) runs, and counts as, its own edition.
+    cp.ctx.db.run("UPDATE devices SET audience = 'student' WHERE id = ?", devices[0]!.deviceId);
+    expect((await config(0)).edition).toMatchObject({ audience: 'staff', tier: 'ultra' });
+    expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).plan.computers).toMatchObject({ basic: 0, ultra: 2 });
 
     // The plan ends: the license goes, and the computers run Essentials.
     await stripeEvent({ id: 'evt_t2', type: 'customer.subscription.deleted', data: { object: { ...stripe.subscriptions.get('sub_t'), status: 'canceled' } } });

@@ -14,7 +14,7 @@ import type { ExtEvents, ExtMethods } from './ext';
 import type { Settings } from './settings';
 import type { UpdateChannel } from './constants';
 import type { ReleaseCheck } from './release';
-import type { EditionStatus } from './editions';
+import type { EditionStatus, Vertical } from './editions';
 
 export type DeepPartial<T> = T extends (infer U)[] ? U[] : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
 
@@ -209,8 +209,8 @@ export interface TokenUsage {
 export type AgentPhase = 'model' | 'thinking' | 'writing' | 'tool' | 'approval' | 'reading' | 'mesh';
 
 /**
- * Events of a run carry its sequence number (seq, from 1), so what someone saw of a run can be put together exactly from
- * its RunActivity and the events after it.
+ * Events of a run carry its sequence number (seq, from 1), so what someone saw of a run can be put together exactly
+ * from its RunActivity and the events after it.
  */
 export type AgentEvent = { seq?: number } & (
   | { type: 'run.started'; runId: string; conversationId: string; providerId: string; model: string }
@@ -728,7 +728,7 @@ export interface CoreMethods extends ExtMethods {
   /** Joins this computer to an organization the account belongs to, at the edition it gives the account. */
   'account.join': (p: { tenantId: string }) => AccountStatus;
   /** Starts an FBRX Command for the person's organization (in the cloud); answers with its console's address. */
-  'account.startOrganization': (p: { name: string; kind: 'business' | 'education' | 'home' }) => { consoleUrl: string; tenantId: string };
+  'account.startOrganization': (p: { name: string; kind: Vertical }) => { consoleUrl: string; tenantId: string };
 
   'updates.status': () => UpdateStatus;
   'updates.check': () => UpdateStatus;

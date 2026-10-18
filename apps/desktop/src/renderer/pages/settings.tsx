@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { DeepPartial, EffectivePolicy, Settings, Texture } from '@fbrx/shared';
+import type { DeepPartial, EditionStatus, EffectivePolicy, Settings, Texture } from '@fbrx/shared';
 import {
   AUDIENCE_NAMES,
   EDITION_PLANS,
@@ -188,6 +188,22 @@ function priceLine(t: Tier): ReactNode {
   return <>{formatPrice(p.monthly)} <small>a month, or {formatPrice(p.tenantMonthly)} through FBRX Command</small></>;
 }
 
+/** Why this computer may run what it may, in a sentence (Settings → Edition). */
+function ceilingLine(ed: EditionStatus): string {
+  switch (ed.ceilingReason) {
+    case 'development':
+      return 'Development build: every edition can be turned on.';
+    case 'grace':
+      return `${graceLine(ed)} Standard is ${formatPrice(EDITION_PLANS.basic.monthly!)} a month after that; Essentials stays free.`;
+    case 'standalone':
+      return 'On its own, this computer runs Essentials for free. Standard and Ultra are bought on your FBRX account or with a license key (Settings → License), or come through your organization’s FBRX Command. Black Hole comes only through FBRX Command.';
+    case 'organization':
+      return `Your organization (FBRX Command) lets this computer go up to ${TIER_SHORT[ed.ceiling]}.`;
+    default:
+      return ed.enrolled ? `Your organization's license allows up to ${TIER_SHORT[ed.ceiling]}.` : `Your license allows up to ${TIER_SHORT[ed.ceiling]}. Black Hole comes only through an organization's FBRX Command.`;
+  }
+}
+
 /**
  * Settings → Edition: Essentials (free, where a new computer starts), Standard and Ultra (bought, or through an
  * organization's FBRX Command) and Black Hole (only through FBRX Command), with why a choice is locked and the
@@ -198,18 +214,6 @@ function EditionSettings() {
   const account = useAccount();
   const { choose, busy } = useChooseEdition();
   if (!ed) return null;
-  const why =
-    ed.ceilingReason === 'development'
-      ? 'Development build: every edition can be turned on.'
-      : ed.ceilingReason === 'grace'
-        ? `${graceLine(ed)} Standard is ${formatPrice(EDITION_PLANS.basic.monthly ?? 0)} a month after that; Essentials stays free.`
-        : ed.ceilingReason === 'standalone'
-          ? 'On its own, this computer runs Essentials for free. Standard and Ultra are bought on your FBRX account or with a license key (Settings → License), or come through your organization’s FBRX Command. Black Hole comes only through FBRX Command.'
-          : ed.ceilingReason === 'organization'
-            ? `Your organization (FBRX Command) lets this computer go up to ${TIER_SHORT[ed.ceiling]}.`
-            : ed.enrolled
-              ? `Your organization's license allows up to ${TIER_SHORT[ed.ceiling]}.`
-              : `Your license allows up to ${TIER_SHORT[ed.ceiling]}. Black Hole comes only through an organization's FBRX Command.`;
   return (
     <>
       <Card title="Edition" subtitle="How much of FBRX this computer shows. Switch any time: nothing you saved goes away.">
@@ -248,7 +252,7 @@ function EditionSettings() {
           })}
         </div>
         <p className="fx-muted" style={{ margin: '12px 0 0' }}>
-          {why}
+          {ceilingLine(ed)}
           {ed.chosen !== ed.tier && tierRank(ed.chosen) > tierRank(ed.tier) && <> You chose {TIER_SHORT[ed.chosen]}; it runs {TIER_SHORT[ed.tier]} until that is allowed.</>}
         </p>
         {!ed.enrolled && ed.ceilingReason !== 'development' && (
@@ -303,6 +307,7 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
   const [profile, setProfile] = useState<{ name: string; callMe: string } | null>(null);
   const toast = useToast();
   const tier = useTier();
+  const ultra = atLeast(tier, 'ultra');
   const learner = useLearner();
   const enrolled = useCore('fleet.status', undefined, ['fleet.changed']).data?.state !== 'unenrolled';
   if (!s) return null;
@@ -337,25 +342,25 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
           </Field>
           <Toggle checked={s.general.launchAtLogin} disabled={L('general.launchAtLogin')} onChange={(v) => void patch({ general: { launchAtLogin: v } })} label="Start FBRX when I sign in" />
           <Toggle checked={s.general.minimizeToTray} disabled={L('general.minimizeToTray')} onChange={(v) => void patch({ general: { minimizeToTray: v } })} label="Keep running in the tray when the window is closed" />
-          {(atLeast(tier, 'ultra') || enrolled) && <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organization's control plane" />}
+          {(ultra || enrolled) && <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organization's control plane" />}
         </div>
       </Card>
       {bridge.popOut && !learner && (
         <Card title="Windows" subtitle="Open these in a window of their own, to keep them beside FBRX or any other app. Right-click a page in the sidebar to open any page in a new window.">
           <div className="fx-form">
-            {atLeast(tier, 'ultra') && <Toggle checked={s.windows.terminal} disabled={L('windows.terminal')} onChange={(v) => void patch({ windows: { terminal: v } })} label="The Terminal opens in its own window" />}
+            {ultra && <Toggle checked={s.windows.terminal} disabled={L('windows.terminal')} onChange={(v) => void patch({ windows: { terminal: v } })} label="The Terminal opens in its own window" />}
             <Toggle checked={s.windows.agent} disabled={L('windows.agent')} onChange={(v) => void patch({ windows: { agent: v } })} label={`The chat with ${s.ai.agentName} opens in its own window`} />
           </div>
         </Card>
       )}
       {!learner && <Card title={`${s.ai.agentName}'s behavior`}>
         <div className="fx-form">
-          {atLeast(tier, 'ultra') && (
+          {ultra && (
             <Field label={<>Creativity (temperature): {s.ai.temperature} <Locked show={L('ai.temperature')} /></>} help="Lower is more precise. Ignored by models that manage this themselves.">
               <input type="range" min={0} max={1} step={0.05} disabled={L('ai.temperature')} value={s.ai.temperature} onChange={(e) => void patch({ ai: { temperature: Number(e.target.value) } })} />
             </Field>
           )}
-          <Field label={<>Agent instructions <Locked show={L('ai.systemPrompt')} /></>} help={atLeast(tier, 'ultra') ? 'Standing instructions included in every conversation' : 'Included in every conversation. Add anything it should always know, such as "I teach 4th grade; keep answers short."'}>
+          <Field label={<>Agent instructions <Locked show={L('ai.systemPrompt')} /></>} help={ultra ? 'Standing instructions included in every conversation' : 'Included in every conversation. Add anything it should always know, such as "I teach 4th grade; keep answers short."'}>
             <TextArea rows={8} disabled={L('ai.systemPrompt')} defaultValue={s.ai.systemPrompt} onBlur={(e) => e.target.value !== s.ai.systemPrompt && void patch({ ai: { systemPrompt: e.target.value } })} />
           </Field>
           <div>
@@ -722,7 +727,7 @@ function AgentSettings() {
   const { s, locked, patch } = useSettings();
   const [name, setName] = useState<string | null>(null);
   const ultra = useAtLeast('ultra');
-  // Unloading the local model when idle comes with Standard; how much the agent does on a task is in every edition (Thinking).
+  // Unloading the local model when idle comes with Standard (Thinking, in every edition, is a card of its own).
   const standard = useAtLeast('basic');
   if (!s) return null;
   const L = (p: string) => isLocked(locked, p);
@@ -840,7 +845,7 @@ const ctxLabel = (n: number) => `${n / 1024}K tokens${n === 8192 ? ' (default)' 
 // Rough extra memory for the conversation itself (the KV cache of a typical 7–8B model).
 const ctxMemory = (n: number) => (n <= 8192 ? 'about 1 GB extra memory' : n <= 16384 ? 'about 2 GB' : n <= 32768 ? 'about 4 GB' : n <= 65536 ? 'about 8 GB' : 'about 16 GB');
 
-/** Each part of the work budget on its own (Ultra and Black Hole): steps, answer length and how much a local model keeps in mind. */
+/** Each part of the work budget on its own (Ultra and Black Hole): steps, answer length, what a model keeps in mind. */
 function WorkBudget({ policy }: { policy: EffectivePolicy }) {
   const { s, locked, patch } = useSettings();
   const providers = useCore('ai.providers', undefined, ['settings.changed']);
