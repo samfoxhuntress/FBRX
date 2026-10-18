@@ -10,6 +10,8 @@ import type { ProductInfo } from './plans';
 /** Where a purchase came from. `grant`: given by FBRX (support, a promotion). */
 export const PURCHASE_SOURCES = ['stripe', 'apple', 'google', 'grant'] as const;
 export type PurchaseSource = (typeof PURCHASE_SOURCES)[number];
+/** Where a purchase was made, as the account pages say it ("Ultra · in the App Store"). */
+export const PURCHASE_SOURCE_NAMES: Record<PurchaseSource, string> = { stripe: 'on the website or a computer', apple: 'in the App Store', google: 'on Google Play', grant: 'from FBRX' };
 
 /**
  * A purchase's state. `active` and `grace` (a payment failed; the store is still trying) count; so does `canceled`

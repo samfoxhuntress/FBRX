@@ -451,7 +451,7 @@
   // Sign in to the FBRX account and buy Standard or Ultra through the App Store or Google Play. The account checks each
   // purchase with the store; every computer signed in to the same account turns the edition on by itself.
   var ACCOUNT_KEY = 'fbrx.mobile.account';
-  var NAMES = { essentials: 'Essentials', basic: 'Standard', ultra: 'Ultra', blackhole: 'Black Hole' };
+  var NAMES = (NATIVE && NATIVE.editions) || {};
   var account = { token: null, view: null, prices: {}, making: false, busy: false, error: null, note: null };
   try {
     account.token = localStorage.getItem(ACCOUNT_KEY);
@@ -486,15 +486,12 @@
       });
     });
   }
-  function money(cents) {
-    return '$' + (cents / 100).toFixed(2);
-  }
   function editionProduct(id) {
     return NATIVE.products.filter(function (p) { return p.productId === id; })[0] || null;
   }
   /** The store's own price for this phone's country, once it has said; the price list's until then. */
   function priceOf(p) {
-    return account.prices[p.productId] || money(p.monthly);
+    return account.prices[p.productId] || p.price;
   }
   function loadPrices() {
     NATIVE.purchases.products({ ids: NATIVE.products.map(function (p) { return p.productId; }) }).then(function (r) {
@@ -585,12 +582,11 @@
         : '<div class="card muted">Loading…</div><span data-load="account"></span>');
     }
     var bought = a.entitlements.filter(function (e) { return e.valid; });
-    var where = { stripe: 'bought online', apple: 'App Store', google: 'Google Play', grant: 'from FBRX' };
     var offers = NATIVE.products.filter(function (p) {
       return (p.tier === 'basic' && a.tier === 'essentials') || (p.tier === 'ultra' && (a.tier === 'essentials' || a.tier === 'basic'));
     });
     out += '<div class="card"><div class="row"><div class="spacer"><b>' + esc(a.name) + '</b><div class="muted">' + esc(a.email) + '</div></div><span class="ed">' + esc(NAMES[a.tier] || a.tier) + '</span></div>' +
-      (bought.length ? '<div class="muted acct-list">' + bought.map(function (e) { return esc(NAMES[e.tier] || e.productId) + ' · ' + esc(where[e.source] || e.source) + (e.periodEnd ? ', renews ' + esc(new Date(e.periodEnd).toLocaleDateString()) : ''); }).join('<br>') + '</div>' : '<div class="muted acct-list">Essentials is free. Standard and Ultra add more on your computers.</div>') +
+      (bought.length ? '<div class="muted acct-list">' + bought.map(function (e) { return esc(NAMES[e.tier] || e.productId) + ' · ' + esc(NATIVE.sources[e.source] || e.source) + (e.periodEnd ? ', renews ' + esc(new Date(e.periodEnd).toLocaleDateString()) : ''); }).join('<br>') + '</div>' : '<div class="muted acct-list">Essentials is free. Standard and Ultra add more on your computers.</div>') +
       '</div>';
     if (offers.length) {
       out += '<h2>Editions</h2>' + offers.map(function (p) {

@@ -2,8 +2,11 @@
 // billing, start an FBRX Command, delete the account. Talks to the FBRX Command accounts live on (config.js).
 (function () {
   'use strict';
-  var API = window.FBRX_ACCOUNT_SERVER || '';
-  var PLANS = window.FBRX_PLANS || {};
+  // config.js: the account server, and the names and prices from the price list (build.mjs).
+  var SITE = window.FBRX_SITE || {};
+  var API = SITE.accountServer || '';
+  var PLANS = SITE.plans || {};
+  var NAMES = SITE.editions || {};
   var KEY = 'fbrx.account.token';
   var root = document.getElementById('account');
   var params = new URLSearchParams(location.search);
@@ -24,9 +27,6 @@
     return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
       return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
     });
-  }
-  function money(cents) {
-    return '$' + (cents / 100).toFixed(2);
   }
   function call(method, path, body) {
     var t = token();
@@ -89,26 +89,25 @@
 
   function buyButtons(a) {
     var out = '';
-    if (a.tier === 'essentials') out += '<button class="btn primary" data-buy="' + esc(PLANS.basic.productId) + '">Get Standard, ' + money(PLANS.basic.monthly) + ' a month</button>';
-    if (a.tier !== 'ultra') out += '<button class="btn primary" data-buy="' + esc(PLANS.ultra.productId) + '">Get Ultra, ' + money(PLANS.ultra.monthly) + ' a month</button>';
+    if (a.tier === 'essentials') out += '<button class="btn primary" data-buy="' + esc(PLANS.basic.productId) + '">Get ' + esc(NAMES.basic) + ', ' + esc(PLANS.basic.price) + ' a month</button>';
+    if (a.tier !== 'ultra') out += '<button class="btn primary" data-buy="' + esc(PLANS.ultra.productId) + '">Get ' + esc(NAMES.ultra) + ', ' + esc(PLANS.ultra.price) + ' a month</button>';
     return out;
   }
 
   function renderAccount(a) {
-    var names = { essentials: 'Essentials', basic: 'Standard', ultra: 'Ultra', blackhole: 'Black Hole' };
     var bought = a.entitlements.filter(function (e) { return e.valid; });
     root.innerHTML =
       (notice ? '<p class="note">' + esc(notice) + '</p>' : '') +
       '<div class="card"><div class="row"><div style="flex:1"><h2 style="margin:0">' + esc(a.name) + '</h2><div class="muted">' + esc(a.email) + '</div></div><button class="btn small" id="out">Sign out</button></div>' +
-      '<p>Your edition: <span class="badge">' + esc(names[a.tier] || a.tier) + '</span>' + (a.tier === 'essentials' ? ' <span class="muted">(free; nothing bought yet)</span>' : '') + '</p>' +
-      (bought.length ? '<p class="muted small">' + bought.map(function (e) { return esc(names[e.tier] || e.productId) + ' · ' + esc({ stripe: 'on the website or a computer', apple: 'in the App Store', google: 'on Google Play', grant: 'from FBRX' }[e.source] || e.source) + (e.periodEnd ? ', renews ' + esc(new Date(e.periodEnd).toLocaleDateString()) : ''); }).join('<br>') + '</p>' : '') +
+      '<p>Your edition: <span class="badge">' + esc(NAMES[a.tier] || a.tier) + '</span>' + (a.tier === 'essentials' ? ' <span class="muted">(free; nothing bought yet)</span>' : '') + '</p>' +
+      (bought.length ? '<p class="muted small">' + bought.map(function (e) { return esc(NAMES[e.tier] || e.productId) + ' · ' + esc(SITE.sources[e.source] || e.source) + (e.periodEnd ? ', renews ' + esc(new Date(e.periodEnd).toLocaleDateString()) : ''); }).join('<br>') + '</p>' : '') +
       '<div class="row">' + buyButtons(a) + (a.billingPortal ? '<button class="btn" id="portal">Manage billing</button>' : '') + '</div>' +
       '<p class="error" id="err"></p></div>' +
       '<div class="card"><h3>Your organizations</h3>' +
       (a.memberships.length
-        ? '<p>' + a.memberships.map(function (m) { return esc(m.tenantName) + ' <span class="badge">' + esc(names[m.tier] || m.tier) + '</span>'; }).join('<br>') + '</p><p class="muted small">Sign in on a computer (Settings → FBRX account) and join it to one of these: it runs the edition your organization gives you.</p>'
+        ? '<p>' + a.memberships.map(function (m) { return esc(m.tenantName) + ' <span class="badge">' + esc(NAMES[m.tier] || m.tier) + '</span>'; }).join('<br>') + '</p><p class="muted small">Sign in on a computer (Settings → FBRX account) and join it to one of these: it runs the edition your organization gives you.</p>'
         : '<p class="muted">Run FBRX for your company, school or family: FBRX Command looks after its computers, people and billing.</p>') +
-      '<form id="org" class="row"' + (params.get('start') === 'organization' ? '' : ' hidden') + '><input name="name" placeholder="Organization name" required maxlength="120"><select name="kind" aria-label="Kind"><option value="business">Work</option><option value="education">School</option><option value="home">Home</option></select><button class="btn primary" type="submit">Start my FBRX Command</button></form>' +
+      '<form id="org" class="row"' + (params.get('start') === 'organization' ? '' : ' hidden') + '><input name="name" placeholder="Organization name" required maxlength="120"><select name="kind" aria-label="Kind">' + Object.keys(SITE.kinds).map(function (k) { return '<option value="' + esc(k) + '">' + esc(SITE.kinds[k]) + '</option>'; }).join('') + '</select><button class="btn primary" type="submit">Start my FBRX Command</button></form>' +
       (params.get('start') === 'organization' ? '' : '<button class="btn" id="startorg">Start an FBRX Command</button>') +
       '</div>' +
       '<div class="card"><h3>Delete your account</h3><p class="muted small">Subscriptions bought here end with it. One bought in an app store is ended in that store’s subscription settings.</p><button class="btn danger" id="del">Delete my account</button></div>';

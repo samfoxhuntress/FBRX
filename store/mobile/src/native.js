@@ -10,6 +10,9 @@
     version: cfg.version,
     accountServer: cfg.accountServer || '',
     products: cfg.products || [],
+    /** The editions' names and where a purchase was made, from the shared lists (scripts/build.mjs). */
+    editions: cfg.editions || {},
+    sources: cfg.sources || {},
     terms: cfg.terms || '',
     privacy: cfg.privacy || '',
     purchases: cap.registerPlugin('FbrxPurchases'),

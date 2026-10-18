@@ -10,12 +10,13 @@
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COMMAND_PLAN, EDITION_PLANS, ESSENTIALS_TIPS, FREE_GRACE_DAYS, SERVER_OFFER, TENANT_DISCOUNT, TIER_SHORT, editionPoints, formatPrice } from '@fbrx/shared';
+import { COMMAND_PLAN, EDITION_PLANS, ESSENTIALS_TIPS, FREE_GRACE_DAYS, PURCHASE_SOURCE_NAMES, RELEASE_REPO, SERVER_OFFER, TENANT_DISCOUNT, TIERS, TIER_SHORT, VERTICAL_NAMES, editionPoints, formatPrice } from '@fbrx/shared';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, 'dist');
 const api = (process.env.FBRX_ACCOUNT_SERVER ?? '').replace(/\/+$/, '');
-const DOWNLOAD = 'https://github.com/samfoxhuntress/FBRX/releases/latest/download/FBRX-OS.zip';
+const REPO = `https://github.com/${RELEASE_REPO}`;
+const DOWNLOAD = `${REPO}/releases/latest/download/FBRX-OS.zip`;
 const off = `${Math.round(TENANT_DISCOUNT * 100)}%`;
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
@@ -64,7 +65,7 @@ ${body}
 <footer>
   <div class="foot-brand">${logo}<span>FBRX</span></div>
   <p>FBRX 2.0 is in beta: new versions arrive often, and the app updates itself.</p>
-  <p><a href="pricing.html">Pricing</a> · <a href="account.html">Account</a> · <a href="https://github.com/samfoxhuntress/FBRX">Source and docs</a></p>
+  <p><a href="pricing.html">Pricing</a> · <a href="account.html">Account</a> · <a href="${REPO}">Source and docs</a></p>
 </footer>
 ${scripts.map((s) => `<script src="${s}"></script>`).join('\n')}
 </body>
@@ -88,6 +89,13 @@ const editionCard = (t, cta) => {
   <ul>${editionPoints(t).map((h) => `<li>${esc(h)}</li>`).join('')}</ul>
   ${cta}
 </article>`;
+};
+
+/** What a computer of an edition costs a month in FBRX Command. */
+const tenantRate = (t) => {
+  const p = EDITION_PLANS[t];
+  if (!p.tenantMonthly) return 'Free';
+  return `${formatPrice(p.tenantMonthly)} <span class="muted">(${p.monthly == null ? 'an add-on, for the people who run it' : `${off} off`})</span>`;
 };
 
 const serverSection = `<section class="band server" id="server">
@@ -137,7 +145,7 @@ page({
 <section class="wrap">
   <h2 class="center">Four editions</h2>
   <div class="plans compact">
-    ${(['essentials', 'basic', 'ultra', 'blackhole']).map((t) => editionCard(t, '')).join('\n')}
+    ${TIERS.map((t) => editionCard(t, '')).join('\n')}
   </div>
   <p class="center"><a class="btn" href="pricing.html">Compare the editions</a></p>
 </section>
@@ -185,19 +193,13 @@ page({
       <table class="rates">
         <thead><tr><th>Each computer</th><th>A month</th></tr></thead>
         <tbody>
-          <tr><td>Essentials</td><td>Free</td></tr>
-          <tr><td>Standard</td><td>${formatPrice(EDITION_PLANS.basic.tenantMonthly)} <span class="muted">(${off} off)</span></td></tr>
-          <tr><td>Ultra</td><td>${formatPrice(EDITION_PLANS.ultra.tenantMonthly)} <span class="muted">(${off} off)</span></td></tr>
-          <tr><td>Black Hole</td><td>${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} <span class="muted">(an add-on, for the people who run it)</span></td></tr>
+          ${TIERS.map((t) => `<tr><td>${TIER_SHORT[t]}</td><td>${tenantRate(t)}</td></tr>`).join('\n          ')}
         </tbody>
       </table>
     </div>
     <form class="card calc" id="calc" data-prices='${JSON.stringify(prices)}' aria-label="What a month comes to">
       <h3>What a month comes to</h3>
-      <label>Standard computers <input type="number" min="0" value="10" name="basic"></label>
-      <label>Ultra computers <input type="number" min="0" value="2" name="ultra"></label>
-      <label>Black Hole computers <input type="number" min="0" value="1" name="blackhole"></label>
-      <label>Essentials computers <input type="number" min="0" value="20" name="essentials"></label>
+      ${[['basic', 10], ['ultra', 2], ['blackhole', 1], ['essentials', 20]].map(([t, n]) => `<label>${TIER_SHORT[t]} computers <input type="number" min="0" value="${n}" name="${t}"></label>`).join('\n      ')}
       <div class="total"><span>A month</span><b id="total">—</b></div>
       <p class="muted small">The FBRX Command plan included. Changes in the month are prorated.</p>
     </form>
@@ -228,7 +230,15 @@ page({
 </section>`,
 });
 
-writeFileSync(join(out, 'config.js'), `window.FBRX_ACCOUNT_SERVER = ${JSON.stringify(api)};\nwindow.FBRX_PLANS = ${JSON.stringify({ basic: { productId: EDITION_PLANS.basic.productId, monthly: EDITION_PLANS.basic.monthly }, ultra: { productId: EDITION_PLANS.ultra.productId, monthly: EDITION_PLANS.ultra.monthly } })};\n`);
+// What account.js needs from the price list and the shared names.
+const site = {
+  accountServer: api,
+  editions: TIER_SHORT,
+  kinds: VERTICAL_NAMES,
+  sources: PURCHASE_SOURCE_NAMES,
+  plans: Object.fromEntries(['basic', 'ultra'].map((t) => [t, { productId: EDITION_PLANS[t].productId, price: formatPrice(EDITION_PLANS[t].monthly) }])),
+};
+writeFileSync(join(out, 'config.js'), `window.FBRX_SITE = ${JSON.stringify(site)};\n`);
 for (const f of ['styles.css', 'account.js', 'pricing.js']) copyFileSync(join(here, 'src', f), join(out, f));
 writeFileSync(join(out, 'favicon.svg'), readFileSync(join(here, '..', '..', 'docs', 'assets', 'fbrx-logo-light.svg'), 'utf8'));
 console.log(`Built the FBRX website in ${out}${api ? ` (accounts on ${api})` : ' (accounts open soon: no FBRX_ACCOUNT_SERVER)'}`);

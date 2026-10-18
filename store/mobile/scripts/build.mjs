@@ -4,7 +4,7 @@
 //
 //   FBRX_ACCOUNT_SERVER=https://command.example.com FBRX_TERMS_URL=… FBRX_PRIVACY_URL=… npm run sync
 //
-// Run with tsx (npm scripts do): the price list comes from packages/shared.
+// Run with tsx (npm scripts do): the price list and the names come from packages/shared.
 import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,7 +14,7 @@ const here = join(dirname(fileURLToPath(import.meta.url)), '..');
 const root = join(here, '..', '..');
 const www = join(here, 'www');
 const require = createRequire(import.meta.url);
-const { EDITION_PLANS, editionPoints } = await import(join(root, 'packages', 'shared', 'src', 'plans.ts'));
+const { EDITION_PLANS, PURCHASE_SOURCE_NAMES, TIER_SHORT, editionPoints, formatPrice } = await import(join(root, 'packages', 'shared', 'src', 'index.ts'));
 const version = JSON.parse(readFileSync(join(here, 'package.json'), 'utf8')).version;
 if (!/^\d+\.\d+\.\d+$/.test(version)) throw new Error(`The stores take versions like 2.0.0, not ${version} (store/mobile/package.json)`);
 
@@ -36,12 +36,12 @@ writeFileSync(join(www, 'index.html'), html.replace('<script src="app.js"></scri
 const accountServer = (process.env.FBRX_ACCOUNT_SERVER ?? '').replace(/\/+$/, '');
 const products = ['basic', 'ultra'].map((tier) => {
   const { productId, monthly, summary } = EDITION_PLANS[tier];
-  return { tier, productId, monthly, summary, points: editionPoints(tier) };
+  return { tier, productId, price: formatPrice(monthly), summary, points: editionPoints(tier) };
 });
 // The App Store wants the terms of use and the privacy policy one tap away from the subscriptions (docs/STORES.md).
 const terms = process.env.FBRX_TERMS_URL ?? '';
 const privacy = process.env.FBRX_PRIVACY_URL ?? '';
-writeFileSync(join(www, 'config.js'), `window.FBRX_STORE_CONFIG = ${JSON.stringify({ version, accountServer, products, terms, privacy })};\n`);
+writeFileSync(join(www, 'config.js'), `window.FBRX_STORE_CONFIG = ${JSON.stringify({ version, accountServer, products, editions: TIER_SHORT, sources: PURCHASE_SOURCE_NAMES, terms, privacy })};\n`);
 
 // ------------------------------------------------------------------------------------- native versions
 // The build number (the App Store's build, Google Play's version code) is major * 10000 + minor * 100 + patch, or
