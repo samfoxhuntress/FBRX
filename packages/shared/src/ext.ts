@@ -1113,8 +1113,10 @@ export interface ExtMethods {
   'helpdesk.assistJobs': (p: { ticketId: string }) => AssistJob[];
   /** What this computer is: its edition, organization kind and who uses it. */
   'edition.status': () => EditionStatus;
-  /** Settings → Edition: Essentials or Standard any time; Ultra when FBRX Command allows it (the person only). */
+  /** Settings → Edition: anything up to what this computer may run (the person only). */
   'edition.choose': (p: { tier: Tier }) => EditionStatus;
+  /** Starts this computer's free Standard trial and turns Standard on (once; the person only). */
+  'edition.startTrial': () => EditionStatus;
   /** The Essentials walkthrough was finished or skipped; false shows it again (the person only). */
   'edition.tourDone': (p: { done: boolean }) => EditionStatus;
   'presenter.status': () => PresenterStatus;
@@ -1304,6 +1306,7 @@ export interface ExtEvents {
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'edition.choose',
+  'edition.startTrial',
   'edition.tourDone',
   'server.copy',
   'server.saved',

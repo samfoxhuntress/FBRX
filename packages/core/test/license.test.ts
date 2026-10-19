@@ -25,10 +25,10 @@ describe('licensing', () => {
         { v: 1, lid: 'lic_1', tenantId: 't', customer: 'Acme', edition: 'enterprise', seats: 5, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null },
         keys.privateKeyPem,
       );
-      // A new computer opens in Essentials, free; on its own, Standard and Ultra are bought.
-      expect(kernel.license.status()).toMatchObject({ tier: 'essentials', chosen: 'essentials', ceiling: 'essentials', ceilingReason: 'standalone', graceUntil: null });
-      expect(kernel.edition()).toMatchObject({ productName: 'FBRX Endpoint Essentials', tourDone: false, graceUntil: null });
-      await expect(kernel.call('edition.choose', { tier: 'basic' }, USER)).rejects.toThrow(/FBRX Endpoint Standard is \$4\.99 a month/);
+      // A new computer opens in Essentials, free; on its own, Standard and Ultra are bought (Standard can be tried).
+      expect(kernel.license.status()).toMatchObject({ tier: 'essentials', chosen: 'essentials', ceiling: 'essentials', ceilingReason: 'standalone', trialUntil: null, trialAvailable: true });
+      expect(kernel.edition()).toMatchObject({ productName: 'FBRX Endpoint Essentials', tourDone: false, trialUntil: null, trialAvailable: true });
+      await expect(kernel.call('edition.choose', { tier: 'basic' }, USER)).rejects.toThrow(/FBRX Endpoint Standard is \$4\.99 a month .*, or try it free for 7 days/);
       const status = (await kernel.call('license.activate', { key }, USER)) as any;
       // A license (one bought for this computer) turns on its features and goes up to Ultra; Black Hole comes only
       // through an organization.
@@ -74,6 +74,44 @@ describe('licensing', () => {
     }
   });
 
+  it('lets a computer on its own try Standard free for 7 days, once', async () => {
+    const { kernel, cleanup } = await makeKernel({ devMode: false });
+    try {
+      // Only the person at the computer starts it.
+      await expect(kernel.call('edition.startTrial', undefined, { origin: 'api', actor: 'localapi:x' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      const ed = (await kernel.call('edition.startTrial', undefined, USER)) as any;
+      expect(ed).toMatchObject({ tier: 'basic', chosen: 'basic', ceiling: 'basic', ceilingReason: 'trial', trialAvailable: false, productName: 'FBRX Endpoint Standard' });
+      const left = Date.parse(ed.trialUntil) - Date.now();
+      expect(left).toBeGreaterThan(6.9 * 86_400_000);
+      expect(left).toBeLessThanOrEqual(7 * 86_400_000);
+      await expect(kernel.call('edition.startTrial', undefined, USER)).rejects.toThrow(/once/);
+      // Nothing to say until its last day; then once that it ends tomorrow, and once that it has ended.
+      expect(kernel.license.takeTrialNotice()).toBeNull();
+      const day = 86_400_000;
+      const until = Date.parse(ed.trialUntil);
+      expect(kernel.license.takeTrialNotice(until - day / 2)).toBe('ending');
+      expect(kernel.license.takeTrialNotice(until - day / 3)).toBeNull();
+      kernel.meta.set('edition.trial', { until: new Date(Date.now() - 1000).toISOString(), told: 'ending' });
+      kernel.license.refresh();
+      expect(kernel.license.takeTrialNotice()).toBe('ended');
+      expect(kernel.license.takeTrialNotice()).toBeNull();
+      // When it ends, the computer runs Essentials; what was chosen comes back once Standard is bought.
+      kernel.meta.set('edition.trial', { until: new Date(Date.now() - 1000).toISOString() });
+      expect(kernel.license.refresh()).toMatchObject({ tier: 'essentials', chosen: 'basic', ceilingReason: 'standalone', trialUntil: null, trialAvailable: false });
+    } finally {
+      await cleanup();
+    }
+    // A computer in an organization does not take it: its organization decides what it runs.
+    const inOrg = await makeKernel({ devMode: false });
+    try {
+      inOrg.kernel.meta.set('fleet.deviceId', 'dev_test');
+      expect(inOrg.kernel.license.refresh()).toMatchObject({ trialAvailable: false });
+      await expect(inOrg.kernel.call('edition.startTrial', undefined, USER)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    } finally {
+      await inOrg.cleanup();
+    }
+  });
+
   it('keeps the edition of a computer set up before Essentials existed', async () => {
     const dataDir = tempDir();
     const first = await makeKernel({ dataDir, devMode: false });
@@ -85,17 +123,18 @@ describe('licensing', () => {
     await first.cleanup();
     const again = await makeKernel({ dataDir, devMode: false, keychain: first.keychain });
     try {
-      // It keeps the most it ran on its own (Standard), free for 30 days, and is not walked through the app again.
+      // It keeps the most it ran on its own (Standard) through its 7-day trial, started by itself, and is not walked
+      // through the app again.
       const st = again.kernel.license.status();
-      expect(st).toMatchObject({ chosen: 'ultra', tier: 'basic', ceiling: 'basic', ceilingReason: 'grace' });
-      expect(Date.parse(st.graceUntil!) - Date.now()).toBeGreaterThan(29 * 86_400_000);
-      expect(again.kernel.edition()).toMatchObject({ tourDone: true, ceilingReason: 'grace', graceUntil: st.graceUntil });
+      expect(st).toMatchObject({ chosen: 'ultra', tier: 'basic', ceiling: 'basic', ceilingReason: 'trial', trialAvailable: false });
+      expect(Date.parse(st.trialUntil!) - Date.now()).toBeGreaterThan(6.9 * 86_400_000);
+      expect(again.kernel.edition()).toMatchObject({ tourDone: true, ceilingReason: 'trial', trialUntil: st.trialUntil });
       // Then Essentials, unless Standard is bought.
-      again.kernel.meta.set('edition.grace', { tier: 'basic', until: new Date(Date.now() - 1000).toISOString() });
-      expect(again.kernel.license.refresh()).toMatchObject({ tier: 'essentials', ceiling: 'essentials', ceilingReason: 'standalone', graceUntil: null });
-      // It was given once: starting again does not give it again.
-      again.kernel.license.beginGrace(true);
-      expect(again.kernel.license.refresh()).toMatchObject({ tier: 'essentials' });
+      again.kernel.meta.set('edition.trial', { until: new Date(Date.now() - 1000).toISOString() });
+      expect(again.kernel.license.refresh()).toMatchObject({ tier: 'essentials', ceiling: 'essentials', ceilingReason: 'standalone', trialUntil: null });
+      // It was had once: starting again does not give it again.
+      again.kernel.license.beginV2(true);
+      expect(again.kernel.license.refresh()).toMatchObject({ tier: 'essentials', trialAvailable: false });
     } finally {
       await again.cleanup();
       rmSync(dataDir, { recursive: true, force: true });

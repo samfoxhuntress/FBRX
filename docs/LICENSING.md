@@ -11,12 +11,12 @@ The desktop app is **FBRX Endpoint**, in four editions (see COMMAND_CENTER.md fo
 * **FBRX Endpoint Essentials** (free) — where every new computer starts: the AI on its own (the chat, the AI models
   and Settings, where it works Quick, Everyday or Thorough) and a walkthrough. It joins an organization's FBRX
   Command for free.
-* **FBRX Endpoint Standard** (`basic` in licenses and the API) — the everyday tools, and unloading the local model
-  when idle.
+* **FBRX Endpoint Standard** (`basic` in licenses and the API) — the everyday tools, the AI's work budget part by part
+  (steps, answer length, how much it keeps in mind) and unloading the local model when idle. Each computer on its own
+  may try it free for 7 days, once (`STANDARD_TRIAL_DAYS`).
 * **FBRX Endpoint Ultra** — expert tool sets (Terminal, FBRX/1, virtual lab, disks and partitions, Defender settings,
-  adapters, device consoles, developer tools, the Local API), the AI's work budget part by part (steps, answer length,
-  how much it keeps in mind), Mesh and AI coordination, connections, tools and plugins, governance, and the theme
-  studio with its gradients and textures.
+  adapters, device consoles, developer tools, the Local API), Mesh and AI coordination, connections, tools and
+  plugins, governance, and the theme studio with its gradients and textures.
 * **FBRX Endpoint Black Hole** (`blackhole`) — everything: Ultra plus the whole Library (The Lab and the FBRX command
   library), network environments in Network Center and the FBRX Server page. For the people who run
   an organization's FBRX Command and its FBRX Servers, and only through FBRX Command.
@@ -48,9 +48,13 @@ month; the product ids are the Stripe price lookup keys and the App Store / Goog
 
 A tenant's bill is the FBRX Command plan plus each computer at its edition's tenant price (`tenantMonthlyTotal`); in the cloud, FBRX Command counts the computers and keeps Stripe in step (ACCOUNTS.md).
 
-**Computers from before 2.0.** Standard was free on a computer on its own until 2.0. A computer set up before keeps
-it, free, for `FREE_GRACE_DAYS` (30) days after it first starts 2.0, then runs Essentials unless Standard or Ultra
-is bought.
+**The Standard trial.** A computer on its own with nothing bought may run Standard free for `STANDARD_TRIAL_DAYS` (7)
+days, once (`edition.startTrial`; Settings → Edition). Standard was free on a computer on its own until 2.0: a computer
+set up before starts its trial by itself the first time it starts 2.0. Then it runs Essentials unless Standard or
+Ultra is bought. Computers in an organization have no trial.
+
+**Student and child computers** exist only in an organization's FBRX Command (the audience comes from it), run the
+learner edition and are billed as Standard at the FBRX Command price ($3.99, 20% off).
 
 **School and Home licenses.** A license can also say what kind of tenant it is for: `vertical: "education"` (School)
 or `"home"` (Home); without it, it is a Work license. Issued from FBRX Command (*Kind of license*) or with

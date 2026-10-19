@@ -9,7 +9,7 @@ import { ConnectDialog, type ConnectTarget } from '../consoles';
 import { Speedometer, speedFraction } from '../speedometer';
 import { unlockTrophy } from '../fun';
 import { commandSearchUrl, matchDeviceProfile } from '@fbrx/shared';
-import { UltraHint } from '../edition';
+import { EditionHint } from '../edition';
 import { Environments } from './network-environments';
 
 type Tab = 'overview' | 'environments' | 'trace' | 'devices' | 'speed' | 'wifi' | 'bluetooth' | 'printers' | 'tools' | 'adapters';
@@ -865,8 +865,8 @@ export function NetworkPage({ advanced, everything, easterEggs }: { advanced: bo
   return (
     <Page title="Network Center" description={advanced ? 'See how this PC connects, what else is on your network, and what is slowing things down.' : 'See how this computer connects and what is slowing things down.'}>
       <Tabs tabs={tabs} active={shown} onChange={setTab} />
-      {!advanced && shown === 'overview' && <UltraHint>Network scans and device consoles come with Endpoint Ultra.</UltraHint>}
-      {advanced && !everything && shown === 'overview' && <UltraHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole, through your organization’s FBRX Command.</UltraHint>}
+      {!advanced && shown === 'overview' && <EditionHint>Network scans and device consoles come with Endpoint Ultra.</EditionHint>}
+      {advanced && !everything && shown === 'overview' && <EditionHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole, through your organization’s FBRX Command.</EditionHint>}
       {shown === 'overview' && <Overview />}
       {shown === 'environments' && <Environments />}
       {shown === 'trace' && <Trace />}

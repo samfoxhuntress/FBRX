@@ -1,8 +1,11 @@
-import { ALL_FEATURES, EDITION_PLANS, FEATURES, FREE_GRACE_DAYS, LEARNER_TIER, formatPrice, isLearner, maxTier, minTier, narrowTier, parseSemver, parseTier, TIER_NAMES, TIER_SHORT, tierRank, type CeilingReason, type DeviceEdition, type Feature, type LicenseStatus, type Tier } from '@fbrx/shared';
+import { ALL_FEATURES, EDITION_PLANS, FEATURES, LEARNER_TIER, STANDARD_TRIAL_DAYS, formatPrice, isLearner, maxTier, minTier, narrowTier, parseSemver, parseTier, TIER_NAMES, TIER_SHORT, tierRank, type CeilingReason, type DeviceEdition, type Feature, type LicenseStatus, type Tier } from '@fbrx/shared';
 import { licenseStatusFrom, verifyLicense } from '@fbrx/shared/node';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
 import type { EventBus } from '../events';
+
+/** Where this computer keeps its Standard trial: until when it runs (kept after it ends, so it is had once). */
+const TRIAL_KEY = 'edition.trial';
 
 /**
  * Offline license verification. Keys are Ed25519-signed by the vendor's control plane; the public key is
@@ -20,8 +23,8 @@ export class LicenseService {
   ) {}
 
   status(): LicenseStatus {
-    // A free spell of Standard (after an update from before 2.0) ends by itself: look again once it is over.
-    if (this.cached && !(this.cached.graceUntil && Date.parse(this.cached.graceUntil) <= Date.now())) return this.cached;
+    // The Standard trial ends by itself: look again once it is over.
+    if (this.cached && !(this.cached.trialUntil && Date.parse(this.cached.trialUntil) <= Date.now())) return this.cached;
     const major = parseSemver(this.appVersion)?.major ?? 1;
     const managed = this.meta.get<string>('license.managed');
     const local = this.meta.get<string>('license.local');
@@ -52,23 +55,23 @@ export class LicenseService {
     // - On its own: Essentials, unless something was bought: a license key (or a purchase on the person's FBRX
     //   account) goes up to Ultra. A license that belongs to an organization (it names its FBRX Command) counts only
     //   there. Black Hole comes only through an organization.
-    // - A computer set up before 2.0 keeps Standard, free, for a while after it updates (see beginGrace).
+    // - On its own, a computer may try Standard free for STANDARD_TRIAL_DAYS, once (startTrial).
     // Student and child computers always run the learner edition, on Standard (LEARNER_TIER).
     const ed = this.meta.get<DeviceEdition>('fleet.edition');
     const enrolled = !!this.meta.get<string>('fleet.deviceId');
     let ceiling: Tier = status.tier;
     let reason: CeilingReason = 'license';
-    let graceUntil: string | null = null;
+    let trialUntil: string | null = null;
+    const trial = this.meta.get<{ until: string }>(TRIAL_KEY);
     if (status.source === 'development') reason = 'development';
     else if (!enrolled) {
       const bought = status.state === 'valid' && !status.commandUrl;
-      const grace = this.meta.get<{ tier: Tier; until: string }>('edition.grace');
       ceiling = bought ? minTier(status.tier, 'ultra') : 'essentials';
       reason = bought ? 'license' : 'standalone';
-      if (grace && Date.parse(grace.until) > Date.now() && tierRank(grace.tier) > tierRank(ceiling)) {
-        ceiling = grace.tier;
-        reason = 'grace';
-        graceUntil = grace.until;
+      if (trial && Date.parse(trial.until) > Date.now() && tierRank(ceiling) < tierRank('basic')) {
+        ceiling = 'basic';
+        reason = 'trial';
+        trialUntil = trial.until;
       }
       if (tryTier) ceiling = maxTier(ceiling, tryTier);
     }
@@ -76,22 +79,48 @@ export class LicenseService {
       ceiling = narrowTier(ceiling, ed.tier);
       reason = 'organization';
     }
-    if (ed && isLearner(ed.audience)) return (this.cached = { ...status, tier: LEARNER_TIER, chosen: LEARNER_TIER, ceiling: LEARNER_TIER, ceilingReason: 'learner', graceUntil: null });
+    if (ed && isLearner(ed.audience)) return (this.cached = { ...status, tier: LEARNER_TIER, chosen: LEARNER_TIER, ceiling: LEARNER_TIER, ceilingReason: 'learner', trialUntil: null, trialAvailable: false });
     // What the person chose (Essentials on a new computer; see Kernel's first start), never above the ceiling.
     const chosen = this.meta.get<Tier>('edition.chosen') ?? (this.devMode ? (tryTier ?? 'blackhole') : 'essentials');
-    this.cached = { ...status, tier: minTier(chosen, ceiling), chosen, ceiling, ceilingReason: reason, graceUntil };
+    // The trial is there for a computer on its own with nothing bought, until it has had it.
+    const trialAvailable = reason === 'standalone' && !trial;
+    this.cached = { ...status, tier: minTier(chosen, ceiling), chosen, ceiling, ceilingReason: reason, trialUntil, trialAvailable };
     return this.cached;
   }
 
+  /** Standard, free, for STANDARD_TRIAL_DAYS: once, on a computer on its own with nothing bought. Turns it on. */
+  startTrial(): LicenseStatus {
+    if (!this.status().trialAvailable) throw new CoreError('FORBIDDEN', 'The Standard trial is for a computer on its own, once, before anything is bought');
+    this.meta.set(TRIAL_KEY, { until: new Date(Date.now() + STANDARD_TRIAL_DAYS * 86_400_000).toISOString() });
+    if (tierRank(this.meta.get<Tier>('edition.chosen') ?? 'essentials') < tierRank('basic')) this.meta.set('edition.chosen', 'basic');
+    return this.changed();
+  }
+
   /**
-   * Standard is no longer free on a computer on its own from 2.0. A computer that ran FBRX before keeps it, free, for
-   * FREE_GRACE_DAYS after it first starts 2.0 (once; a new computer gets no grace).
+   * What to tell the person about the Standard trial, once each: its last day has come (`ending`), or it is over with
+   * nothing bought (`ended`, and the pages it had close). Null when there is nothing new.
    */
-  beginGrace(setUpBefore: boolean): void {
+  takeTrialNotice(now = Date.now()): 'ending' | 'ended' | null {
+    const trial = this.meta.get<{ until: string; told?: 'ending' | 'ended' }>(TRIAL_KEY);
+    if (!trial) return null;
+    const left = Date.parse(trial.until) - now;
+    const reason = this.status().ceilingReason;
+    const notice = reason === 'trial' && left < 86_400_000 ? 'ending' : left <= 0 && reason === 'standalone' ? 'ended' : null;
+    if (!notice || trial.told === notice) return null;
+    this.meta.set(TRIAL_KEY, { ...trial, told: notice });
+    if (notice === 'ended') this.changed();
+    return notice;
+  }
+
+  /**
+   * From 2.0, Standard is bought. A computer that ran FBRX before starts its Standard trial by itself the first time it
+   * starts 2.0, so what it used does not go away without notice (the same trial every computer may take, once).
+   */
+  beginV2(setUpBefore: boolean): void {
     if (this.meta.get<boolean>('edition.v2')) return;
-    if (setUpBefore) this.meta.set('edition.grace', { tier: 'basic', until: new Date(Date.now() + FREE_GRACE_DAYS * 86_400_000).toISOString() });
     this.meta.set('edition.v2', true);
     this.cached = null;
+    if (setUpBefore && this.status().trialAvailable) this.startTrial();
   }
 
   /** The edition the person wants (Settings → Edition): anything up to what this computer may run. */
@@ -111,7 +140,8 @@ export class LicenseService {
     if (enrolled) return `Your organization's license allows up to ${TIER_NAMES[ceiling]}`;
     const plan = EDITION_PLANS[tier];
     if (plan.monthly == null) return `${TIER_NAMES[tier]} comes only through an organization's FBRX Command: once it adds this computer and gives it ${TIER_SHORT[tier]}, it unlocks here`;
-    return `${TIER_NAMES[tier]} is ${formatPrice(plan.monthly)} a month on your FBRX account (or with a license key in Settings → License)`;
+    const trial = tier === 'basic' && now.trialAvailable ? `, or try it free for ${STANDARD_TRIAL_DAYS} days` : '';
+    return `${TIER_NAMES[tier]} is ${formatPrice(plan.monthly)} a month on your FBRX account (or with a license key in Settings → License)${trial}`;
   }
 
   /** Re-reads the license and edition (after FBRX Command changed what this computer is). */

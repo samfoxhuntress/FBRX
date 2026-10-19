@@ -1,5 +1,5 @@
 import { createContext, useContext, useState, type ReactNode } from 'react';
-import { EDITION_PLANS, TIER_NAMES, TIER_SHORT, atLeast, formatPrice, type EditionStatus, type Tier, type Vertical } from '@fbrx/shared';
+import { EDITION_PLANS, STANDARD_TRIAL_DAYS, TIER_NAMES, TIER_SHORT, atLeast, formatPrice, type EditionStatus, type Tier, type Vertical } from '@fbrx/shared';
 import { Button, Card, Icons, formatDay, useToast } from '@fbrx/ui';
 import { useCore } from './hooks';
 import { call } from './client';
@@ -8,9 +8,10 @@ import { navigate } from './app';
 /**
  * FBRX Endpoint Essentials, Standard, Ultra or Black Hole (see TIERS in @fbrx/shared, prices in plans.ts). Every new
  * computer opens in Essentials, free: the AI on its own (the chat, the AI models, Settings) and a walkthrough. Every
- * edition picks how much the AI does on a task (Settings → Agent → Thinking). Standard adds the everyday tools; Ultra
- * the expert tool sets, the AI's work budget part by part, Mesh, AI coordination, connections and plugins and the
- * theme studio. Both are bought (an FBRX account or a license key) or come through an organization's FBRX Command.
+ * edition picks how much the AI does on a task (Settings → Agent → Thinking). Standard adds the everyday tools and the
+ * AI's work budget part by part, with a free trial; Ultra the expert tool sets, Mesh, AI coordination, connections and
+ * plugins and the theme studio. Both are bought (an FBRX account or a license key) or come through an organization's
+ * FBRX Command.
  * Black Hole (everything: the whole Library, network environments, the FBRX Server page) comes only through FBRX
  * Command.
  */
@@ -56,13 +57,14 @@ export function howToGet(tier: Tier, ed: EditionStatus | null): string {
   if (ed && atLeast(ed.ceiling, tier)) return `${TIER_SHORT[tier]} is allowed on this computer: turn it on and it is there.`;
   if (ed?.ceilingReason === 'organization' || ed?.enrolled) return `Your organization keeps this computer on ${TIER_SHORT[ed.ceiling]} for now (in FBRX Command). Ask your IT team if you need ${TIER_SHORT[tier]}.`;
   if (plan.monthly == null) return `${TIER_SHORT[tier]} comes only through an organization's FBRX Command, for the people who run it and its FBRX Servers.`;
+  if (tier === 'basic' && ed?.trialAvailable) return `Try ${TIER_SHORT[tier]} free for ${STANDARD_TRIAL_DAYS} days on this computer, no card needed; then it is ${formatPrice(plan.monthly)} a month on your FBRX account.`;
   return `${TIER_SHORT[tier]} is ${formatPrice(plan.monthly)} a month on your FBRX account, or comes through your organization's FBRX Command.`;
 }
 
-/** "Standard stays free on this computer until November 13, 2026…" after an update from before 2.0, else null. */
-export function graceLine(ed: EditionStatus | null): string | null {
-  if (ed?.ceilingReason !== 'grace' || !ed.graceUntil) return null;
-  return `${TIER_SHORT[ed.ceiling]} stays free on this computer until ${formatDay(ed.graceUntil)}, as a thank-you for using FBRX before 2.0.`;
+/** "Standard is free on this computer until October 26, 2026: its 7-day trial." during the trial, else null. */
+export function trialLine(ed: EditionStatus | null): string | null {
+  if (ed?.ceilingReason !== 'trial' || !ed.trialUntil) return null;
+  return `${TIER_SHORT[ed.ceiling]} is free on this computer until ${formatDay(ed.trialUntil)}: its ${STANDARD_TRIAL_DAYS}-day trial.`;
 }
 
 /** What this computer runs, may run, and why (Settings → Edition, the walkthrough). */
@@ -70,15 +72,17 @@ export function useEditionStatus(): EditionStatus | null {
   return useCore('edition.status', undefined, ['license.changed', 'fleet.changed']).data;
 }
 
-/** Switches this computer's edition (the person's choice; FBRX Command decides how far up it may go). */
-export function useChooseEdition(): { choose: (tier: Tier) => Promise<boolean>; busy: Tier | null } {
+/**
+ * Switches this computer's edition (the person's choice; FBRX Command decides how far up it may go), or starts its
+ * Standard trial.
+ */
+export function useChooseEdition(): { choose: (tier: Tier) => Promise<boolean>; startTrial: () => Promise<boolean>; busy: Tier | null } {
   const toast = useToast();
   const [busy, setBusy] = useState<Tier | null>(null);
-  const choose = async (tier: Tier) => {
+  const turnOn = async (tier: Tier, change: () => Promise<EditionStatus>, after: (ed: EditionStatus) => string) => {
     setBusy(tier);
     try {
-      await call('edition.choose', { tier });
-      toast.success(`${TIER_NAMES[tier]} is on`, tier === 'essentials' ? 'The everyday pages only. Settings → Edition brings the rest back.' : 'Settings → Edition switches back any time.');
+      toast.success(`${TIER_NAMES[tier]} is on`, after(await change()));
       return true;
     } catch (e) {
       toast.error('Edition not changed', (e as Error).message);
@@ -87,13 +91,16 @@ export function useChooseEdition(): { choose: (tier: Tier) => Promise<boolean>; 
       setBusy(null);
     }
   };
-  return { choose, busy };
+  const choose = (tier: Tier) =>
+    turnOn(tier, () => call('edition.choose', { tier }), () => (tier === 'essentials' ? 'The everyday pages only. Settings → Edition brings the rest back.' : 'Settings → Edition switches back any time.'));
+  const startTrial = () => turnOn('basic', () => call('edition.startTrial'), (ed) => `Free until ${formatDay(ed.trialUntil)}. Settings → Edition switches back any time.`);
+  return { choose, startTrial, busy };
 }
 
 /** Where a Standard page would be, in Essentials: what it does, and one click to switch. */
 export function StandardOnly({ title, what }: { title: string; what: string }) {
   const ed = useEditionStatus();
-  const { choose, busy } = useChooseEdition();
+  const { choose, startTrial, busy } = useChooseEdition();
   const held = ed?.ceiling === 'essentials';
   return (
     <div className="ultra-only">
@@ -114,6 +121,11 @@ export function StandardOnly({ title, what }: { title: string; what: string }) {
               {!held && (
                 <Button variant="primary" icon="unlock" loading={busy === 'basic'} onClick={() => void choose('basic')}>
                   Switch to Standard
+                </Button>
+              )}
+              {held && ed?.trialAvailable && (
+                <Button variant="primary" icon="sparkles" loading={busy === 'basic'} onClick={() => void startTrial()}>
+                  Try {TIER_SHORT.basic} free for {STANDARD_TRIAL_DAYS} days
                 </Button>
               )}
               <Button icon="settings" onClick={() => navigate('settings/edition')}>
@@ -188,8 +200,8 @@ export function UltraOnly({ title, what, learner, need = 'ultra' }: { title: str
   );
 }
 
-/** A short line under a screen that has more in Ultra (or in another edition, `tier`). */
-export function UltraHint({ children, tier = 'ultra' }: { children: ReactNode; tier?: Tier }) {
+/** A short line under a screen that has more in another edition (Ultra unless `tier` says). */
+export function EditionHint({ children, tier = 'ultra' }: { children: ReactNode; tier?: Tier }) {
   return (
     <div className="ultra-hint">
       <Icons.sparkles size={13} /> <span>{children}</span>{' '}

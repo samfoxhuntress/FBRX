@@ -68,10 +68,10 @@ saved goes away), up to what the computer may run. Prices are in US dollars, per
 
 | | **Essentials** | **Standard** | **Ultra** | **Black Hole** |
 | --- | --- | --- | --- | --- |
-| Price | Free, and free in an organization | $4.99, or $3.99 through FBRX Command | $11.99, or $9.59 through FBRX Command | $24.99 per computer, only through FBRX Command |
+| Price | Free, and free in an organization | $4.99 after a free 7-day trial, or $3.99 through FBRX Command | $11.99, or $9.59 through FBRX Command | $24.99 per computer, only through FBRX Command |
 | How you get it | Where every new computer starts | Bought on your FBRX account or with a license key, or through your organization's FBRX Command | The same | Only as an add-on in an organization's FBRX Command: for the people who run it and its FBRX Servers |
 | Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, the help desk (in an organization) and Settings. **Home** is the split-flap board and a few notes from FBRX: tips, the AI models, and what Standard and Ultra add (no dashboard) | Everything in Essentials, plus FBRX Glass, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Standard | Everything in Ultra, plus the FBRX Server page |
-| How much the AI does on a task | **Thinking**: Quick, Everyday or Thorough (see *Thinking* below), and whether it shows what it is doing | The same, and unloading the local model when idle | The same, and each part on its own: steps per task, longest answer, how much the built-in and Ollama models keep in mind, and the temperature | The same |
+| How much the AI does on a task | **Thinking**: Quick, Everyday or Thorough (see *Thinking* below), and whether it shows what it is doing | The same, each part on its own (steps per task, longest answer, how much the built-in and Ollama models keep in mind), and unloading the local model when idle | The same, and the temperature | The same |
 | IT and expert tool sets | — | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools and adapters, device consoles, the developer tools in the Toolbox, logs, update channels, the Local API | Everything in Ultra, plus **network environments** (your network controller) in Network Center and the whole Library: **The Lab** and the **FBRX command library** (FBRX/1, FBRX Server and FBRX Gate commands, also in Terminal → FBRX/1), always there |
 | Connect | AI models | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance | The same |
 | Look | Light, dark or follow the computer: plain | The same | The theme studio: eleven themes, accent colors, gradients and textures (with a strength slider) | The same |
@@ -102,9 +102,12 @@ the account bought, wherever it was bought, and a member of an organization can 
 edition the organization gave them. Signed in, the locked editions in Settings → Edition have a **Get** button that
 opens the checkout in the browser. See ACCOUNTS.md.
 
-**Computers from before 2.0.** Until 2.0, Standard was free on a computer on its own. A computer set up before keeps
-Standard, free, for **30 days** after it first starts 2.0 (Settings → Edition says until when); then it runs
-Essentials unless Standard or Ultra is bought. A computer set up before Essentials existed keeps the edition it had
+**Try Standard free for 7 days.** A computer on its own with nothing bought may try Standard free, once, for 7 days,
+no card needed: **Try free for 7 days** in Settings → Edition, on a page that comes with Standard, or in the note on
+Essentials Home. Settings → Edition says until when; then it runs Essentials unless Standard or Ultra is bought (and
+turns Standard back on by itself once it is). Until 2.0, Standard was free on a computer on its own: a computer set up
+before starts its trial by itself the first time it starts 2.0. Computers in an organization have no trial: FBRX
+Command decides what they run. A computer set up before Essentials existed keeps the edition it had
 (up to what it may run now). Developers can try the lighter editions in a development build (which otherwise runs
 Black Hole) with `FBRX_EDITION=essentials`, `standard` or `ultra`.
 
@@ -710,15 +713,15 @@ Windows copies signed by a publisher only install updates signed by the same pub
 | --- | --- | --- | --- |
 | **Quick** | Small jobs and quick answers; it checks in with you sooner | 10 | 8K tokens |
 | **Everyday** (where every computer starts) | Everyday tasks | 30 | 8K tokens (Ollama: its own setting) |
-| **Thorough** | Big jobs and long documents | 60 | 16K tokens (about 1 GB more memory) |
+| **Thorough** | Big jobs and long documents | 100, the most there is | 16K tokens (about 1 GB more memory) |
 
 Every level leaves the length of an answer to the model. A step is one round of thinking and using tools; when Fabrix
 uses them all it says so, and *continue* goes on. The steps are kept in the policy (with up to three tool calls a
 step), so an organization can set them; when it sets any part, the levels are locked. **Show what Fabrix is thinking
 and doing** turns the live activity panel and the thinking notes on or off.
 
-**Ultra and Black Hole** also set each part on its own, which makes the level **Custom** (picking a level puts it
-all back):
+**Standard and up** also set each part on its own, starting from the level's values; changing one makes the level
+**Custom** (picking a level puts it all back):
 
 | Setting | What it does | Default |
 | --- | --- | --- |

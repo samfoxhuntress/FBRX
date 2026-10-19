@@ -10,7 +10,7 @@
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COMMAND_PLAN, EDITION_PLANS, ESSENTIALS_TIPS, FREE_GRACE_DAYS, PURCHASE_SOURCE_NAMES, RELEASE_REPO, SERVER_OFFER, TENANT_DISCOUNT, TIERS, TIER_SHORT, VERTICAL_NAMES, editionPoints, formatPrice } from '@fbrx/shared';
+import { COMMAND_PLAN, EDITION_PLANS, ESSENTIALS_TIPS, PURCHASE_SOURCE_NAMES, STANDARD_TRIAL_DAYS, RELEASE_REPO, SERVER_OFFER, TENANT_DISCOUNT, TIERS, TIER_SHORT, VERTICAL_NAMES, editionPoints, formatPrice } from '@fbrx/shared';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, 'dist');
@@ -139,7 +139,7 @@ page({
 </section>
 <section class="wrap features">
   <div class="feature"><h3>Private by default</h3><p>The AI runs on your computer. Chats start offline, and nothing leaves without you saying so.</p></div>
-  <div class="feature"><h3>Grows with you</h3><p>Essentials is the AI on its own, free, working as hard as you like. Standard adds the everyday tools; Ultra the expert ones, and your AI fine-tuned.</p></div>
+  <div class="feature"><h3>Grows with you</h3><p>Essentials is the AI on its own, free, working as hard as you like. Standard adds the everyday tools and control over your AI, free to try for ${STANDARD_TRIAL_DAYS} days; Ultra the expert ones.</p></div>
   <div class="feature"><h3>One account, every device</h3><p>Buy once with your FBRX account and sign in on your computers and your phone: each one turns on what you have.</p></div>
 </section>
 <section class="wrap">
@@ -179,7 +179,7 @@ page({
   <p class="lead center">Start free. Pay monthly for more, and stop any time. Prices in US dollars.</p>
   <div class="plans">
     ${editionCard('essentials', `<a class="btn" href="${DOWNLOAD}">Download</a>`)}
-    ${editionCard('basic', `<a class="btn primary" href="account.html?buy=${EDITION_PLANS.basic.productId}">Get Standard</a>`)}
+    ${editionCard('basic', `<a class="btn primary" href="account.html?buy=${EDITION_PLANS.basic.productId}">Get Standard</a><p class="muted small">Or try it free for ${STANDARD_TRIAL_DAYS} days in FBRX, no card needed.</p>`)}
     ${editionCard('ultra', `<a class="btn primary" href="account.html?buy=${EDITION_PLANS.ultra.productId}">Get Ultra</a>`)}
     ${editionCard('blackhole', `<a class="btn" href="account.html?start=organization">Start an FBRX Command</a>`)}
   </div>
@@ -196,6 +196,7 @@ page({
           ${TIERS.map((t) => `<tr><td>${TIER_SHORT[t]}</td><td>${tenantRate(t)}</td></tr>`).join('\n          ')}
         </tbody>
       </table>
+      <p class="muted small">Student and child computers count as Standard.</p>
     </div>
     <form class="card calc" id="calc" data-prices='${JSON.stringify(prices)}' aria-label="What a month comes to">
       <h3>What a month comes to</h3>
@@ -211,7 +212,7 @@ ${serverSection}
   <details><summary>Is Essentials really free?</summary><p>Yes, on as many computers as you like, and in an organization too. It is your AI on its own: the chat, its memory and voice, and the AI models.</p></details>
   <details><summary>Where does my AI run?</summary><p>On your computer. ${esc(ESSENTIALS_TIPS.find((t) => t.id === 'tip-offline')?.body.replace('{agent}', 'It') ?? '')}</p></details>
   <details><summary>Can I switch editions?</summary><p>Any time, in Settings → Edition. Nothing you saved goes away when you switch down.</p></details>
-  <details><summary>I used FBRX before 2.0. What changes?</summary><p>Standard used to be free on a computer on its own. If yours ran FBRX before 2.0, Standard stays free on it for ${FREE_GRACE_DAYS} days after it updates; after that it runs Essentials unless you choose Standard or Ultra.</p></details>
+  <details><summary>Can I try Standard first?</summary><p>Yes: every computer can try Standard free for ${STANDARD_TRIAL_DAYS} days, once, from Settings → Edition in FBRX. No card needed; when it ends, the computer goes back to Essentials unless you buy Standard. Standard used to be free, so a computer that ran FBRX before 2.0 starts its trial by itself when it updates.</p></details>
   <details><summary>How do I pay?</summary><p>On this site and in FBRX on your computer: by card, or with the wallet on your phone or computer when checkout offers it. In the phone apps, through the app store, once they leave beta. It all goes to one FBRX account, so what you buy anywhere works everywhere you sign in.</p></details>
   <details><summary>What does beta mean?</summary><p>FBRX 2.0 is finished enough to use every day, and still changing quickly: new versions arrive often and install by themselves. Tell us what breaks, right from the app. Prices are the ones above.</p></details>
   <details><summary>What is Black Hole?</summary><p>${esc(EDITION_PLANS.blackhole.summary)} It is an add-on in FBRX Command, ${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} a month per computer, and comes on wherever its person signs in.</p></details>

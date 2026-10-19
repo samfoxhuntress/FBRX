@@ -71,7 +71,8 @@ the account's email and password, and are a member on Essentials. Nothing is cha
   $54.99-a-month plan; **Manage billing** opens the Stripe portal. The page shows what a month comes to: the plan, and
   each computer at its edition's tenant price, counted from the editions the organization gives (Members, Devices,
   Profiles & groups): Standard $3.99 and Ultra $9.59 (20% off), Black Hole $24.99 (an add-on at full price),
-  Essentials free. Student and child computers run the learner edition on Standard and count as Standard.
+  Essentials free. Student and child computers (only ever in an FBRX Command) run the learner edition and count as
+  Standard, at its $3.99.
 * The plan's per-computer items in Stripe follow the computers by themselves (a few seconds after a change, and every
   quarter of an hour), prorated by Stripe.
 * While the plan runs, FBRX Command holds one license for the organization that allows everything; each computer runs

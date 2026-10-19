@@ -31,7 +31,7 @@ export function EssentialsHome({ status, agentName, who }: { status: SystemStatu
   const modelName = models.data?.find((m) => m.id === runtime.data?.modelId)?.name ?? null;
   // The welcome stays until it is dismissed.
   const firstDays = !dismissed.includes('welcome');
-  const notes = notesFor({ tier: status.license.tier, agentName, modelName, dismissed, firstDays });
+  const notes = notesFor({ tier: status.license.tier, agentName, modelName, dismissed, firstDays, trial: !!status.edition?.trialAvailable });
   const board = homeBoard({ name: who, agentName, aiReady, deviceName: status.deviceName, tier: status.license.tier });
   const dismiss = (id: string) => {
     const next = [...dismissed, id];

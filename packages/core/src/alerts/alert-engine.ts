@@ -45,6 +45,7 @@ export const ALERT_RULES: RuleDef[] = [
   { id: 'mesh_online', group: 'Mesh', label: 'One of my devices came online', unit: null, threshold: null, enabled: false, severity: 'info', help: '' },
   { id: 'approval_waiting', group: 'Agent', label: 'An action is waiting for my approval', unit: null, threshold: null, enabled: true, severity: 'warning', help: 'So you can approve from your phone' },
   { id: 'update_available', group: 'Updates', label: 'FBRX OS update available', unit: null, threshold: null, enabled: true, severity: 'info', help: '' },
+  { id: 'edition_trial', group: 'Edition', label: 'My Standard trial is ending, or has ended', unit: null, threshold: null, enabled: true, severity: 'info', help: 'The day before the free trial ends, and when it has' },
 ];
 
 export interface AlertEngineDeps {
@@ -61,6 +62,8 @@ export interface AlertEngineDeps {
   toOrganisation: (alert: AlertItem) => boolean;
   secret: (name: string) => string | undefined;
   meshPeers: () => Array<{ id: string; name: string; online: boolean }>;
+  /** What to tell the person about this computer's edition (its Standard trial ending, or over), once each. */
+  editionNotice: () => { title: string; body: string } | null;
 }
 
 /**
@@ -311,6 +314,10 @@ export class AlertEngine {
       if (prev === false && p.online) this.raise('mesh_online', `${p.name} is online`, `${p.name} is reachable again.`, { key: p.id });
     }
     if (this.ticks % 20 === 2) this.taskCheck();
+    if (this.ticks % 20 === 3) {
+      const n = this.d.editionNotice();
+      if (n) this.raise('edition_trial', n.title, n.body);
+    }
     if (IS_WIN && this.ticks % 10 === 1) await this.windowsChecks(rules.signatures_old.threshold ?? 3).catch(() => undefined);
   }
 

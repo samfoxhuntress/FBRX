@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_POLICY, thinkingBudget, thinkingLevelOf } from '@fbrx/shared';
+import { DEFAULT_POLICY, MAX_STEPS_PER_TASK, thinkingBudget, thinkingLevelOf } from '@fbrx/shared';
 import { makeKernel, USER } from './helpers';
 
 describe('how much the agent does on one task (thinking levels)', () => {
@@ -8,9 +8,10 @@ describe('how much the agent does on one task (thinking levels)', () => {
     try {
       const level = () => thinkingLevelOf(thinkingBudget(kernel.policy.policy, kernel.settings.get()));
       expect(level()).toBe('everyday');
-      expect(await kernel.call('ai.setThinking', { level: 'thorough' }, USER)).toMatchObject({ steps: 60, contextSize: 16384 });
+      // Thorough takes every step a task may have.
+      expect(await kernel.call('ai.setThinking', { level: 'thorough' }, USER)).toMatchObject({ steps: MAX_STEPS_PER_TASK, contextSize: 16384 });
       expect(level()).toBe('thorough');
-      expect(kernel.policy.policy.ai.maxToolCallsPerRun).toBeGreaterThanOrEqual(180);
+      expect(kernel.policy.policy.ai.maxToolCallsPerRun).toBe(MAX_STEPS_PER_TASK * 3);
       // Fine-tuning one part (Ultra) makes it custom; a level puts all of it back.
       kernel.settings.update({ ai: { maxOutputTokens: 2048 } });
       expect(level()).toBe('custom');

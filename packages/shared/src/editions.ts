@@ -158,8 +158,10 @@ export interface EditionStatus {
   chosen: Tier;
   ceiling: Tier;
   ceilingReason: CeilingReason;
-  /** Until when Standard stays free on this computer, after an update from before 2.0. */
-  graceUntil: string | null;
+  /** Until when this computer's free Standard trial runs (STANDARD_TRIAL_DAYS). */
+  trialUntil: string | null;
+  /** The trial can still be started here: a computer on its own, with nothing bought, that has not had it. */
+  trialAvailable: boolean;
   enrolled: boolean;
   /** The Essentials walkthrough was finished or skipped. */
   tourDone: boolean;

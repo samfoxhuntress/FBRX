@@ -3,6 +3,8 @@ import type { DeepPartial, EditionStatus, EffectivePolicy, Settings, Texture } f
 import {
   AUDIENCE_NAMES,
   EDITION_PLANS,
+  MAX_STEPS_PER_TASK,
+  STANDARD_TRIAL_DAYS,
   THINKING_BUDGETS,
   THINKING_LEVELS,
   THINKING_NAMES,
@@ -37,7 +39,7 @@ import { VoiceSettings } from './settings-voice';
 import { MemorySettings } from './settings-memory';
 import { AboutVersion, ReleasePanel } from '../release';
 import { AccountSettings, BuyButtons, useAccount } from '../account';
-import { UltraHint, graceLine, howToGet, useAtLeast, useChooseEdition, useEditionStatus, useLearner, useTier, useVertical } from '../edition';
+import { EditionHint, trialLine, howToGet, useAtLeast, useChooseEdition, useEditionStatus, useLearner, useTier, useVertical } from '../edition';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -193,10 +195,10 @@ function ceilingLine(ed: EditionStatus): string {
   switch (ed.ceilingReason) {
     case 'development':
       return 'Development build: every edition can be turned on.';
-    case 'grace':
-      return `${graceLine(ed)} Standard is ${formatPrice(EDITION_PLANS.basic.monthly!)} a month after that; Essentials stays free.`;
+    case 'trial':
+      return `${trialLine(ed)} Then Standard is ${formatPrice(EDITION_PLANS.basic.monthly!)} a month; Essentials stays free.`;
     case 'standalone':
-      return 'On its own, this computer runs Essentials for free. Standard and Ultra are bought on your FBRX account or with a license key (Settings → License), or come through your organization’s FBRX Command. Black Hole comes only through FBRX Command.';
+      return `On its own, this computer runs Essentials for free.${ed.trialAvailable ? ` Standard can be tried free for ${STANDARD_TRIAL_DAYS} days, once.` : ''} Standard and Ultra are bought on your FBRX account or with a license key (Settings → License), or come through your organization’s FBRX Command. Black Hole comes only through FBRX Command.`;
     case 'organization':
       return `Your organization (FBRX Command) lets this computer go up to ${TIER_SHORT[ed.ceiling]}.`;
     default:
@@ -212,7 +214,7 @@ function ceilingLine(ed: EditionStatus): string {
 function EditionSettings() {
   const ed = useEditionStatus();
   const account = useAccount();
-  const { choose, busy } = useChooseEdition();
+  const { choose, startTrial, busy } = useChooseEdition();
   if (!ed) return null;
   return (
     <>
@@ -235,6 +237,10 @@ function EditionSettings() {
                 <div className="ed-choice-foot">
                   {current ? (
                     <Status tone="good">On now</Status>
+                  ) : locked && t === 'basic' && ed.trialAvailable ? (
+                    <Button size="sm" variant="primary" icon="sparkles" loading={busy === t} onClick={() => void startTrial()}>
+                      Try free for {STANDARD_TRIAL_DAYS} days
+                    </Button>
                   ) : locked && account?.signedIn && account.canBuy && !ed.enrolled && EDITION_PLANS[t].sold === 'personal' && !atLeast(account.tier, t) ? (
                     <BuyButtons account={account} only={[t]} short />
                   ) : locked ? (
@@ -469,7 +475,7 @@ function Appearance() {
           <Field label={<>Mode <Locked show={L('general.theme')} /></>}>
             {seg(s.general.theme, [{ value: 'system', label: 'Match Windows' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], (v) => void patch({ general: { theme: v } }), L('general.theme'))}
           </Field>
-          {!ultra && <UltraHint>More themes, accent colors, gradients and textures come with Endpoint Ultra.</UltraHint>}
+          {!ultra && <EditionHint>More themes, accent colors, gradients and textures come with Endpoint Ultra.</EditionHint>}
           {ultra && <>
           <div className="swatches">
             {PRESETS.map((p) => {
@@ -795,17 +801,17 @@ function AgentSettings() {
 const THINKING_HELP: Record<ThinkingLevel, string> = {
   quick: `Small jobs and quick answers: up to ${THINKING_BUDGETS.quick.steps} steps a task, so it checks in with you sooner.`,
   everyday: `Everyday tasks: up to ${THINKING_BUDGETS.everyday.steps} steps a task. Recommended.`,
-  thorough: `Big jobs and long documents: up to ${THINKING_BUDGETS.thorough.steps} steps a task, and a local model keeps twice as much in mind (about 1 GB more memory).`,
+  thorough: `Big jobs and long documents: up to ${THINKING_BUDGETS.thorough.steps} steps a task (the most there is), and a local model keeps twice as much in mind (about 1 GB more memory).`,
 };
 
 /**
- * How much the agent does on one task. Every edition picks a level (Quick, Everyday or Thorough); Ultra and Black Hole
- * also set each part of it on its own, which makes the level Custom.
+ * How much the agent does on one task. Every edition picks a level (Quick, Everyday or Thorough); from Standard up,
+ * each part is also set on its own, which makes the level Custom.
  */
 function Thinking() {
   const { s, locked, patch } = useSettings();
   const pol = useCore('governance.policy', undefined, ['policy.changed']);
-  const ultra = useAtLeast('ultra');
+  const standard = useAtLeast('basic');
   const { run, busy } = useAction();
   if (!s || !pol.data) return null;
   const L = (p: string) => isLocked(locked, p);
@@ -825,7 +831,11 @@ function Thinking() {
             ))}
           </div>
         </Field>
-        {ultra ? <WorkBudget policy={pol.data} /> : <UltraHint>Ultra sets each part on its own: steps per task, the longest answer, and how much a local model keeps in mind.</UltraHint>}
+        {standard ? (
+          <WorkBudget policy={pol.data} />
+        ) : (
+          <EditionHint tier="basic">Standard sets each part on its own: steps per task, the longest answer, and how much a local model keeps in mind.</EditionHint>
+        )}
         <Toggle checked={s.ai.showThinking} disabled={L('ai.showThinking')} onChange={(v) => void patch({ ai: { showThinking: v } })} label={`Show what ${name} is thinking and doing while it works`} />
       </div>
     </Card>
@@ -845,7 +855,7 @@ const ctxLabel = (n: number) => `${n / 1024}K tokens${n === 8192 ? ' (default)' 
 // Rough extra memory for the conversation itself (the KV cache of a typical 7–8B model).
 const ctxMemory = (n: number) => (n <= 8192 ? 'about 1 GB extra memory' : n <= 16384 ? 'about 2 GB' : n <= 32768 ? 'about 4 GB' : n <= 65536 ? 'about 8 GB' : 'about 16 GB');
 
-/** Each part of the work budget on its own (Ultra and Black Hole): steps, answer length, what a model keeps in mind. */
+/** Each part of the work budget on its own (Standard and up): steps, answer length, what a model keeps in mind. */
 function WorkBudget({ policy }: { policy: EffectivePolicy }) {
   const { s, locked, patch } = useSettings();
   const providers = useCore('ai.providers', undefined, ['settings.changed']);
@@ -874,7 +884,7 @@ function WorkBudget({ policy }: { policy: EffectivePolicy }) {
         <input
           type="range"
           min={5}
-          max={100}
+          max={MAX_STEPS_PER_TASK}
           step={1}
           value={shownSteps}
           disabled={policyManaged}

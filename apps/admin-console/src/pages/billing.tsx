@@ -79,7 +79,7 @@ export function BillingPage() {
             <StatTile label="Essentials computers" value={p.computers.essentials} foot="Free, as many as you like" />
           </Grid>
           {!b.payments && <Status tone="warning">Payments are not set up on this FBRX Command yet.</Status>}
-          <Card title="What it comes to" subtitle="Counted from the editions you give computers and members (Members, Devices, Profiles & groups). It follows by itself; changes are prorated." flush>
+          <Card title="What it comes to" subtitle="Counted from the editions you give computers and members (Members, Devices, Profiles & groups); student and child computers count as Standard. It follows by itself; changes are prorated." flush>
             <Table
               rows={[{ tier: 'command' as const, n: 1, each: COMMAND_PLAN.monthly }, ...lines]}
               rowKey={(l) => l.tier}

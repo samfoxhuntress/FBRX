@@ -1,10 +1,10 @@
-import type { Policy } from './policy';
+import { MAX_STEPS_PER_TASK, type Policy } from './policy';
 import type { Settings } from './settings';
 
 /**
  * How much the agent does on one task, in plain terms (Settings → Agent → Thinking, in every edition). Each level sets
  * the whole work budget underneath it: steps per task, how much of a conversation a local model keeps in mind, and the
- * longest answer (left to the model). Ultra and Black Hole also set each of these on its own, which makes the level
+ * longest answer (left to the model). From Standard up, each of these is also set on its own, which makes the level
  * Custom.
  */
 export const THINKING_LEVELS = ['quick', 'everyday', 'thorough'] as const;
@@ -21,11 +21,11 @@ export interface ThinkingBudget {
   maxOutputTokens: number;
 }
 
-/** Everyday is where every computer starts (the default policy and settings). */
+/** Everyday is where every computer starts (the default policy and settings); Thorough takes every step there is. */
 export const THINKING_BUDGETS: Record<ThinkingLevel, ThinkingBudget> = {
   quick: { steps: 10, contextSize: 8192, ollamaContext: 0, maxOutputTokens: 0 },
   everyday: { steps: 30, contextSize: 8192, ollamaContext: 0, maxOutputTokens: 0 },
-  thorough: { steps: 60, contextSize: 16384, ollamaContext: 16384, maxOutputTokens: 0 },
+  thorough: { steps: MAX_STEPS_PER_TASK, contextSize: 16384, ollamaContext: 16384, maxOutputTokens: 0 },
 };
 
 export const THINKING_NAMES: Record<ThinkingLevel, string> = { quick: 'Quick', everyday: 'Everyday', thorough: 'Thorough' };

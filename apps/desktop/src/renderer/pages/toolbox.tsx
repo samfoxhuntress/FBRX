@@ -8,7 +8,7 @@ import { useCore } from '../hooks';
 import { AskButton } from '../widgets';
 import { COMMAND_GROUPS } from '../command-library';
 import { unlockTrophy } from '../fun';
-import { UltraHint } from '../edition';
+import { EditionHint } from '../edition';
 
 interface Example {
   label: string;
@@ -846,7 +846,7 @@ export function ToolboxPage({ advanced, easterEggs }: { advanced: boolean; easte
           ))}
           {!advanced && (
             <div style={{ padding: '10px 12px' }}>
-              <UltraHint>Developer and network tools (JSON, hashes, subnets, ports) come with Endpoint Ultra.</UltraHint>
+              <EditionHint>Developer and network tools (JSON, hashes, subnets, ports) come with Endpoint Ultra.</EditionHint>
             </div>
           )}
         </Card>

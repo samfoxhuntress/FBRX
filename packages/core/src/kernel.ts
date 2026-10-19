@@ -13,6 +13,8 @@ import {
   shouldNotify,
   essentialsNotifies,
   TIER_NAMES,
+  EDITION_PLANS,
+  formatPrice,
   homeBoard,
   notesFor,
   atLeast,
@@ -272,15 +274,15 @@ export class Kernel {
     this.limiter = new RateLimiter(() => this.policy.policy.rateLimits.toolCallsPerMinute);
     this.license = new LicenseService(this.meta, this.platform.licensePublicKeys, this.platform.appVersion, this.platform.devMode, this.events);
     // The edition a computer starts in: a new one opens in Essentials (with its walkthrough); one set up before
-    // Essentials existed keeps what it had (up to what it may run now). One set up before 2.0 keeps Standard, free, for
-    // a while (Standard is bought from 2.0).
+    // Essentials existed keeps what it had (up to what it may run now). One set up before 2.0 starts its Standard trial
+    // (Standard is bought from 2.0).
     const setUpBefore = this.meta.get<Tier>('edition.chosen') != null || this.settings.get().general.onboardingComplete;
     if (this.meta.get<Tier>('edition.chosen') == null) {
       const tried = this.platform.devMode ? parseTier(process.env.FBRX_EDITION) : null;
       this.meta.set('edition.chosen', this.platform.devMode ? (tried ?? 'blackhole') : this.settings.get().general.onboardingComplete ? 'ultra' : 'essentials');
       if (this.settings.get().general.onboardingComplete) this.meta.set('edition.tourDone', true);
     }
-    this.license.beginGrace(setUpBefore && !this.platform.devMode);
+    this.license.beginV2(setUpBefore && !this.platform.devMode);
     this.registry = new ToolRegistry(this.db);
     this.gate = new ToolGate({
       registry: this.registry,
@@ -742,6 +744,7 @@ export class Kernel {
       },
       secret: (name) => (this.vault.isUnlocked ? this.vault.get(name) : undefined),
       meshPeers: () => (this.mesh.running ? this.mesh.peers() : []),
+      editionNotice: () => this.trialNotice(),
     });
     this.aicoord = new AiCoordination({
       shim: () => {
@@ -1555,7 +1558,8 @@ export class Kernel {
       chosen: lic.chosen ?? lic.tier,
       ceiling: lic.ceiling ?? lic.tier,
       ceilingReason: lic.ceilingReason ?? 'standalone',
-      graceUntil: lic.graceUntil ?? null,
+      trialUntil: lic.trialUntil ?? null,
+      trialAvailable: !!lic.trialAvailable,
       enrolled: this.fleet.enrolled,
       tourDone: !!this.meta.get<boolean>('edition.tourDone'),
       vertical,
@@ -1570,6 +1574,23 @@ export class Kernel {
     const before = this.license.status().tier;
     this.license.choose(tier);
     this.audit.append({ category: 'user', action: 'edition.chosen', actor, target: tier, outcome: 'success', details: { from: before } });
+    return this.edition();
+  }
+
+  /** The day before the Standard trial ends, and when it has: what to say (alerts, once each). */
+  private trialNotice(): { title: string; body: string } | null {
+    const notice = this.license.takeTrialNotice();
+    if (!notice) return null;
+    const price = formatPrice(EDITION_PLANS.basic.monthly!);
+    return notice === 'ending'
+      ? { title: 'Your Standard trial ends tomorrow', body: `To keep Standard, get it for ${price} a month in Settings → Edition. Otherwise this computer goes back to Essentials, free, and nothing you saved goes away.` }
+      : { title: 'Your Standard trial has ended', body: `This computer runs Essentials again, free, and nothing you saved went away. Standard is ${price} a month in Settings → Edition.` };
+  }
+
+  /** Starts this computer's free Standard trial (Settings → Edition), once. */
+  startTrial(actor: string): EditionStatus {
+    const until = this.license.startTrial().trialUntil;
+    this.audit.append({ category: 'user', action: 'edition.trial', actor, target: 'basic', outcome: 'success', details: { until } });
     return this.edition();
   }
 

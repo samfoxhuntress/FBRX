@@ -21,6 +21,9 @@ export const PolicyRuleSchema = z.object({
 });
 export type PolicyRule = z.infer<typeof PolicyRuleSchema>;
 
+/** The most steps one task may take (the policy's limit, and the Thorough thinking level). */
+export const MAX_STEPS_PER_TASK = 100;
+
 export const PolicySchema = z.object({
   version: z.literal(1),
   /** `enforce` blocks violations; `audit` records violations but lets the call proceed. */
@@ -59,7 +62,7 @@ export const PolicySchema = z.object({
     allowCloudProviders: z.boolean(),
     /** Provider ids allowed; empty means all configured providers. */
     allowedProviders: z.array(z.string()),
-    maxStepsPerRun: z.number().int().min(1).max(100),
+    maxStepsPerRun: z.number().int().min(1).max(MAX_STEPS_PER_TASK),
     maxToolCallsPerRun: z.number().int().min(0).max(500),
     /** Run the guardian's model-based review in addition to its deterministic checks. */
     guardianModelReview: z.boolean(),

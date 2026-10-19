@@ -15,10 +15,11 @@ import { TIERS, TIER_SHORT, type Tier } from './license';
 export const CURRENCY = 'usd';
 
 /**
- * A computer set up before 2.0 ran Standard for free on its own. It keeps Standard, free, for this many days after it
- * updates to 2.0; then it is Essentials unless Standard (or Ultra) is bought.
+ * Standard, free, for this many days: once per computer on its own, no card needed (Settings → Edition). A computer
+ * that ran FBRX before 2.0 starts it by itself when it updates; then it is Essentials unless Standard (or Ultra) is
+ * bought.
  */
-export const FREE_GRACE_DAYS = 30;
+export const STANDARD_TRIAL_DAYS = 7;
 
 /** Off Standard and Ultra bought through an FBRX Command tenant (Black Hole is always full price). */
 export const TENANT_DISCOUNT = 0.2;
@@ -61,8 +62,8 @@ export const EDITION_PLANS: Record<Tier, EditionPlan> = {
     sold: 'personal',
     productId: 'fbrx_standard_monthly',
     tenantProductId: 'fbrx_standard_tenant_monthly',
-    summary: 'The everyday tools, beside your AI.',
-    highlights: ['FBRX Glass, alerts, notes, tasks, calendar and messages', 'Storage, FBRX Shield, updates, network and backups', 'Files, the clipboard history, the toolbox and how-tos'],
+    summary: 'The everyday tools, and control over your AI.',
+    highlights: ['Your AI’s controls: steps, answer length, how much it keeps in mind', 'FBRX Glass, alerts, notes, tasks, calendar and messages', 'Storage, FBRX Shield, updates, network and backups', 'Files, the clipboard history, the toolbox and how-tos'],
   },
   ultra: {
     tier: 'ultra',
@@ -71,8 +72,8 @@ export const EDITION_PLANS: Record<Tier, EditionPlan> = {
     sold: 'personal',
     productId: 'fbrx_ultra_monthly',
     tenantProductId: 'fbrx_ultra_tenant_monthly',
-    summary: 'Expert tools, your AI fine-tuned, your devices together, and every look.',
-    highlights: ['Your AI fine-tuned: steps, answer length, how much it keeps in mind', 'Terminal, Task Manager, the virtual lab and IT tools', 'Mesh, AI coordination, plugins and the theme studio'],
+    summary: 'Expert tools, your devices together, and every look.',
+    highlights: ['Terminal, Task Manager, the virtual lab and IT tools', 'Mesh with your computers and phone, AI coordination', 'Connections, plugins and the theme studio'],
   },
   blackhole: {
     tier: 'blackhole',

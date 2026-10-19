@@ -1,4 +1,4 @@
-import { EDITION_PLANS, formatPrice } from './plans';
+import { EDITION_PLANS, STANDARD_TRIAL_DAYS, formatPrice } from './plans';
 import type { Tier } from './license';
 
 /**
@@ -30,9 +30,10 @@ export const ESSENTIALS_TIPS: Array<Omit<EssentialsNote, 'kind'>> = [
 
 /**
  * The notes for Home: a welcome the first days, two tips that change each day, the AI models, and (in Essentials) what
- * Standard and Ultra add, with their prices. `dismissed` ids are left out.
+ * Standard and Ultra add, with their prices, or Standard's free trial while this computer may start it (`trial`).
+ * `dismissed` ids are left out.
  */
-export function notesFor(o: { tier: Tier; agentName: string; modelName?: string | null; now?: Date; dismissed?: string[]; paired?: boolean; firstDays?: boolean }): EssentialsNote[] {
+export function notesFor(o: { tier: Tier; agentName: string; modelName?: string | null; now?: Date; dismissed?: string[]; paired?: boolean; firstDays?: boolean; trial?: boolean }): EssentialsNote[] {
   const now = o.now ?? new Date();
   const fill = (s: string) => s.replace(/\{agent\}/g, o.agentName);
   const day = Math.floor(now.getTime() / 86_400_000);
@@ -54,18 +55,23 @@ export function notesFor(o: { tier: Tier; agentName: string; modelName?: string 
   if (o.tier === 'essentials') {
     const std = EDITION_PLANS.basic;
     const ultra = EDITION_PLANS.ultra;
-    notes.push({
-      id: 'upgrade-standard',
-      kind: 'upgrade',
-      title: `More with Standard, ${formatPrice(std.monthly!)} a month`,
-      body: 'FBRX Glass, notes, tasks, calendar, alerts, storage, FBRX Shield and backups, beside your AI.',
-      action: { label: 'See the editions', to: 'edition' },
-    });
+    const standard = 'Your AI’s controls (how long it works, how long its answers are, how much it keeps in mind), plus FBRX Glass, notes, tasks, calendar, alerts, storage and backups.';
+    notes.push(
+      o.trial
+        ? {
+            id: 'upgrade-standard',
+            kind: 'upgrade',
+            title: `Try Standard free for ${STANDARD_TRIAL_DAYS} days`,
+            body: `${standard} No card needed; then ${formatPrice(std.monthly!)} a month.`,
+            action: { label: 'Try it free', to: 'edition' },
+          }
+        : { id: 'upgrade-standard', kind: 'upgrade', title: `More with Standard, ${formatPrice(std.monthly!)} a month`, body: standard, action: { label: 'See the editions', to: 'edition' } },
+    );
     notes.push({
       id: 'upgrade-ultra',
       kind: 'upgrade',
       title: `Everything for experts with Ultra, ${formatPrice(ultra.monthly!)} a month`,
-      body: 'Your AI fine-tuned (steps, answer length, how much it keeps in mind), Terminal, Task Manager, the virtual lab, your phone and computers together, and every look.',
+      body: 'Terminal, Task Manager, the virtual lab, your phone and computers together, AI coordination and every look.',
       action: { label: 'See the editions', to: 'edition' },
     });
   }
