@@ -43,6 +43,25 @@ when none is, the sign-in asks for its address.
 A license from an organization (FBRX Command, *managed*) always wins over an account's; between a key typed into
 Settings → License and an account's, the fuller one counts.
 
+### Offline accounts (local, no cloud)
+
+A computer that runs FBRX without the cloud — a local-only environment, or the Beta before the account server is live
+— can make an **offline account** instead: **Settings → Account → Make an offline account**. It is a local identity
+(a name, an optional email, an optional start password) kept on the computer; it never reaches a server. It pairs
+with a license key for its edition: a **Beta key**, or a key from a local FBRX Command (below). An optional start
+password locks FBRX each time it starts. The cloud FBRX account and the offline account are separate; a computer uses
+one or the other.
+
+**Beta keys** are ordinary license keys with a tier and an expiry — for example Ultra until the Beta ends. Make them
+from FBRX Command → Licenses (set the tier and an expiry date), or offline with `npm run license:issue -- --tier
+ultra --expires 2026-12-31 --customer "Beta tester"`. The computer activates the key under Settings → License, as any
+other.
+
+A **local FBRX Command** — one an organization runs for itself (`deploy/control-plane`, with sign-up closed) — keeps
+working as it always has: it issues license keys, enrolls computers and pushes policy, all on the organization's own
+network with no dependence on FBRX's cloud. The cloud account server ([CLOUD.md](CLOUD.md)) is for the public, shared
+FBRX Command; a local one needs none of it.
+
 ## Signing in, and getting back in
 
 An account is an email and a password. FBRX emails a link to **confirm the address** when the account is made
