@@ -7,6 +7,7 @@ import { playChime } from './notify-sound';
 import { useConsoleSessions, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
 import { AgentNameContext, EmergencyStop } from './widgets';
+import { LocalAccountLock } from './account';
 import { GooseOverlay, summonGoose, unlockTrophy, useKonami } from './fun';
 import { TrophyBadge } from './trophies';
 import { DashboardPage } from './pages/dashboard';
@@ -59,6 +60,7 @@ const MeshPage = lazy(() => import('./pages/mesh').then((m) => ({ default: m.Mes
 const AiCoordPage = lazy(() => import('./pages/aicoord').then((m) => ({ default: m.AiCoordPage })));
 const MigratePage = lazy(() => import('./pages/migrate').then((m) => ({ default: m.MigratePage })));
 const ClipboardPage = lazy(() => import('./pages/clipboard').then((m) => ({ default: m.ClipboardPage })));
+const BrowserApp = lazy(() => import('./pages/browser').then((m) => ({ default: m.BrowserApp })));
 
 export type Route =
   | 'home'
@@ -83,6 +85,7 @@ export type Route =
   | 'processes'
   | 'migrate'
   | 'clipboard'
+  | 'browser'
   | 'terminal'
   | 'toolbox'
   | 'library'
@@ -104,6 +107,8 @@ export type Route =
 
 /** This window shows one page on its own, beside the main window (opened with "Open in a new window"). */
 export const POPOUT = new URLSearchParams(location.search).has('popout');
+/** This window is the FBRX Browser (its own window, opened from the sidebar or tray). */
+export const BROWSER_WINDOW = new URLSearchParams(location.search).has('browser');
 const popoutPage = location.hash.replace(/^#\/?/, '').split('/')[0];
 /** Pages set to open in their own window (Settings → General → Windows); kept up to date by the main window. */
 let ownWindows: Record<string, boolean> = {};
@@ -111,6 +116,8 @@ let ownWindows: Record<string, boolean> = {};
 /** Navigates to a page; `to` may carry a sub-path such as `notes/note_123` or `settings/appearance`. */
 export function navigate(to: string) {
   const page = to.split('/')[0];
+  // The browser lives in its own window: opening it from the main window focuses that window, not a page here.
+  if (page === 'browser' && !BROWSER_WINDOW && bridge.openBrowser) return bridge.openBrowser(to.split('/').slice(1).join('/') || undefined);
   // A popped-out page keeps to itself: links to other pages open in the main window.
   if (POPOUT && page !== popoutPage && bridge.openMain) return bridge.openMain(to);
   const here = location.hash.replace(/^#\/?/, '').split('/')[0];
@@ -182,6 +189,17 @@ export function App() {
   const tier = useLicenseTier();
   useAppearance(settings?.settings, tier);
   if (route === 'spotlight') return settings ? <SpotlightView agentName={settings.settings.ai.agentName} fun={funEnabled(settings.settings, tier)} /> : null;
+  // The FBRX Browser runs in its own window (opened from the sidebar or tray): just the browser, no FBRX shell.
+  if (BROWSER_WINDOW)
+    return (
+      <>
+        <SupportBanner />
+        <LocalAccountLock />
+        <Suspense fallback={<div style={{ display: 'grid', placeItems: 'center', height: '100%' }}><Spinner /></div>}>
+          {settings ? <BrowserApp agentName={settings.settings.ai.agentName} /> : null}
+        </Suspense>
+      </>
+    );
   if (route === 'clips') return <ClipPicker />;
   if (route === 'goose-overlay') return <GooseOverlay />;
   return <MainApp route={route} settings={settings} />;
@@ -368,6 +386,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'updates', label: 'Updates', icon: 'download', section: 'PC care' },
     { id: 'bugs', label: 'Bug catcher', icon: 'bug', section: 'PC care', need: 'ultra' },
     { id: 'network', label: 'Network Center', icon: 'network', section: 'PC care' },
+    { id: 'browser', label: 'Browser', icon: 'globe', section: 'Utilities' },
     { id: 'files', label: 'Files', icon: 'folder', section: 'Utilities' },
     { id: 'processes', label: 'Task Manager', icon: 'activity', section: 'Utilities', need: 'ultra' },
     { id: 'clipboard', label: 'Clipboard', icon: 'clipboard', section: 'Utilities' },
@@ -514,6 +533,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return ultra ? <MigratePage /> : ultraOnly('Copy & migrate', 'Copy whole folders or move to a new computer with Robocopy or rsync, verified and resumable.');
       case 'clipboard':
         return <ClipboardPage />;
+      case 'browser':
+        // In the desktop app this opens its own window (see navigate); this inline view is the development fallback.
+        return <BrowserApp agentName={agentName} />;
       case 'terminal':
         return ultra ? <TerminalPage easterEggs={fun} /> : ultraOnly('The Terminal', 'PowerShell, the command prompt and device consoles, with a code lab, commands and snippets beside them.');
       case 'toolbox':
@@ -549,6 +571,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
 
   const hosts = (
     <>
+      <SupportBanner />
+      <LocalAccountLock />
       <ContextMenuHost agentName={agentName} ultra={ultra} essentials={essentials} />
       <MacroAddHost />
       {!POPOUT && <FolderRequestHost />}
@@ -646,6 +670,25 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     </VerticalContext.Provider>
     </LearnerContext.Provider>
     </TierContext.Provider>
+  );
+}
+
+/**
+ * While a support pass is active, a bar across the top of every FBRX window says so and offers to end it — so nobody
+ * forgets the computer is running with full access. The pass ends on its own when it runs out.
+ */
+function SupportBanner() {
+  const { data: support } = useCore('support.status', undefined, ['support.changed']);
+  if (!support?.active) return null;
+  const until = support.until ? new Date(support.until).toLocaleString() : null;
+  return (
+    <div className="support-banner" role="status">
+      <Icons.wrench size={14} />
+      <span>
+        Support mode is on{support.note ? ` — ${support.note}` : ''}. This computer is running with full access for troubleshooting{until ? `, until ${until}` : ''}.
+      </span>
+      <button onClick={() => void call('support.end').catch(() => undefined)}>End support</button>
+    </div>
   );
 }
 

@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { COMMAND_PLAN, EDITION_PLANS, TENANT_DISCOUNT, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, type AccountDevice, type AccountStatus, type Tier, type Vertical } from '@fbrx/shared';
-import { Button, Card, Field, Icons, Input, KeyValue, Status, formatDate, formatDay, timeAgo, useAction, useToast, type IconName } from '@fbrx/ui';
+import { COMMAND_PLAN, EDITION_PLANS, TENANT_DISCOUNT, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, type AccountDevice, type AccountStatus, type LocalAccountStatus, type Tier, type Vertical } from '@fbrx/shared';
+import { Button, Callout, Card, Field, Icons, Input, KeyValue, Status, Toggle, formatDate, formatDay, timeAgo, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { call, openExternal } from './client';
 import { useCore } from './hooks';
 
@@ -77,6 +77,43 @@ export function AccountSignInForm({ onDone, extraActions, startCreating = false 
   );
 }
 
+/**
+ * The offline account's start password: when it is on, FBRX waits for it at launch. A full-screen cover over every
+ * window until the right password is given (the lock is only this computer's, kept apart from the vault).
+ */
+export function LocalAccountLock() {
+  const { data: local } = useCore('localAccount.status', undefined, ['localAccount.changed']);
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const { run, busy } = useAction();
+  if (!local?.locked) return null;
+  const unlock = () =>
+    run('u', () => call('localAccount.unlock', { password })).then(
+      () => setPassword(''),
+      (e: Error) => setError(e.message),
+    );
+  return (
+    <div className="localacct-lock">
+      <form
+        className="localacct-lock-card"
+        onSubmit={(e) => {
+          e.preventDefault();
+          void unlock();
+        }}
+      >
+        <Icons.lock size={30} />
+        <h2>{local.account?.name ? `Welcome back, ${local.account.name}` : 'This computer is locked'}</h2>
+        <p>Enter your FBRX start password.</p>
+        <Input type="password" autoFocus value={password} autoComplete="current-password" onChange={(e) => (setPassword(e.target.value), setError(null))} />
+        {error && <Status tone="warning">{error}</Status>}
+        <Button type="submit" variant="primary" loading={busy === 'u'} disabled={!password}>
+          Unlock
+        </Button>
+      </form>
+    </div>
+  );
+}
+
 /** "Get Ultra, $11.99 a month": opens the checkout in the browser. Only the editions above what the account has. */
 export function BuyButtons({ account, only, short }: { account: AccountStatus; only?: Tier[]; short?: boolean }) {
   const { run, busy } = useAction();
@@ -108,10 +145,13 @@ export function AccountSettings() {
   if (!account) return null;
   if (!account.signedIn) {
     return (
-      <Card title="Your FBRX account" subtitle="Sign in to bring what you bought (on the website, on another computer or on your phone) to this computer. It turns that edition on here too.">
-        {account.error && <Status tone="warning">{account.error}</Status>}
-        <AccountSignInForm />
-      </Card>
+      <>
+        <Card title="Your FBRX account" subtitle="Sign in to bring what you bought (on the website, on another computer or on your phone) to this computer. It turns that edition on here too.">
+          {account.error && <Status tone="warning">{account.error}</Status>}
+          <AccountSignInForm />
+        </Card>
+        <LocalAccountCard />
+      </>
     );
   }
   return (
@@ -188,7 +228,136 @@ export function AccountSettings() {
           </div>
         </Card>
       )}
+      <LocalAccountCard />
     </>
+  );
+}
+
+/**
+ * The offline account: a local identity for running FBRX with no cloud (a local-only environment, or the Beta before
+ * the account server is live). It pairs with a license key for its edition. An optional password locks FBRX on start.
+ * Separate from the cloud FBRX account above.
+ */
+function LocalAccountCard() {
+  const { data: local } = useCore('localAccount.status', undefined, ['localAccount.changed']);
+  const { run, busy } = useAction();
+  const { confirm, dialog } = useConfirm();
+  const toast = useToast();
+  const [creating, setCreating] = useState(false);
+  const [f, setF] = useState({ name: '', email: '', password: '' });
+  const [pw, setPw] = useState({ current: '', next: '' });
+  const [editingPw, setEditingPw] = useState(false);
+  if (!local) return null;
+
+  if (!local.exists) {
+    return (
+      <Card title="Offline account" subtitle="For running FBRX without the cloud — a local-only computer, or the Beta before online accounts open. It pairs with a license key for its edition and never leaves this computer.">
+        {creating ? (
+          <form
+            className="fx-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run('make', () => call('localAccount.create', { name: f.name, email: f.email || undefined, password: f.password || undefined }), 'Offline account created').then(() => setCreating(false));
+            }}
+          >
+            <Field label="Name">
+              <Input value={f.name} maxLength={120} autoComplete="off" onChange={(e) => setF({ ...f, name: e.target.value })} />
+            </Field>
+            <Field label="Email" help="Optional, only to recognize you. It is never sent anywhere.">
+              <Input value={f.email} maxLength={200} autoComplete="off" onChange={(e) => setF({ ...f, email: e.target.value })} />
+            </Field>
+            <Field label="Start password" help="Optional. FBRX asks for it each time it starts.">
+              <Input type="password" value={f.password} autoComplete="new-password" onChange={(e) => setF({ ...f, password: e.target.value })} />
+            </Field>
+            <div className="fx-actions">
+              <Button type="submit" variant="primary" icon="user" loading={busy === 'make'} disabled={!f.name.trim()}>
+                Create it
+              </Button>
+              <Button variant="ghost" onClick={() => setCreating(false)}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        ) : (
+          <Button size="sm" icon="user" onClick={() => setCreating(true)}>
+            Make an offline account
+          </Button>
+        )}
+      </Card>
+    );
+  }
+
+  const a = local.account!;
+  return (
+    <Card
+      title={a.name}
+      subtitle={a.email ?? 'Offline account on this computer'}
+      actions={
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={() =>
+            void confirm({ title: 'Remove this offline account?', body: 'Its name and start password are deleted from this computer. Your license and settings are not touched.', confirmLabel: 'Remove', danger: true }).then((ok) => {
+              if (ok) void run('rm', () => call('localAccount.remove', { confirm: 'DELETE' }), 'Offline account removed');
+            })
+          }
+        >
+          Remove
+        </Button>
+      }
+    >
+      <Callout tone="info">Offline account — for local, licensed use with no cloud. Add a license key under Settings → License to set its edition.</Callout>
+      <div className="fx-form" style={{ marginTop: 10 }}>
+        <Toggle
+          checked={a.passwordOnStart}
+          onChange={(on) => {
+            if (on) setEditingPw(true);
+            else
+              void confirm({
+                title: 'Turn off the start password',
+                body: (
+                  <Field label="Current password">
+                    <Input type="password" autoComplete="current-password" onChange={(e) => setPw((v) => ({ ...v, current: e.target.value }))} />
+                  </Field>
+                ),
+                confirmLabel: 'Turn it off',
+              }).then((ok) => {
+                if (ok) void run('pwoff', () => call('localAccount.clearPassword', { current: pw.current }), 'Start password turned off').finally(() => setPw({ current: '', next: '' }));
+              });
+          }}
+          label="Ask for a password when FBRX starts"
+        />
+        {editingPw && (
+          <form
+            className="fx-form"
+            onSubmit={(e) => {
+              e.preventDefault();
+              void run('pwon', () => call('localAccount.setPassword', { password: pw.next, current: a.passwordOnStart ? pw.current : undefined }), 'Start password set')
+                .then(() => setEditingPw(false))
+                .finally(() => setPw({ current: '', next: '' }));
+            }}
+          >
+            {a.passwordOnStart && (
+              <Field label="Current password">
+                <Input type="password" value={pw.current} autoComplete="current-password" onChange={(e) => setPw({ ...pw, current: e.target.value })} />
+              </Field>
+            )}
+            <Field label="New start password" help="At least 4 characters.">
+              <Input type="password" value={pw.next} autoComplete="new-password" onChange={(e) => setPw({ ...pw, next: e.target.value })} />
+            </Field>
+            <div className="fx-actions">
+              <Button type="submit" size="sm" variant="primary" loading={busy === 'pwon'} disabled={pw.next.length < 4}>
+                Save password
+              </Button>
+              <Button type="button" size="sm" variant="ghost" onClick={() => (setEditingPw(false), setPw({ current: '', next: '' }))}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        )}
+      </div>
+      {dialog}
+    </Card>
   );
 }
 

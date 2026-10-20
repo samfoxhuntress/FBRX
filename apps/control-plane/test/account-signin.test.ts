@@ -119,4 +119,31 @@ describe('signing in on a computer with an FBRX account', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 60_000);
+
+  it('FBRX Command mints a support pass that puts one computer into support mode, and refusing to brew ends it', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fbrx-sup-'));
+    const k = await Kernel.create({ dataDir: dir, platform: createNodePlatform({ dataDir: dir, devMode: false, keychain: new StaticKeyKeychain(randomBytes(32), 'memory'), licensePublicKeys: [cp.ctx.keys.licensePublicPem] }) });
+    try {
+      k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, protection: { shield: { updateSignatures: false } } });
+      await k.start();
+      const installId = k.meta.get<string>('install.id')!;
+      expect(k.license.status().tier).toBe('essentials');
+
+      // The admin mints a pass for this computer's install id.
+      const minted = await api('POST', '/v1/admin/support-passes', { installId, note: 'Ticket 42', hours: 2 }, admin, { 'x-fbrx-tenant': tenantId });
+      expect(minted).toMatchObject({ tier: 'blackhole' });
+      // A pass for a different computer is refused on the endpoint it is pasted into.
+      const wrong = await api('POST', '/v1/admin/support-passes', { installId: 'not-this-one', hours: 1 }, admin, { 'x-fbrx-tenant': tenantId });
+      await expect(k.call('support.activate', { pass: wrong.pass }, USER)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+
+      // The right pass turns this computer into Black Hole with everything on; "refusetobrew" ends it.
+      expect((await k.call('support.activate', { pass: minted.pass }, USER)) as any).toMatchObject({ active: true, tier: 'blackhole' });
+      expect(k.license.status()).toMatchObject({ tier: 'blackhole', source: 'support', support: true });
+      expect((await k.call('support.end', {}, USER)) as any).toMatchObject({ active: false });
+      expect(k.license.status().tier).toBe('essentials');
+    } finally {
+      await k.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
 });

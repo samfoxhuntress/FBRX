@@ -45,6 +45,11 @@ export interface ServerResourcesInfo {
 /** The built-in browser's own storage (cookies, sign-ins) for server consoles, apart from everything else in FBRX. */
 export const SERVER_BROWSER_PARTITION = 'persist:fbrx-servers';
 
+/** FBRX Browser's own storage for ordinary web browsing (cookies, sign-ins), kept apart from FBRX's own pages. */
+export const WEB_BROWSER_PARTITION = 'persist:fbrx-web';
+/** A private tab's session: nothing is kept once the tab closes. */
+export const WEB_BROWSER_PRIVATE_PARTITION = 'fbrx-web-private';
+
 /** A server whose web console opens inside FBRX (Lab → FBRX Server → Your servers). */
 export interface SavedServer {
   id: string;

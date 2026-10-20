@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { SpotlightItem } from '@fbrx/shared';
+import { SUPPORT_ENTER_PHRASE, SUPPORT_EXIT_PHRASE, SUPPORT_PASS_PREFIX, type SpotlightItem } from '@fbrx/shared';
 import { Icons, Spinner, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { Markdown } from '../markdown';
@@ -22,6 +22,12 @@ const KIND_ICON: Record<SpotlightItem['kind'], IconName> = {
 const KIND_LABEL: Partial<Record<SpotlightItem['kind'], string>> = { app: 'Apps', file: 'Files', page: 'FBRX', command: 'Settings & commands', note: 'Notes', task: 'Tasks', snippet: 'Snippets', recent: 'Recent' };
 
 /** The Spotlight launcher (its own small window, opened with the global hotkey). */
+/** Whether the typed text is a support-mode phrase or a pass, handled specially on Enter. */
+function supportFromInput(t: string): boolean {
+  const low = t.toLowerCase();
+  return low === SUPPORT_ENTER_PHRASE || low === SUPPORT_EXIT_PHRASE || t.startsWith(`${SUPPORT_PASS_PREFIX}.`);
+}
+
 export function SpotlightView({ agentName, fun }: { agentName: string; fun: boolean }) {
   const [q, setQ] = useState('');
   const [items, setItems] = useState<SpotlightItem[]>([]);
@@ -120,6 +126,14 @@ export function SpotlightView({ agentName, fun }: { agentName: string; fun: bool
     } else if (e.key === 'Tab') {
       e.preventDefault();
       void quickAnswer();
+    } else if (e.key === 'Enter' && supportFromInput(q.trim())) {
+      // Support mode (troubleshooting), typed here too: the phrase opens the license box; a pass or the resume phrase act.
+      e.preventDefault();
+      const t = q.trim();
+      if (t.toLowerCase() === SUPPORT_ENTER_PHRASE) bridge.openMain?.('settings/license');
+      else if (t.toLowerCase() === SUPPORT_EXIT_PHRASE) void call('support.end').catch(() => undefined);
+      else void call('support.activate', { pass: t }).catch((err: Error) => setMessage(err.message));
+      hide();
     } else if (e.key === 'Enter' && merged[sel]) {
       e.preventDefault();
       void exec(merged[sel], e.ctrlKey || e.metaKey ? 'reveal' : undefined);

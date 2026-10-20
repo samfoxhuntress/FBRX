@@ -12,6 +12,7 @@ import { ClipHistory } from './clip-history';
 import { PasteKeys } from './paste-keys';
 import { runJavaScript, stopJavaScript } from './code-sandbox';
 import { guardWebviews, setupServerBrowser } from './server-browser';
+import { browserWebContents, browserWindowOpen, openBrowserWindow, setupWebSessions, type BrowserDeps } from './browser';
 
 const dataDir = process.env.FBRX_HOME ?? app.getPath('userData');
 const rendererUrl = process.env.FBRX_RENDERER_URL ?? null;
@@ -159,6 +160,24 @@ function provisioningLocations(): string[] {
   const arg = process.argv.find((a) => a.startsWith('--provision='));
   if (arg) out.unshift(arg.slice('--provision='.length));
   return out;
+}
+
+/** How the FBRX Browser window reaches the kernel, opens popups as tabs, and reports downloads it has checked. */
+function browserDeps(): BrowserDeps {
+  return {
+    kernel: () => kernel,
+    rendererUrl,
+    appPath: app.getAppPath(),
+    actor,
+    onPopup: (url) => openBrowserWindow(browserDeps(), url),
+    onDownload: ({ name, path, verdict }) => {
+      if (verdict === 'threat') {
+        deliverNotification({ title: 'Download stopped', body: `FBRX Shield found a threat in "${name}" and moved it to quarantine.`, level: 'error', source: 'shield' });
+      } else {
+        deliverNotification({ title: 'Download finished', body: verdict === 'clean' ? `"${name}" is saved and FBRX Shield found nothing wrong.` : `"${name}" is saved.`, level: 'success', source: 'shield', open: 'shield' });
+      }
+    },
+  };
 }
 
 function showWindow(route?: string) {
@@ -602,6 +621,7 @@ function trayMenu() {
     { type: 'separator' },
     { label: 'Open FBRX Endpoint', click: () => showWindow() },
     { label: 'New agent chat', click: () => showWindow('agent') },
+    { label: browserWindowOpen() ? 'Show FBRX Browser' : 'Open FBRX Browser', click: () => openBrowserWindow(browserDeps()) },
     { label: `Spotlight${spotlightKey ? ` (${spotlightKey})` : ''}`, click: () => showSpotlight() },
     { label: `Clipboard history${pickerKey ? ` (${pickerKey.replace('Control', 'Ctrl')})` : ''}`, click: () => showClipPicker() },
     { label: pending ? `Review ${pending} pending approval${pending > 1 ? 's' : ''}` : 'No pending approvals', enabled: pending > 0, click: () => showWindow('approvals') },
@@ -760,6 +780,12 @@ function registerIpc() {
     if (url) void shell.openExternal(url);
     return !!url;
   });
+  // FBRX Browser: open or focus its own window (from the sidebar, the tray, or a link).
+  ipcMain.handle('fbrx:browser', (e, action: unknown, url?: unknown) => {
+    if (!trusted(e) || action !== 'open') return false;
+    openBrowserWindow(browserDeps(), typeof url === 'string' && /^https?:\/\//i.test(url) ? url : undefined);
+    return true;
+  });
   ipcMain.handle('fbrx:goose', (e, action: string, on?: boolean) => {
     if (!trusted(e)) return false;
     if (action === 'summon') summonGoose();
@@ -798,6 +824,7 @@ async function boot() {
   kernel.events.onAny((name, payload) => {
     win?.webContents.send('fbrx:event', name, payload);
     for (const p of popouts.values()) if (!p.isDestroyed()) p.webContents.send('fbrx:event', name, payload);
+    browserWebContents()?.send('fbrx:event', name, payload);
     if (name === 'settings.changed') {
       bindMacroKeys();
       clips.setEnabled(!!kernel?.settings.get().clipboard.history);
@@ -849,6 +876,7 @@ app.whenReady().then(async () => {
   serveVoice();
   guardPermissions();
   setupServerBrowser(() => kernel);
+  setupWebSessions(browserDeps());
   appMenu();
   try {
     await boot();

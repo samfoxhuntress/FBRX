@@ -36,6 +36,10 @@ interface Bridge {
   edit?(action: 'cut' | 'copy' | 'paste' | 'pasteAsText' | 'selectAll' | 'undo' | 'redo'): Promise<boolean>;
   /** The Silly Goose overlay window (Electron only). */
   goose?(action: 'summon' | 'leave' | 'interactive', on?: boolean): Promise<unknown> | void;
+  /** Open or focus the FBRX Browser window (Electron only). */
+  openBrowser?(url?: string): void;
+  /** A URL to open as a new tab in the browser window. */
+  onBrowserOpen?(cb: (url: string) => void): () => void;
   /** The pointer's position (the click-through overlay can't see it), honks and shoos, for the goose. */
   onGoose?(cb: (e: { type: 'cursor'; x: number; y: number } | { type: 'honk' } | { type: 'shoo' }) => void): () => void;
   /** Clipboard history, kept in memory by the desktop app (Electron only). */

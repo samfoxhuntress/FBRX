@@ -41,6 +41,14 @@ const api = {
   popOutWindow: (action: 'pin' | 'tile' | 'main', on?: boolean) => ipcRenderer.invoke('fbrx:window', action, on) as Promise<boolean>,
   edit: (action: 'cut' | 'copy' | 'paste' | 'pasteAsText' | 'selectAll' | 'undo' | 'redo') => ipcRenderer.invoke('fbrx:edit', action) as Promise<boolean>,
   goose: (action: string, on?: boolean) => ipcRenderer.invoke('fbrx:goose', action, on) as Promise<unknown>,
+  /** Open or focus the FBRX Browser window (optionally at a URL). */
+  openBrowser: (url?: string) => void ipcRenderer.invoke('fbrx:browser', 'open', url),
+  /** A URL to open as a new tab in the browser window (a link asked for a new window, or Spotlight sent one). */
+  onBrowserOpen(cb: (url: string) => void): () => void {
+    const h = (_e: unknown, url: string) => cb(url);
+    ipcRenderer.on('fbrx:browser-open', h);
+    return () => ipcRenderer.removeListener('fbrx:browser-open', h);
+  },
   onGoose(cb: (e: unknown) => void): () => void {
     const h = (_e: unknown, payload: unknown) => cb(payload);
     ipcRenderer.on('fbrx:goose', h);

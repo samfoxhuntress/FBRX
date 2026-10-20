@@ -5,6 +5,9 @@ import {
   EDITION_PLANS,
   MAX_STEPS_PER_TASK,
   STANDARD_TRIAL_DAYS,
+  SUPPORT_ENTER_PHRASE,
+  SUPPORT_EXIT_PHRASE,
+  SUPPORT_PASS_PREFIX,
   THINKING_BUDGETS,
   THINKING_LEVELS,
   THINKING_NAMES,
@@ -1005,12 +1008,38 @@ function Updates() {
 
 function License() {
   const { data: l } = useCore('license.status', undefined, ['license.changed']);
+  const { data: support } = useCore('support.status', undefined, ['support.changed']);
   const { s, patch } = useSettings();
   const [key, setKey] = useState('');
+  // When the support phrase is typed, the box turns into a support-pass prompt.
+  const [awaitingPass, setAwaitingPass] = useState(false);
   const { run, busy } = useAction();
   const toast = useToast();
   if (!l || !s) return null;
   const activate = () => {
+    const trimmed = key.trim();
+    // Support mode (troubleshooting): the phrase asks for a signed pass; the resume phrase, or a pass, acts at once.
+    if (trimmed.toLowerCase() === SUPPORT_ENTER_PHRASE) {
+      setKey('');
+      setAwaitingPass(true);
+      return;
+    }
+    if (trimmed.toLowerCase() === SUPPORT_EXIT_PHRASE) {
+      setKey('');
+      setAwaitingPass(false);
+      if (support?.active) void run('a', () => call('support.end'), 'Support mode ended');
+      return;
+    }
+    if (trimmed.startsWith(`${SUPPORT_PASS_PREFIX}.`)) {
+      void run('a', () =>
+        call('support.activate', { pass: trimmed }).then((st) => {
+          setKey('');
+          setAwaitingPass(false);
+          toast.success('Support mode on', `This computer runs as ${TIER_NAMES[(st as { tier: Tier }).tier ?? 'blackhole']} until the pass runs out. Type "${SUPPORT_EXIT_PHRASE}" to end it.`);
+        }),
+      );
+      return;
+    }
     // 418: not a license at all, just a teapot. It unlocks the easter eggs, in every edition.
     if (key === '418') {
       setKey('');
@@ -1054,15 +1083,38 @@ function License() {
           ]}
         />
         {l.message && <Callout tone="info">{l.message}</Callout>}
+        {support?.active && (
+          <Callout tone="warning">
+            Support mode is on until {support.until ? formatDate(support.until) : 'the pass runs out'}. This computer runs with full access for troubleshooting. Type “{SUPPORT_EXIT_PHRASE}” below, or{' '}
+            <button className="fx-link" onClick={() => void run('a', () => call('support.end'), 'Support mode ended')}>
+              end support now
+            </button>
+            .
+          </Callout>
+        )}
       </Card>
-      <Card title={l.state === 'valid' ? 'Change the license key' : 'Enter a license key'} subtitle={l.source === 'managed' ? 'Computers in an organization receive their license automatically' : 'Paste the license key you bought or got from your organization. If it belongs to an FBRX Command tenant, this computer joins it too.'}>
+      <Card
+        title={awaitingPass ? 'Enter the support pass' : l.state === 'valid' ? 'Change the license key' : 'Enter a license key'}
+        subtitle={
+          awaitingPass
+            ? 'Paste the support pass FBRX gave you for this computer. It turns on full access for a short while, for troubleshooting.'
+            : l.source === 'managed'
+              ? 'Computers in an organization receive their license automatically'
+              : 'Paste the license key you bought or got from your organization. If it belongs to an FBRX Command tenant, this computer joins it too.'
+        }
+      >
         <div className="fx-form">
-          <TextArea code rows={4} value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder="FBRX1.…" />
+          <TextArea code rows={4} value={key} onChange={(e) => setKey(e.target.value)} placeholder={awaitingPass ? `${SUPPORT_PASS_PREFIX}.…` : 'FBRX1.…'} />
           <div className="fx-actions">
-            <Button variant="primary" loading={busy === 'a'} disabled={!key} onClick={activate}>
-              Activate
+            <Button variant="primary" loading={busy === 'a'} disabled={!key.trim()} onClick={activate}>
+              {awaitingPass ? 'Start support mode' : 'Activate'}
             </Button>
-            {l.source === 'local' && (
+            {awaitingPass && (
+              <Button variant="ghost" onClick={() => (setAwaitingPass(false), setKey(''))}>
+                Cancel
+              </Button>
+            )}
+            {!awaitingPass && l.source === 'local' && (
               <Button variant="danger" onClick={() => void run('r', () => call('license.remove'), 'License removed')}>
                 Remove license
               </Button>
