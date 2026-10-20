@@ -1,5 +1,7 @@
 // The account page: sign in or make an account, see what it has, buy Standard or Ultra (Stripe Checkout), manage
-// billing, start an FBRX Command, delete the account. Talks to the FBRX Command accounts live on (config.js).
+// billing, see where the account is signed in, start an FBRX Command, delete the account. The links FBRX emails open
+// here too (#verify=… confirms the email, #reset=… chooses a new password). Talks to the FBRX Command accounts live on
+// (config.js).
 (function () {
   'use strict';
   // config.js: the account server, and the names and prices from the price list (build.mjs).
@@ -61,19 +63,30 @@
       '<label>Email<input name="email" type="email" autocomplete="email" required></label>' +
       '<label>Password' + (making ? ' <span class="muted small">(at least 12 characters)</span>' : '') + '<input name="password" type="password" autocomplete="' + (making ? 'new-password' : 'current-password') + '" required minlength="' + (making ? 12 : 1) + '"></label>' +
       '<div class="row"><button class="btn primary" type="submit">' + (making ? 'Make my account' : 'Sign in') + '</button>' +
-      '<button class="btn" type="button" id="swap">' + (making ? 'I have an account' : 'Make an account') + '</button></div>' +
+      '<button class="btn" type="button" id="swap">' + (making ? 'I have an account' : 'Make an account') + '</button>' +
+      (making ? '' : '<button class="btn" type="button" id="forgot">Forgot your password?</button>') + '</div>' +
       '<p class="error" id="err">' + esc(err || '') + '</p></form></div>' +
       '<p class="muted small">One FBRX account for your computers and your phone: sign in on each, and it turns on what you have.</p>';
     document.getElementById('swap').onclick = function () {
       mode = making ? 'signin' : 'signup';
       renderSignIn();
     };
+    var forgot = document.getElementById('forgot');
+    if (forgot) forgot.onclick = function () {
+      var email = document.getElementById('f').email.value.trim();
+      if (!email) return fail(new Error('Type your email first.'));
+      busy(forgot, true);
+      call('POST', '/v1/accounts/password/forgot', { email: email }).then(function () {
+        notice = 'If ' + email + ' has an FBRX account, a link to choose a new password is on its way. It works for an hour.';
+        renderSignIn();
+      }, function (e) { busy(forgot, false); fail(e); });
+    };
     document.getElementById('f').onsubmit = function (e) {
       e.preventDefault();
       var f = e.target;
       var btn = f.querySelector('button[type=submit]');
       busy(btn, true);
-      var body = { email: f.email.value.trim(), password: f.password.value, device: 'website' };
+      var body = { email: f.email.value.trim(), password: f.password.value, device: { name: 'Website', kind: 'website' } };
       if (making) body.name = f.name.value.trim();
       call('POST', making ? '/v1/accounts/signup' : '/v1/accounts/login', body)
         .then(function (r) {
@@ -101,8 +114,10 @@
       '<div class="card"><div class="row"><div style="flex:1"><h2 style="margin:0">' + esc(a.name) + '</h2><div class="muted">' + esc(a.email) + '</div></div><button class="btn small" id="out">Sign out</button></div>' +
       '<p>Your edition: <span class="badge">' + esc(NAMES[a.tier] || a.tier) + '</span>' + (a.tier === 'essentials' ? ' <span class="muted">(free; nothing bought yet)</span>' : '') + '</p>' +
       (bought.length ? '<p class="muted small">' + bought.map(function (e) { return esc(NAMES[e.tier] || e.productId) + ' · ' + esc(SITE.sources[e.source] || e.source) + (e.periodEnd ? ', renews ' + esc(new Date(e.periodEnd).toLocaleDateString()) : ''); }).join('<br>') + '</p>' : '') +
+      (a.emailVerified ? '' : '<p class="note">Confirm your email: open the link FBRX sent to ' + esc(a.email) + '. <button class="btn small" id="resend">Send it again</button></p>') +
       '<div class="row">' + buyButtons(a) + (a.billingPortal ? '<button class="btn" id="portal">Manage billing</button>' : '') + '</div>' +
       '<p class="error" id="err"></p></div>' +
+      '<div class="card"><h3>Signed in on</h3><div id="devices" class="muted small">Loading…</div></div>' +
       '<div class="card"><h3>Your organizations</h3>' +
       (a.memberships.length
         ? '<p>' + a.memberships.map(function (m) { return esc(m.tenantName) + ' <span class="badge">' + esc(NAMES[m.tier] || m.tier) + '</span>'; }).join('<br>') + '</p><p class="muted small">Sign in on a computer (Settings → FBRX account) and join it to one of these: it runs the edition your organization gives you.</p>'
@@ -121,6 +136,12 @@
     Array.prototype.forEach.call(root.querySelectorAll('[data-buy]'), function (b) {
       b.onclick = function () { checkout(b.getAttribute('data-buy'), b); };
     });
+    var resend = document.getElementById('resend');
+    if (resend) resend.onclick = function () {
+      busy(resend, true);
+      call('POST', '/v1/accounts/verify/resend', {}).then(function () { resend.textContent = 'Sent'; }, function (e) { busy(resend, false); fail(e); });
+    };
+    loadDevices();
     var portal = document.getElementById('portal');
     if (portal) portal.onclick = function () {
       busy(portal, true);
@@ -150,6 +171,47 @@
     };
   }
 
+  /** Where the account is signed in, with a button to sign each of the others out. */
+  function loadDevices() {
+    var el = document.getElementById('devices');
+    call('GET', '/v1/accounts/sessions').then(function (list) {
+      el.innerHTML = list.map(function (d) {
+        var about = [d.platform, d.appVersion ? 'FBRX ' + d.appVersion : '', d.lastSeenAt ? 'seen ' + new Date(d.lastSeenAt).toLocaleDateString() : ''].filter(Boolean).join(' · ');
+        return '<div class="row"><div style="flex:1"><b>' + esc(d.name || 'Unnamed') + '</b> <span class="muted">' + esc({ computer: 'computer', phone: 'phone', website: 'browser' }[d.kind] || d.kind) + (about ? ' · ' + esc(about) : '') + '</span></div>' +
+          (d.current ? '<span class="badge">This browser</span>' : '<button class="btn small" data-out="' + esc(d.id) + '">Sign out</button>') + '</div>';
+      }).join('');
+      Array.prototype.forEach.call(el.querySelectorAll('[data-out]'), function (b) {
+        b.onclick = function () {
+          busy(b, true);
+          call('DELETE', '/v1/accounts/sessions/' + encodeURIComponent(b.getAttribute('data-out')), undefined).then(loadDevices, function (e) { busy(b, false); fail(e); });
+        };
+      });
+    }, function () { el.textContent = ''; });
+  }
+
+  /** The emailed link to choose a new password. */
+  function renderReset(resetToken) {
+    root.innerHTML =
+      '<div class="card"><form id="r"><h2>Choose a new password</h2>' +
+      '<label>New password <span class="muted small">(at least 12 characters)</span><input name="password" type="password" autocomplete="new-password" required minlength="12"></label>' +
+      '<label>The same again<input name="again" type="password" autocomplete="new-password" required minlength="12"></label>' +
+      '<div class="row"><button class="btn primary" type="submit">Change my password</button></div>' +
+      '<p class="error" id="err"></p><p class="muted small">This signs your account out everywhere: sign in again with the new password.</p></form></div>';
+    document.getElementById('r').onsubmit = function (e) {
+      e.preventDefault();
+      var f = e.target;
+      if (f.password.value !== f.again.value) return fail(new Error('The two passwords are not the same.'));
+      var btn = f.querySelector('button[type=submit]');
+      busy(btn, true);
+      call('POST', '/v1/accounts/password/reset', { token: resetToken, password: f.password.value }).then(function () {
+        token(null);
+        mode = 'signin';
+        notice = 'Your password is changed. Sign in with it.';
+        renderSignIn();
+      }, function (x) { busy(btn, false); fail(x); });
+    };
+  }
+
   function checkout(productId, btn) {
     busy(btn, true);
     return call('POST', '/v1/billing/checkout', { productId: productId }).then(function (r) { location.href = r.url; }, function (e) { busy(btn, false); fail(e); });
@@ -174,6 +236,18 @@
     return;
   }
   if (params.get('start') === 'organization' || params.get('buy')) mode = 'signup';
-  if (token()) show().catch(function () { renderSignIn(); });
+  // A link from FBRX's email: the token is in the fragment, so it never reaches a server's logs.
+  var link = /^#(verify|reset)=(.+)$/.exec(location.hash);
+  if (link) history.replaceState(null, '', location.pathname + location.search);
+  if (link && link[1] === 'reset') renderReset(decodeURIComponent(link[2]));
+  else if (link) {
+    call('POST', '/v1/accounts/verify', { token: decodeURIComponent(link[2]) }).then(
+      function () { notice = 'Your email is confirmed.'; },
+      function (e) { notice = e.message; },
+    ).then(function () {
+      if (token()) show().catch(function () { renderSignIn(); });
+      else renderSignIn();
+    });
+  } else if (token()) show().catch(function () { renderSignIn(); });
   else renderSignIn();
 })();

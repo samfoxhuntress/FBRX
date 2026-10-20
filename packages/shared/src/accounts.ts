@@ -36,6 +36,8 @@ export interface EntitlementView {
 export interface AccountView {
   id: string;
   email: string;
+  /** The email was confirmed (the link FBRX sent to it was opened). */
+  emailVerified: boolean;
   name: string;
   /** The edition the account's own purchases give its computers and phones (Essentials when nothing is bought). */
   tier: Tier;
@@ -72,6 +74,32 @@ export interface AccountLicense {
   expiresAt: string | null;
 }
 
+/** Where an FBRX account is signed in: FBRX on a computer, the phone app, or the website. */
+export const ACCOUNT_DEVICE_KINDS = ['computer', 'phone', 'website'] as const;
+export type AccountDeviceKind = (typeof ACCOUNT_DEVICE_KINDS)[number];
+
+/** What a sign-in says about where it happens. `installId` is the install's own id: signing in again replaces it. */
+export interface AccountDeviceInfo {
+  name: string;
+  kind: AccountDeviceKind;
+  platform?: string;
+  appVersion?: string;
+  installId?: string;
+}
+
+/** A computer, phone or browser signed in to the account (GET /v1/accounts/sessions). */
+export interface AccountDevice {
+  id: string;
+  name: string;
+  kind: AccountDeviceKind;
+  platform: string | null;
+  appVersion: string | null;
+  signedInAt: string;
+  lastSeenAt: string | null;
+  /** The one asking. */
+  current: boolean;
+}
+
 /** An organization's FBRX Command plan in the cloud, as its console shows it (GET /v1/admin/billing). */
 export interface TenantPlanView {
   /** `manual`: the operator of this FBRX Command issues its licenses; `cloud`: it pays for its plan. */
@@ -96,6 +124,8 @@ export interface PlansInfo {
 /** The FBRX account this computer is signed in to (Settings → Account). */
 export interface AccountStatus {
   signedIn: boolean;
+  /** The account's email is confirmed (needed to join an organization's members or start one). */
+  emailVerified: boolean;
   /** The FBRX Command the account lives on ("" until one is known: then the sign-in asks for its address). */
   server: string;
   email: string | null;

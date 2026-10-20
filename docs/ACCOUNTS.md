@@ -43,6 +43,36 @@ when none is, the sign-in asks for its address.
 A license from an organization (FBRX Command, *managed*) always wins over an account's; between a key typed into
 Settings → License and an account's, the fuller one counts.
 
+## Signing in, and getting back in
+
+An account is an email and a password. FBRX emails a link to **confirm the address** when the account is made
+(*Send it again* in Settings → FBRX account and on the website's account page); an account becomes an organization's
+member, or starts an organization, only once its email is confirmed, so nobody can claim someone else's address.
+**Forgot your password?** (in FBRX's sign-in, on the website and in the phone app) emails a link to choose a new one:
+it works once, for an hour, and signs the account out everywhere. Both links open the website's account page
+(`FBRX_CP_ACCOUNT_URL`), with the token after `#`, so it never reaches a server's logs.
+
+Every sign-in says where it is: a **computer** (its name, system, FBRX version and install id), a **phone** (the
+app) or the **website**. Settings → FBRX account → **Signed in on** and the website list them, and sign any of the others
+out: its token stops working at once (a computer keeps the license it was given until it runs out, a few days at most).
+The same install signing in again takes the place of its last sign-in, so each computer is listed once.
+
+### Where accounts are kept
+
+In the database of the FBRX Command that runs in the cloud for everyone (`control-plane.db` in its data folder, see
+[CLOUD.md](CLOUD.md)):
+
+| What | How it is kept |
+| --- | --- |
+| Email, name | As typed; the email is unique, whatever its capitals |
+| Password | Never itself: a scrypt hash with its own salt, compared in constant time; ten wrong tries lock the account for a quarter of an hour |
+| Sign-ins | One row each (where, when, last seen). The token the app keeps is signed by FBRX Command and names that row, so ending the row ends the token |
+| Emailed links | Only a SHA-256 hash of each, used once, then expired (a week to confirm, an hour to reset) |
+| Purchases | The provider's ids and states (`entitlements`): never a card number, which stays with Stripe, Apple or Google |
+| License keys | Signed fresh from the account's purchases each time a computer asks; not stored |
+
+Deleting the account deletes all of it (sign-ins, links, memberships and purchases' records go with it).
+
 ## Organizations and members
 
 An organization's FBRX Command gives editions to people, not just computers: a **member** is an FBRX account the
@@ -56,7 +86,7 @@ Black Hole there.
 | | |
 | --- | --- |
 | `GET /v1/admin/members` | The organization's members, their editions and how many computers each joined |
-| `POST /v1/admin/members` `{ email, tier }` | Adds an account (it must exist) |
+| `POST /v1/admin/members` `{ email, tier }` | Adds an account (it must exist, with its email confirmed) |
 | `PATCH /v1/admin/members/:accountId` `{ tier }` | Changes a member's edition, on their computers too |
 | `DELETE /v1/admin/members/:accountId` | Removes a member |
 | `POST /v1/accounts/memberships/:tenantId/enroll` | (The account) a one-time enrollment token for this computer |
@@ -91,7 +121,9 @@ the operator issues. The operator sees every account under **FBRX accounts**.
 | Variable | |
 | --- | --- |
 | `FBRX_CP_PUBLIC_SIGNUP=1` | Anyone may make an FBRX account |
-| `FBRX_CP_ACCOUNT_URL` | The website's account page, where Checkout and the billing portal send people back to (default: `<public URL>/account`) |
+| `FBRX_CP_ACCOUNT_URL` | The website's account page, where Checkout and the billing portal send people back to and the emailed links open (default: `<public URL>/account`) |
+| `FBRX_SMTP_URL` | Email for accounts (confirming an address, resetting a password), from any transactional email service: `smtps://user:password@smtp.example.com:465`. Without it nothing is sent, and the log says so |
+| `FBRX_MAIL_FROM` | Who the email comes from (default `FBRX <no-reply@<public host>>`); use an address on a domain the email service is set up to send for |
 
 ### Stripe
 
@@ -161,9 +193,15 @@ downgrade ends the purchase it replaced.
 | | |
 | --- | --- |
 | `GET /v1/plans` | The price list (`editions`, `command`, `server`), whether sign-up is open, and which ways to pay are set up |
-| `POST /v1/accounts/signup` `{ email, name, password, device }` | Makes an account; answers with an account token (90 days) and the account |
+| `POST /v1/accounts/signup` `{ email, name, password, device }` | Makes an account and emails the link to confirm it; answers with an account token (90 days) and the account. `device`: `{ name, kind: computer \| phone \| website, platform?, appVersion?, installId? }` (a name alone counts as a computer) |
 | `POST /v1/accounts/login` `{ email, password, device }` | Signs in (ten wrong passwords lock the account for a quarter of an hour) |
 | `POST /v1/accounts/logout` | Ends this sign-in |
+| `GET /v1/accounts/sessions` | Where the account is signed in (`current`: this one) |
+| `DELETE /v1/accounts/sessions/:id` | Signs one of them out |
+| `POST /v1/accounts/verify` `{ token }` | Confirms the email (the emailed link) |
+| `POST /v1/accounts/verify/resend` | Sends the link to confirm the email again |
+| `POST /v1/accounts/password/forgot` `{ email }` | Emails a link to choose a new password (the same answer whether the account exists or not) |
+| `POST /v1/accounts/password/reset` `{ token, password }` | Sets the new password from that link, and signs out everywhere |
 | `GET /v1/accounts/me` | The account: its edition and what it bought |
 | `GET /v1/accounts/license` | The license key the account signs a computer up to (`key: null` with nothing bought) |
 | `POST /v1/accounts/password` `{ current, password }` | Changes the password and signs out everywhere else |

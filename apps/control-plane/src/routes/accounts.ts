@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { SignJWT, jwtVerify } from 'jose';
 import { z } from 'zod';
-import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIERS, TIER_SHORT, VERTICALS, atLeast, productById, type AccountView, type MemberView, type PlansInfo, type Tier } from '@fbrx/shared';
+import { ACCOUNT_DEVICE_KINDS, COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIERS, TIER_SHORT, VERTICALS, atLeast, productById, type AccountDevice, type AccountDeviceInfo, type AccountView, type MemberView, type PlansInfo, type Tier } from '@fbrx/shared';
 import { hashPassword, randomToken, safeEqual, sha256Hex, verifyPassword } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
@@ -19,8 +19,12 @@ import { slugify } from './util';
 /**
  * FBRX accounts and what they buy (FBRX Command in the cloud).
  *
- * - Anyone signs up (when FBRX_CP_PUBLIC_SIGNUP=1) with an email and a password; the app on a computer or a phone signs
- *   in and keeps a long-lived account token, and fetches the account's license with it (GET /v1/accounts/license).
+ * - Anyone signs up (when FBRX_CP_PUBLIC_SIGNUP=1) with an email and a password (kept only as a scrypt hash); the app
+ *   on a computer or a phone signs in and keeps a long-lived account token, and fetches the account's license with it
+ *   (GET /v1/accounts/license). Each sign-in is one row in account_sessions, by install: the account lists them and
+ *   signs any of them out.
+ * - FBRX emails a link to confirm the address (needed to become an organization's member or start one) and, when asked,
+ *   one to reset the password. Only the links' hashes are kept, each works once, and a reset signs out everywhere.
  * - On the website and on computers, editions are bought with Stripe Checkout (cards, Apple Pay, Google Pay); in the
  *   phone apps, with the App Store or Google Play (their rules: purchases made in an app go through the store). Every
  *   purchase lands in the same entitlements, so whatever an account bought anywhere signs in everywhere.
@@ -28,6 +32,9 @@ import { slugify } from './util';
 
 const ISSUER = 'fbrx-accounts';
 const ACCOUNT_TOKEN_DAYS = 90;
+/** How long the emailed links work. */
+const VERIFY_LINK_MS = 7 * 86_400_000;
+const RESET_LINK_MS = 60 * 60_000;
 const TEST_PURCHASE = 'That purchase was made in a test copy of the app, so nothing was charged and it does not turn on an edition.';
 
 interface AccountRow {
@@ -40,6 +47,7 @@ interface AccountRow {
   stripe_customer_id: string | null;
   failed_logins: number;
   locked_until: string | null;
+  email_verified_at: string | null;
   created_at: string;
 }
 
@@ -55,6 +63,7 @@ export function accountView(ctx: AppContext, a: AccountRow): AccountView {
   return {
     id: a.id,
     email: a.email,
+    emailVerified: !!a.email_verified_at,
     name: a.name,
     tier: accountTier(ctx, a.id).tier,
     entitlements: accountEntitlements(ctx, a.id).map(entitlementView),
@@ -67,13 +76,54 @@ export function accountView(ctx: AppContext, a: AccountRow): AccountView {
   };
 }
 
-async function issueAccountToken(ctx: AppContext, account: AccountRow, label: string) {
+/** What a sign-in says about where it is; older apps send a name only (a computer). */
+const DeviceSchema = z
+  .union([
+    z.string().max(120).transform((name): AccountDeviceInfo => ({ name, kind: 'computer' })),
+    z.object({ name: z.string().max(120), kind: z.enum(ACCOUNT_DEVICE_KINDS), platform: z.string().max(40).optional(), appVersion: z.string().max(40).optional(), installId: z.string().max(80).optional() }),
+  ])
+  .default({ name: '', kind: 'computer' });
+
+async function issueAccountToken(ctx: AppContext, account: AccountRow, device: AccountDeviceInfo) {
   const sid = ids.accountSession();
   const now = new Date();
   const expires = new Date(now.getTime() + ACCOUNT_TOKEN_DAYS * 86_400_000);
-  ctx.db.run('INSERT INTO account_sessions (id, account_id, label, created_at, expires_at, last_seen_at) VALUES (?,?,?,?,?,?)', sid, account.id, label.slice(0, 120), now.toISOString(), expires.toISOString(), now.toISOString());
+  // The same install signing in again takes the place of its last sign-in.
+  if (device.installId) ctx.db.run('UPDATE account_sessions SET revoked_at = ? WHERE account_id = ? AND install_id = ? AND revoked_at IS NULL', now.toISOString(), account.id, device.installId);
+  ctx.db.run(
+    'INSERT INTO account_sessions (id, account_id, label, kind, platform, app_version, install_id, created_at, expires_at, last_seen_at) VALUES (?,?,?,?,?,?,?,?,?,?)',
+    sid,
+    account.id,
+    device.name.slice(0, 120),
+    device.kind,
+    device.platform ?? null,
+    device.appVersion ?? null,
+    device.installId ?? null,
+    now.toISOString(),
+    expires.toISOString(),
+    now.toISOString(),
+  );
   const token = await new SignJWT({ sid }).setProtectedHeader({ alg: 'HS256' }).setSubject(account.id).setIssuedAt().setIssuer(ISSUER).setExpirationTime(Math.floor(expires.getTime() / 1000)).sign(ctx.keys.jwt);
   return { token, expiresAt: expires.toISOString() };
+}
+
+/** A one-time link's token for an account (confirming its email, resetting its password): only its hash is kept. */
+function issueLinkToken(ctx: AppContext, accountId: string, purpose: 'verify' | 'reset', lifetimeMs: number): string {
+  const token = randomToken(purpose === 'verify' ? 'fbrx_ver' : 'fbrx_rst');
+  const now = Date.now();
+  // A new link replaces the ones sent before it.
+  ctx.db.run('UPDATE account_tokens SET used_at = ? WHERE account_id = ? AND purpose = ? AND used_at IS NULL', new Date(now).toISOString(), accountId, purpose);
+  ctx.db.run('INSERT INTO account_tokens (id, account_id, purpose, token_hash, created_at, expires_at) VALUES (?,?,?,?,?,?)', ids.accountToken(), accountId, purpose, sha256Hex(token), new Date(now).toISOString(), new Date(now + lifetimeMs).toISOString());
+  return token;
+}
+
+/** The account a one-time link is for, using the link up; null when it is unknown, used or out of date. */
+function redeemLinkToken(ctx: AppContext, token: string, purpose: 'verify' | 'reset'): string | null {
+  const row = ctx.db.get<{ id: string; account_id: string; expires_at: string; used_at: string | null }>('SELECT id, account_id, expires_at, used_at FROM account_tokens WHERE token_hash = ? AND purpose = ?', sha256Hex(token), purpose);
+  const now = new Date().toISOString();
+  if (!row || row.used_at || row.expires_at < now) return null;
+  ctx.db.run('UPDATE account_tokens SET used_at = ? WHERE id = ?', now, row.id);
+  return row.account_id;
 }
 
 function accountAuth(ctx: AppContext) {
@@ -118,9 +168,20 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
   }));
 
   // ------------------------------------------------------------------------------------------- accounts
+  /** The website's account page opens the links; the token rides in the fragment, which never reaches a server. */
+  const link = (kind: 'verify' | 'reset', token: string) => `${cloud.returnUrl}#${kind}=${encodeURIComponent(token)}`;
+  async function sendVerification(a: AccountRow) {
+    const token = issueLinkToken(ctx, a.id, 'verify', VERIFY_LINK_MS);
+    await ctx.mail.send({
+      to: a.email,
+      subject: 'Confirm your FBRX account',
+      text: `Hi ${a.name},\n\nConfirm that this is the email address of your FBRX account:\n\n${link('verify', token)}\n\nThe link works for 7 days. If you did not make an FBRX account, ignore this email: nothing happens.\n\nFBRX`,
+    });
+  }
+
   app.post('/v1/accounts/signup', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
     if (!cloud.publicSignup) throw forbidden('This FBRX Command does not take new accounts');
-    const body = z.object({ email: z.string().email().max(200), name: z.string().trim().min(1).max(120), password: PasswordSchema, device: z.string().max(120).default('') }).parse(req.body);
+    const body = z.object({ email: z.string().email().max(200), name: z.string().trim().min(1).max(120), password: PasswordSchema, device: DeviceSchema }).parse(req.body);
     if (ctx.db.get('SELECT id FROM accounts WHERE email = ?', body.email.trim())) throw conflict('There is already an FBRX account with that email. Sign in instead.');
     const now = new Date().toISOString();
     const id = ids.account();
@@ -136,11 +197,12 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     );
     const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE id = ?', id)!;
     ctx.audit.record(accountActor(a, req), 'account.created', { type: 'account', id });
+    sendVerification(a).catch((err) => ctx.log.warn({ err, account: id }, 'Could not send the email to confirm an FBRX account'));
     return { ...(await issueAccountToken(ctx, a, body.device)), account: accountView(ctx, a) };
   });
 
   app.post('/v1/accounts/login', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
-    const body = z.object({ email: z.string().max(200), password: z.string().max(200), device: z.string().max(120).default('') }).parse(req.body);
+    const body = z.object({ email: z.string().max(200), password: z.string().max(200), device: DeviceSchema }).parse(req.body);
     const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE email = ?', body.email.trim());
     const fail = () => unauthorized('Wrong email or password');
     if (!a || a.status !== 'active') throw fail();
@@ -151,7 +213,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
       throw fail();
     }
     ctx.db.run('UPDATE accounts SET failed_logins = 0, locked_until = NULL, last_login_at = ? WHERE id = ?', new Date().toISOString(), a.id);
-    ctx.audit.record(accountActor(a, req), 'account.login', { type: 'account', id: a.id }, { device: body.device });
+    ctx.audit.record(accountActor(a, req), 'account.login', { type: 'account', id: a.id }, { device: body.device.name, kind: body.device.kind });
     return { ...(await issueAccountToken(ctx, a, body.device)), account: accountView(ctx, a) };
   });
 
@@ -161,6 +223,85 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   app.get('/v1/accounts/me', { preHandler: auth }, async (req) => accountView(ctx, req.account!));
+
+  /** Forgot the password: a link to choose a new one, by email. The same answer whether the account exists or not. */
+  app.post('/v1/accounts/password/forgot', { config: { rateLimit: { max: 5, timeWindow: '1 minute' } } }, async (req) => {
+    const body = z.object({ email: z.string().max(200) }).parse(req.body);
+    const a = ctx.db.get<AccountRow>("SELECT * FROM accounts WHERE email = ? AND status = 'active'", body.email.trim());
+    if (a) {
+      const token = issueLinkToken(ctx, a.id, 'reset', RESET_LINK_MS);
+      ctx.audit.record(accountActor(a, req), 'account.passwordResetSent', { type: 'account', id: a.id });
+      // Not waited for, so the answer takes as long either way.
+      ctx.mail
+        .send({
+          to: a.email,
+          subject: 'Reset your FBRX password',
+          text: `Hi ${a.name},\n\nChoose a new password for your FBRX account:\n\n${link('reset', token)}\n\nThe link works for an hour, once, and signs your account out everywhere. If you did not ask for it, ignore this email: your password stays as it is.\n\nFBRX`,
+        })
+        .catch((err) => ctx.log.warn({ err, account: a.id }, 'Could not send the email to reset an FBRX password'));
+    }
+    return { ok: true };
+  });
+
+  /** Sets a new password from the emailed link: once, within the hour; every sign-in ends. */
+  app.post('/v1/accounts/password/reset', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+    const body = z.object({ token: z.string().min(10).max(200), password: PasswordSchema }).parse(req.body);
+    const accountId = redeemLinkToken(ctx, body.token, 'reset');
+    const a = accountId ? ctx.db.get<AccountRow>("SELECT * FROM accounts WHERE id = ? AND status = 'active'", accountId) : undefined;
+    if (!a) throw badRequest('That link was used already or is out of date: ask for a new one');
+    const now = new Date().toISOString();
+    // The link reached the inbox, so the email is confirmed too.
+    ctx.db.run('UPDATE accounts SET password_hash = ?, failed_logins = 0, locked_until = NULL, email_verified_at = COALESCE(email_verified_at, ?), updated_at = ? WHERE id = ?', await hashPassword(body.password), now, now, a.id);
+    ctx.db.run('UPDATE account_sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL', now, a.id);
+    ctx.audit.record(accountActor(a, req), 'account.passwordReset', { type: 'account', id: a.id });
+    return { ok: true, email: a.email };
+  });
+
+  /** Confirms the account's email from the emailed link. */
+  app.post('/v1/accounts/verify', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+    const body = z.object({ token: z.string().min(10).max(200) }).parse(req.body);
+    const accountId = redeemLinkToken(ctx, body.token, 'verify');
+    if (!accountId) throw badRequest('That link was used already or is out of date: sign in and send a new one');
+    const now = new Date().toISOString();
+    ctx.db.run('UPDATE accounts SET email_verified_at = COALESCE(email_verified_at, ?), updated_at = ? WHERE id = ?', now, now, accountId);
+    ctx.audit.record({ type: 'account', id: accountId, label: accountId, tenantId: null, ip: req.ip }, 'account.emailVerified', { type: 'account', id: accountId });
+    return { ok: true };
+  });
+
+  app.post('/v1/accounts/verify/resend', { preHandler: auth, config: { rateLimit: { max: 3, timeWindow: '1 minute' } } }, async (req) => {
+    const a = req.account!;
+    if (a.email_verified_at) return { ok: true, sent: false };
+    try {
+      await sendVerification(a);
+    } catch {
+      throw new HttpError(502, 'The email could not be sent just now: try again in a few minutes', 'EMAIL');
+    }
+    return { ok: true, sent: true };
+  });
+
+  /** Where the account is signed in: computers, phones and browsers, most recently seen first. */
+  app.get('/v1/accounts/sessions', { preHandler: auth }, async (req): Promise<AccountDevice[]> =>
+    ctx.db
+      .all<{ id: string; label: string; kind: AccountDevice['kind']; platform: string | null; app_version: string | null; created_at: string; last_seen_at: string | null }>(
+        'SELECT id, label, kind, platform, app_version, created_at, last_seen_at FROM account_sessions WHERE account_id = ? AND revoked_at IS NULL AND expires_at > ? ORDER BY COALESCE(last_seen_at, created_at) DESC',
+        req.account!.id,
+        new Date().toISOString(),
+      )
+      .map((r) => ({ id: r.id, name: r.label, kind: r.kind, platform: r.platform, appVersion: r.app_version, signedInAt: r.created_at, lastSeenAt: r.last_seen_at, current: r.id === req.accountSessionId })),
+  );
+
+  /**
+   * Signs one of them out: its token stops working at once. A computer keeps the license it was given until it runs
+   * out (a few days at most), and turns back to what it had then.
+   */
+  app.delete('/v1/accounts/sessions/:id', { preHandler: auth }, async (req) => {
+    const a = req.account!;
+    const id = (req.params as { id: string }).id;
+    const r = ctx.db.run('UPDATE account_sessions SET revoked_at = ? WHERE id = ? AND account_id = ? AND revoked_at IS NULL', new Date().toISOString(), id, a.id);
+    if (!r.changes) throw notFound('That one is not signed in');
+    ctx.audit.record(accountActor(a, req), 'account.signedOutDevice', { type: 'account', id: a.id }, { session: id });
+    return { ok: true };
+  });
 
   /** The license this account signs a computer up to (no key with nothing bought), fetched again before it ends. */
   app.get('/v1/accounts/license', { preHandler: auth }, async (req) => accountLicense(ctx, req.account!));
@@ -233,6 +374,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!cloud.publicSignup) throw forbidden('This FBRX Command does not take new organizations');
     const body = z.object({ name: z.string().trim().min(1).max(120), kind: z.enum(VERTICALS).default('business') }).parse(req.body);
     const a = req.account!;
+    if (!a.email_verified_at) throw new HttpError(403, `Confirm your email first: open the link FBRX sent to ${a.email}, or send it again`, 'EMAIL_NOT_CONFIRMED');
     if (ctx.db.get('SELECT id FROM users WHERE email = ?', a.email)) throw conflict('That email already signs in to an FBRX Command console');
     const now = new Date().toISOString();
     const tenantId = ids.tenant();
@@ -475,6 +617,8 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
       const body = z.object({ email: z.string().email(), tier: z.enum(TIERS).default('essentials') }).parse(req.body);
       const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE email = ?', body.email.trim());
       if (!a) throw notFound('There is no FBRX account with that email yet: ask them to make one, then add them');
+      // Someone else could have made an account with that email: only its owner, who confirmed it, becomes a member.
+      if (!a.email_verified_at) throw conflict(`${a.email} has not confirmed the email of their FBRX account yet: ask them to open the link FBRX sent them, then add them`);
       if (ctx.db.get('SELECT 1 FROM tenant_members WHERE tenant_id = ? AND account_id = ?', tenantId, a.id)) throw conflict(`${a.email} is already a member`);
       ctx.db.run('INSERT INTO tenant_members (tenant_id, account_id, tier, created_at) VALUES (?,?,?,?)', tenantId, a.id, body.tier, new Date().toISOString());
       ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId, ip: req.ip }, 'member.added', { type: 'account', id: a.id, tenantId }, { tier: body.tier });

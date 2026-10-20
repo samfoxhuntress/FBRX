@@ -54,6 +54,11 @@ export interface CloudConfig {
    * license testers cost nothing either: allowTest (FBRX_GOOGLE_TEST_PURCHASES=1) is for a test FBRX Command only.
    */
   google: { packageName: string; serviceAccount: { clientEmail: string; privateKey: string; tokenUri: string }; rtdnToken: string; apiBase: string; allowTest: boolean } | null;
+  /**
+   * Email for FBRX accounts (confirming an address, resetting a password): an SMTP URL such as
+   * smtps://user:password@smtp.example.com:465 (FBRX_SMTP_URL) and who it comes from (FBRX_MAIL_FROM).
+   */
+  mail: { url: string; from: string } | null;
 }
 
 function readPems(paths: string | undefined): string[] {
@@ -89,6 +94,7 @@ export function loadCloudConfig(env: NodeJS.ProcessEnv, publicUrl: string): Clou
             allowTest: env.FBRX_GOOGLE_TEST_PURCHASES === '1',
           }
         : null,
+    mail: env.FBRX_SMTP_URL ? { url: env.FBRX_SMTP_URL, from: env.FBRX_MAIL_FROM ?? `FBRX <no-reply@${new URL(publicUrl).hostname}>` } : null,
   };
 }
 

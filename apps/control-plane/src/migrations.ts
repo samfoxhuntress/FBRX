@@ -505,4 +505,28 @@ export const CP_MIGRATIONS: Migration[] = [
       ALTER TABLE users ADD COLUMN account_id TEXT;
     `,
   },
+  {
+    version: 11,
+    name: 'account-recovery-devices',
+    // An FBRX account's confirmed email, the one-time links sent to it (confirming it, resetting the password; only
+    // their hashes are kept), and what each sign-in is: a computer, a phone or the website, and which install.
+    up: `
+      ALTER TABLE accounts ADD COLUMN email_verified_at TEXT;
+      CREATE TABLE account_tokens (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        purpose TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used_at TEXT
+      );
+      CREATE INDEX cp_account_tokens_account ON account_tokens (account_id);
+      ALTER TABLE account_sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'computer';
+      ALTER TABLE account_sessions ADD COLUMN platform TEXT;
+      ALTER TABLE account_sessions ADD COLUMN app_version TEXT;
+      ALTER TABLE account_sessions ADD COLUMN install_id TEXT;
+      CREATE INDEX cp_account_sessions_account ON account_sessions (account_id);
+    `,
+  },
 ];

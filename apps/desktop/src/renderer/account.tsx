@@ -1,6 +1,6 @@
-import { useState, type ReactNode } from 'react';
-import { COMMAND_PLAN, EDITION_PLANS, TENANT_DISCOUNT, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, type AccountStatus, type Tier, type Vertical } from '@fbrx/shared';
-import { Button, Card, Field, Input, KeyValue, Status, formatDate, formatDay, useAction } from '@fbrx/ui';
+import { useEffect, useState, type ReactNode } from 'react';
+import { COMMAND_PLAN, EDITION_PLANS, TENANT_DISCOUNT, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, type AccountDevice, type AccountStatus, type Tier, type Vertical } from '@fbrx/shared';
+import { Button, Card, Field, Icons, Input, KeyValue, Status, formatDate, formatDay, timeAgo, useAction, useToast, type IconName } from '@fbrx/ui';
 import { call, openExternal } from './client';
 import { useCore } from './hooks';
 
@@ -18,7 +18,13 @@ export function AccountSignInForm({ onDone, extraActions, startCreating = false 
   const [creating, setCreating] = useState(startCreating);
   const [f, setF] = useState({ server: '', email: '', password: '', name: '' });
   const { run, busy } = useAction();
+  const toast = useToast();
   const needServer = !account?.server;
+  const forgot = () =>
+    run('forgot', async () => {
+      await call('account.forgotPassword', { email: f.email, ...(needServer || f.server ? { server: f.server } : {}) });
+      toast.success('Check your email', `If ${f.email} has an FBRX account, a link to choose a new password is on its way. It opens in your browser.`);
+    });
   const submit = () =>
     run(
       'signin',
@@ -60,6 +66,11 @@ export function AccountSignInForm({ onDone, extraActions, startCreating = false 
         <Button variant="ghost" onClick={() => setCreating(!creating)}>
           {creating ? 'I have an account' : 'Make an account'}
         </Button>
+        {!creating && (
+          <Button variant="ghost" loading={busy === 'forgot'} disabled={!f.email || (needServer && !f.server)} title={f.email ? undefined : 'Type your email first'} onClick={() => void forgot()}>
+            Forgot your password?
+          </Button>
+        )}
         {extraActions}
       </div>
     </form>
@@ -122,6 +133,14 @@ export function AccountSettings() {
           ]}
         />
         {account.error && <Status tone="warning">{account.error}</Status>}
+        {!account.emailVerified && (
+          <div className="fx-actions" style={{ marginTop: 10 }}>
+            <Status tone="warning">Confirm your email: open the link FBRX sent to {account.email}.</Status>
+            <Button size="sm" variant="ghost" loading={busy === 'confirm'} onClick={() => void run('confirm', () => call('account.resendConfirmation').then(() => call('account.refresh')), 'Sent again')}>
+              Send it again
+            </Button>
+          </div>
+        )}
         <div className="fx-actions" style={{ marginTop: 10 }}>
           <BuyButtons account={account} />
           {account.billingPortal && (
@@ -139,6 +158,7 @@ export function AccountSettings() {
           </p>
         )}
       </Card>
+      <SignedInDevices />
       {account.memberships.length === 0 && <StartOrganization />}
       {account.memberships.length > 0 && (
         <Card title="Your organizations" subtitle="Organizations that gave your account an edition. Join this computer to one and it runs that edition, looked after by its FBRX Command.">
@@ -169,6 +189,43 @@ export function AccountSettings() {
         </Card>
       )}
     </>
+  );
+}
+
+const DEVICE_ICON: Record<AccountDevice['kind'], IconName> = { computer: 'laptop', phone: 'phone', website: 'globe' };
+
+/** Where the account is signed in (computers, phones, the website), and signing one of them out. */
+function SignedInDevices() {
+  const [devices, setDevices] = useState<AccountDevice[] | null>(null);
+  const { run, busy } = useAction();
+  const load = () => call('account.devices').then(setDevices, () => setDevices(null));
+  useEffect(() => void load(), []);
+  if (!devices) return null;
+  return (
+    <Card title="Signed in on" subtitle="Computers, phones and browsers signed in to your FBRX account. Signing one out stops it renewing what the account bought.">
+      <div className="fx-form">
+        {devices.map((d) => {
+          const Ico = Icons[DEVICE_ICON[d.kind]];
+          return (
+            <div key={d.id} className="account-org">
+              <div>
+                <Ico size={14} /> <strong>{d.name || 'Unnamed'}</strong>{' '}
+                <span className="fx-muted" style={{ fontSize: 12.5 }}>
+                  {[d.platform, d.appVersion && `FBRX ${d.appVersion}`, d.lastSeenAt && `seen ${timeAgo(d.lastSeenAt)}`].filter(Boolean).join(' · ')}
+                </span>
+              </div>
+              {d.current ? (
+                <Status tone="good">This computer</Status>
+              ) : (
+                <Button size="sm" variant="ghost" loading={busy === d.id} onClick={() => void run(d.id, () => call('account.signOutDevice', { id: d.id }).then(load), `Signed out of ${d.name || 'it'}`)}>
+                  Sign out
+                </Button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </Card>
   );
 }
 

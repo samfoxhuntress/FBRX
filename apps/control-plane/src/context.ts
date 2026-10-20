@@ -6,6 +6,7 @@ import type { Keys } from './keys';
 import type { CpAudit } from './audit';
 import type { Realtime } from './realtime';
 import type { WebhookDispatcher } from './services/webhooks';
+import type { Mailer } from './mail';
 
 export interface AppContext {
   config: Config;
@@ -14,6 +15,8 @@ export interface AppContext {
   audit: CpAudit;
   realtime: Realtime;
   webhooks: WebhookDispatcher;
+  /** Email to FBRX accounts (mail.ts). */
+  mail: Mailer;
   version: string;
   log: FastifyBaseLogger;
   /** The certificate FBRX Command serves HTTPS with, when it does so itself (null behind a proxy or on plain HTTP). */
@@ -72,5 +75,6 @@ export const ids = {
   chatMessage: () => newId('chm'),
   account: () => newId('acc'),
   accountSession: () => newId('acs'),
+  accountToken: () => newId('act'),
   entitlement: () => newId('ent'),
 };

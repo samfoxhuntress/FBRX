@@ -18,6 +18,7 @@ import { CpAudit } from './audit';
 import { Realtime } from './realtime';
 import { WebhookDispatcher } from './services/webhooks';
 import { createContextHelpers, ids, type AppContext } from './context';
+import { createMailer } from './mail';
 import { HttpError } from './errors';
 import { authRoutes } from './routes/auth';
 import { deviceRoutes } from './routes/device';
@@ -99,6 +100,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     audit: new CpAudit(db),
     realtime: new Realtime(),
     webhooks: new WebhookDispatcher(db, keys.master, version, (m, d) => app.log.warn(d, m)),
+    mail: createMailer(config.cloud.mail, app.log),
     version,
     log: app.log,
     tls: tls ? { fingerprint: tls.fingerprint, selfSigned: tls.selfSigned, notAfter: tls.notAfter } : null,

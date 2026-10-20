@@ -44,7 +44,7 @@ describe('signing in on a computer with an FBRX account', () => {
   beforeAll(async () => {
     dataDir = mkdtempSync(join(tmpdir(), 'fbrx-acct-'));
     cp = await buildServer(
-      loadConfig({}, { dataDir, port: 0, host: '127.0.0.1', logLevel: 'silent', setupToken: 'setup-token-123', adminConsoleDir: null, heartbeatSeconds: 10, cloud: { publicSignup: true, returnUrl: 'https://fbrx.example/account', websiteOrigins: [], stripe: null, apple: null, google: null } }),
+      loadConfig({}, { dataDir, port: 0, host: '127.0.0.1', logLevel: 'silent', setupToken: 'setup-token-123', adminConsoleDir: null, heartbeatSeconds: 10, cloud: { publicSignup: true, returnUrl: 'https://fbrx.example/account', websiteOrigins: [], stripe: null, apple: null, google: null, mail: null } }),
     );
     await cp.app.listen({ port: 0, host: '127.0.0.1' });
     base = `http://127.0.0.1:${(cp.app.server.address() as AddressInfo).port}`;
@@ -71,6 +71,14 @@ describe('signing in on a computer with an FBRX account', () => {
       expect(made).toMatchObject({ signedIn: true, email: 'sam@harbor.example', tier: 'essentials', memberships: [], canBuy: false });
       await expect(k.call('account.signIn', { server: base, email: 'sam@harbor.example', password: 'wrong-password-123' }, USER)).rejects.toThrow(/Wrong email or password/);
 
+      // The computer signed in as itself: its name, system, version and install.
+      const devices = (await k.call('account.devices', {}, USER)) as any[];
+      expect(devices).toEqual([expect.objectContaining({ kind: 'computer', current: true, appVersion: k.platform.appVersion })]);
+      expect(cp.ctx.db.get<{ install_id: string }>('SELECT install_id FROM account_sessions WHERE id = ?', devices[0].id)?.install_id).toBe(k.meta.get('install.id'));
+      // Forgot the password: FBRX emails a link (it opens on the website).
+      await k.call('account.forgotPassword', { email: 'sam@harbor.example', server: base }, USER);
+      expect(cp.ctx.mail.kept.at(-1)).toMatchObject({ to: 'sam@harbor.example', subject: 'Reset your FBRX password' });
+
       // Ultra bought (here: given by FBRX): the computer picks it up and turns it on.
       const acct = (await api('GET', '/v1/admin/accounts?q=sam@')).at(0);
       await api('POST', `/v1/admin/accounts/${acct.id}/grant`, { tier: 'ultra', days: 30 });
@@ -80,6 +88,11 @@ describe('signing in on a computer with an FBRX account', () => {
 
       // The organization adds Sam as a Black Hole member (its license allows it): Sam's computer joins at Black Hole.
       await api('POST', '/v1/admin/licenses', { edition: 'enterprise', seats: 0, tier: 'blackhole' }, admin, { 'x-fbrx-tenant': tenantId });
+      // Only an account whose email is confirmed becomes a member.
+      await expect(api('POST', '/v1/admin/members', { email: 'sam@harbor.example', tier: 'blackhole' }, admin, { 'x-fbrx-tenant': tenantId })).rejects.toThrow(/has not confirmed/);
+      const confirm = cp.ctx.mail.kept.filter((m) => m.to === 'sam@harbor.example' && m.subject === 'Confirm your FBRX account').at(-1)!;
+      await api('POST', '/v1/accounts/verify', { token: decodeURIComponent(/#verify=(\S+)/.exec(confirm.text)![1]!) });
+      expect(await k.call('account.refresh', {}, USER)).toMatchObject({ emailVerified: true });
       await api('POST', '/v1/admin/members', { email: 'sam@harbor.example', tier: 'blackhole' }, admin, { 'x-fbrx-tenant': tenantId });
       await expect(api('POST', '/v1/admin/members', { email: 'nobody@harbor.example' }, admin, { 'x-fbrx-tenant': tenantId })).rejects.toThrow(/no FBRX account with that email/);
       expect((await k.call('account.refresh', {}, USER)) as any).toMatchObject({ memberships: [{ tenantId, tenantName: 'Harbor Lane', tier: 'blackhole' }] });

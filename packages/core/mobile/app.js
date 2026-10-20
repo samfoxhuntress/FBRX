@@ -468,6 +468,18 @@
       /* private storage */
     }
   }
+  /** This phone, as its sign-ins say: signing in again from it takes the place of its last sign-in. */
+  function phoneDevice() {
+    var id = null;
+    try {
+      id = localStorage.getItem('fbrx.mobile.install');
+      if (!id) localStorage.setItem('fbrx.mobile.install', (id = Array.prototype.map.call(crypto.getRandomValues(new Uint8Array(8)), function (b) { return ('0' + b.toString(16)).slice(-2); }).join('')));
+    } catch (e) {
+      /* private storage */
+    }
+    var ios = NATIVE.platform === 'ios';
+    return { name: ios ? 'iPhone or iPad app' : 'Android app', kind: 'phone', platform: ios ? 'iOS' : 'Android', appVersion: NATIVE.version || undefined, installId: id || undefined };
+  }
   function accountCall(method, path, body) {
     return fetch(NATIVE.accountServer + path, {
       method: method,
@@ -572,6 +584,7 @@
         '<input name="email" type="email" placeholder="Email" autocomplete="email" required />' +
         '<input name="password" type="password" placeholder="Password' + (m ? ' (at least 12 characters)' : '') + '" autocomplete="' + (m ? 'new-password' : 'current-password') + '" required minlength="' + (m ? 12 : 1) + '" />' +
         '<div class="row"><button class="primary" type="submit"' + (account.busy ? ' disabled' : '') + '>' + (m ? 'Make my account' : 'Sign in') + '</button><span class="spacer"></span><button type="button" data-acct="swap">' + (m ? 'I have an account' : 'Make an account') + '</button></div>' +
+        (m ? '' : '<button type="button" data-acct="forgot">Forgot your password?</button>') +
         '<div class="error">' + esc(account.error || '') + '</div></form></div>' +
         '<p class="muted">One FBRX account for this phone and your computers: what you buy here turns on wherever you sign in.</p>';
     }
@@ -611,7 +624,7 @@
       form.onsubmit = function (e) {
         e.preventDefault();
         var making = account.making;
-        var body = { email: form.email.value.trim(), password: form.password.value, device: NATIVE.platform === 'ios' ? 'iPhone or iPad app' : 'Android app' };
+        var body = { email: form.email.value.trim(), password: form.password.value, device: phoneDevice() };
         if (making) body.name = form.name.value.trim();
         busyWhile(accountCall('POST', making ? '/v1/accounts/signup' : '/v1/accounts/login', body).then(function (r) {
           setToken(r.token);
@@ -631,6 +644,15 @@
           account.making = !account.making;
           account.error = null;
           render();
+        } else if (what === 'forgot') {
+          var email = form && form.email.value.trim();
+          if (!email) {
+            account.error = 'Type your email first.';
+            return render();
+          }
+          busyWhile(accountCall('POST', '/v1/accounts/password/forgot', { email: email }).then(function () {
+            account.note = 'If ' + email + ' has an FBRX account, a link to choose a new password is on its way. It opens in your browser.';
+          }));
         } else if (what === 'restore') restorePurchases();
         else if (what === 'manage') {
           var mine = (account.view.entitlements || []).filter(function (e) { return e.valid && e.source === (NATIVE.platform === 'ios' ? 'apple' : 'google'); })[0];

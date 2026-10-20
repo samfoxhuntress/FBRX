@@ -219,7 +219,7 @@ export function AccountsPage() {
             { key: 't', header: 'Edition', render: (a) => <span className={`fx-badge${a.tier === 'essentials' ? '' : ' accent'}`}>{TIER_SHORT[a.tier]}</span> },
             { key: 'p', header: 'Purchases', render: (a) => a.entitlements.filter((e) => e.valid).map((e) => `${e.productId} (${e.source})`).join(', ') || '—' },
             { key: 'o', header: 'Organizations', render: (a) => a.memberships.map((m) => m.tenantName).join(', ') || '—' },
-            { key: 's', header: 'Status', render: (a) => <Status tone={a.status === 'active' ? 'good' : 'warning'}>{a.status}</Status> },
+            { key: 's', header: 'Status', render: (a) => <Status tone={a.status !== 'active' ? 'warning' : a.emailVerified ? 'good' : 'neutral'}>{a.status !== 'active' ? a.status : a.emailVerified ? 'active' : 'email not confirmed'}</Status> },
             {
               key: 'x',
               header: '',

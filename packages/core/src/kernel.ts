@@ -415,7 +415,13 @@ export class Kernel {
       events: this.events,
       log: L('account'),
       defaultServer: this.platform.accountServer ?? '',
-      deviceName: () => this.deviceName(),
+      device: () => ({
+        name: this.deviceName(),
+        kind: 'computer',
+        platform: ({ win32: 'Windows', darwin: 'macOS', linux: 'Linux' } as Record<string, string>)[process.platform] ?? process.platform,
+        appVersion: this.platform.appVersion,
+        installId: this.meta.get<string>('install.id') ?? undefined,
+      }),
       enroll: (serverUrl, token, fingerprint, actor) => this.fleet.enroll(serverUrl, token, undefined, actor, undefined, fingerprint ?? undefined),
     });
     this.helpdesk = new Helpdesk({

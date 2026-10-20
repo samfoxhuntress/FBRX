@@ -1,4 +1,4 @@
-import { atLeast, tierRank, type AccountLicense, type AccountStatus, type AccountView, type Tier, type Vertical } from '@fbrx/shared';
+import { atLeast, tierRank, type AccountDevice, type AccountDeviceInfo, type AccountLicense, type AccountStatus, type AccountView, type Tier, type Vertical } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
 import type { Vault } from '../vault/vault';
@@ -23,7 +23,8 @@ export interface AccountDeps {
   log: Logger;
   /** The FBRX Command FBRX accounts live on when nobody named another (built in, or FBRX_ACCOUNT_SERVER). */
   defaultServer: string;
-  deviceName: () => string;
+  /** This computer, as its sign-ins say (its name, system, FBRX version and install id). */
+  device: () => AccountDeviceInfo;
   /** Joins this computer to an organization with a one-time token (FleetAgent.enroll). */
   enroll: (serverUrl: string, token: string, fingerprint: string | null, actor: string) => Promise<unknown>;
 }
@@ -57,6 +58,7 @@ export class AccountService {
     const signedIn = !!this.d.meta.get<string>('account.id');
     return {
       signedIn,
+      emailVerified: signedIn && !!view?.emailVerified,
       server: this.server,
       email: signedIn ? (view?.email ?? null) : null,
       name: signedIn ? (view?.name ?? null) : null,
@@ -102,7 +104,7 @@ export class AccountService {
     const r = await this.request<{ token: string; account: AccountView }>(
       'POST',
       p.create ? '/v1/accounts/signup' : '/v1/accounts/login',
-      { email: p.email.trim(), password: p.password, device: this.d.deviceName(), ...(p.create ? { name: p.name?.trim() || p.email.split('@')[0] } : {}) },
+      { email: p.email.trim(), password: p.password, device: this.d.device(), ...(p.create ? { name: p.name?.trim() || p.email.split('@')[0] } : {}) },
       null,
       server,
     );
@@ -185,6 +187,29 @@ export class AccountService {
         /* held lower */
       }
     }
+  }
+
+  /** Where the account is signed in: this computer, others, phones and browsers. */
+  devices(): Promise<AccountDevice[]> {
+    return this.request<AccountDevice[]>('GET', '/v1/accounts/sessions', undefined, this.requireToken());
+  }
+
+  /** Signs the account out on another computer, phone or browser. */
+  async signOutDevice(id: string, actor: string): Promise<{ ok: true }> {
+    await this.request('DELETE', `/v1/accounts/sessions/${encodeURIComponent(id)}`, undefined, this.requireToken());
+    this.d.audit.append({ category: 'license', action: 'account.signedOutDevice', actor, target: id, outcome: 'success' });
+    return { ok: true };
+  }
+
+  /** Sends the email that confirms the account's address again. */
+  resendConfirmation(): Promise<{ sent: boolean }> {
+    return this.request<{ sent: boolean }>('POST', '/v1/accounts/verify/resend', {}, this.requireToken());
+  }
+
+  /** Emails a link to choose a new password (opened on the website); says the same whether the account exists or not. */
+  async forgotPassword(p: { email: string; server?: string }): Promise<{ ok: true }> {
+    await this.request('POST', '/v1/accounts/password/forgot', { email: p.email.trim() }, null, (p.server?.trim() || this.server).replace(/\/+$/, ''));
+    return { ok: true };
   }
 
   /** A Stripe Checkout page for Standard or Ultra, opened in the browser. */

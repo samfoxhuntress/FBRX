@@ -6,7 +6,7 @@
  * method is validated and audited by the core before it runs.
  */
 import type { LicenseStatus } from './license';
-import type { AccountStatus } from './accounts';
+import type { AccountDevice, AccountStatus } from './accounts';
 import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
 import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
 import type { ThinkingBudget, ThinkingLevel } from './thinking';
@@ -727,6 +727,14 @@ export interface CoreMethods extends ExtMethods {
   'account.portal': () => { url: string };
   /** Joins this computer to an organization the account belongs to, at the edition it gives the account. */
   'account.join': (p: { tenantId: string }) => AccountStatus;
+  /** Where the account is signed in: computers, phones and browsers (`current` is this computer). */
+  'account.devices': () => AccountDevice[];
+  /** Signs the account out somewhere else. */
+  'account.signOutDevice': (p: { id: string }) => { ok: true };
+  /** Sends the email that confirms the account's address again. */
+  'account.resendConfirmation': () => { sent: boolean };
+  /** Emails a link to choose a new password (it opens on the website). */
+  'account.forgotPassword': (p: { email: string; server?: string }) => { ok: true };
   /** Starts an FBRX Command for the person's organization (in the cloud); answers with its console's address. */
   'account.startOrganization': (p: { name: string; kind: Vertical }) => { consoleUrl: string; tenantId: string };
 

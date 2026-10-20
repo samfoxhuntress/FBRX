@@ -103,6 +103,11 @@ describe('FBRX accounts and what they buy', () => {
     if (r.status >= 400) throw new Error(`${r.status} ${JSON.stringify(r.json)}`);
     return r.json;
   };
+  /** The token in the newest link of a kind FBRX emailed to `to` (email is not set up here, so it is kept). */
+  const linkFor = (to: string, kind: 'verify' | 'reset') => {
+    const m = cp.ctx.mail.kept.filter((x) => x.to === to).at(-1);
+    return decodeURIComponent(new RegExp(`#${kind}=(\\S+)`).exec(m?.text ?? '')?.[1] ?? '');
+  };
   const stripeEvent = (event: object, secret = WEBHOOK_SECRET) => {
     const body = JSON.stringify(event);
     const t = Math.floor(Date.now() / 1000);
@@ -138,6 +143,7 @@ describe('FBRX accounts and what they buy', () => {
               apiBase: googleUrl,
               allowTest: false,
             },
+            mail: null,
           },
         },
       ),
@@ -178,6 +184,45 @@ describe('FBRX accounts and what they buy', () => {
     // An account token is not an FBRX Command console session.
     expect((await call('GET', '/v1/admin/devices', undefined, token)).status).toBe(401);
     expect((await call('GET', '/v1/accounts/me')).status).toBe(401);
+  });
+
+  it('confirms the email, resets a forgotten password, and lists and signs out where the account is signed in', async () => {
+    const email = 'rae@example.com';
+    const desk = { name: 'rae-desk', kind: 'computer', platform: 'Windows', appVersion: '2.0.0', installId: 'inst-1' };
+    const made = await ok('POST', '/v1/accounts/signup', { email, name: 'Rae', password: PASSWORD, device: desk });
+    expect(made.account.emailVerified).toBe(false);
+    // The link FBRX emailed confirms the address, once.
+    const verify = linkFor(email, 'verify');
+    expect(verify).toMatch(/^fbrx_ver/);
+    await ok('POST', '/v1/accounts/verify', { token: verify });
+    expect((await call('POST', '/v1/accounts/verify', { token: verify })).status).toBe(400);
+    expect((await ok('GET', '/v1/accounts/me', undefined, made.token)).emailVerified).toBe(true);
+
+    // The same computer signing in again takes the place of its last sign-in; a phone adds one.
+    const desk2 = await ok('POST', '/v1/accounts/login', { email, password: PASSWORD, device: desk });
+    expect((await call('GET', '/v1/accounts/me', undefined, made.token)).status).toBe(401);
+    const phone = await ok('POST', '/v1/accounts/login', { email, password: PASSWORD, device: { name: 'iPhone or iPad app', kind: 'phone', platform: 'iOS' } });
+    const list = await ok('GET', '/v1/accounts/sessions', undefined, desk2.token);
+    expect(list).toHaveLength(2);
+    expect(list).toEqual(expect.arrayContaining([expect.objectContaining({ name: 'rae-desk', kind: 'computer', platform: 'Windows', appVersion: '2.0.0', current: true }), expect.objectContaining({ kind: 'phone', current: false })]));
+    // Signed out from the computer, the phone's token stops working.
+    const onPhone = list.find((d: any) => d.kind === 'phone');
+    await ok('DELETE', `/v1/accounts/sessions/${onPhone.id}`, undefined, desk2.token);
+    expect((await call('GET', '/v1/accounts/me', undefined, phone.token)).status).toBe(401);
+    expect((await call('DELETE', `/v1/accounts/sessions/${onPhone.id}`, undefined, desk2.token)).status).toBe(404);
+
+    // Forgot the password: the same answer for an unknown email; the link works once, and signs out everywhere.
+    expect(await ok('POST', '/v1/accounts/password/forgot', { email: 'nobody@example.com' })).toEqual({ ok: true });
+    await ok('POST', '/v1/accounts/password/forgot', { email: 'RAE@example.com' });
+    const reset = linkFor(email, 'reset');
+    expect(reset).toMatch(/^fbrx_rst/);
+    expect((await call('POST', '/v1/accounts/password/reset', { token: reset, password: 'short' })).status).toBe(400);
+    const NEW = 'A-brand-new-password-2';
+    expect(await ok('POST', '/v1/accounts/password/reset', { token: reset, password: NEW })).toEqual({ ok: true, email });
+    expect((await call('POST', '/v1/accounts/password/reset', { token: reset, password: 'A-third-password-33' })).status).toBe(400);
+    expect((await call('GET', '/v1/accounts/me', undefined, desk2.token)).status).toBe(401);
+    expect((await call('POST', '/v1/accounts/login', { email, password: PASSWORD })).status).toBe(401);
+    await ok('POST', '/v1/accounts/login', { email, password: NEW });
   });
 
   it('sells Ultra with Stripe Checkout, follows the subscription by webhook, and signs a license up to Ultra', async () => {
@@ -262,6 +307,9 @@ describe('FBRX accounts and what they buy', () => {
 
   it('runs an organization’s FBRX Command plan: each computer at its edition, Black Hole as an add-on, Essentials free', async () => {
     const owner = await ok('POST', '/v1/accounts/signup', { email: 'owner@river.example', name: 'Riv', password: PASSWORD });
+    // An organization is started from a confirmed email.
+    expect((await call('POST', '/v1/accounts/tenants', { name: 'River Design', kind: 'business' }, owner.token)).json.error.code).toBe('EMAIL_NOT_CONFIRMED');
+    await ok('POST', '/v1/accounts/verify', { token: linkFor('owner@river.example', 'verify') });
     const t = await ok('POST', '/v1/accounts/tenants', { name: 'River Design', kind: 'business' }, owner.token);
     // The owner signs in to the console with the account's password.
     expect((await call('POST', '/v1/auth/login', { email: 'owner@river.example', password: 'not-the-password' })).status).toBe(401);
