@@ -114,6 +114,9 @@ import { ConnectorHub } from './connectors/hub';
 import { BackupService } from './backup/backup-service';
 import { applyStagedRestore, stageRestore } from './backup/snapshot';
 import { AccountService } from './account/account-service';
+import { LocalAccountService } from './account/local-account-service';
+import { SupportService } from './support/support-service';
+import { BrowserService } from './browser/browser-service';
 import { FleetAgent } from './fleet/fleet-agent';
 import { deviceFacts } from './fleet/machine';
 import { LocalApiServer } from './localapi/local-api';
@@ -182,6 +185,9 @@ export class Kernel {
   readonly backup: BackupService;
   readonly fleet: FleetAgent;
   readonly account: AccountService;
+  readonly localAccount: LocalAccountService;
+  readonly support: SupportService;
+  readonly browser: BrowserService;
   readonly localApi: LocalApiServer;
   readonly services: ServiceManager;
   readonly workspace: WorkspaceStore;
@@ -424,6 +430,25 @@ export class Kernel {
       }),
       enroll: (serverUrl, token, fingerprint, actor) => this.fleet.enroll(serverUrl, token, undefined, actor, undefined, fingerprint ?? undefined),
     });
+    this.localAccount = new LocalAccountService(this.meta, this.audit, this.events);
+    // Support mode: a signed pass elevates this computer; the license and settings services read its state.
+    this.support = new SupportService({
+      meta: this.meta,
+      license: this.license,
+      publicKeys: this.platform.licensePublicKeys,
+      audit: this.audit,
+      events: this.events,
+      log: L('support'),
+      installId: () => this.meta.get<string>('install.id') ?? '',
+      report: (message, data) => this.fleet.enrolled && this.fleet.reportEvent({ kind: 'alert', severity: 'warning', message, data, at: new Date().toISOString() }),
+    });
+    this.settings.setSupportActive(() => this.support.status().active);
+    this.browser = new BrowserService(
+      this.meta,
+      this.events,
+      () => this.settings.get(),
+      () => this.settings.get().protection.provider === 'shield',
+    );
     this.helpdesk = new Helpdesk({
       fleet: this.fleet,
       events: this.events,
@@ -1145,6 +1170,7 @@ export class Kernel {
     this.orgMesh.start();
     // The FBRX account's license, renewed now and every few hours (when someone signed in).
     this.account.start();
+    this.support.start();
     // A provisioning file (IT deployment) goes first; a license that names an FBRX Command tenant joins after it.
     void this.applyProvisioning()
       .catch((err) => this.log.error('Provisioning failed', { error: errorMessage(err) }))
@@ -1229,6 +1255,7 @@ export class Kernel {
     this.started = false;
     this.release.stop();
     this.account.stop();
+    this.support.stop();
     this.messages.stop();
     this.orgMesh.stop();
     this.terminal.killAll();

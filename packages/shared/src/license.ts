@@ -114,7 +114,7 @@ export type LicensePayload = z.infer<typeof LicensePayloadSchema>;
 export const LICENSE_PREFIX = 'FBRX1';
 
 /** Why a computer may run no more than it does (see LicenseStatus.ceiling). */
-export type CeilingReason = 'standalone' | 'trial' | 'organization' | 'license' | 'learner' | 'development';
+export type CeilingReason = 'standalone' | 'trial' | 'organization' | 'license' | 'learner' | 'development' | 'support';
 
 export interface LicenseStatus {
   state: 'unlicensed' | 'valid' | 'expired' | 'invalid' | 'development';
@@ -142,7 +142,9 @@ export interface LicenseStatus {
   features: string[];
   message: string | null;
   /** Where the license came from: typed in (local), the organization's FBRX Command (managed) or the FBRX account. */
-  source: 'none' | 'local' | 'managed' | 'account' | 'development';
+  source: 'none' | 'local' | 'managed' | 'account' | 'development' | 'support';
+  /** A support engineer's pass is running this computer at full access (see support.ts); ends on its own. */
+  support?: boolean;
   /** The FBRX Command address this license joins, if it names one. */
   commandUrl: string | null;
   /** Education or Home licenses (null = business). */

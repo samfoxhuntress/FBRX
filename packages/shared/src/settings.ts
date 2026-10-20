@@ -5,6 +5,7 @@ import { ALERT_CHANNELS } from './ext';
 import { PROTECTION_DEFAULT_FEED, SCAN_TIME_PATTERN } from './protection';
 import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS } from './mesh-assist';
 import { isCidr, MESH_TRAFFIC_CLASSES } from './net';
+import { BROWSER_SEARCH_ENGINES } from './browser';
 
 /** Built-in color themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
 export const THEME_PRESETS = ['fabrics', 'tropical', 'neon', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
@@ -402,6 +403,22 @@ export const SettingsSchema = z.object({
   fleet: z.object({
     heartbeatSeconds: z.number().int().min(10).max(3600),
   }),
+  /** FBRX Browser (the web browser inside FBRX OS). The allow/block lists are usually set by an organization. */
+  browser: z.object({
+    homepage: z.string().max(2000),
+    searchEngine: z.enum(Object.keys(BROWSER_SEARCH_ENGINES) as [keyof typeof BROWSER_SEARCH_ENGINES]),
+    /** Ask sites not to track you (sends the Do Not Track / Global Privacy Control signals). */
+    doNotTrack: z.boolean(),
+    /** Open new tabs in a private view by default (nothing kept once the tab closes). */
+    privateByDefault: z.boolean(),
+    /** Fabrix reads the page to answer questions about it (off keeps page text on the computer, unread). */
+    aiAssist: z.boolean(),
+    /** Addresses only an organization may change (managed). The person adds their own blocks too. */
+    blocked: z.array(z.string().max(300)).max(500),
+    allowed: z.array(z.string().max(300)).max(500),
+    /** Safe browsing on a student's or child's computer (set by the organization). */
+    safeBrowsing: z.boolean(),
+  }),
   updates: z.object({
     channel: z.enum(UPDATE_CHANNELS),
     autoDownload: z.boolean(),
@@ -647,6 +664,16 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   fleet: {
     heartbeatSeconds: 30,
+  },
+  browser: {
+    homepage: '',
+    searchEngine: 'duckduckgo',
+    doNotTrack: true,
+    privateByDefault: false,
+    aiAssist: true,
+    blocked: [],
+    allowed: [],
+    safeBrowsing: false,
   },
   updates: {
     channel: 'stable',

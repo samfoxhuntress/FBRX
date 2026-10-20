@@ -6,7 +6,9 @@
  * method is validated and audited by the core before it runs.
  */
 import type { LicenseStatus } from './license';
-import type { AccountDevice, AccountStatus } from './accounts';
+import type { AccountDevice, AccountStatus, LocalAccountStatus } from './accounts';
+import type { SupportStatus } from './support';
+import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './browser';
 import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
 import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
 import type { ThinkingBudget, ThinkingLevel } from './thinking';
@@ -738,6 +740,33 @@ export interface CoreMethods extends ExtMethods {
   /** Starts an FBRX Command for the person's organization (in the cloud); answers with its console's address. */
   'account.startOrganization': (p: { name: string; kind: Vertical }) => { consoleUrl: string; tenantId: string };
 
+  /** The offline, local-only FBRX account on this computer (works with no cloud; see accounts.ts). */
+  'localAccount.status': () => LocalAccountStatus;
+  'localAccount.create': (p: { name: string; email?: string; password?: string }) => LocalAccountStatus;
+  'localAccount.update': (p: { name?: string; email?: string | null }) => LocalAccountStatus;
+  /** Turn the start password on (with a password) or off; and unlock FBRX at start with it. */
+  'localAccount.setPassword': (p: { password: string; current?: string }) => LocalAccountStatus;
+  'localAccount.clearPassword': (p: { current: string }) => LocalAccountStatus;
+  'localAccount.unlock': (p: { password: string }) => LocalAccountStatus;
+  'localAccount.remove': (p: { confirm: 'DELETE' }) => LocalAccountStatus;
+
+  /** Support mode (troubleshooting): a signed pass elevates this computer; the resume phrase or expiry restores it. */
+  'support.status': () => SupportStatus;
+  'support.activate': (p: { pass: string }) => SupportStatus;
+  'support.end': () => SupportStatus;
+
+  /** FBRX Browser: what the browser window needs that lives in the core (bookmarks, history, policy, homepage). */
+  'browser.state': () => BrowserState;
+  'browser.check': (p: { input: string }) => BrowserCheck;
+  'browser.bookmark': (p: { url: string; title: string }) => Bookmark[];
+  'browser.removeBookmark': (p: { id: string }) => Bookmark[];
+  'browser.history': (p?: { limit?: number; query?: string }) => HistoryEntry[];
+  'browser.visited': (p: { url: string; title: string }) => { ok: true };
+  'browser.clearHistory': (p?: { since?: string }) => { cleared: number };
+  'browser.setHomepage': (p: { url: string }) => BrowserState;
+  'browser.addBlocked': (p: { host: string }) => BrowserState;
+  'browser.removeBlocked': (p: { host: string }) => BrowserState;
+
   'updates.status': () => UpdateStatus;
   'updates.check': () => UpdateStatus;
   'updates.install': () => UpdateStatus;
@@ -780,6 +809,9 @@ export interface CoreEvents extends ExtEvents {
   'fleet.changed': FleetStatus;
   'license.changed': LicenseStatus;
   'account.changed': AccountStatus;
+  'support.changed': SupportStatus;
+  'localAccount.changed': LocalAccountStatus;
+  'browser.changed': BrowserState;
   'updates.changed': UpdateStatus;
   'release.changed': ReleaseCheck;
   notification: NotificationEvent;

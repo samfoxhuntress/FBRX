@@ -1,5 +1,6 @@
 export * from './crypto';
 export * from './license-signing';
+export * from './support-pass';
 export * from './db';
 export * from './totp';
 export * from './selfsigned';

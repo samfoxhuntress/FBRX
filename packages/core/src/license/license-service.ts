@@ -1,4 +1,4 @@
-import { ALL_FEATURES, EDITION_PLANS, FEATURES, LEARNER_TIER, STANDARD_TRIAL_DAYS, formatPrice, isLearner, maxTier, minTier, narrowTier, parseSemver, parseTier, TIER_NAMES, TIER_SHORT, tierRank, type CeilingReason, type DeviceEdition, type Feature, type LicenseStatus, type Tier } from '@fbrx/shared';
+import { ALL_FEATURES, EDITION_PLANS, FEATURES, LEARNER_TIER, STANDARD_TRIAL_DAYS, formatPrice, isLearner, licenseEditionFor, maxTier, minTier, narrowTier, parseSemver, parseTier, TIER_NAMES, TIER_SHORT, tierRank, type CeilingReason, type DeviceEdition, type Feature, type LicenseStatus, type Tier } from '@fbrx/shared';
 import { licenseStatusFrom, verifyLicense } from '@fbrx/shared/node';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
@@ -14,6 +14,9 @@ const TRIAL_KEY = 'edition.trial';
 export class LicenseService {
   private cached: LicenseStatus | null = null;
 
+  /** While a support pass is active, SupportService sets this so the computer runs fully for troubleshooting. */
+  private supportElevation: (() => { tier: Tier; until: string } | null) | null = null;
+
   constructor(
     private readonly meta: MetaStore,
     private readonly publicKeys: string[],
@@ -22,7 +25,30 @@ export class LicenseService {
     private readonly events?: EventBus,
   ) {}
 
+  /** SupportService wires this; when it returns an elevation, the computer runs at that edition with everything on. */
+  setSupportElevation(fn: () => { tier: Tier; until: string } | null): void {
+    this.supportElevation = fn;
+    this.cached = null;
+  }
+
   status(): LicenseStatus {
+    // Support mode wins over everything else while its pass is valid (it ends on its own at the pass's expiry).
+    const support = this.supportElevation?.();
+    if (support) {
+      return {
+        ...licenseStatusFrom(null, this.publicKeys, 'none', 1),
+        state: 'valid',
+        edition: licenseEditionFor(support.tier),
+        tier: support.tier,
+        chosen: support.tier,
+        ceiling: support.tier,
+        ceilingReason: 'support',
+        features: [...ALL_FEATURES],
+        source: 'support',
+        support: true,
+        message: `Support mode: running as ${TIER_NAMES[support.tier]} until ${new Date(support.until).toLocaleString()}`,
+      };
+    }
     // The Standard trial ends by itself: look again once it is over.
     if (this.cached && !(this.cached.trialUntil && Date.parse(this.cached.trialUntil) <= Date.now())) return this.cached;
     const major = parseSemver(this.appVersion)?.major ?? 1;

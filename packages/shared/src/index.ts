@@ -6,6 +6,8 @@ export * from './settings';
 export * from './thinking';
 export * from './policy';
 export * from './license';
+export * from './support';
+export * from './browser';
 export * from './commands';
 export * from './protocol';
 export * from './api';

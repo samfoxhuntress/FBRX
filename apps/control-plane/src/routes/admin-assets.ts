@@ -6,8 +6,8 @@ import type { Readable } from 'node:stream';
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import * as tar from 'tar';
 import { z } from 'zod';
-import { ALL_FEATURES, EDITIONS, LICENSE_TIERS, UPDATE_CHANNELS, VERTICALS, compareSemver, decodeLicenseUnverified, isValidSemver, newId, tierFor, type Edition, type LicensePayload } from '@fbrx/shared';
-import { openString, randomToken, sealString, sha256Hex, signLicense } from '@fbrx/shared/node';
+import { ALL_FEATURES, EDITIONS, LICENSE_TIERS, SUPPORT_PASS_DEFAULT_HOURS, SUPPORT_PASS_MAX_HOURS, UPDATE_CHANNELS, VERTICALS, compareSemver, decodeLicenseUnverified, isValidSemver, newId, tierFor, type Edition, type LicensePayload } from '@fbrx/shared';
+import { openString, randomToken, sealString, sha256Hex, signLicense, signSupportPass } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
 import { actorOf, adminAuth, assertTenantAccess, requirePerm, requireTenant, resolvePrincipal, tenantScope } from '../auth';
@@ -308,6 +308,37 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
     admin.get('/v1/admin/licensing/public-key', async (req) => {
       requirePerm(req, 'licenses.manage');
       return { publicKeyPem: ctx.keys.licensePublicPem };
+    });
+
+    // A support pass for troubleshooting one computer: signed by this FBRX Command's license key, tied to the
+    // computer's install id, short-lived. Typed into the computer's FBRX apps after 418teapotadmin, it elevates that
+    // computer to full access until the resume phrase or the pass running out. Nothing on the server changes.
+    admin.post('/v1/admin/support-passes', async (req) => {
+      const p = requirePerm(req, 'licenses.manage');
+      const body = z
+        .object({
+          installId: z.string().min(1).max(200),
+          tier: z.enum(LICENSE_TIERS).default('blackhole'),
+          hours: z.number().int().min(1).max(SUPPORT_PASS_MAX_HOURS).default(SUPPORT_PASS_DEFAULT_HOURS),
+          note: z.string().max(200).default(''),
+        })
+        .parse(req.body);
+      const now = Date.now();
+      const pass = signSupportPass(
+        {
+          v: 1,
+          installId: body.installId,
+          tier: body.tier,
+          scope: 'endpoint',
+          note: body.note,
+          issuedBy: p.label ?? actorOf(req),
+          issuedAt: new Date(now).toISOString(),
+          expiresAt: new Date(now + body.hours * 3_600_000).toISOString(),
+        },
+        ctx.keys.licensePrivatePem,
+      );
+      ctx.audit.record(actorOf(req), 'support.passIssued', { type: 'device', id: body.installId }, { tier: body.tier, hours: body.hours, note: body.note });
+      return { pass, expiresAt: new Date(now + body.hours * 3_600_000).toISOString(), tier: body.tier };
     });
 
     // ----------------------------------------------------------------------------- packages

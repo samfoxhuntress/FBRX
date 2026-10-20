@@ -30,6 +30,7 @@
     "package:store": "npm run package:store -w @fbrx/desktop",
     "keys:generate": "node scripts/generate-license-keys.mjs",
     "license:issue": "node --import tsx scripts/issue-license.ts",
+    "support:pass": "node --import tsx scripts/issue-support-pass.ts",
     "release:publish": "node scripts/publish-release.mjs",
     "verify": "npm run typecheck && npm test",
     "knowledge": "node scripts/build-knowledge.mjs",

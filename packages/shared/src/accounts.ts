@@ -142,3 +142,27 @@ export interface AccountStatus {
   /** Why the last renewal did not work (the internet, or the sign-in ended). */
   error: string | null;
 }
+
+/**
+ * A local, offline FBRX account: an identity kept on this computer, for a person who runs FBRX without the cloud (a
+ * local-only environment, or the Beta before the account server is live). It is paired with a license key for its
+ * edition (a Beta key, or a key from a local FBRX Command). It never leaves the computer and never reaches a server;
+ * an optional password locks FBRX on start. The cloud FBRX account (signing in to FBRX Command) is separate and
+ * unchanged: a computer uses one or the other.
+ */
+export interface LocalAccountView {
+  name: string;
+  /** Optional, only to recognize the person (never emailed or sent anywhere). */
+  email: string | null;
+  /** FBRX asks for the password when it starts. */
+  passwordOnStart: boolean;
+  createdAt: string;
+}
+
+/** Settings → Account, the offline side (localAccount.status). */
+export interface LocalAccountStatus {
+  exists: boolean;
+  account: LocalAccountView | null;
+  /** Locked until the start password is given (only when passwordOnStart and FBRX has just started). */
+  locked: boolean;
+}
