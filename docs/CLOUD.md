@@ -68,8 +68,10 @@ address or reset a password, so set it up before opening sign-up.
 
 1. A domain, and the business accounts: a payment processor, an Apple Developer Program membership, a Google Play
    developer account, an email service, a server.
-2. The account server (above), with sign-up still closed; try it with test payments.
+2. The account server (above), with sign-up closed.
 3. The website, with the terms of use and the privacy policy.
-4. The apps built against the account server: the desktop app's next release, and the phone apps through TestFlight
+4. Email, then sign-up (`FBRX_CP_PUBLIC_SIGNUP=1`) while payments are still in test mode: make an account on the
+   website, confirm it, reset its password, and buy an edition with a test card.
+5. The apps built against the account server: the desktop app's next release, and the phone apps through TestFlight
    and Google Play's testing tracks ([STORES.md](STORES.md)).
-5. Open sign-up (`FBRX_CP_PUBLIC_SIGNUP=1`) and turn on real payments.
+6. Turn on real payments (the live keys) and tell people.
