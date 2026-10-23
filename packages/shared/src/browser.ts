@@ -32,8 +32,8 @@ export interface HistoryEntry {
 }
 
 /**
- * What an organization (FBRX Command) decides about browsing, pushed as managed settings. On a student's or child's
- * computer the learner list is on by default; elsewhere it is off unless the organization turns it on.
+ * What an organization (FBRX Command) decides about browsing, pushed as managed settings, plus the person's own
+ * blocks. The lists are enforced for every page and frame the browser loads (main/browser.ts), not only what is typed.
  */
 export interface BrowserPolicy {
   /** When set, only addresses matching one of these host patterns may be opened (an allow-list). */
@@ -42,7 +42,10 @@ export interface BrowserPolicy {
   blocked: string[];
   /** Whether the policy is set by the organization (so the person cannot change it). */
   managed: boolean;
-  /** Safe browsing for a student's or child's computer: known-adult and unsafe sites are blocked. */
+  /**
+   * Safe browsing: strict SafeSearch on Google, Bing, DuckDuckGo and Brave, and YouTube's Restricted Mode. On by
+   * default on a student's or child's computer; elsewhere when the organization turns it on.
+   */
   safeBrowsing: boolean;
 }
 
@@ -54,10 +57,16 @@ export interface BrowserState {
   policy: BrowserPolicy;
   /** FBRX Shield is on and will check downloads. */
   shieldOn: boolean;
+  /** New tabs open private (nothing kept once they close). */
+  privateByDefault: boolean;
+  /** Fabrix may read the page to answer about it. */
+  aiAssist: boolean;
+  /** The sites the person blocked themselves (the organization's are in policy.blocked too, and cannot be removed). */
+  blockedByMe: string[];
 }
 
 /** Why an address was refused (browser.check), so the page can say so. */
-export type BrowserBlockReason = 'blocked' | 'not-allowed' | 'safe-browsing';
+export type BrowserBlockReason = 'blocked' | 'not-allowed';
 
 export interface BrowserCheck {
   ok: boolean;
@@ -101,3 +110,33 @@ export function policyAllows(url: string, policy: BrowserPolicy): { ok: boolean;
   if (policy.allowed.length && !policy.allowed.some((p) => hostMatches(host, p))) return { ok: false, reason: 'not-allowed' };
   return { ok: true };
 }
+
+/**
+ * Safe browsing: the strict-SafeSearch version of a search engine's results address, or null when the address is not
+ * a search there or is already strict. The browser's session redirects to it while safe browsing is on.
+ */
+export function safeSearchUrl(url: string): string | null {
+  let u: URL;
+  try {
+    u = new URL(url);
+  } catch {
+    return null;
+  }
+  const host = u.hostname.toLowerCase().replace(/^www\./, '');
+  const want: [string, string] | null =
+    /^google\.[a-z.]+$/.test(host) && u.pathname === '/search'
+      ? ['safe', 'active']
+      : host === 'bing.com' && u.pathname === '/search'
+        ? ['adlt', 'strict']
+        : (host === 'duckduckgo.com' || host === 'html.duckduckgo.com') && u.searchParams.has('q')
+          ? ['kp', '1']
+          : host === 'search.brave.com' && u.pathname.startsWith('/search')
+            ? ['safesearch', 'strict']
+            : null;
+  if (!want || u.searchParams.get(want[0]) === want[1]) return null;
+  u.searchParams.set(want[0], want[1]);
+  return u.toString();
+}
+
+/** YouTube's own switch for Restricted Mode, sent as a request header to its hosts while safe browsing is on. */
+export const YOUTUBE_RESTRICT_HOSTS = ['youtube.com', 'm.youtube.com', 'youtubei.googleapis.com', 'youtube.googleapis.com', 'youtube-nocookie.com'];

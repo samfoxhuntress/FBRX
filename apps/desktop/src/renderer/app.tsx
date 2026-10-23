@@ -187,7 +187,11 @@ export function App() {
   const route = useRoute();
   const { data: settings } = useCore('settings.get', undefined, ['settings.changed']);
   const tier = useLicenseTier();
+  const localLocked = useCore('localAccount.status', undefined, ['localAccount.changed']).data?.locked ?? false;
   useAppearance(settings?.settings, tier);
+  // The offline account's start password covers every window; the small ones show only the lock until it is given
+  // (Spotlight would otherwise take the keyboard back for its own search box).
+  if ((route === 'spotlight' || route === 'clips') && localLocked) return <LocalAccountLock />;
   if (route === 'spotlight') return settings ? <SpotlightView agentName={settings.settings.ai.agentName} fun={funEnabled(settings.settings, tier)} /> : null;
   // The FBRX Browser runs in its own window (opened from the sidebar or tray): just the browser, no FBRX shell.
   if (BROWSER_WINDOW)
@@ -829,7 +833,7 @@ function TopBar({
  * it; collapsed to icons, its pages slide out beside it.
  */
 /** What a student's or child's computer (FBRX OS Education or Home) shows. */
-const LEARNER_PAGES = new Set(['home', 'agent', 'messages', 'helpdesk', 'calendar', 'tasks', 'notes', 'toolbox', 'library', 'settings']);
+const LEARNER_PAGES = new Set(['home', 'agent', 'messages', 'helpdesk', 'calendar', 'tasks', 'notes', 'browser', 'toolbox', 'library', 'settings']);
 
 /**
  * Endpoint Essentials is the AI on its own: the chat (with its history), the AI models, and Settings (memory, voice,

@@ -20,6 +20,11 @@ export interface SupportDeps {
   events: EventBus;
   log: Logger;
   installId: () => string;
+  /**
+   * Whether support mode may run here: always on a computer on its own; on an organization's computer only when the
+   * organization turned it on (settings.support.allowOnManaged, from FBRX Command).
+   */
+  allowed: () => boolean;
   /** Tells an organization's FBRX Command that a support session started or ended on this computer. */
   report?: (message: string, data: Record<string, unknown>) => void;
 }
@@ -43,7 +48,7 @@ export class SupportService {
   /** The active, unexpired pass's payload, or null. A pass for another computer or a stale one never counts. */
   private valid(): { tier: Tier; expiresAt: string; issuedBy: string; note: string } | null {
     const pass = this.d.meta.get<string>(PASS_KEY);
-    if (!pass) return null;
+    if (!pass || !this.d.allowed()) return null;
     const v = verifySupportPass(pass, this.d.publicKeys);
     if (!v.ok || v.expired || v.payload.installId !== this.d.installId()) return null;
     return { tier: v.payload.tier, expiresAt: v.payload.expiresAt, issuedBy: v.payload.issuedBy, note: v.payload.note };
@@ -51,7 +56,7 @@ export class SupportService {
 
   status(): SupportStatus {
     const p = this.valid();
-    return { active: !!p, tier: p?.tier ?? null, until: p?.expiresAt ?? null, issuedBy: p?.issuedBy ?? null, note: p?.note ?? null };
+    return { active: !!p, installId: this.d.installId(), tier: p?.tier ?? null, until: p?.expiresAt ?? null, issuedBy: p?.issuedBy ?? null, note: p?.note ?? null };
   }
 
   /**
@@ -59,6 +64,10 @@ export class SupportService {
    * edition the person had is remembered so it comes back exactly when support ends.
    */
   activate(pass: string, actor: string): SupportStatus {
+    if (!this.d.allowed()) {
+      this.d.audit.append({ category: 'security', action: 'support.refused', actor, outcome: 'failure', details: { reason: 'organization' } });
+      throw new CoreError('FORBIDDEN', 'This computer belongs to an organization that has not turned on FBRX support access. Its FBRX Command can turn it on (support.allowOnManaged).');
+    }
     const v = verifySupportPass(pass.trim(), this.d.publicKeys);
     if (!v.ok) throw new CoreError('INVALID_ARGUMENT', v.error);
     if (v.expired) throw new CoreError('INVALID_ARGUMENT', 'This support pass has expired. Ask for a fresh one.');
@@ -75,7 +84,7 @@ export class SupportService {
   }
 
   /** Ends support mode (the resume phrase, a button, or the pass running out) and restores the previous edition. */
-  end(actor: string, reason: 'resume-phrase' | 'ended' | 'expired'): SupportStatus {
+  end(actor: string, reason: 'resume-phrase' | 'ended' | 'expired' | 'withdrawn'): SupportStatus {
     if (!this.d.meta.get<string>(PASS_KEY)) return this.status();
     const before = this.d.meta.get<Tier>(BEFORE_KEY) ?? 'essentials';
     this.d.meta.delete(PASS_KEY);
@@ -102,13 +111,18 @@ export class SupportService {
   /** On start and every minute, end support by itself the moment its pass has run out. */
   start(): void {
     if (this.valid()) this.schedule();
-    else if (this.d.meta.get<string>(PASS_KEY)) this.end('system', 'expired');
+    else if (this.d.meta.get<string>(PASS_KEY)) this.end('system', this.d.allowed() ? 'expired' : 'withdrawn');
+  }
+
+  /** The organization changed its mind (support.allowOnManaged turned off): support ends at once. */
+  settingsChanged(): void {
+    if (this.d.meta.get<string>(PASS_KEY) && !this.d.allowed()) this.end('system', 'withdrawn');
   }
 
   private schedule(): void {
     this.stopTimer();
     this.timer = setInterval(() => {
-      if (!this.valid() && this.d.meta.get<string>(PASS_KEY)) this.end('system', 'expired');
+      if (!this.valid() && this.d.meta.get<string>(PASS_KEY)) this.end('system', this.d.allowed() ? 'expired' : 'withdrawn');
     }, 60_000);
     this.timer.unref?.();
   }

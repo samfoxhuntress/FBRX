@@ -32,8 +32,10 @@ type WebviewElement = HTMLElement & {
 
 interface Tab {
   id: string;
-  /** Where the tab is pointed (what the webview loads); '' is the start page. */
+  /** Where the tab was pointed (the webview's src); '' is the start page. */
   url: string;
+  /** Where the page is now, after links and redirects (what the address bar, bookmarks and Fabrix use). */
+  current: string;
   title: string;
   loading: boolean;
   canBack: boolean;
@@ -47,8 +49,9 @@ interface Tab {
 const BLOCK_WORDS: Record<string, string> = {
   blocked: 'This site is on the block list.',
   'not-allowed': 'This site is not on the list your organization allows.',
-  'safe-browsing': 'Safe browsing blocked this site.',
 };
+/** Chromium's net::ERR_BLOCKED_BY_CLIENT: the browser's session refused the page (the policy, main/browser.ts). */
+const BLOCKED_BY_POLICY = -20;
 
 function host(url: string): string {
   try {
@@ -60,7 +63,7 @@ function host(url: string): string {
 
 const WEBVIEW_POPUPS = { allowpopups: 'true' } as object;
 let seq = 0;
-const makeTab = (over: Partial<Tab> = {}): Tab => ({ id: `t${Date.now().toString(36)}-${seq++}`, url: '', title: 'New tab', loading: false, canBack: false, canForward: false, priv: false, blocked: null, ...over });
+const makeTab = (over: Partial<Tab> = {}): Tab => ({ id: `t${Date.now().toString(36)}-${seq++}`, url: '', current: over.url ?? '', title: 'New tab', loading: false, canBack: false, canForward: false, priv: false, blocked: null, ...over });
 
 export function BrowserApp({ agentName }: { agentName: string }) {
   const toast = useToast();
@@ -107,10 +110,17 @@ export function BrowserApp({ agentName }: { agentName: string }) {
       const check = await call('browser.check', { input }).catch(() => null);
       if (!check || !check.url) return;
       if (!check.ok) {
-        patchTab(tabId, { blocked: { reason: BLOCK_WORDS[check.reason ?? 'blocked'] ?? 'This site is blocked.', url: check.url }, url: '', title: 'Blocked', loading: false });
+        patchTab(tabId, { blocked: { reason: BLOCK_WORDS[check.reason ?? 'blocked'] ?? 'This site is blocked.', url: check.url }, url: '', current: '', title: 'Blocked', loading: false });
         return;
       }
-      patchTab(tabId, { url: check.url, blocked: null, loading: true });
+      // A tab already showing a page loads the address in place (its src may already be this very address).
+      const live = views.current.get(tabId);
+      if (live) {
+        patchTab(tabId, { current: check.url, blocked: null, loading: true });
+        void live.loadURL(check.url).catch(() => undefined);
+        return;
+      }
+      patchTab(tabId, { url: check.url, current: check.url, blocked: null, loading: true });
     },
     [patchTab],
   );
@@ -137,7 +147,7 @@ export function BrowserApp({ agentName }: { agentName: string }) {
       const sync = () => {
         try {
           const url = el.getURL();
-          patchTab(tab.id, { canBack: el.canGoBack(), canForward: el.canGoForward() });
+          patchTab(tab.id, { canBack: el.canGoBack(), canForward: el.canGoForward(), ...(/^https?:/.test(url) ? { current: url } : {}) });
           if (/^https?:/.test(url)) {
             if (tab.id === activeRef.current.id) setAddress(url);
             // Record the visit (never for a private tab).
@@ -153,6 +163,18 @@ export function BrowserApp({ agentName }: { agentName: string }) {
         ['did-navigate', sync],
         ['did-navigate-in-page', sync],
         ['page-title-updated', (e) => patchTab(tab.id, { title: (e as Event & { title: string }).title })],
+        [
+          // A page (or a link on one) the policy refuses in the session: show why, as for a typed address.
+          'did-fail-load',
+          (e) => {
+            const f = e as Event & { errorCode: number; validatedURL: string; isMainFrame: boolean };
+            if (!f.isMainFrame || f.errorCode !== BLOCKED_BY_POLICY) return;
+            void call('browser.check', { input: f.validatedURL }).then((c) => {
+              if (c.ok) return;
+              patchTab(tab.id, { blocked: { reason: BLOCK_WORDS[c.reason ?? 'blocked'] ?? 'This site is blocked.', url: c.url }, url: '', current: '', title: 'Blocked', loading: false });
+            });
+          },
+        ],
       ];
       for (const [n, h] of on) el.addEventListener(n, h);
     },
@@ -161,10 +183,10 @@ export function BrowserApp({ agentName }: { agentName: string }) {
 
   // Keep the address bar showing the active tab's URL when switching tabs.
   useEffect(() => {
-    setAddress(active.url && /^https?:/.test(active.url) ? active.url : '');
+    setAddress(/^https?:/.test(active.current) ? active.current : '');
   }, [activeId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const newTab = (priv = false) => {
+  const newTab = (priv = state?.privateByDefault ?? false) => {
     const t = makeTab({ priv });
     setTabs((ts) => [...ts, t]);
     setActiveId(t.id);
@@ -190,29 +212,29 @@ export function BrowserApp({ agentName }: { agentName: string }) {
     const hp = state?.homepage;
     if (hp) void go(hp);
     else {
-      patchTab(active.id, { url: '', title: 'New tab', blocked: null });
+      patchTab(active.id, { url: '', current: '', title: 'New tab', blocked: null });
       setAddress('');
     }
   };
-  const bookmarked = !!state?.bookmarks.some((b) => b.url === active.url);
+  const bookmarked = !!state?.bookmarks.some((b) => b.url === active.current);
   const toggleBookmark = async () => {
-    if (!/^https?:/.test(active.url)) return;
-    const mark = state?.bookmarks.find((b) => b.url === active.url);
+    if (!/^https?:/.test(active.current)) return;
+    const mark = state?.bookmarks.find((b) => b.url === active.current);
     if (mark) await call('browser.removeBookmark', { id: mark.id });
-    else await call('browser.bookmark', { url: active.url, title: active.title });
+    else await call('browser.bookmark', { url: active.current, title: active.title });
   };
 
   // Fabrix reads the live page text (never for a private tab) and answers about it through the local AI.
   const pageText = useCallback(async (): Promise<string> => {
     const el = view();
-    if (!el || active.priv) return '';
+    if (!el || active.priv || state?.aiAssist === false) return '';
     try {
       const text = (await el.executeJavaScript('document.title + "\\n\\n" + (document.body?.innerText || "")')) as string;
       return String(text).slice(0, 40_000);
     } catch {
       return '';
     }
-  }, [active.priv]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [active.priv, state?.aiAssist]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const setZoomTo = (z: number) => {
     const next = Math.min(2, Math.max(0.5, Math.round(z * 10) / 10));
@@ -243,7 +265,7 @@ export function BrowserApp({ agentName }: { agentName: string }) {
   }, [zoom, find]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const partitionFor = (t: Tab) => (t.priv ? WEB_BROWSER_PRIVATE_PARTITION : WEB_BROWSER_PARTITION);
-  const secure = active.url.startsWith('https://');
+  const secure = active.current.startsWith('https://');
 
   return (
     <div className="br-app" data-private={active.priv || undefined}>
@@ -269,8 +291,8 @@ export function BrowserApp({ agentName }: { agentName: string }) {
             addressRef.current?.blur();
           }}
         >
-          <span className={`br-lock ${secure ? 'ok' : active.url ? 'warn' : ''}`} title={secure ? 'This connection is secure' : active.url ? 'Not a secure (https) connection' : undefined}>
-            {secure ? <Icons.lock size={13} /> : active.url ? <Icons.unlock size={13} /> : <Icons.search size={13} />}
+          <span className={`br-lock ${secure ? 'ok' : active.current ? 'warn' : ''}`} title={secure ? 'This connection is secure' : active.current ? 'Not a secure (https) connection' : undefined}>
+            {secure ? <Icons.lock size={13} /> : active.current ? <Icons.unlock size={13} /> : <Icons.search size={13} />}
           </span>
           <input
             ref={addressRef}
@@ -281,7 +303,7 @@ export function BrowserApp({ agentName }: { agentName: string }) {
             placeholder={`Search ${BROWSER_SEARCH_ENGINES[state?.searchEngine ?? 'duckduckgo'].name} or enter an address`}
             aria-label="Address and search"
           />
-          {/^https?:/.test(active.url) && (
+          {/^https?:/.test(active.current) && (
             <button type="button" className={`br-star ${bookmarked ? 'on' : ''}`} onClick={toggleBookmark} title={bookmarked ? 'Remove bookmark' : 'Bookmark this page'} aria-label="Bookmark">
               <Icons.tag size={15} />
             </button>
@@ -396,8 +418,10 @@ function TabStrip({ tabs, activeId, onSelect, onClose, onNew }: { tabs: Tab[]; a
 
 function Favicon({ url }: { url: string }) {
   const h = host(url);
-  if (!h) return <FbrxMark size={13} />;
   const [bad, setBad] = useState(false);
+  // A new site gets a fresh try at its icon.
+  useEffect(() => setBad(false), [h]);
+  if (!h) return <FbrxMark size={13} />;
   if (bad) return <span className="br-fav-letter">{h[0]?.toUpperCase() ?? '•'}</span>;
   // The favicon rides along with the page's own session; it is only a hint, so a miss just shows a letter.
   return <img className="br-fav" src={`https://${h}/favicon.ico`} alt="" onError={() => setBad(true)} />;
@@ -516,14 +540,14 @@ function BrowserMenu({ active, state, onClose, onOpen, onNewPrivate, onFind, zoo
     setTimeout(() => document.addEventListener('mousedown', onDown), 0);
     return () => document.removeEventListener('mousedown', onDown);
   }, [onClose]);
-  const onPage = /^https?:/.test(active.url);
+  const onPage = /^https?:/.test(active.current);
   const saveNote = async () => {
-    await call('notes.save', { title: active.title || host(active.url), content: `${active.title}\n${active.url}` });
-    toast.success('Saved to Notes', active.title || active.url);
+    await call('notes.save', { title: active.title || host(active.current), content: `${active.title}\n${active.current}` });
+    toast.success('Saved to Notes', active.title || active.current);
     onClose();
   };
   const copyLink = async () => {
-    await (bridge.copyText?.(active.url) ?? navigator.clipboard.writeText(active.url));
+    await (bridge.copyText?.(active.current) ?? navigator.clipboard.writeText(active.current));
     toast.info('Link copied');
     onClose();
   };
@@ -562,7 +586,7 @@ function BrowserMenu({ active, state, onClose, onOpen, onNewPrivate, onFind, zoo
       <button role="menuitem" disabled={!onPage} onClick={copyLink}>
         <Icons.copy size={15} /> Copy link
       </button>
-      <button role="menuitem" disabled={!onPage} onClick={() => (bridge.openExternal?.(active.url), onClose())}>
+      <button role="menuitem" disabled={!onPage} onClick={() => (bridge.openExternal?.(active.current), onClose())}>
         <Icons.external size={15} /> Open in system browser
       </button>
       <div className="br-menu-sep" />
@@ -589,7 +613,7 @@ function SidePanel({ which, onClose, state, active, pageText, onGo, agentName, t
         </button>
       </div>
       <div className="br-panel-body">
-        {which === 'fabrix' && <FabrixPanel active={active} pageText={pageText} agentName={agentName} />}
+        {which === 'fabrix' && <FabrixPanel active={active} pageText={pageText} agentName={agentName} reads={state?.aiAssist !== false} />}
         {which === 'bookmarks' && <BookmarksPanel bookmarks={state?.bookmarks ?? []} onGo={onGo} />}
         {which === 'history' && <HistoryPanel onGo={onGo} />}
         {which === 'passwords' && <PasswordsPanel toast={toast} />}
@@ -598,14 +622,15 @@ function SidePanel({ which, onClose, state, active, pageText, onGo, agentName, t
   );
 }
 
-function FabrixPanel({ active, pageText, agentName }: { active: Tab; pageText: () => Promise<string>; agentName: string }) {
+function FabrixPanel({ active, pageText, agentName, reads }: { active: Tab; pageText: () => Promise<string>; agentName: string; reads: boolean }) {
   const ai = useQuickAi();
-  const onPage = /^https?:/.test(active.url);
+  // With reading pages turned off (Settings → Browser), the page buttons go and only plain questions remain.
+  const onPage = reads && /^https?:/.test(active.current);
   // Fabrix answers from the live page text (read here on the computer), or just the question when there is no page.
   const ask = async (label: string, instruction: string) => {
     const text = await pageText();
     if (!text) return void ai.ask(label, `${instruction}${active.priv ? "\n\n(This is a private tab, so the page's text was not read.)" : ''}`);
-    void ai.ask(label, `${instruction}\n\nThe page is "${active.title}" (${active.url}). Here is its text:\n\n${text}`, text);
+    void ai.ask(label, `${instruction}\n\nThe page is "${active.title}" (${active.current}). Here is its text:\n\n${text}`, text);
   };
   return (
     <QuickAiPanel
@@ -613,7 +638,15 @@ function FabrixPanel({ active, pageText, agentName }: { active: Tab; pageText: (
       className="br-fabrix"
       onAsk={(text) => void ask(text, text)}
       placeholder={`Ask ${agentName} about this page…`}
-      empty={<p className="br-muted">{onPage ? `Ask ${agentName} about this page. It reads the page here on your computer — nothing is sent away.` : `Open a page and ${agentName} can read and explain it, or just ask a question.`}</p>}
+      empty={
+        <p className="br-muted">
+          {!reads
+            ? `${agentName} does not read pages (Settings → Browser). You can still ask a question.`
+            : onPage
+              ? `Ask ${agentName} about this page. It reads the page here on your computer — nothing is sent away.`
+              : `Open a page and ${agentName} can read and explain it, or just ask a question.`}
+        </p>
+      }
       actions={
         <>
           <Button size="sm" variant="ghost" disabled={!onPage || ai.busy} onClick={() => ask('Summarize this page', 'Summarize this web page in a few clear sentences.')}>

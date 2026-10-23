@@ -50,7 +50,9 @@ describe('support mode (kernel)', () => {
       expect(installId).toBeTruthy();
       // A new computer on its own: Essentials.
       expect(kernel.license.status().tier).toBe('essentials');
-      expect(kernel.support.status().active).toBe(false);
+      // The install id a pass is minted for is there to read (Settings → License, FBRX/1 show version).
+      expect(kernel.support.status()).toMatchObject({ active: false, installId });
+      expect(((await kernel.call('cli.exec', { session: 's1', line: 'show version' }, USER)) as { output: string }).output).toContain(`Install id:   ${installId}`);
 
       // The organization locks a setting; the person cannot change it.
       kernel.settings.applyManaged({ general: { telemetry: false } }, ['general.telemetry']);
@@ -74,6 +76,31 @@ describe('support mode (kernel)', () => {
       expect(ended.active).toBe(false);
       expect(kernel.license.status().tier).toBe('essentials');
       await expect(kernel.call('settings.update', { patch: { general: { telemetry: false } } }, USER)).rejects.toMatchObject({ code: 'MANAGED' });
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('on an organization\'s computer, works only when the organization turned it on, and ends when it turns it off', async () => {
+    const keys = generateSigningKeyPair();
+    const { kernel, cleanup } = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem] });
+    try {
+      const installId = kernel.meta.get<string>('install.id')!;
+      // In an organization (FBRX Command), with support access not turned on: even a valid pass is refused.
+      kernel.meta.set('fleet.deviceId', 'dev_test');
+      await expect(kernel.call('support.activate', { pass: makePass(keys.privateKeyPem, installId) }, USER)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      expect(kernel.license.status().source).not.toBe('support');
+
+      // The organization turns it on: the pass works.
+      kernel.settings.applyManaged({ support: { allowOnManaged: true } }, ['support.allowOnManaged']);
+      expect((await kernel.call('support.activate', { pass: makePass(keys.privateKeyPem, installId) }, USER)) as { active: boolean }).toMatchObject({ active: true });
+      expect(kernel.license.status().tier).toBe('blackhole');
+
+      // ...and turns it off again: support ends at once.
+      kernel.settings.applyManaged({ support: { allowOnManaged: false } }, ['support.allowOnManaged']);
+      expect(kernel.support.status().active).toBe(false);
+      expect(kernel.meta.get('support.pass')).toBeNull();
+      expect(kernel.license.status().source).not.toBe('support');
     } finally {
       await cleanup();
     }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addressBarToUrl, hostMatches, policyAllows } from '@fbrx/shared';
+import { addressBarToUrl, hostMatches, policyAllows, safeSearchUrl } from '@fbrx/shared';
 import { makeKernel, USER } from './helpers';
 
 describe('browser address bar and policy (shared)', () => {
@@ -19,6 +19,21 @@ describe('browser address bar and policy (shared)', () => {
     const notAllowed = policyAllows('https://other.test', { allowed: ['school.test'], blocked: [], managed: true, safeBrowsing: false });
     expect(notAllowed).toMatchObject({ ok: false, reason: 'not-allowed' });
     expect(policyAllows('https://school.test/a', { allowed: ['school.test'], blocked: [], managed: true, safeBrowsing: false })).toMatchObject({ ok: true });
+  });
+});
+
+describe('safe search (shared)', () => {
+  it('turns searches on the big engines strict, once', () => {
+    expect(safeSearchUrl('https://www.google.com/search?q=cats')).toBe('https://www.google.com/search?q=cats&safe=active');
+    expect(safeSearchUrl('https://www.google.co.uk/search?q=cats')).toContain('safe=active');
+    expect(safeSearchUrl('https://www.bing.com/search?q=cats')).toContain('adlt=strict');
+    expect(safeSearchUrl('https://duckduckgo.com/?q=cats')).toContain('kp=1');
+    expect(safeSearchUrl('https://search.brave.com/search?q=cats')).toContain('safesearch=strict');
+    // Already strict, or not a search: left alone (no redirect loops).
+    expect(safeSearchUrl('https://www.google.com/search?q=cats&safe=active')).toBeNull();
+    expect(safeSearchUrl('https://www.google.com/maps')).toBeNull();
+    expect(safeSearchUrl('https://example.com/search?q=x')).toBeNull();
+    expect(safeSearchUrl('not a url')).toBeNull();
   });
 });
 
@@ -48,9 +63,30 @@ describe('browser service (kernel)', () => {
       expect((await kernel.call('browser.check', { input: 'https://school.test/home' }, USER)) as object).toMatchObject({ ok: true });
       expect((kernel.browser.state()).policy.managed).toBe(true);
 
+      // The person's own blocks are listed apart, and the new settings reach the browser window.
+      expect(kernel.browser.state()).toMatchObject({ blockedByMe: ['ads.test'], privateByDefault: false, aiAssist: true });
+
+      // Safe browsing: off by default on an ordinary computer; on, typed searches go to the strict version.
+      expect(kernel.browser.policy().safeBrowsing).toBe(false);
+      kernel.settings.applyManaged({ browser: { allowed: [], safeBrowsing: true } }, ['browser.safeBrowsing']);
+      expect((await kernel.call('browser.check', { input: 'cute cats' }, USER)) as { url: string }).toMatchObject({ url: expect.stringContaining('kp=1') });
+      kernel.settings.applyManaged({ browser: { allowed: ['school.test'] } }, ['browser.allowed']);
+
       // Clear history.
       expect((await kernel.call('browser.clearHistory', {}, USER)) as object).toMatchObject({ cleared: 2 });
       expect((await kernel.call('browser.history', {}, USER)) as unknown[]).toHaveLength(0);
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('turns safe browsing on by itself on a student\'s computer', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      kernel.meta.set('fleet.edition', { tier: 'basic', vertical: 'education', audience: 'student' });
+      kernel.license.refresh();
+      expect(kernel.edition().learner).toBe(true);
+      expect(kernel.browser.policy().safeBrowsing).toBe(true);
     } finally {
       await cleanup();
     }

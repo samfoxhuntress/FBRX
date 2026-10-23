@@ -403,6 +403,13 @@ export const SettingsSchema = z.object({
   fleet: z.object({
     heartbeatSeconds: z.number().int().min(10).max(3600),
   }),
+  /**
+   * Support mode on a computer that belongs to an organization: off unless the organization turns it on (a managed
+   * setting from FBRX Command). A computer on its own may always use a support pass.
+   */
+  support: z.object({
+    allowOnManaged: z.boolean(),
+  }),
   /** FBRX Browser (the web browser inside FBRX OS). The allow/block lists are usually set by an organization. */
   browser: z.object({
     homepage: z.string().max(2000),
@@ -664,6 +671,9 @@ export const DEFAULT_SETTINGS: Settings = {
   },
   fleet: {
     heartbeatSeconds: 30,
+  },
+  support: {
+    allowOnManaged: false,
   },
   browser: {
     homepage: '',

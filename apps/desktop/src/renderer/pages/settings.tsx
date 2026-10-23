@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import type { DeepPartial, EditionStatus, EffectivePolicy, Settings, Texture } from '@fbrx/shared';
 import {
   AUDIENCE_NAMES,
+  BROWSER_SEARCH_ENGINES,
   EDITION_PLANS,
   MAX_STEPS_PER_TASK,
   STANDARD_TRIAL_DAYS,
@@ -52,7 +53,7 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'memory' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'api' | 'logs';
+type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'memory' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'browser' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'api' | 'logs';
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
@@ -64,6 +65,7 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: str
   { id: 'snippets', label: 'Snippets', icon: 'code', group: 'You', notEssentials: true },
   { id: 'macros', label: 'Macros', icon: 'zap', group: 'You', notEssentials: true },
   { id: 'spotlight', label: 'Spotlight', icon: 'search', group: 'You' },
+  { id: 'browser', label: 'Browser', icon: 'globe', group: 'You', notEssentials: true },
   { id: 'trophies', label: 'Trophy case', icon: 'trophy', group: 'You' },
   { id: 'updates', label: 'Updates', icon: 'download', group: 'This computer' },
   { id: 'account', label: 'FBRX account', icon: 'user', group: 'This computer' },
@@ -129,6 +131,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'snippets' && <SnippetSettings />}
           {tab === 'macros' && <MacroSettings />}
           {tab === 'spotlight' && <SpotlightSettings />}
+          {tab === 'browser' && <BrowserSettings />}
           {tab === 'trophies' && <Trophies />}
           {tab === 'updates' && <Updates />}
           {tab === 'account' && <AccountSettings />}
@@ -949,6 +952,82 @@ function SpotlightSettings() {
   );
 }
 
+/** Settings → Browser: FBRX Browser's home page, search, privacy, Fabrix, and the sites blocked on this computer. */
+function BrowserSettings() {
+  const { s, locked, patch } = useSettings();
+  const { data: b } = useCore('browser.state', undefined, ['browser.changed', 'settings.changed']);
+  const [block, setBlock] = useState('');
+  const { run, busy } = useAction();
+  if (!s || !b) return null;
+  const br = s.browser;
+  const lock = (path: string) => isLocked(locked, `browser.${path}`);
+  const org = b.policy;
+  return (
+    <>
+      <Card title="Browser" subtitle="FBRX Browser opens in its own window, from the sidebar or the tray." actions={<Button size="sm" icon="globe" onClick={() => navigate('browser')}>Open it</Button>}>
+        <div className="fx-form">
+          <Field label="Home page" help="Where the home button goes. Empty: the FBRX start page.">
+            <Input value={br.homepage} disabled={lock('homepage')} placeholder="https://" onChange={(e) => void patch({ browser: { homepage: e.target.value.trim() } })} />
+          </Field>
+          <Field label="Search with">
+            <Select
+              value={br.searchEngine}
+              disabled={lock('searchEngine')}
+              onChange={(e) => void patch({ browser: { searchEngine: e.target.value as typeof br.searchEngine } })}
+              options={Object.entries(BROWSER_SEARCH_ENGINES).map(([value, e]) => ({ value, label: e.name }))}
+            />
+          </Field>
+          <Toggle checked={br.doNotTrack} disabled={lock('doNotTrack')} onChange={(v) => void patch({ browser: { doNotTrack: v } })} label="Ask sites not to track me (Do Not Track and Global Privacy Control)" />
+          <Toggle checked={br.privateByDefault} disabled={lock('privateByDefault')} onChange={(v) => void patch({ browser: { privateByDefault: v } })} label="Open new tabs as private tabs (nothing is kept once they close)" />
+          <Toggle checked={br.aiAssist} disabled={lock('aiAssist')} onChange={(v) => void patch({ browser: { aiAssist: v } })} label="Let Fabrix read the page when I ask about it (on this computer only)" />
+        </div>
+      </Card>
+      <Card title="Blocked sites" subtitle="Sites that never open in FBRX Browser on this computer, with their subdomains.">
+        <form
+          className="fx-actions"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run('add', () => call('browser.addBlocked', { host: block }).then(() => setBlock('')));
+          }}
+        >
+          <Input value={block} placeholder="example.com" onChange={(e) => setBlock(e.target.value)} />
+          <Button type="submit" size="sm" loading={busy === 'add'} disabled={!block.trim()}>
+            Block
+          </Button>
+        </form>
+        {b.blockedByMe.length > 0 && (
+          <div className="fx-form" style={{ marginTop: 10 }}>
+            {b.blockedByMe.map((h) => (
+              <div key={h} className="account-org">
+                <span className="mono">{h}</span>
+                <Button size="sm" variant="ghost" onClick={() => void run(h, () => call('browser.removeBlocked', { host: h }))}>
+                  Unblock
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+      {(org.managed || org.safeBrowsing) && (
+        <Card title="Set by your organization" subtitle="These come from FBRX Command and apply to every page, not only what is typed.">
+          <KeyValue
+            items={[
+              ['Only these sites', org.allowed.length ? org.allowed.join(', ') : 'Any site'],
+              ['Blocked', br.blocked.length ? br.blocked.join(', ') : 'None'],
+              ['Safe browsing', org.safeBrowsing ? 'On: strict SafeSearch on Google, Bing, DuckDuckGo and Brave, and YouTube Restricted Mode' : 'Off'],
+            ]}
+          />
+        </Card>
+      )}
+      <Card title="History">
+        <Button size="sm" variant="danger" loading={busy === 'clear'} onClick={() => void run('clear', () => call('browser.clearHistory', {}), 'Browsing history cleared')}>
+          Clear browsing history
+        </Button>
+      </Card>
+    </>
+  );
+}
+
 function Updates() {
   const { data: u } = useCore('updates.status', undefined, ['updates.changed']);
   const { s, locked, patch } = useSettings();
@@ -1078,6 +1157,7 @@ function License() {
             ['Seats', l.seats === 0 ? 'Unlimited' : l.seats ?? '—'],
             ['Expires', l.expiresAt ? formatDate(l.expiresAt) : l.state === 'valid' ? 'Never' : '—'],
             ['Source', { managed: 'Your organization (FBRX Command)', local: 'License key on this device', account: 'Your FBRX account', development: 'Development build', support: 'Support mode', none: '—' }[l.source]],
+            ...(support ? [['Install id', <CopyText value={support.installId} />] as [string, ReactNode]] : []),
             ...(l.commandUrl ? [['FBRX Command', <span className="mono">{l.commandUrl}</span>] as [string, ReactNode]] : []),
             ['Features', l.features.join(', ')],
           ]}

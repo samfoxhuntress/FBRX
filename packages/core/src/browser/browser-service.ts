@@ -1,4 +1,4 @@
-import { addressBarToUrl, newId, policyAllows, type Bookmark, type BrowserCheck, type BrowserPolicy, type BrowserState, type HistoryEntry, type Settings } from '@fbrx/shared';
+import { addressBarToUrl, newId, policyAllows, safeSearchUrl, type Bookmark, type BrowserCheck, type BrowserPolicy, type BrowserState, type HistoryEntry, type Settings } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
 import type { EventBus } from '../events';
@@ -22,6 +22,8 @@ export class BrowserService {
     private readonly settings: () => Settings,
     /** Whether FBRX Shield is the antivirus and will check downloads. */
     private readonly shieldOn: () => boolean,
+    /** A student's or child's computer: safe browsing is on there whatever the settings say. */
+    private readonly learner: () => boolean = () => false,
   ) {}
 
   private bookmarks(): Bookmark[] {
@@ -41,20 +43,22 @@ export class BrowserService {
       blocked: [...new Set([...b.blocked, ...mine])],
       // Managed when the organization set any list (those paths are locked); the person can still add their own blocks.
       managed: b.allowed.length > 0 || b.blocked.length > 0 || b.safeBrowsing,
-      safeBrowsing: b.safeBrowsing,
+      safeBrowsing: b.safeBrowsing || this.learner(),
     };
   }
 
   state(): BrowserState {
     const b = this.settings().browser;
-    return { homepage: b.homepage, searchEngine: b.searchEngine, bookmarks: this.bookmarks(), policy: this.policy(), shieldOn: this.shieldOn() };
+    return { homepage: b.homepage, searchEngine: b.searchEngine, bookmarks: this.bookmarks(), policy: this.policy(), shieldOn: this.shieldOn(), privateByDefault: b.privateByDefault, aiAssist: b.aiAssist, blockedByMe: this.meta.get<string[]>(LOCAL_BLOCKED_KEY) ?? [] };
   }
 
   /** Turns what was typed into an address, and says whether the policy allows it. */
   check(input: string): BrowserCheck {
-    const url = addressBarToUrl(input, this.settings().browser.searchEngine);
-    if (!url) return { ok: false, url: '' };
-    const verdict = policyAllows(url, this.policy());
+    const typed = addressBarToUrl(input, this.settings().browser.searchEngine);
+    if (!typed) return { ok: false, url: '' };
+    const policy = this.policy();
+    const url = (policy.safeBrowsing && safeSearchUrl(typed)) || typed;
+    const verdict = policyAllows(url, policy);
     return { ok: verdict.ok, reason: verdict.reason, url };
   }
 

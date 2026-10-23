@@ -1,15 +1,16 @@
-import { app, BrowserWindow, screen, session, shell, type IpcMainInvokeEvent } from 'electron';
+import { app, BrowserWindow, screen, session, shell, type IpcMainInvokeEvent, type Session } from 'electron';
 import { basename, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import type { Kernel } from '@fbrx/core';
-import { PRODUCT_NAME, WEB_BROWSER_PARTITION, WEB_BROWSER_PRIVATE_PARTITION } from '@fbrx/shared';
+import { PRODUCT_NAME, WEB_BROWSER_PARTITION, WEB_BROWSER_PRIVATE_PARTITION, YOUTUBE_RESTRICT_HOSTS, hostMatches, policyAllows, safeSearchUrl } from '@fbrx/shared';
 import { openExternalSafe } from './platform';
 
 /**
  * FBRX Browser: a real web browser inside FBRX OS, in its own window. Pages load in locked-down <webview>s with their
- * own storage (WEB_BROWSER_PARTITION), apart from FBRX's own pages. The main process hardens that session — it checks
- * every download with FBRX Shield, keeps web permissions off by default, and sends pages that try to open a new window
- * back to the browser as a new tab — while the tabs, the address bar and Fabrix live in the renderer (pages/browser).
+ * own storage (WEB_BROWSER_PARTITION), apart from FBRX's own pages. The main process hardens that session: it enforces
+ * the browsing policy on every page and frame (not only what is typed), applies safe browsing, checks every download
+ * with FBRX Shield, keeps web permissions off by default, and sends pages that try to open a new window back to the
+ * browser as a new tab. The tabs, the address bar and Fabrix live in the renderer (pages/browser).
  */
 
 let browserWin: BrowserWindow | null = null;
@@ -24,50 +25,73 @@ export interface BrowserDeps {
   actor: string;
   /** Tells the renderer to open a URL a page asked to pop up as a new tab in the browser window. */
   onPopup: (url: string) => void;
-  /** A finished download and what FBRX Shield made of it, for a toast/alert. */
-  onDownload: (d: { name: string; path: string; verdict: 'clean' | 'threat' | 'unchecked' }) => void;
+  /** A finished download Shield found nothing in, or did not check. A finding raises Shield's own alert instead. */
+  onDownload: (d: { name: string; path: string; checked: boolean }) => void;
+}
+
+/** The browser's own sessions (ordinary and private), so its rules never touch FBRX's pages or server consoles. */
+function webSessions(): Session[] {
+  return [session.fromPartition(WEB_BROWSER_PARTITION), session.fromPartition(WEB_BROWSER_PRIVATE_PARTITION)];
 }
 
 /** Hardens the web sessions once, at start. Call before any browser window opens. */
 export function setupWebSessions(deps: BrowserDeps): void {
-  for (const partition of [WEB_BROWSER_PARTITION, WEB_BROWSER_PRIVATE_PARTITION]) {
-    const ses = session.fromPartition(partition);
+  const sessions = webSessions();
+  for (const ses of sessions) {
     ses.setPermissionRequestHandler((_wc, permission, cb) => cb(WEB_PERMISSIONS.has(permission)));
     ses.setPermissionCheckHandler((_wc, permission) => WEB_PERMISSIONS.has(permission));
-    // Ask sites not to track, when the person chose that.
+    // The browsing policy, for every page and frame: blocked sites are refused (the tab shows why), and with safe
+    // browsing on, searches go to their strict-SafeSearch version.
+    ses.webRequest.onBeforeRequest({ urls: ['http://*/*', 'https://*/*'] }, (details, cb) => {
+      const k = deps.kernel();
+      if (!k || (details.resourceType !== 'mainFrame' && details.resourceType !== 'subFrame')) return cb({});
+      const policy = k.browser.policy();
+      if (!policyAllows(details.url, policy).ok) return cb({ cancel: true });
+      const strict = policy.safeBrowsing ? safeSearchUrl(details.url) : null;
+      cb(strict ? { redirectURL: strict } : {});
+    });
     ses.webRequest.onBeforeSendHeaders((details, cb) => {
       const headers = details.requestHeaders;
-      if (deps.kernel()?.settings.get().browser.doNotTrack) {
+      const k = deps.kernel();
+      // Ask sites not to track, when the person chose that.
+      if (k?.settings.get().browser.doNotTrack) {
         headers['DNT'] = '1';
         headers['Sec-GPC'] = '1';
+      }
+      // Safe browsing: YouTube's Restricted Mode, by the header YouTube itself reads for it.
+      if (k?.browser.policy().safeBrowsing) {
+        try {
+          const h = new URL(details.url).hostname;
+          if (YOUTUBE_RESTRICT_HOSTS.some((p) => hostMatches(h, p))) headers['YouTube-Restrict'] = 'Strict';
+        } catch {
+          /* not a URL we can read */
+        }
       }
       cb({ requestHeaders: headers });
     });
     ses.on('will-download', (_e, item) => {
       item.once('done', (_ev, state) => {
         const path = item.getSavePath();
-        const name = basename(path || item.getFilename());
         if (state !== 'completed' || !path) return;
+        const name = basename(path);
         const k = deps.kernel();
-        if (!k) return void deps.onDownload({ name, path, verdict: 'unchecked' });
-        // FBRX Shield checks the finished file; a threat is quarantined by the check itself.
-        void k
-          .call('shield.check', { path }, { origin: 'user', actor: deps.actor })
-          .then((r) => {
-            const verdict = (r as { verdict: { malicious?: boolean } | null }).verdict;
-            deps.onDownload({ name, path, verdict: verdict?.malicious ? 'threat' : 'clean' });
+        if (!k || !k.browser.state().shieldOn) return void deps.onDownload({ name, path, checked: false });
+        // FBRX Shield checks it as a download: malware goes to quarantine and Shield raises its own alert.
+        void k.shield
+          .checkDownload(path)
+          .then((found) => {
+            if (!found) deps.onDownload({ name, path, checked: true });
           })
-          .catch(() => deps.onDownload({ name, path, verdict: 'unchecked' }));
+          .catch(() => deps.onDownload({ name, path, checked: false }));
       });
     });
   }
-  // A page that opens a new window becomes a new tab; everything else that is not web goes to the system browser.
+  // A page in the browser that opens a new window gets a new tab instead; anything not on the web goes to the system
+  // browser. Server consoles (their own session, server-browser.ts) keep their own handling.
   app.on('web-contents-created', (_e, wc) => {
-    if (wc.getType() !== 'webview') return;
-    const web = (url: string) => /^https?:\/\//i.test(url);
-    if (!web(wc.getURL()) && wc.getURL() !== 'about:blank' && wc.getURL() !== '') return; // only our web webviews
+    if (wc.getType() !== 'webview' || !sessions.includes(wc.session)) return;
     wc.setWindowOpenHandler(({ url }) => {
-      if (web(url)) deps.onPopup(url);
+      if (/^https?:\/\//i.test(url)) deps.onPopup(url);
       else openExternalSafe(url);
       return { action: 'deny' };
     });

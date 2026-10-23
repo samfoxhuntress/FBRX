@@ -440,14 +440,17 @@ export class Kernel {
       events: this.events,
       log: L('support'),
       installId: () => this.meta.get<string>('install.id') ?? '',
+      allowed: () => !this.fleet.enrolled || this.settings.get().support.allowOnManaged,
       report: (message, data) => this.fleet.enrolled && this.fleet.reportEvent({ kind: 'alert', severity: 'warning', message, data, at: new Date().toISOString() }),
     });
     this.settings.setSupportActive(() => this.support.status().active);
+    this.settings.onChange(() => this.support.settingsChanged());
     this.browser = new BrowserService(
       this.meta,
       this.events,
       () => this.settings.get(),
       () => this.settings.get().protection.provider === 'shield',
+      () => this.edition().learner,
     );
     this.helpdesk = new Helpdesk({
       fleet: this.fleet,

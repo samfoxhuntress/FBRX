@@ -170,13 +170,9 @@ function browserDeps(): BrowserDeps {
     appPath: app.getAppPath(),
     actor,
     onPopup: (url) => openBrowserWindow(browserDeps(), url),
-    onDownload: ({ name, path, verdict }) => {
-      if (verdict === 'threat') {
-        deliverNotification({ title: 'Download stopped', body: `FBRX Shield found a threat in "${name}" and moved it to quarantine.`, level: 'error', source: 'shield' });
-      } else {
-        deliverNotification({ title: 'Download finished', body: verdict === 'clean' ? `"${name}" is saved and FBRX Shield found nothing wrong.` : `"${name}" is saved.`, level: 'success', source: 'shield', open: 'shield' });
-      }
-    },
+    // A finding raises FBRX Shield's own alert; only a download with nothing found is announced here (one notice, not two).
+    onDownload: ({ name, checked }) =>
+      deliverNotification({ title: 'Download finished', body: checked ? `"${name}" is saved, and FBRX Shield found nothing wrong.` : `"${name}" is saved.`, level: 'success', source: 'shield' }),
   };
 }
 
@@ -621,7 +617,7 @@ function trayMenu() {
     { type: 'separator' },
     { label: 'Open FBRX Endpoint', click: () => showWindow() },
     { label: 'New agent chat', click: () => showWindow('agent') },
-    { label: browserWindowOpen() ? 'Show FBRX Browser' : 'Open FBRX Browser', click: () => openBrowserWindow(browserDeps()) },
+    ...(kernel.license.status().tier !== 'essentials' ? [{ label: browserWindowOpen() ? 'Show FBRX Browser' : 'Open FBRX Browser', click: () => openBrowserWindow(browserDeps()) }] : []),
     { label: `Spotlight${spotlightKey ? ` (${spotlightKey})` : ''}`, click: () => showSpotlight() },
     { label: `Clipboard history${pickerKey ? ` (${pickerKey.replace('Control', 'Ctrl')})` : ''}`, click: () => showClipPicker() },
     { label: pending ? `Review ${pending} pending approval${pending > 1 ? 's' : ''}` : 'No pending approvals', enabled: pending > 0, click: () => showWindow('approvals') },
@@ -782,7 +778,8 @@ function registerIpc() {
   });
   // FBRX Browser: open or focus its own window (from the sidebar, the tray, or a link).
   ipcMain.handle('fbrx:browser', (e, action: unknown, url?: unknown) => {
-    if (!trusted(e) || action !== 'open') return false;
+    // Endpoint Essentials is the AI on its own; the browser comes with Standard and up (and on learners' computers).
+    if (!trusted(e) || action !== 'open' || kernel?.license.status().tier === 'essentials') return false;
     openBrowserWindow(browserDeps(), typeof url === 'string' && /^https?:\/\//i.test(url) ? url : undefined);
     return true;
   });

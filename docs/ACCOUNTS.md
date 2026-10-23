@@ -49,7 +49,8 @@ A computer that runs FBRX without the cloud — a local-only environment, or the
 — can make an **offline account** instead: **Settings → Account → Make an offline account**. It is a local identity
 (a name, an optional email, an optional start password) kept on the computer; it never reaches a server. It pairs
 with a license key for its edition: a **Beta key**, or a key from a local FBRX Command (below). An optional start
-password locks FBRX each time it starts. The cloud FBRX account and the offline account are separate; a computer uses
+password locks FBRX each time it starts: a lock on the screen, not encryption (to keep saved passwords encrypted
+until you type a password, turn on the vault's own password at start, under Credentials). The cloud FBRX account and the offline account are separate; a computer uses
 one or the other.
 
 **Beta keys** are ordinary license keys with a tier and an expiry — for example Ultra until the Beta ends. Make them

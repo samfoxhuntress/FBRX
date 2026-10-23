@@ -294,6 +294,29 @@ describe('FBRX Shield on a computer', () => {
     }
   });
 
+  it('checks a file the browser downloaded the way the Downloads watcher does', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    const dir = tempDir('fbrx-dl-');
+    try {
+      // A plain file: nothing found.
+      writeFileSync(join(dir, 'notes.txt'), 'just some notes');
+      expect(await kernel.shield.checkDownload(join(dir, 'notes.txt'))).toBeNull();
+      // Nothing there: nothing to say.
+      expect(await kernel.shield.checkDownload(join(dir, 'missing.bin'))).toBeNull();
+      // Download rules apply: an archive hiding a script is flagged for the person to decide.
+      writeFileSync(join(dir, 'statement.zip'), makeZip(['statement.pdf.js']));
+      expect(await kernel.shield.checkDownload(join(dir, 'statement.zip'))).toMatchObject({ source: 'download', kind: 'suspicious', action: 'open' });
+      if (process.platform !== 'win32') {
+        // The antivirus test file goes to quarantine, as from the Downloads folder.
+        writeFileSync(join(dir, 'eicar.com'), EICAR);
+        expect(await kernel.shield.checkDownload(join(dir, 'eicar.com'))).toMatchObject({ source: 'download', kind: 'test', action: 'quarantined' });
+        expect(existsSync(join(dir, 'eicar.com'))).toBe(false);
+      }
+    } finally {
+      await cleanup();
+    }
+  });
+
   it('never flags FBRX itself, tells about a scan once, and lets the person trust many at once', async () => {
     const { kernel, cleanup } = await makeKernel({ start: false });
     const home = tempDir('fbrx-home-');

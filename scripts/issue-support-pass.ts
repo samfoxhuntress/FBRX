@@ -8,7 +8,7 @@
  *   npm run support:pass -- --install-id <the computer's install id> [--hours 4] [--tier blackhole|ultra|basic]
  *                           [--note "Ticket 1234"] [--by name@fbrx] [--key .fbrx-keys/license-signing.pem]
  *
- * Find the install id on the computer: Settings → License shows it, or the FBRX/1 command `show system` prints it.
+ * Find the install id on the computer: Settings → License shows it, or the FBRX/1 command `show version` prints it.
  * Keep passes short; they cannot be revoked once signed, only wait out.
  */
 import { existsSync, readFileSync } from 'node:fs';

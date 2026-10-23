@@ -46,6 +46,8 @@ export const SUPPORT_PASS_PREFIX = 'FBRXSUP1';
 /** What the app shows while support mode is on (status.support). */
 export interface SupportStatus {
   active: boolean;
+  /** This computer's install id: what a support pass is minted for (shown in Settings → License and FBRX/1). */
+  installId: string;
   /** The edition support mode is running (Black Hole unless a lighter pass was minted). */
   tier: Tier | null;
   /** Until when the pass is valid. */

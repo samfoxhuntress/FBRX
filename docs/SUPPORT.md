@@ -10,6 +10,14 @@ runs as Black Hole with every feature on, settings an organization locked can be
 written to the audit log (and reported to FBRX Command on a managed computer). The resume phrase, or the pass running
 out, puts the computer back exactly as it was.
 
+## On an organization's computers
+
+A computer that belongs to an organization (joined to its FBRX Command) takes a support pass only when **the
+organization has turned FBRX support access on**: the managed setting `support.allowOnManaged`, off by default, set in
+FBRX Command's settings for its computers. Until then, even a valid pass is refused, so FBRX cannot unlock an
+organization's computer, or settings it locked, without the organization's say-so. If the organization turns it off
+again, support mode ends at once. A computer on its own always takes a valid pass.
+
 ## Using it
 
 1. On the computer, type **`418teapotadmin`** into the license box (Settings → License), Spotlight, or FBRX Browser's
@@ -19,7 +27,8 @@ out, puts the computer back exactly as it was.
 3. When you are done, type **`refusetobrew`** (anywhere the phrase is taken, or the “End support” button on the
    banner). The computer goes back to the edition and settings it had. It also ends on its own when the pass runs out.
 
-A pass is for one computer only; its install id is on Settings → License. Nothing on a server changes.
+A pass is for one computer only. Its install id is on Settings → License (with a copy button), and the FBRX/1 command
+`show version` prints it. Nothing on a server changes.
 
 ## Making a support pass
 
@@ -49,5 +58,7 @@ project's signing key works on the builds made from it.
 - **A pass is short-lived.** At most 12 hours (4 by default), and it ends on its own.
 - **Everything is audited.** Starting and ending support, and every change made while it is on, are in the tamper-
   evident audit log; on a computer in an organization, FBRX Command is told too.
+- **An organization decides for its computers.** On a computer in an organization, support mode needs the
+  organization's permission (above), and its FBRX Command is told when a session starts and ends.
 - **It reaches the apps on a computer only** — FBRX OS and FBRX Browser. FBRX Command and FBRX Server have their own
   administrator accounts; support mode does not touch them.

@@ -727,6 +727,19 @@ export class Shield {
     if (r.verdict && this.watchers.length) await this.handle(file, r, 'download', true);
   }
 
+  /**
+   * A file FBRX Browser just finished downloading: checked as a download (the rules for files from the internet
+   * apply), malware quarantined when that is on, and the finding passed on, exactly as the Downloads watcher does.
+   * The watcher then skips the same file.
+   */
+  async checkDownload(file: string): Promise<ShieldDetection | null> {
+    const st = await stat(file).catch(() => null);
+    if (!st?.isFile() || this.excluded(file)) return null;
+    this.seen.set(file, `${st.size}:${st.mtimeMs}`);
+    const r = await this.verdictFor(file, { downloaded: true });
+    return r.verdict ? this.handle(file, r, 'download', true) : null;
+  }
+
   /** Checks one file on request (Security → Check a file, the agent). */
   async check(file: string): Promise<{ verdict: ShieldVerdict | null; sha256: string | null; detection: ShieldDetection | null }> {
     const r = await this.verdictFor(file);

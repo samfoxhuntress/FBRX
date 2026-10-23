@@ -109,8 +109,18 @@ const OPERATIONAL: Record<string, Node> = {
       version: {
         help: 'Product, version and license',
         run: async (_a, c) => {
-          const s = await c.call('system.status');
-          return [`Product:      ${s.product}`, `Version:      ${s.version}`, `Platform:     ${s.platform} ${s.arch}`, `Device name:  ${s.deviceName}`, `Edition:      ${TIER_NAMES[s.license.tier as Tier] ?? s.license.tier}`, `License:      ${s.license.edition}${s.license.customer ? ` (${s.license.customer})` : ''}`, `Build:        ${s.devMode ? 'development' : 'release'}`].join('\n');
+          const [s, sup] = await Promise.all([c.call('system.status'), c.call('support.status')]);
+          return [
+            `Product:      ${s.product}`,
+            `Version:      ${s.version}`,
+            `Platform:     ${s.platform} ${s.arch}`,
+            `Device name:  ${s.deviceName}`,
+            `Install id:   ${sup.installId}`,
+            `Edition:      ${TIER_NAMES[s.license.tier as Tier] ?? s.license.tier}`,
+            `License:      ${s.license.edition}${s.license.customer ? ` (${s.license.customer})` : ''}`,
+            `Support mode: ${sup.active ? `on until ${sup.until}` : 'off'}`,
+            `Build:        ${s.devMode ? 'development' : 'release'}`,
+          ].join('\n');
         },
       },
       system: {
