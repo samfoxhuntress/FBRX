@@ -1,11 +1,20 @@
 import { createServer } from 'node:https';
-import type { AddressInfo } from 'node:net';
+import { createServer as createTcpServer, type AddressInfo } from 'node:net';
 import { describe, expect, it } from 'vitest';
 import { createSelfSignedCertificate } from '@fbrx/shared/node';
 import type { SavedServer, ServerCheck } from '@fbrx/shared';
 import { SavedServers, certificateFingerprint, parseServerAddress } from '../src/system/saved-servers';
 import { MetaStore } from '../src/storage/meta';
 import { makeKernel, USER } from './helpers';
+
+/** A port nothing listens on: one the system just handed out and took back (a guessed one may be another test's). */
+async function closedPort(): Promise<number> {
+  const tcp = createTcpServer();
+  await new Promise<void>((r) => tcp.listen(0, '127.0.0.1', r));
+  const port = (tcp.address() as AddressInfo).port;
+  await new Promise<void>((r) => tcp.close(() => r()));
+  return port;
+}
 
 describe('saved servers (Lab → FBRX Server → Your servers)', () => {
   it('reads an address the way people type it', () => {
@@ -80,7 +89,7 @@ describe('saved servers (Lab → FBRX Server → Your servers)', () => {
       expect(kernel.servers.trustsCertificate(s.url, other.fingerprint)).toBe(false);
 
       // Moving it to another address forgets the trusted certificate.
-      const moved = (await kernel.call('server.save', { id: s.id, address: `127.0.0.1:${port + 1}` }, USER)) as SavedServer;
+      const moved = (await kernel.call('server.save', { id: s.id, address: `127.0.0.1:${await closedPort()}` }, USER)) as SavedServer;
       expect(moved.fingerprint).toBeNull();
       const gone = (await kernel.call('server.check', { id: s.id }, USER)) as ServerCheck;
       expect(gone).toMatchObject({ reachable: false, ok: false, error: expect.stringContaining('nothing listens') });
