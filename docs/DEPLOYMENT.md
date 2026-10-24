@@ -150,7 +150,7 @@ unit), users and API keys. Health endpoint: `GET /healthz`.
 2. Merge into `main` (the default branch: installed copies read `release.json` from it).
 3. Tag that commit `v<version>` and push the tag, or run the **Release** workflow on `main` (Actions → Release →
    Run workflow) with *channel* `stable` and *Also publish a GitHub release* ticked, which creates the tag itself. It
-   builds the Mac and Windows installers, the FBRX Server ISO and bundle and the FBRX Command image, and publishes them
+   builds the Mac, Windows and Linux installers, the FBRX Server ISO and bundle and the FBRX Command image, and publishes them
    as a GitHub release named after the version (a version with a `-` in it, such as `2.0.0-beta.1`, or the beta or
    dev channel, is published as a pre-release).
 
@@ -164,15 +164,20 @@ npm run runtime:fetch -- --platform darwin --arch arm64,x64     # optional: bund
 npm run package:mac                                              # → apps/desktop/release/<version>/
 npm run runtime:fetch -- --platform win32 --arch x64,arm64
 npm run package:win
+npm run runtime:fetch -- --platform linux --arch x64
+npm run package:linux
 ```
 
-macOS packages must be built on a Mac and Windows packages are most reliably built on Windows (the Release
-workflow does both). Without a Developer ID certificate, Mac builds are ad-hoc signed: they run on the Mac that built
+macOS packages must be built on a Mac, Windows packages are most reliably built on Windows, and Linux packages on
+Linux (the Release workflow does all three). Without a Developer ID certificate, Mac builds are ad-hoc signed: they run on the Mac that built
 them, but other Macs will refuse them until you sign and notarize. Artifacts:
 
 * macOS: `FBRX-OS-<v>-arm64.dmg`, `FBRX-OS-<v>-x64.dmg` (installers) and matching `.zip` files (auto-update).
 * Windows: `FBRX-OS-Setup-<v>.exe` — one NSIS installer containing x64 and arm64; per-user by default, per-machine
   with elevation.
+* Linux (x64): `FBRX-OS-<v>-x86_64.AppImage` (runs on any distribution: make it executable and open it; it updates
+  itself) and `FBRX-OS-<v>-amd64.deb` (Debian and Ubuntu: `sudo apt install ./FBRX-OS-<v>-amd64.deb`). Linux
+  packages are not code-signed; `latest-linux.yml` carries their checksums for updates.
 
 If the runtime is not bundled, users can install it from **Local AI → Install runtime**, and onboarding offers it.
 

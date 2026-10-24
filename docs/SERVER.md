@@ -197,6 +197,16 @@ before anything risky, like on any FBRX computer. It listens for FBRX Mesh on po
 * **AI provider:** what this server's agent runs on: a cloud provider with an API key (kept encrypted in the core's
   vault, never shown again), or a model on your network (Ollama or any OpenAI-compatible server, by address).
 
+### The AI sets itself up
+
+On the first start of the ai role, the server gets its own AI ready without anyone choosing: it installs the runtime,
+picks the best model the hardware runs well, downloads it and makes it the server's AI. With a graphics card, the
+biggest model the card holds; on processors alone, a model that answers quickly there (Qwen3 30B-A3B with 32 GB of
+memory or more), otherwise the biggest everyday model that fits; always leaving 20 GB of the disk free. *Fabrix* in the
+console shows the progress (and *Try again* to administrators when a download fails). It happens once, and only when
+nobody chose an AI for the server yet: a provider or model set by an administrator is never overruled, and after that
+the choice is theirs (below).
+
 ### A bigger AI on the server
 
 Endpoints run small models (or a cloud provider). A server with plenty of memory, or a graphics card, can run a much
@@ -249,6 +259,17 @@ approval. Every change is in FBRX Virtual's audit log and, with the console user
 core's Local API on `127.0.0.1` with it, as the person signed in to the console. FBRX Virtual passes on only the
 calls the page makes, with the role each needs, and only the settings above (never the core's policy, Local API or
 system prompt). The console token can never read a secret back or the Local API's automation tokens.
+
+## Fabrix in the console
+
+*Fabrix* (in the console's Server section, with the ai role) is a chat with the server's own agent: ask how the
+server is doing, which virtual machines use what, what filled the disk, or hand it a job. Its answer shows as it is
+written, with each step it takes; Stop ends a run. It works under the server's FBRX policy like on any FBRX computer:
+it looks things up freely, and what needs a yes waits for an administrator (in the chat, or under Mesh & AI). A new
+chat stays offline unless *May use the internet* is on.
+
+Operators and administrators chat; administrators also delete chats. FBRX Virtual's audit log records who asked and
+how long the question was, never what it said.
 
 ## The hardware map
 

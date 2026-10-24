@@ -43,6 +43,8 @@ interface Taking {
 let taking: Taking | null = null;
 
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+/** A snapshot nobody finishes is put away (the overlays cover every screen). */
+const PICK_TIMEOUT_MS = 5 * 60_000;
 const PNG_SIGNATURE = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]);
 
 /** A snapshot overlay's page (it may capture a window it was asked to). */
@@ -134,8 +136,11 @@ function overlay(deps: SnapshotDeps, t: Taking, capture: Capture): BrowserWindow
     w.show();
     if (capture.display.id === t.home) w.focus();
   });
-  // Closed some other way (Alt+F4): no snapshot.
-  w.on('closed', () => taking === t && t.finish(null));
+  // Closed some other way (Alt+F4), or its page could not show: no snapshot, and never a screen left covered.
+  const leave = () => taking === t && t.finish(null);
+  w.on('closed', leave);
+  w.webContents.on('did-fail-load', leave);
+  w.webContents.on('render-process-gone', leave);
   deps.load(w, '/snap-overlay');
   return w;
 }
@@ -181,6 +186,7 @@ export async function takeSnapshot(deps: SnapshotDeps, o: { mode: SnapshotMode; 
               finish(r);
             };
             taking = t;
+            setTimeout(() => t.finish(null), PICK_TIMEOUT_MS).unref();
             for (const capture of captures) {
               const win = overlay(deps, t, capture);
               t.overlays.set(win.webContents.id, { win, capture });
