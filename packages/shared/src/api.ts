@@ -332,6 +332,8 @@ export interface CatalogModel {
   /** "server": for FBRX Server or a workstation with a lot of memory (the hive other computers call on). */
   tier: 'small' | 'medium' | 'large' | 'server';
   toolCalling: boolean;
+  /** A mixture of experts: only a few billion of its parameters work at a time, so it answers quickly on processors. */
+  moe?: boolean;
 }
 
 /** What this computer offers a model: memory, and a graphics card the runtime can use. */
@@ -359,6 +361,25 @@ export function modelFit(sizeBytes: number, hw: Pick<RuntimeHardware, 'memoryByt
   if (need <= hw.memoryBytes * 0.75) return 'memory';
   if (need <= hw.memoryBytes * 0.9) return 'tight';
   return 'too-big';
+}
+
+/** The biggest dense model that answers at a comfortable speed on processors alone (the 8B class). */
+const DENSE_ON_PROCESSORS_MAX_BYTES = 6e9;
+/** Room a server keeps on its disk after a model (virtual machines, backups, updates). */
+const DISK_TO_SPARE_BYTES = 20e9;
+
+/**
+ * The model a server picks for itself: the biggest one its graphics card runs, or, when processors do better (no card,
+ * or a small one), a mixture of experts first and then dense models up to the 8B class (bigger ones are slow without
+ * a card). Only models that call tools and that leave the disk room to spare; null when none does.
+ */
+export function bestModelFor(catalog: CatalogModel[], hw: RuntimeHardware, diskFreeBytes: number): CatalogModel | null {
+  const usable = catalog.filter((m) => m.toolCalling && m.sizeBytes + DISK_TO_SPARE_BYTES <= diskFreeBytes);
+  const biggest = (list: CatalogModel[]) => list.reduce<CatalogModel | null>((a, m) => (!a || m.sizeBytes > a.sizeBytes ? m : a), null);
+  const onCard = biggest(usable.filter((m) => modelFit(m.sizeBytes, hw) === 'gpu'));
+  const inMemory = usable.filter((m) => modelFit(m.sizeBytes, hw) === 'memory');
+  const onProcessors = biggest(inMemory.filter((m) => m.moe)) ?? biggest(inMemory.filter((m) => m.sizeBytes <= DENSE_ON_PROCESSORS_MAX_BYTES));
+  return onCard && (!onProcessors || onCard.sizeBytes >= onProcessors.sizeBytes) ? onCard : onProcessors;
 }
 
 export interface InstalledModel {

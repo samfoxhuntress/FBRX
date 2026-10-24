@@ -1,5 +1,4 @@
 import { memo, type ReactNode } from 'react';
-import { openExternal } from './client';
 
 /**
  * Minimal, safe Markdown → React (no HTML injection): code fences, headings, nested lists, tables, quotes, rules,
@@ -208,7 +207,7 @@ function inline(s: string): ReactNode[] {
       const label = /^\[([^\]]+)\]/.exec(t)![1];
       const url = m[5];
       out.push(
-        <a key={k++} href={url} onClick={(e) => (e.preventDefault(), openExternal(url))}>
+        <a key={k++} href={url} target="_blank" rel="noopener noreferrer">
           {label}
         </a>,
       );

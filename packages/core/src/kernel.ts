@@ -140,6 +140,8 @@ export interface KernelOptions {
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
   /** Extra locations to look for an fbrx-provision.json (e.g. next to the installer). */
   provisioningFiles?: string[];
+  /** FBRX Server's own core (the ai role): its AI sets itself up with the best model the server runs well. */
+  server?: boolean;
 }
 
 const LOCAL_API_TOKEN = 'fbrx.localapi.token';
@@ -159,6 +161,8 @@ export class Kernel {
   readonly log: Logger;
   readonly paths: DataPaths;
   readonly platform: PlatformAdapter;
+  /** FBRX Server's own core (KernelOptions.server). */
+  readonly server: boolean;
   readonly startedAt = new Date();
 
   readonly db: Db;
@@ -244,6 +248,7 @@ export class Kernel {
 
   constructor(opts: KernelOptions) {
     this.platform = opts.platform;
+    this.server = !!opts.server;
     this.paths = resolveDataPaths(opts.dataDir);
     ensureDataDirs(this.paths);
     this.logSink = new LogSink({ dir: this.paths.logs, console: opts.logToConsole, level: opts.logLevel ?? (opts.platform.devMode ? 'debug' : 'info') });
@@ -328,7 +333,18 @@ export class Kernel {
       log: L('runtime'),
       events: this.events,
     });
-    this.starter = new StarterAi({ models: this.models, runtime: this.runtime, settings: () => this.settings.get(), meta: this.meta, events: this.events, log: L('starter-ai'), use: (id) => this.useLocalModel(id) });
+    this.starter = new StarterAi({
+      models: this.models,
+      runtime: this.runtime,
+      settings: () => this.settings.get(),
+      meta: this.meta,
+      events: this.events,
+      log: L('starter-ai'),
+      use: (id) => this.useLocalModel(id),
+      server: this.server,
+      // Models go in the data folder, which is there from the first start (the models folder may not be yet).
+      diskFree: async () => ((await diskFreeGb(this.paths.root)) ?? 0) * 1024 ** 3,
+    });
     this.providers = new ProviderManager({ settings: this.settings, vault: this.vault, policy: this.policy, license: this.license, runtime: this.runtime });
     this.agent = new AgentRuntime({
       store: this.conversations,
@@ -1209,8 +1225,9 @@ export class Kernel {
     this.applyLicenseFile();
     // Look for new versions in the FBRX repository (the desktop app only; servers and tests don't).
     if (this.platform.shell === 'desktop') this.release.start();
-    // A new computer's AI, ready before the first question (the starter model, picked up or downloaded once).
-    if (this.platform.shell === 'desktop' && this.starterAiWanted()) void this.starter.prepare({ auto: true });
+    // A new computer's AI, ready before the first question (the starter model, picked up or downloaded once); a
+    // server's, the best model it runs well.
+    if (this.server || (this.platform.shell === 'desktop' && this.starterAiWanted())) void this.starter.prepare({ auto: true });
     this.messages.start();
     this.orgMesh.start();
     // The FBRX account's license, renewed now and every few hours (when someone signed in).

@@ -6,7 +6,9 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config';
 import { buildServer, type BuiltVirtual } from '../src/server';
 import { SimulatedHypervisor } from '../src/drivers/simulated';
-import { makeKernel } from '../../../packages/core/test/helpers';
+import { makeKernel, waitFor } from '../../../packages/core/test/helpers';
+import { mockOpenAI } from '../../../packages/core/test/mock-llm';
+import { DEFAULT_PROVIDERS, type OpenConversation } from '@fbrx/shared';
 import type { Kernel } from '../../../packages/core/src/kernel';
 
 // FBRX Virtual reaching the server's own FBRX core (the "ai" role) with the console token, as on FBRX Server.
@@ -190,6 +192,38 @@ describe('FBRX Virtual and the server core', () => {
     expect(((await core(viewer, 'runtime.installed')).body.result as Array<{ id: string; active: boolean }>).find((x) => x.id === m.id)?.active).toBe(true);
     expect(s.ctx.audit.list(10).map((e) => e.action)).toContain('core.runtime.useModel');
     expect((await core(admin, 'runtime.useModel', { modelId: 'not-there' })).status).toBe(404);
+  });
+
+  it('lets operators chat with the server’s AI, and keeps only how long the questions were', async () => {
+    const llm = await mockOpenAI(() => ({ text: 'Two virtual machines are running.' }));
+    try {
+      kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
+      const question = 'Which virtual machines are running on the secret-project host?';
+      expect((await core(viewer, 'ai.chat', { message: question })).status).toBe(403);
+      expect((await core(operator, 'ai.chat', { message: question, attachments: ['att_1'] })).status).toBe(400);
+      const sent = await core(operator, 'ai.chat', { message: question, offline: true });
+      expect(sent.status).toBe(200);
+      const id = sent.body.result.conversationId as string;
+      const chat = await waitFor(async () => {
+        const c = (await core(operator, 'ai.conversations.get', { id })).body.result as OpenConversation;
+        return !c.run && c.messages.some((m) => m.role === 'assistant') ? c : null;
+      });
+      expect(chat.messages.map((m) => [m.role, m.content])).toEqual([
+        ['user', question],
+        ['assistant', 'Two virtual machines are running.'],
+      ]);
+      expect(((await core(operator, 'ai.conversations.list')).body.result as Array<{ id: string }>).map((c) => c.id)).toContain(id);
+      expect((await core(viewer, 'ai.conversations.list')).status).toBe(403);
+      expect((await core(viewer, 'ai.starter')).body.result).toMatchObject({ state: expect.any(String) });
+      // The console's audit says who asked and how much, never what.
+      expect(s.ctx.audit.list(20).find((e) => e.action === 'core.ai.chat')).toMatchObject({ actor: 'olly', target: 'new chat', outcome: 'success' });
+      expect(JSON.stringify(s.ctx.audit.list(50))).not.toContain('secret-project');
+      // Chats go away by an administrator's hand.
+      expect((await core(operator, 'ai.conversations.delete', { id })).status).toBe(403);
+      expect((await core(admin, 'ai.conversations.delete', { id })).body.result).toEqual({ deleted: true });
+    } finally {
+      await llm.close();
+    }
   });
 
   it('follows the core through a restart and says when it is missing', async () => {

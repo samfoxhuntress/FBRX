@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { SUPPORT_ENTER_PHRASE, SUPPORT_EXIT_PHRASE, SUPPORT_PASS_PREFIX, type SpotlightItem } from '@fbrx/shared';
-import { Icons, Spinner, type IconName } from '@fbrx/ui';
+import { Icons, Markdown, Spinner, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
-import { Markdown } from '../markdown';
 import { LUKE_1_37, NOTHING_IS_IMPOSSIBLE } from '../fun';
 
 const KIND_ICON: Record<SpotlightItem['kind'], IconName> = {

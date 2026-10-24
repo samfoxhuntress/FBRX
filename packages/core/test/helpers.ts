@@ -39,6 +39,8 @@ export interface TestKernelOptions {
   start?: boolean;
   localApiPort?: number;
   onRestart?: (reason: string) => void;
+  /** FBRX Server's own core. */
+  server?: boolean;
 }
 
 /** Boots an isolated kernel in a temp folder with tools confined to a sandbox directory. */
@@ -48,6 +50,7 @@ export async function makeKernel(o: TestKernelOptions = {}): Promise<{ kernel: K
   const keychain = o.keychain ?? memoryKeychain();
   const kernel = await Kernel.create({
     dataDir,
+    server: o.server,
     platform: createNodePlatform({
       dataDir,
       devMode: o.devMode ?? true,

@@ -1,10 +1,9 @@
 import { useEffect, useRef, useState } from 'react';
 import { SERVER_BROWSER_PARTITION, type SavedServer, type ServerCheck, type ServerResourceFile, type ServerSuggestion } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Grid, Icons, InfoTip, Input, Modal, Page, Spinner, Status, TextArea, formatBytes, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
+import { Button, Callout, Card, Empty, Field, Grid, Icons, InfoTip, Input, Markdown, Modal, Page, Spinner, Status, TextArea, formatBytes, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { navigate, routeArg } from '../app';
 import { useCore } from '../hooks';
-import { Markdown } from '../markdown';
 
 /** Electron's <webview> (allowed only for server consoles, see main/server-browser.ts). */
 type WebviewElement = HTMLElement & {

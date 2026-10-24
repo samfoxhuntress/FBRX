@@ -1,5 +1,5 @@
-import type { DownloadProgress, RuntimeStatus, Settings, StarterAiStatus } from '@fbrx/shared';
-import { STARTER_MODEL_ID } from '@fbrx/shared';
+import type { CatalogModel, DownloadProgress, RuntimeStatus, Settings, StarterAiStatus } from '@fbrx/shared';
+import { STARTER_MODEL_ID, bestModelFor } from '@fbrx/shared';
 import type { EventBus } from '../../events';
 import type { Logger } from '../../logger';
 import type { MetaStore } from '../../storage/meta';
@@ -18,6 +18,9 @@ import type { LocalRuntime } from './local-runtime';
  * built-in runtime is the default and no model is set): someone who removes the model, or picks another AI, is not
  * overruled, and a computer that was already set up before this existed is not sent a gigabyte unasked. "Get it ready"
  * on the chat starts it by hand.
+ *
+ * FBRX Server gets the best model its hardware runs well instead (bestModelFor), once, on the first start of its AI
+ * role where nobody chose one yet (a server has no first-run setup to wait for).
  */
 
 const AUTO_DONE = 'ai.starter.auto';
@@ -31,16 +34,29 @@ export interface StarterAiDeps {
   log: Logger;
   /** Makes an installed model the one the agent uses (built-in runtime as the default provider) and starts it. */
   use: (modelId: string) => Promise<RuntimeStatus>;
+  /** FBRX Server's own core: the best model it runs well, not the starter. */
+  server: boolean;
+  /** Free space where models are kept (a server's pick leaves room to spare). */
+  diskFree: () => Promise<number>;
 }
 
 export class StarterAi {
   private state: StarterAiStatus;
   private busy: Promise<StarterAiStatus> | null = null;
+  /** The model being got ready. */
+  private target: CatalogModel;
 
   constructor(private readonly d: StarterAiDeps) {
-    const m = d.models.catalog().find((x) => x.id === STARTER_MODEL_ID);
-    this.state = { state: 'idle', step: null, receivedBytes: 0, totalBytes: m?.sizeBytes ?? 0, message: null, modelId: STARTER_MODEL_ID, modelName: m?.name ?? 'the starter model' };
+    this.target = d.models.catalog().find((x) => x.id === STARTER_MODEL_ID)!;
+    this.state = { state: 'idle', step: null, receivedBytes: 0, totalBytes: this.target.sizeBytes, message: null, modelId: this.target.id, modelName: this.target.name };
     d.events.on('runtime.download', (p) => this.onProgress(p));
+  }
+
+  /** The model to get ready: the starter, or on a server the best one its hardware runs well. */
+  private async choose(): Promise<CatalogModel> {
+    const starter = this.d.models.catalog().find((x) => x.id === STARTER_MODEL_ID)!;
+    if (!this.d.server) return starter;
+    return bestModelFor(this.d.models.catalog(), await this.d.runtime.hardware(), await this.d.diskFree()) ?? starter;
   }
 
   /** Nobody chose an AI on this computer yet: the built-in runtime with no model. */
@@ -66,7 +82,7 @@ export class StarterAi {
 
   private onProgress(p: DownloadProgress) {
     if (this.state.state !== 'preparing') return;
-    if ((p.modelId === 'llama-runtime' && this.state.step === 'runtime') || (p.modelId === STARTER_MODEL_ID && this.state.step === 'model')) {
+    if ((p.modelId === 'llama-runtime' && this.state.step === 'runtime') || (p.modelId === this.target.id && this.state.step === 'model')) {
       this.set({ receivedBytes: p.receivedBytes, totalBytes: p.totalBytes || this.state.totalBytes });
     }
   }
@@ -91,17 +107,19 @@ export class StarterAi {
         await this.useIt(pick.id);
         return this.status();
       }
-      if (auto && (this.d.meta.get<boolean>(AUTO_DONE) || this.d.settings().general.onboardingComplete)) return this.status();
+      if (auto && (this.d.meta.get<boolean>(AUTO_DONE) || (!this.d.server && this.d.settings().general.onboardingComplete))) return this.status();
       this.d.meta.set(AUTO_DONE, true);
+      this.target = await this.choose();
+      this.set({ modelId: this.target.id, modelName: this.target.name, totalBytes: this.target.sizeBytes });
+      this.d.log.info('Getting the AI ready', { model: this.target.id });
 
       if (this.d.runtime.status().state === 'not-installed') {
         this.set({ state: 'preparing', step: 'runtime', receivedBytes: 0, totalBytes: 0, message: null });
         await this.installRuntime();
       }
-      const entry = this.d.models.catalog().find((m) => m.id === STARTER_MODEL_ID)!;
-      this.set({ state: 'preparing', step: 'model', receivedBytes: 0, totalBytes: entry.sizeBytes, message: null });
+      this.set({ state: 'preparing', step: 'model', receivedBytes: 0, totalBytes: this.target.sizeBytes, message: null });
       await this.downloadModel();
-      await this.useIt(STARTER_MODEL_ID);
+      await this.useIt(this.target.id);
     } catch (err) {
       const message = (err as Error).message;
       this.d.log.warn('The starter AI could not be got ready', { error: message });
@@ -138,9 +156,10 @@ export class StarterAi {
   }
 
   private downloadModel(): Promise<void> {
+    const id = this.target.id;
     return new Promise((resolve, reject) => {
       const off = this.d.events.on('runtime.download', (p) => {
-        if (p.modelId !== STARTER_MODEL_ID) return;
+        if (p.modelId !== id) return;
         if (p.state === 'completed') done(null);
         else if (p.state === 'failed' || p.state === 'cancelled') done(new Error(p.error ?? 'The model could not be downloaded'));
       });
@@ -151,7 +170,7 @@ export class StarterAi {
       };
       try {
         // Already on its way (someone started it on the AI models page): wait for that one.
-        if (!this.d.models.activeDownloads().some((x) => x.modelId === STARTER_MODEL_ID)) this.d.models.download(STARTER_MODEL_ID);
+        if (!this.d.models.activeDownloads().some((x) => x.modelId === id)) this.d.models.download(id);
       } catch (err) {
         done(err as Error);
       }

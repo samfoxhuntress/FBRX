@@ -1,9 +1,8 @@
 import { useEffect, useState } from 'react';
 import type { AiAppInfo } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Grid, Icons, Page, Select, Spinner, Status, TextArea, useAction, useToast } from '@fbrx/ui';
+import { Button, Callout, Card, Empty, Field, Grid, Icons, Markdown, Page, Select, Spinner, Status, TextArea, useAction, useToast } from '@fbrx/ui';
 import { call } from '../client';
 import { useCore } from '../hooks';
-import { Markdown } from '../markdown';
 import { navigate } from '../app';
 
 const KIND: Record<string, string> = { 'desktop-app': 'Desktop app', cli: 'Command line', ide: 'Code editor', 'local-server': 'Local AI server' };

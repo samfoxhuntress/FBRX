@@ -1,10 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentEvent, ApprovalRequest, AttachmentInfo, ChatMessage, ProviderStatus, StarterAiStatus, ToolCallRecord } from '@fbrx/shared';
 import { NATURAL_PREFIX, addressAs, funEnabled, modelSeesImages } from '@fbrx/shared';
-import { Button, Callout, Card, Icons, Modal, Select, Status, TextArea, useAction, useConfirm, type IconName, FbrxMark } from '@fbrx/ui';
+import { Button, Callout, Card, FbrxMark, Icons, Markdown, Modal, Select, Status, TextArea, useAction, useConfirm, type IconName } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
 import { useCore, useStarterAi } from '../hooks';
-import { Markdown } from '../markdown';
 import { POPOUT, navigate, routeArg } from '../app';
 import { EmergencyStop, ModelPicker } from '../widgets';
 import { useSlashMenu } from '../slash-menu';

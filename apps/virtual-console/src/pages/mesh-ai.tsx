@@ -32,46 +32,14 @@ import {
 } from '@fbrx/shared';
 import { Button, Callout, Card, CopyText, Empty, Field, Grid, Input, KeyValue, Page, Select, Status, Tabs, TextArea, Toggle, formatBytes, timeAgo, useAction, useConfirm, type StatusTone } from '@fbrx/ui';
 import { api } from '../api';
+import { coreCall, useCore, type CoreState } from '../core';
 import { useApp, usePoll, useRoute } from '../state';
 
-/** The server's FBRX core (the "ai" role), reached through FBRX Virtual. */
-interface CoreState {
-  installed: boolean;
-  running: boolean;
-  version: string | null;
-  error: string | null;
-}
 interface CoreSettings {
   settings: { general: { deviceName: string }; ai: Pick<Settings['ai'], 'defaultProvider' | 'defaultModel' | 'agentName' | 'providers'>; mesh: Settings['mesh'] };
   locked: string[];
 }
 type AssistSettings = Settings['mesh']['assist'];
-
-const coreCall = async <T,>(method: string, params?: unknown): Promise<T> => (await api<{ result: T }>('POST', '/v1/core/call', { method, params })).result;
-
-/** Polls a core method while the page is open. */
-function useCore<T>(method: string | null, ms: number, params?: unknown) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const key = JSON.stringify(params ?? null);
-  const load = async () => {
-    if (!method) return;
-    try {
-      setData(await coreCall<T>(method, params));
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
-  useEffect(() => {
-    if (!method) return;
-    void load();
-    const t = setInterval(() => document.visibilityState === 'visible' && void load(), ms);
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [method, ms, key]);
-  return { data, error, reload: load, set: setData };
-}
 
 const MODES: Array<{ value: AssistMode; label: string }> = [
   { value: 'off', label: 'Never' },

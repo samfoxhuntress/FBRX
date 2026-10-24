@@ -6,7 +6,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { describe, expect, it } from 'vitest';
-import { STARTER_MODEL_ID, type StarterAiStatus } from '@fbrx/shared';
+import { STARTER_MODEL_ID, bestModelFor, type RuntimeHardware, type StarterAiStatus } from '@fbrx/shared';
 import { MODEL_CATALOG } from '../src/ai/runtime/catalog';
 import { makeKernel, USER } from './helpers';
 
@@ -163,6 +163,50 @@ describe('The AI ready before the first question', () => {
     } finally {
       server.close();
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe("A server's AI sets itself up", () => {
+  const GiB = 1024 ** 3;
+  const machine = (memory: number, vram = 0): RuntimeHardware => ({ memoryBytes: memory * GiB, freeMemoryBytes: memory * GiB, cpus: 16, gpus: vram ? [{ name: 'Graphics', vramBytes: vram * GiB }] : [], variant: vram ? 'vulkan' : 'cpu' });
+  const pick = (hw: RuntimeHardware, disk = 500e9) => bestModelFor(MODEL_CATALOG, hw, disk)?.id ?? null;
+
+  it('picks the best model the hardware runs well, and leaves the disk room', () => {
+    // Processors only: a mixture of experts answers quickly; without room for one, a dense model up to the 8B class.
+    expect(pick(machine(32))).toBe('qwen3-30b-a3b-q4km');
+    expect(pick(machine(16))).toBe('qwen3-8b-q4km');
+    expect(pick(machine(8))).toBe('llama-3.2-3b-instruct-q4km');
+    expect(pick(machine(1))).toBeNull();
+    // A big graphics card takes the biggest model it holds; a small one loses to the processors.
+    expect(pick(machine(64, 24))).toBe('qwen3-32b-q4km');
+    expect(pick(machine(128, 48))).toBe('llama-3.3-70b-instruct-q4km');
+    expect(pick(machine(64, 4))).toBe('qwen3-30b-a3b-q4km');
+    // 20 GB stays free on the disk after the model.
+    expect(pick(machine(64), 25e9)).toBe('qwen2.5-7b-instruct-q4km');
+  });
+
+  it('downloads it on the first start of the ai role, set up or not', async () => {
+    // Not started: the test stands in for the hardware and the download before the AI sets itself up.
+    const { kernel, cleanup } = await makeKernel({ server: true, start: false });
+    try {
+      // A server is set up the moment it starts (no first-run setup to wait for).
+      kernel.settings.update({ general: { onboardingComplete: true } });
+      (kernel.runtime as any).status = () => ({ state: 'stopped' });
+      kernel.runtime.hardware = async () => machine(64);
+      (kernel.starter as any).d.diskFree = async () => 500e9;
+      const asked: string[] = [];
+      kernel.models.download = (id: string) => {
+        asked.push(id);
+        setTimeout(() => kernel.events.emit('runtime.download', { modelId: id, receivedBytes: 0, totalBytes: 0, state: 'failed', error: 'Stopped by the test' }), 10);
+      };
+      expect(await kernel.starter.prepare({ auto: true })).toMatchObject({ state: 'failed', modelId: 'qwen3-30b-a3b-q4km', modelName: 'Qwen3 30B-A3B' });
+      expect(asked).toEqual(['qwen3-30b-a3b-q4km']);
+      // Once: the next start leaves it to the administrators (Mesh & AI, or Fabrix's "Try again").
+      await kernel.starter.prepare({ auto: true });
+      expect(asked).toHaveLength(1);
+    } finally {
+      await cleanup();
     }
   });
 });

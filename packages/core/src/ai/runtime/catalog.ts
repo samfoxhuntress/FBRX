@@ -96,6 +96,7 @@ export const MODEL_CATALOG: CatalogModel[] = [
     description: 'Open-weight reasoning model with native tool use; needs ~16 GB of free memory.',
     tier: 'large',
     toolCalling: true,
+    moe: true,
   },
   // For FBRX Server (or a big workstation): the larger agent the other computers call on over FBRX Mesh.
   {
@@ -112,6 +113,7 @@ export const MODEL_CATALOG: CatalogModel[] = [
     description: 'A server model that needs no graphics card: only 3B of its 30B parameters work at a time, so it answers quickly on processors alone. Needs ~22 GB of memory.',
     tier: 'server',
     toolCalling: true,
+    moe: true,
   },
   {
     id: 'qwen3-32b-q4km',

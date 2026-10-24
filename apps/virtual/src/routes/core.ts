@@ -121,6 +121,20 @@ const RULES: Record<string, Rule> = {
     },
   },
 
+  // Fabrix in the console: operators talk with this server's agent (it follows this server's policy, and anything it
+  // wants to do that needs a yes waits for an administrator); administrators also delete chats.
+  'ai.conversations.list': { role: 'operator' },
+  'ai.conversations.get': { role: 'operator', params: (p) => z.object({ id: z.string().max(80) }).strict().parse(p) },
+  'ai.conversations.delete': { role: 'admin', params: (p) => z.object({ id: z.string().max(80) }).strict().parse(p) },
+  'ai.chat': {
+    role: 'operator',
+    params: (p) => z.object({ conversationId: z.string().max(80).optional(), message: z.string().min(1).max(20000), offline: z.boolean().optional() }).strict().parse(p),
+  },
+  'ai.cancel': { role: 'operator', params: (p) => z.object({ runId: z.string().max(80) }).strict().parse(p) },
+  // The server's AI getting itself ready (the best model it runs well, on the ai role's first start).
+  'ai.starter': { role: 'viewer' },
+  'ai.prepareStarter': { role: 'admin' },
+
   'ai.models': { role: 'admin', params: (p) => z.object({ providerId: z.string().max(64) }).strict().parse(p) },
   'settings.update': { role: 'admin', params: (p) => ({ patch: z.object({ patch: SettingsPatch }).strict().parse(p).patch }), result: settingsView },
   // Which provider keys are saved (names and dates, never values).
@@ -174,6 +188,9 @@ const READS = new Set([
   'mesh.assist.helpers',
   'mesh.assist.sessions',
   'approvals.list',
+  'ai.conversations.list',
+  'ai.conversations.get',
+  'ai.starter',
   'vault.list',
   'ai.models',
   'mesh.network.test',
@@ -189,14 +206,16 @@ function target(method: string, p: Record<string, unknown>): string | null {
   if (method === 'vault.set') return String(p.name);
   if (method === 'mesh.assist.send') return Array.isArray(p.peerIds) ? p.peerIds.join(', ') : 'best helper';
   if (method === 'settings.update') return Object.keys((p.patch as object) ?? {}).join(', ');
-  for (const k of ['sessionId', 'id', 'host', 'name', 'modelId']) if (typeof p[k] === 'string') return p[k] as string;
+  if (method === 'ai.chat') return (p.conversationId as string | undefined) ?? 'new chat';
+  for (const k of ['sessionId', 'id', 'runId', 'host', 'name', 'modelId']) if (typeof p[k] === 'string') return p[k] as string;
   return null;
 }
 
-/** What the audit log keeps of the arguments (never a key). */
+/** What the audit log keeps of the arguments (never a key, and of what someone asked only how long it was). */
 function details(method: string, p: Record<string, unknown>): unknown {
   if (method === 'vault.set') return { name: p.name };
   if (method === 'mesh.assist.send' || method === 'mesh.assist.followUp') return { ...p, goal: undefined, text: undefined, length: String(p.goal ?? p.text ?? '').length };
+  if (method === 'ai.chat') return { conversationId: p.conversationId, offline: p.offline, length: String(p.message ?? '').length };
   return p;
 }
 
