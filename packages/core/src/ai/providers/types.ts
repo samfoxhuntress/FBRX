@@ -14,9 +14,15 @@ export interface ProviderData {
   raw: unknown;
 }
 
+/** An image the person attached, for a model that can see (base64, no data: prefix). */
+export interface ProviderImage {
+  mime: string;
+  data: string;
+}
+
 export type ProviderMessage =
   | { role: 'system'; content: string }
-  | { role: 'user'; content: string }
+  | { role: 'user'; content: string; images?: ProviderImage[] }
   | { role: 'assistant'; content: string; toolCalls?: ProviderToolCall[]; providerData?: ProviderData | null }
   | { role: 'tool'; toolCallId: string; name: string; content: string; isError?: boolean };
 

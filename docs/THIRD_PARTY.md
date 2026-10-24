@@ -50,3 +50,11 @@ No GPL component is included: the eSpeak NG phonemizer that other Kokoro front e
 | wireguard-tools | FBRX Gate's VPN keys and status (the VPN itself is in the Linux kernel) | GPL-2.0 | Installed from Debian's package (gate role). WireGuard is a registered trademark of Jason A. Donenfeld; FBRX Gate uses it and is not affiliated with it |
 | conntrack-tools | FBRX MiniDome: following new connections | GPL-2.0 | Installed from Debian's package (minidome role), run as its own program |
 | [qrcode](https://github.com/soldair/node-qrcode) | QR codes for VPN devices | MIT | Bundled (npm `qrcode`) |
+
+# Third-party components in Fabrix's files
+
+| Component | Used for | License | Where |
+| --- | --- | --- | --- |
+| [unpdf](https://github.com/unjs/unpdf), with its build of [PDF.js](https://github.com/mozilla/pdf.js) | Reading the text of attached PDFs | MIT (unpdf), Apache-2.0 (PDF.js) | Bundled (npm `unpdf`, unmodified) |
+
+Office documents (.docx, .xlsx, .pptx, OpenDocument) are read by FBRX's own code.

@@ -102,6 +102,7 @@ import { OrgMesh } from './mesh/org-mesh';
 import { meshTools } from './tools/builtin/mesh-tools';
 import { AiCoordination } from './aicoord/aicoord';
 import { ConversationStore } from './ai/conversations';
+import { AttachmentStore } from './ai/attachments';
 import { ModelManager } from './ai/runtime/model-manager';
 import { StarterAi } from './ai/runtime/starter';
 import { LocalRuntime } from './ai/runtime/local-runtime';
@@ -175,6 +176,7 @@ export class Kernel {
   readonly registry: ToolRegistry;
   readonly gate: ToolGate;
   readonly conversations: ConversationStore;
+  readonly attachments: AttachmentStore;
   readonly models: ModelManager;
   readonly starter: StarterAi;
   readonly runtime: LocalRuntime;
@@ -303,6 +305,7 @@ export class Kernel {
       agentToolsBlocked: () => (this.edition().learner ? 'The learning helper on student computers does not use tools' : null),
     });
     this.conversations = new ConversationStore(this.db);
+    this.attachments = new AttachmentStore({ db: this.db, root: join(this.paths.workspace, 'Attachments'), log: L('attachments') });
     this.models = new ModelManager(this.db, this.paths.models, () => this.settings.get().runtime.modelId, L('models'), this.events);
     this.runtime = new LocalRuntime({
       settings: this.settings,
@@ -328,6 +331,7 @@ export class Kernel {
       log: L('agent'),
       workspace: this.paths.workspace,
       allowedRoots: () => this.policy.allowedRoots(),
+      attachments: this.attachments,
       halt: () => this.aiHalt(),
       learner: () => {
         const e = this.edition();
@@ -1180,6 +1184,7 @@ export class Kernel {
       .catch((err) => this.log.error('Provisioning failed', { error: errorMessage(err) }))
       .then(() => this.joinLicenseTenant('license'));
     this.audit.prune(365);
+    void this.attachments.sweep().catch((err) => this.log.warn('Could not tidy old attachments', { error: errorMessage(err) }));
   }
 
   /** FBRX's check-up of itself (fbrx.doctor). */

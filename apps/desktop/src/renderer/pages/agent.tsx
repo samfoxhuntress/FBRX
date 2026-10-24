@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { AgentEvent, ApprovalRequest, ChatMessage, ProviderStatus, StarterAiStatus, ToolCallRecord } from '@fbrx/shared';
-import { NATURAL_PREFIX, addressAs, funEnabled } from '@fbrx/shared';
+import type { AgentEvent, ApprovalRequest, AttachmentInfo, ChatMessage, ProviderStatus, StarterAiStatus, ToolCallRecord } from '@fbrx/shared';
+import { NATURAL_PREFIX, addressAs, funEnabled, modelSeesImages } from '@fbrx/shared';
 import { Button, Callout, Card, Icons, Modal, Select, Status, TextArea, useAction, useConfirm, type IconName, FbrxMark } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
 import { useCore, useStarterAi } from '../hooks';
@@ -18,6 +18,7 @@ import { ModelDownload } from './settings-voice';
 import { summonGoose } from '../fun';
 import { useLearner, useTier } from '../edition';
 import { ChatHistory, type ChatFilter } from '../chat-history';
+import { AttachmentTray, MessageAttachments, useAttachments } from '../attachments';
 
 const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'activity', title: 'Check my PC', prompt: 'Give me a quick health check of this computer: performance right now, storage, security status and any recent errors. Tell me what (if anything) needs attention.' },
@@ -239,6 +240,12 @@ export function AgentPage({ agentName }: { agentName: string }) {
   const [input, setInput] = useState('');
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const slash = useSlashMenu({ value: input, setValue: setInput, inputRef: composerRef, scope: 'chat' });
+  // Files and pictures for the next message (the paperclip, dropped on the chat, or pasted).
+  const files = useAttachments();
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  const picker = useRef<HTMLInputElement>(null);
+  const [dropping, setDropping] = useState(false);
   const [providerId, setProviderId] = useState('');
   const [model, setModel] = useState('');
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
@@ -429,16 +436,20 @@ export function AgentPage({ agentName }: { agentName: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const send = async (text = input) => {
+  /** Sends a message: what is in the composer (with what is attached), or a message again with what it had attached. */
+  const send = async (text = input, again?: AttachmentInfo[]) => {
     const message = text.trim();
-    if (!message || busyRef.current) return;
+    const pending = filesRef.current;
+    const attached = again ?? pending.items.flatMap((i) => (i.info ? [i.info] : []));
+    if ((!message && !attached.length) || busyRef.current || (!again && pending.reading)) return;
     setError(null);
     setInput('');
     setSending(true);
-    const local: ChatMessage = { id: `local-${Date.now()}`, role: 'user', content: message, createdAt: new Date().toISOString() };
+    const local: ChatMessage = { id: `local-${Date.now()}`, role: 'user', content: message, createdAt: new Date().toISOString(), ...(attached.length ? { attachments: attached } : {}) };
     setChat((v) => ({ ...v, messages: [...v.messages, local] }));
+    if (!again) pending.clear();
     try {
-      const r = await call('ai.chat', { conversationId: selected ?? undefined, message, providerId: providerId || undefined, model: model || undefined, offline: selected ? undefined : offline });
+      const r = await call('ai.chat', { conversationId: selected ?? undefined, message, providerId: providerId || undefined, model: model || undefined, offline: selected ? undefined : offline, ...(attached.length ? { attachments: attached.map((a) => a.id) } : {}) });
       // Your wingman shows up in person, too.
       if (/^talk\s+to\s+me,?\s+goose\W*$/i.test(message) && funEnabled(settings.data?.settings, tier)) summonGoose();
       // The chat as it is now, with the agent already at work in it (a new chat gets its id here).
@@ -451,6 +462,8 @@ export function AgentPage({ agentName }: { agentName: string }) {
     } catch (err) {
       setChat((v) => ({ ...v, messages: v.messages.filter((x) => x.id !== local.id) }));
       setInput(message);
+      // What was attached stays attached, to send again.
+      if (!again) pending.restore(attached);
       setError((err as Error).message);
     } finally {
       setSending(false);
@@ -461,6 +474,8 @@ export function AgentPage({ agentName }: { agentName: string }) {
   const visible = useMemo(() => chat.messages.filter((m) => m.role === 'user' || m.role === 'assistant'), [chat.messages]);
   const usable = (providers.data ?? []).filter((p) => p.enabled && !p.blockedByPolicy);
   const currentProvider = usable.find((p) => p.id === providerId) as ProviderStatus | undefined;
+  const currentModel = model || (currentProvider?.id === s?.ai.defaultProvider && s?.ai.defaultModel) || currentProvider?.defaultModel || '';
+  const blindToImages = !!currentProvider && files.items.some((i) => i.kind === 'image') && !modelSeesImages(currentProvider.type, currentModel);
 
   return (
     <div className="agent">
@@ -492,6 +507,26 @@ export function AgentPage({ agentName }: { agentName: string }) {
         )}
       </Card>
       <Card className="agent-main" flush>
+        <div
+          className={`agent-drop${dropping ? ' on' : ''}`}
+          onDragOver={(e) => {
+            if (!e.dataTransfer.types.includes('Files')) return;
+            e.preventDefault();
+            setDropping(true);
+          }}
+          onDragLeave={(e) => e.currentTarget.contains(e.relatedTarget as Node) || setDropping(false)}
+          onDrop={(e) => {
+            if (!e.dataTransfer.files.length) return;
+            e.preventDefault();
+            setDropping(false);
+            files.add(e.dataTransfer.files);
+          }}
+        >
+        {dropping && (
+          <div className="agent-drop-hint">
+            <Icons.paperclip size={22} /> Drop to attach for {agentName}
+          </div>
+        )}
         <div className="agent-thread" ref={thread} aria-live="polite">
           {!!visible.length && <StarterAiCard st={starter} />}
           {!visible.length && !reply && (
@@ -533,8 +568,9 @@ export function AgentPage({ agentName }: { agentName: string }) {
           {visible.map((m) =>
             m.role === 'user' ? (
               <div key={m.id} className="msg msg-mine">
-                <UserMessage text={m.content} />
-                <MessageActions text={m.content} onEdit={() => setInput(m.content)} onRerun={busy ? undefined : () => void send(m.content)} />
+                {!!m.attachments?.length && <MessageAttachments files={m.attachments} />}
+                {m.content && <UserMessage text={m.content} />}
+                <MessageActions text={m.content} onEdit={() => setInput(m.content)} onRerun={busy ? undefined : () => void send(m.content, m.attachments ?? [])} />
               </div>
             ) : (
               <div key={m.id} className="msg">
@@ -603,9 +639,20 @@ export function AgentPage({ agentName }: { agentName: string }) {
               )}
             </div>
           )}
+          <AttachmentTray items={files.items} onRemove={files.remove} />
+          {blindToImages && (
+            <div className="attach-warn">
+              <Icons.eyeOff size={13} /> {currentModel || currentProvider?.name} can’t see pictures: {agentName} gets their names only. Pick a model that can see (a cloud model, or one with “vision” or “vl” in its name).
+            </div>
+          )}
           <TextArea
             ref={composerRef}
             value={input}
+            onPaste={(e) => {
+              if (!e.clipboardData.files.length) return;
+              e.preventDefault();
+              files.add(e.clipboardData.files);
+            }}
             placeholder={busy ? `${agentName} is working…` : learner ? `Ask ${agentName} a question — Enter to send` : `Ask ${agentName} to do something — Enter to send, Shift+Enter for a new line, / for snippets`}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
@@ -667,6 +714,19 @@ export function AgentPage({ agentName }: { agentName: string }) {
                   }}
                 />
               )}
+              <input
+                ref={picker}
+                type="file"
+                multiple
+                hidden
+                onChange={(e) => {
+                  if (e.target.files) files.add(e.target.files);
+                  e.target.value = '';
+                }}
+              />
+              <button className="voice-btn" title={files.full ? 'That is as many files as one message takes' : 'Attach files or pictures (or drop them on the chat, or paste)'} aria-label="Attach files" disabled={files.full} onClick={() => picker.current?.click()}>
+                <Icons.paperclip size={16} />
+              </button>
               <div className="voice-buttons" role="group" aria-label="Voice">
                 <button
                   className={`voice-btn${s?.voice.readReplies || voice.handsFree ? ' on' : ''}`}
@@ -701,12 +761,13 @@ export function AgentPage({ agentName }: { agentName: string }) {
                   Stop
                 </Button>
               ) : (
-                <Button variant="primary" icon="send" disabled={!input.trim()} onClick={() => void send()}>
+                <Button variant="primary" icon="send" disabled={(!input.trim() && !files.ids.length) || files.reading} title={files.reading ? 'Reading the attached files…' : undefined} onClick={() => void send()}>
                   Send
                 </Button>
               )}
             </div>
           </div>
+        </div>
         </div>
       </Card>
       {voice.needsModel && (

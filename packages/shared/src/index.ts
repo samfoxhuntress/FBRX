@@ -35,4 +35,5 @@ export * from './net';
 export * from './profile-presets';
 export * from './plans';
 export * from './accounts';
+export * from './attachments';
 export * from './essentials-home';

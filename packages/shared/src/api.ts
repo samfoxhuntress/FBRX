@@ -7,6 +7,7 @@
  */
 import type { LicenseStatus } from './license';
 import type { AccountDevice, AccountStatus, InvitationPreview, LocalAccountStatus } from './accounts';
+import type { AttachmentInfo } from './attachments';
 import type { SupportStatus } from './support';
 import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './browser';
 import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
@@ -176,6 +177,8 @@ export interface ChatMessage {
   model?: string;
   /** What the model said it was thinking before this answer (a summary, when the provider shares one). */
   thinking?: string;
+  /** Files and images the person attached to this message. */
+  attachments?: AttachmentInfo[];
 }
 
 export interface ConversationSummary {
@@ -612,7 +615,14 @@ export interface CoreMethods extends ExtMethods {
 
   'ai.providers': () => ProviderStatus[];
   'ai.models': (p: { providerId: string }) => ModelInfo[];
-  'ai.chat': (p: { conversationId?: string; message: string; providerId?: string; model?: string; offline?: boolean }) => { runId: string; conversationId: string };
+  /** attachments: ids from ai.attachments.add, sent with this message. */
+  'ai.chat': (p: { conversationId?: string; message: string; providerId?: string; model?: string; offline?: boolean; attachments?: string[] }) => { runId: string; conversationId: string };
+  /** Attaches a file (its bytes in base64) for the next message; it is read and kept until sent or removed. */
+  'ai.attachments.add': (p: { name: string; data: string; mime?: string }) => AttachmentInfo;
+  /** Removes an attachment that was not sent. */
+  'ai.attachments.remove': (p: { id: string }) => { removed: boolean };
+  /** An attachment's bytes (base64), to show it again in the chat. */
+  'ai.attachments.read': (p: { id: string }) => { mime: string; data: string };
   'ai.cancel': (p: { runId: string }) => { cancelled: boolean };
   /** What every run in progress is doing right now. */
   'ai.runs': () => RunActivity[];

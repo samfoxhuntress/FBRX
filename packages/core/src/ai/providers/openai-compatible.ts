@@ -83,6 +83,10 @@ export class OpenAICompatibleProvider implements ChatProvider {
           };
         case 'tool':
           return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
+        case 'user':
+          return m.images?.length
+            ? { role: 'user', content: [...m.images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.data}` } })), { type: 'text', text: m.content }] }
+            : { role: 'user', content: m.content };
         default:
           return { role: m.role, content: m.content };
       }

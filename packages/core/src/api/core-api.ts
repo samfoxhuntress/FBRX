@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { AUDIENCES, EXT_USER_ONLY, MEMORY_CATEGORIES, SECRET_KINDS, THINKING_LEVELS, VERTICALS, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, EXT_USER_ONLY, MEMORY_CATEGORIES, SECRET_KINDS, THINKING_LEVELS, VERTICALS, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -24,6 +24,9 @@ const USER_ONLY = new Set<string>([
   'backup.restore',
   'ai.conversations.deleteMany',
   'ai.conversations.cleanup',
+  'ai.attachments.add',
+  'ai.attachments.remove',
+  'ai.attachments.read',
   'ai.setThinking',
   'fleet.enroll',
   'fleet.unenroll',
@@ -100,6 +103,11 @@ const NameSchema = z.object({ name: z.string().min(1) });
 const IdSchema = z.object({ id: z.string().min(1) });
 
 export function buildCoreApi(k: Kernel): Record<string, Handler> {
+  /** Sweeps the files of deleted chats' attachments once a delete is done, and passes its answer on. */
+  const tidied = <T,>(result: T): T => {
+    void k.attachments.sweep().catch(() => undefined);
+    return result;
+  };
   const h: Record<Exclude<CoreMethod, keyof ExtMethods> | 'agent.runToCompletion', Handler> = {
     'system.status': () => k.status(),
     'system.restartService': (p) => k.services.restart(NameSchema.parse(p).name),
@@ -173,10 +181,19 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'ai.providers': () => k.providers.status(),
     'ai.models': (p) => k.providers.models(z.object({ providerId: z.string() }).parse(p).providerId),
     'ai.chat': (p, ctx) => {
-      const q = z.object({ conversationId: z.string().optional(), message: z.string(), providerId: z.string().optional(), model: z.string().optional(), offline: z.boolean().optional() }).parse(p);
+      const q = z
+        .object({ conversationId: z.string().optional(), message: z.string(), providerId: z.string().optional(), model: z.string().optional(), offline: z.boolean().optional(), attachments: z.array(z.string().max(64)).max(ATTACHMENTS_PER_MESSAGE).optional() })
+        .parse(p);
       const { runId, conversationId } = k.agent.start({ ...q, origin: ctx.origin, actor: ctx.actor });
       return { runId, conversationId };
     },
+    'ai.attachments.add': (p) => {
+      // Base64 of the largest file allowed, plus a little room.
+      const q = z.object({ name: z.string().min(1).max(260), data: z.string().max(Math.ceil((ATTACHMENT_MAX_BYTES * 4) / 3) + 16), mime: z.string().max(120).optional() }).parse(p);
+      return k.attachments.add({ name: q.name, data: Buffer.from(q.data, 'base64'), mime: q.mime });
+    },
+    'ai.attachments.remove': async (p) => ({ removed: await k.attachments.remove(IdSchema.parse(p).id) }),
+    'ai.attachments.read': (p) => k.attachments.read(IdSchema.parse(p).id),
     'agent.runToCompletion': async (p, ctx) => {
       const q = z.object({ conversationId: z.string().optional(), message: z.string(), providerId: z.string().optional(), model: z.string().optional() }).parse(p);
       return k.agent.runToCompletion({ ...q, origin: ctx.origin, actor: ctx.actor });
@@ -194,14 +211,15 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       const q = z.object({ id: z.string(), title: z.string() }).parse(p);
       return k.conversations.rename(q.id, q.title);
     },
-    'ai.conversations.delete': (p) => ({ deleted: k.conversations.delete(IdSchema.parse(p).id) }),
-    'ai.conversations.deleteMany': (p) => k.conversations.deleteMany(z.object({ ids: z.array(z.string().max(64)).max(5000) }).parse(p).ids, k.agent.busyConversations()),
+    // Deleting chats deletes their attachments too (the rows go with the chat; the files are swept after).
+    'ai.conversations.delete': (p) => tidied({ deleted: k.conversations.delete(IdSchema.parse(p).id) }),
+    'ai.conversations.deleteMany': (p) => tidied(k.conversations.deleteMany(z.object({ ids: z.array(z.string().max(64)).max(5000) }).parse(p).ids, k.agent.busyConversations())),
     'ai.conversations.cleanup': (p) => {
       const q = z.object({ olderThanDays: z.number().int().min(0).max(36500), includeProjects: z.boolean().optional(), dryRun: z.boolean().optional() }).parse(p);
       const ids = k.conversations.stale(q.olderThanDays, !!q.includeProjects);
       const busy = k.agent.busyConversations();
       if (q.dryRun) return { deleted: ids.filter((id) => !busy.has(id)).length };
-      return { deleted: k.conversations.deleteMany(ids, busy).deleted };
+      return tidied({ deleted: k.conversations.deleteMany(ids, busy).deleted });
     },
     'ai.conversations.setProject': (p) => {
       const q = z.object({ id: z.string(), projectId: z.string().max(64).nullable() }).parse(p);

@@ -87,7 +87,12 @@ export class AnthropicProvider implements ChatProvider {
       }
       flushResults();
       if (m.role === 'user') {
-        out.push({ role: 'user', content: m.content });
+        out.push({
+          role: 'user',
+          content: m.images?.length
+            ? [...m.images.map((i): Anthropic.Beta.BetaImageBlockParam => ({ type: 'image', source: { type: 'base64', media_type: i.mime as 'image/png', data: i.data } })), { type: 'text', text: m.content }]
+            : m.content,
+        });
       } else if (m.providerData?.providerType === 'anthropic' && Array.isArray(m.providerData.raw)) {
         out.push({ role: 'assistant', content: m.providerData.raw as Anthropic.Beta.BetaContentBlockParam[] });
       } else {

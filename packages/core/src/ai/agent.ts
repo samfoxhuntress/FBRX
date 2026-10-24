@@ -2,8 +2,10 @@ import { arch, hostname, platform } from 'node:os';
 import {
   addressAs,
   foldRunActivity,
+  modelSeesImages,
   newId,
   type AgentEvent,
+  type AttachmentInfo,
   type AgentPhase,
   type InvocationOrigin,
   type RunActivity,
@@ -24,7 +26,9 @@ import type { ToolRegistry } from '../tools/registry';
 import type { ToolSpec } from '../tools/types';
 import type { ConversationStore, StoredMessage } from './conversations';
 import type { ProviderManager } from './provider-manager';
-import type { ProviderMessage, ProviderTool, ProviderToolCall } from './providers/types';
+import type { ProviderImage, ProviderMessage, ProviderTool, ProviderToolCall } from './providers/types';
+import type { AttachmentStore } from './attachments';
+import { formatBytes } from '../util/misc';
 import { chatEgg, type ChatEgg } from '../fun/chat-eggs';
 import { learnerConcern, learnerPrompt, type LearnerConcern } from './learner';
 import { isCapacityError } from '../mesh/mesh-assist';
@@ -40,6 +44,8 @@ export interface ChatParams {
   offline?: boolean;
   /** For a new conversation: its title (otherwise the start of the message). */
   title?: string;
+  /** Files and images attached to the message (ids from AttachmentStore.add). */
+  attachments?: string[];
   /** Narrower limits for this run (help given to another computer through Mesh Assist). */
   limits?: {
     maxSteps?: number;
@@ -119,6 +125,8 @@ export class AgentRuntime {
       log: Logger;
       workspace: string;
       allowedRoots: () => string[];
+      /** Files and images attached to messages. */
+      attachments?: AttachmentStore;
       /** Emergency stop in force (no new runs). */
       halt?: () => { at: string; by: string } | null;
       /** A student (or child) computer: the learning helper, with no tools. */
@@ -161,7 +169,12 @@ export class AgentRuntime {
   /** Starts a run and returns immediately; progress streams as `agent` events. */
   start(p: ChatParams): { runId: string; conversationId: string; done: Promise<RunResult> } {
     const text = p.message.trim();
-    if (!text) throw new CoreError('INVALID_ARGUMENT', 'Message is empty');
+    // What is attached is checked before anything is made, so a missing file stops the message here.
+    const attached = (p.attachments ?? []).map((id) => {
+      if (!this.d.attachments) throw new CoreError('UNAVAILABLE', 'Attachments are not available here');
+      return this.d.attachments.info(id);
+    });
+    if (!text && !attached.length) throw new CoreError('INVALID_ARGUMENT', 'Message is empty');
     if (text.length > 100_000) throw new CoreError('INVALID_ARGUMENT', 'Message is too long');
     if (this.d.halt?.()) throw new CoreError('UNAVAILABLE', `${this.d.settings.get().ai.agentName} is on emergency stop. Resume it in Settings → Agent or on the ${this.d.settings.get().ai.agentName} page.`);
     const learner = this.d.learner?.() ?? null;
@@ -173,7 +186,7 @@ export class AgentRuntime {
         return run;
       }
     }
-    const egg = learner ? null : this.easterEgg(text, p.conversationId);
+    const egg = learner || attached.length ? null : this.easterEgg(text, p.conversationId);
     if (egg) return this.cannedRun(p, text, egg);
     // Resolve the provider first so configuration errors surface synchronously to the caller.
     const resolved = this.d.providers.resolve(p.providerId, p.model);
@@ -186,11 +199,12 @@ export class AgentRuntime {
       }
     } else {
       const offline = p.offline ?? (p.origin === 'user' && this.d.settings.get().ai.newChatsOffline);
-      conversationId = this.d.store.create((p.title ?? text).replace(/\s+/g, ' ').slice(0, 80), p.origin, offline).id;
+      conversationId = this.d.store.create((p.title ?? (text || attached.map((a) => a.name).join(', '))).replace(/\s+/g, ' ').slice(0, 80), p.origin, offline).id;
     }
+    const files = attached.length ? this.d.attachments!.bind(attached.map((a) => a.id), conversationId) : [];
     const runId = newId('run');
     const controller = new AbortController();
-    const done = this.execute(runId, conversationId, text, resolved, p, controller).finally(() => this.runs.delete(runId));
+    const done = this.execute(runId, conversationId, text, files, resolved, p, controller).finally(() => this.runs.delete(runId));
     this.runs.set(runId, { runId, conversationId, controller, done });
     return { runId, conversationId, done };
   }
@@ -384,20 +398,42 @@ export class AgentRuntime {
     return true;
   }
 
-  private history(conversationId: string, budgetChars: number): ProviderMessage[] {
-    const msgs = this.d.store.messages(conversationId);
+  /**
+   * A user message as the model reads it: what the person wrote, then each attachment with its details and the text
+   * read out of it (each file's share of the room this model has, the rest left in the file for the file tools). The
+   * same message always reads the same way, so history stays append-only.
+   */
+  private withAttachments(content: string, files: AttachmentInfo[], budgetChars: number, sees: boolean): string {
+    const room = Math.floor(Math.min(120_000, budgetChars * 0.5) / Math.max(1, files.filter((f) => f.textChars).length));
+    const blocks = files.map((f) => {
+      const attrs = `name="${f.name.replace(/"/g, "'")}" kind="${f.kind}" size="${formatBytes(f.size)}"${f.pages ? ` pages="${f.pages}"` : ''} path="${f.path}"`;
+      if (f.kind === 'image') {
+        return sees ? `<attachment ${attrs} />` : `<attachment ${attrs}>\nThe AI model in use cannot see images, so this picture is not shown to you. If you are asked about it, say so and suggest choosing a model that can see images.\n</attachment>`;
+      }
+      const text = this.d.attachments?.text(f.id) ?? null;
+      if (!text) return `<attachment ${attrs}>\n${f.note ?? 'No text could be read from this file.'} Its path is above.\n</attachment>`;
+      const more = text.length > room ? `\n[… ${(text.length - room).toLocaleString('en-US')} more characters: read the rest with fs.read_file at the path above]` : '';
+      return `<attachment ${attrs}>\n${text.slice(0, room)}${more}\n</attachment>`;
+    });
+    return `${content || 'Here are the attached files.'}\n\n${blocks.join('\n\n')}`;
+  }
+
+  private async history(conversationId: string, budgetChars: number, sees: boolean): Promise<ProviderMessage[]> {
+    const msgs = this.d.store.messages(conversationId).map((m) => (m.role === 'user' && m.attachments?.length ? { ...m, content: this.withAttachments(m.content, m.attachments, budgetChars, sees) } : m));
     // Group into turns (each starts at a user message) and drop the oldest turns that exceed the budget.
     const turns: StoredMessage[][] = [];
     for (const m of msgs) {
       if (m.role === 'user' || !turns.length) turns.push([m]);
       else turns[turns.length - 1].push(m);
     }
-    const size = (t: StoredMessage[]) => t.reduce((n, m) => n + m.content.length + JSON.stringify(m.providerData?.raw ?? m.toolCalls ?? '').length, 0);
+    // An image counts as a few thousand characters of the budget.
+    const imageChars = (m: StoredMessage) => (sees ? (m.attachments ?? []).filter((a) => a.kind === 'image').length * 4000 : 0);
+    const size = (t: StoredMessage[]) => t.reduce((n, m) => n + m.content.length + imageChars(m) + JSON.stringify(m.providerData?.raw ?? m.toolCalls ?? '').length, 0);
     let total = turns.reduce((n, t) => n + size(t), 0);
     while (turns.length > 1 && total > budgetChars) total -= size(turns.shift()!);
     const out: ProviderMessage[] = [];
     for (const m of turns.flat()) {
-      if (m.role === 'user') out.push({ role: 'user', content: m.content });
+      if (m.role === 'user') out.push({ role: 'user', content: m.content, ...(sees && m.attachments?.some((a) => a.kind === 'image') ? { images: await this.images(m.attachments) } : {}) });
       else if (m.role === 'assistant')
         out.push({
           role: 'assistant',
@@ -410,10 +446,22 @@ export class AgentRuntime {
     return out;
   }
 
+  /** The attached images' bytes, for a model that can see (ones whose file is gone are left out). */
+  private async images(files: AttachmentInfo[]): Promise<ProviderImage[]> {
+    const out: ProviderImage[] = [];
+    for (const f of files) {
+      if (f.kind !== 'image') continue;
+      const image = await this.d.attachments?.image(f.id);
+      if (image) out.push(image);
+    }
+    return out;
+  }
+
   private async execute(
     runId: string,
     conversationId: string,
     text: string,
+    files: AttachmentInfo[],
     resolved: ReturnType<ProviderManager['resolve']>,
     p: ChatParams,
     controller: AbortController,
@@ -428,7 +476,8 @@ export class AgentRuntime {
     // Tool calls whose results are not yet in history; closed out on cancel/failure so history stays well-formed.
     let unanswered: Array<{ id: string; name: string }> = [];
 
-    this.d.store.append(conversationId, { role: 'user', content: text });
+    this.d.store.append(conversationId, { role: 'user', content: text, ...(files.length ? { attachments: files } : {}) });
+    const sees = modelSeesImages(config.type, model);
     // Memory: what the person just said may hold a lasting fact; what is remembered goes into this run's instructions
     // (with a cloud AI, only general facts, never private ones).
     try {
@@ -458,7 +507,7 @@ export class AgentRuntime {
         }));
         const messages: ProviderMessage[] = [
           { role: 'system', content: this.systemPrompt(tools.length, this.d.store.isOffline(conversationId), memory) },
-          ...this.history(conversationId, provider.historyBudgetChars),
+          ...(await this.history(conversationId, provider.historyBudgetChars, sees)),
         ];
 
         progress(steps === 1 ? 'model' : 'reading', steps === 1 ? (config.type === 'local-runtime' ? `Asking ${model} (the first answer can take a moment while the model loads)` : `Asking ${model}`) : 'Reading the results and deciding what to do next');

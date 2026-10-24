@@ -1,6 +1,7 @@
 import type { ToolSpec } from '../types';
 import { truncate } from '../../util/misc';
 import type { UrlCheck } from '../../governance/network-guard';
+import { htmlToText } from '../../docs/html-text';
 
 export interface NetDeps {
   checkUrl: (url: string) => Promise<UrlCheck>;
@@ -51,21 +52,6 @@ export async function guardedFetch(
     return { status: res.status, headers, body: Buffer.concat(chunks).toString('utf8'), finalUrl: current, truncated };
   }
   throw new Error('Too many redirects');
-}
-
-function htmlToText(html: string): string {
-  return html
-    .replace(/<script[\s\S]*?<\/script>/gi, '')
-    .replace(/<style[\s\S]*?<\/style>/gi, '')
-    .replace(/<(br|p|div|li|h[1-6]|tr)[^>]*>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/\n\s*\n\s*\n+/g, '\n\n')
-    .trim();
 }
 
 export function netTools(d: NetDeps): ToolSpec[] {

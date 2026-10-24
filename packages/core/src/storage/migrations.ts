@@ -404,6 +404,30 @@ export const MIGRATIONS: Migration[] = [
       END;
     `,
   },
+  {
+    version: 13,
+    name: 'attachments',
+    // Files and images attached to messages for the AI: the file is in the workspace (Attachments/<id>), the text read
+    // out of it is kept here. An attachment belongs to its chat once sent (and goes with it); the message keeps what
+    // was attached.
+    up: `
+      CREATE TABLE attachments (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT REFERENCES conversations(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        mime TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        path TEXT NOT NULL,
+        text TEXT,
+        pages INTEGER,
+        note TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX attachments_conversation ON attachments (conversation_id);
+      ALTER TABLE messages ADD COLUMN attachments TEXT;
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

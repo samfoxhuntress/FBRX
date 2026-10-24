@@ -67,6 +67,7 @@ export class OllamaProvider implements ChatProvider {
         };
       }
       if (m.role === 'tool') return { role: 'tool', content: m.content, tool_name: m.name };
+      if (m.role === 'user' && m.images?.length) return { role: 'user', content: m.content, images: m.images.map((i) => i.data) };
       return { role: m.role, content: m.content };
     });
   }
