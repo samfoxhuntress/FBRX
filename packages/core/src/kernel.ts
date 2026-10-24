@@ -105,6 +105,7 @@ import { ConversationStore } from './ai/conversations';
 import { AttachmentStore } from './ai/attachments';
 import { OutputFolder } from './docs/output-folder';
 import { AutomationService } from './automations/automation-service';
+import { ScreenSnapshots } from './snapshots/screen-snapshots';
 import { createTools } from './tools/builtin/create-tools';
 import { webTools } from './tools/builtin/web-tools';
 import { ModelManager } from './ai/runtime/model-manager';
@@ -183,6 +184,8 @@ export class Kernel {
   readonly attachments: AttachmentStore;
   /** Where what the agent makes is saved. */
   readonly output: OutputFolder;
+  /** FBRX Snapshot's folder of screen snapshots. */
+  readonly snapshots: ScreenSnapshots;
   readonly automations: AutomationService;
   readonly models: ModelManager;
   readonly starter: StarterAi;
@@ -313,7 +316,9 @@ export class Kernel {
     });
     this.conversations = new ConversationStore(this.db);
     this.attachments = new AttachmentStore({ db: this.db, root: join(this.paths.workspace, 'Attachments'), log: L('attachments') });
-    this.output = new OutputFolder({ settings: this.settings, policy: this.policy, workspace: this.paths.workspace, dirs: () => ({ ...this.platform.specialDirs(), workspace: this.paths.workspace, data: this.paths.root }) });
+    const dirs = () => ({ ...this.platform.specialDirs(), workspace: this.paths.workspace, data: this.paths.root });
+    this.output = new OutputFolder({ settings: this.settings, policy: this.policy, workspace: this.paths.workspace, dirs });
+    this.snapshots = new ScreenSnapshots({ folder: () => expandPathVars(this.settings.get().snapshot.folder, dirs()), events: this.events, log: L('snapshots'), images: () => this.platform.images });
     this.models = new ModelManager(this.db, this.paths.models, () => this.settings.get().runtime.modelId, L('models'), this.events);
     this.runtime = new LocalRuntime({
       settings: this.settings,
@@ -374,7 +379,7 @@ export class Kernel {
       },
       takenHotkeys: () => {
         const s = this.settings.get();
-        return [s.spotlight.hotkey, s.clipboard.hotkey, s.presenter.hotkey, ...s.keyMacros.map((m) => m.hotkey)].filter(Boolean);
+        return [s.spotlight.hotkey, s.clipboard.hotkey, s.presenter.hotkey, s.snapshot.hotkey, s.snapshot.printScreen ? 'PrintScreen' : '', ...s.keyMacros.map((m) => m.hotkey)].filter(Boolean);
       },
     });
     const urlCheck = (u: string) => checkUrl(u, this.policy.policy.network);

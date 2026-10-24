@@ -16,7 +16,7 @@ export interface PendingAttachment {
 
 const KIND_ICON: Record<AttachmentKind, IconName> = { image: 'image', text: 'file', document: 'note', file: 'paperclip' };
 
-function base64(buf: ArrayBuffer): string {
+export function base64(buf: ArrayBuffer): string {
   const bytes = new Uint8Array(buf);
   let s = '';
   for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
@@ -27,7 +27,7 @@ function base64(buf: ArrayBuffer): string {
  * A picture as AI models take it: no longer than IMAGE_ATTACHMENT_MAX_SIDE on its longest side and under their size
  * limit (a photo is saved as JPEG; a screenshot keeps PNG unless that is still too big).
  */
-async function fitImage(file: File): Promise<Blob> {
+export async function fitImage(file: Blob): Promise<Blob> {
   const bmp = await createImageBitmap(file);
   const scale = Math.min(1, IMAGE_ATTACHMENT_MAX_SIDE / Math.max(bmp.width, bmp.height));
   if (scale === 1 && file.size <= IMAGE_ATTACHMENT_MAX_BYTES) {

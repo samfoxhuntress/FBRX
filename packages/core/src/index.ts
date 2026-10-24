@@ -9,6 +9,7 @@ export {
   StaticKeyKeychain,
   defaultSpecialDirs,
   type DocumentRenderer,
+  type ImageTools,
   type KeychainAdapter,
   type MovedKeychain,
   type PlatformAdapter,

@@ -13,6 +13,7 @@ import { PasteKeys } from './paste-keys';
 import { runJavaScript, stopJavaScript } from './code-sandbox';
 import { guardWebviews, setupServerBrowser } from './server-browser';
 import { browserWebContents, browserWindowOpen, openBrowserWindow, setupWebSessions, type BrowserDeps } from './browser';
+import { isSnapshotOverlay, registerSnapshotIpc, takeSnapshot, type SnapshotDeps } from './snapshot';
 
 const dataDir = process.env.FBRX_HOME ?? app.getPath('userData');
 const rendererUrl = process.env.FBRX_RENDERER_URL ?? null;
@@ -32,6 +33,8 @@ let spotlightKey: string | null = null;
 let picker: BrowserWindow | null = null;
 let pickerKey: string | null = null;
 let presenterKey: string | null = null;
+let snapshotKey: string | null = null;
+let printScreenKey: string | null = null;
 /** Your own shortcuts bound now: shortcut → what it does ("macro:<id>" or "automation:<id>"). */
 const ownKeys = new Map<string, string>();
 /** Whether FBRX's own window had the focus when the clipboard history opened (macOS gives the focus back otherwise). */
@@ -110,13 +113,18 @@ function serveVoice() {
   });
 }
 
-/** The app's own pages may use the microphone (audio only) and the clipboard; other permissions are refused. */
+/**
+ * The app's own pages may use the microphone (audio only) and the clipboard, and FBRX Snapshot's overlay may capture a
+ * window; other permissions are refused.
+ */
 const ALLOWED_PERMISSIONS = new Set(['media', 'clipboard-read', 'clipboard-sanitized-write', 'notifications', 'fullscreen']);
 function guardPermissions() {
   const ownPage = (url: string) => (rendererUrl ? url.startsWith(rendererUrl) : url.startsWith('file://'));
   session.defaultSession.setPermissionRequestHandler((wc, permission, cb, details) => {
     if (!ownPage(details.requestingUrl || wc.getURL()) || !ALLOWED_PERMISSIONS.has(permission)) return cb(false);
     if (permission === 'media') {
+      // FBRX Snapshot's overlay capturing the window the person picked (a desktop capture names no media type).
+      if (isSnapshotOverlay(wc)) return cb(true);
       const types = (details as { mediaTypes?: string[] }).mediaTypes ?? [];
       return cb(types.length > 0 && types.every((t) => t === 'audio'));
     }
@@ -174,6 +182,24 @@ function browserDeps(): BrowserDeps {
     onDownload: ({ name, checked }) =>
       deliverNotification({ title: 'Download finished', body: checked ? `"${name}" is saved, and FBRX Shield found nothing wrong.` : `"${name}" is saved.`, level: 'success', source: 'shield' }),
   };
+}
+
+function snapshotDeps(): SnapshotDeps {
+  return {
+    kernel: () => kernel,
+    load: loadRenderer,
+    preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
+    ownWindows: () => [win, ...popouts.values()].filter((w): w is BrowserWindow => !!w && !w.isDestroyed()),
+    open: (id) => popOut(`snapshots/${encodeURIComponent(id)}`, { wide: true }),
+    notify: deliverNotification,
+    trusted,
+  };
+}
+
+/** FBRX Snapshot comes with Standard and up (Essentials is the AI on its own), and not on student computers. */
+function snapshotsAllowed() {
+  const e = kernel?.edition();
+  return !!e && e.tier !== 'essentials' && !e.learner;
 }
 
 function showWindow(route?: string) {
@@ -278,7 +304,7 @@ const pageOf = (route: string) => route.split('/')[0];
  * Opens a page in a window of its own beside the main one, or brings its window forward (and to that route) when the
  * page already has one. The window shows the page without the sidebar; links to other pages open in the main window.
  */
-function popOut(route: string) {
+function popOut(route: string, o: { wide?: boolean } = {}) {
   const page = pageOf(route);
   const open = popouts.get(page);
   if (open && !open.isDestroyed()) {
@@ -289,8 +315,8 @@ function popOut(route: string) {
     return;
   }
   const area = screen.getDisplayMatching(win?.getBounds() ?? screen.getPrimaryDisplay().bounds).workArea;
-  const width = Math.min(820, Math.round(area.width * 0.45));
-  const height = Math.min(900, area.height - 40);
+  const width = o.wide ? Math.min(1280, Math.round(area.width * 0.8)) : Math.min(820, Math.round(area.width * 0.45));
+  const height = Math.min(o.wide ? 860 : 900, area.height - 40);
   const main = win && !win.isDestroyed() && win.isVisible() ? win.getBounds() : null;
   // To the right of the main window when there is room, otherwise on the right edge of the screen.
   const x = main && main.x + main.width + 8 + width <= area.x + area.width ? main.x + main.width + 8 : area.x + area.width - width - 16;
@@ -421,6 +447,9 @@ function bindMacroKeys() {
   spotlightKey = bindKey(spotlightKey, s?.spotlight.enabled ? s.spotlight.hotkey : null, showSpotlight, 'Spotlight');
   pickerKey = bindKey(pickerKey, s?.clipboard.hotkey || null, showClipPicker, 'Clipboard history');
   presenterKey = bindKey(presenterKey, s?.presenter.hotkey || null, togglePresenting, 'Presenter-safe mode');
+  const snap = () => void takeSnapshot(snapshotDeps(), { mode: 'region', delay: 0, fromApp: false });
+  snapshotKey = bindKey(snapshotKey, (snapshotsAllowed() && s?.snapshot.hotkey) || null, snap, 'Snapshot');
+  printScreenKey = bindKey(printScreenKey, snapshotsAllowed() && s?.snapshot.printScreen ? 'PrintScreen' : null, snap, 'Print Screen');
   bindOwnKeys();
 }
 
@@ -429,7 +458,7 @@ function bindMacroKeys() {
  * shortcut FBRX uses itself stays its own, and a macro keeps a shortcut an automation also asks for.
  */
 function bindOwnKeys() {
-  const builtIn = new Set([spotlightKey, pickerKey, presenterKey]);
+  const builtIn = new Set([spotlightKey, pickerKey, presenterKey, snapshotKey, printScreenKey]);
   const want = new Map<string, string>();
   for (const m of kernel?.settings.get().keyMacros ?? []) if (m.hotkey && !builtIn.has(m.hotkey)) want.set(m.hotkey, `macro:${m.id}`);
   for (const a of kernel?.automations.hotkeys() ?? []) if (!builtIn.has(a.hotkey) && !want.has(a.hotkey)) want.set(a.hotkey, `automation:${a.id}`);
@@ -636,6 +665,7 @@ function trayMenu() {
     ...(kernel.license.status().tier !== 'essentials' ? [{ label: browserWindowOpen() ? 'Show FBRX Browser' : 'Open FBRX Browser', click: () => openBrowserWindow(browserDeps()) }] : []),
     { label: `Spotlight${spotlightKey ? ` (${spotlightKey})` : ''}`, click: () => showSpotlight() },
     { label: `Clipboard history${pickerKey ? ` (${pickerKey.replace('Control', 'Ctrl')})` : ''}`, click: () => showClipPicker() },
+    ...(snapshotsAllowed() ? [{ label: `Take a snapshot${snapshotKey ? ` (${snapshotKey.replace('Control', 'Ctrl')})` : ''}`, click: () => void takeSnapshot(snapshotDeps(), { mode: 'region', delay: 0, fromApp: false }) }] : []),
     { label: pending ? `Review ${pending} pending approval${pending > 1 ? 's' : ''}` : 'No pending approvals', enabled: pending > 0, click: () => showWindow('approvals') },
     kernel.aiHalt()
       ? { label: 'Resume the AI (on emergency stop)', click: () => void kernel?.resumeAi(actor) }
@@ -850,7 +880,9 @@ async function boot() {
       trayMenu();
     }
     if (name === 'license.changed' && !funAllowed()) goose?.close();
-    if (name === 'automations.changed' || name === 'license.changed' || name === 'fleet.changed') bindOwnKeys();
+    // The edition decides whether automations and snapshots have shortcuts.
+    if (name === 'license.changed' || name === 'fleet.changed') bindMacroKeys();
+    else if (name === 'automations.changed') bindOwnKeys();
     if (name === 'presenter.changed') {
       const p = payload as { active: boolean };
       // Presenting: the goose goes home and the clipboard history masks what it shows.
@@ -892,6 +924,7 @@ async function boot() {
 app.whenReady().then(async () => {
   if (!primary) return;
   registerIpc();
+  registerSnapshotIpc(snapshotDeps());
   serveVoice();
   guardPermissions();
   setupServerBrowser(() => kernel);

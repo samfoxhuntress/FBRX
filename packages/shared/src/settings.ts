@@ -7,6 +7,7 @@ import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS } from './mesh-assist';
 import { isCidr, MESH_TRAFFIC_CLASSES } from './net';
 import { BROWSER_SEARCH_ENGINES } from './browser';
 import { DEFAULT_OUTPUT_FOLDER, IMAGE_GENERATORS, IMAGE_SIZES, WEB_SEARCH_ENGINES } from './creations';
+import { DEFAULT_SNAPSHOT_FOLDER, SNAPSHOT_AFTER } from './snapshots';
 
 /** Built-in color themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
 export const THEME_PRESETS = ['fabrics', 'tropical', 'neon', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
@@ -288,6 +289,18 @@ export const SettingsSchema = z.object({
     blurPrivate: z.boolean(),
     /** The macro (global keyboard shortcut) that switches it on and off; empty turns it off. */
     hotkey: z.string().max(60),
+  }),
+  /** FBRX Snapshot: pictures of the screen, marked up and shared (snapshots.ts). */
+  snapshot: z.object({
+    /** Where they are saved; ${PICTURES} and the other folder names work here. */
+    folder: z.string().min(1).max(500),
+    /** The shortcut that starts one (an area to drag out, or a window or screen); empty turns it off. */
+    hotkey: z.string().max(60),
+    /** The Print Screen key starts one too (instead of the system's own). */
+    printScreen: z.boolean(),
+    /** Each new snapshot goes on the clipboard, ready to paste. */
+    copy: z.boolean(),
+    after: z.enum(SNAPSHOT_AFTER),
   }),
   /** Who uses this computer: shown on FBRX Glass and used by the agent. */
   profile: z.object({
@@ -613,6 +626,13 @@ export const DEFAULT_SETTINGS: Settings = {
     maskClipboard: true,
     blurPrivate: true,
     hotkey: 'Control+Alt+P',
+  },
+  snapshot: {
+    folder: DEFAULT_SNAPSHOT_FOLDER,
+    hotkey: 'Control+Alt+S',
+    printScreen: false,
+    copy: true,
+    after: 'editor',
   },
   profile: {
     name: '',

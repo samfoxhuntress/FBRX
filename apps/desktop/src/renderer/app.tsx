@@ -9,6 +9,7 @@ import { playStartupSound, useAppearance } from './theme';
 import { AgentNameContext, EmergencyStop } from './widgets';
 import { LocalAccountLock } from './account';
 import { GooseOverlay, summonGoose, unlockTrophy, useKonami } from './fun';
+import { SnapOverlay } from './snap-overlay';
 import { TrophyBadge } from './trophies';
 import { DashboardPage } from './pages/dashboard';
 import { Onboarding } from './pages/onboarding';
@@ -60,6 +61,7 @@ const ServerPage = lazy(() => import('./pages/server').then((m) => ({ default: m
 const MeshPage = lazy(() => import('./pages/mesh').then((m) => ({ default: m.MeshPage })));
 const AiCoordPage = lazy(() => import('./pages/aicoord').then((m) => ({ default: m.AiCoordPage })));
 const MigratePage = lazy(() => import('./pages/migrate').then((m) => ({ default: m.MigratePage })));
+const SnapshotsPage = lazy(() => import('./pages/snapshots').then((m) => ({ default: m.SnapshotsPage })));
 const ClipboardPage = lazy(() => import('./pages/clipboard').then((m) => ({ default: m.ClipboardPage })));
 const BrowserApp = lazy(() => import('./pages/browser').then((m) => ({ default: m.BrowserApp })));
 
@@ -87,6 +89,7 @@ export type Route =
   | 'processes'
   | 'migrate'
   | 'clipboard'
+  | 'snapshots'
   | 'browser'
   | 'terminal'
   | 'toolbox'
@@ -105,7 +108,8 @@ export type Route =
   | 'spotlight'
   | 'clips'
   | 'goose'
-  | 'goose-overlay';
+  | 'goose-overlay'
+  | 'snap-overlay';
 
 /** This window shows one page on its own, beside the main window (opened with "Open in a new window"). */
 export const POPOUT = new URLSearchParams(location.search).has('popout');
@@ -208,6 +212,7 @@ export function App() {
     );
   if (route === 'clips') return <ClipPicker />;
   if (route === 'goose-overlay') return <GooseOverlay />;
+  if (route === 'snap-overlay') return <SnapOverlay />;
   return <MainApp route={route} settings={settings} />;
 }
 
@@ -397,6 +402,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'files', label: 'Files', icon: 'folder', section: 'Utilities' },
     { id: 'processes', label: 'Task Manager', icon: 'activity', section: 'Utilities', need: 'ultra' },
     { id: 'clipboard', label: 'Clipboard', icon: 'clipboard', section: 'Utilities' },
+    { id: 'snapshots', label: 'Snapshot', icon: 'camera', section: 'Utilities' },
     { id: 'migrate', label: 'Copy & migrate', icon: 'copy', section: 'Utilities', need: 'ultra' },
     { id: 'toolbox', label: 'Toolbox', icon: 'toolbox', section: 'Utilities' },
     { id: 'library', label: 'Library', icon: 'book', section: 'Utilities' },
@@ -542,6 +548,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return ultra ? <MigratePage /> : ultraOnly('Copy & migrate', 'Copy whole folders or move to a new computer with Robocopy or rsync, verified and resumable.');
       case 'clipboard':
         return <ClipboardPage />;
+      case 'snapshots':
+        return <SnapshotsPage />;
       case 'browser':
         // In the desktop app this opens its own window (see navigate); this inline view is the development fallback.
         return <BrowserApp agentName={agentName} />;
@@ -872,6 +880,7 @@ const STANDARD_WHAT: Partial<Record<Route, string>> = {
   network: 'Your connection: speed, Wi‑Fi and the devices on your network.',
   files: 'Find, preview and tidy files, with the agent to help.',
   clipboard: 'Everything you copied, with handy transforms (Ctrl+Alt+Z).',
+  snapshots: 'Pictures of the screen (an area, a window or all of it), marked up and copied (Ctrl+Alt+S).',
   toolbox: 'Quick tools: password generator, unit converter, QR codes and more.',
   library: 'Short guides for everyday things: Wi‑Fi, printers, backups, and more.',
   shield: 'FBRX Shield, the antivirus: checks new downloads and keeps threats out.',

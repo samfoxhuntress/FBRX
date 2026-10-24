@@ -258,7 +258,7 @@ describe('FBRX Shield on a computer', () => {
     const downloads = join(home, 'Downloads');
     mkdirSync(downloads);
     mkdirSync(join(home, 'Desktop'));
-    kernel.platform.specialDirs = () => ({ home, documents: join(home, 'Documents'), desktop: join(home, 'Desktop'), downloads });
+    kernel.platform.specialDirs = () => ({ home, documents: join(home, 'Documents'), desktop: join(home, 'Desktop'), downloads, pictures: join(home, 'Pictures') });
     kernel.settings.update({ protection: { provider: 'shield' } });
     try {
       await kernel.start();
@@ -323,7 +323,7 @@ describe('FBRX Shield on a computer', () => {
     const downloads = join(home, 'Downloads');
     mkdirSync(downloads);
     mkdirSync(join(home, 'Desktop'));
-    kernel.platform.specialDirs = () => ({ home, documents: join(home, 'Documents'), desktop: join(home, 'Desktop'), downloads });
+    kernel.platform.specialDirs = () => ({ home, documents: join(home, 'Documents'), desktop: join(home, 'Desktop'), downloads, pictures: join(home, 'Pictures') });
     kernel.settings.update({ protection: { provider: 'shield', shield: { watchDownloads: false } } });
     try {
       await kernel.start();
@@ -392,7 +392,7 @@ describe('FBRX Shield on a computer', () => {
   it('never watches the home folder itself, even when it is reported as Downloads', async () => {
     const { kernel, cleanup } = await makeKernel({ start: false });
     const home = tempDir('fbrx-home-');
-    kernel.platform.specialDirs = () => ({ home, documents: home, desktop: home, downloads: home });
+    kernel.platform.specialDirs = () => ({ home, documents: home, desktop: home, downloads: home, pictures: home });
     try {
       await kernel.start();
       const st = (await kernel.call('protection.status', { refresh: true }, USER)) as ProtectionStatus;

@@ -51,6 +51,10 @@ interface Bridge {
   clipPicker?(action: 'show' | 'hide' | 'enable' | 'paste', text?: string): Promise<unknown>;
   /** "shown" each time the clipboard history window opens. */
   onClipPicker?(cb: (what: string) => void): () => void;
+  /** FBRX Snapshot (Electron only): start one from a page, or, in the overlay, its still picture, mode, windows and pick. */
+  snap?(action: 'start' | 'frame' | 'mode' | 'windows' | 'pick' | 'cancel', arg?: unknown): Promise<unknown>;
+  /** The overlay's mode changed on another screen. */
+  onSnapMode?(cb: (mode: string) => void): () => void;
   /** Code lab: runs JavaScript in a hidden, network-blocked window (Electron only). */
   runCode?(code: string, inputs: string[]): Promise<unknown>;
   stopCode?(): Promise<unknown>;

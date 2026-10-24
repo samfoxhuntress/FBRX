@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, THINKING_LEVELS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, THINKING_LEVELS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -29,7 +29,12 @@ const USER_ONLY = new Set<string>([
   'ai.attachments.add',
   'ai.attachments.remove',
   'ai.attachments.read',
+  'ai.attachments.get',
   'ai.files.preview',
+  'snapshots.list',
+  'snapshots.read',
+  'snapshots.save',
+  'snapshots.remove',
   'automations.create',
   'automations.update',
   'automations.remove',
@@ -216,6 +221,18 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     },
     'ai.attachments.remove': async (p) => ({ removed: await k.attachments.remove(IdSchema.parse(p).id) }),
     'ai.attachments.read': (p) => k.attachments.read(IdSchema.parse(p).id),
+    'ai.attachments.get': (p) => k.attachments.info(IdSchema.parse(p).id),
+    'snapshots.list': () => k.snapshots.list(),
+    'snapshots.read': (p) => {
+      const q = z.object({ id: z.string().min(1).max(260), size: z.number().int().min(32).max(1024).optional() }).parse(p);
+      return k.snapshots.read(q.id, q.size);
+    },
+    'snapshots.save': (p) => {
+      const q = z.object({ data: z.string().min(1).max(Math.ceil((SNAPSHOT_MAX_BYTES * 4) / 3) + 16), id: z.string().min(1).max(260).optional() }).parse(p);
+      return k.snapshots.save(Buffer.from(q.data, 'base64'), q.id);
+    },
+    'snapshots.remove': (p) => k.snapshots.remove(z.object({ id: z.string().min(1).max(260) }).parse(p).id),
+    'snapshots.folder': () => ({ path: k.snapshots.folder() }),
     'ai.files.preview': async (p) => {
       const file = z.object({ path: z.string().min(1).max(1000) }).parse(p).path;
       const ext = fileExtension(file);

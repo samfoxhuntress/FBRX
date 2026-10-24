@@ -69,6 +69,13 @@ const api = {
   },
   runCode: (code: string, inputs: string[]) => ipcRenderer.invoke('fbrx:code-run', code, inputs) as Promise<unknown>,
   stopCode: () => ipcRenderer.invoke('fbrx:code-stop') as Promise<unknown>,
+  /** FBRX Snapshot: start one (a page's button), and the overlay's side (its still picture, the mode, windows, the pick). */
+  snap: (action: 'start' | 'frame' | 'mode' | 'windows' | 'pick' | 'cancel', arg?: unknown) => ipcRenderer.invoke('fbrx:snap', action, arg) as Promise<unknown>,
+  onSnapMode(cb: (mode: string) => void): () => void {
+    const h = (_e: unknown, mode: string) => cb(mode);
+    ipcRenderer.on('fbrx:snap-mode', h);
+    return () => ipcRenderer.removeListener('fbrx:snap-mode', h);
+  },
   micAccess: () => ipcRenderer.invoke('fbrx:mic-access') as Promise<{ granted: boolean; status: string }>,
   openVoiceSettings: () => ipcRenderer.invoke('fbrx:voice-settings') as Promise<boolean>,
   platform: process.platform,

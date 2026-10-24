@@ -428,6 +428,11 @@ export function AgentPage({ agentName }: { agentName: string }) {
       } else if (arg?.startsWith('chat/')) {
         navigate('agent');
         void openChat(decodeURIComponent(arg.slice(5)));
+      } else if (arg?.startsWith('attach/')) {
+        // A picture from FBRX Snapshot (or another page): a new chat with it attached, ready to ask about.
+        const id = decodeURIComponent(arg.slice(7));
+        navigate('agent');
+        void openChat(null).then(() => call('ai.attachments.get', { id }).then((info) => filesRef.current.restore([info]), () => undefined));
       } else if (first) void openChat(rememberedChat());
     };
     pick(true);

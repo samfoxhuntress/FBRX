@@ -38,4 +38,5 @@ export * from './accounts';
 export * from './attachments';
 export * from './automations';
 export * from './creations';
+export * from './snapshots';
 export * from './essentials-home';

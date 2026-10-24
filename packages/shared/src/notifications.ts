@@ -40,6 +40,7 @@ export const NOTIFICATION_KINDS: readonly NotificationKind[] = [
   { id: 'agent', label: 'Your AI', help: 'Notes your AI leaves when it finishes something' },
   { id: 'automations', label: 'Automations', help: 'What your automations found (each one says when it tells you)' },
   { id: 'macros', label: 'Macros', help: '“Ready to paste” after a macro' },
+  { id: 'snapshots', label: 'FBRX Snapshot', help: 'A snapshot taken (when it does not open by itself), or why one could not be' },
   { id: 'fbrx', label: 'FBRX itself', help: 'A part of FBRX that keeps failing' },
   { id: 'plugins', label: 'Plugins', help: 'Notifications from plugins you installed' },
 ];
@@ -58,6 +59,7 @@ const KIND_OF_SOURCE: Record<string, string> = {
   agent: 'agent',
   automation: 'automations',
   macros: 'macros',
+  snapshot: 'snapshots',
   watchdog: 'fbrx',
 };
 

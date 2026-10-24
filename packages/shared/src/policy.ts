@@ -39,7 +39,7 @@ export const PolicySchema = z.object({
   /** First matching rule wins. Rules are evaluated before risk defaults. */
   rules: z.array(PolicyRuleSchema),
   filesystem: z.object({
-    /** Roots the agent may touch. Supports `~`, `${HOME}`, `${DOCUMENTS}`, `${DESKTOP}`, `${DOWNLOADS}`, `${WORKSPACE}`. */
+    /** Roots the agent may touch. Supports `~`, `${HOME}`, `${DOCUMENTS}`, `${DESKTOP}`, `${DOWNLOADS}`, `${PICTURES}`, `${WORKSPACE}`. */
     allowedRoots: z.array(z.string()),
     /** Globs that are never readable or writable (matched against absolute paths). */
     denyPatterns: z.array(z.string()),

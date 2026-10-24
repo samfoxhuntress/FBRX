@@ -9,6 +9,7 @@ import type { LicenseStatus } from './license';
 import type { AccountDevice, AccountStatus, InvitationPreview, LocalAccountStatus } from './accounts';
 import type { AttachmentInfo } from './attachments';
 import type { Automation, AutomationInput, AutomationRun } from './automations';
+import type { ScreenSnapshot } from './snapshots';
 import type { CreatedFile } from './creations';
 import type { SupportStatus } from './support';
 import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './browser';
@@ -627,6 +628,8 @@ export interface CoreMethods extends ExtMethods {
   'ai.attachments.remove': (p: { id: string }) => { removed: boolean };
   /** An attachment's bytes (base64), to show it again in the chat. */
   'ai.attachments.read': (p: { id: string }) => { mime: string; data: string };
+  /** An attachment not sent yet, to put it in the composer (another page attached it). */
+  'ai.attachments.get': (p: { id: string }) => AttachmentInfo;
   'automations.list': () => Automation[];
   'automations.create': (p: AutomationInput) => Automation;
   'automations.update': (p: { id: string } & Partial<AutomationInput>) => Automation;
@@ -635,6 +638,15 @@ export interface CoreMethods extends ExtMethods {
   /** Runs an automation now (it waits its turn behind one already running). */
   'automations.run': (p: { id: string; trigger?: 'manual' | 'hotkey' }) => Automation;
   'automations.runs': (p: { id: string; limit?: number }) => AutomationRun[];
+  /** FBRX Snapshot: the newest screen snapshots in the snapshot folder. */
+  'snapshots.list': () => ScreenSnapshot[];
+  /** A snapshot's picture (base64): the PNG itself, or a small JPEG of it when `size` (its longest side) is given. */
+  'snapshots.read': (p: { id: string; size?: number }) => { mime: string; data: string };
+  /** Saves a snapshot (a PNG in base64): over the one named `id` (marked up), or as a new one. */
+  'snapshots.save': (p: { data: string; id?: string }) => ScreenSnapshot;
+  'snapshots.remove': (p: { id: string }) => { removed: boolean };
+  /** Where snapshots are saved (the setting with its folder names filled in). */
+  'snapshots.folder': () => { path: string };
   /** A picture the agent made (in the output folder or the workspace), to show in the chat. */
   'ai.files.preview': (p: { path: string }) => { mime: string; data: string };
   /** Where what the agent makes is saved: the folder in use, the one chosen, and whether the AI may write there. */
@@ -843,6 +855,7 @@ export interface CoreEvents extends ExtEvents {
   'license.changed': LicenseStatus;
   'account.changed': AccountStatus;
   'automations.changed': Automation[];
+  'snapshots.changed': { id: string };
   'support.changed': SupportStatus;
   'localAccount.changed': LocalAccountStatus;
   'browser.changed': BrowserState;

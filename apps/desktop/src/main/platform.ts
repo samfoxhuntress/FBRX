@@ -1,4 +1,4 @@
-import { app, Notification, safeStorage, shell } from 'electron';
+import { app, nativeImage, Notification, safeStorage, shell } from 'electron';
 import { execFile } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
@@ -98,16 +98,24 @@ export function createElectronPlatform(o: {
     vendorDbFile: join(workerDir, 'oui-vendors.tsv.gz'),
     mcpShim: { command: process.execPath, args: [join(workerDir, 'fbrx-mcp.mjs')], env: { ELECTRON_RUN_AS_NODE: '1' } },
     renderer: documentRenderer,
+    images: {
+      thumbnail: (data, side) => {
+        const image = nativeImage.createFromBuffer(data);
+        const { width, height } = image.getSize();
+        const scale = Math.min(1, side / Math.max(width, height, 1));
+        return image.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: 'good' }).toJPEG(82);
+      },
+    },
     specialDirs: () => {
       const d = defaultSpecialDirs();
       try {
         const home = app.getPath('home');
         // Without XDG user folders, Linux reports the home folder itself; use the usual folder inside it instead.
-        const pick = (name: 'documents' | 'desktop' | 'downloads') => {
+        const pick = (name: 'documents' | 'desktop' | 'downloads' | 'pictures') => {
           const p = app.getPath(name);
           return p && p !== home ? p : d[name];
         };
-        return { home, documents: pick('documents'), desktop: pick('desktop'), downloads: pick('downloads') };
+        return { home, documents: pick('documents'), desktop: pick('desktop'), downloads: pick('downloads'), pictures: pick('pictures') };
       } catch {
         return d;
       }
