@@ -36,6 +36,7 @@ const RuntimePage = lazy(() => import('./pages/runtime').then((m) => ({ default:
 const BackupPage = lazy(() => import('./pages/backup').then((m) => ({ default: m.BackupPage })));
 const FleetPage = lazy(() => import('./pages/fleet').then((m) => ({ default: m.FleetPage })));
 const SettingsPage = lazy(() => import('./pages/settings').then((m) => ({ default: m.SettingsPage })));
+const AutomationsPage = lazy(() => import('./pages/automations').then((m) => ({ default: m.AutomationsPage })));
 const TasksPage = lazy(() => import('./pages/tasks').then((m) => ({ default: m.TasksPage })));
 const NotesPage = lazy(() => import('./pages/notes').then((m) => ({ default: m.NotesPage })));
 const ProjectsPage = lazy(() => import('./pages/projects').then((m) => ({ default: m.ProjectsPage })));
@@ -73,6 +74,7 @@ export type Route =
   | 'projects'
   | 'calendar'
   | 'snippets'
+  | 'automations'
   | 'storage'
   | 'security'
   | 'shield'
@@ -385,6 +387,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'notes', label: 'Notes', icon: 'note', section: 'Workspace' },
     { id: 'projects', label: 'Projects', icon: 'layers', section: 'Workspace' },
     { id: 'snippets', label: 'Snippets', icon: 'code', section: 'Workspace' },
+    { id: 'automations', label: 'Automations', icon: 'repeat', section: 'Workspace' },
     { id: 'storage', label: 'Storage', icon: 'drive', section: 'PC care' },
     { id: 'security', label: 'Security', icon: 'lock', section: 'PC care' },
     { id: 'updates', label: 'Updates', icon: 'download', section: 'PC care' },
@@ -513,6 +516,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return <ProjectsPage />;
       case 'snippets':
         return <SnippetsPage />;
+      case 'automations':
+        return <AutomationsPage />;
       case 'storage':
         return <StoragePage advanced={ultra} />;
       case 'shield':
@@ -860,6 +865,7 @@ const STANDARD_WHAT: Partial<Record<Route, string>> = {
   notes: 'Quick notes, kept on this computer.',
   projects: 'Group notes, tasks and chats by project.',
   snippets: 'Text you type again and again, a shortcut away.',
+  automations: 'Jobs the AI does by itself on a schedule (watch listings, check stocks, a morning brief) and tells you what it found.',
   storage: 'See what fills your disk and clear out what you don’t need, safely.',
   security: 'Windows and macOS security settings, checked and explained.',
   updates: 'Keeps this computer’s apps and system up to date.',
@@ -876,7 +882,7 @@ const STANDARD_WHAT: Partial<Record<Route, string>> = {
 
 const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; basicHint?: string; learnerHint?: string; icon: IconName }> = [
   { id: 'bridge', section: 'Command', label: 'Bridge', hint: 'Glass, agent, messages, alerts', learnerHint: 'Home, helper, messages', icon: 'compass' },
-  { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Calendar, tasks, notes', learnerHint: 'Calendar, notes and to-dos', icon: 'layers' },
+  { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Calendar, tasks, notes, automations', learnerHint: 'Calendar, notes and to-dos', icon: 'layers' },
   { id: 'pitstop', section: 'PC care', label: 'Pit Stop', hint: 'Storage, security, repairs', icon: 'wrench' },
   { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', learnerHint: 'Tools and stories', icon: 'toolbox' },
   { id: 'orbit', section: 'Connect', label: 'Orbit', hint: 'Phone, mesh, AI models', basicHint: 'AI models', icon: 'orbit' },

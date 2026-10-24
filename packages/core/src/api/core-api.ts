@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SECRET_KINDS, THINKING_LEVELS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, THINKING_LEVELS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -30,6 +30,10 @@ const USER_ONLY = new Set<string>([
   'ai.attachments.remove',
   'ai.attachments.read',
   'ai.files.preview',
+  'automations.create',
+  'automations.update',
+  'automations.remove',
+  'automations.run',
   'ai.setThinking',
   'fleet.enroll',
   'fleet.unenroll',
@@ -104,6 +108,21 @@ function scrub(params: unknown): unknown {
 
 const NameSchema = z.object({ name: z.string().min(1) });
 const IdSchema = z.object({ id: z.string().min(1) });
+
+const AutomationInputSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  prompt: z.string().trim().min(1).max(8000),
+  schedule: z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('interval'), minutes: z.number().int().min(AUTOMATION_INTERVAL.min).max(AUTOMATION_INTERVAL.max) }),
+    z.object({ kind: z.literal('daily'), time: z.string().regex(SCHEDULE_TIME_PATTERN), days: z.array(z.number().int().min(0).max(6)).max(7) }),
+    z.object({ kind: z.literal('start') }),
+    z.object({ kind: z.literal('manual') }),
+  ]),
+  notify: z.enum(AUTOMATION_NOTIFY),
+  online: z.boolean(),
+  hotkey: z.string().max(60),
+  enabled: z.boolean(),
+});
 
 export function buildCoreApi(k: Kernel): Record<string, Handler> {
   /** Sweeps the files of deleted chats' attachments once a delete is done, and passes its answer on. */
@@ -206,6 +225,22 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       return { mime: ext === 'svg' ? 'image/svg+xml' : (IMAGE_MIME[ext] ?? 'image/png'), data: data.toString('base64') };
     },
     'ai.files.folder': () => ({ path: k.output.path(), chosen: k.output.chosen(), allowed: k.output.allowed() }),
+
+    'automations.list': () => k.automations.list(),
+    'automations.create': (p, ctx) => k.automations.create(AutomationInputSchema.parse(p), ctx.actor),
+    'automations.update': (p, ctx) => {
+      const { id, ...patch } = AutomationInputSchema.partial().extend({ id: z.string().min(1).max(64) }).parse(p);
+      return k.automations.update(id, patch, ctx.actor);
+    },
+    'automations.remove': (p, ctx) => k.automations.remove(IdSchema.parse(p).id, ctx.actor),
+    'automations.run': (p) => {
+      const q = z.object({ id: z.string().min(1).max(64), trigger: z.enum(['manual', 'hotkey']).optional() }).parse(p);
+      return k.automations.runNow(q.id, q.trigger);
+    },
+    'automations.runs': (p) => {
+      const q = z.object({ id: z.string().min(1).max(64), limit: z.number().int().min(1).max(50).optional() }).parse(p);
+      return k.automations.runs(q.id, q.limit);
+    },
     'agent.runToCompletion': async (p, ctx) => {
       const q = z.object({ conversationId: z.string().optional(), message: z.string(), providerId: z.string().optional(), model: z.string().optional() }).parse(p);
       return k.agent.runToCompletion({ ...q, origin: ctx.origin, actor: ctx.actor });

@@ -79,7 +79,8 @@ export async function makeKernel(o: TestKernelOptions = {}): Promise<{ kernel: K
   };
 }
 
-export async function waitFor<T>(fn: () => T | Promise<T>, timeoutMs = 10_000, intervalMs = 50): Promise<T> {
+/** Waits until `fn` gives something (not null, undefined or false), and gives that. */
+export async function waitFor<T>(fn: () => T | null | undefined | false | Promise<T | null | undefined | false>, timeoutMs = 10_000, intervalMs = 50): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   let last: unknown;
   while (Date.now() < deadline) {

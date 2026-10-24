@@ -98,7 +98,7 @@ export function ChatHistory({
                       {project.name} ·{' '}
                     </span>
                   )}
-                  {timeAgo(c.updatedAt)} · {c.messageCount} messages{c.origin === 'remote' ? ' · remote' : ''}
+                  {timeAgo(c.updatedAt)} · {c.messageCount} messages{c.origin === 'remote' ? ' · remote' : c.origin === 'scheduler' ? ' · automation' : ''}
                 </div>
               </button>
               {!selecting && (

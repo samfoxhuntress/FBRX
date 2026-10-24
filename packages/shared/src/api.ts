@@ -8,6 +8,7 @@
 import type { LicenseStatus } from './license';
 import type { AccountDevice, AccountStatus, InvitationPreview, LocalAccountStatus } from './accounts';
 import type { AttachmentInfo } from './attachments';
+import type { Automation, AutomationInput, AutomationRun } from './automations';
 import type { CreatedFile } from './creations';
 import type { SupportStatus } from './support';
 import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './browser';
@@ -626,6 +627,14 @@ export interface CoreMethods extends ExtMethods {
   'ai.attachments.remove': (p: { id: string }) => { removed: boolean };
   /** An attachment's bytes (base64), to show it again in the chat. */
   'ai.attachments.read': (p: { id: string }) => { mime: string; data: string };
+  'automations.list': () => Automation[];
+  'automations.create': (p: AutomationInput) => Automation;
+  'automations.update': (p: { id: string } & Partial<AutomationInput>) => Automation;
+  /** Deletes an automation and its runs (its chat stays in Conversations). */
+  'automations.remove': (p: { id: string }) => { removed: boolean };
+  /** Runs an automation now (it waits its turn behind one already running). */
+  'automations.run': (p: { id: string; trigger?: 'manual' | 'hotkey' }) => Automation;
+  'automations.runs': (p: { id: string; limit?: number }) => AutomationRun[];
   /** A picture the agent made (in the output folder or the workspace), to show in the chat. */
   'ai.files.preview': (p: { path: string }) => { mime: string; data: string };
   /** Where what the agent makes is saved: the folder in use, the one chosen, and whether the AI may write there. */
@@ -833,6 +842,7 @@ export interface CoreEvents extends ExtEvents {
   'fleet.changed': FleetStatus;
   'license.changed': LicenseStatus;
   'account.changed': AccountStatus;
+  'automations.changed': Automation[];
   'support.changed': SupportStatus;
   'localAccount.changed': LocalAccountStatus;
   'browser.changed': BrowserState;

@@ -428,6 +428,38 @@ export const MIGRATIONS: Migration[] = [
       ALTER TABLE messages ADD COLUMN attachments TEXT;
     `,
   },
+  {
+    version: 14,
+    name: 'automations',
+    // Automations (jobs the agent does by itself) and their runs; a run keeps the start of what the agent answered.
+    up: `
+      CREATE TABLE automations (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        schedule TEXT NOT NULL,
+        notify TEXT NOT NULL,
+        online INTEGER NOT NULL,
+        hotkey TEXT NOT NULL DEFAULT '',
+        enabled INTEGER NOT NULL,
+        conversation_id TEXT,
+        next_run_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE automation_runs (
+        id TEXT PRIMARY KEY,
+        automation_id TEXT NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+        trigger TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        finished_at TEXT,
+        status TEXT NOT NULL,
+        changed INTEGER NOT NULL DEFAULT 0,
+        summary TEXT NOT NULL DEFAULT ''
+      );
+      CREATE INDEX automation_runs_automation ON automation_runs (automation_id, started_at);
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -6099,6 +6099,57 @@ html[data-presenting='blur'] .private::selection {
   gap: 10px;
 }
 
+/* Automations: a card for each, its last run and its history */
+.auto-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  align-items: start;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+.auto-card.off {
+  opacity: 0.7;
+}
+.auto-prompt {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.auto-last,
+.auto-run {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  font-size: 12.5px;
+}
+.auto-last {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border);
+}
+.auto-run-summary {
+  flex-basis: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.auto-runs {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.auto-run + .auto-run {
+  padding-top: 8px;
+  border-top: 1px solid var(--border);
+}
+
 /* The right-click menu */
 .ctx-menu {
   position: fixed;

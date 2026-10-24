@@ -32,8 +32,8 @@ let spotlightKey: string | null = null;
 let picker: BrowserWindow | null = null;
 let pickerKey: string | null = null;
 let presenterKey: string | null = null;
-/** Your own macros bound now: shortcut → macro id. */
-const macroKeys = new Map<string, string>();
+/** Your own shortcuts bound now: shortcut → what it does ("macro:<id>" or "automation:<id>"). */
+const ownKeys = new Map<string, string>();
 /** Whether FBRX's own window had the focus when the clipboard history opened (macOS gives the focus back otherwise). */
 let pickerFromMain = false;
 const pasteKeys = new PasteKeys();
@@ -421,26 +421,42 @@ function bindMacroKeys() {
   spotlightKey = bindKey(spotlightKey, s?.spotlight.enabled ? s.spotlight.hotkey : null, showSpotlight, 'Spotlight');
   pickerKey = bindKey(pickerKey, s?.clipboard.hotkey || null, showClipPicker, 'Clipboard history');
   presenterKey = bindKey(presenterKey, s?.presenter.hotkey || null, togglePresenting, 'Presenter-safe mode');
-  bindKeyMacros();
+  bindOwnKeys();
 }
 
-/** Your own macros (Settings → Macros): each shortcut types its text into whatever app you are in. */
-function bindKeyMacros() {
+/**
+ * Your own shortcuts: macros (Settings → Macros) type their text into whatever app you are in, and automations run. A
+ * shortcut FBRX uses itself stays its own, and a macro keeps a shortcut an automation also asks for.
+ */
+function bindOwnKeys() {
   const builtIn = new Set([spotlightKey, pickerKey, presenterKey]);
-  const want = new Map((kernel?.settings.get().keyMacros ?? []).filter((m) => m.hotkey && !builtIn.has(m.hotkey)).map((m) => [m.hotkey, m.id]));
-  for (const [accel, id] of macroKeys) {
-    if (want.get(accel) === id) continue;
+  const want = new Map<string, string>();
+  for (const m of kernel?.settings.get().keyMacros ?? []) if (m.hotkey && !builtIn.has(m.hotkey)) want.set(m.hotkey, `macro:${m.id}`);
+  for (const a of kernel?.automations.hotkeys() ?? []) if (!builtIn.has(a.hotkey) && !want.has(a.hotkey)) want.set(a.hotkey, `automation:${a.id}`);
+  for (const [accel, what] of ownKeys) {
+    if (want.get(accel) === what) continue;
     globalShortcut.unregister(accel);
-    macroKeys.delete(accel);
+    ownKeys.delete(accel);
   }
-  for (const [accel, id] of want) {
-    if (macroKeys.has(accel)) continue;
+  for (const [accel, what] of want) {
+    if (ownKeys.has(accel)) continue;
+    const [kind, id] = what.split(':');
+    const run = kind === 'macro' ? () => void typeMacro(id) : () => runAutomation(id);
     try {
-      if (globalShortcut.register(accel, () => void typeMacro(id))) macroKeys.set(accel, id);
-      else kernel?.log.warn('A macro shortcut is taken by another app', { hotkey: accel });
+      if (globalShortcut.register(accel, run)) ownKeys.set(accel, what);
+      else kernel?.log.warn(`A ${kind} shortcut is taken by another app`, { hotkey: accel });
     } catch (err) {
-      kernel?.log.warn('Invalid macro shortcut', { hotkey: accel, error: (err as Error).message });
+      kernel?.log.warn(`Invalid ${kind} shortcut`, { hotkey: accel, error: (err as Error).message });
     }
+  }
+}
+
+/** An automation's shortcut: it runs now (its result is the one notification), or FBRX says why it can't. */
+function runAutomation(id: string) {
+  try {
+    kernel?.automations.runNow(id, 'hotkey');
+  } catch (err) {
+    kernel?.events.emit('notification', { title: 'Automation', body: (err as Error).message, level: 'warning', source: 'automation' });
   }
 }
 
@@ -834,6 +850,7 @@ async function boot() {
       trayMenu();
     }
     if (name === 'license.changed' && !funAllowed()) goose?.close();
+    if (name === 'automations.changed' || name === 'license.changed' || name === 'fleet.changed') bindOwnKeys();
     if (name === 'presenter.changed') {
       const p = payload as { active: boolean };
       // Presenting: the goose goes home and the clipboard history masks what it shows.

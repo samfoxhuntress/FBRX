@@ -104,6 +104,7 @@ import { AiCoordination } from './aicoord/aicoord';
 import { ConversationStore } from './ai/conversations';
 import { AttachmentStore } from './ai/attachments';
 import { OutputFolder } from './docs/output-folder';
+import { AutomationService } from './automations/automation-service';
 import { createTools } from './tools/builtin/create-tools';
 import { webTools } from './tools/builtin/web-tools';
 import { ModelManager } from './ai/runtime/model-manager';
@@ -182,6 +183,7 @@ export class Kernel {
   readonly attachments: AttachmentStore;
   /** Where what the agent makes is saved. */
   readonly output: OutputFolder;
+  readonly automations: AutomationService;
   readonly models: ModelManager;
   readonly starter: StarterAi;
   readonly runtime: LocalRuntime;
@@ -356,6 +358,23 @@ export class Kernel {
           get: (c) => this.meta.get<string>(`agent.persona.${c}`),
           set: (c, v) => (v ? this.meta.set(`agent.persona.${c}`, v) : this.meta.delete(`agent.persona.${c}`)),
         },
+      },
+    });
+    this.automations = new AutomationService({
+      db: this.db,
+      agent: this.agent,
+      events: this.events,
+      log: L('automations'),
+      audit: this.audit,
+      notify: (n) => this.notify(n),
+      blocked: () => {
+        const e = this.edition();
+        if (e.learner) return 'Automations are not on student computers';
+        return e.tier === 'essentials' ? 'Automations come with FBRX Endpoint Standard (Settings → Edition)' : null;
+      },
+      takenHotkeys: () => {
+        const s = this.settings.get();
+        return [s.spotlight.hotkey, s.clipboard.hotkey, s.presenter.hotkey, ...s.keyMacros.map((m) => m.hotkey)].filter(Boolean);
       },
     });
     const urlCheck = (u: string) => checkUrl(u, this.policy.policy.network);
@@ -1192,6 +1211,7 @@ export class Kernel {
     // The FBRX account's license, renewed now and every few hours (when someone signed in).
     this.account.start();
     this.support.start();
+    this.automations.start();
     // A provisioning file (IT deployment) goes first; a license that names an FBRX Command tenant joins after it.
     void this.applyProvisioning()
       .catch((err) => this.log.error('Provisioning failed', { error: errorMessage(err) }))
@@ -1278,6 +1298,7 @@ export class Kernel {
     this.release.stop();
     this.account.stop();
     this.support.stop();
+    this.automations.stop();
     this.messages.stop();
     this.orgMesh.stop();
     this.terminal.killAll();
