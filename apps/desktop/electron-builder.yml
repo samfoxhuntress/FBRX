@@ -1,4 +1,4 @@
-# FBRX OS desktop packaging (macOS + Windows, Linux for labs).
+# FBRX OS desktop packaging (macOS, Windows and Linux).
 # Signing (docs/DEPLOYMENT.md): CSC_LINK/CSC_KEY_PASSWORD + APPLE_ID/APPLE_APP_SPECIFIC_PASSWORD/APPLE_TEAM_ID on macOS;
 # on Windows, Azure Trusted Signing (-c.win.azureSignOptions.*, set by the Release workflow) or CSC_LINK with a .pfx.
 appId: com.fbrx.os
@@ -99,6 +99,19 @@ linux:
       to: server
       filter: ["**/*"]
   executableName: fbrx-os
-  target: [AppImage]
+  # The menu entry is fbrx-os.desktop (desktopName in package.json), so desktops group FBRX's windows under it.
+  syncDesktopName: true
+  # An AppImage runs on any distribution and updates itself; the .deb installs it the Debian and Ubuntu way.
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
   artifactName: FBRX-OS-${version}-${arch}.${ext}
   category: Utility
+  synopsis: Your own AI and a command center for your computer
+  maintainer: FBRX
+  vendor: FBRX
+deb:
+  # The desktop menu entry and its icon come from the app; these let the system tray and notifications work.
+  depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0]

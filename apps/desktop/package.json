@@ -7,6 +7,7 @@
   "author": "FBRX",
   "license": "UNLICENSED",
   "homepage": "https://fbrx.example",
+  "desktopName": "fbrx-os.desktop",
   "type": "module",
   "main": "dist/main/index.mjs",
   "scripts": {
