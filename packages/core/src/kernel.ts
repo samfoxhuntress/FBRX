@@ -429,6 +429,7 @@ export class Kernel {
         installId: this.meta.get<string>('install.id') ?? undefined,
       }),
       enroll: (serverUrl, token, fingerprint, actor) => this.fleet.enroll(serverUrl, token, undefined, actor, undefined, fingerprint ?? undefined),
+      enrolled: () => this.fleet.enrolled,
     });
     this.localAccount = new LocalAccountService(this.meta, this.audit, this.events);
     // Support mode: a signed pass elevates this computer; the license and settings services read its state.

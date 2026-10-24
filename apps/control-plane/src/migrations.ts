@@ -529,4 +529,25 @@ export const CP_MIGRATIONS: Migration[] = [
       CREATE INDEX cp_account_sessions_account ON account_sessions (account_id);
     `,
   },
+  {
+    version: 12,
+    name: 'invitations',
+    // An organization invites someone without a confirmed FBRX account by email: a one-time code (only its hash is
+    // kept) that makes or confirms the account and adds it as a member at the edition given here.
+    up: `
+      CREATE TABLE invitations (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        email TEXT NOT NULL,
+        tier TEXT NOT NULL,
+        code_hash TEXT NOT NULL UNIQUE,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        accepted_at TEXT,
+        account_id TEXT
+      );
+      CREATE INDEX cp_invitations_tenant ON invitations (tenant_id);
+    `,
+  },
 ];

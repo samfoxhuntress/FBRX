@@ -6,7 +6,7 @@
  * method is validated and audited by the core before it runs.
  */
 import type { LicenseStatus } from './license';
-import type { AccountDevice, AccountStatus, LocalAccountStatus } from './accounts';
+import type { AccountDevice, AccountStatus, InvitationPreview, LocalAccountStatus } from './accounts';
 import type { SupportStatus } from './support';
 import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './browser';
 import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
@@ -739,6 +739,13 @@ export interface CoreMethods extends ExtMethods {
   'account.forgotPassword': (p: { email: string; server?: string }) => { ok: true };
   /** Starts an FBRX Command for the person's organization (in the cloud); answers with its console's address. */
   'account.startOrganization': (p: { name: string; kind: Vertical }) => { consoleUrl: string; tenantId: string };
+  /** What an invitation code from an organization is for (its name, the email and edition), before using it. */
+  'account.previewInvitation': (p: { code: string; server?: string }) => InvitationPreview;
+  /**
+   * Uses an invitation code: makes the FBRX account (or, when the email has one, signs in to it with its password),
+   * joins the organization at the edition it gives, and signs in here.
+   */
+  'account.acceptInvitation': (p: { code: string; server?: string; name?: string; password: string }) => AccountStatus;
 
   /** The offline, local-only FBRX account on this computer (works with no cloud; see accounts.ts). */
   'localAccount.status': () => LocalAccountStatus;

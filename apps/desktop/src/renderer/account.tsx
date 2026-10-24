@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { COMMAND_PLAN, EDITION_PLANS, TENANT_DISCOUNT, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, type AccountDevice, type AccountStatus, type LocalAccountStatus, type Tier, type Vertical } from '@fbrx/shared';
+import { COMMAND_PLAN, EDITION_PLANS, TENANT_DISCOUNT, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, type AccountDevice, type AccountStatus, type InvitationPreview, type LocalAccountStatus, type Tier, type Vertical } from '@fbrx/shared';
 import { Button, Callout, Card, Field, Icons, Input, KeyValue, Status, Toggle, formatDate, formatDay, timeAgo, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { call, openExternal } from './client';
 import { useCore } from './hooks';
@@ -12,61 +12,119 @@ export function useAccount(): AccountStatus | null {
   return useCore('account.status', undefined, ['account.changed', 'license.changed']).data;
 }
 
-/** Sign in, or make an account (`create`). Asks for the FBRX Command address only when none is built in. */
+/**
+ * Sign in, make an account, or use an organization's invitation code (which makes the account and joins the
+ * organization, with no website or email needed). Asks for the FBRX Command address only when none is built in.
+ */
 export function AccountSignInForm({ onDone, extraActions, startCreating = false }: { onDone?: () => void; extraActions?: ReactNode; startCreating?: boolean }) {
   const account = useAccount();
-  const [creating, setCreating] = useState(startCreating);
-  const [f, setF] = useState({ server: '', email: '', password: '', name: '' });
+  const [mode, setMode] = useState<'signin' | 'create' | 'invite'>(startCreating ? 'create' : 'signin');
+  const [f, setF] = useState({ server: '', email: '', password: '', name: '', code: '' });
+  const [invite, setInvite] = useState<InvitationPreview | null>(null);
   const { run, busy } = useAction();
   const toast = useToast();
   const needServer = !account?.server;
+  const server = needServer || f.server ? { server: f.server } : {};
   const forgot = () =>
     run('forgot', async () => {
-      await call('account.forgotPassword', { email: f.email, ...(needServer || f.server ? { server: f.server } : {}) });
+      await call('account.forgotPassword', { email: f.email, ...server });
       toast.success('Check your email', `If ${f.email} has an FBRX account, a link to choose a new password is on its way. It opens in your browser.`);
     });
-  const submit = () =>
-    run(
+  const lookUp = () => run('look', () => call('account.previewInvitation', { code: f.code, ...server }).then(setInvite));
+  const submit = () => {
+    if (mode === 'invite' && !invite) return void lookUp();
+    const done = <T,>(s: T) => {
+      onDone?.();
+      return s;
+    };
+    void run(
       'signin',
       () =>
-        call('account.signIn', { email: f.email, password: f.password, ...(needServer || f.server ? { server: f.server } : {}), ...(creating ? { create: true, name: f.name } : {}) }).then((s) => {
-          onDone?.();
-          return s;
-        }),
-      creating ? 'Your FBRX account is ready' : 'Signed in',
+        mode === 'invite'
+          ? call('account.acceptInvitation', { code: f.code, password: f.password, ...server, ...(f.name.trim() ? { name: f.name } : {}) }).then(done)
+          : call('account.signIn', { email: f.email, password: f.password, ...server, ...(mode === 'create' ? { create: true, name: f.name } : {}) }).then(done),
+      mode === 'invite' ? `Welcome to ${invite!.tenantName}` : mode === 'create' ? 'Your FBRX account is ready' : 'Signed in',
     );
+  };
+  const switchTo = (m: typeof mode) => {
+    setMode(m);
+    setInvite(null);
+  };
+  const newPassword = mode === 'create' || (mode === 'invite' && invite && !invite.accountExists);
   return (
     <form
       className="fx-form"
       onSubmit={(e) => {
         e.preventDefault();
-        void submit();
+        submit();
       }}
     >
       {needServer && (
-        <Field label="FBRX Command address" help="Where your FBRX account lives, such as https://command.example.com">
+        <Field label="FBRX Command address" help={mode === 'invite' ? 'It is with your invitation code, such as https://command.example.com' : 'Where your FBRX account lives, such as https://command.example.com'}>
           <Input value={f.server} placeholder="https://" onChange={(e) => setF({ ...f, server: e.target.value.trim() })} />
         </Field>
       )}
-      {creating && (
+      {mode === 'invite' && (
+        <Field label="Invitation code" help={invite ? undefined : 'From your organization: FBRX- and four groups of four letters and numbers'}>
+          <Input
+            value={f.code}
+            placeholder="FBRX-XXXX-XXXX-XXXX-XXXX"
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) => {
+              setF({ ...f, code: e.target.value });
+              setInvite(null);
+            }}
+          />
+        </Field>
+      )}
+      {invite && (
+        <Callout tone="good" title={`${invite.tenantName} invited ${invite.email}`}>
+          {TIER_NAMES[invite.tier]}.{' '}
+          {invite.accountExists ? 'That email has an FBRX account: enter its password to join.' : 'Choose a password for your new FBRX account.'} This computer joins {invite.tenantName} too.
+        </Callout>
+      )}
+      {(mode === 'create' || (mode === 'invite' && invite && !invite.accountExists)) && (
         <Field label="Your name">
           <Input value={f.name} maxLength={120} autoComplete="name" onChange={(e) => setF({ ...f, name: e.target.value })} />
         </Field>
       )}
-      <Field label="Email">
-        <Input type="email" value={f.email} autoComplete="email" onChange={(e) => setF({ ...f, email: e.target.value })} />
-      </Field>
-      <Field label="Password" help={creating ? 'At least 12 characters' : undefined}>
-        <Input type="password" value={f.password} autoComplete={creating ? 'new-password' : 'current-password'} onChange={(e) => setF({ ...f, password: e.target.value })} />
-      </Field>
+      {mode !== 'invite' && (
+        <Field label="Email">
+          <Input type="email" value={f.email} autoComplete="email" onChange={(e) => setF({ ...f, email: e.target.value })} />
+        </Field>
+      )}
+      {(mode !== 'invite' || invite) && (
+        <Field label={mode === 'invite' && invite?.accountExists ? 'Password of your FBRX account' : 'Password'} help={newPassword ? 'At least 12 characters' : undefined}>
+          <Input type="password" value={f.password} autoComplete={newPassword ? 'new-password' : 'current-password'} onChange={(e) => setF({ ...f, password: e.target.value })} />
+        </Field>
+      )}
       <div className="fx-actions">
-        <Button type="submit" variant="primary" icon="key" loading={busy === 'signin'} disabled={!f.email || !f.password || (needServer && !f.server)}>
-          {creating ? 'Make my account' : 'Sign in'}
-        </Button>
-        <Button variant="ghost" onClick={() => setCreating(!creating)}>
-          {creating ? 'I have an account' : 'Make an account'}
-        </Button>
-        {!creating && (
+        {mode === 'invite' && !invite ? (
+          <Button type="submit" variant="primary" icon="search" loading={busy === 'look'} disabled={!f.code.trim() || (needServer && !f.server)}>
+            Look up the invitation
+          </Button>
+        ) : (
+          <Button type="submit" variant="primary" icon="key" loading={busy === 'signin'} disabled={(mode !== 'invite' && !f.email) || !f.password || (needServer && !f.server)}>
+            {mode === 'invite' ? `Join ${invite!.tenantName}` : mode === 'create' ? 'Make my account' : 'Sign in'}
+          </Button>
+        )}
+        {mode !== 'signin' && (
+          <Button variant="ghost" onClick={() => switchTo('signin')}>
+            I have an account
+          </Button>
+        )}
+        {mode !== 'create' && (
+          <Button variant="ghost" onClick={() => switchTo('create')}>
+            Make an account
+          </Button>
+        )}
+        {mode !== 'invite' && (
+          <Button variant="ghost" icon="ticket" onClick={() => switchTo('invite')}>
+            I have an invitation
+          </Button>
+        )}
+        {mode === 'signin' && (
           <Button variant="ghost" loading={busy === 'forgot'} disabled={!f.email || (needServer && !f.server)} title={f.email ? undefined : 'Type your email first'} onClick={() => void forgot()}>
             Forgot your password?
           </Button>

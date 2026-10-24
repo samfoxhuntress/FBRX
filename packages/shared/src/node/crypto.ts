@@ -4,10 +4,12 @@ import {
   createHash,
   createHmac,
   randomBytes,
+  randomInt,
   scrypt as scryptCb,
   timingSafeEqual,
   type ScryptOptions,
 } from 'node:crypto';
+import { INVITE_CODE_ALPHABET, INVITE_CODE_LENGTH } from '../accounts';
 
 export function sha256Hex(data: string | Uint8Array): string {
   return createHash('sha256').update(data).digest('hex');
@@ -23,6 +25,11 @@ export function b64u(buf: Uint8Array): string {
 
 export function fromB64u(s: string): Buffer {
   return Buffer.from(s, 'base64url');
+}
+
+/** A new invitation code in canonical form (80 bits, typed by people; see normalizeInviteCode). Store only its hash. */
+export function randomInviteCode(): string {
+  return Array.from({ length: INVITE_CODE_LENGTH }, () => INVITE_CODE_ALPHABET[randomInt(INVITE_CODE_ALPHABET.length)]).join('');
 }
 
 /** Opaque bearer token: `<prefix>_<43 chars>` (256 bits). Store only `sha256Hex(token)` server-side. */

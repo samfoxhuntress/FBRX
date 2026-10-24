@@ -48,6 +48,7 @@ const USER_ONLY = new Set<string>([
   'account.resendConfirmation',
   'account.forgotPassword',
   'account.startOrganization',
+  'account.acceptInvitation',
   'localAccount.create',
   'localAccount.update',
   'localAccount.setPassword',
@@ -390,6 +391,12 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'account.signOutDevice': (p, ctx) => k.account.signOutDevice(z.object({ id: z.string().min(1).max(80) }).parse(p).id, ctx.actor),
     'account.resendConfirmation': () => k.account.resendConfirmation(),
     'account.forgotPassword': (p) => k.account.forgotPassword(z.object({ email: z.string().email().max(200), server: z.string().max(300).optional() }).parse(p)),
+    'account.previewInvitation': (p) => k.account.previewInvitation(z.object({ code: z.string().min(1).max(60), server: z.string().max(300).optional() }).parse(p)),
+    'account.acceptInvitation': (p, ctx) =>
+      k.account.acceptInvitation(
+        z.object({ code: z.string().min(1).max(60), server: z.string().max(300).optional(), name: z.string().max(120).optional(), password: z.string().min(1).max(200) }).parse(p),
+        ctx.actor,
+      ),
 
     'localAccount.status': () => k.localAccount.status(),
     'localAccount.create': (p, ctx) => k.localAccount.create(z.object({ name: z.string().trim().min(1).max(120), email: z.string().max(200).optional(), password: z.string().max(200).optional() }).parse(p), ctx.actor),

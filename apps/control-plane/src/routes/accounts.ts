@@ -2,8 +2,8 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { SignJWT, jwtVerify } from 'jose';
 import { z } from 'zod';
-import { ACCOUNT_DEVICE_KINDS, COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIERS, TIER_SHORT, VERTICALS, atLeast, productById, type AccountDevice, type AccountDeviceInfo, type AccountView, type MemberView, type PlansInfo, type Tier } from '@fbrx/shared';
-import { hashPassword, randomToken, safeEqual, sha256Hex, verifyPassword } from '@fbrx/shared/node';
+import { ACCOUNT_DEVICE_KINDS, COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIERS, TIER_NAMES, TIER_SHORT, VERTICALS, atLeast, formatInviteCode, normalizeInviteCode, productById, type AccountDevice, type AccountDeviceInfo, type AccountView, type AddMemberResult, type InvitationPreview, type InvitationView, type MemberView, type PlansInfo, type Tier } from '@fbrx/shared';
+import { hashPassword, randomInviteCode, randomToken, safeEqual, sha256Hex, verifyPassword } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
 import { adminAuth, requirePerm, requireTenant } from '../auth';
@@ -35,6 +35,8 @@ const ACCOUNT_TOKEN_DAYS = 90;
 /** How long the emailed links work. */
 const VERIFY_LINK_MS = 7 * 86_400_000;
 const RESET_LINK_MS = 60 * 60_000;
+/** How long an invitation code works unless the organization says otherwise. */
+const INVITATION_DAYS = 14;
 const TEST_PURCHASE = 'That purchase was made in a test copy of the app, so nothing was charged and it does not turn on an edition.';
 
 interface AccountRow {
@@ -49,6 +51,31 @@ interface AccountRow {
   locked_until: string | null;
   email_verified_at: string | null;
   created_at: string;
+}
+
+interface InvitationRow {
+  id: string;
+  tenant_id: string;
+  email: string;
+  tier: Tier;
+  code_hash: string;
+  created_by: string;
+  created_at: string;
+  expires_at: string;
+  accepted_at: string | null;
+  account_id: string | null;
+}
+
+function invitationView(r: InvitationRow): InvitationView {
+  return {
+    id: r.id,
+    email: r.email,
+    tier: r.tier,
+    createdBy: r.created_by,
+    createdAt: r.created_at,
+    expiresAt: r.expires_at,
+    status: r.accepted_at ? 'accepted' : r.expires_at < new Date().toISOString() ? 'expired' : 'pending',
+  };
 }
 
 declare module 'fastify' {
@@ -146,6 +173,17 @@ function accountAuth(ctx: AppContext) {
 
 const accountActor = (a: AccountRow, req: FastifyRequest) => ({ type: 'account' as const, id: a.id, label: a.email, tenantId: null, ip: req.ip });
 
+/** Checks an account's password, counting wrong ones: ten in a row lock it for a quarter of an hour. */
+async function checkPassword(ctx: AppContext, a: AccountRow, password: string, wrong: string): Promise<void> {
+  if (a.locked_until && a.locked_until > new Date().toISOString()) throw unauthorized('Too many tries: wait a quarter of an hour and try again');
+  if (!(await verifyPassword(password, a.password_hash))) {
+    const fails = Number(a.failed_logins) + 1;
+    ctx.db.run('UPDATE accounts SET failed_logins = ?, locked_until = ? WHERE id = ?', fails, fails >= 10 ? new Date(Date.now() + 15 * 60_000).toISOString() : null, a.id);
+    throw unauthorized(wrong);
+  }
+  ctx.db.run('UPDATE accounts SET failed_logins = 0, locked_until = NULL, last_login_at = ? WHERE id = ?', new Date().toISOString(), a.id);
+}
+
 /** A product an account may buy for itself: Standard or Ultra, the personal plans. */
 function personalProduct(productId: string) {
   const p = productById(productId);
@@ -204,15 +242,8 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
   app.post('/v1/accounts/login', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
     const body = z.object({ email: z.string().max(200), password: z.string().max(200), device: DeviceSchema }).parse(req.body);
     const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE email = ?', body.email.trim());
-    const fail = () => unauthorized('Wrong email or password');
-    if (!a || a.status !== 'active') throw fail();
-    if (a.locked_until && a.locked_until > new Date().toISOString()) throw unauthorized('Too many tries: wait a quarter of an hour and try again');
-    if (!(await verifyPassword(body.password, a.password_hash))) {
-      const fails = Number(a.failed_logins) + 1;
-      ctx.db.run('UPDATE accounts SET failed_logins = ?, locked_until = ? WHERE id = ?', fails, fails >= 10 ? new Date(Date.now() + 15 * 60_000).toISOString() : null, a.id);
-      throw fail();
-    }
-    ctx.db.run('UPDATE accounts SET failed_logins = 0, locked_until = NULL, last_login_at = ? WHERE id = ?', new Date().toISOString(), a.id);
+    if (!a || a.status !== 'active') throw unauthorized('Wrong email or password');
+    await checkPassword(ctx, a, body.password, 'Wrong email or password');
     ctx.audit.record(accountActor(a, req), 'account.login', { type: 'account', id: a.id }, { device: body.device.name, kind: body.device.kind });
     return { ...(await issueAccountToken(ctx, a, body.device)), account: accountView(ctx, a) };
   });
@@ -387,6 +418,73 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     });
     ctx.audit.record({ ...accountActor(a, req), tenantId }, 'tenant.created', { type: 'tenant', id: tenantId, tenantId }, { name: body.name, kind: body.kind, billing: 'cloud' });
     return { tenantId, consoleUrl: ctx.config.publicUrl, email: a.email };
+  });
+
+  // ------------------------------------------------------------------------------------------- invitations
+  /** The invitation a code is for while it can be used; null when it is unknown, used, out of date, or its organization is gone. */
+  const openInvitation = (code: string) => {
+    const canonical = normalizeInviteCode(code);
+    if (!canonical) return null;
+    return (
+      ctx.db.get<InvitationRow & { tenant_name: string }>(
+        "SELECT i.*, t.name AS tenant_name FROM invitations i JOIN tenants t ON t.id = i.tenant_id WHERE i.code_hash = ? AND i.accepted_at IS NULL AND i.expires_at > ? AND t.status = 'active'",
+        sha256Hex(canonical),
+        new Date().toISOString(),
+      ) ?? null
+    );
+  };
+  const NO_INVITATION = 'That invitation code does not work: check it, or ask your organization for a new one';
+
+  app.post('/v1/accounts/invitations/preview', { config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req): Promise<InvitationPreview> => {
+    const inv = openInvitation(z.object({ code: z.string().max(60) }).parse(req.body).code);
+    if (!inv) throw notFound(NO_INVITATION);
+    const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE email = ?', inv.email);
+    return { tenantName: inv.tenant_name, email: inv.email, tier: inv.tier, accountExists: !!a?.email_verified_at, expiresAt: inv.expires_at };
+  });
+
+  /**
+   * Uses an invitation code, whether or not this FBRX Command takes new accounts. With no FBRX account for its email,
+   * makes one; with a confirmed one, signs in with its password; with one nobody confirmed, the password given replaces
+   * the old one and its sign-ins end (whoever made it never proved the email was theirs). Either way the email counts as
+   * confirmed, since the organization gave the code to that person, and the account joins at the invitation's edition.
+   */
+  app.post('/v1/accounts/invitations/accept', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+    const body = z.object({ code: z.string().max(60), name: z.string().trim().min(1).max(120).optional(), password: z.string().max(200), device: DeviceSchema }).parse(req.body);
+    const inv = openInvitation(body.code);
+    if (!inv) throw notFound(NO_INVITATION);
+    const now = new Date().toISOString();
+    const existing = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE email = ?', inv.email);
+    if (existing?.email_verified_at) {
+      if (existing.status !== 'active') throw forbidden('That FBRX account is turned off');
+      await checkPassword(ctx, existing, body.password, `${inv.email} already has an FBRX account: enter its password`);
+    } else {
+      const hash = await hashPassword(PasswordSchema.parse(body.password));
+      if (existing) {
+        ctx.db.run('UPDATE accounts SET password_hash = ?, failed_logins = 0, locked_until = NULL, email_verified_at = ?, updated_at = ? WHERE id = ?', hash, now, now, existing.id);
+        ctx.db.run('UPDATE account_sessions SET revoked_at = ? WHERE account_id = ? AND revoked_at IS NULL', now, existing.id);
+      } else {
+        const id = ids.account();
+        ctx.db.run(
+          'INSERT INTO accounts (id, email, name, password_hash, app_account_token, email_verified_at, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?)',
+          id,
+          inv.email,
+          body.name ?? inv.email.split('@')[0],
+          hash,
+          randomUUID(),
+          now,
+          now,
+          now,
+        );
+        ctx.audit.record({ type: 'account', id, label: inv.email, tenantId: null, ip: req.ip }, 'account.created', { type: 'account', id }, { invitation: inv.id });
+      }
+    }
+    const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE email = ?', inv.email)!;
+    ctx.db.tx(() => {
+      ctx.db.run('INSERT INTO tenant_members (tenant_id, account_id, tier, created_at) VALUES (?,?,?,?) ON CONFLICT(tenant_id, account_id) DO NOTHING', inv.tenant_id, a.id, inv.tier, now);
+      ctx.db.run('UPDATE invitations SET accepted_at = ?, account_id = ? WHERE id = ?', now, a.id, inv.id);
+    });
+    ctx.audit.record({ ...accountActor(a, req), tenantId: inv.tenant_id }, 'invitation.accepted', { type: 'tenant', id: inv.tenant_id, tenantId: inv.tenant_id }, { invitation: inv.id, tier: inv.tier });
+    return { ...(await issueAccountToken(ctx, a, body.device)), account: accountView(ctx, a), tenantId: inv.tenant_id };
   });
 
   // ------------------------------------------------------------------------------------------- Stripe
@@ -611,18 +709,106 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
       const tenantId = requireTenant(req);
       return members(tenantId).map((r) => memberView(tenantId, r));
     });
+    const isMember = (tenantId: string, accountId: string) => !!ctx.db.get('SELECT 1 FROM tenant_members WHERE tenant_id = ? AND account_id = ?', tenantId, accountId);
+    const addMember = (req: FastifyRequest, tenantId: string, a: AccountRow, tier: Tier): MemberView => {
+      const p = req.principal!;
+      ctx.db.run('INSERT INTO tenant_members (tenant_id, account_id, tier, created_at) VALUES (?,?,?,?)', tenantId, a.id, tier, new Date().toISOString());
+      ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId, ip: req.ip }, 'member.added', { type: 'account', id: a.id, tenantId }, { tier });
+      return memberView(tenantId, members(tenantId).find((m) => m.account_id === a.id)!);
+    };
+    /** Adds an existing, confirmed FBRX account. Without one, invite them (POST /v1/admin/invitations). */
     admin.post('/v1/admin/members', async (req) => {
-      const p = requirePerm(req, 'users.manage');
+      requirePerm(req, 'users.manage');
       const tenantId = requireTenant(req);
       const body = z.object({ email: z.string().email(), tier: z.enum(TIERS).default('essentials') }).parse(req.body);
       const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE email = ?', body.email.trim());
-      if (!a) throw notFound('There is no FBRX account with that email yet: ask them to make one, then add them');
+      if (!a) throw notFound('There is no FBRX account with that email yet: invite them instead, with a code they enter in FBRX OS');
       // Someone else could have made an account with that email: only its owner, who confirmed it, becomes a member.
-      if (!a.email_verified_at) throw conflict(`${a.email} has not confirmed the email of their FBRX account yet: ask them to open the link FBRX sent them, then add them`);
-      if (ctx.db.get('SELECT 1 FROM tenant_members WHERE tenant_id = ? AND account_id = ?', tenantId, a.id)) throw conflict(`${a.email} is already a member`);
-      ctx.db.run('INSERT INTO tenant_members (tenant_id, account_id, tier, created_at) VALUES (?,?,?,?)', tenantId, a.id, body.tier, new Date().toISOString());
-      ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId, ip: req.ip }, 'member.added', { type: 'account', id: a.id, tenantId }, { tier: body.tier });
-      return memberView(tenantId, members(tenantId).find((m) => m.account_id === a.id)!);
+      if (!a.email_verified_at) throw conflict(`${a.email} has not confirmed the email of their FBRX account yet: invite them instead, or ask them to open the link FBRX sent them`);
+      if (isMember(tenantId, a.id)) throw conflict(`${a.email} is already a member`);
+      return addMember(req, tenantId, a, body.tier);
+    });
+
+    // Invitations: for people without a confirmed FBRX account (no website or email needed; see InvitationView).
+    admin.get('/v1/admin/invitations', async (req) => {
+      requirePerm(req, 'users.manage');
+      return ctx.db.all<InvitationRow>('SELECT * FROM invitations WHERE tenant_id = ? AND accepted_at IS NULL ORDER BY created_at DESC', requireTenant(req)).map(invitationView);
+    });
+    /**
+     * Adds someone by email: at once when their FBRX account exists and is confirmed, otherwise with an invitation code
+     * (emailed when this FBRX Command can send email; shown here either way, once). A new invitation for the same email
+     * takes the place of the one before it.
+     */
+    admin.post('/v1/admin/invitations', async (req): Promise<AddMemberResult> => {
+      const p = requirePerm(req, 'users.manage');
+      const tenantId = requireTenant(req);
+      const body = z.object({ email: z.string().trim().email().max(200), tier: z.enum(TIERS).default('essentials'), days: z.number().int().min(1).max(90).default(INVITATION_DAYS) }).parse(req.body);
+      const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE email = ?', body.email);
+      if (a && isMember(tenantId, a.id)) throw conflict(`${a.email} is already a member`);
+      if (a?.email_verified_at) return { kind: 'added', member: addMember(req, tenantId, a, body.tier) };
+      const code = randomInviteCode();
+      const now = new Date();
+      const row: InvitationRow = {
+        id: ids.invitation(),
+        tenant_id: tenantId,
+        email: body.email,
+        tier: body.tier,
+        code_hash: sha256Hex(code),
+        created_by: p.label,
+        created_at: now.toISOString(),
+        expires_at: new Date(now.getTime() + body.days * 86_400_000).toISOString(),
+        accepted_at: null,
+        account_id: null,
+      };
+      ctx.db.tx(() => {
+        ctx.db.run('DELETE FROM invitations WHERE tenant_id = ? AND email = ? AND accepted_at IS NULL', tenantId, body.email);
+        ctx.db.run(
+          'INSERT INTO invitations (id, tenant_id, email, tier, code_hash, created_by, created_at, expires_at) VALUES (?,?,?,?,?,?,?,?)',
+          row.id,
+          row.tenant_id,
+          row.email,
+          row.tier,
+          row.code_hash,
+          row.created_by,
+          row.created_at,
+          row.expires_at,
+        );
+      });
+      ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId, ip: req.ip }, 'invitation.created', { type: 'invitation', id: row.id, tenantId }, { email: body.email, tier: body.tier, days: body.days });
+      const tenant = ctx.db.get<{ name: string }>('SELECT name FROM tenants WHERE id = ?', tenantId)!;
+      let emailed = false;
+      try {
+        await ctx.mail.send({
+          to: body.email,
+          subject: `You are invited to ${tenant.name} on FBRX`,
+          text: [
+            `Hi,`,
+            ``,
+            `${tenant.name} invited you to FBRX, with ${TIER_NAMES[body.tier]}.`,
+            ``,
+            `Your invitation code: ${formatInviteCode(code)}`,
+            `FBRX Command: ${ctx.config.publicUrl}`,
+            ``,
+            `In FBRX OS, open Settings → Account and choose “I have an invitation”, then enter the code. It makes your FBRX account (or uses the one you have) and joins your computer to ${tenant.name}.`,
+            ``,
+            `The code works once, until ${row.expires_at.slice(0, 10)}. If you did not expect this, ignore this email.`,
+            ``,
+            `FBRX`,
+          ].join('\n'),
+        });
+        emailed = ctx.mail.configured;
+      } catch (err) {
+        ctx.log.warn({ err, invitation: row.id }, 'Could not send an invitation email');
+      }
+      return { kind: 'invited', invitation: invitationView(row), code: formatInviteCode(code), server: ctx.config.publicUrl, emailed };
+    });
+    admin.delete('/v1/admin/invitations/:id', async (req) => {
+      const p = requirePerm(req, 'users.manage');
+      const tenantId = requireTenant(req);
+      const id = (req.params as { id: string }).id;
+      if (!ctx.db.run('DELETE FROM invitations WHERE id = ? AND tenant_id = ? AND accepted_at IS NULL', id, tenantId).changes) throw notFound('No such invitation');
+      ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId, ip: req.ip }, 'invitation.revoked', { type: 'invitation', id, tenantId });
+      return { ok: true };
     });
     /** Changes a member's edition, on the computers they already joined too. */
     admin.patch('/v1/admin/members/:accountId', async (req) => {

@@ -32,7 +32,9 @@ A pass is for one computer only. Its install id is on Settings → License (with
 
 ## Making a support pass
 
-**From FBRX Command** (an admin with the `licenses.manage` permission):
+**From FBRX Command** (an admin with the `licenses.manage` permission): **Licenses → Support pass**. Paste the
+computer's install id, pick how long (1 to 12 hours) and what it runs as, add a note (a ticket number), and **Make the
+pass**. It is shown once, with a copy button. The same, by API:
 
 ```
 POST /v1/admin/support-passes
@@ -48,7 +50,9 @@ npm run support:pass -- --install-id <id> [--hours 4] [--tier blackhole|ultra|ba
 ```
 
 The build must carry the matching public key (the same one that verifies license keys), so a pass made with the
-project's signing key works on the builds made from it.
+project's signing key works on the builds made from it. Release builds carry the key in the `FBRX_LICENSE_PUBLIC_KEY`
+repository secret; FBRX Command shows its own on the Licenses page. A build made on your own computer without a key
+(`npm run dev:desktop`) already runs as Black Hole, so it needs no pass.
 
 ## Why it is safe
 

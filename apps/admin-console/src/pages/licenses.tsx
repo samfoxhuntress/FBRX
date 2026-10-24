@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { ALL_FEATURES, EDITIONS, EDITION_FEATURES, FEATURES, TIER_NAMES, tierFor, type Edition, type Tier } from '@fbrx/shared';
-import { Button, Callout, Card, CopyText, Empty, Field, Input, Modal, Page, Select, Status, Table, formatDate, useAction, useConfirm } from '@fbrx/ui';
+import { ALL_FEATURES, EDITIONS, EDITION_FEATURES, FEATURES, SUPPORT_ENTER_PHRASE, SUPPORT_EXIT_PHRASE, SUPPORT_PASS_DEFAULT_HOURS, SUPPORT_PASS_MAX_HOURS, TIER_NAMES, tierFor, type Edition, type Tier } from '@fbrx/shared';
+import { Button, Callout, Card, CopyText, Empty, Field, Input, KeyValue, Modal, Page, Select, Status, Table, formatDate, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
 
@@ -28,6 +28,7 @@ export function LicensesPage() {
   const pub = useQuery<{ publicKeyPem: string }>(manage ? '/v1/admin/licensing/public-key' : null);
   const tenants = app.me.tenants;
   const [issuing, setIssuing] = useState(false);
+  const [supportPass, setSupportPass] = useState(false);
   const [show, setShow] = useState<License | null>(null);
   const { confirm, dialog } = useConfirm();
   const { run } = useAction();
@@ -38,10 +39,17 @@ export function LicensesPage() {
       title="Licenses"
       description="Each customer is a tenant with a signed license (product, edition, seats, features, expiry). Computers open in FBRX Endpoint Essentials, free. A license key goes up to Ultra on a computer on its own; Black Hole comes only when the computer is in this tenant and the license allows it. A key that joins the tenant enrolls the computer here on its own. Licenses are verified offline by the app using your public key and delivered automatically to enrolled devices."
       actions={
-        manage && app.tenantId ? (
-          <Button variant="primary" icon="plus" onClick={() => setIssuing(true)}>
-            Issue license
-          </Button>
+        manage ? (
+          <>
+            <Button icon="lifebuoy" onClick={() => setSupportPass(true)}>
+              Support pass
+            </Button>
+            {app.tenantId && (
+              <Button variant="primary" icon="plus" onClick={() => setIssuing(true)}>
+                Issue license
+              </Button>
+            )}
+          </>
         ) : undefined
       }
     >
@@ -72,6 +80,7 @@ export function LicensesPage() {
         />
       </Card>
       {issuing && <IssueModal onClose={() => setIssuing(false)} onIssued={() => (setIssuing(false), lic.reload())} />}
+      {supportPass && <SupportPassModal onClose={() => setSupportPass(false)} />}
       {show && (
         <Modal
           wide
@@ -217,6 +226,71 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
           </Callout>
         )}
       </div>
+    </Modal>
+  );
+}
+
+/**
+ * A support pass for one computer (docs/SUPPORT.md): signed with this FBRX Command's license key, so it works on
+ * builds that carry the public key above. The person at the computer reads its install id from Settings → License.
+ */
+function SupportPassModal({ onClose }: { onClose: () => void }) {
+  const [f, setF] = useState({ installId: '', hours: String(SUPPORT_PASS_DEFAULT_HOURS), tier: 'blackhole' as Tier, note: '' });
+  const [made, setMade] = useState<{ pass: string; expiresAt: string; tier: Tier } | null>(null);
+  const { busy, run } = useAction();
+  const make = () =>
+    void run('p', () => api<{ pass: string; expiresAt: string; tier: Tier }>('POST', '/v1/admin/support-passes', { installId: f.installId.trim(), hours: Number(f.hours), tier: f.tier, note: f.note.trim() }).then(setMade));
+  return (
+    <Modal
+      title="Support pass"
+      description="Full access to one computer's FBRX apps for troubleshooting, for a few hours. On a computer in an organization, that organization must have FBRX support access turned on."
+      onClose={onClose}
+      footer={
+        made ? (
+          <Button variant="primary" onClick={onClose}>
+            Done
+          </Button>
+        ) : (
+          <>
+            <Button onClick={onClose}>Cancel</Button>
+            <Button variant="primary" icon="key" loading={busy === 'p'} disabled={!f.installId.trim()} onClick={make}>
+              Make the pass
+            </Button>
+          </>
+        )
+      }
+    >
+      {made ? (
+        <div className="fx-form">
+          <Field label="Support pass" help="Shown once. Hand it to the computer it is for.">
+            <CopyText value={made.pass} secret />
+          </Field>
+          <KeyValue
+            items={[
+              ['Runs as', TIER_NAMES[made.tier]],
+              ['Ends', formatDate(made.expiresAt)],
+            ]}
+          />
+          <Callout tone="info" title="On the computer">
+            Type <code>{SUPPORT_ENTER_PHRASE}</code> in Settings → License (or Spotlight, or FBRX Browser&apos;s address bar), then paste the pass. <code>{SUPPORT_EXIT_PHRASE}</code> ends support and puts everything back.
+          </Callout>
+        </div>
+      ) : (
+        <div className="fx-form">
+          <Field label="Install id" help="On the computer: Settings → License (copy button), or show version in Terminal → FBRX/1.">
+            <Input value={f.installId} autoFocus spellCheck={false} onChange={(e) => setF({ ...f, installId: e.target.value })} />
+          </Field>
+          <Field label="For how long">
+            <Select value={f.hours} options={Array.from({ length: SUPPORT_PASS_MAX_HOURS }, (_, i) => ({ value: String(i + 1), label: `${i + 1} hour${i ? 's' : ''}` }))} onChange={(e) => setF({ ...f, hours: e.target.value })} />
+          </Field>
+          <Field label="Runs as">
+            <Select value={f.tier} options={(['blackhole', 'ultra', 'basic'] as const).map((t) => ({ value: t, label: TIER_NAMES[t] }))} onChange={(e) => setF({ ...f, tier: e.target.value as Tier })} />
+          </Field>
+          <Field label="Note" help="Why, such as a ticket number. It is in both audit logs.">
+            <Input value={f.note} maxLength={200} onChange={(e) => setF({ ...f, note: e.target.value })} />
+          </Field>
+        </div>
+      )}
     </Modal>
   );
 }

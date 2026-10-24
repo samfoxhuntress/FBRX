@@ -103,12 +103,36 @@ and turns it on. When the organization changes a member's edition, the computers
 member leaves their computers in the organization on Essentials. This is how an admin signs in on any computer and gets
 Black Hole there.
 
+### Inviting someone without an FBRX account (no website or email needed)
+
+**Members → Add a member** takes an email and an edition. When that email has a confirmed FBRX account, it is added
+at once. Otherwise FBRX Command makes an **invitation**: a code like `FBRX-7K3M-Q9TD-2HXP-W4NC`, shown once to the admin
+(with the FBRX Command address to go with it) and emailed too when this FBRX Command sends email. The person, in FBRX
+OS, opens **Settings → Account → I have an invitation**, enters the code (and the FBRX Command address if FBRX asks),
+sees which organization invited them and at what edition, and either chooses a password (a new account) or enters the
+password of the account that email already has. FBRX Command makes or confirms the account, adds it as a member, and
+the computer signs in and joins the organization at that edition, all in one step.
+
+* The code works once, for 14 days (the API takes `days`, 1 to 90). Inviting the same email again replaces the old
+  code; **Withdraw** in the Invitations list ends one. Only the code's hash is kept.
+* The invitation counts as confirming the email (the organization gave the code to that person). If someone else had
+  made an account with that email and never confirmed it, the password the invited person chooses replaces theirs and
+  their sign-ins end.
+* Codes work while public sign-up is off, so an FBRX Command can take only the people it invites.
+* A computer already in another organization still signs in; it lists the new organization with its **Join this
+  computer** button.
+
 | | |
 | --- | --- |
 | `GET /v1/admin/members` | The organization's members, their editions and how many computers each joined |
 | `POST /v1/admin/members` `{ email, tier }` | Adds an account (it must exist, with its email confirmed) |
 | `PATCH /v1/admin/members/:accountId` `{ tier }` | Changes a member's edition, on their computers too |
 | `DELETE /v1/admin/members/:accountId` | Removes a member |
+| `GET /v1/admin/invitations` | Invitations not used yet (pending or expired) |
+| `POST /v1/admin/invitations` `{ email, tier, days? }` | Adds the member now, or invites them: `{ kind: 'added', member }` or `{ kind: 'invited', invitation, code, server, emailed }` |
+| `DELETE /v1/admin/invitations/:id` | Withdraws an invitation |
+| `POST /v1/accounts/invitations/preview` `{ code }` | (Anyone with the code) the organization, email and edition it is for, and whether the email has an account |
+| `POST /v1/accounts/invitations/accept` `{ code, password, name?, device }` | Makes or confirms the account, adds it, and signs in: like `login`, plus `tenantId` |
 | `POST /v1/accounts/memberships/:tenantId/enroll` | (The account) a one-time enrollment token for this computer |
 
 ## An organization's FBRX Command in the cloud

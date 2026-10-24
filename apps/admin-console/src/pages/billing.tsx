@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TENANT_DISCOUNT, TIERS, TIER_NAMES, TIER_SHORT, formatPrice, type AccountView, type MemberView, type TenantPlanView, type Tier } from '@fbrx/shared';
-import { Button, Card, Empty, Field, Grid, Input, Modal, Page, Select, StatTile, Status, Table, formatDay, useAction, useConfirm } from '@fbrx/ui';
+import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TENANT_DISCOUNT, TIERS, TIER_NAMES, TIER_SHORT, formatPrice, type AccountView, type AddMemberResult, type InvitationView, type MemberView, type TenantPlanView, type Tier } from '@fbrx/shared';
+import { Button, Callout, Card, CopyText, Empty, Field, Grid, Input, KeyValue, Modal, Page, Select, StatTile, Status, Table, formatDay, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
 
@@ -110,13 +110,29 @@ export function BillingPage() {
   );
 }
 
-/** Members: FBRX accounts the organization gives an edition; it comes on wherever they sign in. */
+/**
+ * Members: FBRX accounts the organization gives an edition; it comes on wherever they sign in. Someone without a
+ * confirmed FBRX account is invited: a code they enter in FBRX OS makes their account and joins them (no website or
+ * email needed; it is emailed too when this FBRX Command sends email).
+ */
 export function MembersPage() {
   const q = useQuery<MemberView[]>('/v1/admin/members');
+  const invites = useQuery<InvitationView[]>('/v1/admin/invitations');
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<{ email: string; tier: Tier }>({ email: '', tier: 'essentials' });
+  const [invited, setInvited] = useState<Extract<AddMemberResult, { kind: 'invited' }> | null>(null);
   const { run, busy } = useAction();
   const { confirm, dialog } = useConfirm();
+  const add = async () => {
+    const r = await run('add', () => api<AddMemberResult>('POST', '/v1/admin/invitations', form), undefined);
+    if (!r) return;
+    setAdding(false);
+    setForm({ email: '', tier: 'essentials' });
+    if (r.kind === 'invited') setInvited(r);
+    q.reload();
+    invites.reload();
+  };
+  const pending = invites.data ?? [];
   return (
     <Page
       title="Members"
@@ -131,7 +147,7 @@ export function MembersPage() {
         <Table
           rows={q.data ?? []}
           rowKey={(m) => m.accountId}
-          empty={<Empty title="No members yet">Add the people who use your computers by the email of their FBRX account.</Empty>}
+          empty={<Empty title="No members yet">Add the people who use your computers by their email. Without an FBRX account yet, they get an invitation code.</Empty>}
           columns={[
             { key: 'n', header: 'Member', render: (m) => (<div><div className="fx-cell-title">{m.name}</div><div className="fx-cell-sub">{m.email}</div></div>) },
             {
@@ -165,35 +181,67 @@ export function MembersPage() {
           ]}
         />
       </Card>
+      {pending.length > 0 && (
+        <Card title="Invitations" subtitle="Waiting for the person to enter their code in FBRX OS (Settings → Account → I have an invitation)." flush>
+          <Table
+            rows={pending}
+            rowKey={(i) => i.id}
+            columns={[
+              { key: 'e', header: 'Email', render: (i) => i.email },
+              { key: 't', header: 'Edition', render: (i) => TIER_SHORT[i.tier] },
+              { key: 's', header: 'Code works until', render: (i) => (i.status === 'expired' ? <Status tone="warning">Expired: invite again</Status> : formatDay(i.expiresAt)) },
+              { key: 'b', header: 'Made by', render: (i) => i.createdBy },
+              {
+                key: 'x',
+                header: '',
+                render: (i) => (
+                  <Button size="sm" variant="danger" loading={busy === `inv-${i.id}`} onClick={() => void run(`inv-${i.id}`, () => api('DELETE', `/v1/admin/invitations/${i.id}`).then(invites.reload), 'Invitation withdrawn')}>
+                    Withdraw
+                  </Button>
+                ),
+              },
+            ]}
+          />
+        </Card>
+      )}
       {adding && (
         <Modal
           title="Add a member"
           onClose={() => setAdding(false)}
           footer={
-            <Button
-              variant="primary"
-              loading={busy === 'add'}
-              disabled={!form.email}
-              onClick={() =>
-                void run('add', () => api('POST', '/v1/admin/members', form).then(() => {
-                  setAdding(false);
-                  setForm({ email: '', tier: 'essentials' });
-                  q.reload();
-                }), 'Member added')
-              }
-            >
+            <Button variant="primary" loading={busy === 'add'} disabled={!form.email} onClick={() => void add()}>
               Add
             </Button>
           }
         >
           <div className="fx-form">
-            <Field label="Email of their FBRX account" help="They make the account themselves, in FBRX or on the website.">
+            <Field label="Their email" help="With a confirmed FBRX account, they are added now. Otherwise you get an invitation code to give them: it makes their account in FBRX OS.">
               <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value.trim() })} />
             </Field>
             <Field label="Edition" help="Black Hole is for the people who run this FBRX Command and its servers.">
               <Select value={form.tier} options={tierOptions} onChange={(e) => setForm({ ...form, tier: e.target.value as Tier })} />
             </Field>
           </div>
+        </Modal>
+      )}
+      {invited && (
+        <Modal title={`Invitation for ${invited.invitation.email}`} onClose={() => setInvited(null)} footer={<Button variant="primary" onClick={() => setInvited(null)}>Done</Button>}>
+          <Callout tone={invited.emailed ? 'good' : 'info'} title={invited.emailed ? 'Emailed to them' : 'Give them this code'}>
+            {invited.emailed
+              ? 'FBRX sent them the code. It is shown here once too, in case it does not arrive.'
+              : 'This FBRX Command does not send email, so pass the code on yourself (a message, a call, a note). It is shown only now.'}
+          </Callout>
+          <KeyValue
+            items={[
+              ['Invitation code', <CopyText key="c" value={invited.code} />],
+              ['FBRX Command', <CopyText key="u" value={invited.server} />],
+              ['Edition', TIER_NAMES[invited.invitation.tier]],
+              ['Works until', formatDay(invited.invitation.expiresAt)],
+            ]}
+          />
+          <p className="fx-secondary" style={{ marginBottom: 0 }}>
+            In FBRX OS they open <strong>Settings → Account → I have an invitation</strong> and enter the code (and this FBRX Command&apos;s address, if FBRX asks). It makes their FBRX account, or uses the one they have, and joins their computer here at this edition.
+          </p>
         </Modal>
       )}
       {dialog}

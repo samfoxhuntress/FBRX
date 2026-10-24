@@ -67,6 +67,60 @@ export interface MemberView {
   createdAt: string;
 }
 
+/**
+ * An invitation to an organization, for someone who has no confirmed FBRX account yet. It carries a code the
+ * organization hands over (emailed too when FBRX Command can send email); typing it in FBRX OS makes or confirms the
+ * account and joins the organization at the edition given here. No website and no email needed.
+ */
+export interface InvitationView {
+  id: string;
+  email: string;
+  tier: Tier;
+  /** Who made it (the console user's email). */
+  createdBy: string;
+  createdAt: string;
+  expiresAt: string;
+  /** pending: the code works; accepted: they joined; expired: make a new one. */
+  status: 'pending' | 'accepted' | 'expired';
+}
+
+/**
+ * Adding a member: added at once when their FBRX account exists and is confirmed, otherwise invited with a code (shown
+ * once) for the FBRX Command at `server`.
+ */
+export type AddMemberResult = { kind: 'added'; member: MemberView } | { kind: 'invited'; invitation: InvitationView; code: string; server: string; emailed: boolean };
+
+/** What an invitation code is for, shown before it is used (POST /v1/accounts/invitations/preview). */
+export interface InvitationPreview {
+  tenantName: string;
+  email: string;
+  tier: Tier;
+  /** That email has an FBRX account already: accepting asks for its password instead of making one. */
+  accountExists: boolean;
+  expiresAt: string;
+}
+
+/** Invitation codes: FBRX- and four groups of four, from an alphabet without look-alikes (Crockford base 32). */
+export const INVITE_CODE_ALPHABET = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
+export const INVITE_CODE_LENGTH = 16;
+
+/** An invitation code as typed (any case, spaces, dashes, O for 0, I or L for 1) in its one canonical form, or null. */
+export function normalizeInviteCode(input: string): string | null {
+  const raw = input
+    .toUpperCase()
+    .replace(/[^0-9A-Z]/g, '')
+    .replace(/^FBRX/, '')
+    .replace(/O/g, '0')
+    .replace(/[IL]/g, '1');
+  if (raw.length !== INVITE_CODE_LENGTH || [...raw].some((c) => !INVITE_CODE_ALPHABET.includes(c))) return null;
+  return raw;
+}
+
+/** The canonical code as people read it: FBRX-ABCD-EFGH-JKMN-PQRS. */
+export function formatInviteCode(canonical: string): string {
+  return `FBRX-${canonical.match(/.{1,4}/g)!.join('-')}`;
+}
+
 /** What an account signs a computer up to: a license key (null with nothing bought), until it is renewed. */
 export interface AccountLicense {
   key: string | null;

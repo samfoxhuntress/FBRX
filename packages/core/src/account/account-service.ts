@@ -1,4 +1,4 @@
-import { atLeast, tierRank, type AccountDevice, type AccountDeviceInfo, type AccountLicense, type AccountStatus, type AccountView, type Tier, type Vertical } from '@fbrx/shared';
+import { atLeast, tierRank, type AccountDevice, type AccountDeviceInfo, type AccountLicense, type AccountStatus, type AccountView, type InvitationPreview, type Tier, type Vertical } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
 import type { Vault } from '../vault/vault';
@@ -27,6 +27,8 @@ export interface AccountDeps {
   device: () => AccountDeviceInfo;
   /** Joins this computer to an organization with a one-time token (FleetAgent.enroll). */
   enroll: (serverUrl: string, token: string, fingerprint: string | null, actor: string) => Promise<unknown>;
+  /** This computer is in an organization already (it then joins another only when the person says so). */
+  enrolled: () => boolean;
 }
 
 /**
@@ -97,10 +99,15 @@ export class AccountService {
     return json as T;
   }
 
+  /** The FBRX Command a sign-in goes to: the one named, or the one this computer uses. */
+  private serverFor(named?: string): string {
+    return (named?.trim() || this.server).replace(/\/+$/, '');
+  }
+
   /** Signs in (or makes a new account first), brings the account's edition and turns it on. */
   async signIn(p: { server?: string; email: string; password: string; name?: string; create?: boolean }, actor: string): Promise<AccountStatus> {
     if (!this.d.vault.isUnlocked) throw new CoreError('LOCKED', 'Unlock the vault before signing in');
-    const server = (p.server?.trim() || this.server).replace(/\/+$/, '');
+    const server = this.serverFor(p.server);
     const r = await this.request<{ token: string; account: AccountView }>(
       'POST',
       p.create ? '/v1/accounts/signup' : '/v1/accounts/login',
@@ -108,10 +115,33 @@ export class AccountService {
       null,
       server,
     );
+    return this.signedIn(server, r, actor, p.create ? 'account.created' : 'account.signedIn');
+  }
+
+  /** What an invitation code from an organization is for, before using it. */
+  previewInvitation(p: { code: string; server?: string }): Promise<InvitationPreview> {
+    return this.request<InvitationPreview>('POST', '/v1/accounts/invitations/preview', { code: p.code }, null, this.serverFor(p.server));
+  }
+
+  /**
+   * Uses an organization's invitation code: FBRX Command makes the account (or checks the password of the one that
+   * email has), adds it to the organization, and signs in here; then this computer joins the organization too, unless
+   * it is in one already (the organization is then listed with its Join button, like any other membership).
+   */
+  async acceptInvitation(p: { code: string; server?: string; name?: string; password: string }, actor: string): Promise<AccountStatus> {
+    if (!this.d.vault.isUnlocked) throw new CoreError('LOCKED', 'Unlock the vault before signing in');
+    const server = this.serverFor(p.server);
+    const r = await this.request<{ token: string; account: AccountView; tenantId: string }>('POST', '/v1/accounts/invitations/accept', { code: p.code, name: p.name?.trim() || undefined, password: p.password, device: this.d.device() }, null, server);
+    await this.signedIn(server, r, actor, 'account.invitationAccepted');
+    return this.d.enrolled() ? this.status() : this.join(r.tenantId, actor);
+  }
+
+  /** Keeps a new sign-in's token and account, and turns on what the account brings. */
+  private async signedIn(server: string, r: { token: string; account: AccountView }, actor: string, action: string): Promise<AccountStatus> {
     this.d.vault.set({ name: TOKEN_SECRET, value: r.token, kind: 'token', description: 'FBRX account sign-in' }, { internal: true });
     this.d.meta.set('account.server', server);
     this.d.meta.set('account.id', r.account.id);
-    this.d.audit.append({ category: 'license', action: p.create ? 'account.created' : 'account.signedIn', actor, target: r.account.email, outcome: 'success', details: { server } });
+    this.d.audit.append({ category: 'license', action, actor, target: r.account.email, outcome: 'success', details: { server } });
     await this.refresh({ adopt: true });
     this.start();
     return this.status();
@@ -208,7 +238,7 @@ export class AccountService {
 
   /** Emails a link to choose a new password (opened on the website); says the same whether the account exists or not. */
   async forgotPassword(p: { email: string; server?: string }): Promise<{ ok: true }> {
-    await this.request('POST', '/v1/accounts/password/forgot', { email: p.email.trim() }, null, (p.server?.trim() || this.server).replace(/\/+$/, ''));
+    await this.request('POST', '/v1/accounts/password/forgot', { email: p.email.trim() }, null, this.serverFor(p.server));
     return { ok: true };
   }
 
