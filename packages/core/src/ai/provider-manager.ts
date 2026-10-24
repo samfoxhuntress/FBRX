@@ -104,6 +104,18 @@ export class ProviderManager {
     }
   }
 
+  /**
+   * An OpenAI-compatible provider's address and key, for its endpoints besides chat (making pictures). The same
+   * governance applies as for chatting with it.
+   */
+  endpoint(id: string): { baseUrl: string; apiKey: string | undefined } {
+    const cfg = this.config(id);
+    const blocked = this.blockReason(cfg);
+    if (blocked) throw new CoreError('POLICY_DENIED', `${cfg.name}: ${blocked}`);
+    if ((cfg.type !== 'openai' && cfg.type !== 'openai-compatible') || !cfg.baseUrl) throw new CoreError('INVALID_ARGUMENT', `${cfg.name} has no images endpoint: pick an OpenAI-compatible provider`);
+    return { baseUrl: cfg.baseUrl, apiKey: this.apiKey(cfg)() };
+  }
+
   /** Picks the provider + model for a run, applying defaults and governance. */
   resolve(providerId?: string, model?: string): { provider: ChatProvider; config: ProviderConfig; model: string } {
     const ai = this.d.settings.get().ai;

@@ -57,4 +57,4 @@ No GPL component is included: the eSpeak NG phonemizer that other Kokoro front e
 | --- | --- | --- | --- |
 | [unpdf](https://github.com/unjs/unpdf), with its build of [PDF.js](https://github.com/mozilla/pdf.js) | Reading the text of attached PDFs | MIT (unpdf), Apache-2.0 (PDF.js) | Bundled (npm `unpdf`, unmodified) |
 
-Office documents (.docx, .xlsx, .pptx, OpenDocument) are read by FBRX's own code.
+Office documents (.docx, .xlsx, .pptx, OpenDocument) are read, and .docx documents and PDFs written, by FBRX's own code.

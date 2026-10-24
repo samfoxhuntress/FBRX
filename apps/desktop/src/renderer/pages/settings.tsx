@@ -4,6 +4,8 @@ import {
   AUDIENCE_NAMES,
   BROWSER_SEARCH_ENGINES,
   EDITION_PLANS,
+  IMAGE_GENERATORS,
+  IMAGE_SIZES,
   MAX_STEPS_PER_TASK,
   STANDARD_TRIAL_DAYS,
   SUPPORT_ENTER_PHRASE,
@@ -26,8 +28,11 @@ import {
   thinkingLevelOf,
   tierRank,
   withSteps,
+  type ImageGenerator,
+  type ImageSize,
   type ThinkingLevel,
   type Tier,
+  type WebSearchEngine,
 } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
@@ -786,6 +791,9 @@ function AgentSettings() {
       <div style={{ gridColumn: '1 / -1' }}>
         <Thinking />
       </div>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Creations />
+      </div>
       <Card title={ultra ? 'Models and permissions' : 'AI model'}>
         <div className="fx-form">
           <p className="fx-muted" style={{ margin: 0 }}>{ultra ? <>Choose which AI model {s.ai.agentName} uses in AI models, and what it may do without asking in Governance.</> : <>Choose which AI model {s.ai.agentName} uses. {s.ai.agentName} always asks before it changes anything on this computer.</>}</p>
@@ -801,6 +809,86 @@ function AgentSettings() {
         </Card>
       </div>
     </Grid>
+  );
+}
+
+const IMAGE_GENERATOR_NAMES: Record<ImageGenerator, string> = { draw: 'The agent draws them (vector art, works offline)', 'images-api': 'An AI provider’s images endpoint', txt2img: 'A local image server (txt2img)' };
+const IMAGE_SIZE_NAMES: Record<ImageSize, string> = { '1024x1024': 'Square (1024 × 1024)', '1536x1024': 'Wide (1536 × 1024)', '1024x1536': 'Tall (1024 × 1536)' };
+
+/** What the agent makes and reads: where its files go, how it makes pictures, where it searches. */
+function Creations() {
+  const { s, locked, patch } = useSettings();
+  const folder = useCore('ai.files.folder', undefined, ['settings.changed', 'policy.changed']).data;
+  const [url, setUrl] = useState<{ images?: string; search?: string; model?: string }>({});
+  if (!s) return null;
+  const L = (p: string) => isLocked(locked, p);
+  const img = s.ai.images;
+  const providers = s.ai.providers.filter((p) => p.type === 'openai' || p.type === 'openai-compatible');
+  const pick = async () => {
+    const dir = await bridge.dialog?.({ kind: 'folder', title: `Where ${s.ai.agentName} saves what it makes`, defaultPath: folder?.path });
+    if (dir) await patch({ ai: { outputFolder: dir } });
+  };
+  return (
+    <Card title="Files, pictures and the web" subtitle={`${s.ai.agentName} writes documents (PDF, .docx, web pages, Markdown, text, CSV), draws or makes pictures, reads web pages and looks up stock quotes. What it makes appears in the chat with an Open button.`}>
+      <div className="fx-form">
+        <Field label={<>Saved in <Locked show={L('ai.outputFolder')} /></>} help={folder && !folder.allowed ? `${s.ai.agentName} may not write in ${folder.chosen} (the folders it may use are set in Governance), so it saves in FBRX’s workspace instead.` : 'A new file never replaces one already there.'}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
+            <code style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={folder?.path}>
+              {folder?.path ?? '…'}
+            </code>
+            {bridge.dialog && (
+              <Button size="sm" disabled={L('ai.outputFolder')} onClick={() => void pick()}>
+                Change…
+              </Button>
+            )}
+            {folder && bridge.reveal && (
+              <Button size="sm" variant="ghost" icon="folder" onClick={() => void bridge.reveal?.(folder.path)}>
+                Show
+              </Button>
+            )}
+          </div>
+        </Field>
+        <Field label={<>Pictures from a description <Locked show={L('ai.images')} /></>} help={img.generator === 'draw' ? `${s.ai.agentName} draws illustrations, icons, logos, charts and diagrams itself. For photo-like pictures, choose a picture maker.` : 'The description goes to the picture maker; the picture is saved as PNG.'}>
+          <Select value={img.generator} disabled={L('ai.images')} options={IMAGE_GENERATORS.map((g) => ({ value: g, label: IMAGE_GENERATOR_NAMES[g] }))} onChange={(e) => void patch({ ai: { images: { generator: e.target.value as ImageGenerator } } })} />
+        </Field>
+        {img.generator === 'images-api' && (
+          <Grid cols={2}>
+            <Field label="AI provider" help={providers.length ? 'Its address and key are used (AI models).' : 'Add an OpenAI-compatible provider in AI models first.'}>
+              <Select value={img.providerId} disabled={L('ai.images')} options={[{ value: '', label: 'Choose…' }, ...providers.map((p) => ({ value: p.id, label: p.name }))]} onChange={(e) => void patch({ ai: { images: { providerId: e.target.value } } })} />
+            </Field>
+            <Field label="Model" help="The provider’s picture model">
+              <Input value={url.model ?? img.model} placeholder="gpt-image-1" disabled={L('ai.images')} onChange={(e) => setUrl({ ...url, model: e.target.value })} onBlur={() => url.model !== undefined && void patch({ ai: { images: { model: url.model.trim() } } })} />
+            </Field>
+          </Grid>
+        )}
+        {img.generator === 'txt2img' && (
+          <Field label="Image server’s address" help="A picture server on this computer or your network that offers the txt2img API (/sdapi/v1/txt2img).">
+            <Input value={url.images ?? img.url} placeholder="http://127.0.0.1:7860" disabled={L('ai.images')} onChange={(e) => setUrl({ ...url, images: e.target.value })} onBlur={() => url.images !== undefined && void patch({ ai: { images: { url: url.images.trim() } } })} />
+          </Field>
+        )}
+        {img.generator !== 'draw' && (
+          <Field label="Picture size">
+            <Select value={img.size} disabled={L('ai.images')} options={IMAGE_SIZES.map((z) => ({ value: z, label: IMAGE_SIZE_NAMES[z] }))} onChange={(e) => void patch({ ai: { images: { size: e.target.value as ImageSize } } })} />
+          </Field>
+        )}
+        <Field label={<>Web search <Locked show={L('ai.webSearch')} /></>} help={s.ai.webSearch.engine === 'public' ? 'A public search page, no account needed.' : 'Your own SearXNG server, with its JSON format turned on.'}>
+          <Select
+            value={s.ai.webSearch.engine}
+            disabled={L('ai.webSearch')}
+            options={[
+              { value: 'public', label: 'DuckDuckGo (no account)' },
+              { value: 'searxng', label: 'My SearXNG server' },
+            ]}
+            onChange={(e) => void patch({ ai: { webSearch: { engine: e.target.value as WebSearchEngine } } })}
+          />
+        </Field>
+        {s.ai.webSearch.engine === 'searxng' && (
+          <Field label="SearXNG server’s address">
+            <Input value={url.search ?? s.ai.webSearch.url} placeholder="http://searxng.lan:8080" disabled={L('ai.webSearch')} onChange={(e) => setUrl({ ...url, search: e.target.value })} onBlur={() => url.search !== undefined && void patch({ ai: { webSearch: { url: url.search.trim() } } })} />
+          </Field>
+        )}
+      </div>
+    </Card>
   );
 }
 

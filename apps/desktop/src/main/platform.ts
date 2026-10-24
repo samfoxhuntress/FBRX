@@ -4,6 +4,7 @@ import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { FileKeychain, defaultSpecialDirs, openMacSafeStorage, type KeychainAdapter, type MovedKeychain, type PlatformAdapter, type UpdateController } from '@fbrx/core';
 import type { NotificationEvent } from '@fbrx/shared';
+import { documentRenderer } from './document-renderer';
 
 declare const __FBRX_LICENSE_PUBKEYS__: string[];
 /** Microsoft app (client) ID for Outlook / Microsoft 365 calendars, from FBRX_MS_CLIENT_ID at build time. */
@@ -96,6 +97,7 @@ export function createElectronPlatform(o: {
     meshMobileDir: join(workerDir, 'mobile'),
     vendorDbFile: join(workerDir, 'oui-vendors.tsv.gz'),
     mcpShim: { command: process.execPath, args: [join(workerDir, 'fbrx-mcp.mjs')], env: { ELECTRON_RUN_AS_NODE: '1' } },
+    renderer: documentRenderer,
     specialDirs: () => {
       const d = defaultSpecialDirs();
       try {

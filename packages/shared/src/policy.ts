@@ -106,6 +106,18 @@ export const DEFAULT_POLICY: Policy = {
       match: { tool: 'workspace.*', source: 'builtin' },
       action: 'allow',
     },
+    {
+      id: 'builtin-documents',
+      description: 'Documents the agent writes only ever go into a new file in the FBRX folder, never over an existing one',
+      match: { tool: 'docs.*', source: 'builtin' },
+      action: 'allow',
+    },
+    {
+      id: 'builtin-pictures',
+      description: 'Pictures the agent makes only ever go into a new file in the FBRX folder, never over an existing one',
+      match: { tool: 'image.*', source: 'builtin' },
+      action: 'allow',
+    },
   ],
   filesystem: {
     allowedRoots: ['${HOME}', '${WORKSPACE}'],

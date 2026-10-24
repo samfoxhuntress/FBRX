@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { ATTACHMENTS_PER_MESSAGE, ATTACHMENT_MAX_BYTES, IMAGE_ATTACHMENT_MAX_BYTES, IMAGE_ATTACHMENT_MAX_SIDE, attachmentKind, type AttachmentInfo, type AttachmentKind } from '@fbrx/shared';
-import { Icons, Modal, formatBytes, type IconName } from '@fbrx/ui';
+import { ATTACHMENTS_PER_MESSAGE, ATTACHMENT_MAX_BYTES, IMAGE_ATTACHMENT_MAX_BYTES, IMAGE_ATTACHMENT_MAX_SIDE, attachmentKind, fileExtension, type AttachmentInfo, type AttachmentKind, type CreatedFile } from '@fbrx/shared';
+import { Button, Icons, Modal, formatBytes, type IconName } from '@fbrx/ui';
 import { bridge, call } from './client';
 
 /** A file on its way into the next message: being read, ready (with what the core made of it), or refused. */
@@ -133,25 +133,33 @@ function describe(a: AttachmentInfo): string {
 }
 
 const thumbs = new Map<string, Promise<string>>();
-/** An attached image as a data URL (read once per window). */
-function thumb(id: string): Promise<string> {
-  if (!thumbs.has(id)) thumbs.set(id, call('ai.attachments.read', { id }).then((r) => `data:${r.mime};base64,${r.data}`));
-  return thumbs.get(id)!;
+/** A picture as a data URL, read once per window: an attachment (by id) or a file the agent made (by path). */
+function picture(key: string, read: () => Promise<{ mime: string; data: string }>): Promise<string> {
+  if (!thumbs.has(key)) thumbs.set(key, read().then((r) => `data:${r.mime};base64,${r.data}`));
+  return thumbs.get(key)!;
 }
 
-function Thumb({ a, onOpen }: { a: AttachmentInfo; onOpen: (src: string) => void }) {
+function Thumb({ name, load, onOpen }: { name: string; load: () => Promise<string>; onOpen: (src: string) => void }) {
   const [src, setSrc] = useState<string | null>(null);
   useEffect(() => {
     let live = true;
-    thumb(a.id).then((s) => live && setSrc(s), () => undefined);
+    load().then((s) => live && setSrc(s), () => undefined);
     return () => {
       live = false;
     };
-  }, [a.id]);
+  }, [name]); // eslint-disable-line react-hooks/exhaustive-deps
   return (
-    <button className="attach-thumb" title={a.name} onClick={() => src && onOpen(src)}>
-      {src ? <img src={src} alt={a.name} /> : <Icons.image size={18} />}
+    <button className="attach-thumb" title={name} onClick={() => src && onOpen(src)}>
+      {src ? <img src={src} alt={name} /> : <Icons.image size={18} />}
     </button>
+  );
+}
+
+function BigPicture({ big, onClose }: { big: { src: string; name: string }; onClose: () => void }) {
+  return (
+    <Modal wide title={big.name} onClose={onClose}>
+      <img src={big.src} alt={big.name} style={{ display: 'block', maxWidth: '100%', maxHeight: '70vh', margin: '0 auto', borderRadius: 8 }} />
+    </Modal>
   );
 }
 
@@ -161,7 +169,7 @@ export function MessageAttachments({ files }: { files: AttachmentInfo[] }) {
   return (
     <div className="msg-attachments">
       {files.map((a) => {
-        if (a.kind === 'image') return <Thumb key={a.id} a={a} onOpen={(src) => setBig({ src, name: a.name })} />;
+        if (a.kind === 'image') return <Thumb key={a.id} name={a.name} load={() => picture(a.id, () => call('ai.attachments.read', { id: a.id }))} onOpen={(src) => setBig({ src, name: a.name })} />;
         const Ico = Icons[KIND_ICON[a.kind]];
         return (
           <button key={a.id} className="attach-chip sent" title={a.note ?? `Show ${a.name} in its folder`} onClick={() => void bridge.reveal?.(a.path)}>
@@ -171,11 +179,42 @@ export function MessageAttachments({ files }: { files: AttachmentInfo[] }) {
           </button>
         );
       })}
-      {big && (
-        <Modal wide title={big.name} onClose={() => setBig(null)}>
-          <img src={big.src} alt={big.name} style={{ display: 'block', maxWidth: '100%', maxHeight: '70vh', margin: '0 auto', borderRadius: 8 }} />
-        </Modal>
-      )}
+      {big && <BigPicture big={big} onClose={() => setBig(null)} />}
+    </div>
+  );
+}
+
+const DOC_ICON: Record<string, IconName> = { pdf: 'note', docx: 'note', html: 'globe', md: 'file', txt: 'file', csv: 'grid', svg: 'image' };
+
+/** Files a step made (documents, pictures): pictures shown, every file with Open and Show in folder. */
+export function CreatedFiles({ files }: { files: CreatedFile[] }) {
+  const [big, setBig] = useState<{ src: string; name: string } | null>(null);
+  // A drawing comes as PNG and SVG: show the picture once, and list both files.
+  const shown = files.find((f) => f.kind === 'image' && /\.(png|jpe?g|webp|gif)$/i.test(f.name)) ?? files.find((f) => f.kind === 'image');
+  return (
+    <div className="made-files">
+      {shown && <Thumb name={shown.name} load={() => picture(shown.path, () => call('ai.files.preview', { path: shown.path }))} onOpen={(src) => setBig({ src, name: shown.name })} />}
+      <div className="made-list">
+        {files.map((f) => {
+          const Ico = Icons[DOC_ICON[fileExtension(f.name)] ?? (f.kind === 'image' ? 'image' : 'file')];
+          return (
+            <div key={f.path} className="made-file">
+              <Ico size={15} />
+              <span className="attach-name" title={f.path}>
+                {f.name}
+              </span>
+              <span className="attach-sub">{formatBytes(f.size)}</span>
+              {bridge.openFile && (
+                <Button size="sm" variant="ghost" icon="external" onClick={() => void bridge.openFile?.(f.path)}>
+                  Open
+                </Button>
+              )}
+              {bridge.reveal && <Button size="sm" variant="ghost" icon="folder" aria-label={`Show ${f.name} in its folder`} title="Show in its folder" onClick={() => void bridge.reveal?.(f.path)} />}
+            </div>
+          );
+        })}
+      </div>
+      {big && <BigPicture big={big} onClose={() => setBig(null)} />}
     </div>
   );
 }

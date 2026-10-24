@@ -50,6 +50,14 @@ export interface SpecialDirs {
   downloads: string;
 }
 
+/** Turns what the agent writes into finished files with a browser engine, offline (nothing is loaded from the web). */
+export interface DocumentRenderer {
+  /** A web page printed to a Letter-size PDF. */
+  printPdf(html: string): Promise<Buffer>;
+  /** An SVG picture drawn as a PNG of the given size. */
+  rasterizeSvg(svg: string, width: number, height: number): Promise<Buffer>;
+}
+
 export interface PlatformAdapter {
   shell: 'desktop' | 'headless';
   appVersion: string;
@@ -78,6 +86,8 @@ export interface PlatformAdapter {
   vendorDbFile?: string | null;
   /** How AI apps start the FBRX MCP bridge (the app executable in Node mode plus the bridge script). */
   mcpShim?: { command: string; args: string[]; env?: Record<string, string> } | null;
+  /** The app's browser engine, for what the agent makes (desktop only; FBRX on a server has its own PDF writer). */
+  renderer?: DocumentRenderer | null;
   specialDirs(): SpecialDirs;
   /** FBRX's own folders outside its data folder (where it is installed, its update cache): never scanned. */
   ownDirs?(): string[];

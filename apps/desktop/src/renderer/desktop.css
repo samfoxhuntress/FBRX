@@ -179,6 +179,40 @@
   height: 100%;
   object-fit: cover;
 }
+/* Files a step made, under its card in the chat. */
+.made-files {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--border);
+}
+.made-files .attach-thumb {
+  width: 160px;
+  height: 120px;
+  flex-shrink: 0;
+}
+.made-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.made-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+.made-file > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.made-file .attach-name {
+  min-width: 0;
+}
 .attach-warn {
   display: flex;
   gap: 6px;

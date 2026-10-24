@@ -5,6 +5,7 @@ import { CoreError } from '../errors';
 import type { Db } from '../storage/db';
 import type { Logger } from '../logger';
 import { extractText } from '../docs/extract';
+import { safeFileName } from '../util/misc';
 
 interface AttachmentRow {
   id: string;
@@ -25,12 +26,6 @@ const UNSENT_MS = 24 * 3600_000;
 
 const info = (r: AttachmentRow): AttachmentInfo => ({ id: r.id, name: r.name, mime: r.mime, kind: r.kind, size: r.size, path: r.path, textChars: r.text?.length ?? null, pages: r.pages, note: r.note });
 
-/** A file name that is safe on every system, keeping its extension. */
-function safeName(name: string): string {
-  const base = name.replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_').replace(/^\.+/, '').trim().slice(-120);
-  return base || 'file';
-}
-
 /**
  * Files and images attached to chat messages. Each is kept in the workspace (Attachments/<id>/<name>), where the AI's
  * file tools reach it, with the text read out of it in the database. Unsent ones are removed after a day, and sent
@@ -40,7 +35,7 @@ export class AttachmentStore {
   constructor(private readonly d: { db: Db; root: string; log: Logger }) {}
 
   async add(p: { name: string; data: Buffer; mime?: string }): Promise<AttachmentInfo> {
-    const name = safeName(p.name);
+    const name = safeFileName(p.name);
     if (!p.data.length) throw new CoreError('INVALID_ARGUMENT', `${name} is empty`);
     if (p.data.length > ATTACHMENT_MAX_BYTES) throw new CoreError('INVALID_ARGUMENT', `${name} is larger than ${ATTACHMENT_MAX_BYTES / 1024 / 1024} MB`);
     const kind = attachmentKind(name, p.mime);

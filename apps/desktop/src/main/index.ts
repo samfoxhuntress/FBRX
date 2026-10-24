@@ -681,6 +681,11 @@ function registerIpc() {
     return r.canceled ? null : r.filePaths[0] ?? null;
   });
   ipcMain.handle('fbrx:reveal', (e, p: string) => trusted(e) && typeof p === 'string' && shell.showItemInFolder(p));
+  // Opens a file the agent made or was given in its app; nothing outside the FBRX folder and the workspace.
+  ipcMain.handle('fbrx:openFile', async (e, p: unknown) => {
+    if (!trusted(e) || typeof p !== 'string' || !kernel?.output.holds(p) || !existsSync(p)) return false;
+    return (await shell.openPath(p)) === '';
+  });
   ipcMain.handle('fbrx:openExternal', (e, url: string) => trusted(e) && openExternalSafe(String(url)));
   ipcMain.handle('fbrx:app', (e) => (trusted(e) ? { version: app.getVersion(), platform: process.platform, arch: process.arch, dataDir, packaged: app.isPackaged } : null));
   ipcMain.handle('fbrx:spotlight', (e, action: string, arg?: string) => {

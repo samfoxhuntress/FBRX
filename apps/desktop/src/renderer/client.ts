@@ -21,6 +21,8 @@ interface Bridge {
   onChime?(cb: (c: { level: NotificationEvent['level']; volume: number }) => void): () => void;
   dialog?(opts: DialogOptions): Promise<string | null>;
   reveal?(path: string): Promise<unknown>;
+  /** Opens a file the agent made in its app (only ones in the FBRX folder or the workspace). */
+  openFile?(path: string): Promise<boolean>;
   openExternal?(url: string): Promise<unknown>;
   appInfo?(): Promise<{ version: string; platform: string; arch: string; dataDir: string; packaged: boolean } | null>;
   /** Spotlight window helpers (Electron only). */

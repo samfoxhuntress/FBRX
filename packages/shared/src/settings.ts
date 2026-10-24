@@ -6,6 +6,7 @@ import { PROTECTION_DEFAULT_FEED, SCAN_TIME_PATTERN } from './protection';
 import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS } from './mesh-assist';
 import { isCidr, MESH_TRAFFIC_CLASSES } from './net';
 import { BROWSER_SEARCH_ENGINES } from './browser';
+import { DEFAULT_OUTPUT_FOLDER, IMAGE_GENERATORS, IMAGE_SIZES, WEB_SEARCH_ENGINES } from './creations';
 
 /** Built-in color themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
 export const THEME_PRESETS = ['fabrics', 'tropical', 'neon', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
@@ -120,6 +121,21 @@ export const SettingsSchema = z.object({
     ollamaContext: z.number().int().min(0).max(262144),
     /** Show what the agent is thinking and doing while it works. */
     showThinking: z.boolean(),
+    /** Where the documents and pictures the agent makes are saved (${DOCUMENTS}, ${DESKTOP} and ${HOME} work). */
+    outputFolder: z.string().min(1).max(500),
+    /**
+     * How the agent makes pictures from a description (creations.ts): which generator, the AI provider whose images
+     * endpoint it uses (images-api), the image server's address (txt2img), the model, and the size.
+     */
+    images: z.object({
+      generator: z.enum(IMAGE_GENERATORS),
+      providerId: z.string().max(64),
+      url: z.string().max(500),
+      model: z.string().max(200),
+      size: z.enum(IMAGE_SIZES),
+    }),
+    /** Where the agent searches the web (and the SearXNG server's address). */
+    webSearch: z.object({ engine: z.enum(WEB_SEARCH_ENGINES), url: z.string().max(500) }),
   }),
   voice: z.object({
     /** Speech recognition model (see VOICE_MODELS). */
@@ -536,6 +552,9 @@ export const DEFAULT_SETTINGS: Settings = {
     maxOutputTokens: 0,
     ollamaContext: 0,
     showThinking: true,
+    outputFolder: DEFAULT_OUTPUT_FOLDER,
+    images: { generator: 'draw', providerId: '', url: '', model: '', size: '1024x1024' },
+    webSearch: { engine: 'public', url: '' },
   },
   voice: {
     sttModel: 'whisper-base.en',

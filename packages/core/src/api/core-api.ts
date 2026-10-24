@@ -1,5 +1,7 @@
+import { readFile } from 'node:fs/promises';
+import { isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, EXT_USER_ONLY, MEMORY_CATEGORIES, SECRET_KINDS, THINKING_LEVELS, VERTICALS, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SECRET_KINDS, THINKING_LEVELS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -27,6 +29,7 @@ const USER_ONLY = new Set<string>([
   'ai.attachments.add',
   'ai.attachments.remove',
   'ai.attachments.read',
+  'ai.files.preview',
   'ai.setThinking',
   'fleet.enroll',
   'fleet.unenroll',
@@ -194,6 +197,15 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     },
     'ai.attachments.remove': async (p) => ({ removed: await k.attachments.remove(IdSchema.parse(p).id) }),
     'ai.attachments.read': (p) => k.attachments.read(IdSchema.parse(p).id),
+    'ai.files.preview': async (p) => {
+      const file = z.object({ path: z.string().min(1).max(1000) }).parse(p).path;
+      const ext = fileExtension(file);
+      if (!PICTURE_EXTENSIONS.has(ext) || !isAbsolute(file) || !k.output.holds(file)) throw new CoreError('FORBIDDEN', 'Only pictures in the FBRX folder or the workspace are shown here');
+      const data = await readFile(file);
+      if (data.length > 10 * 1024 * 1024) throw new CoreError('INVALID_ARGUMENT', 'That picture is too large to show here');
+      return { mime: ext === 'svg' ? 'image/svg+xml' : (IMAGE_MIME[ext] ?? 'image/png'), data: data.toString('base64') };
+    },
+    'ai.files.folder': () => ({ path: k.output.path(), chosen: k.output.chosen(), allowed: k.output.allowed() }),
     'agent.runToCompletion': async (p, ctx) => {
       const q = z.object({ conversationId: z.string().optional(), message: z.string(), providerId: z.string().optional(), model: z.string().optional() }).parse(p);
       return k.agent.runToCompletion({ ...q, origin: ctx.origin, actor: ctx.actor });

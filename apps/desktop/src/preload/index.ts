@@ -31,6 +31,7 @@ const api = {
   },
   dialog: (opts: { kind: 'file' | 'folder' | 'save'; title?: string; filters?: Array<{ name: string; extensions: string[] }>; defaultPath?: string }) => ipcRenderer.invoke('fbrx:dialog', opts) as Promise<string | null>,
   reveal: (path: string) => ipcRenderer.invoke('fbrx:reveal', path),
+  openFile: (path: string) => ipcRenderer.invoke('fbrx:openFile', path),
   openExternal: (url: string) => ipcRenderer.invoke('fbrx:openExternal', url),
   appInfo: () => ipcRenderer.invoke('fbrx:app'),
   showSpotlight: () => void ipcRenderer.invoke('fbrx:spotlight', 'show'),

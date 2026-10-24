@@ -8,6 +8,7 @@ export {
   FileKeychain,
   StaticKeyKeychain,
   defaultSpecialDirs,
+  type DocumentRenderer,
   type KeychainAdapter,
   type MovedKeychain,
   type PlatformAdapter,

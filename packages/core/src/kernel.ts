@@ -103,6 +103,9 @@ import { meshTools } from './tools/builtin/mesh-tools';
 import { AiCoordination } from './aicoord/aicoord';
 import { ConversationStore } from './ai/conversations';
 import { AttachmentStore } from './ai/attachments';
+import { OutputFolder } from './docs/output-folder';
+import { createTools } from './tools/builtin/create-tools';
+import { webTools } from './tools/builtin/web-tools';
 import { ModelManager } from './ai/runtime/model-manager';
 import { StarterAi } from './ai/runtime/starter';
 import { LocalRuntime } from './ai/runtime/local-runtime';
@@ -177,6 +180,8 @@ export class Kernel {
   readonly gate: ToolGate;
   readonly conversations: ConversationStore;
   readonly attachments: AttachmentStore;
+  /** Where what the agent makes is saved. */
+  readonly output: OutputFolder;
   readonly models: ModelManager;
   readonly starter: StarterAi;
   readonly runtime: LocalRuntime;
@@ -306,6 +311,7 @@ export class Kernel {
     });
     this.conversations = new ConversationStore(this.db);
     this.attachments = new AttachmentStore({ db: this.db, root: join(this.paths.workspace, 'Attachments'), log: L('attachments') });
+    this.output = new OutputFolder({ settings: this.settings, policy: this.policy, workspace: this.paths.workspace, dirs: () => ({ ...this.platform.specialDirs(), workspace: this.paths.workspace, data: this.paths.root }) });
     this.models = new ModelManager(this.db, this.paths.models, () => this.settings.get().runtime.modelId, L('models'), this.events);
     this.runtime = new LocalRuntime({
       settings: this.settings,
@@ -1008,6 +1014,13 @@ export class Kernel {
           }),
           ...helpdeskTools(this.helpdesk, () => (this.fleet.enrolled ? null : 'This computer is not part of an organization, so there is no help desk to send to')),
           ...pcTools({ monitor: this.monitor, net: this.net, alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined) }),
+          ...createTools({
+            output: this.output,
+            renderer: () => this.platform.renderer ?? null,
+            images: () => this.settings.get().ai.images,
+            imagesEndpoint: (id) => this.providers.endpoint(id),
+          }),
+          ...webTools({ checkUrl: (u) => checkUrl(u, this.policy.policy.network), search: () => this.settings.get().ai.webSearch, appVersion: this.platform.appVersion }),
         ]);
       },
       stop: () => undefined,

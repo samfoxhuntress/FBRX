@@ -12,9 +12,9 @@ const MAX_BODY = 1_000_000;
 /** fetch with manual redirects so every hop is re-checked against network policy. */
 export async function guardedFetch(
   url: string,
-  init: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal },
+  init: { method?: string; headers?: Record<string, string>; body?: string; signal?: AbortSignal; maxBytes?: number },
   checkUrl: (u: string) => Promise<UrlCheck>,
-): Promise<{ status: number; headers: Record<string, string>; body: string; finalUrl: string; truncated: boolean }> {
+): Promise<{ status: number; headers: Record<string, string>; body: string; bytes: Buffer; finalUrl: string; truncated: boolean }> {
   let current = url;
   let method = (init.method ?? 'GET').toUpperCase();
   let body = init.body;
@@ -41,7 +41,7 @@ export async function guardedFetch(
         const { done, value } = await reader.read();
         if (done) break;
         size += value.length;
-        if (size > MAX_BODY) {
+        if (size > (init.maxBytes ?? MAX_BODY)) {
           truncated = true;
           await reader.cancel();
           break;
@@ -49,7 +49,8 @@ export async function guardedFetch(
         chunks.push(value);
       }
     }
-    return { status: res.status, headers, body: Buffer.concat(chunks).toString('utf8'), finalUrl: current, truncated };
+    const bytes = Buffer.concat(chunks);
+    return { status: res.status, headers, body: bytes.toString('utf8'), bytes, finalUrl: current, truncated };
   }
   throw new Error('Too many redirects');
 }

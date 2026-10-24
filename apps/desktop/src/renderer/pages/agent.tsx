@@ -18,7 +18,7 @@ import { ModelDownload } from './settings-voice';
 import { summonGoose } from '../fun';
 import { useLearner, useTier } from '../edition';
 import { ChatHistory, type ChatFilter } from '../chat-history';
-import { AttachmentTray, MessageAttachments, useAttachments } from '../attachments';
+import { AttachmentTray, CreatedFiles, MessageAttachments, useAttachments } from '../attachments';
 
 const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'activity', title: 'Check my PC', prompt: 'Give me a quick health check of this computer: performance right now, storage, security status and any recent errors. Tell me what (if anything) needs attention.' },
@@ -124,6 +124,7 @@ function ToolCard({ c, approval }: { c: ToolCallRecord; approval: ApprovalReques
           )}
         </div>
       )}
+      {!!c.files?.length && <CreatedFiles files={c.files} />}
       {c.status === 'awaiting-approval' && approval && (
         <div className="toolcall-approval">
           <Icons.shield size={16} style={{ color: 'var(--warning)' }} />

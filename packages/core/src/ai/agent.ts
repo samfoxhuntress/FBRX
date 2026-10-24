@@ -6,6 +6,7 @@ import {
   newId,
   type AgentEvent,
   type AttachmentInfo,
+  type CreatedFile,
   type AgentPhase,
   type InvocationOrigin,
   type RunActivity,
@@ -91,6 +92,12 @@ export function describeCall(spec: Pick<ToolSpec, 'title'>, args: unknown): stri
   const key = ['path', 'url', 'host', 'query', 'command', 'name', 'id', 'title', 'target'].find((k) => typeof a[k] === 'string' && (a[k] as string).trim());
   const value = key ? String(a[key]).replace(/\s+/g, ' ').trim() : '';
   return value ? `${spec.title}: ${value.length > 80 ? `${value.slice(0, 79)}…` : value}` : spec.title;
+}
+
+/** Files a built-in tool says it made (its data.files), shown under the call in the chat. */
+function createdFiles(data: unknown): CreatedFile[] | undefined {
+  const files = (data as { files?: unknown } | null | undefined)?.files;
+  return Array.isArray(files) && files.length ? (files as CreatedFile[]) : undefined;
 }
 
 const UNTRUSTED_PREFIX =
@@ -357,6 +364,10 @@ export class AgentRuntime {
       offline
         ? '- This chat is OFFLINE (private and local). Prefer local knowledge and local tools. If you truly need the internet, call the tool anyway: FBRX will ask the user whether this chat may go online.'
         : '- This chat is ONLINE: internet tools are available. Mention the sources you used.',
+      '',
+      '## Files',
+      '- Files the person attached come in their message as <attachment> blocks with the text read out of them; the path given there works with fs.read_file for the rest.',
+      '- Asked for a document, a picture or a spreadsheet, make the file (docs.create, image.draw, image.generate): it is saved in the FBRX folder and shown in the chat with an Open button. Say what you made and its name; do not paste the whole document into your reply too.',
       '',
       '## FBRX itself',
       '- When the person asks about FBRX (how to do something in it, what a setting does, why it is slow, an error, something not working), call fbrx.help (its guides and playbooks, on this computer) and, for trouble, fbrx.doctor (a check-up) before you answer. Explain what you found in plain words.',
@@ -639,6 +650,7 @@ export class AgentRuntime {
               error: result.error,
               durationMs: result.durationMs,
               findings: result.findings.length ? result.findings : undefined,
+              files: spec.source === 'builtin' ? createdFiles(result.data) : undefined,
             });
           }
           this.d.store.append(conversationId, { role: 'tool', content: output, toolCallId: call.id, toolName: rec.name });

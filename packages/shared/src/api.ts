@@ -8,6 +8,7 @@
 import type { LicenseStatus } from './license';
 import type { AccountDevice, AccountStatus, InvitationPreview, LocalAccountStatus } from './accounts';
 import type { AttachmentInfo } from './attachments';
+import type { CreatedFile } from './creations';
 import type { SupportStatus } from './support';
 import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './browser';
 import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
@@ -163,6 +164,8 @@ export interface ToolCallRecord {
   error?: string;
   durationMs?: number;
   findings?: GuardianFinding[];
+  /** Files the call made (documents, pictures), shown under it in the chat. */
+  files?: CreatedFile[];
 }
 
 export interface ChatMessage {
@@ -623,6 +626,10 @@ export interface CoreMethods extends ExtMethods {
   'ai.attachments.remove': (p: { id: string }) => { removed: boolean };
   /** An attachment's bytes (base64), to show it again in the chat. */
   'ai.attachments.read': (p: { id: string }) => { mime: string; data: string };
+  /** A picture the agent made (in the output folder or the workspace), to show in the chat. */
+  'ai.files.preview': (p: { path: string }) => { mime: string; data: string };
+  /** Where what the agent makes is saved: the folder in use, the one chosen, and whether the AI may write there. */
+  'ai.files.folder': () => { path: string; chosen: string; allowed: boolean };
   'ai.cancel': (p: { runId: string }) => { cancelled: boolean };
   /** What every run in progress is doing right now. */
   'ai.runs': () => RunActivity[];
