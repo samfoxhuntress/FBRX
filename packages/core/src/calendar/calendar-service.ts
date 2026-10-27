@@ -23,7 +23,7 @@ import { parseIcs } from './ics';
 import { authorizeUrl, GraphClient, loopbackListener, msEndpoints, msScopes, msToken, pkcePair, type GraphOccurrence, type MsEndpoints, type MsTokens } from './microsoft';
 
 /**
- * Calendar (Workspace → Calendar, FBRX Glass, reminders and the agent's calendar tools).
+ * Calendar (Workspace → Calendar, Dash, reminders and the agent's calendar tools).
  *
  * - Outlook / Microsoft 365: the person signs in in the browser; the refresh token is an internal vault secret and
  *   access tokens stay in memory. Microsoft expands repeating meetings; FBRX keeps the last week and the next two

@@ -90,7 +90,7 @@ function healthScore(o: { status: SystemStatus; critical: number; unread: number
   return { score, label: score >= 90 ? 'Excellent' : score >= 75 ? 'Good' : score >= 55 ? 'Needs a look' : 'Needs attention', reasons };
 }
 
-/** FBRX Glass: the meetings left today, with a Join button when one is about to start. */
+/** Dash: the meetings left today, with a Join button when one is about to start. */
 function TodayStrip({ events }: { events: CalendarEvent[] }) {
   const now = Date.now();
   return (
@@ -302,7 +302,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
         <span className="screw s-br" aria-hidden />
         <div className="glass-hero-main">
           <div className="glass-eyebrow">
-            FBRX <b>Glass</b>
+            FBRX <b>Dash</b>
           </div>
           <SplitFlapBoard
             messages={messages}

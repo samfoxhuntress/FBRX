@@ -42,7 +42,7 @@ section to open its pages (one at a time; the section of the page you are on ope
 
 | Section | Pages |
 | --- | --- |
-| **Bridge** | FBRX Glass, Fabrix, Alerts |
+| **Glass** | Dash, Fabrix, Alerts |
 | **Studio** | Calendar, Tasks, Notes, Projects, Snippets |
 | **Pit Stop** | Storage, Security, Updates, Bug catcher, Network Center |
 | **Workbench** | Files, Task Manager, Clipboard, Copy & migrate, Toolbox, Library |
@@ -70,7 +70,7 @@ saved goes away), up to what the computer may run. Prices are in US dollars, per
 | --- | --- | --- | --- | --- |
 | Price | Free, and free in an organization | $4.99 after a free 7-day trial, or $3.99 through FBRX Command | $11.99, or $9.59 through FBRX Command | $24.99 per computer, only through FBRX Command |
 | How you get it | Where every new computer starts | Bought on your FBRX account or with a license key, or through your organization's FBRX Command | The same | Only as an add-on in an organization's FBRX Command: for the people who run it and its FBRX Servers |
-| Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, the help desk (in an organization) and Settings. **Home** is the split-flap board and a few notes from FBRX: tips, the AI models, and what Standard and Ultra add (no dashboard) | Everything in Essentials, plus FBRX Glass, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Standard | Everything in Ultra, plus the FBRX Server page |
+| Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, the help desk (in an organization) and Settings. **Home** is the split-flap board and a few notes from FBRX: tips, the AI models, and what Standard and Ultra add (no dashboard) | Everything in Essentials, plus Dash, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Standard | Everything in Ultra, plus the FBRX Server page |
 | How much the AI does on a task | **Thinking**: Quick, Everyday or Thorough (see *Thinking* below), and whether it shows what it is doing | The same, each part on its own (steps per task, longest answer, how much the built-in and Ollama models keep in mind), and unloading the local model when idle | The same, and the temperature | The same |
 | IT and expert tool sets | — | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools and adapters, device consoles, the developer tools in the Toolbox, logs, update channels, the Local API | Everything in Ultra, plus **network environments** (your network controller) in Network Center and the whole Library: **The Lab** and the **FBRX command library** (FBRX/1, FBRX Server and FBRX Gate commands, also in Terminal → FBRX/1), always there |
 | Connect | AI models | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance | The same |
@@ -132,8 +132,8 @@ sent a gigabyte unasked (*AI models* has it, one click). `Install FBRX OS --no-a
 
 ### Your name
 
-FBRX asks what it should call you on the first screen (or once on FBRX Glass, for computers set up before it asked):
-"Samuel", called "Sam" or "Sir". FBRX Glass greets you by it and Fabrix addresses you that way. Change it in
+FBRX asks what it should call you on the first screen (or once on Dash, for computers set up before it asked):
+"Samuel", called "Sam" or "Sir". Dash greets you by it and Fabrix addresses you that way. Change it in
 **Settings → General → You**.
 
 ### Ask the agent about anything
@@ -257,7 +257,7 @@ is edited in FBRX Command (Governance), not on the computer.
 
 | Page | What it does |
 | --- | --- |
-| **FBRX Glass** | The dashboard, in frosted glass: a split-flap board that rotates through status messages, a health score out of 100 with what costs points, what is left on today's calendar (with *Join* when a meeting is about to start), insight tiles (your next task, internet speed, storage, Fabrix, backups and the vault, alerts and approvals, a tip), then live processor, memory, network and battery (sampled every 2 s), today's tasks, drives, recent alerts, this computer's hardware, and service health |
+| **Dash** | The dashboard, in frosted glass: a split-flap board that rotates through status messages, a health score out of 100 with what costs points, what is left on today's calendar (with *Join* when a meeting is about to start), insight tiles (your next task, internet speed, storage, Fabrix, backups and the vault, alerts and approvals, a tip), then live processor, memory, network and battery (sampled every 2 s), today's tasks, drives, recent alerts, this computer's hardware, and service health |
 | **Fabrix** | The agent. Six starter cards (check my PC, plan my day, free up space, slow internet, is this link safe, explain crashes). Each chat is **Offline** or **Online**: new chats start offline (Settings → Agent); the first internet tool in an offline chat asks you to put that chat online. Attach files and pictures, and ask for documents and pictures: see [FABRIX.md](FABRIX.md) |
 | **FBRX Shield** | The antivirus: what protects this computer (FBRX Shield, Microsoft Defender or an antivirus already installed, such as Sophos), its status, scans with live progress, what was found, quarantine, and FBRX Shield's settings. See [SHIELD.md](SHIELD.md) |
 | **Calendar** | Outlook / Microsoft 365 accounts and calendar links (Outlook.com, Google, Apple, a school) as an agenda or a week, with *Join* for online meetings, reminders before meetings, new events in Outlook, and *Prepare my day*. See [CALENDAR.md](CALENDAR.md) |

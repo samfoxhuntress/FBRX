@@ -5,7 +5,7 @@
 The easter eggs, the Silly Goose and the trophy case come with every edition of FBRX Endpoint (Essentials, Standard and
 Ultra), but they stay hidden until someone enters **418** as a license key (**Settings → License**). It is not a
 license: it is HTTP status 418, *I'm a teapot*. The locked trophy case in Settings drops the only hint: "The key is
-short and stout." Some eggs live on pages a lighter edition does not show (the Terminal's are in Ultra, FBRX Glass's in
+short and stout." Some eggs live on pages a lighter edition does not show (the Terminal's are in Ultra, Dash's in
 Standard and Ultra); the rest, the chat's among them, work everywhere. Student computers have no License page, so they
 stay plain.
 
@@ -41,8 +41,8 @@ ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `
 | Synergy Achieved | Keep the jargon manager talking for five answers |
 | Back-Seat Radar | Say "Talk to me, Goose" to Fabrix |
 | Wingman for Life | Keep your wingman on the radio for five messages |
-| Loose Screw | Click the loose **Tip** tile on FBRX Glass until it falls off |
-| Flap Happy | Run your mouse across twenty letters of the split-flap board on FBRX Glass |
+| Loose Screw | Click the loose **Tip** tile on Dash until it falls off |
+| Flap Happy | Run your mouse across twenty letters of the split-flap board on Dash |
 | Nobody Calls Me Chicken | Set "What should FBRX call you?" to `chicken` (Settings → General). Bawk. |
 | PC Load Letter | Say "PC load letter" (or "PC load better") to Fabrix |
 | Home Sweet Ship | Tell Fabrix you're home, calling your furry co-pilot by name (you'll know the line) |
@@ -135,7 +135,7 @@ by side, pointing at each other, each convinced the other is the copy ("Wait… 
 computer yet? Click this computer's own address (under *Reachable at*) three times: it pings itself and has the same
 crisis. Click anywhere to make them stop.
 
-## FBRX Glass
+## Dash
 
 - **The split-flap board** flips through status messages like a railway departures board. Run your mouse across the
   letters and they riffle (with a faint clack).
@@ -171,7 +171,7 @@ single day*, *How to be a great wingman* (which tells you what to say to Fabrix)
 | Where | What |
 | --- | --- |
 | Library | **The Lab**: power-user how-tos, a hazard-striped banner and "Safety goggles recommended (sold separately)", with a dry remark for every section of downloads |
-| FBRX Glass | A line under the board at special moments: after midnight, on Friday afternoons ("Maybe don't deploy anything"), after 14 days without a restart ("Have you tried turning it off and on again?"), when the battery is nearly empty, on Halloween and on April Fools' Day |
+| Dash | A line under the board at special moments: after midnight, on Friday afternoons ("Maybe don't deploy anything"), after 14 days without a restart ("Have you tried turning it off and on again?"), when the battery is nearly empty, on Halloween and on April Fools' Day |
 | Terminal | `matrix` makes it rain green code; `sudo make me a sandwich` → "Okay."; `make me a sandwich` → "What? Make it yourself."; `coffee` → 418 I'm a teapot; `xyzzy` → "Nothing happens."; `hello`; `exit`. And `rm -rf /`, `format c:` and friends are refused: "Fabrix hid the sharp objects." |
 | FBRX/1 | `request goose release` |
 | Toolbox → Base64 | Decode the sample |

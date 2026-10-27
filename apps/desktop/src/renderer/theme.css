@@ -826,7 +826,7 @@
   z-index: 1;
 }
 
-/* ------------------------------------------------------------------------------------------ FBRX Glass */
+/* ------------------------------------------------------------------------------------------------ Dash */
 /*
  * The dashboard: classic glass. Panels are frosted and see-through, with a glossy upper half like old-school
  * desktop glass, over a soft aurora in the theme's colors. High contrast keeps solid panels.
@@ -1415,7 +1415,7 @@
   --sec-system: #64748b;
 }
 /* Sections by name (the grouped sidebar) and by heading (Essentials' short list). */
-.fx-group[data-group='bridge'],
+.fx-group[data-group='glass'],
 [data-section='Command'],
 [data-section='Your AI'] { --hue: var(--sec-command); }
 .fx-group[data-group='studio'],

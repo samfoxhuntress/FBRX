@@ -1,6 +1,6 @@
 # Messages
 
-**Messages** (in the sidebar, under Bridge, in every edition) is chat between computers, for two kinds of
+**Messages** (in the sidebar, under Glass, in every edition) is chat between computers, for two kinds of
 neighbors:
 
 * **My devices**: your other computers and your phone on FBRX Mesh. Messages go straight from one device to the

@@ -143,7 +143,7 @@ function Welcome({ onAdd }: { onAdd: () => void }) {
           </Button>
         }
       >
-        Sign in to Outlook / Microsoft 365, or paste a calendar link from Outlook.com, Google, Apple or your school. Your meetings show here and on FBRX Glass, FBRX reminds you before they start, and your
+        Sign in to Outlook / Microsoft 365, or paste a calendar link from Outlook.com, Google, Apple or your school. Your meetings show here and on Dash, FBRX reminds you before they start, and your
         assistant can tell you what is on or find a free hour.
       </Empty>
     </Card>

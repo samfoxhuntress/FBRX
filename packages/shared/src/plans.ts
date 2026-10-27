@@ -63,7 +63,7 @@ export const EDITION_PLANS: Record<Tier, EditionPlan> = {
     productId: 'fbrx_standard_monthly',
     tenantProductId: 'fbrx_standard_tenant_monthly',
     summary: 'The everyday tools, and control over your AI.',
-    highlights: ['Your AI’s controls: steps, answer length, how much it keeps in mind', 'FBRX Glass, alerts, notes, tasks, calendar and messages', 'Storage, FBRX Shield, updates, network and backups', 'Files, the clipboard history, the toolbox and how-tos'],
+    highlights: ['Your AI’s controls: steps, answer length, how much it keeps in mind', 'Dash (the dashboard), alerts, notes, tasks, calendar and messages', 'Storage, FBRX Shield, updates, network and backups', 'Files, the clipboard history, the toolbox and how-tos'],
   },
   ultra: {
     tier: 'ultra',

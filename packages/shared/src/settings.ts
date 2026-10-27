@@ -307,7 +307,7 @@ export const SettingsSchema = z.object({
     copy: z.boolean(),
     after: z.enum(SNAPSHOT_AFTER),
   }),
-  /** Who uses this computer: shown on FBRX Glass and used by the agent. */
+  /** Who uses this computer: shown on Dash and used by the agent. */
   profile: z.object({
     name: z.string().max(60),
     /** What FBRX and the agent call you ("Sam", "Sir"); empty uses the first name. */
@@ -478,7 +478,7 @@ export const SettingsSchema = z.object({
     /** A version the person chose to skip (no more reminders for it). */
     skipVersion: z.string().max(40),
   }),
-  /** Calendars (Outlook / Microsoft 365 accounts and calendar links) shown in Calendar, on FBRX Glass and to the agent. */
+  /** Calendars (Outlook / Microsoft 365 accounts and calendar links) shown in Calendar, on Dash and to the agent. */
   calendar: z.object({
     /** Remind this many minutes before a meeting starts (0 = no reminders). */
     remindMinutes: z.number().int().min(0).max(120),

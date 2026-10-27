@@ -333,7 +333,7 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
   return (
     <Grid cols={2}>
       <div style={{ gridColumn: '1 / -1' }}>
-        <Card title="You" subtitle={`FBRX Glass and ${s.ai.agentName} greet you by this name.`}>
+        <Card title="You" subtitle={`Dash and ${s.ai.agentName} greet you by this name.`}>
           <div className="fx-form">
             <ProfileFields name={prof.name} callMe={prof.callMe} onChange={setProfile} />
             <div>

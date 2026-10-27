@@ -11,7 +11,7 @@
 * **Automatic** (the default): an antivirus you installed that is on; otherwise Microsoft Defender when it is protecting
   Windows; otherwise an installed antivirus even if it is off (so you hear that it is off); otherwise FBRX Shield.
 
-FBRX then shows that antivirus's status everywhere (FBRX Shield, Security, FBRX Glass, the agent, FBRX Command), runs
+FBRX then shows that antivirus's status everywhere (FBRX Shield, Security, Dash, the agent, FBRX Command), runs
 its scans where it can, and raises an **Antivirus needs attention** alert when it is off, out of date or gone.
 
 ## What FBRX can see and do with each

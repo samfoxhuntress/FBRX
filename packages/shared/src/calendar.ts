@@ -1,7 +1,7 @@
 /**
  * Calendar: Outlook / Microsoft 365 accounts (Microsoft Graph, signed in through the browser) and calendar links
  * (an iCalendar address published by Outlook, Google, Apple or a school). Events are kept on the computer for the
- * Calendar page, FBRX Glass, meeting reminders and the agent.
+ * Calendar page, Dash, meeting reminders and the agent.
  */
 
 export const CALENDAR_KINDS = ['microsoft', 'ics'] as const;

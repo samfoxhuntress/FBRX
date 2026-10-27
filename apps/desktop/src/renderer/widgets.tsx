@@ -220,7 +220,7 @@ export function ProfileFields({ name, callMe, onChange, autoFocus }: { name: str
   );
 }
 
-/** On FBRX Glass, once: asks for a name when none is set (people who set FBRX up before it asked). */
+/** On Dash, once: asks for a name when none is set (people who set FBRX up before it asked). */
 export function NamePrompt({ fun }: { fun: boolean }) {
   const { data } = useCore('settings.get', undefined, ['settings.changed']);
   const toast = useToast();
@@ -248,7 +248,7 @@ export function NamePrompt({ fun }: { fun: boolean }) {
         Nice to meet you
       </div>
       <div className="fx-secondary" style={{ fontSize: 13, margin: '6px 0 10px' }}>
-        What's your name? FBRX Glass and {data.settings.ai.agentName} will greet you by it. You can change it any time in Settings → General.
+        What's your name? Dash and {data.settings.ai.agentName} will greet you by it. You can change it any time in Settings → General.
       </div>
       <ProfileFields name={p.name} callMe={p.callMe} onChange={setP} />
       <div className="fx-actions" style={{ marginTop: 10 }}>

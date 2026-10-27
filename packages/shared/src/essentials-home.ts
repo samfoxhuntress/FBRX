@@ -55,7 +55,7 @@ export function notesFor(o: { tier: Tier; agentName: string; modelName?: string 
   if (o.tier === 'essentials') {
     const std = EDITION_PLANS.basic;
     const ultra = EDITION_PLANS.ultra;
-    const standard = 'Your AI’s controls (how long it works, how long its answers are, how much it keeps in mind), plus FBRX Glass, notes, tasks, calendar, alerts, storage and backups.';
+    const standard = 'Your AI’s controls (how long it works, how long its answers are, how much it keeps in mind), plus Dash (the dashboard), notes, tasks, calendar, alerts, storage and backups.';
     notes.push(
       o.trial
         ? {

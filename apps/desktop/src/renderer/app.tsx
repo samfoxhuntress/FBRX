@@ -381,7 +381,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const helpdeskShown = vertical !== 'home' || ultra;
 
   const all: Array<NavItem & { need?: Tier }> = [
-    { id: 'home', label: 'FBRX Glass', icon: 'dashboard', section: 'Command' },
+    { id: 'home', label: 'Dash', icon: 'dashboard', section: 'Command' },
     { id: 'agent', label: agentName, icon: 'sparkles', section: 'Command' },
     { id: 'alerts', label: 'Alerts', icon: 'bell', count: alertCounts?.unread, section: 'Command' },
     // Chat with your other devices and the organization's (or family's) computers, in every edition.
@@ -868,7 +868,7 @@ const ESSENTIALS_PAGES = new Set<string>(ESSENTIALS_NAV.map(([id]) => id));
 
 /** What a Standard page does, said on its place in Essentials. */
 const STANDARD_WHAT: Partial<Record<Route, string>> = {
-  home: 'FBRX Glass: your computer at a glance, how it is doing and anything that needs you.',
+  home: 'Dash: your computer at a glance, how it is doing and anything that needs you.',
   alerts: 'What FBRX keeps an eye on (space running low, a threat stopped, an update waiting), in one place.',
   messages: 'Chat with your other devices and your organization’s computers.',
   calendar: 'Your calendar, with your Outlook or Google account if you connect one.',
@@ -893,7 +893,7 @@ const STANDARD_WHAT: Partial<Record<Route, string>> = {
 };
 
 const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; basicHint?: string; learnerHint?: string; icon: IconName }> = [
-  { id: 'bridge', section: 'Command', label: 'Bridge', hint: 'Glass, agent, messages, alerts', learnerHint: 'Home, helper, messages', icon: 'compass' },
+  { id: 'glass', section: 'Command', label: 'Glass', hint: 'Dash, agent, messages, alerts', learnerHint: 'Home, helper, messages', icon: 'compass' },
   { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Calendar, tasks, notes, automations', learnerHint: 'Calendar, notes and to-dos', icon: 'layers' },
   { id: 'pitstop', section: 'PC care', label: 'Pit Stop', hint: 'Storage, security, repairs', icon: 'wrench' },
   { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', learnerHint: 'Tools and stories', icon: 'toolbox' },

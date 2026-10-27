@@ -3117,7 +3117,7 @@ html.goose-mode #root {
   font-style: italic;
 }
 
-/* FBRX Glass: the one-time "what's your name?" card. */
+/* Dash: the one-time "what's your name?" card. */
 .glass-tile.name-prompt {
   min-height: 0;
   padding: 16px 18px;
@@ -5177,7 +5177,7 @@ html[data-presenting='blur'] .private::selection {
   display: none;
 }
 
-/* Calendar: agenda and week, the calendars beside them, and today's strip on FBRX Glass */
+/* Calendar: agenda and week, the calendars beside them, and today's strip on Dash */
 .cal-layout {
   display: grid;
   grid-template-columns: minmax(0, 1fr) 300px;
@@ -5536,7 +5536,7 @@ html[data-presenting='blur'] .private::selection {
   margin: 0;
 }
 
-/* FBRX Glass: what is left on today's calendar */
+/* Dash: what is left on today's calendar */
 .glass-agenda {
   display: flex;
   align-items: center;

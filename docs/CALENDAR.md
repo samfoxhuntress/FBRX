@@ -1,7 +1,7 @@
 # Calendar
 
 **Studio → Calendar** puts your Outlook / Microsoft 365 calendars and any calendar link side by side, as an agenda or a
-week. FBRX reminds you before meetings, today's meetings run along the top of FBRX Glass, and Fabrix can tell you
+week. FBRX reminds you before meetings, today's meetings run along the top of Dash, and Fabrix can tell you
 what is on, find a free hour and (with your approval) add an event. It is in every edition, including student and
 child computers (a school timetable link, for example).
 
@@ -36,7 +36,7 @@ A link is a credential (anyone with it can read the calendar), so FBRX keeps it 
   removed) it offers **Sign in again**.
 * **Calendar settings:** remind me (never, 5, 10, 15 or 30 minutes before), update every 5–60 minutes, and the
   Microsoft sign-in details.
-* **FBRX Glass** shows what is left today (with *Join* when a meeting is about to start), the split-flap board
+* **Dash** shows what is left today (with *Join* when a meeting is about to start), the split-flap board
   announces the next one, and *Plan my day* fits your tasks around your meetings.
 
 FBRX keeps the last week and the next two months on the computer. Repeating events are expanded (Outlook does it for
