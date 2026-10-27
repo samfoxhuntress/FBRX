@@ -148,6 +148,21 @@ describe('Update now', () => {
     }
   });
 
+  it('leaves new versions to FBRX Server when it is the server’s command role', async () => {
+    const { home, db } = installed('1.9.8');
+    const launch = vi.fn(() => 'started');
+    process.env.FBRX_CP_MANAGED_BY = 'fbrx-server';
+    try {
+      const u = new CommandUpdater({ version: '1.9.8', db, dataDir: join(home, 'data'), log: () => undefined, launchInstaller: launch, manifestUrl: `${await serve({ '/release.json': manifest('https://github.com/x.zip', '1.9.9') })}/release.json` });
+      expect(await u.check()).toMatchObject({ state: 'available', canInstall: false, installedFrom: null, managedBy: 'FBRX Server' });
+      expect(() => u.install()).toThrow(/role of FBRX Server.*fbrx-server update check/);
+      expect(launch).not.toHaveBeenCalled();
+    } finally {
+      delete process.env.FBRX_CP_MANAGED_BY;
+      db.close();
+    }
+  });
+
   it('refuses a download that holds another version, or comes from somewhere else', async () => {
     const zip = makeZip([
       { name: 'x/package-lock.json', data: '{}' },

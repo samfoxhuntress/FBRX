@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Smoke test of a built FBRX Server bundle without installing it: starts the FBRX core in server mode (the ai role)
 # and FBRX Virtual (simulated hypervisor) next to each other, as on a server, and checks that the console reaches the
-# core with the console token. Then FBRX Virtual as a gate (simulated), driven by the bundled fbrx-gate command line.
+# core with the console token. Then FBRX Virtual as a gate (simulated), driven by the bundled fbrx-gate command line,
+# and FBRX Command (the command role) as the installer sets it up, seen from the server console.
 # Uses the core's usual Local API port (47821), so nothing else may be listening there.
 #   scripts/server/smoke.sh dist/fbrx-server-<version>
 set -euo pipefail
@@ -93,6 +94,40 @@ gate reset >/dev/null
 DOME="$(curl -fs -H "authorization: Bearer $(cat "$WORK/gate/cli.token")" "http://127.0.0.1:$G_PORT/v1/dome")" || fail "FBRX MiniDome does not answer"
 [ "$(json 'v.mode + " " + v.settings.enabled' <<<"$DOME")" = "simulated true" ] || fail "FBRX MiniDome is not watching: $DOME"
 echo "OK: FBRX Gate commits, confirms and previews from the bundled command line; FBRX MiniDome watches it"
+
+echo "==> FBRX Command (the command role), from the bundle, as the installer sets it up"
+C_PORT=$((V_PORT + 2))
+C_LOCAL="http://127.0.0.1:$((C_PORT + 1))"
+mkdir -p "$WORK/command"
+printf 'FBRX_CP_PORT=%s\nFBRX_CP_PUBLIC_URL=https://127.0.0.1:%s\nFBRX_CP_LOCAL_PORT=%s\n' "$C_PORT" "$C_PORT" "$((C_PORT + 1))" >"$WORK/command.env"
+printf 'FBRX_CP_SETUP_TOKEN=smoke-setup-token\n' >"$WORK/secrets.env"
+(
+  set -a
+  # shellcheck disable=SC1091
+  . "$WORK/command.env"
+  # shellcheck disable=SC1091
+  . "$WORK/secrets.env"
+  set +a
+  FBRX_CP_HOST=127.0.0.1 FBRX_CP_DATA_DIR="$WORK/command" FBRX_CP_TLS=self-signed FBRX_CP_MANAGED_BY=fbrx-server FBRX_CP_UPDATE_CHECK=off \
+    FBRX_CP_LOG_LEVEL=warn FBRX_ADMIN_CONSOLE_DIR="$BUNDLE/fbrx-command/admin-console" exec "$NODE" "$BUNDLE/fbrx-command/server.mjs"
+) >"$WORK/command.log" 2>&1 &
+PIDS+=($!)
+wait_for "curl -fs '$C_LOCAL/v1/setup/status' >/dev/null" || { cat "$WORK/command.log" >&2; fail "FBRX Command from the bundle does not answer"; }
+curl -fs "$C_LOCAL/" | grep -q '<div id="root">' || fail "FBRX Command does not serve its console"
+FP="$(openssl x509 -in "$WORK/command/tls/command.crt" -noout -fingerprint -sha256 | cut -d= -f2)"
+S_PORT=$((V_PORT + 4))
+FBRX_V_ROLES=command FBRX_V_TLS=off FBRX_V_HOST=127.0.0.1 FBRX_V_PORT="$S_PORT" FBRX_V_DATA_DIR="$WORK/command-console" FBRX_V_LOG_LEVEL=warn \
+  FBRX_V_ADMIN_USER=smoke FBRX_V_ADMIN_PASSWORD=smoke-test-password FBRX_V_CORE_TOKEN_FILE="$WORK/none.token" FBRX_V_CONSOLE_DIR="$BUNDLE/fbrx-virtual/virtual-console" \
+  FBRX_V_COMMAND_ENV="$WORK/command.env" FBRX_V_COMMAND_SECRETS="$WORK/secrets.env" FBRX_V_COMMAND_CERT="$WORK/command/tls/command.crt" FBRX_V_COMMAND_URL="$C_LOCAL" \
+  "$NODE" "$BUNDLE/fbrx-virtual/server.mjs" >"$WORK/command-console.log" 2>&1 &
+PIDS+=($!)
+S="http://127.0.0.1:$S_PORT"
+wait_for "curl -fs '$S/healthz' >/dev/null" || { cat "$WORK/command-console.log" >&2; fail "FBRX Virtual with the command role does not answer"; }
+STOKEN="$(curl -fs -H 'content-type: application/json' -d '{"username":"smoke","password":"smoke-test-password"}' "$S/v1/auth/login" | json 'v.token')"
+SEEN="$(curl -fs -H "authorization: Bearer $STOKEN" "$S/v1/server/command")"
+[ "$(json '[v.enabled, v.running, v.needsSetup, v.setupToken].join(" ")' <<<"$SEEN")" = "true true true smoke-setup-token" ] || fail "the console does not see FBRX Command waiting to be set up: $SEEN"
+[ "$(json 'v.fingerprint' <<<"$SEEN")" = "$FP" ] || fail "the console shows another certificate than FBRX Command's: $SEEN"
+echo "OK: FBRX Command runs from the bundle with its own certificate, and the server console shows it"
 
 echo "==> fbrx-server update check (the bundled helper)"
 VERSION_NOW="$(cat "$BUNDLE/VERSION")"

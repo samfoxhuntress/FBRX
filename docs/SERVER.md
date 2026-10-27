@@ -19,10 +19,15 @@ schedule while they run, and the computers that send it their whole-computer ima
 restore would: it opens it as a throwaway virtual machine with no network, confirms it starts, then shuts it down and
 deletes it. Same console, *FBRX Time* page.
 
+With the **command** role the server runs your organization's **FBRX Command**: the computers that join it, their
+settings and policy, licenses, updates, backups and help desk, with its own console on port **8787**. It runs day and
+night, so computers stay in touch with it, and it updates with the server. A server with the ai role also joins an
+FBRX Command (its own or another) and takes its settings and policy from there (*FBRX Command* page, below).
+
 Roles can be added and turned off later, from the console's *Roles* page or `fbrx-server roles` (below).
 
 > FBRX Server 1.0. It runs real virtual machines and backs them up, and both are tested against a real hypervisor in
-> CI. Clusters and governance from FBRX Command come later (see [LINEUP.md](LINEUP.md)).
+> CI. FBRX Command runs on the server, and servers join it; clusters come later (see [LINEUP.md](LINEUP.md)).
 
 ## Install
 
@@ -66,6 +71,7 @@ options (for device passthrough, after one reboot) and starts the `fbrx-virtual`
 | `--roles virtual,ai` | What the server does (below). `--roles virtual` installs the hypervisor alone; `--roles virtual,ai,time` adds image backups; `--roles gate,minidome,ai` makes a gate without virtual machines. Change them later with `fbrx-server roles` or the console's *Roles* page. |
 | `--gate-wan eno1 --gate-lan eno2` | The gate's internet port and the port to your network (gate role; see [GATE.md](GATE.md#install)). Your network avoids the addresses the internet side uses; `--gate-lan-address`, `--gate-wan-address` and `--gate-wan-gateway` choose them yourself. `--gate-manage <cidr\|none>` keeps the console and SSH reachable from a private network on the internet side. |
 | `--reboot` | Restart at the end when a change waits for it (the gate taking its ports, the bridge). |
+| `--command-address command.example.lan` | The address computers use to reach FBRX Command (command role): a name in your DNS, or an address. By default the one it has, else this server's address (the gate's address in your network, on a gate). |
 | `--bridge eno1` | Makes bridge `br0` on that port so virtual machines sit straight on your network (applies after a reboot). Only for a port set up with DHCP; for a static address, see *Networks* below. |
 | `--port 9443` | The console's port. |
 | `--uninstall [--purge]` | Takes FBRX Server off again. Virtual machines and their disks, and the ai role's mesh pairings and keys, stay unless `--purge`. |
@@ -82,7 +88,7 @@ helper, so work can go to the right server).
 | `gate` | FBRX Gate: routing, firewall, VLANs, DHCP and DNS, VPN, traffic priority ([GATE.md](GATE.md)) | First stage |
 | `minidome` | FBRX MiniDome: threat detection through the gate ([MINIDOME.md](MINIDOME.md)); needs `gate` | First stage |
 | `time` | FBRX Time: image backups of virtual machines and computers, each checked by starting it ([TIME.md](TIME.md)); needs `virtual` | New in 1.0 |
-| `command` | FBRX Command on the server: the tenant's settings and policy, kept with the mesh | Planned |
+| `command` | FBRX Command: your organization's computers, their settings and policy, licenses and updates, with its own console on port 8787 ([below](#fbrx-command-on-the-server-the-command-role)) | New |
 | `dns` | Name service for the network | Planned |
 | `directory` | Directory and sign-in for the organization's computers (a domain controller) | Planned |
 | `files` | File sharing | Planned |
@@ -271,6 +277,38 @@ chat stays offline unless *May use the internet* is on.
 Operators and administrators chat; administrators also delete chats. FBRX Virtual's audit log records who asked and
 how long the question was, never what it said.
 
+## FBRX Command on the server (the command role)
+
+The **FBRX Command** page (Server section) shows where FBRX Command is, the fingerprint of its certificate and, until
+someone sets it up, its **setup token** (administrators only; `sudo fbrx-server command` shows the same).
+
+1. **Set it up.** Open its address (`https://<server address>:8787`; *Open FBRX Command* on the page). FBRX Command
+   makes its own certificate, so the browser warns the first time: compare the fingerprint with the page's. Enter
+   the setup token, your organization (Work, School or Home) and the first administrator. The rest is FBRX Command
+   as in [ADMIN_CONSOLE.md](ADMIN_CONSOLE.md).
+2. **Computers join it** from *Deploy & enroll* in FBRX Command, as on any FBRX Command: an enrollment token, a
+   provisioning file, a device-manager script. They pin its certificate's fingerprint when they join.
+3. **Keep its address.** Computers keep the address they joined with: give the server a fixed address in your router,
+   or a name in your DNS (`install.sh --command-address <name>` sets it; computers that joined before keep the old one).
+
+On a gate, a new gate lets your network reach FBRX Command from the start (a firewall rule, *FBRX Command for your
+network*). On a gate set up before the command role, the page says when the rule is missing: add it under *Gate →
+Firewall* (from your network to the gate, TCP 8787, accept).
+
+**This server in FBRX Command.** With the ai role, the page's second card joins this server to an FBRX Command: paste an
+enrollment token from FBRX Command (*Deploy & enroll*). On a server with the command role it joins its own FBRX Command,
+trusting its certificate by itself; otherwise enter the other FBRX Command's address and fingerprint too. The server's
+FBRX core then shows in FBRX Command as one of the organization's computers and takes its settings and policy from
+there. *Leave FBRX Command* undoes it.
+
+**Updates and data.** FBRX Command updates with the server (`sudo fbrx-server update`; its *Releases* page says so
+instead of offering *Update now*), and an update's rollback brings its database and settings back too. Its data
+(database, keys, certificate, uploads) is in `/var/lib/fbrx-command`; turning the role off keeps it, `--uninstall
+--purge` deletes it. Its settings are in `/etc/fbrx-command/fbrx-command.env` (the address, port and certificate; see
+DEPLOYMENT.md → Configuration) and its secrets in `/etc/fbrx-command/secrets.env`, which only root reads (the setup
+token; an e-mail server's address with its password goes here too). `sudo systemctl restart fbrx-command` after a
+change.
+
 ## The hardware map
 
 *Hardware map* draws the server as it is wired: the processor sockets (NUMA nodes) with their cores on top, and the
@@ -319,6 +357,9 @@ fbrx-server logs [-f]              FBRX Virtual's log
 fbrx-server logs ai [-f]           the FBRX core's log (agent, FBRX Mesh, Mesh Assist)
 fbrx-server restart                restart FBRX Virtual (virtual machines keep running)
 fbrx-server restart ai             restart the FBRX core
+fbrx-server command                FBRX Command (command role): address, certificate, setup token until set up
+fbrx-server logs command [-f]      FBRX Command's log
+fbrx-server restart command        restart FBRX Command (computers reconnect by themselves)
 fbrx-server users                  who can sign in
 fbrx-server reset-password <user>  a new password for someone locked out
 fbrx-server create-admin [name]    another administrator
@@ -390,6 +431,7 @@ No new ISO is needed for this, or for any update: the ISO is only for a server's
 | `FBRX_V_GATE_MANAGE_WAN` | | A private network on the internet side allowed to reach the console and SSH. |
 | `FBRX_V_GATE_LAN_ADDRESS` | | Your network's addresses in the starter configuration (default: 192.168.1.1/24, or the next free choice clear of the internet side's). |
 | `FBRX_V_GATE_WAN_ADDRESS` / `FBRX_V_GATE_WAN_GATEWAY` | | A fixed internet address in the starter configuration (both, or DHCP). |
+| `FBRX_V_COMMAND_URL` | `http://127.0.0.1:8788` | FBRX Command's local-only address (command role), where the console checks on it. |
 
 `/etc/fbrx-core/fbrx-core.env` (ai role; `sudo systemctl restart fbrx-core` after a change): `FBRX_SERVER_ROLES`, the
 roles this server announces (the installer writes it). Everything else about the core is set from *Mesh & AI*.
@@ -405,6 +447,8 @@ roles this server announces (the installer writes it). Everything else about the
 * The management controller's password is encrypted with a key kept in the data folder (`keys/master.key`, mode 600).
 * The FBRX core (ai role) runs unprivileged and sandboxed by systemd (read-only system, only its data folder
   writable); see *Mesh & AI* for how the console reaches it.
+* FBRX Command (command role) runs unprivileged and sandboxed the same way, as its own `fbrx-command` account; its
+  secrets file is readable by root only, and the console reads its status on a port only this computer reaches.
 
 ## API
 

@@ -1,14 +1,17 @@
 #!/usr/bin/env bash
 # FBRX Server installer: turns Debian 13 ("trixie") into FBRX Server (FBRX OS for servers), with its web console on
 # port 9443 and the roles you pick: the FBRX Virtual hypervisor (KVM through libvirt), the FBRX core (an AI agent on
-# FBRX Mesh that lends its AI to the other computers and borrows theirs), and FBRX Gate (routing, firewall, VLANs,
-# DHCP and DNS, VPN and traffic priority for your network).
+# FBRX Mesh that lends its AI to the other computers and borrows theirs), FBRX Gate (routing, firewall, VLANs, DHCP
+# and DNS, VPN and traffic priority for your network), FBRX Time (image backups) and FBRX Command (your organization's
+# computers, settings, policy and updates).
 #
 #   sudo ./install.sh                 from an unpacked FBRX Server bundle (this script sits next to fbrx-virtual/)
 #   sudo ./install.sh --roles virtual hypervisor only, without the AI role
 #   sudo ./install.sh --roles gate,ai --gate-wan eno1 --gate-lan eno2
 #                                     a gate: the internet on eno1, your network on eno2 (192.168.1.1, or another
 #                                     network when the router in front already uses 192.168.1.x)
+#   sudo ./install.sh --roles virtual,ai,command
+#                                     also run your organization's FBRX Command (its own console on port 8787)
 #   sudo ./install.sh --bridge eno1   also put virtual machines straight onto your network through eno1 (after a reboot)
 #   sudo ./install.sh --uninstall     take FBRX Server off again (virtual machines and their disks stay)
 #
@@ -28,10 +31,14 @@ GATE_ETC=/etc/fbrx-gate
 GATE_DATA=/var/lib/fbrx-gate
 GATE_LOG=/var/log/fbrx-gate
 GATE_UNIT=/etc/systemd/system/fbrx-gate-firewall.service
+CMD_DATA=/var/lib/fbrx-command
+CMD_ETC=/etc/fbrx-command
+CMD_UNIT=/etc/systemd/system/fbrx-command.service
+CMD_USER=fbrx-command
 NODE_MAJOR=22
-# Roles this installer sets up. Planned roles (command, dns, directory, files) come with later releases.
-AVAILABLE_ROLES="virtual ai gate minidome time"
-PLANNED_ROLES="command dns directory files"
+# Roles this installer sets up. Planned roles (dns, directory, files) come with later releases.
+AVAILABLE_ROLES="virtual ai gate minidome time command"
+PLANNED_ROLES="dns directory files"
 
 BUNDLE=""
 YES=0
@@ -48,6 +55,7 @@ GATE_MANAGE=""
 GATE_LAN_ADDRESS=""
 GATE_WAN_ADDRESS=""
 GATE_WAN_GATEWAY=""
+CMD_ADDRESS=""
 REBOOT=0
 NO_START=0
 REBOOT_NEEDED=0
@@ -73,6 +81,8 @@ Options:
                                 time     FBRX Time: image backups of virtual machines and computers, each checked by
                                          starting it as a throwaway machine (with virtual); a backup folder (SMB)
                                          for computers
+                                command  FBRX Command: your organization's computers, their settings and policy,
+                                         licenses and updates, with its own console on port 8787
                               The web console comes with every role. The server keeps a copy of this installer, so
                               roles change later from the console (Roles) or with sudo fbrx-server roles add <role>.
   --gate-wan <nic>            the gate's internet port (from your modem or provider)
@@ -83,6 +93,8 @@ Options:
   --gate-wan-gateway <ip>     in /etc/network/interfaces when that is fixed, else DHCP from the modem or router)
   --gate-manage <cidr|none>   a private network on the internet side that may still reach the console and SSH
                               (default: the one the internet port is on now, if private, so you are not shut out)
+  --command-address <name>    the address computers use for FBRX Command (command role): a name in your DNS or an
+                              address (default: the one it has, or this server's address; on a gate, the gate's)
   --bridge <nic>              make bridge br0 on this network port for virtual machines (applies after a reboot)
   --port <n>                  the console's port (default: the one it has, or 9443)
   --no-start                  install and enable, but do not start (inside an installer)
@@ -105,6 +117,7 @@ while [ $# -gt 0 ]; do
     --gate-lan-address) GATE_LAN_ADDRESS="${2:?--gate-lan-address needs an address like 192.168.50.1/24}"; shift 2 ;;
     --gate-wan-address) GATE_WAN_ADDRESS="${2:?--gate-wan-address needs an address like 203.0.113.2/29}"; shift 2 ;;
     --gate-wan-gateway) GATE_WAN_GATEWAY="${2:?--gate-wan-gateway needs the gateway address, like 203.0.113.1}"; shift 2 ;;
+    --command-address) CMD_ADDRESS="${2:?--command-address needs a name or address, like command.example.lan}"; shift 2 ;;
     --reboot) REBOOT=1; shift ;;
     --port) PORT="${2:?--port needs a number}"; shift 2 ;;
     --no-start) START=0; NO_START=1; shift ;;
@@ -162,9 +175,10 @@ in_chroot() {
 # ------------------------------------------------------------------------------------------- uninstall
 
 if [ "$UNINSTALL" -eq 1 ]; then
-  say "Removing FBRX Server (FBRX Virtual, the AI role and FBRX Gate)"
+  say "Removing FBRX Server (FBRX Virtual and its roles)"
   systemctl disable --now fbrx-virtual.service 2>/dev/null || true
   systemctl disable --now fbrx-core.service 2>/dev/null || true
+  systemctl disable --now fbrx-command.service 2>/dev/null || true
   if [ -f "$GATE_UNIT" ]; then
     # The gate's networks go away: the ports get the settings they had before FBRX Gate (after a restart).
     systemctl disable fbrx-gate-firewall.service 2>/dev/null || true
@@ -177,7 +191,7 @@ if [ "$UNINSTALL" -eq 1 ]; then
   fi
   systemctl disable fbrx-server-firstboot.service 2>/dev/null || true
   rm -f /etc/systemd/system/fbrx-server-firstboot.service /etc/issue.d/fbrx-server-firstboot.issue
-  rm -f "$UNIT" "$CORE_UNIT" "$GATE_UNIT" /usr/local/sbin/fbrx-server /usr/local/sbin/fbrx-gate /etc/fbrx-server-release /etc/issue.d/fbrx-virtual-setup.issue /etc/modules-load.d/fbrx-vfio.conf /etc/motd.d/fbrx-server 2>/dev/null || true
+  rm -f "$UNIT" "$CORE_UNIT" "$CMD_UNIT" "$GATE_UNIT" /usr/local/sbin/fbrx-server /usr/local/sbin/fbrx-gate /etc/fbrx-server-release /etc/issue.d/fbrx-virtual-setup.issue /etc/modules-load.d/fbrx-vfio.conf /etc/motd.d/fbrx-server 2>/dev/null || true
   rm -rf "$APP"
   if [ -f /etc/default/grub.d/fbrx-server.cfg ]; then
     rm -f /etc/default/grub.d/fbrx-server.cfg
@@ -186,13 +200,14 @@ if [ "$UNINSTALL" -eq 1 ]; then
   [ -f /etc/issue.fbrx-backup ] && mv -f /etc/issue.fbrx-backup /etc/issue
   systemctl daemon-reload 2>/dev/null || true
   if [ "$PURGE" -eq 1 ]; then
-    if confirm "Delete $DATA (the ISO library, virtual disks, users, settings and the gate's history), $CORE_DATA (the AI role: mesh pairings, keys, chats), $GATE_ETC and $ETC?"; then
-      rm -rf "$DATA" "$ETC" "$CORE_DATA" "$CORE_ETC" "$GATE_ETC" "$GATE_DATA" "$GATE_LOG"
+    if confirm "Delete $DATA (the ISO library, virtual disks, users, settings and the gate's history), $CORE_DATA (the AI role: mesh pairings, keys, chats), $CMD_DATA (FBRX Command: its computers, settings, keys and uploads), $GATE_ETC and $ETC?"; then
+      rm -rf "$DATA" "$ETC" "$CORE_DATA" "$CORE_ETC" "$CMD_DATA" "$CMD_ETC" "$GATE_ETC" "$GATE_DATA" "$GATE_LOG"
       if id "$CORE_USER" >/dev/null 2>&1; then userdel "$CORE_USER" 2>/dev/null || true; fi
+      if id "$CMD_USER" >/dev/null 2>&1; then userdel "$CMD_USER" 2>/dev/null || true; fi
       note "Deleted."
     fi
   else
-    note "Kept $DATA, $CORE_DATA and $ETC (virtual disks, ISO library, users, mesh pairings). --purge deletes them."
+    note "Kept $DATA, $CORE_DATA, $CMD_DATA and $ETC (virtual disks, ISO library, users, mesh pairings, FBRX Command's data). --purge deletes them."
   fi
   note "Virtual machines stay defined in libvirt (virsh list --all). libvirt and QEMU stay installed."
   exit 0
@@ -233,6 +248,7 @@ BUNDLE="$(cd "$BUNDLE" && pwd)"
 [ -f "$BUNDLE/fbrx-virtual/server.mjs" ] || die "No FBRX Virtual in $BUNDLE (expected fbrx-virtual/server.mjs). Use the FBRX Server bundle."
 if has_role ai && [ ! -f "$BUNDLE/fbrx-core/core.mjs" ]; then die "This bundle has no FBRX core (fbrx-core/core.mjs) for the ai role: use a newer bundle, or --roles virtual"; fi
 if has_role gate && [ ! -f "$BUNDLE/fbrx-virtual/gate-cli.mjs" ]; then die "This bundle has no FBRX Gate: use a newer bundle"; fi
+if has_role command && [ ! -f "$BUNDLE/fbrx-command/server.mjs" ]; then die "This bundle has no FBRX Command (fbrx-command/server.mjs) for the command role: use a newer bundle"; fi
 VERSION="$(cat "$BUNDLE/VERSION" 2>/dev/null || echo 0.0.0)"
 
 # ------------------------------------------------------------------------------------------- gate ports
@@ -325,6 +341,7 @@ note "Roles: ${ROLE_LIST//,/, }"
 note "Installs the web console on port $PORT$(with_role virtual ', QEMU/KVM, libvirt and FBRX Virtual')."
 if has_role ai; then note "And the FBRX core (ai role): an AI agent on FBRX Mesh (port 47800), run from the console's Mesh & AI page."; fi
 if has_role minidome; then note "And FBRX MiniDome: watches the gate's names, connections and devices for threats (MiniDome in the console)."; fi
+if has_role command; then note "And FBRX Command: your organization's computers, their settings and policy, licenses and updates, with its own console."; fi
 if has_role gate; then
   note "And FBRX Gate: the internet on $GATE_WAN${GATE_WAN_ADDRESS:+ (fixed address $GATE_WAN_ADDRESS via $GATE_WAN_GATEWAY)}, your network on $GATE_LAN ($GATE_LAN_IP, handing out addresses)."
   if [ "$GATE_LAN_ADDRESS" != "192.168.1.1/24" ] && [ -n "$WAN_NOW" ] && overlaps 192.168.1.1/24 "$WAN_NOW"; then note "Not 192.168.1.1: the internet side already uses those addresses ($WAN_NOW)."; fi
@@ -636,6 +653,76 @@ elif [ -f "$TIME_SMB" ]; then
   if ! in_chroot; then systemctl reload smbd.service 2>/dev/null || true; fi
 fi
 
+# ------------------------------------------------------------------------------------------ command role
+
+cmd_existing() { (grep -E "^$1=" "$CMD_ETC/fbrx-command.env" 2>/dev/null || true) | tail -1 | cut -d= -f2-; }
+set_cmd() {
+  if grep -q "^$1=" "$CMD_ETC/fbrx-command.env"; then sed -i "s|^$1=.*|$1=$2|" "$CMD_ETC/fbrx-command.env"; else printf '%s=%s\n' "$1" "$2" >>"$CMD_ETC/fbrx-command.env"; fi
+}
+CMD_PORT="$(cmd_existing FBRX_CP_PORT)"
+CMD_PORT="${CMD_PORT:-8787}"
+CMD_URL=""
+if has_role command; then
+  say "Installing FBRX Command (command role)"
+  rm -rf "$APP/fbrx-command.new"
+  cp -r "$BUNDLE/fbrx-command" "$APP/fbrx-command.new"
+  rm -rf "$APP/fbrx-command"
+  mv "$APP/fbrx-command.new" "$APP/fbrx-command"
+  chmod -R go-w "$APP/fbrx-command"
+  # Its own account, with no login and no special rights.
+  if ! id "$CMD_USER" >/dev/null 2>&1; then
+    useradd --system --home-dir "$CMD_DATA" --no-create-home --shell /usr/sbin/nologin "$CMD_USER"
+  fi
+  mkdir -p "$CMD_DATA" "$CMD_ETC"
+  chown "$CMD_USER:$CMD_USER" "$CMD_DATA"
+  chmod 0700 "$CMD_DATA"
+  chmod 0755 "$CMD_ETC"
+  install -m 0644 "$BUNDLE/fbrx-command.service" "$CMD_UNIT"
+  if [ ! -f "$CMD_ETC/fbrx-command.env" ]; then
+    # The address computers use: the one given, the gate's on a gate (computers sit behind it), else this server's.
+    CMD_HOST="$CMD_ADDRESS"
+    if [ -z "$CMD_HOST" ] && has_role gate; then CMD_HOST="$GATE_LAN_IP"; fi
+    if [ -z "$CMD_HOST" ] && ! in_chroot; then CMD_HOST="$(ip -4 route get 1.1.1.1 2>/dev/null | awk '{for (i = 1; i <= NF; i++) if ($i == "src") { print $(i + 1); exit }}' || true)"; fi
+    CMD_HOST="${CMD_HOST:-$(hostname)}"
+    cat >"$CMD_ETC/fbrx-command.env" <<EOF
+# FBRX Command on FBRX Server (sudo systemctl restart fbrx-command after a change). See docs/SERVER.md.
+FBRX_CP_PORT=$CMD_PORT
+FBRX_CP_HOST=0.0.0.0
+FBRX_CP_DATA_DIR=$CMD_DATA
+# The address computers and people use. Give the server a fixed address in your router, or a name in your DNS
+# (the installer's --command-address changes it).
+FBRX_CP_PUBLIC_URL=https://$CMD_HOST:$CMD_PORT
+# HTTPS with its own certificate, made once in $CMD_DATA/tls: computers check its fingerprint when they join.
+FBRX_CP_TLS=self-signed
+FBRX_CP_TLS_NAMES=$CMD_HOST
+# The server's console checks on it here (this computer only).
+FBRX_CP_LOCAL_PORT=$((CMD_PORT + 1))
+# New versions come with FBRX Server (sudo fbrx-server update).
+FBRX_CP_MANAGED_BY=fbrx-server
+# Secrets (the setup token, an e-mail server's password…) go in secrets.env next to this file, which only root reads.
+EOF
+  elif [ -n "$CMD_ADDRESS" ]; then
+    set_cmd FBRX_CP_PUBLIC_URL "https://$CMD_ADDRESS:$CMD_PORT"
+    set_cmd FBRX_CP_TLS_NAMES "$CMD_ADDRESS"
+    note "Computers reach FBRX Command at https://$CMD_ADDRESS:$CMD_PORT from now on (ones that joined before keep the old address)."
+  else
+    note "Kept FBRX Command's settings in $CMD_ETC/fbrx-command.env"
+  fi
+  chmod 0644 "$CMD_ETC/fbrx-command.env"
+  # The first sign-in asks for the setup token (sudo fbrx-server command shows it until FBRX Command is set up).
+  if [ ! -s "$CMD_ETC/secrets.env" ]; then
+    printf '# FBRX Command settings only root may read. See fbrx-command.env.\nFBRX_CP_SETUP_TOKEN=%s\n' "$(head -c 18 /dev/urandom | base64 | tr '+/' '-_' | tr -d '=\n')" >"$CMD_ETC/secrets.env"
+  fi
+  chmod 0600 "$CMD_ETC/secrets.env"
+  CMD_URL="$(cmd_existing FBRX_CP_PUBLIC_URL)"
+  # The server's console reads its status on the local-only port.
+  set_env FBRX_V_COMMAND_URL "http://127.0.0.1:$(cmd_existing FBRX_CP_LOCAL_PORT)"
+elif [ -f "$CMD_UNIT" ]; then
+  say "Turning FBRX Command off (its data stays in $CMD_DATA)"
+  systemctl disable --now fbrx-command.service 2>/dev/null || true
+  rm -f "$CMD_UNIT" /etc/systemd/system/multi-user.target.wants/fbrx-command.service
+fi
+
 cat >/etc/fbrx-server-release <<EOF
 NAME="FBRX Server"
 VERSION="$VERSION"
@@ -732,6 +819,7 @@ $SIGN_IN
 
 EOF
 fi
+if has_role command; then printf 'FBRX Command for your organization:  %s\n\n' "$CMD_URL" >>/etc/issue; fi
 mkdir -p /etc/issue.d
 ln -sf "$DATA/setup-code.issue" /etc/issue.d/fbrx-virtual-setup.issue
 mkdir -p /etc/motd.d 2>/dev/null || true
@@ -741,6 +829,7 @@ cat >/etc/motd.d/fbrx-server 2>/dev/null <<EOF || true
   fbrx-server status   where the console is, and how things are
   fbrx-server help     everything else
 $(with_role gate '  fbrx-gate status     the gate: ports, devices, problems (fbrx-gate help: the rest)')
+$(with_role command '  fbrx-server command  FBRX Command: its address, certificate and setup token')
 EOF
 
 # ---------------------------------------------------------------------------------------------- start
@@ -749,6 +838,7 @@ systemctl daemon-reload 2>/dev/null || true
 mkdir -p /etc/systemd/system/multi-user.target.wants
 systemctl enable fbrx-virtual.service >/dev/null 2>&1 || ln -sf "$UNIT" /etc/systemd/system/multi-user.target.wants/fbrx-virtual.service
 if has_role ai; then systemctl enable fbrx-core.service >/dev/null 2>&1 || ln -sf "$CORE_UNIT" /etc/systemd/system/multi-user.target.wants/fbrx-core.service; fi
+if has_role command; then systemctl enable fbrx-command.service >/dev/null 2>&1 || ln -sf "$CMD_UNIT" /etc/systemd/system/multi-user.target.wants/fbrx-command.service; fi
 if has_role time; then systemctl enable smbd.service >/dev/null 2>&1 || true; fi
 if has_role gate; then
   mkdir -p /etc/systemd/system/sysinit.target.wants
@@ -771,6 +861,7 @@ if [ "$START" -eq 1 ] && ! in_chroot; then
     systemctl restart dnsmasq.service || warn "dnsmasq did not start (journalctl -u dnsmasq)"
   fi
   if has_role ai; then systemctl restart fbrx-core.service || warn "The FBRX core did not start (journalctl -u fbrx-core)"; fi
+  if has_role command; then systemctl restart fbrx-command.service || warn "FBRX Command did not start (journalctl -u fbrx-command)"; fi
   if has_role time; then systemctl restart smbd.service || warn "Samba did not start: computers cannot reach the backup folder (journalctl -u smbd)"; fi
   systemctl restart fbrx-virtual.service
   say "Starting FBRX Virtual"
@@ -785,7 +876,7 @@ if [ "$START" -eq 1 ] && ! in_chroot; then
     warn "FBRX Virtual did not answer yet: fbrx-server logs shows why."
   fi
 else
-  note "Enabled: the console$(with_role ai ', the FBRX core')$(with_role gate ' and FBRX Gate') start with the server."
+  note "Enabled: the console$(with_role ai ', the FBRX core')$(with_role command ', FBRX Command')$(with_role gate ' and FBRX Gate') start with the server."
 fi
 
 echo
@@ -798,6 +889,10 @@ fi
 note "Your browser warns about the certificate the first time: compare it with fbrx-server fingerprint."
 if has_role ai; then note "Then open Mesh & AI in the console: under Models on this server, download a model that fits and use it (or pick a provider), and pair the server with your other computers."; fi
 if has_role gate; then note "The Gate pages (or fbrx-gate on this server) change networks, VLANs, the firewall, the VPN and Prefer Mesh: edit, review, commit."; fi
+if has_role command; then
+  note "FBRX Command: open $CMD_URL and set it up with its setup token (fbrx-server command shows both). Your browser warns about its certificate the first time: compare it with fbrx-server command."
+  if has_role gate && [ "$GATE_NEW" -eq 0 ]; then note "On this gate, let your network reach it: a firewall rule from your network to the gate, TCP $CMD_PORT (the console's FBRX Command page says when it is missing)."; fi
+fi
 if has_role time; then note "FBRX Time in the console: back up virtual machines on a schedule, and connect computers to the backup folder (its connection code is there).$(with_role gate ' On a gate, let your network reach it: a firewall rule for TCP 445 to the gate.')"; fi
 # Everything that should run, runs (fbrx-server doctor --fix switches on whatever is off).
 if [ "$START" -eq 1 ] && ! in_chroot; then /usr/local/sbin/fbrx-server doctor --quiet || note "sudo fbrx-server doctor --fix switches on what is off."; fi

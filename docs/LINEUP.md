@@ -41,7 +41,7 @@ roles fit.
 | `gate` | FBRX Gate: the network's router and firewall | First stage |
 | `minidome` | FBRX MiniDome: threat detection through the gate | First stage |
 | `time` | FBRX Time: image backups of virtual machines and computers, each checked by starting it | 1.0 |
-| `command` | FBRX Command on the server: the organization's settings and policy, decided on the server side | Planned |
+| `command` | FBRX Command on the server: the organization's computers, settings and policy, licenses and updates; servers join it too | New |
 | `dns` | Name service for the network | Planned |
 | `directory` | Directory and sign-in for the organization's computers (a domain controller) | Planned |
 | `files` | File sharing | Planned |

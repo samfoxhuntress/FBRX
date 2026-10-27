@@ -11,12 +11,18 @@ R="$(mktemp -d)"
 trap 'rm -rf "$R"' EXIT
 fail() { echo "FAIL: $*" >&2; exit 1; }
 
-mkdir -p "$R/bin" "$R/opt/fbrx-server/fbrx-virtual" "$R/etc/fbrx-virtual" "$R/var/lib/fbrx-virtual" "$R/usr/local/sbin" "$R/etc/systemd/system" "$R/var/log" "$R/state"
+mkdir -p "$R/bin" "$R/opt/fbrx-server/fbrx-virtual" "$R/etc/fbrx-virtual" "$R/var/lib/fbrx-virtual" "$R/usr/local/sbin" "$R/etc/systemd/system" "$R/var/log" "$R/state" \
+  "$R/etc/fbrx-command" "$R/var/lib/fbrx-command"
 echo "old" >"$R/opt/fbrx-server/fbrx-virtual/marker"
 printf 'NAME="FBRX Server"\nVERSION="0.1.0"\nROLES="virtual,ai"\n' >"$R/etc/fbrx-server-release"
 printf 'FBRX_V_PORT=9443\nFBRX_V_ROLES=virtual,ai\n' >"$R/etc/fbrx-virtual/fbrx-virtual.env"
 echo "old data" >"$R/var/lib/fbrx-virtual/virtual.db"
 echo "[Unit]" >"$R/etc/systemd/system/fbrx-virtual.service"
+# The command role: FBRX Command's settings and database go aside with the rest, and come back with a rollback.
+echo "[Unit]" >"$R/etc/systemd/system/fbrx-command.service"
+printf 'FBRX_CP_PORT=8787\n' >"$R/etc/fbrx-command/fbrx-command.env"
+printf 'FBRX_CP_SETUP_TOKEN=old-token\n' >"$R/etc/fbrx-command/secrets.env"
+echo "old command data" >"$R/var/lib/fbrx-command/control-plane.db"
 
 # Stand-ins: systemctl remembers nothing; curl answers when the state file says the console is up.
 printf '#!/usr/bin/env bash\necho "systemctl $*" >>"%s/state/systemctl.log"\nexit 0\n' "$R" >"$R/bin/systemctl"
@@ -30,6 +36,7 @@ sed -e "s|/opt/fbrx-server|$R/opt/fbrx-server|g; s|/var/lib/fbrx-virtual|$R/var/
   -e "s|/etc/fbrx-server-release|$R/etc/fbrx-server-release|g; s|/var/lib/fbrx-server-update|$R/var/lib/fbrx-server-update|g" \
   -e "s|/var/log/fbrx-server-update.log|$R/var/log/fbrx-server-update.log|g; s|/usr/local/sbin|$R/usr/local/sbin|g" \
   -e "s|/etc/systemd/system|$R/etc/systemd/system|g; s|/etc/fbrx-core|$R/etc/fbrx-core|g; s|/var/lib/fbrx-core|$R/var/lib/fbrx-core|g" \
+  -e "s|/etc/fbrx-command|$R/etc/fbrx-command|g; s|/var/lib/fbrx-command|$R/var/lib/fbrx-command|g" \
   -e 's|^need_root() {.*|need_root() { :; }|' \
   "$HERE/fbrx-server" >"$R/fbrx-server"
 cp "$R/fbrx-server" "$R/usr/local/sbin/fbrx-server"
@@ -46,6 +53,8 @@ case " \$* " in *" --roles virtual,ai "*) ;; *) echo "install.sh was not given t
 echo "new $version" >"$R/opt/fbrx-server/fbrx-virtual/marker"
 sed -i 's/^VERSION=.*/VERSION="$version"/' "$R/etc/fbrx-server-release"
 echo "migrated for $version" >"$R/var/lib/fbrx-virtual/virtual.db"
+echo "migrated for $version" >"$R/var/lib/fbrx-command/control-plane.db"
+echo "FBRX_CP_SETUP_TOKEN=new-token" >"$R/etc/fbrx-command/secrets.env"
 case "$outcome" in fails) echo "something broke" >&2; exit 1 ;; silent) echo no >"$R/state/up" ;; *) echo yes >"$R/state/up" ;; esac
 EOF
   printf 'VERSION=%s\nBUNDLE=%s\nFROM=test\nSHA256=x\nSUMMARY=Test\nSTAGED_AT=now\n' "$version" "$b" >"$R/var/lib/fbrx-server-update/staged.env"
@@ -65,6 +74,7 @@ version_is 0.1.1
 grep -q 'new 0.1.1' "$R/opt/fbrx-server/fbrx-virtual/marker" || fail "the new program is not in place"
 [ ! -e "$R/var/lib/fbrx-server-update/staged.env" ] || fail "the staged update was not cleared"
 grep -q 'old data' "$R/var/lib/fbrx-server-update/previous/data/virtual.db" || fail "the database was not kept aside"
+grep -q 'old command data' "$R/var/lib/fbrx-server-update/previous/command-data/control-plane.db" || fail "FBRX Command's database was not kept aside"
 fbrx_server update | grep -q 'Previous:   0.1.0' || fail "status does not show the previous version"
 
 echo "== update rollback"
@@ -72,6 +82,8 @@ fbrx_server update rollback --yes >/dev/null || fail "rollback"
 version_is 0.1.0
 grep -q 'old' "$R/opt/fbrx-server/fbrx-virtual/marker" || fail "the old program did not come back"
 grep -q 'old data' "$R/var/lib/fbrx-virtual/virtual.db" || fail "the old database did not come back"
+grep -q 'old command data' "$R/var/lib/fbrx-command/control-plane.db" || fail "FBRX Command's old database did not come back"
+grep -q 'old-token' "$R/etc/fbrx-command/secrets.env" || fail "FBRX Command's old settings did not come back"
 
 echo "== an installer that fails goes back by itself"
 stage 0.1.2 fails

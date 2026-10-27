@@ -42,11 +42,12 @@ import { coreRoutes } from './routes/core';
 import { gateRoutes } from './routes/gate';
 import { domeRoutes } from './routes/dome';
 import { timeRoutes } from './routes/time';
-import { roleRoutes } from './routes/roles';
+import { readEnv, roleRoutes } from './routes/roles';
+import { commandRoutes, commandRule } from './routes/command';
 import { TimeService } from './time/service';
 import { LibvirtTimeDriver, SimulatedTimeDriver, type TimeDriver } from './time/driver';
 import { ConntrackSensor, DevicesSensor, DnsLogSensor, DomeEngine, DomeStore, SimulatedSensor, type DomeSensor } from '@fbrx/dome/node';
-import type { MeshNetworkComputer } from '@fbrx/shared';
+import { DEFAULT_CONTROL_PLANE_PORT, type MeshNetworkComputer } from '@fbrx/shared';
 
 function readVersion(): string {
   if (process.env.FBRX_V_VERSION) return process.env.FBRX_V_VERSION;
@@ -262,6 +263,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   await domeRoutes(app, ctx);
   await timeRoutes(app, ctx);
   await roleRoutes(app, ctx);
+  await commandRoutes(app, ctx);
 
   if (config.consoleDir && existsSync(join(config.consoleDir, 'index.html'))) {
     await app.register(fastifyStatic, { root: config.consoleDir, index: 'index.html' });
@@ -325,6 +327,8 @@ export function gateStarter(config: VirtualConfig, nics: NodeJS.Dict<Array<{ fam
     vmSwitch: config.roles.includes('virtual'),
   });
   c.management.consolePort = config.port;
+  // FBRX Command on this server: the computers on your network reach it (and join it) through the gate.
+  if (config.roles.includes('command')) c.firewall.rules.push(commandRule(Number(readEnv(config.command.envFile).FBRX_CP_PORT ?? DEFAULT_CONTROL_PLANE_PORT)));
   if (config.gate.manageFromWan) {
     c.firewall.rules.push({ id: 'manage-from-wan', name: `Manage the gate from ${config.gate.manageFromWan}`, enabled: true, from: 'wan', to: 'gate', proto: 'tcp', ports: `22,${config.port}`, source: config.gate.manageFromWan, action: 'accept', log: false });
   }

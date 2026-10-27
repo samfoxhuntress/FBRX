@@ -23,6 +23,7 @@ import { GateChangesPage } from './pages/gate-changes';
 import { DomePage } from './pages/dome';
 import { TimePage } from './pages/time';
 import { RolesPage } from './pages/roles';
+import { CommandPage } from './pages/command';
 
 export function App() {
   const [phase, setPhase] = useState<'loading' | 'setup' | 'login' | 'ready'>('loading');
@@ -120,6 +121,7 @@ function Console() {
     { id: 'server', label: 'Server & BIOS', icon: 'server', section: 'Server' },
     ...(app.has('ai') ? ([{ id: 'fabrix', label: 'Fabrix', icon: 'agent', section: 'Server' }] satisfies NavItem[]) : []),
     { id: 'mesh', label: 'Mesh & AI', icon: 'sparkles', section: 'Server' },
+    { id: 'command', label: 'FBRX Command', icon: 'globe', section: 'Server' },
     { id: 'roles', label: 'Roles', icon: 'layers', section: 'Server' },
     ...(app.can('admin') ? [{ id: 'access', label: 'Users & audit', icon: 'users', section: 'Access' } as NavItem] : []),
   ];
@@ -163,6 +165,8 @@ function Console() {
         return <TimePage tab={route.id} />;
       case 'roles':
         return <RolesPage />;
+      case 'command':
+        return <CommandPage />;
       case 'access':
         return <AccessPage />;
       default:

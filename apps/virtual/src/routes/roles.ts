@@ -8,8 +8,8 @@ import { rolesProblem, SERVER_ROLE_CATALOG, type RoleChange, type ServerRolesSta
 import { audited, need, type VirtualContext } from '../context';
 import { badRequest, conflict } from '../errors';
 
-/** KEY=value lines, as fbrx-server writes them. */
-function readEnv(file: string): Record<string, string> {
+/** KEY=value lines, as fbrx-server and the installer write them. */
+export function readEnv(file: string): Record<string, string> {
   const v: Record<string, string> = {};
   if (!existsSync(file)) return v;
   for (const line of readFileSync(file, 'utf8').split('\n')) {

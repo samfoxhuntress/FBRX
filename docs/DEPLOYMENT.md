@@ -69,7 +69,8 @@ from (keeping `.fbrx-keys`, `.fbrx-setup` and `node_modules`), then runs `Instal
 Command computer: in its own window on Windows, in Terminal on a Mac (press Return), in the background on Linux
 (`logs/update.log`). FBRX Command stops for a few minutes and starts again with all its data. **Skip this version**
 stops the reminder; the switch on the card (or `FBRX_CP_UPDATE_CHECK=off`) turns the checks off. Only the platform
-operator (the account that set FBRX Command up) checks or installs; administrators see the version. FBRX Command
+operator (the account that set FBRX Command up) checks or installs; administrators see the version. FBRX Command as
+FBRX Server's command role updates with the server instead (`FBRX_CP_MANAGED_BY=fbrx-server`). FBRX Command
 from before 1.9.8 cannot update itself yet: update it once by hand (below), and from then on Update now works.
 
 Run the installer again to update by hand (same data, certificate and setup): download and unzip the new FBRX zip and
@@ -83,6 +84,12 @@ FBRX Command's own log: `logs/command.log` in its folder.
 code like `4qZy-…`) and opening FBRX Command from its icon fills it in; it is also `setupToken` in `config.json` in
 FBRX Command's folder until setup is done. The long `AB:CD:…` code under *Certificate* is the certificate's
 fingerprint, not the token: the setup page says so if it is pasted there.
+
+### On FBRX Server
+
+FBRX Server runs FBRX Command as a role (`install.sh --roles …,command`, or *Roles* in the server's console): its own
+certificate, a setup token, updates with the server, and the server itself joins it. See
+[SERVER.md](SERVER.md#fbrx-command-on-the-server-the-command-role).
 
 ### Docker (recommended for a hosted service)
 

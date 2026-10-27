@@ -60,7 +60,7 @@ describe('Changing FBRX Server’s roles from the console', () => {
   it('shows the roles, and why they cannot change until the server keeps its installer', async () => {
     const st = (await req('GET', '/v1/server/roles', viewer)).body;
     expect(st).toMatchObject({ roles: ['virtual', 'ai'], canChange: false, why: expect.stringContaining('keeps no copy of its installer'), change: null });
-    expect(st.catalog.map((r: { id: string }) => r.id)).toEqual(['virtual', 'ai', 'gate', 'minidome', 'time']);
+    expect(st.catalog.map((r: { id: string }) => r.id)).toEqual(['virtual', 'ai', 'gate', 'minidome', 'time', 'command']);
     expect((await req('POST', '/v1/server/roles', admin, { roles: ['virtual', 'ai', 'time'] })).status).toBe(409);
   });
 
@@ -92,7 +92,8 @@ describe('Changing FBRX Server’s roles from the console', () => {
 
   it('knows what a set of roles needs, and which ports are the server’s own', () => {
     expect(rolesProblem([])).toBe('Pick at least one role');
-    expect(rolesProblem(['virtual', 'command'])).toBe('There is no command role');
+    expect(rolesProblem(['virtual', 'command'])).toBeNull();
+    expect(rolesProblem(['virtual', 'dns'])).toBe('There is no dns role');
     expect(rolesProblem(['gate', 'minidome'])).toBeNull();
     expect(rolesProblem(['minidome'])).toMatch(/through FBRX Gate/);
     expect(physicalPorts({ lo: [], eno1: [], eno2: [], virbr0: [], vnet3: [], 'br-lan': [], wg0: [] } as never)).toEqual(['eno1', 'eno2']);

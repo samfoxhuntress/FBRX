@@ -65,6 +65,12 @@ export interface VirtualConfig {
    * went to stateDir/roles.env and logFile.
    */
   server: { command: string; bundleDir: string; stateDir: string; logFile: string; spawn: 'systemd-run' | 'direct' };
+  /**
+   * FBRX Command on this server (the command role): the settings the installer wrote for it (its address) and its
+   * root-only secrets (the setup token), the certificate it made for itself, and its local-only address, where this
+   * console checks on it.
+   */
+  command: { envFile: string; secretsFile: string; certFile: string; localUrl: string };
 }
 
 function hasVirsh(): boolean {
@@ -133,6 +139,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
       stateDir: resolve(env.FBRX_V_SERVER_STATE_DIR ?? '/var/lib/fbrx-server-update'),
       logFile: resolve(env.FBRX_V_ROLES_LOG ?? '/var/log/fbrx-server-roles.log'),
       spawn: env.FBRX_V_SPAWN === 'direct' ? 'direct' : 'systemd-run',
+    },
+    command: {
+      envFile: resolve(env.FBRX_V_COMMAND_ENV ?? '/etc/fbrx-command/fbrx-command.env'),
+      secretsFile: resolve(env.FBRX_V_COMMAND_SECRETS ?? '/etc/fbrx-command/secrets.env'),
+      certFile: resolve(env.FBRX_V_COMMAND_CERT ?? '/var/lib/fbrx-command/tls/command.crt'),
+      localUrl: (env.FBRX_V_COMMAND_URL ?? 'http://127.0.0.1:8788').replace(/\/+$/, ''),
     },
     ...overrides,
   };

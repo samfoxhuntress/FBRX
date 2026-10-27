@@ -41,6 +41,8 @@ export interface CommandUpdateStatus {
   /** FBRX Command knows the folder it was installed from, so Update now can do it all. */
   canInstall: boolean;
   installedFrom: string | null;
+  /** What installs its new versions instead ("FBRX Server" for the server's command role), or null. */
+  managedBy: string | null;
   installing: { phase: 'downloading' | 'unpacking' | 'starting' | 'started' | 'failed'; pct: number | null; message: string | null } | null;
 }
 
@@ -67,7 +69,7 @@ interface Saved {
 }
 
 export class CommandUpdater {
-  private state: Omit<CommandUpdateStatus, 'autoCheck' | 'skipped' | 'canInstall' | 'installedFrom'>;
+  private state: Omit<CommandUpdateStatus, 'autoCheck' | 'skipped' | 'canInstall' | 'installedFrom' | 'managedBy'>;
   private timer: NodeJS.Timeout | null = null;
   private busy: Promise<CommandUpdateStatus> | null = null;
 
@@ -114,11 +116,17 @@ export class CommandUpdater {
     this.timer = null;
   }
 
+  /** FBRX Command as a role of FBRX Server (FBRX_CP_MANAGED_BY=fbrx-server) updates with the server, never by itself. */
+  managedBy(): string | null {
+    return process.env.FBRX_CP_MANAGED_BY === 'fbrx-server' ? 'FBRX Server' : null;
+  }
+
   /**
    * The FBRX folder FBRX Command was installed from ("Install FBRX Command" writes it into config.json next to the
    * data folder), when it is still there.
    */
   installRoot(): string | null {
+    if (this.managedBy()) return null;
     let root = process.env.FBRX_CP_INSTALLED_FROM ?? null;
     if (!root) {
       try {
@@ -140,6 +148,7 @@ export class CommandUpdater {
       skipped: !!this.state.latest && this.saved().skip === this.state.latest.version,
       canInstall: !!root,
       installedFrom: root,
+      managedBy: this.managedBy(),
     };
   }
 
@@ -191,6 +200,7 @@ export class CommandUpdater {
   install(): CommandUpdateStatus {
     const latest = this.state.latest;
     if (!latest || this.state.state !== 'available') throw new Error('There is no new version to install. Check for updates first.');
+    if (this.managedBy()) throw new Error('FBRX Command is a role of FBRX Server and updates with it: on the server, sudo fbrx-server update check, then sudo fbrx-server update commit.');
     const root = this.installRoot();
     if (!root) throw new Error('FBRX Command does not know which FBRX folder it was installed from. Download the new FBRX zip, unzip it and run "Install FBRX Command" in it.');
     if (this.state.installing && !['failed', 'started'].includes(this.state.installing.phase)) throw new Error('The update is already being prepared');

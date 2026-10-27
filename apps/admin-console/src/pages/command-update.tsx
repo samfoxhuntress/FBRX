@@ -19,6 +19,8 @@ export interface CommandUpdateStatus {
   skipped: boolean;
   canInstall: boolean;
   installedFrom: string | null;
+  /** What installs its new versions instead ("FBRX Server"), or null. */
+  managedBy: string | null;
   installing: { phase: 'downloading' | 'unpacking' | 'starting' | 'started' | 'failed'; pct: number | null; message: string | null } | null;
 }
 
@@ -115,6 +117,10 @@ export function CommandUpdateCard() {
             {s.canInstall ? (
               <>
                 Update now downloads the new FBRX folder into <span className="mono">{s.installedFrom}</span> and runs Install FBRX Command there, on the FBRX Command computer. FBRX Command stops for a few minutes, then starts again with all its devices, settings and data. On a Mac, press Return in the Terminal window that opens.
+              </>
+            ) : s.managedBy ? (
+              <>
+                FBRX Command runs as a role of {s.managedBy} and updates with it. On the server: <span className="mono">sudo fbrx-server update check</span>, then <span className="mono">sudo fbrx-server update commit</span>. It keeps all its devices, settings and data.
               </>
             ) : (
               <>

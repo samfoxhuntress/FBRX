@@ -358,7 +358,33 @@ export const SERVER_ROLE_CATALOG: ServerRoleInfo[] = [
   { id: 'gate', name: 'FBRX Gate', what: 'The router and firewall for your network, on two of this server’s network ports.', ports: true },
   { id: 'minidome', name: 'FBRX MiniDome', what: 'Watches the network through FBRX Gate for threats and tells the computer they are about.', needs: ['gate'] },
   { id: 'time', name: 'FBRX Time', what: 'Image backups of virtual machines and computers, each checked by starting it as a throwaway machine.', needs: ['virtual'] },
+  { id: 'command', name: 'FBRX Command', what: 'Your organization’s FBRX Command on this server: its computers, their settings and policy, licenses and updates, with its own console.' },
 ];
+
+/** FBRX Command on this server (the command role), as the server console shows it. */
+export interface ServerCommandStatus {
+  /** The command role is on. */
+  enabled: boolean;
+  /** Its service answers. */
+  running: boolean;
+  version: string | null;
+  /** Nobody has set it up yet: its first sign-in asks for the setup token. Null while it does not answer. */
+  needsSetup: boolean | null;
+  /** Where people and computers reach it (https://<this server>:8787). */
+  url: string | null;
+  /** Its certificate's SHA-256 fingerprint, which a computer compares once when it joins. */
+  fingerprint: string | null;
+  /** The one-time setup token, shown to administrators until FBRX Command is set up. */
+  setupToken: string | null;
+  /** Why it does not answer, in words. */
+  error: string | null;
+  /** On a gate: the gate's firewall lets your networks reach it (null without the gate role). */
+  gateOpen: boolean | null;
+  /** This server's FBRX core (the ai role) in an FBRX Command: null when it has not joined one (or has no ai role). */
+  joined: { server: string; organization: string | null; state: string } | null;
+  /** This server has the ai role, which is what joins an FBRX Command. */
+  canJoin: boolean;
+}
 
 /** A change of roles: running, or how the last one ended (fbrx-server roles writes it). */
 export interface RoleChange {

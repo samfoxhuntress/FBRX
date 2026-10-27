@@ -21,7 +21,8 @@ Server**, powered by FBRX OS, and the products below for the computers you alrea
   passthrough, and the server's health, power and **BIOS settings** through its management controller (Dell iDRAC
   and other Redfish ones). With the **ai** role the server is also an AI agent on FBRX Mesh: **Mesh Assist** lets
   your servers and computers lend each other their AI when one runs out of steps or credits, and lets a server you
-  make a controller hand out work. Install it from the FBRX Server ISO or on Debian 13 ([docs/SERVER.md](docs/SERVER.md));
+  make a controller hand out work. With the **command** role it runs your organization's FBRX Command, and servers
+  join it like any computer. Install it from the FBRX Server ISO or on Debian 13 ([docs/SERVER.md](docs/SERVER.md));
   for now the FBRX Endpoint installer carries the ISO, the server bundle and the guides (*Lab → FBRX Server*).
 * **FBRX Gate** and **FBRX MiniDome** — FBRX Server as the network's router and firewall: VLANs, DHCP and DNS, port
   forwards, a VPN with QR-code setup, traffic priority and **Prefer Mesh** (a fast lane, with jumbo frames, for FBRX
