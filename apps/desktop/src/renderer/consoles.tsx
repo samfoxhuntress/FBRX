@@ -218,7 +218,7 @@ function cssVar(name: string, fallback: string) {
 }
 
 /** The terminal screen of one session (xterm.js), sized to its box. */
-function Screen({ session }: { session: ConsoleSession }) {
+export function ConsoleScreen({ session }: { session: ConsoleSession }) {
   const box = useRef<HTMLDivElement>(null);
   const term = useRef<Terminal | null>(null);
   const closed = session.state === 'closed';
@@ -460,7 +460,7 @@ export function DeviceConsolesPanel({ selected, onSelect }: { selected: string |
             </Button>
           </div>
           <div className={`console-body${showGuide ? ' with-guide' : ''}`}>
-            <Screen key={current.id} session={current} />
+            <ConsoleScreen key={current.id} session={current} />
             {showGuide && <Guide session={current} profile={profile} />}
           </div>
         </div>

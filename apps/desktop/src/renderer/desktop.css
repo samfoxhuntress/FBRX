@@ -2449,6 +2449,39 @@ html.goose-mode #root {
   overflow: hidden;
   background: #fff;
 }
+/* Full screen, and in a window of its own (less its bar and the content's padding). */
+.srv-browser.full {
+  height: 100vh;
+  padding: 8px;
+  background: var(--page);
+}
+body.popout .srv-browser:not(.full) {
+  height: calc(100vh - 44px - 48px);
+}
+/* The server's command line, under its console. */
+.srv-terminal {
+  flex: 0 0 38%;
+  min-height: 180px;
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border);
+  overflow: hidden;
+  background: #0c0e11;
+}
+.srv-terminal-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px 4px 10px;
+  font-size: 12.5px;
+  background: var(--surface-2);
+  border-bottom: 1px solid var(--border);
+}
+.srv-terminal .console-screen {
+  flex: 1;
+  min-height: 0;
+}
 .story-ref {
   margin-top: 12px;
   padding-top: 10px;

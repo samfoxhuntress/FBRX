@@ -509,6 +509,15 @@ are offered there. *Open* shows the console inside FBRX, in a browser of its own
 * links to the same server open in place (back, forward and reload in the bar); anything else opens in your own
   browser, as does the button at the end of the bar.
 
+**Remote desktop.** An FBRX Server (a saved server on port 9443) opens as a remote desktop: its console, with the
+dashboard, the roles and every virtual machine's screen, and **Terminal**, a command line on the server over SSH under
+the console (the host key is confirmed the first time, a password can be kept encrypted in the vault, and the session
+is also in Terminal → Device consoles, with the FBRX Server guide). **Full screen** fills the screen with it, and **In a
+window of its own** gives the server a window beside FBRX. Away from home, connect [FBRX VPN](VPN.md) first: the bar
+shows *FBRX VPN* when the server is reached through your gate, and a server that does not answer offers to connect it.
+When the server is the gate itself, its console, SSH and FBRX Mesh answer VPN devices while the gate's VPN has full
+access (the default). The server has no graphical desktop of its own yet; the console is its screen.
+
 ### FBRX Server inside FBRX Endpoint (for now)
 
 Until FBRX Server has its own download page, the FBRX Endpoint installers carry it: the installer ISO, the bundle and

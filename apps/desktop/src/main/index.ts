@@ -306,6 +306,8 @@ const pageOf = (route: string) => route.split('/')[0];
  */
 function popOut(route: string, o: { wide?: boolean } = {}) {
   const page = pageOf(route);
+  // A server's console is a web page of its own, shown in a locked-down <webview> (server-browser.ts).
+  const server = page === 'server';
   const open = popouts.get(page);
   if (open && !open.isDestroyed()) {
     if (open.isMinimized()) open.restore();
@@ -315,8 +317,9 @@ function popOut(route: string, o: { wide?: boolean } = {}) {
     return;
   }
   const area = screen.getDisplayMatching(win?.getBounds() ?? screen.getPrimaryDisplay().bounds).workArea;
-  const width = o.wide ? Math.min(1280, Math.round(area.width * 0.8)) : Math.min(820, Math.round(area.width * 0.45));
-  const height = Math.min(o.wide ? 860 : 900, area.height - 40);
+  const wide = o.wide || server;
+  const width = wide ? Math.min(1280, Math.round(area.width * 0.8)) : Math.min(820, Math.round(area.width * 0.45));
+  const height = Math.min(wide ? 860 : 900, area.height - 40);
   const main = win && !win.isDestroyed() && win.isVisible() ? win.getBounds() : null;
   // To the right of the main window when there is room, otherwise on the right edge of the screen.
   const x = main && main.x + main.width + 8 + width <= area.x + area.width ? main.x + main.width + 8 : area.x + area.width - width - 16;
@@ -339,8 +342,10 @@ function popOut(route: string, o: { wide?: boolean } = {}) {
       nodeIntegration: false,
       webSecurity: true,
       spellcheck: true,
+      webviewTag: server,
     },
   });
+  if (server) guardWebviews(w);
   popouts.set(page, w);
   w.on('closed', () => popouts.get(page) === w && popouts.delete(page));
   w.once('ready-to-show', () => w.show());

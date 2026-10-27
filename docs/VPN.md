@@ -21,7 +21,9 @@ after `Endpoint =` before you paste.
 
 **Check home** pings the gate and each paired FBRX computer with an address behind the tunnel, and asks them over FBRX
 Mesh: when your FBRX Server answers there, its AI can help this computer as at home, and your chats can think with it
-(*AI models → Your other computers' AI*, see [MESH.md](MESH.md#think-with-your-fbrx-servers-ai)). Pair your computers with the
+(*AI models → Your other computers' AI*, see [MESH.md](MESH.md#think-with-your-fbrx-servers-ai)). *Your servers* opens
+the server as a remote desktop (its console and a command line) through the tunnel, see
+[SERVER.md](SERVER.md#your-servers-in-fbrx-endpoint). Pair your computers with the
 server at home first (*Mesh & phone*); they find each other by the addresses they had there.
 
 ## What it needs on this computer

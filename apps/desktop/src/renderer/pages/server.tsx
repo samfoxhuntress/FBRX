@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from 'react';
-import { SERVER_BROWSER_PARTITION, type SavedServer, type ServerCheck, type ServerResourceFile, type ServerSuggestion } from '@fbrx/shared';
+import { inCidr, isIPv4, SERVER_BROWSER_PARTITION, type SavedServer, type ServerCheck, type ServerResourceFile, type ServerSuggestion } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Icons, InfoTip, Input, Markdown, Modal, Page, Spinner, Status, TextArea, formatBytes, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call } from '../client';
-import { navigate, routeArg } from '../app';
-import { useCore } from '../hooks';
+import { navigate, POPOUT, routeArg } from '../app';
+import { ConnectDialog, ConsoleScreen } from '../consoles';
+import { useConsoleSessions, useCore } from '../hooks';
 
 /** Electron's <webview> (allowed only for server consoles, see main/server-browser.ts). */
 type WebviewElement = HTMLElement & {
@@ -39,7 +40,7 @@ export function ServerPage() {
     return <ServerConsole key={open.id} server={open} onChanged={() => void saved.reload()} />;
   }
   return (
-    <Page title="FBRX Server" description="FBRX OS for servers: any 64-bit PC or server with Debian 13 underneath, running FBRX Virtual and the roles you pick (AI, gate, MiniDome). Open your servers' consoles here, or set up a new one.">
+    <Page title="FBRX Server" description="FBRX OS for servers: any 64-bit PC or server with Debian 13 underneath, running FBRX Virtual and the roles you pick (AI, gate, MiniDome). Reach your servers here (their console and a command line, at home or through FBRX VPN), or set up a new one.">
       <YourServers servers={saved.data?.servers ?? null} suggestions={saved.data?.suggestions ?? []} reload={() => void saved.reload()} />
       <SetUp />
     </Page>
@@ -47,6 +48,9 @@ export function ServerPage() {
 }
 
 // ------------------------------------------------------------------------------------------ your servers
+
+/** FBRX Server's console port: a saved server on it opens as a remote desktop (console and command line). */
+const FBRX_SERVER_PORT = 9443;
 
 function YourServers({ servers, suggestions, reload }: { servers: SavedServer[] | null; suggestions: ServerSuggestion[]; reload: () => void }) {
   const [editing, setEditing] = useState<SavedServer | 'new' | ServerSuggestion | null>(null);
@@ -100,8 +104,8 @@ function YourServers({ servers, suggestions, reload }: { servers: SavedServer[] 
                   </div>
                   {s.notes && <div className="saved-notes">{s.notes}</div>}
                   <div className="fx-actions">
-                    <Button size="sm" variant="primary" icon="globe" onClick={() => navigate(`server/open/${encodeURIComponent(s.id)}`)}>
-                      Open
+                    <Button size="sm" variant="primary" icon={s.port === FBRX_SERVER_PORT ? 'monitor' : 'globe'} onClick={() => navigate(`server/open/${encodeURIComponent(s.id)}`)}>
+                      {s.port === FBRX_SERVER_PORT ? 'Remote desktop' : 'Open'}
                     </Button>
                     <Button size="sm" variant="ghost" icon="edit" onClick={() => setEditing(s)}>
                       Edit
@@ -213,6 +217,7 @@ const WEBVIEW_POPUPS = { allowpopups: 'true' } as object;
 const certError = (code: number) => code <= -200 && code > -300;
 
 function ServerConsole({ server, onChanged }: { server: SavedServer; onChanged: () => void }) {
+  const vpn = useVpnTo(server.host);
   const [check, setCheck] = useState<ServerCheck | null>(null);
   const [open, setOpen] = useState(false);
   const [checking, setChecking] = useState(true);
@@ -254,10 +259,16 @@ function ServerConsole({ server, onChanged }: { server: SavedServer; onChanged: 
         <Card title="The server does not answer">
           <div className="fx-grid">
             <Callout tone="warning">{check.error ?? `No answer from ${server.host}:${server.port}.`}</Callout>
+            {!vpn.on && <div className="fx-secondary">Away from home? Connect FBRX VPN first: through your FBRX Gate, the server answers at its address at home.</div>}
             <div className="fx-actions">
               <Button variant="primary" icon="refresh" onClick={() => void run()}>
                 Try again
               </Button>
+              {!vpn.on && (
+                <Button icon="lock" onClick={() => navigate('vpn')}>
+                  FBRX VPN
+                </Button>
+              )}
               {bridge.openExternal && (
                 <Button variant="ghost" icon="external" onClick={() => void bridge.openExternal!(server.url)}>
                   Open in your browser
@@ -311,13 +322,31 @@ function TrustCertificate({ server, check, onTrusted }: { server: SavedServer; c
   );
 }
 
+/** Whether FBRX VPN is up, and whether it carries the way to this host (its networks at home, or everything). */
+function useVpnTo(host: string): { on: boolean; through: boolean } {
+  const st = useCore('vpn.status', undefined, ['vpn.changed']).data;
+  const p = st?.state === 'on' ? st.profiles.find((x) => x.id === st.connected) : undefined;
+  return { on: !!p, through: !!p && (p.fullTunnel || (isIPv4(host) && p.networks.some((n) => inCidr(host, n)))) };
+}
+
+/**
+ * The server, as if you sat at it: its console (the dashboard, virtual machines and their screens, the roles) with a
+ * command line beside it over SSH, full screen or in a window of its own, at home or through FBRX VPN.
+ */
 function ServerBrowser({ server, onCertificateRefused }: { server: SavedServer; onCertificateRefused: () => void }) {
+  const frame = useRef<HTMLDivElement | null>(null);
   const view = useRef<WebviewElement | null>(null);
   const [url, setUrl] = useState(server.url);
   const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [nav, setNav] = useState({ back: false, forward: false });
   const [failed, setFailed] = useState<string | null>(null);
+  const [terminal, setTerminal] = useState(false);
+  const [connecting, setConnecting] = useState(false);
+  const [full, setFull] = useState(false);
+  const vpn = useVpnTo(server.host);
+  const sessions = useConsoleSessions();
+  const shell = (sessions.data ?? []).find((c) => c.host === server.host && c.protocol === 'ssh' && c.state !== 'closed') ?? null;
   const refused = useRef(onCertificateRefused);
   refused.current = onCertificateRefused;
   useEffect(() => {
@@ -352,14 +381,25 @@ function ServerBrowser({ server, onCertificateRefused }: { server: SavedServer; 
       for (const [n, h] of on) w.removeEventListener(n, h);
     };
   }, []);
+  useEffect(() => {
+    const on = () => setFull(document.fullscreenElement === frame.current);
+    document.addEventListener('fullscreenchange', on);
+    return () => document.removeEventListener('fullscreenchange', on);
+  }, []);
+  const toggleTerminal = () => (terminal ? setTerminal(false) : shell ? setTerminal(true) : setConnecting(true));
+  const toggleFull = () => void (document.fullscreenElement ? document.exitFullscreen() : frame.current?.requestFullscreen());
   const secure = url.startsWith('https://');
   return (
-    <div className="srv-browser">
+    <div className={`srv-browser${full ? ' full' : ''}`} ref={frame}>
       <div className="srv-bar">
-        <Button size="sm" variant="ghost" icon="chevronLeft" onClick={() => navigate('server')}>
-          Your servers
-        </Button>
-        <span className="srv-bar-sep" />
+        {!POPOUT && (
+          <>
+            <Button size="sm" variant="ghost" icon="chevronLeft" onClick={() => navigate('server')}>
+              Your servers
+            </Button>
+            <span className="srv-bar-sep" />
+          </>
+        )}
         <Button size="sm" variant="ghost" icon="chevronLeft" aria-label="Back" disabled={!nav.back} onClick={() => view.current?.goBack()} />
         <Button size="sm" variant="ghost" icon="chevronRight" aria-label="Forward" disabled={!nav.forward} onClick={() => view.current?.goForward()} />
         <Button size="sm" variant="ghost" icon={loading ? 'x' : 'refresh'} aria-label={loading ? 'Stop' : 'Reload'} onClick={() => (loading ? view.current?.stop() : view.current?.reload())} />
@@ -368,7 +408,18 @@ function ServerBrowser({ server, onCertificateRefused }: { server: SavedServer; 
           <span className="srv-address-name">{server.name}</span>
           <span className="mono">{url}</span>
         </div>
+        {vpn.through && (
+          <span className="fx-badge accent" title="This server is reached through your FBRX Gate">
+            FBRX VPN
+          </span>
+        )}
         {loading && <Spinner />}
+        <span className="srv-bar-sep" />
+        <Button size="sm" variant={terminal ? 'primary' : 'ghost'} icon="terminal" onClick={toggleTerminal} title="A command line on the server (SSH), beside its console">
+          Terminal
+        </Button>
+        <Button size="sm" variant="ghost" icon="monitor" aria-label={full ? 'Leave full screen' : 'Full screen'} title={full ? 'Leave full screen (Esc)' : 'Full screen'} onClick={toggleFull} />
+        {!POPOUT && bridge.popOut && <Button size="sm" variant="ghost" icon="appWindow" aria-label="In a window of its own" title="In a window of its own" onClick={() => void bridge.popOut!(`server/open/${encodeURIComponent(server.id)}`)} />}
         {bridge.openExternal && <Button size="sm" variant="ghost" icon="external" aria-label="Open in your browser" title="Open in your browser" onClick={() => void bridge.openExternal!(url)} />}
       </div>
       {failed && (
@@ -380,6 +431,33 @@ function ServerBrowser({ server, onCertificateRefused }: { server: SavedServer; 
         </Callout>
       )}
       <webview ref={(el) => void (view.current = el as WebviewElement | null)} className="srv-webview" src={server.url} partition={SERVER_BROWSER_PARTITION} title={title || server.name} {...WEBVIEW_POPUPS} />
+      {terminal && (
+        <div className="srv-terminal">
+          <div className="srv-terminal-bar">
+            <Icons.terminal size={13} />
+            <span>{shell ? `${shell.username ?? ''}@${server.name}` : server.name}</span>
+            <span className="fx-spacer" />
+            {shell ? (
+              <Button size="sm" variant="ghost" onClick={() => void call('console.close', { id: shell.id })}>
+                Disconnect
+              </Button>
+            ) : (
+              <Button size="sm" variant="ghost" icon="terminal" onClick={() => setConnecting(true)}>
+                Connect
+              </Button>
+            )}
+            <Button size="sm" variant="ghost" icon="x" aria-label="Hide the terminal" onClick={() => setTerminal(false)} />
+          </div>
+          {shell ? <ConsoleScreen key={shell.id} session={shell} /> : <Empty title="Not connected">Log in to {server.name} over SSH to use its command line here.</Empty>}
+        </div>
+      )}
+      {connecting && (
+        <ConnectDialog
+          target={{ host: server.host, name: server.name, protocol: 'ssh', port: 22, profileId: 'fbrx-server', auto: true }}
+          onClose={() => setConnecting(false)}
+          onConnected={() => (setConnecting(false), setTerminal(true), sessions.reload())}
+        />
+      )}
     </div>
   );
 }
