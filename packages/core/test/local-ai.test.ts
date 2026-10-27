@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PROVIDERS, THINKING_BUDGETS } from '@fbrx/shared';
 import { briefDescription, shortlistTools } from '../src/ai/tool-shortlist';
+import { agentFit } from '../src/ai/agent-fit';
 import { OpenAICompatibleProvider } from '../src/ai/providers/openai-compatible';
 import type { ToolSpec } from '../src/tools/types';
 import { makeKernel, waitFor, USER } from './helpers';
@@ -44,7 +45,15 @@ describe('a local model reads less, so it answers sooner', () => {
     expect([THINKING_BUDGETS.quick.localThinking, THINKING_BUDGETS.everyday.localThinking, THINKING_BUDGETS.thorough.localThinking]).toEqual([false, false, true]);
   });
 
-  it('sends a local model a short list of tools and keeps what it remembers with the message; a cloud model gets them all', async () => {
+  it('fits what it shows to how much the agent holds, or to what the person chose', () => {
+    expect(agentFit({}, { historyBudgetChars: 20_480 })).toEqual({ tools: 'focused' }); // 8K tokens on this computer
+    expect(agentFit({}, { historyBudgetChars: 81_920 })).toEqual({ tools: 'all' }); // 32K tokens
+    expect(agentFit({}, { historyBudgetChars: 2_500_000 })).toEqual({ tools: 'all' }); // a cloud AI
+    expect(agentFit({ tools: 'all' }, { historyBudgetChars: 20_480 })).toEqual({ tools: 'all' });
+    expect(agentFit({ tools: 'focused' }, { historyBudgetChars: 2_500_000 })).toEqual({ tools: 'focused' });
+  });
+
+  it('sends a small model a short list of tools and a roomy one them all; what it remembers rides with the message for both', async () => {
     const llm = await mockOpenAI(() => ({ text: 'Done.' }));
     const { kernel, cleanup } = await makeKernel();
     try {
@@ -67,7 +76,9 @@ describe('a local model reads less, so it answers sooner', () => {
       expect(local.messages.at(-1).content).toMatch(/^<memory>[\s\S]*Prefers short answers[\s\S]*<\/memory>\n\nwhy is my computer so slow\?$/);
       const cloud = await ask('why is my computer so slow?', 'far');
       expect(cloud.tools.length).toBeGreaterThan(40);
-      expect(cloud.messages[0].content).toContain('Prefers short answers');
+      // The same instructions for both, so a cloud AI's prompt cache holds across the conversation too.
+      expect(cloud.messages[0].content).toBe(local.messages[0].content);
+      expect(cloud.messages.at(-1).content).toContain('Prefers short answers');
     } finally {
       await cleanup();
       await llm.close();

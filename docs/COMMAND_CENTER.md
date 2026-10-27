@@ -211,6 +211,12 @@ cloud one, or a different one tomorrow). **Settings → Memory** shows all of it
 You can add a fact, change or forget any of them (right-click one), **Forget everything**, and turn each part off.
 Student and child computers keep no memory at all.
 
+Memory is not the model's own working memory: that is its **context window** (*What a local model keeps in mind*,
+under Thinking), the conversation and instructions it reads before each answer, much as a computer's RAM. FBRX's memory
+is a notebook it keeps for the model: before each answer, the facts that fit the question go with your message, inside
+that window. It helps the model know you; it does not make it reason better. Nor is it prompt caching, which is the AI
+service reusing what it already read when a request starts the same way as the last one, so it answers sooner.
+
 **Never kept**: Social Security and other national ID numbers, driver's license and passport numbers, tax IDs, bank
 account and routing numbers, full payment card numbers and their security codes, and passwords and PINs. FBRX finds
 them by their shape and the words around them and takes them out before anything is saved, whoever asked.
@@ -735,17 +741,23 @@ and doing** turns the live activity panel and the thinking notes on or off.
 
 ### Why a model on this computer is slower than a cloud AI
 
+FBRX is the banks of the river, not the river: every AI you pick gets the same tools, memory and governance, and
+FBRX helps a small one more and gets out of a capable one's way. A cloud AI sees every tool and decides how long it
+thinks; a model on this computer gets the help below.
+
 A cloud AI runs on accelerators built for it, with many times the memory speed of a computer's processor and RAM:
 writing each word means reading the whole model from memory, so a laptop writes 5 to 15 words a second where a cloud
 AI writes 50 to 100, and it reads a long request in a moment where a laptop takes many seconds. FBRX gives a local
 model less to read and write:
 
-* **A short list of tools.** A cloud AI is shown every tool (about 6,500 tokens of descriptions). A model on this
-  computer or the local network gets a few it always has (the time, its memory, FBRX's help and check-up) and the
-  tools for what the chat is about, briefly described: the files, the web, the computer, the calendar… A new
-  subject adds its tools at the end. It may still call any tool it is allowed to use.
+* **A short list of tools.** An AI that holds a long conversation (about 32K tokens or more: a cloud AI, a big
+  model on a server) is shown every tool (about 6,500 tokens of descriptions). A smaller one gets a few it always has
+  (the time, its memory, FBRX's help and check-up) and the tools for what the chat is about, briefly described: the
+  files, the web, the computer, the calendar… A new subject adds its tools at the end. It may still call any tool it
+  is allowed to use. *Tools it is shown* on each provider (AI models → edit) chooses for yourself.
 * **The same start every time.** The instructions and tools stay the same from one request to the next (what Fabrix
-  remembers goes with your message), so the built-in runtime reuses what it already read and starts writing sooner.
+  remembers goes with your message), so the AI reuses what it already read and starts writing sooner: the built-in
+  runtime's prompt cache, and a cloud AI's (Claude's, for one).
 * **Room for the chat.** What the model keeps in mind is shared out after the instructions and the tools, so a long
   chat is shortened from its start instead of overflowing.
 * **No thinking out loud first** (above), unless the level is Thorough or you turn it on.

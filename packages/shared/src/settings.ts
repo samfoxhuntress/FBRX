@@ -88,6 +88,11 @@ export const ProviderConfigSchema = z.object({
   defaultModel: z.string().optional(),
   /** True when requests leave the machine. Governed by policy.ai.allowCloudProviders. */
   cloud: z.boolean(),
+  /**
+   * The tools this agent is shown: "all", "focused" (the ones the chat is about, briefly described, for a small model)
+   * or "auto" (by how much it holds). Any tool it may use still works either way.
+   */
+  tools: z.enum(['auto', 'all', 'focused']).optional(),
 });
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 

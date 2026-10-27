@@ -281,6 +281,17 @@ function ProviderEditor({ provider, all, onClose }: { provider: ProviderConfig; 
           </Field>
         )}
         {p.type === 'openai-compatible' && <Toggle checked={p.cloud} onChange={(v) => setP({ ...p, cloud: v })} label="This endpoint is a cloud service (subject to the cloud AI policy)" />}
+        <Field label="Tools it is shown" help="Every tool it may use works either way; a small model answers sooner with fewer to read.">
+          <Select
+            value={p.tools ?? 'auto'}
+            onChange={(e) => setP({ ...p, tools: e.target.value === 'auto' ? undefined : (e.target.value as 'all' | 'focused') })}
+            options={[
+              { value: 'auto', label: 'Automatic: all of them when it holds a long conversation, else the ones the chat is about' },
+              { value: 'all', label: 'All of them, fully described' },
+              { value: 'focused', label: 'The ones the chat is about, briefly described' },
+            ]}
+          />
+        </Field>
         {(needsKey || p.apiKeySecret) && (
           <>
             <Field label="API key secret" help="Name of the vault credential holding the key">

@@ -168,8 +168,8 @@ manages (managed, which can *lock* a path so the page shows it read-only and the
 `ai/agent.ts` runs Fabrix's loop: build the request (instructions, the chat so far, the tools it may use), stream the
 model's answer, run each tool call it asks for through the gate, add the results, and repeat until it answers or uses
 up its steps (the *Thinking* level). Providers (`ai/providers/`) turn that one request shape into each service's own
-API. A model on the computer or the local network gets a short list of tools (`ai/tool-shortlist.ts`) so it has less
-to read; a cloud AI gets them all.
+API. How much FBRX scaffolds follows how much the agent holds (`ai/agent-fit.ts`): a small model gets a short list of
+tools (`ai/tool-shortlist.ts`) so it has less to read; a cloud AI or a big server model gets them all.
 
 **Tools** are plain objects (`ToolSpec` in `tools/types.ts`): a dotted name (`passwords.find`), a title, a
 description the model reads, a risk (`read`, `write`, `execute`, `network`, `sensitive`), a JSON Schema for its input,

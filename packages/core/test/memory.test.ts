@@ -98,7 +98,7 @@ describe("The AI's memory of the person", () => {
     }
   });
 
-  it('reaches whichever AI is chosen: with the message for a local one, in the instructions for a cloud one', async () => {
+  it('reaches whichever AI is chosen, with the person’s message (the instructions stay the same)', async () => {
     const { kernel, cleanup } = await makeKernel();
     let system = '';
     let message = '';
@@ -130,8 +130,9 @@ describe("The AI's memory of the person", () => {
       kernel.settings.update({ ...provider(true), policy: undefined } as never);
       kernel.policy.updateLocal({ ...kernel.policy.policy, ai: { ...kernel.policy.policy.ai, allowCloudProviders: true } });
       await ask('Hi again');
-      expect(system).toContain('Their name is Jake');
-      expect(system).not.toContain('12 Oak St');
+      expect(message).toContain('Their name is Jake');
+      expect(message).not.toContain('12 Oak St');
+      expect(system).not.toContain('Jake');
     } finally {
       await llm.close();
       await cleanup();
