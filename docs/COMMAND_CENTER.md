@@ -56,9 +56,9 @@ and its pages slide out beside it. Counts (unread alerts, waiting approvals) sho
 
 ### Version names
 
-FBRX 2.0 is the Beta (1.x was the Alpha): versions read **FBRX Endpoint Ultra Beta 2.0.0** (or Essentials, Standard or
+FBRX 2.x is the Beta (1.x was the Alpha): versions read **FBRX Endpoint Ultra Beta 2.1.0** (or Essentials, Standard or
 Black Hole). Each minor version also gets a codename from cloth, fiber to fabric, shown in **Settings → Logs & about**:
-1.8 *Spindle*, 1.9 *Bobbin*, 2.0 *Loom* (later *Warp*, *Weft*, *Selvedge*, *Tapestry*).
+1.8 *Spindle*, 1.9 *Bobbin*, 2.0 *Loom*, 2.1 *Warp* (later *Weft*, *Selvedge*, *Tapestry*).
 
 ### FBRX Endpoint Essentials, Standard, Ultra and Black Hole
 
