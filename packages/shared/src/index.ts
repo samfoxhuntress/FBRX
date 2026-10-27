@@ -41,3 +41,4 @@ export * from './creations';
 export * from './snapshots';
 export * from './passwords';
 export * from './essentials-home';
+export * from './vpn';

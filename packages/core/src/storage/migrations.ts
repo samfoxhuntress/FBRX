@@ -477,6 +477,20 @@ export const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 16,
+    name: 'vpn-profiles',
+    // FBRX VPN's tunnels to FBRX Gates: each one's settings (its private key among them) sealed with the vault key.
+    up: `
+      CREATE TABLE vpn_profiles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        data_enc TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_connected_at TEXT
+      );
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -151,7 +151,8 @@ the phone's browser storage for the FBRX Mobile page.
 ## Limits to know about
 
 * **Local network only.** The mesh is meant for your home or office network. To reach your devices from elsewhere,
-  use a VPN into that network rather than forwarding the port.
+  connect with **FBRX VPN** to your FBRX Gate ([VPN.md](VPN.md)) rather than forwarding the port: the mesh then works
+  through the tunnel, your FBRX Server's AI included.
 * **The phone app arrives over plain HTTP.** Requests are end-to-end encrypted, but the web page itself is served
   unencrypted by your computer, so someone actively attacking your local network at the moment you open FBRX
   Mobile could tamper with the page. Pair and use the phone app on networks you trust. (A future native app removes

@@ -301,6 +301,20 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return { ok: true };
     },
 
+    // ------------------------------------------------------------------------------------------- vpn
+    'vpn.status': () => k.vpn.status(),
+    'vpn.add': async (p) => {
+      const q = z.object({ name: z.string().max(60), settings: z.string().min(20).max(4000).optional(), path: z.string().min(1).max(1000).optional() }).parse(p);
+      if (!q.settings && !q.path) throw new CoreError('INVALID_ARGUMENT', 'Paste the settings, or pick the file the gate gave');
+      const settings = q.settings ?? (await readFile(expandPath(q.path!), 'utf8')).slice(0, 4000);
+      return k.vpn.add({ name: q.name, settings });
+    },
+    'vpn.remove': async (p) => ({ removed: await k.vpn.remove(z.object({ id: z.string().min(1).max(80) }).parse(p).id) }),
+    'vpn.connect': (p) => k.vpn.connect(z.object({ id: z.string().min(1).max(80) }).parse(p).id),
+    'vpn.disconnect': () => k.vpn.disconnect(),
+    'vpn.install': () => k.vpn.install(),
+    'vpn.check': () => k.vpn.check(),
+
     // --------------------------------------------------------------------------------------- network
     'net.context': () => k.net.context(),
     'net.publicIp': () => k.net.publicIp(),

@@ -3,8 +3,11 @@ import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'no
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import type { GateConfig } from '../src/index';
-import { GateEngine, GateStore, LinuxApplier, runCommand } from '../src/node/index';
+import { parseVpnSettings, renderVpnSettings } from '@fbrx/shared';
+import { peerConfig, type GateConfig } from '../src/index';
+import { GateEngine, GateStore, LinuxApplier, runCommand, wgKeyPair } from '../src/node/index';
+// FBRX VPN's own Linux driver (in FBRX OS), on a laptop that reaches this gate from the internet.
+import { LinuxVpnDriver } from '../../core/src/network/vpn';
 // FBRX MiniDome listens to this gate too (it depends on FBRX Gate, so its real-network check lives here).
 import { DOME_TEST_DOMAIN } from '../../dome/src/index';
 import { ConntrackSensor, DnsLogSensor, DomeEngine, DomeStore } from '../../dome/src/node/index';
@@ -17,6 +20,17 @@ import { ConntrackSensor, DnsLogSensor, DomeEngine, DomeStore } from '../../dome
 const can = process.platform === 'linux' && process.getuid?.() === 0 && ['nft', 'dnsmasq', 'ip', 'tc'].every((c) => spawnSync(c, ['-V']).error === undefined || spawnSync(c, ['--version']).error === undefined);
 
 const id = process.pid % 100000;
+// FBRX VPN needs the kernel's WireGuard and wg-quick (wireguard-tools).
+const wireguard =
+  can &&
+  spawnSync('wg-quick', ['-h']).error === undefined &&
+  (() => {
+    const ns = `fwgp${id}`;
+    spawnSync('ip', ['netns', 'add', ns]);
+    const ok = spawnSync('ip', ['-n', ns, 'link', 'add', 'wgprobe', 'type', 'wireguard']).status === 0;
+    spawnSync('ip', ['netns', 'del', ns]);
+    return ok;
+  })();
 const NS = { gw: `fgw${id}`, wan: `fwan${id}`, lan: `flan${id}`, guest: `fgst${id}`, mesh: `fmsh${id}`, vm: `fvm${id}` };
 // A DHCP client for the virtual machine (busybox's udhcpc), where the system has one.
 const udhcpc = spawnSync('busybox', ['udhcpc', '--help']).error === undefined;
@@ -50,6 +64,7 @@ describe.runIf(can)('FBRX Gate on a real (namespaced) network', () => {
   let vlans = false;
   let engine: GateEngine;
   let store: GateStore;
+  let applier: LinuxApplier;
   const procs: ChildProcess[] = [];
   const connect = (ns: string, host: string, port: number, ms = 1500) => inNs(ns, process.execPath, tool, 'connect', host, String(port), String(ms)).trim();
   const dnsq = (ns: string, server: string, name: string) => inNs(ns, process.execPath, tool, 'dns', server, name).trim();
@@ -138,7 +153,7 @@ describe.runIf(can)('FBRX Gate on a real (namespaced) network', () => {
     };
 
     const pidFile = join(dir, 'dnsmasq.pid');
-    const applier = new LinuxApplier({
+    applier = new LinuxApplier({
       paths: { varDir: join(dir, 'var'), logDir: join(dir, 'log'), etcDir: join(dir, 'etc-gate') },
       mode: 'iproute',
       root: join(dir, 'root'),
@@ -313,4 +328,32 @@ describe.runIf(can)('FBRX Gate on a real (namespaced) network', () => {
     expect(sh('-n', NS.gw, '-br', 'addr', 'show', LAN.lan)).toContain('192.168.50.1/24');
     expect(connect(NS.lan, '203.0.113.1', 8080, 5000)).toBe('OK 203.0.113.2');
   }, 90_000);
+
+  // FBRX VPN: a laptop on the internet joins the gate's VPN with the settings the gate makes for it (read by FBRX's own
+  // parser, run by FBRX's Linux driver) and reaches home: the gate, a device inside, and FBRX Mesh on the gate itself
+  // (where the server's own FBRX core listens).
+  it.runIf(wireguard)('lets a laptop on the internet in through FBRX VPN', async () => {
+    const keys = wgKeyPair();
+    const c = structuredClone(engine.candidate());
+    c.vpn.enabled = true;
+    c.vpn.peers.push({ name: 'laptop', publicKey: keys.publicKey, address: '10.99.0.2', keepalive: 25 });
+    engine.setCandidate(c, 'test');
+    expect((await engine.commit({ by: 'test', comment: 'VPN for the laptop' })).status).toBe('confirmed');
+    const text = peerConfig({ config: c, peer: c.vpn.peers.at(-1)!, privateKey: keys.privateKey, gatePublicKey: (await applier.vpnKey()).publicKey, endpoint: '203.0.113.2', fullTunnel: false });
+    const file = join(dir, 'fbrxvpn.conf');
+    writeFileSync(file, renderVpnSettings(parseVpnSettings(text), { dns: false }), { mode: 0o600 });
+    serve(NS.gw, '192.168.50.1', 47800);
+    await wait(300);
+    const laptop = new LinuxVpnDriver({ run: (cmd, args) => runCommand('ip', ['netns', 'exec', NS.wan, cmd, ...args]), root: true });
+    await laptop.up(file);
+    try {
+      expect((await laptop.state()).up).toBe(true);
+      expect(inNs(NS.wan, 'ping', '-c', '1', '-W', '2', '10.99.0.1')).toMatch(/1 received/);
+      expect(connect(NS.wan, '192.168.50.10', 8081, 3000)).toBe('OK 10.99.0.2');
+      expect(connect(NS.wan, '192.168.50.1', 47800, 3000)).toBe('OK 10.99.0.2');
+    } finally {
+      await laptop.down(file);
+    }
+    expect((await laptop.state()).up).toBe(false);
+  }, 30_000);
 });

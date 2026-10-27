@@ -74,6 +74,7 @@ import { FileBrowser, TerminalSessions } from './system/files';
 import { Spotlight } from './spotlight/spotlight';
 import { AlertEngine } from './alerts/alert-engine';
 import { NetDiag } from './network/netdiag';
+import { LinuxVpnDriver, MacVpnDriver, VpnService, WindowsVpnDriver, type VpnDriver } from './network/vpn';
 import { Trophies } from './fun/trophies';
 import { Fbrx1Cli } from './cli/fbrx1';
 import { VendorDb } from './network/vendors';
@@ -85,7 +86,7 @@ import { CalendarService } from './calendar/calendar-service';
 import { Shield } from './protection/shield';
 import { ProtectionService } from './protection/protection-service';
 import { ImageBackupService } from './time/image-backup';
-import { elevated as runElevated, ps as runPs } from './windows/ps';
+import { elevated as runElevated, exec, ps as runPs } from './windows/ps';
 import { shieldTools } from './tools/builtin/shield-tools';
 import { helpdeskTools } from './tools/builtin/helpdesk-tools';
 import { NetEnvironments } from './network/environments';
@@ -217,6 +218,8 @@ export class Kernel {
   readonly spotlight: Spotlight;
   readonly alerts: AlertEngine;
   readonly net: NetDiag;
+  /** FBRX VPN: this computer's tunnel to an FBRX Gate. */
+  readonly vpn: VpnService;
   readonly netenv: NetEnvironments;
   readonly calendar: CalendarService;
   readonly shield: Shield;
@@ -575,6 +578,26 @@ export class Kernel {
       internet: () => this.internetAllowed(),
     });
     this.net = new NetDiag({ db: this.db, events: this.events, vendors: this.vendors, internet: () => this.internetAllowed() });
+    const vpnDriver: VpnDriver =
+      process.platform === 'win32'
+        ? new WindowsVpnDriver({ run: exec, elevate: (script) => runElevated(script, { workDir: this.paths.tmp }) })
+        : process.platform === 'darwin'
+          ? new MacVpnDriver({ run: exec })
+          : new LinuxVpnDriver({ run: exec, root: process.getuid?.() === 0 });
+    this.vpn = new VpnService({
+      db: this.db,
+      meta: this.meta,
+      vault: this.vault,
+      events: this.events,
+      dir: join(this.paths.tmp, 'vpn'),
+      driver: vpnDriver,
+      ping: async (host) => {
+        const r = await this.net.ping(host, 2, 1500);
+        return { ok: r.received > 0, ms: r.avg };
+      },
+      computers: async () => (await this.mesh.networkComputers()).map((c) => ({ id: c.id, name: c.name, addresses: c.addresses, roles: this.mesh.rolesOf(c.id) })),
+      meshAnswers: (id) => this.mesh.hello(id).then(() => true),
+    });
     this.netenv = new NetEnvironments({ meta: this.meta, vault: this.vault, events: this.events, log: L('netenv'), unavailable: () => this.blackHoleOnly('Network environments') });
     this.calendar = new CalendarService({
       db: this.db,

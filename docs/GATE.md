@@ -159,7 +159,9 @@ log** (on by default) is what FBRX MiniDome reads; it is rotated daily and kept 
 Your phone or laptop reaches home from anywhere (uses WireGuard). *DNS & VPN → Add a device*: the gate makes the
 device's keys and settings and shows them **once**, as a QR code for the WireGuard app and as a settings file. The
 device's private key is not kept anywhere. Choose whether everything goes through home (safer on public Wi-Fi) or only
-your networks. Behind another router, forward UDP 51820 to the gate.
+your networks. Behind another router, forward UDP 51820 to the gate. On an FBRX computer, paste the settings into
+**FBRX VPN** ([VPN.md](VPN.md)): it connects from FBRX, and the gate lets a device with full access reach its console,
+SSH and FBRX Mesh (the server's own AI), as it does for the networks that may manage it.
 
 ## Traffic priority and Prefer Mesh
 

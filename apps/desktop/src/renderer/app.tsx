@@ -60,6 +60,7 @@ const BugsPage = lazy(() => import('./pages/bugs').then((m) => ({ default: m.Bug
 const LabPage = lazy(() => import('./pages/lab').then((m) => ({ default: m.LabPage })));
 const ServerPage = lazy(() => import('./pages/server').then((m) => ({ default: m.ServerPage })));
 const MeshPage = lazy(() => import('./pages/mesh').then((m) => ({ default: m.MeshPage })));
+const VpnPage = lazy(() => import('./pages/vpn').then((m) => ({ default: m.VpnPage })));
 const AiCoordPage = lazy(() => import('./pages/aicoord').then((m) => ({ default: m.AiCoordPage })));
 const MigratePage = lazy(() => import('./pages/migrate').then((m) => ({ default: m.MigratePage })));
 const SnapshotsPage = lazy(() => import('./pages/snapshots').then((m) => ({ default: m.SnapshotsPage })));
@@ -96,6 +97,7 @@ export type Route =
   | 'toolbox'
   | 'library'
   | 'mesh'
+  | 'vpn'
   | 'aicoord'
   | 'connections'
   | 'tools'
@@ -409,6 +411,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'toolbox', label: 'Toolbox', icon: 'toolbox', section: 'Utilities' },
     { id: 'library', label: 'Library', icon: 'book', section: 'Utilities' },
     { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect', need: 'ultra' },
+    { id: 'vpn', label: 'FBRX VPN', icon: 'lock', section: 'Connect', need: 'ultra' },
     { id: 'runtime', label: 'AI models', icon: 'cpu', section: 'Connect' },
     { id: 'aicoord', label: 'AI coordination', icon: 'zap', section: 'Connect', need: 'ultra' },
     { id: 'connections', label: 'Connections', icon: 'link', section: 'Connect', need: 'ultra' },
@@ -563,6 +566,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return <LibraryPage agentName={agentName} everything={blackhole} easterEggs={fun} />;
       case 'mesh':
         return ultra ? <MeshPage /> : ultraOnly('Mesh & phone', 'Link your computers and your phone over an encrypted mesh, and reach FBRX from anywhere.');
+      case 'vpn':
+        return ultra ? <VpnPage /> : ultraOnly('FBRX VPN', 'Reach home from anywhere through your FBRX Gate: your FBRX Server, its AI and your network.');
       case 'aicoord':
         return ultra ? <AiCoordPage agentName={agentName} /> : ultraOnly('AI coordination', 'Let other AI apps on this computer (such as Claude) use FBRX tools safely, through MCP.');
       case 'approvals':
@@ -897,7 +902,7 @@ const SECTIONS: Array<{ id: string; section: string; label: string; hint: string
   { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Calendar, tasks, notes, automations', learnerHint: 'Calendar, notes and to-dos', icon: 'layers' },
   { id: 'pitstop', section: 'PC care', label: 'Pit Stop', hint: 'Storage, security, repairs', icon: 'wrench' },
   { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', learnerHint: 'Tools and stories', icon: 'toolbox' },
-  { id: 'orbit', section: 'Connect', label: 'Orbit', hint: 'Phone, mesh, AI models', basicHint: 'AI models', icon: 'orbit' },
+  { id: 'orbit', section: 'Connect', label: 'Orbit', hint: 'Phone, mesh, VPN, AI models', basicHint: 'AI models', icon: 'orbit' },
   { id: 'stronghold', section: 'Protect', label: 'Stronghold', hint: 'Antivirus, approvals, keys, backups', icon: 'castle' },
   { id: 'lab', section: 'Advanced', label: 'Lab', hint: 'Terminal, virtual lab, FBRX Server', icon: 'flask' },
   { id: 'control', section: 'System', label: 'Control', hint: 'Organization, settings', basicHint: 'Settings, license', learnerHint: 'Settings', icon: 'settings' },

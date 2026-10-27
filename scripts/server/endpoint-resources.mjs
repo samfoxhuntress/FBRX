@@ -149,6 +149,7 @@ const GUIDES = {
   'SERVER.md': 'FBRX Server and FBRX Virtual',
   'MESH.md': 'FBRX Mesh, Mesh Assist and Prefer Mesh',
   'GATE.md': 'FBRX Gate',
+  'VPN.md': 'FBRX VPN: home from anywhere',
   'MINIDOME.md': 'FBRX MiniDome',
   'LINEUP.md': 'The FBRX lineup',
 };

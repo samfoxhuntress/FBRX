@@ -1,3 +1,4 @@
+import type { VpnCheck, VpnProfile, VpnStatus } from './vpn';
 import type { TrophyState } from './fun';
 import type { VoiceDownloadId } from './settings';
 import type { AssistAction, AssistJob, HelpdeskScope, HelpdeskStatus, TicketCategory, TicketDetail, TicketPriority, TicketStatus, TicketSummary } from './helpdesk';
@@ -1054,6 +1055,18 @@ export interface ExtMethods {
   'net.scanGet': (p: { id: string }) => LanScan;
   'net.scanDelete': (p: { id: string }) => Deleted;
   'net.compare': (p: { a: string; b: string }) => LanScanCompare;
+
+  /** FBRX VPN: tunnels to FBRX Gates (home from anywhere). */
+  'vpn.status': () => VpnStatus;
+  /** Keeps a gate's device settings: the text of the file DNS & VPN → Add a device gives, or the file itself. */
+  'vpn.add': (p: { name: string; settings?: string; path?: string }) => VpnProfile;
+  'vpn.remove': (p: { id: string }) => { removed: boolean };
+  'vpn.connect': (p: { id: string }) => VpnStatus;
+  'vpn.disconnect': () => VpnStatus;
+  /** Installs the system's VPN tools when they are missing. */
+  'vpn.install': () => VpnStatus;
+  /** Pings the gate and the paired FBRX computers behind the tunnel, and asks those over FBRX Mesh. */
+  'vpn.check': () => VpnCheck;
   'net.exportCsv': (p: { id: string; path: string }) => { path: string; rows: number };
   'net.speedTest': (p: { reqId: string }) => SpeedTestResult;
   'net.speedHistory': () => SpeedTestResult[];
@@ -1306,10 +1319,16 @@ export interface ExtEvents {
   'messages.changed': { threadId: string | null; message?: ThreadMessage; unread: number };
   'mesh.job': { reqId: string; job: MeshJob };
   'mesh.assist': AssistSession;
+  'vpn.changed': { at: string };
 }
 
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
+  'vpn.add',
+  'vpn.remove',
+  'vpn.connect',
+  'vpn.disconnect',
+  'vpn.install',
   'edition.choose',
   'edition.startTrial',
   'edition.tourDone',
