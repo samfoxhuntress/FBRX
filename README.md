@@ -209,7 +209,8 @@ license an installer yourself.
 
 ## Quick start (development)
 
-Requirements: Node.js 22.15+ (see `.nvmrc`). No native modules, no Python, no compilers.
+Requirements: Node.js 22.15+ (see `.nvmrc`). No native modules, no Python, no compilers. How the code fits together
+and how to change it: [docs/DEVELOPING.md](docs/DEVELOPING.md).
 
 ```bash
 npm install

@@ -1,5 +1,7 @@
 # Architecture
 
+For a guided tour of the code and recipes for common changes, start with [DEVELOPING.md](DEVELOPING.md).
+
 FBRX OS has three deployable pieces that share one TypeScript codebase:
 
 | Piece | Runs on | Built from |
