@@ -893,9 +893,9 @@ function Creations() {
 }
 
 const THINKING_HELP: Record<ThinkingLevel, string> = {
-  quick: `Small jobs and quick answers: up to ${THINKING_BUDGETS.quick.steps} steps a task, so it checks in with you sooner.`,
-  everyday: `Everyday tasks: up to ${THINKING_BUDGETS.everyday.steps} steps a task. Recommended.`,
-  thorough: `Big jobs and long documents: up to ${THINKING_BUDGETS.thorough.steps} steps a task (the most there is), and a local model keeps twice as much in mind (about 1 GB more memory).`,
+  quick: `Small jobs and quick answers: up to ${THINKING_BUDGETS.quick.steps} steps a task, so it checks in with you sooner. A local model answers straight away.`,
+  everyday: `Everyday tasks: up to ${THINKING_BUDGETS.everyday.steps} steps a task, and a local model answers straight away (fast on any computer). Recommended.`,
+  thorough: `Big jobs and long documents: up to ${THINKING_BUDGETS.thorough.steps} steps a task (the most there is); a local model keeps twice as much in mind (about 1 GB more memory) and thinks before it answers, which on a computer's processor can take minutes.`,
 };
 
 /**
@@ -928,7 +928,7 @@ function Thinking() {
         {standard ? (
           <WorkBudget policy={pol.data} />
         ) : (
-          <EditionHint tier="basic">Standard sets each part on its own: steps per task, the longest answer, and how much a local model keeps in mind.</EditionHint>
+          <EditionHint tier="basic">Standard sets each part on its own: steps per task, the longest answer, how much a local model keeps in mind and whether it thinks first.</EditionHint>
         )}
         <Toggle checked={s.ai.showThinking} disabled={L('ai.showThinking')} onChange={(v) => void patch({ ai: { showThinking: v } })} label={`Show what ${name} is thinking and doing while it works`} />
       </div>
@@ -1002,6 +1002,13 @@ function WorkBudget({ policy }: { policy: EffectivePolicy }) {
           options={[...new Set([...CONTEXTS, s.runtime.contextSize])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: ctxLabel(n) }))}
         />
       </Field>
+      <Toggle
+        checked={s.ai.localThinking}
+        disabled={L('ai.localThinking')}
+        onChange={(v) => void patch({ ai: { localThinking: v } })}
+        label={<>A local model thinks before it answers <Locked show={L('ai.localThinking')} /></>}
+        info="Models such as Qwen3 can reason first. Better on hard tasks, but on a computer's processor that can take minutes before the first word; off, they answer straight away. Cloud AI is not affected."
+      />
       {hasOllama && (
         <Field label={<>Memory of Ollama models <Locked show={L('ai.ollamaContext')} /></>} help="Ollama's own setting is often 4K, which a long task fills quickly. 32K suits most tool-using work on a 16 GB computer.">
           <Select

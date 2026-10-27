@@ -120,6 +120,11 @@ export const SettingsSchema = z.object({
     maxOutputTokens: z.number().int().min(0).max(128000),
     /** Context window for Ollama models, in tokens (0 = Ollama's own setting). The built-in runtime uses runtime.contextSize. */
     ollamaContext: z.number().int().min(0).max(262144),
+    /**
+     * Let a model on this computer that can think before answering (Qwen3 and the like) do so. Off, it answers
+     * straight away: on a processor, its thinking can take minutes before the first word.
+     */
+    localThinking: z.boolean(),
     /** Show what the agent is thinking and doing while it works. */
     showThinking: z.boolean(),
     /** Where the documents and pictures the agent makes are saved (${DOCUMENTS}, ${DESKTOP} and ${HOME} work). */
@@ -572,6 +577,7 @@ export const DEFAULT_SETTINGS: Settings = {
     newChatsOffline: true,
     resources: 'balanced',
     maxOutputTokens: 0,
+    localThinking: false,
     ollamaContext: 0,
     showThinking: true,
     outputFolder: DEFAULT_OUTPUT_FOLDER,

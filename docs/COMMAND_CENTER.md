@@ -711,11 +711,11 @@ Windows copies signed by a publisher only install updates signed by the same pub
 
 **Settings → Agent → Thinking** sets how much Fabrix does on one task, in every edition:
 
-| Level | For | Steps per task | What a local model keeps in mind |
-| --- | --- | --- | --- |
-| **Quick** | Small jobs and quick answers; it checks in with you sooner | 10 | 8K tokens |
-| **Everyday** (where every computer starts) | Everyday tasks | 30 | 8K tokens (Ollama: its own setting) |
-| **Thorough** | Big jobs and long documents | 100, the most there is | 16K tokens (about 1 GB more memory) |
+| Level | For | Steps per task | What a local model keeps in mind | A local model thinks first |
+| --- | --- | --- | --- | --- |
+| **Quick** | Small jobs and quick answers; it checks in with you sooner | 10 | 8K tokens | No |
+| **Everyday** (where every computer starts) | Everyday tasks | 30 | 8K tokens (Ollama: its own setting) | No |
+| **Thorough** | Big jobs and long documents | 100, the most there is | 16K tokens (about 1 GB more memory) | Yes |
 
 Every level leaves the length of an answer to the model. A step is one round of thinking and using tools; when Fabrix
 uses them all it says so, and *continue* goes on. The steps are kept in the policy (with up to three tool calls a
@@ -731,6 +731,28 @@ and doing** turns the live activity panel and the thinking notes on or off.
 | Longest answer | The most the model may write in one reply. A cut-off answer says so. | Automatic (64K tokens for Claude, the server's own limit for other models) |
 | Memory of the built-in model | The built-in runtime's context window, 4K to 128K tokens, with the memory it needs. | 8K |
 | Memory of Ollama models | Ollama's context window (`num_ctx`); Ollama's own setting is often 4K. | Ollama's setting |
+| A local model thinks before it answers | Lets a model that can reason first (Qwen3, DeepSeek R1 and the like) do so on this computer. Better on hard questions, much slower: it writes hundreds of words of reasoning before the answer. | Off (on for Thorough) |
+
+### Why a model on this computer is slower than a cloud AI
+
+A cloud AI runs on accelerators built for it, with many times the memory speed of a computer's processor and RAM:
+writing each word means reading the whole model from memory, so a laptop writes 5 to 15 words a second where a cloud
+AI writes 50 to 100, and it reads a long request in a moment where a laptop takes many seconds. FBRX gives a local
+model less to read and write:
+
+* **A short list of tools.** A cloud AI is shown every tool (about 6,500 tokens of descriptions). A model on this
+  computer or the local network gets a few it always has (the time, its memory, FBRX's help and check-up) and the
+  tools for what the chat is about, briefly described: the files, the web, the computer, the calendar… A new
+  subject adds its tools at the end. It may still call any tool it is allowed to use.
+* **The same start every time.** The instructions and tools stay the same from one request to the next (what Fabrix
+  remembers goes with your message), so the built-in runtime reuses what it already read and starts writing sooner.
+* **Room for the chat.** What the model keeps in mind is shared out after the instructions and the tools, so a long
+  chat is shortened from its start instead of overflowing.
+* **No thinking out loud first** (above), unless the level is Thorough or you turn it on.
+
+On a computer with 16 GB of memory, a 4B or 8B model is the quick choice; with 32 GB, a mixture-of-experts model
+(Qwen3 30B-A3B, which uses about 3B of its parameters for each word) answers about as fast as a 4B one and better. A
+graphics card with enough memory for the model is the biggest speed-up of all.
 
 ## AI models
 

@@ -98,11 +98,13 @@ describe("The AI's memory of the person", () => {
     }
   });
 
-  it('reaches whichever AI is chosen, as part of its instructions', async () => {
+  it('reaches whichever AI is chosen: with the message for a local one, in the instructions for a cloud one', async () => {
     const { kernel, cleanup } = await makeKernel();
     let system = '';
+    let message = '';
     const llm = await mockOpenAI((body) => {
       system = body.messages.find((x: any) => x.role === 'system')?.content ?? '';
+      message = body.messages.findLast((x: any) => x.role === 'user')?.content ?? '';
       return { text: 'Hello Jake.' };
     });
     try {
@@ -119,8 +121,9 @@ describe("The AI's memory of the person", () => {
       };
       kernel.settings.update(provider(false));
       await ask('Hi! I work at Fabrics Inc.');
-      expect(system).toContain('Their name is Jake');
-      expect(system).toContain('12 Oak St');
+      expect(message).toContain('Their name is Jake');
+      expect(message).toContain('12 Oak St');
+      expect(system).not.toContain('Jake');
       // Learned from this very message.
       expect(kernel.memory.list().map((e) => e.content)).toContain('Works at Fabrics Inc');
 

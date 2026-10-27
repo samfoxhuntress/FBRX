@@ -1914,7 +1914,8 @@ export class Kernel {
     };
     const timeout = setTimeout(() => ctrl.abort(), 300_000);
     try {
-      for await (const chunk of provider.chat({ model, messages, tools: [], temperature: 0.3, signal: ctrl.signal })) {
+      // A quick answer: a model on this computer answers straight away instead of thinking first.
+      for await (const chunk of provider.chat({ model, messages, tools: [], temperature: 0.3, ...(config.cloud ? {} : { reasoning: false }), signal: ctrl.signal })) {
         if (chunk.type === 'text') {
           answer += chunk.delta;
           pending += chunk.delta;

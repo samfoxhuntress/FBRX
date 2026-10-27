@@ -32,6 +32,7 @@ import type { AttachmentStore } from './attachments';
 import { formatBytes } from '../util/misc';
 import { chatEgg, type ChatEgg } from '../fun/chat-eggs';
 import { learnerConcern, learnerPrompt, type LearnerConcern } from './learner';
+import { briefDescription, shortlistTools } from './tool-shortlist';
 import { isCapacityError } from '../mesh/mesh-assist';
 
 export interface ChatParams {
@@ -355,7 +356,7 @@ export class AgentRuntime {
     return c;
   }
 
-  private systemPrompt(toolCount: number, offline: boolean, memory: string | null = null, instructions = ''): string {
+  private systemPrompt(offline: boolean, memory: string | null = null, instructions = ''): string {
     const s = this.d.settings.get();
     const learner = this.d.learner?.();
     if (learner) return learnerPrompt(s.ai.agentName, learner.vertical, s.profile.callMe.trim() || s.profile.name.trim().split(/\s+/)[0] || '');
@@ -372,7 +373,6 @@ export class AgentRuntime {
       `- Workstation: ${s.general.deviceName || hostname()} (${platform()} ${arch()})`,
       `- Workspace folder: ${this.d.workspace} (relative paths resolve here)`,
       `- Folders you may access: ${this.d.allowedRoots().join(', ')}. For a folder outside these (another drive, a network share), call files.request_access: the person picks the folder or says no.`,
-      `- Tools available: ${toolCount}`,
       offline
         ? '- This chat is OFFLINE (private and local). Prefer local knowledge and local tools. If you truly need the internet, call the tool anyway: FBRX will ask the user whether this chat may go online.'
         : '- This chat is ONLINE: internet tools are available. Mention the sources you used.',
@@ -510,6 +510,11 @@ export class AgentRuntime {
       this.d.log.debug('Memory could not learn from the message', { error: (err as Error).message });
     }
     const memory = this.d.memory?.context({ conversationId, text, cloud: config.cloud }) ?? null;
+    // A model on this computer (or the local network) reads the whole request on the processor, slowly: it gets the
+    // tools this conversation is about, briefly described, and what it remembers goes with the person's message, so
+    // the start of every request (the instructions and the tools) stays the same and the runtime reuses its reading.
+    const local = !config.cloud;
+    const asked = local ? this.d.store.messages(conversationId).filter((m) => m.role === 'user').map((m) => m.content) : [];
     this.emit({ type: 'run.started', runId, conversationId, providerId: config.id, model });
     this.d.log.info('Agent run started', { runId, provider: config.id, model, origin: p.origin });
     const maxSteps = Math.min(policy.ai.maxStepsPerRun, p.limits?.maxSteps ?? Number.POSITIVE_INFINITY);
@@ -522,17 +527,24 @@ export class AgentRuntime {
     try {
       while (steps < maxSteps) {
         steps++;
-        const tools = this.availableTools(p.limits, this.d.store.isOffline(conversationId));
-        const byWire = new Map(tools.map((t) => [toWireName(t.name), t]));
+        const available = this.availableTools(p.limits, this.d.store.isOffline(conversationId));
+        const tools = local ? shortlistTools(available, asked) : available;
+        // A call to a tool it may use but was not shown (one it knows from earlier, say) still goes through.
+        const byWire = new Map(available.map((t) => [toWireName(t.name), t]));
         const wireTools: ProviderTool[] = tools.map((t) => ({
           name: toWireName(t.name),
-          description: `${t.title}. ${t.description}${t.risk !== 'read' ? ` [risk: ${t.risk}]` : ''}`.slice(0, 1024),
+          description: `${t.title}. ${local ? briefDescription(t.description) : t.description}${t.risk !== 'read' ? ` [risk: ${t.risk}]` : ''}`.slice(0, 1024),
           parameters: t.inputSchema,
         }));
-        const messages: ProviderMessage[] = [
-          { role: 'system', content: this.systemPrompt(tools.length, this.d.store.isOffline(conversationId), memory, p.instructions) },
-          ...(await this.history(conversationId, provider.historyBudgetChars, sees)),
-        ];
+        const system = this.systemPrompt(this.d.store.isOffline(conversationId), local ? null : memory, p.instructions);
+        // The history gets what the model holds less the instructions and the tools, which come with every request.
+        const room = Math.max(4000, provider.historyBudgetChars - system.length - JSON.stringify(wireTools).length);
+        const history = await this.history(conversationId, room, sees);
+        if (local && memory) {
+          const last = history.findLastIndex((m) => m.role === 'user');
+          if (last >= 0) history[last] = { ...history[last], content: `<memory>\n${memory}\n</memory>\n\n${history[last].content}` } as ProviderMessage;
+        }
+        const messages: ProviderMessage[] = [{ role: 'system', content: system }, ...history];
 
         progress(steps === 1 ? 'model' : 'reading', steps === 1 ? (config.type === 'local-runtime' ? `Asking ${model} (the first answer can take a moment while the model loads)` : `Asking ${model}`) : 'Reading the results and deciding what to do next');
         const messageId = newId('msg');
@@ -563,6 +575,7 @@ export class AgentRuntime {
           tools: toolCallsUsed < policy.ai.maxToolCallsPerRun ? wireTools : [],
           temperature: this.d.settings.get().ai.temperature,
           maxTokens,
+          ...(local ? { reasoning: this.d.settings.get().ai.localThinking } : {}),
           signal,
         })) {
           if (chunk.type === 'text') {

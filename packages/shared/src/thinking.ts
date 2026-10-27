@@ -19,23 +19,25 @@ export interface ThinkingBudget {
   ollamaContext: number;
   /** The longest answer, in tokens (ai.maxOutputTokens; 0: the model decides). */
   maxOutputTokens: number;
+  /** A model on this computer may think before answering (ai.localThinking): better on hard tasks, much slower. */
+  localThinking: boolean;
 }
 
 /** Everyday is where every computer starts (the default policy and settings); Thorough takes every step there is. */
 export const THINKING_BUDGETS: Record<ThinkingLevel, ThinkingBudget> = {
-  quick: { steps: 10, contextSize: 8192, ollamaContext: 0, maxOutputTokens: 0 },
-  everyday: { steps: 30, contextSize: 8192, ollamaContext: 0, maxOutputTokens: 0 },
-  thorough: { steps: MAX_STEPS_PER_TASK, contextSize: 16384, ollamaContext: 16384, maxOutputTokens: 0 },
+  quick: { steps: 10, contextSize: 8192, ollamaContext: 0, maxOutputTokens: 0, localThinking: false },
+  everyday: { steps: 30, contextSize: 8192, ollamaContext: 0, maxOutputTokens: 0, localThinking: false },
+  thorough: { steps: MAX_STEPS_PER_TASK, contextSize: 16384, ollamaContext: 16384, maxOutputTokens: 0, localThinking: true },
 };
 
 export const THINKING_NAMES: Record<ThinkingLevel, string> = { quick: 'Quick', everyday: 'Everyday', thorough: 'Thorough' };
 
 /** The settings a level sets (its steps are in the policy). An organization that locks one of them sets the level. */
-export const THINKING_SETTINGS = ['runtime.contextSize', 'ai.ollamaContext', 'ai.maxOutputTokens'] as const;
+export const THINKING_SETTINGS = ['runtime.contextSize', 'ai.ollamaContext', 'ai.maxOutputTokens', 'ai.localThinking'] as const;
 
 /** The work budget a computer has now. */
 export function thinkingBudget(policy: Policy, settings: Settings): ThinkingBudget {
-  return { steps: policy.ai.maxStepsPerRun, contextSize: settings.runtime.contextSize, ollamaContext: settings.ai.ollamaContext, maxOutputTokens: settings.ai.maxOutputTokens };
+  return { steps: policy.ai.maxStepsPerRun, contextSize: settings.runtime.contextSize, ollamaContext: settings.ai.ollamaContext, maxOutputTokens: settings.ai.maxOutputTokens, localThinking: settings.ai.localThinking };
 }
 
 /** The level a work budget is, or custom when its parts were set one by one. */
@@ -52,5 +54,5 @@ export function withSteps(policy: Policy, steps: number): Policy {
 }
 
 function sameBudget(a: ThinkingBudget, b: ThinkingBudget): boolean {
-  return a.steps === b.steps && a.contextSize === b.contextSize && a.ollamaContext === b.ollamaContext && a.maxOutputTokens === b.maxOutputTokens;
+  return a.steps === b.steps && a.contextSize === b.contextSize && a.ollamaContext === b.ollamaContext && a.maxOutputTokens === b.maxOutputTokens && a.localThinking === b.localThinking;
 }

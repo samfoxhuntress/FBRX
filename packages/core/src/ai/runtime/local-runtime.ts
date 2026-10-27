@@ -274,6 +274,8 @@ export class LocalRuntime {
       '--threads', String(threads),
       // One conversation at a time: the whole context goes to it and the memory for extra slots is not reserved.
       '--parallel', '1',
+      // When the oldest messages drop out of a long chat, what follows them is moved up instead of read again.
+      '--cache-reuse', '256',
     ];
     this.stopping = false;
     this.recentOutput = [];

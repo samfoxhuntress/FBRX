@@ -1,9 +1,16 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PROVIDERS, describeAutomationSchedule, nextAutomationRun, type Automation, type NotificationEvent } from '@fbrx/shared';
 import { makeKernel, waitFor, USER } from './helpers';
+import type { Kernel } from '../src/kernel';
 import { mockOpenAI } from './mock-llm';
 
 const listings = { name: 'New bikes', prompt: 'List new road bikes under $500 at https://ads.example/bikes', schedule: { kind: 'interval' as const, minutes: 60 }, notify: 'changes' as const, online: true, hotkey: '', enabled: true };
+
+/** A cloud model is shown every tool it may use (a local one gets a short list), so its request shows what a run may use. */
+function useCloudMock(kernel: Kernel, url: string) {
+  kernel.policy.updateLocal({ ...kernel.policy.policy, ai: { ...kernel.policy.policy.ai, allowCloudProviders: true } });
+  kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${url}/v1`, cloud: true }] } });
+}
 
 describe('automations', () => {
   it('says when they run, and works out the next run', () => {
@@ -29,7 +36,7 @@ describe('automations', () => {
     let calls = 0;
     const llm = await mockOpenAI(() => ({ text: answers[calls++] }));
     try {
-      kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
+      useCloudMock(kernel, llm.url);
       const told: NotificationEvent[] = [];
       kernel.events.on('notification', (n) => told.push(n));
       const created = (await kernel.call('automations.create', { ...listings, schedule: { kind: 'manual' } }, USER)) as Automation;
@@ -77,7 +84,7 @@ describe('automations', () => {
     const { kernel, cleanup } = await makeKernel();
     const llm = await mockOpenAI(() => ({ text: 'Done.' }));
     try {
-      kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
+      useCloudMock(kernel, llm.url);
       await expect(kernel.call('automations.create', { ...listings, hotkey: kernel.settings.get().spotlight.hotkey }, USER)).rejects.toMatchObject({ code: 'CONFLICT' });
       const a = (await kernel.call('automations.create', { ...listings, name: 'Report', online: false, notify: 'never' }, USER)) as Automation;
       expect(Date.parse(a.nextRunAt!)).toBeLessThanOrEqual(Date.now());

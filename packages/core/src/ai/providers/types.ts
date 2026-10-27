@@ -38,6 +38,11 @@ export interface ChatRequest {
   tools: ProviderTool[];
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Whether a model that can think before answering should. False asks it to answer straight away (much faster on a
+   * computer's processor); unset leaves it to the model.
+   */
+  reasoning?: boolean;
   signal: AbortSignal;
 }
 
