@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, posix, win32 } from 'node:path';
 import { hostRange, inCidr, isIPv4, newId, parseVpnSettings, renderVpnSettings, VPN_INTERFACE, type VpnCheck, type VpnProfile, type VpnSettings, type VpnStatus } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
@@ -108,7 +108,7 @@ export class MacVpnDriver implements VpnDriver {
 
   private find(name: string): string | null {
     const exists = this.o.exists ?? existsSync;
-    return MacVpnDriver.BIN.map((d) => join(d, name)).find((p) => exists(p)) ?? null;
+    return MacVpnDriver.BIN.map((d) => posix.join(d, name)).find((p) => exists(p)) ?? null;
   }
 
   private async admin(command: string): Promise<CommandResult> {
@@ -169,7 +169,7 @@ export class WindowsVpnDriver implements VpnDriver {
   ) {}
 
   private get exe(): string {
-    return join(this.o.programFiles ?? process.env.ProgramFiles ?? 'C:\\Program Files', 'WireGuard', 'wireguard.exe');
+    return win32.join(this.o.programFiles ?? process.env.ProgramFiles ?? 'C:\\Program Files', 'WireGuard', 'wireguard.exe');
   }
 
   private q(s: string): string {
