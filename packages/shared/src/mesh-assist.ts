@@ -30,6 +30,20 @@ export type AssistStatus = 'waiting-approval' | 'queued' | 'running' | 'done' | 
 export const SERVER_ROLES = ['ai', 'virtual', 'command', 'dns', 'directory', 'files', 'gate', 'minidome', 'time'] as const;
 export type ServerRole = (typeof SERVER_ROLES)[number];
 
+/**
+ * A computer's answer to "may my agent think with your AI?": its own AI model, lent to a paired computer whose agent
+ * keeps working there (its tools, memory and approvals stay on that computer; only the model's work happens here).
+ */
+export interface LentModel {
+  accepts: AssistMode;
+  reason: string | null;
+  /** The model it would use, and the others its AI offers. */
+  model: string | null;
+  models: Array<{ id: string; name: string }>;
+  /** About how many characters of conversation the model holds. */
+  historyChars: number;
+}
+
 /** A computer's answer to "could you help?". */
 export interface AssistOffer {
   deviceId: string;

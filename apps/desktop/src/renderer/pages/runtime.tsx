@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { DownloadProgress, ProviderConfig, ProviderStatus } from '@fbrx/shared';
+import type { AssistOffer, DownloadProgress, ProviderConfig, ProviderStatus } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Input, KeyValue, Modal, Page, Select, Status, Table, Toggle, formatBytes, useAction, useConfirm } from '@fbrx/ui';
 import { call, onEvent, pickFile } from '../client';
 import { isLocked, useCore } from '../hooks';
@@ -142,6 +142,7 @@ export function RuntimePage() {
           />
         </Card>
       </Grid>
+      {ai && <MeshAi providers={ai.providers} defaultProvider={ai.defaultProvider} locked={isLocked(locked, 'ai.providers') || isLocked(locked, 'ai.defaultProvider')} />}
       {ai?.providers.some((p) => p.id === 'ollama' && p.enabled) && <OllamaModels defaultProvider={ai.defaultProvider} defaultModel={ai.defaultModel || (ai.providers.find((p) => p.id === 'ollama')?.defaultModel ?? '')} onUse={(m) => void useModel('ollama', m, m)} locked={isLocked(locked, 'ai.defaultProvider')} busy={busy === 'use'} />}
       <Card title="Model catalog" subtitle="Open-weight models tested with FBRX tool calling. Downloads resume if interrupted and are checksummed.">
         <div className="choice-grid">
@@ -188,7 +189,7 @@ export function RuntimePage() {
           rows={providers.data ?? []}
           rowKey={(p) => p.id}
           columns={[
-            { key: 'n', header: 'Provider', render: (p) => (<div><div className="fx-cell-title">{p.name}{ai?.defaultProvider === p.id && <span className="fx-badge accent" style={{ marginLeft: 6 }}>default</span>}</div><div className="fx-cell-sub">{p.cloud ? 'Cloud' : 'On this machine / network'} · {p.type}</div></div>) },
+            { key: 'n', header: 'Provider', render: (p) => (<div><div className="fx-cell-title">{p.name}{ai?.defaultProvider === p.id && <span className="fx-badge accent" style={{ marginLeft: 6 }}>default</span>}</div><div className="fx-cell-sub">{p.type === 'mesh' ? 'Another FBRX computer, over FBRX Mesh' : `${p.cloud ? 'Cloud' : 'On this machine / network'} · ${p.type}`}</div></div>) },
             { key: 's', header: 'Status', render: (p: ProviderStatus) => (!p.enabled ? <Status tone="neutral">Off</Status> : p.blockedByPolicy ? <Status tone="serious">{p.message}</Status> : p.available ? <Status tone="good">Ready</Status> : <Status tone="warning">{p.message ?? 'Unavailable'}</Status>) },
             { key: 'm', header: 'Model', render: (p) => <span className="mono fx-secondary">{p.defaultModel ?? '—'}</span> },
             {
@@ -266,17 +267,17 @@ function ProviderEditor({ provider, all, onClose }: { provider: ProviderConfig; 
         <Field label="Display name">
           <Input value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} />
         </Field>
-        {p.type !== 'local-runtime' && (
+        {p.type !== 'local-runtime' && p.type !== 'mesh' && (
           <Field label="Base URL">
             <Input value={p.baseUrl ?? ''} onChange={(e) => setP({ ...p, baseUrl: e.target.value || undefined })} />
           </Field>
         )}
         {p.type !== 'local-runtime' && (
-          <Field label="Default model" help={p.type === 'anthropic' ? 'Recommended: claude-opus-5-5' : p.type === 'ollama' ? 'The models Ollama has downloaded on this computer. Automatic picks the best one for tools.' : undefined}>
+          <Field label="Default model" help={p.type === 'anthropic' ? 'Recommended: claude-opus-5-5' : p.type === 'ollama' ? 'The models Ollama has downloaded on this computer. Automatic picks the best one for tools.' : p.type === 'mesh' ? 'The models that computer runs. Automatic uses the one it uses itself.' : undefined}>
             {isNew || p.baseUrl !== provider.baseUrl ? (
               <Input value={p.defaultModel ?? ''} placeholder="Model name" onChange={(e) => setP({ ...p, defaultModel: e.target.value || undefined })} />
             ) : (
-              <ModelPicker providerId={p.id} value={p.defaultModel ?? ''} onChange={(v) => setP({ ...p, defaultModel: v || undefined })} defaultLabel={p.type === 'ollama' ? 'Automatic (best installed model)' : 'None'} />
+              <ModelPicker providerId={p.id} value={p.defaultModel ?? ''} onChange={(v) => setP({ ...p, defaultModel: v || undefined })} defaultLabel={p.type === 'ollama' ? 'Automatic (best installed model)' : p.type === 'mesh' ? 'Automatic (the one it uses)' : 'None'} />
             )}
           </Field>
         )}
@@ -307,6 +308,53 @@ function ProviderEditor({ provider, all, onClose }: { provider: ProviderConfig; 
         {p.cloud && <Callout tone="info">Requests to cloud providers leave this machine. Your organization can disable cloud AI in the governance policy. <a href="#/governance" onClick={() => navigate('governance')}>Policy</a></Callout>}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * Paired computers that lend the AI they run themselves (an FBRX Server's bigger model): the agent here thinks with it
+ * and keeps its tools, memory and approvals on this computer. Through FBRX VPN it works away from home too.
+ */
+function MeshAi({ providers, defaultProvider, locked }: { providers: ProviderConfig[]; defaultProvider: string; locked: boolean }) {
+  const helpers = useCore('mesh.assist.helpers', undefined, ['mesh.changed']);
+  const { run, busy } = useAction();
+  const lenders = (helpers.data ?? []).filter((h) => h.ai.ready && h.ai.local && h.accepts !== 'off');
+  if (!lenders.length) return null;
+  const providerFor = (h: AssistOffer) => providers.find((p) => p.type === 'mesh' && p.peer === h.deviceId);
+  const use = (h: AssistOffer) =>
+    run(
+      h.deviceId,
+      async () => {
+        const existing = providerFor(h);
+        const id = existing?.id ?? `mesh-${h.deviceId.toLowerCase().replace(/[^a-z0-9]/g, '').slice(-12)}`;
+        const next = existing ? providers : [...providers, { id, type: 'mesh' as const, name: `${h.name}'s AI`, enabled: true, cloud: false, peer: h.deviceId }];
+        await call('settings.update', { patch: { ai: { providers: next, defaultProvider: id, defaultModel: '' } } });
+      },
+      `${h.name}'s AI answers your chats now`,
+    );
+  return (
+    <Card title="Your other computers’ AI" subtitle="Think with a bigger AI on your FBRX Server: your chats, tools and memory stay here, and only the thinking happens there. Away from home, connect FBRX VPN first." flush>
+      <Table
+        rows={lenders}
+        rowKey={(h) => h.deviceId}
+        columns={[
+          { key: 'n', header: 'Computer', render: (h) => (<div><div className="fx-cell-title">{h.name}</div><div className="fx-cell-sub">{h.roles.includes('ai') ? 'FBRX Server · AI role' : 'Paired computer'}{h.accepts === 'ask' ? ' · asks its person the first time' : ''}</div></div>) },
+          { key: 'm', header: 'Its AI', render: (h) => <span className="mono fx-secondary">{h.ai.model ?? h.ai.provider ?? '—'}</span> },
+          {
+            key: 'a',
+            header: '',
+            render: (h) =>
+              providerFor(h)?.id === defaultProvider ? (
+                <span className="fx-badge accent">In use</span>
+              ) : (
+                <Button size="sm" disabled={locked} loading={busy === h.deviceId} onClick={() => void use(h)}>
+                  Use for chats
+                </Button>
+              ),
+          },
+        ]}
+      />
+    </Card>
   );
 }
 

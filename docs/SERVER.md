@@ -199,7 +199,9 @@ before anything risky, like on any FBRX computer. It listens for FBRX Mesh on po
   *Mesh & phone → Add a device → Enter a code*), join another computer's code, and set what each paired computer may do here,
   including **Help with AI** and **Controller**.
 * **Models on this server:** run the AI right here, with FBRX's built-in runtime (llama.cpp), so the server is the
-  big agent the other computers lean on (see below).
+  big agent the other computers lean on (see below). Paired computers may also think with the model itself while their
+  own agent keeps working on them (*AI models → Your other computers' AI* there; see
+  [MESH.md](MESH.md#think-with-your-fbrx-servers-ai)): the same lending setting and Help with AI permission decide.
 * **AI provider:** what this server's agent runs on: a cloud provider with an API key (kept encrypted in the core's
   vault, never shown again), or a model on your network (Ollama or any OpenAI-compatible server, by address).
 

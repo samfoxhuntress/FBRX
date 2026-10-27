@@ -156,7 +156,8 @@ export class MeshAssist {
 
   // ======================================================================================== helping (in)
 
-  private acceptance(peer: MeshDevice, admin: boolean): { mode: AssistMode; reason: string | null; maxPriority: AssistPriority } {
+  /** How a request from this peer would be treated: off (and why), ask the person here, or go ahead. */
+  acceptance(peer: MeshDevice, admin: boolean): { mode: AssistMode; reason: string | null; maxPriority: AssistPriority } {
     const s = this.d.settings();
     const controller = peer.permissions.command && admin;
     const maxPriority: AssistPriority = controller ? 'urgent' : 'high';

@@ -90,6 +90,26 @@ stop lower-priority help that is running. Without the Controller permission a co
 * Everything is in both computers' audit logs (`assist.*`, `run.handoff`), and either side can stop a request.
 * Requests travel over the same sealed, authenticated mesh connection as everything else.
 
+## Think with your FBRX Server's AI
+
+Mesh Assist hands a task to another computer's agent. A paired computer can also lend just its **AI model**: the agent
+here keeps working here (its tools, files, memory, approvals and audit log stay on this computer) and only the thinking
+happens there. A laptop that runs a small model, or none, gets the answers of your FBRX Server's big one.
+
+* **On this computer:** *AI models → Your other computers' AI* lists the paired computers that would lend the AI they
+  run themselves; **Use for chats** makes one your default (it is an AI provider like any other, so it can also be
+  chosen per chat, or set up by hand with type *mesh*). Each answer in a chat shows the model, the computer, and how
+  long it took, so you can compare it with the AI on this computer.
+* **On the server:** the same setting lends it as Mesh Assist (*Lend the agent to other computers*, or *Mesh & AI* in
+  the server console) and the same **Help with AI** permission. With *Ask me first*, its person is asked once per
+  computer (until FBRX restarts there); a "no" holds for ten minutes.
+* **Only an AI it runs itself.** A computer whose AI is a cloud provider does not lend it, so a conversation never
+  leaves your computers this way. The server's own *Thinking* setting decides whether its model thinks first.
+* **How it travels:** the conversation goes to the server over the sealed mesh connection (up to 1 MiB a request, so
+  about 160,000 characters of conversation; pictures stay here), and the answer streams back as the model writes it.
+  Stopping the answer here stops the model there. From away, connect [FBRX VPN](VPN.md) first: the server is reached at
+  its address at home.
+
 ## Prefer Mesh
 
 A fast lane for traffic between FBRX computers, so their AI helping each other does not wait behind a backup or a

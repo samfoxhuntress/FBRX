@@ -97,6 +97,7 @@ import { sleep } from './util/misc';
 import { MeshService } from './mesh/mesh-service';
 import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
 import { MeshAssist, runsElevated } from './mesh/mesh-assist';
+import { ModelLender } from './mesh/model-lending';
 import { MeshNetwork } from './mesh/mesh-network';
 import { ServerResources } from './system/server-resources';
 import { SavedServers } from './system/saved-servers';
@@ -241,6 +242,8 @@ export class Kernel {
   readonly mesh: MeshService;
   readonly orgMesh: OrgMesh;
   readonly assist: MeshAssist;
+  /** This computer's own AI, lent to the paired computers' agents that think with it. */
+  readonly lender: ModelLender;
   /** Prefer Mesh: mesh networks, priority marking and path tests. */
   readonly meshNetwork: MeshNetwork;
   /** FBRX Server resources (installer ISO, bundle, guides) shipped inside the app. */
@@ -353,7 +356,17 @@ export class Kernel {
       // Models go in the data folder, which is there from the first start (the models folder may not be yet).
       diskFree: async () => ((await diskFreeGb(this.paths.root)) ?? 0) * 1024 ** 3,
     });
-    this.providers = new ProviderManager({ settings: this.settings, vault: this.vault, policy: this.policy, license: this.license, runtime: this.runtime });
+    this.providers = new ProviderManager({
+      settings: this.settings,
+      vault: this.vault,
+      policy: this.policy,
+      license: this.license,
+      runtime: this.runtime,
+      mesh: {
+        call: (peerId, method, params, timeoutMs) => this.mesh.call(peerId, method, params, timeoutMs),
+        name: (peerId) => this.mesh.devices().find((d) => d.id === peerId)?.name ?? null,
+      },
+    });
     this.agent = new AgentRuntime({
       store: this.conversations,
       providers: this.providers,
@@ -747,6 +760,7 @@ export class Kernel {
       system: (cmd) => this.spotlight.system(cmd),
       audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
       assist: (device, method, params) => this.assist.handle(device, method, params),
+      lend: (device, method, params) => this.lender.handle(device, method, params),
       // A gate's FBRX MiniDome saw something coming from this computer: an alert here (critical when it is serious).
       networkFinding: (device, f) =>
         void this.alerts
@@ -840,6 +854,21 @@ export class Kernel {
       audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
       emit: (session) => this.events.emit('mesh.assist', session),
       log: L('mesh'),
+    });
+    this.lender = new ModelLender({
+      accepts: (peer) => this.assist.acceptance(peer, false),
+      resolve: (model) => this.providers.resolve(undefined, model),
+      models: (providerId) => this.providers.models(providerId),
+      reasoning: () => this.settings.get().ai.localThinking,
+      approve: async (p) => {
+        const r = await this.approvals.request(
+          { runId: null, tool: 'mesh.assist', toolTitle: p.title, risk: 'execute', input: p.input, reason: p.reason, origin: 'remote', findings: [] },
+          this.policy.policy.approvals.timeoutSeconds,
+        );
+        return r.decision === 'approve';
+      },
+      agentName: () => this.settings.get().ai.agentName,
+      audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
     });
     this.alerts = new AlertEngine({
       db: this.db,
@@ -1352,6 +1381,7 @@ export class Kernel {
     this.automations.stop();
     this.messages.stop();
     this.orgMesh.stop();
+    this.lender.close();
     this.terminal.killAll();
     this.consoles.closeAll();
     this.migrator.cancelAll();

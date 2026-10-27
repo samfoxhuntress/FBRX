@@ -46,7 +46,7 @@ section to open its pages (one at a time; the section of the page you are on ope
 | **Studio** | Calendar, Tasks, Notes, Projects, Snippets |
 | **Pit Stop** | Storage, Security, Updates, Bug catcher, Network Center |
 | **Workbench** | Files, Task Manager, Clipboard, Copy & migrate, Toolbox, Library |
-| **Orbit** | Mesh & phone, AI models, AI coordination, Connections, Tools & plugins |
+| **Orbit** | Mesh & phone, FBRX VPN, AI models, AI coordination, Connections, Tools & plugins |
 | **Stronghold** | FBRX Shield (antivirus), Approvals, Credentials, Governance, Backup & restore |
 | **Lab** | Terminal, Virtual lab (Endpoint Ultra), FBRX Server (Black Hole) |
 | **Control** | Organization, Settings |
@@ -73,7 +73,7 @@ saved goes away), up to what the computer may run. Prices are in US dollars, per
 | Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, the help desk (in an organization) and Settings. **Home** is the split-flap board and a few notes from FBRX: tips, the AI models, and what Standard and Ultra add (no dashboard) | Everything in Essentials, plus Dash, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Standard | Everything in Ultra, plus the FBRX Server page |
 | How much the AI does on a task | **Thinking**: Quick, Everyday or Thorough (see *Thinking* below), and whether it shows what it is doing | The same, each part on its own (steps per task, longest answer, how much the built-in and Ollama models keep in mind), and unloading the local model when idle | The same, and the temperature | The same |
 | IT and expert tool sets | — | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools and adapters, device consoles, the developer tools in the Toolbox, logs, update channels, the Local API | Everything in Ultra, plus **network environments** (your network controller) in Network Center and the whole Library: **The Lab** and the **FBRX command library** (FBRX/1, FBRX Server and FBRX Gate commands, also in Terminal → FBRX/1), always there |
-| Connect | AI models | AI models | Mesh & phone, AI coordination, connections, tools and plugins, governance | The same |
+| Connect | AI models | AI models | Mesh & phone, FBRX VPN, AI coordination, connections, tools and plugins, governance | The same |
 | Look | Light, dark or follow the computer: plain | The same | The theme studio: eleven themes, accent colors, gradients and textures (with a strength slider) | The same |
 | Fun | Easter eggs, the Silly Goose and the trophy case, once unlocked with the secret key (see EASTER_EGGS.md, spoilers) | The same | The same | The same |
 
@@ -781,11 +781,15 @@ graphics card with enough memory for the model is the biggest speed-up of all.
 * **Ollama models**: the models Ollama has already downloaded on this computer, read from Ollama, or from its model
   folder (`OLLAMA_MODELS` or `~/.ollama/models`) while Ollama is not running, with *Start Ollama*. *Use* makes one the
   default. With no model chosen, Fabrix picks the installed model best suited to tool calling.
-* **Providers**: Ollama, Claude and other OpenAI-compatible endpoints. The *Default model* is a list of the
-  provider's models (or *Other model…* to type a name).
+* **Your other computers' AI**: paired computers (your FBRX Server, say) that lend the AI they run themselves. *Use
+  for chats* makes one the default: Fabrix keeps working here, with its tools, memory and approvals, and the model
+  there does the thinking. From away, connect FBRX VPN first. See [MESH.md](MESH.md#think-with-your-fbrx-servers-ai).
+* **Providers**: Ollama, Claude, other OpenAI-compatible endpoints, and other computers' AI. The *Default model* is a
+  list of the provider's models (or *Other model…* to type a name).
 
 The chat's model list shows the same installed models. If a chat asks Ollama for a model it does not have, the error
-names the installed ones.
+names the installed ones. Each answer in a chat shows the model that wrote it and how long it took from your question,
+so two AIs are easy to compare.
 
 
 ## Easter eggs

@@ -74,7 +74,8 @@ export const VOICE_DOWNLOAD_IDS = [...VOICE_MODEL_IDS, NATURAL_VOICE_PACK.id] as
 /** Speaking speed, in words per minute. 180 is an ordinary conversational pace; FBRX starts a little brisker. */
 export const VOICE_WPM = { min: 120, max: 360, default: 210 } as const;
 
-export const PROVIDER_TYPES = ['local-runtime', 'ollama', 'openai-compatible', 'openai', 'anthropic'] as const;
+/** mesh: another FBRX computer's own AI (an FBRX Server's, say), reached over FBRX Mesh. */
+export const PROVIDER_TYPES = ['local-runtime', 'ollama', 'openai-compatible', 'openai', 'anthropic', 'mesh'] as const;
 export type ProviderType = (typeof PROVIDER_TYPES)[number];
 
 export const ProviderConfigSchema = z.object({
@@ -93,6 +94,8 @@ export const ProviderConfigSchema = z.object({
    * or "auto" (by how much it holds). Any tool it may use still works either way.
    */
   tools: z.enum(['auto', 'all', 'focused']).optional(),
+  /** For a mesh provider: the paired computer whose AI it is (its mesh device id). */
+  peer: z.string().max(64).optional(),
 });
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 

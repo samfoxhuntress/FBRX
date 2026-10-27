@@ -72,6 +72,7 @@ const SEEING_MODELS =
  */
 export function modelSeesImages(providerType: string, model: string): boolean {
   if (providerType === 'anthropic') return true;
-  if (providerType === 'local-runtime') return false;
+  // Pictures are not sent to another computer's AI: they would not fit through FBRX Mesh.
+  if (providerType === 'local-runtime' || providerType === 'mesh') return false;
   return SEEING_MODELS.test(model);
 }

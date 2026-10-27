@@ -477,6 +477,16 @@ export function AgentPage({ agentName }: { agentName: string }) {
 
   sendRef.current = (t: string) => void send(t);
   const visible = useMemo(() => chat.messages.filter((m) => m.role === 'user' || m.role === 'assistant'), [chat.messages]);
+  // How long each answer took, from the question to the last message of the reply (to compare one AI with another).
+  const took = useMemo(() => {
+    const out = new Map<string, number>();
+    let asked: number | null = null;
+    visible.forEach((m, i) => {
+      if (m.role === 'user') asked = Date.parse(m.createdAt);
+      else if (asked !== null && visible[i + 1]?.role !== 'assistant' && (visible[i + 1] || !busy)) out.set(m.id, Date.parse(m.createdAt) - asked);
+    });
+    return out;
+  }, [visible, busy]);
   const usable = (providers.data ?? []).filter((p) => p.enabled && !p.blockedByPolicy);
   const currentProvider = usable.find((p) => p.id === providerId) as ProviderStatus | undefined;
   const currentModel = model || (currentProvider?.id === s?.ai.defaultProvider && s?.ai.defaultModel) || currentProvider?.defaultModel || '';
@@ -586,6 +596,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
                 ))}
                 <div className="msg-meta">
                   {m.model && <span>{m.model}</span>}
+                  {took.has(m.id) && <span title="From your question to this answer">{answerTime(took.get(m.id)!)}</span>}
                   {m.content && <MessageActions text={m.content} onSpeak={() => (stopSpeaking(), s && say(speakable(m.content), s.voice))} />}
                 </div>
               </div>
@@ -803,4 +814,10 @@ export function AgentPage({ agentName }: { agentName: string }) {
       {dialog}
     </div>
   );
+}
+
+/** How long an answer took: tenths of a second under a minute, then minutes and seconds. */
+function answerTime(ms: number): string {
+  const s = Math.max(0, ms) / 1000;
+  return s < 60 ? `${s.toFixed(1)} s` : `${Math.floor(s / 60)} min ${Math.round(s % 60)} s`;
 }

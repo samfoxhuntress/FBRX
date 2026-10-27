@@ -52,6 +52,8 @@ const NO_PERMISSIONS = Object.fromEntries(PERMISSION_KEYS.map((k) => [k, false])
 const PAIRING_TTL_MS = 5 * 60_000;
 const MAX_PAIR_FAILURES = 5;
 const MAX_BODY = 256 * 1024;
+/** A sealed request from a paired computer may be bigger: a whole conversation for this computer's AI to answer. */
+const MAX_RPC_BODY = 1024 * 1024;
 const MOBILE_ONLINE_MS = 90_000;
 
 interface DeviceRow {
@@ -122,6 +124,8 @@ export interface MeshHost {
   audit: (action: string, actor: string, outcome: 'success' | 'failure' | 'denied', details?: Record<string, unknown>) => void;
   /** Mesh Assist requests (assist.offer / start / status / cancel) from a paired computer. */
   assist?: (device: MeshDevice, method: string, params: any) => Promise<unknown>;
+  /** A paired computer's agent thinking with this computer's AI (assist.model.offer / start / read / cancel). */
+  lend?: (device: MeshDevice, method: string, params: any) => Promise<unknown>;
   /** A gate's FBRX MiniDome saw something coming from this computer (Network protection). */
   networkFinding?: (device: MeshDevice, finding: MeshNetworkFinding) => void;
   /** How this computer is protected (antivirus, threats), for a MiniDome allowed to ask. */
@@ -883,7 +887,7 @@ export class MeshService {
         return json(res, 200, this.acceptPairing(body, remote));
       }
       if (req.method === 'POST' && url.pathname === '/mesh/rpc') {
-        const env = (await readJson(req)) as Envelope;
+        const env = (await readJson(req, MAX_RPC_BODY)) as Envelope;
         return json(res, 200, await this.rpc(env, remote));
       }
       json(res, 404, { error: { code: 'NOT_FOUND', message: 'Not found' } });
@@ -1056,6 +1060,12 @@ export class MeshService {
       case 'assist.cancel':
         if (d.kind !== 'desktop' || !this.host.assist) throw new CoreError('NOT_FOUND', 'Mesh Assist is not available here');
         return this.host.assist(d, method, p);
+      case 'assist.model.offer':
+      case 'assist.model.start':
+      case 'assist.model.read':
+      case 'assist.model.cancel':
+        if (d.kind !== 'desktop' || !this.host.lend) throw new CoreError('NOT_FOUND', 'This computer does not lend its AI');
+        return this.host.lend(d, method, p);
       case 'action': {
         const a = String(p.action ?? '');
         if (a === 'notify') {
@@ -1195,13 +1205,13 @@ function json(res: ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
-function readJson(req: IncomingMessage): Promise<any> {
+function readJson(req: IncomingMessage, limit = MAX_BODY): Promise<any> {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => {
       size += c.length;
-      if (size > MAX_BODY) {
+      if (size > limit) {
         reject(new CoreError('INVALID_ARGUMENT', 'Request too large'));
         req.destroy();
       } else chunks.push(c);
