@@ -10,6 +10,7 @@ import type { AccountDevice, AccountStatus, InvitationPreview, LocalAccountStatu
 import type { AttachmentInfo } from './attachments';
 import type { Automation, AutomationInput, AutomationRun } from './automations';
 import type { ScreenSnapshot } from './snapshots';
+import type { Login, LoginInput, LoginSummary } from './passwords';
 import type { CreatedFile } from './creations';
 import type { SupportStatus } from './support';
 import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './browser';
@@ -52,6 +53,8 @@ export interface VaultStatus {
   keychainKind: 'os' | 'file' | 'env' | 'memory';
   secretCount: number;
   managedCount: number;
+  /** Sign-ins in the password keeper. */
+  loginCount: number;
   hasRecovery: boolean;
   lockReason: VaultLockReason | null;
   /** The vault asks for its password every time FBRX OS starts. */
@@ -638,6 +641,26 @@ export interface CoreMethods extends ExtMethods {
   'vault.passwordOnStart': (p: { enabled: boolean; passphrase: string }) => VaultStatus;
   /** Deletes every saved credential and starts a new, empty vault (FBRX OS restarts). */
   'vault.reset': (p: { confirm: 'DELETE' }) => VaultStatus;
+  /** The password keeper's sign-ins, as lists show them (no passwords). */
+  'passwords.list': () => LoginSummary[];
+  /** The sign-ins for a web address (FBRX Browser offers these), the closest match first. */
+  'passwords.query': (p: { url: string }) => LoginSummary[];
+  /** A sign-in with its password, 2-step secret and notes. */
+  'passwords.reveal': (p: { id: string }) => Login;
+  /** Adds a sign-in, or changes one (id): only the fields given change. */
+  'passwords.save': (p: { id?: string } & Partial<LoginInput>) => LoginSummary;
+  'passwords.remove': (p: { id: string }) => { removed: boolean };
+  /** What FBRX Browser types into a sign-in form: only for a page on one of the sign-in's sites. */
+  'passwords.fill': (p: { id: string; url: string }) => { username: string; password: string };
+  /**
+   * Whether the Vault already has what was just typed into a site's sign-in form (FBRX Browser offers to save or
+   * update it): a sign-in for that site and username with the same password, a different one, or none.
+   */
+  'passwords.verify': (p: { url: string; username: string; password: string }) => { found: 'none' | 'same' | 'changed'; id: string | null; title: string | null };
+  /** The sign-in's 2-step code now, and for how many more seconds it is good. */
+  'passwords.code': (p: { id: string }) => { code: string; remaining: number; period: number };
+  /** Sign-ins from a CSV file another browser or password manager exported. */
+  'passwords.import': (p: { csv: string }) => { added: number; updated: number; skipped: number };
 
   'ai.providers': () => ProviderStatus[];
   'ai.models': (p: { providerId: string }) => ModelInfo[];
@@ -877,6 +900,8 @@ export interface CoreEvents extends ExtEvents {
   'account.changed': AccountStatus;
   'automations.changed': Automation[];
   'snapshots.changed': { id: string };
+  /** Fabrix asked to open the Save to Vault window, filled in, for the person to type the password. */
+  'passwords.saveRequested': { title: string; url: string; username: string };
   'support.changed': SupportStatus;
   'localAccount.changed': LocalAccountStatus;
   'browser.changed': BrowserState;

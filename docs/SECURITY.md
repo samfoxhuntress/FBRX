@@ -59,7 +59,12 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   passphrase is entered (FBRX asks when it opens). Services that need credentials wait for the unlock instead of
   failing.
 * The model never sees secret values. Connectors and plugins reference secrets by name; the redactor removes any
-  secret value from tool output, logs and the conversation.
+  secret value, and every password in the password keeper, from tool output, logs and the conversation.
+* **The password keeper** (Vault → Passwords) seals each sign-in whole (site and username too) with the vault key,
+  bound to the sign-in's id. Its methods are for the person at the computer only, never the Local API or a remote
+  command. FBRX Browser's sign-in helper runs in each page's main frame in an isolated world the page cannot reach,
+  fills in only on the person's pick, only into visible boxes, and only on a page of one of the sign-in's sites (the
+  core checks the address; an `https` sign-in is never offered on `http`). See [VAULT.md](VAULT.md).
 * Organization credentials are created in the console, encrypted at rest with the control plane's master key,
   delivered over the authenticated device channel and stored as read-only managed secrets.
 * Snapshots contain the vault key encrypted under the snapshot passphrase — protect snapshot files and passphrases

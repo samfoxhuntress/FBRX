@@ -38,6 +38,7 @@ const api = {
   spotlightHide: () => void ipcRenderer.invoke('fbrx:spotlight', 'hide'),
   openMain: (route: string) => void ipcRenderer.invoke('fbrx:spotlight', 'open', route),
   copyText: async (text: string) => void (await ipcRenderer.invoke('fbrx:copy', text)),
+  copySecret: async (text: string) => void (await ipcRenderer.invoke('fbrx:copySecret', text)),
   popOut: (route: string) => ipcRenderer.invoke('fbrx:popout', route) as Promise<boolean>,
   popOutWindow: (action: 'pin' | 'tile' | 'main', on?: boolean) => ipcRenderer.invoke('fbrx:window', action, on) as Promise<boolean>,
   edit: (action: 'cut' | 'copy' | 'paste' | 'pasteAsText' | 'selectAll' | 'undo' | 'redo') => ipcRenderer.invoke('fbrx:edit', action) as Promise<boolean>,

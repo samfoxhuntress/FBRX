@@ -22,6 +22,7 @@ import { Tour, type TourStep } from './tour';
 import { PresenterPill, usePresenter } from './presenter';
 import { ContextMenuHost } from './context-menu';
 import { MacroAddHost } from './macro-add';
+import { VaultSaveHost } from './vault-save';
 import { FolderRequestHost } from './pages/governance-folders';
 
 // Pages load when first opened, so the app starts with only what the first screen needs.
@@ -208,6 +209,7 @@ export function App() {
         <Suspense fallback={<div style={{ display: 'grid', placeItems: 'center', height: '100%' }}><Spinner /></div>}>
           {settings ? <BrowserApp agentName={settings.settings.ai.agentName} /> : null}
         </Suspense>
+        <VaultSaveHost listen={false} />
       </>
     );
   if (route === 'clips') return <ClipPicker />;
@@ -413,7 +415,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'tools', label: 'Tools & plugins', icon: 'wrench', section: 'Connect', need: 'ultra' },
     { id: 'shield', label: 'FBRX Shield', icon: 'shield', count: shieldCount || undefined, section: 'Protect' },
     { id: 'approvals', label: 'Approvals', icon: 'check', count: status.pendingApprovals, section: 'Protect' },
-    { id: 'vault', label: 'Credentials', icon: 'key', section: 'Protect' },
+    { id: 'vault', label: 'Vault', icon: 'key', section: 'Protect' },
     { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect', need: 'ultra' },
     { id: 'backup', label: 'Backup & restore', icon: 'archive', section: 'Protect' },
     { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', need: 'ultra' },
@@ -592,6 +594,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       <LocalAccountLock />
       <ContextMenuHost agentName={agentName} ultra={ultra} essentials={essentials} />
       <MacroAddHost />
+      <VaultSaveHost listen={!POPOUT} />
       {!POPOUT && <FolderRequestHost />}
     </>
   );
@@ -787,7 +790,7 @@ function TopBar({
       </button>
       {status.vault.state === 'locked' ? (
         <button className="status-link" onClick={() => navigate('vault')} title="Open the vault to unlock">
-          <Status tone={status.vault.lockReason === 'keychain' ? 'warning' : 'neutral'}>Credentials locked</Status>
+          <Status tone={status.vault.lockReason === 'keychain' ? 'warning' : 'neutral'}>Vault locked</Status>
         </button>
       ) : failing.length ? (
         <Status tone="critical">{failing.length} service(s) failing</Status>
@@ -885,7 +888,7 @@ const STANDARD_WHAT: Partial<Record<Route, string>> = {
   library: 'Short guides for everyday things: Wi‑Fi, printers, backups, and more.',
   shield: 'FBRX Shield, the antivirus: checks new downloads and keeps threats out.',
   approvals: 'What the agent asked to do, waiting for your yes or no.',
-  vault: 'Saved passwords and keys the agent and connections use, encrypted.',
+  vault: 'Your passwords, kept encrypted: FBRX Browser fills them in, with 2-step codes and checks for weak or reused ones.',
   backup: 'Snapshots of FBRX and images of the whole computer, to move or restore it.',
 };
 

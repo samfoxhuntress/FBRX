@@ -4,12 +4,14 @@ import { bridge, writeClipboard } from './client';
 import { navigate } from './app';
 import { addToMacros } from './macro-add';
 import { askAgent } from './widgets';
+import { saveToVault } from './vault-save';
 
 /**
  * The right-click menu, everywhere in FBRX. Parts of the app add their own items with `menuFor(...)` (innermost first),
- * and the menu fills in what fits where you clicked: Cut, Copy and Paste in a text box; Copy and Ask about it for
- * picked text; Copy and Add to macros on a command; Open in a new window on a page in the sidebar; and "What's this?",
- * which asks the agent to explain that part of FBRX (handy in Endpoint Essentials).
+ * and the menu fills in what fits where you clicked: Cut, Copy and Paste in a text box (and Save to Vault in a filled
+ * password box); Copy and Ask about it for picked text (and Save to Vault, for a password); Copy and Add to macros on
+ * a command; Open in a new window on a page in the sidebar; and "What's this?", which asks the agent to explain that
+ * part of FBRX (handy in Endpoint Essentials).
  */
 
 export type MenuItem = { label: string; icon?: IconName; onSelect: () => void; disabled?: boolean; danger?: boolean; hint?: string } | 'separator';
@@ -74,6 +76,7 @@ function build(e: MenuEvent, o: { agentName: string; ultra: boolean; essentials:
             { label: 'Select all', onSelect: edit('selectAll'), disabled: !canEdit, hint: 'Ctrl+A' },
           ],
     );
+    if (!o.essentials && field instanceof HTMLInputElement && field.type === 'password' && field.value) groups.push([{ label: 'Save to Vault…', icon: 'key', onSelect: () => saveToVault({ password: field.value }) }]);
   } else {
     const code = target.closest('pre, code');
     const command = code?.textContent?.trim() ?? '';
@@ -82,6 +85,7 @@ function build(e: MenuEvent, o: { agentName: string; ultra: boolean; essentials:
         { label: 'Copy', icon: 'copy', onSelect: () => void writeClipboard(picked), hint: 'Ctrl+C' },
         { label: `Ask ${o.agentName} about “${short(picked, 24)}”`, icon: 'sparkles', onSelect: () => askAgent(`Explain this, in plain language:\n\n${picked.slice(0, 4000)}`) },
         ...(!o.essentials && picked.length <= 5000 ? [{ label: 'Add to macros…', icon: 'zap' as const, onSelect: () => addToMacros({ name: short(picked.split('\n')[0], 40), text: picked }) }] : []),
+        ...(!o.essentials && picked.length <= 200 && !/\s/.test(picked) ? [{ label: 'Save to Vault as a password…', icon: 'key' as const, onSelect: () => saveToVault({ password: picked }) }] : []),
       ]);
     } else if (command && command.length <= 5000) {
       groups.push([

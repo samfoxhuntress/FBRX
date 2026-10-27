@@ -2,8 +2,8 @@
 
 A web browser inside FBRX OS, in its own window. It is a real browser — tabs, an address bar, back and forward,
 bookmarks, history, downloads — that also works with the rest of FBRX: the local AI reads and explains the page, the
-password vault hands over a saved password, Notes keeps a page, FBRX Shield checks what you download, and an organization's
-FBRX Command decides which sites may open.
+Vault fills in your sign-ins and offers to save new ones, Notes keeps a page, FBRX Shield checks what you download, and
+an organization's FBRX Command decides which sites may open.
 
 Open it from the sidebar (**Browser**), the tray (**Open FBRX Browser**), or Settings → Browser. It opens in a window
 of its own, beside FBRX. It comes with Endpoint Standard and up, and on students' and children's computers (Endpoint
@@ -17,7 +17,7 @@ Essentials is the AI on its own).
 | **Address bar** | Type a web address, or a search. The search engine is yours to pick (Settings → Browser): DuckDuckGo (the default), Startpage, Google, Bing or Brave. A lock shows a secure (https) connection. |
 | **Fabrix** | The side panel (the ✶ button) asks the **local AI** about the page — *Summarize*, *Key points*, *Explain simply*, or your own question. It reads the page here on the computer; nothing is sent away. A private tab is never read. |
 | **Bookmarks and history** | The tag in the address bar keeps a page; the menu opens Bookmarks and History, each searchable, with a way to clear history. |
-| **Saved sign-ins** | The menu → *Saved sign-ins* lists the passwords in your FBRX vault and copies one to paste into a form (and clears it from the clipboard shortly after). The vault must be unlocked. |
+| **Sign-ins** | The Vault is built in: click into a sign-in box and your sign-ins for that site show beside it, to fill in with a click; a sign-up form gets **Use a strong password**; after you sign in with something new, FBRX offers to save it (or update the password it has). The key in the address bar and the menu's *Saved sign-ins* fill in, copy or add one. See [VAULT.md](VAULT.md#fbrx-browser-fills-them-in). |
 | **Downloads** | Every download is checked by **FBRX Shield** when it finishes, as if it had landed in Downloads: malware goes to quarantine (when automatic quarantine is on) and Shield raises its alert; a suspicious file waits for your decision in FBRX Shield. With nothing found, you get one "Download finished". This needs FBRX Shield as the antivirus. |
 | **Keep a page** | The menu saves a page to **Notes**, copies its link, or opens it in the system browser. |
 | **Find and zoom** | Ctrl/⌘+F finds on the page; Ctrl/⌘+ +/−/0 zooms. |

@@ -1,18 +1,19 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { BROWSER_SEARCH_ENGINES, SUPPORT_ENTER_PHRASE, SUPPORT_EXIT_PHRASE, SUPPORT_PASS_PREFIX, WEB_BROWSER_PARTITION, WEB_BROWSER_PRIVATE_PARTITION, type Bookmark, type BrowserState, type HistoryEntry, type SecretMeta } from '@fbrx/shared';
-import { Button, FbrxMark, Icons, Spinner, useToast } from '@fbrx/ui';
+import { AUTOFILL_CHANNEL, BROWSER_SEARCH_ENGINES, SUPPORT_ENTER_PHRASE, SUPPORT_EXIT_PHRASE, SUPPORT_PASS_PREFIX, WEB_BROWSER_PARTITION, WEB_BROWSER_PRIVATE_PARTITION, type AutofillReport, type Bookmark, type BrowserState, type HistoryEntry } from '@fbrx/shared';
+import { Button, FbrxMark, Icons, useToast } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
 import { useQuickAi, QuickAiPanel } from '../quick-ai';
+import { FillMenuView, SaveBar, SignInsPanel, useBrowserVault } from './browser-vault';
 
 /**
  * FBRX Browser: a web browser inside FBRX OS, in its own window. Pages load in locked-down <webview>s with their own
  * storage (apart from FBRX's own pages); the toolbar, tabs and the Fabrix side panel live here, and the main process
  * checks downloads with FBRX Shield and governs which sites may open (pages/browser is reached only from the browser
- * window). Fabrix reads the page through the local AI to summarize or explain it; the vault fills saved sign-ins;
- * notes and the mesh keep or share a page.
+ * window). Fabrix reads the page through the local AI to summarize or explain it; the Vault fills in saved sign-ins
+ * and offers to save new ones (browser-vault); notes and the mesh keep or share a page.
  */
 
-type WebviewElement = HTMLElement & {
+export type WebviewElement = HTMLElement & {
   src: string;
   canGoBack(): boolean;
   canGoForward(): boolean;
@@ -28,9 +29,11 @@ type WebviewElement = HTMLElement & {
   stopFindInPage(action: 'clearSelection'): void;
   setZoomFactor(factor: number): void;
   insertText(text: string): Promise<void>;
+  /** A message for the page's sign-in helper (preload/autofill.ts). */
+  send(channel: string, ...args: unknown[]): void;
 };
 
-interface Tab {
+export interface Tab {
   id: string;
   /** Where the tab was pointed (the webview's src); '' is the start page. */
   url: string;
@@ -62,12 +65,14 @@ function host(url: string): string {
 }
 
 const WEBVIEW_POPUPS = { allowpopups: 'true' } as object;
+/** The address the window was opened at (from FBRX's main window, a link, Spotlight…), for its first tab. */
+const OPENED_AT = new URLSearchParams(location.search).get('open');
 let seq = 0;
 const makeTab = (over: Partial<Tab> = {}): Tab => ({ id: `t${Date.now().toString(36)}-${seq++}`, url: '', current: over.url ?? '', title: 'New tab', loading: false, canBack: false, canForward: false, priv: false, blocked: null, ...over });
 
 export function BrowserApp({ agentName }: { agentName: string }) {
   const toast = useToast();
-  const [tabs, setTabs] = useState<Tab[]>(() => [makeTab()]);
+  const [tabs, setTabs] = useState<Tab[]>(() => [makeTab(OPENED_AT && /^https?:\/\//i.test(OPENED_AT) ? { url: OPENED_AT, loading: true } : {})]);
   const [activeId, setActiveId] = useState(tabs[0].id);
   const [address, setAddress] = useState('');
   const [state, setState] = useState<BrowserState | null>(null);
@@ -77,6 +82,8 @@ export function BrowserApp({ agentName }: { agentName: string }) {
   const [supportAsk, setSupportAsk] = useState(false);
   const [zoom, setZoom] = useState(1);
   const views = useRef<Map<string, WebviewElement>>(new Map());
+  const vault = useBrowserVault(views, zoom, toast);
+  const { report: vaultReport, navigated: vaultNavigated } = vault;
   const addressRef = useRef<HTMLInputElement>(null);
   const active = tabs.find((t) => t.id === activeId) ?? tabs[0];
   const activeRef = useRef(active);
@@ -160,7 +167,21 @@ export function BrowserApp({ agentName }: { agentName: string }) {
       const on: Array<[string, (e: Event) => void]> = [
         ['did-start-loading', () => patchTab(tab.id, { loading: true })],
         ['did-stop-loading', () => (patchTab(tab.id, { loading: false }), sync())],
-        ['did-navigate', sync],
+        [
+          'did-navigate',
+          () => {
+            vaultNavigated(tab.id);
+            sync();
+          },
+        ],
+        // The page's sign-in helper: a sign-in box has the focus, a form was sent, a form is there.
+        [
+          'ipc-message',
+          (e) => {
+            const m = e as Event & { channel: string; args: unknown[] };
+            if (m.channel === AUTOFILL_CHANNEL) void vaultReport(tab, m.args[0] as AutofillReport);
+          },
+        ],
         ['did-navigate-in-page', sync],
         ['page-title-updated', (e) => patchTab(tab.id, { title: (e as Event & { title: string }).title })],
         [
@@ -178,7 +199,7 @@ export function BrowserApp({ agentName }: { agentName: string }) {
       ];
       for (const [n, h] of on) el.addEventListener(n, h);
     },
-    [patchTab],
+    [patchTab, vaultReport, vaultNavigated],
   );
 
   // Keep the address bar showing the active tab's URL when switching tabs.
@@ -193,6 +214,7 @@ export function BrowserApp({ agentName }: { agentName: string }) {
     setTimeout(() => addressRef.current?.focus(), 0);
   };
   const closeTab = (id: string) => {
+    if (vault.offer?.tabId === id) vault.dismissOffer();
     setTabs((ts) => {
       const left = ts.filter((t) => t.id !== id);
       if (!left.length) {
@@ -303,6 +325,11 @@ export function BrowserApp({ agentName }: { agentName: string }) {
             placeholder={`Search ${BROWSER_SEARCH_ENGINES[state?.searchEngine ?? 'duckduckgo'].name} or enter an address`}
             aria-label="Address and search"
           />
+          {vault.hasForm(active.id) && (
+            <button type="button" className="br-star" onClick={() => void vault.openMenu(active.id)} title="Fill in a sign-in from your Vault" aria-label="Fill in a sign-in">
+              <Icons.key size={14} />
+            </button>
+          )}
           {/^https?:/.test(active.current) && (
             <button type="button" className={`br-star ${bookmarked ? 'on' : ''}`} onClick={toggleBookmark} title={bookmarked ? 'Remove bookmark' : 'Bookmark this page'} aria-label="Bookmark">
               <Icons.tag size={15} />
@@ -341,6 +368,7 @@ export function BrowserApp({ agentName }: { agentName: string }) {
           }}
         />
       )}
+      {vault.offer?.tabId === active.id && <SaveBar key={vault.offer.password} offer={vault.offer} onDone={vault.dismissOffer} toast={toast} />}
       {find !== null && (
         <FindBar
           value={find}
@@ -369,6 +397,7 @@ export function BrowserApp({ agentName }: { agentName: string }) {
               )}
             </div>
           ))}
+          {vault.menu?.tabId === active.id && <FillMenuView menu={vault.menu} onFill={(id) => void vault.fill(active.id, id)} onSuggest={() => vault.suggest(active.id)} onClose={vault.closeMenu} />}
         </div>
         {panel && (
           <SidePanel
@@ -383,6 +412,7 @@ export function BrowserApp({ agentName }: { agentName: string }) {
             }}
             agentName={agentName}
             toast={toast}
+            onFill={(id) => void vault.fill(active.id, id)}
           />
         )}
       </div>
@@ -603,7 +633,7 @@ function BrowserMenu({ active, state, onClose, onOpen, onNewPrivate, onFind, zoo
   );
 }
 
-function SidePanel({ which, onClose, state, active, pageText, onGo, agentName, toast }: { which: 'fabrix' | 'bookmarks' | 'history' | 'passwords'; onClose: () => void; state: BrowserState | null; active: Tab; pageText: () => Promise<string>; onGo: (u: string) => void; agentName: string; toast: Toaster }) {
+function SidePanel({ which, onClose, state, active, pageText, onGo, agentName, toast, onFill }: { which: 'fabrix' | 'bookmarks' | 'history' | 'passwords'; onClose: () => void; state: BrowserState | null; active: Tab; pageText: () => Promise<string>; onGo: (u: string) => void; agentName: string; toast: Toaster; onFill: (id: string) => void }) {
   return (
     <aside className="br-panel">
       <div className="br-panel-head">
@@ -616,7 +646,7 @@ function SidePanel({ which, onClose, state, active, pageText, onGo, agentName, t
         {which === 'fabrix' && <FabrixPanel active={active} pageText={pageText} agentName={agentName} reads={state?.aiAssist !== false} />}
         {which === 'bookmarks' && <BookmarksPanel bookmarks={state?.bookmarks ?? []} onGo={onGo} />}
         {which === 'history' && <HistoryPanel onGo={onGo} />}
-        {which === 'passwords' && <PasswordsPanel toast={toast} />}
+        {which === 'passwords' && <SignInsPanel active={active} onFill={onFill} toast={toast} />}
       </div>
     </aside>
   );
@@ -716,45 +746,6 @@ function HistoryPanel({ onGo }: { onGo: (u: string) => void }) {
             </small>
           </span>
         </button>
-      ))}
-    </div>
-  );
-}
-
-function PasswordsPanel({ toast }: { toast: Toaster }) {
-  const [list, setList] = useState<SecretMeta[] | null>(null);
-  const [locked, setLocked] = useState(false);
-  useEffect(() => {
-    void call('vault.list')
-      .then((all) => setList((all as SecretMeta[]).filter((s) => s.kind === 'password')))
-      .catch(() => setLocked(true));
-  }, []);
-  const copy = async (name: string, what: 'password') => {
-    try {
-      const r = await call('vault.reveal', { name });
-      await (bridge.copyText?.(r.value) ?? navigator.clipboard.writeText(r.value));
-      toast.success('Copied', 'Paste it into the sign-in form. It is cleared from the clipboard shortly.');
-      // Clear the clipboard after a short while so a copied password does not linger.
-      setTimeout(() => void (bridge.copyText?.('') ?? navigator.clipboard.writeText('')).catch(() => undefined), 30_000);
-    } catch {
-      toast.error('The vault is locked', 'Unlock Credentials in FBRX, then try again.');
-    }
-  };
-  if (locked) return <p className="br-muted br-empty">The vault is locked. Unlock Credentials in FBRX to use saved sign-ins.</p>;
-  if (!list) return <Spinner />;
-  if (!list.length) return <p className="br-muted br-empty">No saved sign-ins yet. Add passwords under Credentials in FBRX.</p>;
-  return (
-    <div className="br-list">
-      {list.map((s) => (
-        <div key={s.name} className="br-row">
-          <span className="br-row-text">
-            <b>{s.name}</b>
-            {s.description && <small>{s.description}</small>}
-          </span>
-          <button className="br-row-copy" onClick={() => copy(s.name, 'password')}>
-            Copy password
-          </button>
-        </div>
       ))}
     </div>
   );

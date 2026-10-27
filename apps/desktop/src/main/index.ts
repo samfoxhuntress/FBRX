@@ -745,6 +745,20 @@ function registerIpc() {
     return true;
   });
   ipcMain.handle('fbrx:copy', (e, text: string) => trusted(e) && typeof text === 'string' && clipboard.writeText(text.slice(0, 1_000_000)));
+  // A password or 2-step code from the Vault: kept out of the clipboard history, and gone after a while (Settings →
+  // Vault) unless something else was copied since.
+  ipcMain.handle('fbrx:copySecret', async (e, text: string) => {
+    if (!trusted(e) || typeof text !== 'string' || text.length > 10_000) return false;
+    clips.skip(text);
+    await clipboard.writeText(text);
+    const seconds = kernel?.settings.get().passwords.clearClipboardSeconds ?? 30;
+    if (seconds > 0) {
+      setTimeout(async () => {
+        if ((await clipboard.readText()) === text) await clipboard.writeText('');
+      }, seconds * 1000).unref();
+    }
+    return true;
+  });
   // A page in a window of its own, and arranging it beside the main window.
   ipcMain.handle('fbrx:popout', (e, route: unknown) => {
     if (!trusted(e) || typeof route !== 'string' || !/^[a-z][\w-]*(\/[^\s]*)?$/i.test(route) || route.length > 4000) return false;

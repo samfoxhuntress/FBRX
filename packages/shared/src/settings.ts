@@ -455,6 +455,15 @@ export const SettingsSchema = z.object({
     /** Safe browsing on a student's or child's computer (set by the organization). */
     safeBrowsing: z.boolean(),
   }),
+  /** The Vault's password keeper. */
+  passwords: z.object({
+    /** FBRX Browser offers to save a sign-in after you sign in to a site. */
+    offerToSave: z.boolean(),
+    /** Sites FBRX Browser never offers to save a sign-in for (what siteOf gives). */
+    neverSave: z.array(z.string().max(253)).max(500),
+    /** A copied password or 2-step code leaves the clipboard after this many seconds (0 = it stays). */
+    clearClipboardSeconds: z.number().int().min(0).max(600),
+  }),
   updates: z.object({
     channel: z.enum(UPDATE_CHANNELS),
     autoDownload: z.boolean(),
@@ -723,6 +732,11 @@ export const DEFAULT_SETTINGS: Settings = {
     blocked: [],
     allowed: [],
     safeBrowsing: false,
+  },
+  passwords: {
+    offerToSave: true,
+    neverSave: [],
+    clearClipboardSeconds: 30,
   },
   updates: {
     channel: 'stable',

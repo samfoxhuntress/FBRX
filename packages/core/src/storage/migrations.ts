@@ -460,6 +460,23 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX automation_runs_automation ON automation_runs (automation_id, started_at);
     `,
   },
+  {
+    version: 15,
+    name: 'vault-logins',
+    // The password keeper's sign-ins. All of each one (its site and username too) is sealed with the vault key, so
+    // the table says nothing without the vault.
+    up: `
+      CREATE TABLE vault_logins (
+        id TEXT PRIMARY KEY,
+        data_enc TEXT NOT NULL,
+        favorite INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        password_changed_at TEXT NOT NULL,
+        last_used_at TEXT
+      );
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

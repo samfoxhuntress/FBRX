@@ -30,6 +30,8 @@ interface Bridge {
   spotlightHide?(): void;
   openMain?(route: string): void;
   copyText?(text: string): Promise<void>;
+  /** Copies a password or code: kept out of the clipboard history and cleared after a while. */
+  copySecret?(text: string): Promise<void>;
   /** Opens a page of FBRX in a window of its own, beside the main one (a terminal, the chat…). */
   popOut?(route: string): Promise<boolean>;
   /** In a popped-out window: keep it on top, put it beside the main window, or bring the main window forward. */
@@ -82,6 +84,12 @@ export async function readClipboard(): Promise<string> {
 /** Puts text on the clipboard. */
 export async function writeClipboard(text: string): Promise<void> {
   if (bridge.copyText) await bridge.copyText(text);
+  else await navigator.clipboard.writeText(text);
+}
+
+/** Puts a password or 2-step code on the clipboard, out of the clipboard history, for a short while. */
+export async function copySecret(text: string): Promise<void> {
+  if (bridge.copySecret) await bridge.copySecret(text);
   else await navigator.clipboard.writeText(text);
 }
 

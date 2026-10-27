@@ -46,6 +46,7 @@ import { MIGRATIONS } from './storage/migrations';
 import { MetaStore } from './storage/meta';
 import { SettingsService } from './settings/settings-service';
 import { Vault } from './vault/vault';
+import { Passwords } from './vault/passwords';
 import { AuditLog } from './audit/audit-log';
 import { PolicyEngine } from './governance/policy-engine';
 import { FolderAccess } from './governance/folder-access';
@@ -108,6 +109,7 @@ import { AutomationService } from './automations/automation-service';
 import { ScreenSnapshots } from './snapshots/screen-snapshots';
 import { createTools } from './tools/builtin/create-tools';
 import { webTools } from './tools/builtin/web-tools';
+import { passwordTools } from './tools/builtin/password-tools';
 import { ModelManager } from './ai/runtime/model-manager';
 import { StarterAi } from './ai/runtime/starter';
 import { LocalRuntime } from './ai/runtime/local-runtime';
@@ -170,6 +172,8 @@ export class Kernel {
   readonly settings: SettingsService;
   readonly audit: AuditLog;
   readonly vault: Vault;
+  /** The Vault's password keeper: sign-ins sealed with the vault key. */
+  readonly passwords: Passwords;
   readonly policy: PolicyEngine;
   readonly guardian = new Guardian();
   readonly approvals: ApprovalQueue;
@@ -276,6 +280,7 @@ export class Kernel {
     this.settings = new SettingsService(this.db, this.events);
     this.audit = new AuditLog(this.db, this.meta, this.events);
     this.vault = new Vault(this.db, this.platform.keychain, L('vault'), this.events, this.platform.movedKeychain ?? null);
+    this.passwords = new Passwords(this.db, this.vault);
     this.policy = new PolicyEngine(
       this.db,
       () => ({ ...this.platform.specialDirs(), workspace: this.paths.workspace, data: this.paths.root }),
@@ -927,7 +932,7 @@ export class Kernel {
       this.events.on('settings.changed', () => this.calendar.schedule()),
       this.events.on('settings.changed', () => this.protection.applyWatch()),
     );
-    this.disposers.push(this.vault.onChange(() => this.redactor.setSecrets(this.vault.valuesForRedaction())));
+    this.disposers.push(this.vault.onChange(() => this.updateRedaction()));
     // Licensed features (plugins, connectors, …) start or stop as soon as a license is activated, pushed or revoked.
     this.disposers.push(
       this.events.on('license.changed', () => {
@@ -1003,7 +1008,7 @@ export class Kernel {
       dependsOn: ['storage', 'audit'],
       start: async () => {
         await this.vault.open();
-        this.redactor.setSecrets(this.vault.valuesForRedaction());
+        this.updateRedaction();
       },
       stop: () => undefined,
       health: async () => {
@@ -1039,6 +1044,7 @@ export class Kernel {
           ...netTools({ checkUrl: (u) => checkUrl(u, this.policy.policy.network) }),
           ...systemTools({ workspace: ws, notify: (title, body) => this.notify({ title, body, level: 'info', source: 'agent' }) }),
           ...memoryTools(this.memory),
+          ...passwordTools({ passwords: this.passwords, offerSave: (d) => this.events.emit('passwords.saveRequested', d) }),
           ...folderTools(this.folders),
           ...knowledgeTools({ kb: this.knowledge, doctor: () => this.doctor(), fix: (id) => this.applyFix(id) }),
           ...fbrxTools({ status: () => this.status(), recentAudit: (n) => this.audit.query({ limit: n }) }),
@@ -1336,8 +1342,13 @@ export class Kernel {
     this.logSink.flush();
   }
 
+  /** What the output redactor scrubs: the vault's credentials and the password keeper's passwords. */
+  private updateRedaction(): void {
+    this.redactor.setSecrets([...this.vault.valuesForRedaction(), ...this.passwords.valuesForRedaction()]);
+  }
+
   async onVaultUnlocked(): Promise<void> {
-    this.redactor.setSecrets(this.vault.valuesForRedaction());
+    this.updateRedaction();
     for (const name of ['localapi', 'plugins', 'connectors', 'mesh']) {
       const st = this.services.get(name);
       if (st && st.state !== 'disabled') await this.services.restart(name);

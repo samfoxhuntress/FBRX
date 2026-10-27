@@ -140,3 +140,27 @@ export function safeSearchUrl(url: string): string | null {
 
 /** YouTube's own switch for Restricted Mode, sent as a request header to its hosts while safe browsing is on. */
 export const YOUTUBE_RESTRICT_HOSTS = ['youtube.com', 'm.youtube.com', 'youtubei.googleapis.com', 'youtube.googleapis.com', 'youtube-nocookie.com'];
+
+/** The channel between FBRX Browser's window and the sign-in helper in each page (its Vault extension). */
+export const AUTOFILL_CHANNEL = 'fbrx:autofill';
+
+/** What the sign-in helper in a page tells the browser window. */
+export type AutofillReport =
+  /** A sign-in form's box has the focus, here (in the page's own pixels). */
+  | { type: 'focus'; field: 'username' | 'password'; isNew: boolean; rect: { x: number; y: number; width: number; height: number } }
+  /** The box moved (the page scrolled or resized); the suggestions follow it. */
+  | { type: 'moved'; rect: { x: number; y: number; width: number; height: number } }
+  /** The person moved on (another box, a click elsewhere, Esc), or the box went out of sight. */
+  | { type: 'away' }
+  /** A sign-in form was sent with this in it. */
+  | { type: 'submit'; username: string; password: string; isNew: boolean }
+  | { type: 'filled' }
+  /** Whether the page has a sign-in form now. */
+  | { type: 'forms'; present: boolean };
+
+/** A sign-in the window gives the page's helper to type in, for this origin only. */
+export interface AutofillFill {
+  origin: string;
+  username: string;
+  password: string;
+}

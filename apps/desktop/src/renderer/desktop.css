@@ -6347,6 +6347,293 @@ html[data-presenting='blur'] .private::selection {
   border-top: 1px solid var(--border);
 }
 
+/* The Vault's password keeper: search and filters, the list beside the chosen sign-in, the strength meter */
+.pw-tools {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin: 14px 0;
+}
+.pw-tools > .fx-input {
+  flex: 1 1 220px;
+  max-width: 340px;
+}
+.pw-filters {
+  display: flex;
+  gap: 4px;
+  margin-right: auto;
+  padding: 3px;
+  border-radius: 999px;
+  background: var(--surface-2);
+}
+.pw-filters button {
+  padding: 5px 12px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  color: var(--text-secondary);
+  font: inherit;
+  font-size: 12.5px;
+  cursor: pointer;
+}
+.pw-filters button.on {
+  background: var(--surface-1);
+  color: var(--text-primary);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+}
+.pw-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 340px) 1fr;
+  align-items: start;
+  gap: 14px;
+}
+@media (max-width: 860px) {
+  .pw-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.pw-list {
+  max-height: 64vh;
+  overflow-y: auto;
+}
+.pw-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 12px;
+  border: 0;
+  border-bottom: 1px solid var(--border);
+  background: none;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.pw-row:hover {
+  background: var(--surface-2);
+}
+.pw-row.on {
+  background: var(--accent-wash);
+}
+.pw-row-text {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-width: 0;
+}
+.pw-row-text b,
+.pw-row-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pw-row-text b {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  font-weight: 600;
+}
+.pw-row-text small {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.pw-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  color: #fff;
+  font-weight: 700;
+  font-size: 13px;
+}
+.pw-flag {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--warning) 18%, transparent);
+  color: var(--warning);
+  font-size: 11px;
+  font-weight: 600;
+}
+.pw-flag.bad {
+  background: color-mix(in srgb, var(--critical) 16%, transparent);
+  color: var(--critical);
+}
+.pw-detail .fx-callout {
+  margin-top: 12px;
+}
+.pw-detail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+.pw-detail-head .pw-mark {
+  width: 40px;
+  height: 40px;
+  font-size: 17px;
+}
+.pw-detail-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.pw-fav.on {
+  color: var(--accent);
+}
+.pw-fields {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  align-items: center;
+  gap: 10px 18px;
+  margin: 0;
+}
+.pw-fields dt {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+.pw-fields dd {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 4px 6px;
+  min-width: 0;
+  margin: 0;
+}
+.pw-fields dd > .mono {
+  overflow-wrap: anywhere;
+}
+.pw-secret {
+  letter-spacing: 0.04em;
+}
+.pw-code {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+}
+.pw-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  cursor: pointer;
+}
+.pw-urls {
+  gap: 4px 14px;
+}
+.pw-notes {
+  white-space: pre-wrap;
+}
+.pw-history {
+  margin-top: 12px;
+  font-size: 13px;
+}
+.pw-history summary {
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+.pw-history div {
+  display: flex;
+  gap: 12px;
+  padding: 4px 0;
+}
+.pw-meta {
+  margin: 14px 0 0;
+  font-size: 12px;
+}
+.pw-never {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.pw-never .fx-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.pw-never button {
+  display: grid;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+}
+.pw-input {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.pw-input > .fx-input {
+  flex: 1;
+}
+.pw-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.pw-meter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11.5px;
+  font-weight: 500;
+}
+.pw-meter-bar {
+  display: inline-flex;
+  gap: 2px;
+}
+.pw-meter-bar i {
+  width: 12px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--border-strong);
+}
+.pw-meter.s0,
+.pw-meter.s1 {
+  --pw-tone: var(--critical);
+}
+.pw-meter.s2 {
+  --pw-tone: var(--warning);
+}
+.pw-meter.s3,
+.pw-meter.s4 {
+  --pw-tone: var(--good);
+}
+.pw-meter-bar i.on {
+  background: var(--pw-tone);
+}
+.pw-meter-word {
+  color: var(--pw-tone);
+}
+.pw-gen {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+}
+.pw-gen-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+}
+.pw-gen-row code {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
+
 /* The right-click menu */
 .ctx-menu {
   position: fixed;
@@ -6624,6 +6911,15 @@ body.popout .fx-page-header p {
   background: var(--page);
   color: var(--text-primary);
 }
+/* The browser's own buttons start plain (no weight, so each part's style below wins); the UI kit's keep theirs. */
+:where(.br-app button:not(.fx-btn)) {
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
 .br-app[data-private] {
   background: color-mix(in srgb, var(--accent) 8%, var(--page));
 }
@@ -6854,6 +7150,114 @@ body.popout .fx-page-header p {
 .br-find button { display: grid; place-items: center; width: 24px; height: 24px; border-radius: 6px; color: var(--text-muted); }
 .br-find button:hover { background: var(--surface-2); }
 
+/* The Vault in the browser: sign-ins beside a sign-in box (or under the toolbar's key), and "save your sign-in?" */
+.br-fill {
+  position: absolute;
+  z-index: 20;
+  width: 300px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 5px;
+  border-radius: 10px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1);
+  box-shadow: 0 12px 32px rgb(0 0 0 / 0.28), 0 2px 6px rgb(0 0 0 / 0.16);
+}
+.br-fill.from-key {
+  top: 6px;
+  right: 12px;
+}
+.br-fill-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 8px 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.br-fill-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border-radius: 7px;
+  text-align: left;
+}
+.br-fill-item:hover,
+.br-fill-item:focus-visible {
+  background: var(--accent-wash);
+}
+.br-fill-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: var(--surface-3);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 700;
+}
+.br-fill-mark.accent {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+.br-fill-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+}
+.br-fill-text b,
+.br-fill-text small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.br-fill-text b {
+  font-size: 13px;
+  font-weight: 600;
+}
+.br-fill-text small {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+.br-fill-note {
+  margin: 4px 8px 8px;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+}
+.br-fill-foot {
+  width: 100%;
+  margin-top: 4px;
+  padding: 7px 8px;
+  border-top: 1px solid var(--border);
+  color: var(--accent);
+  font-size: 12.5px;
+  text-align: left;
+}
+.br-save {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 12px;
+  background: var(--accent-wash);
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.br-save-text {
+  flex: 1;
+  min-width: 0;
+}
+.br-signin .br-row-text {
+  flex: 1;
+}
+
 /* Body: the web stage and the side panel */
 .br-body { flex: 1; display: flex; min-height: 0; }
 .br-stage { position: relative; flex: 1; min-width: 0; background: var(--surface-1); }
@@ -6977,6 +7381,7 @@ body.popout .fx-page-header p {
 .br-list-search:focus { outline: none; border-color: var(--focus); }
 .br-list-top { display: flex; justify-content: flex-end; padding: 0 2px 4px; }
 .br-clear { font-size: 12px; color: var(--critical-text); padding: 4px 8px; border-radius: 6px; }
+.br-add { font-size: 12px; color: var(--accent); padding: 4px 8px; border-radius: 6px; }
 .br-clear:hover { background: color-mix(in srgb, var(--critical) 10%, transparent); }
 .br-empty { padding: 20px 8px; text-align: center; font-size: 12.5px; }
 .br-row { display: flex; align-items: center; gap: 4px; border-radius: 9px; }

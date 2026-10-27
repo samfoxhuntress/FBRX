@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, THINKING_LEVELS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, LOGIN_LIMITS, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, THINKING_LEVELS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -23,6 +23,15 @@ const USER_ONLY = new Set<string>([
   'vault.importMoved',
   'vault.passwordOnStart',
   'vault.reset',
+  'passwords.list',
+  'passwords.query',
+  'passwords.reveal',
+  'passwords.save',
+  'passwords.remove',
+  'passwords.fill',
+  'passwords.verify',
+  'passwords.code',
+  'passwords.import',
   'backup.restore',
   'ai.conversations.deleteMany',
   'ai.conversations.cleanup',
@@ -97,7 +106,7 @@ const READ_ONLY = /\.(status|list|get|types|catalog|installed|policy|query|stats
 const EXT_READ_ONLY =
   /^(sysinfo\.\w+|files\.(home|read|search)|spotlight\.(query|files)|alerts\.(rules|inbox|counts)|storage\.(drives|disks|cleanupInfo|analyze)|security\.(defender|defenderPrefs|threats|firewall|ports|processAudit|startup|fileReport|linkCheck)|bugs\.(scan|fixes|events)|winupdates\.(apps|windows|drivers|hotfixes)|lab\.vms|net\.(context|publicIp|ping|traceroute|scans|scanGet|compare|speedHistory|wifi|bluetooth|printers|dns|port|adapters)|mesh\.(messages|peerInfo)|aicoord\.(detect|bridge)|events\.logs|codelab\.(read|folder|editors)|voice\.models|server\.(resources|readDoc)|mesh\.network\.(status|test|computers))$/;
 
-const SENSITIVE_KEYS = new Set(['value', 'passphrase', 'recoveryPassphrase', 'current', 'next', 'key', 'token', 'password']);
+const SENSITIVE_KEYS = new Set(['value', 'passphrase', 'recoveryPassphrase', 'current', 'next', 'key', 'token', 'password', 'totp', 'notes', 'csv']);
 
 function scrub(params: unknown): unknown {
   if (!params || typeof params !== 'object') return params;
@@ -112,6 +121,18 @@ function scrub(params: unknown): unknown {
 }
 
 const NameSchema = z.object({ name: z.string().min(1) });
+const LoginSchema = z
+  .object({
+    id: z.string().max(64),
+    title: z.string().max(LOGIN_LIMITS.title),
+    username: z.string().max(LOGIN_LIMITS.username),
+    password: z.string().max(LOGIN_LIMITS.password),
+    urls: z.array(z.string().max(LOGIN_LIMITS.url)).max(LOGIN_LIMITS.urls),
+    notes: z.string().max(LOGIN_LIMITS.notes),
+    totp: z.string().max(LOGIN_LIMITS.totp),
+    favorite: z.boolean(),
+  })
+  .partial();
 const IdSchema = z.object({ id: z.string().min(1) });
 
 const AutomationInputSchema = z.object({
@@ -204,6 +225,21 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       k.platform.requestRestart('vault-reset');
       return k.vault.status();
     },
+    'passwords.list': () => k.passwords.list(),
+    'passwords.query': (p) => k.passwords.query(z.object({ url: z.string().max(LOGIN_LIMITS.url) }).parse(p).url),
+    'passwords.reveal': (p) => k.passwords.reveal(IdSchema.parse(p).id),
+    'passwords.save': (p) => k.passwords.save(LoginSchema.parse(p)),
+    'passwords.remove': (p) => ({ removed: k.passwords.remove(IdSchema.parse(p).id) }),
+    'passwords.fill': (p) => {
+      const { id, url } = z.object({ id: z.string().min(1), url: z.string().max(LOGIN_LIMITS.url) }).parse(p);
+      return k.passwords.fill(id, url);
+    },
+    'passwords.verify': (p) => {
+      const { url, username, password } = z.object({ url: z.string().max(LOGIN_LIMITS.url), username: z.string().max(LOGIN_LIMITS.username), password: z.string().max(LOGIN_LIMITS.password) }).parse(p);
+      return k.passwords.verify(url, username, password);
+    },
+    'passwords.code': (p) => k.passwords.code(IdSchema.parse(p).id),
+    'passwords.import': (p) => k.passwords.import(z.object({ csv: z.string().max(5 * 1024 * 1024) }).parse(p).csv),
 
     'ai.providers': () => k.providers.status(),
     'ai.models': (p) => k.providers.models(z.object({ providerId: z.string() }).parse(p).providerId),

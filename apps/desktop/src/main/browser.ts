@@ -127,11 +127,8 @@ export function openBrowserWindow(deps: BrowserDeps, url?: string): void {
     },
   });
   const w = browserWin;
-  guardWebBrowser(w);
-  w.once('ready-to-show', () => {
-    w.show();
-    if (url) w.webContents.send('fbrx:browser-open', url);
-  });
+  guardWebBrowser(w, deps.appPath);
+  w.once('ready-to-show', () => w.show());
   w.on('closed', () => (browserWin = null));
   // The window chrome itself (FBRX's page) never leaves FBRX; web pages live only in the webviews.
   w.webContents.setWindowOpenHandler(({ url: u }) => {
@@ -144,8 +141,10 @@ export function openBrowserWindow(deps: BrowserDeps, url?: string): void {
       openExternalSafe(u);
     }
   });
-  if (deps.rendererUrl) void w.loadURL(`${deps.rendererUrl}?browser=1#/browser`);
-  else void w.loadFile(join(deps.appPath, 'dist', 'renderer', 'index.html'), { hash: '/browser', query: { browser: '1' } });
+  // The first address rides along in the window's own address: a message sent while the page starts would be missed.
+  const query: Record<string, string> = { browser: '1', ...(url && /^https?:\/\//i.test(url) ? { open: url } : {}) };
+  if (deps.rendererUrl) void w.loadURL(`${deps.rendererUrl}?${new URLSearchParams(query)}#/browser`);
+  else void w.loadFile(join(deps.appPath, 'dist', 'renderer', 'index.html'), { hash: '/browser', query });
 }
 
 export function browserWindowOpen(): boolean {
@@ -157,11 +156,18 @@ export function browserWebContents(): Electron.WebContents | null {
   return browserWin && !browserWin.isDestroyed() ? browserWin.webContents : null;
 }
 
-/** Only the browser window's own web webviews are allowed; locked down whatever the page asked for. */
-export function guardWebBrowser(win: BrowserWindow): void {
-  win.webContents.on('will-attach-webview', (_e, prefs) => {
+/**
+ * Only the browser window's own web webviews are allowed; locked down whatever the page asked for. Each web page gets
+ * FBRX's sign-in helper (the Vault's extension) and nothing else: it runs sandboxed, in a world of its own the page
+ * cannot reach, and talks only to the browser window.
+ */
+export function guardWebBrowser(win: BrowserWindow, appPath: string): void {
+  const helper = join(appPath, 'dist', 'preload', 'autofill.cjs');
+  win.webContents.on('will-attach-webview', (_e, prefs, params) => {
     delete prefs.preload;
+    if ((params.partition === WEB_BROWSER_PARTITION || params.partition === WEB_BROWSER_PRIVATE_PARTITION) && existsSync(helper)) prefs.preload = helper;
     prefs.nodeIntegration = false;
+    prefs.nodeIntegrationInSubFrames = false;
     prefs.contextIsolation = true;
     prefs.sandbox = true;
     prefs.webSecurity = true;

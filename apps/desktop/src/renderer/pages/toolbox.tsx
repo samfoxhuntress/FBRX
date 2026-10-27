@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import QRCode from 'qrcode';
-import type { MacLookup } from '@fbrx/shared';
+import { GENERATOR_DEFAULTS, GENERATOR_LENGTH, generatePassword, type MacLookup } from '@fbrx/shared';
 import { AdvancedTag, Button, Card, Field, Input, Page, Select, TextArea, Toggle, useToast } from '@fbrx/ui';
-import { call } from '../client';
+import { call, copySecret } from '../client';
 import { navigate } from '../app';
 import { useCore } from '../hooks';
 import { AskButton } from '../widgets';
 import { COMMAND_GROUPS } from '../command-library';
 import { unlockTrophy } from '../fun';
-import { EditionHint } from '../edition';
+import { EditionHint, useLearner } from '../edition';
+import { saveToVault } from '../vault-save';
 
 interface Example {
   label: string;
@@ -60,6 +61,47 @@ function Out({ value }: { value: string }) {
         Copy
       </Button>
     </div>
+  );
+}
+
+/** Strong passwords from the Vault's own generator, each ready to copy or save to the Vault. */
+function PasswordTool() {
+  const [length, setLength] = useState(GENERATOR_DEFAULTS.length);
+  const [symbols, setSymbols] = useState(true);
+  const make = () => Array.from({ length: 5 }, () => generatePassword({ length, symbols }));
+  const [list, setList] = useState(make);
+  const learner = useLearner();
+  const toast = useToast();
+  useEffect(() => setList(make()), [length, symbols]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <>
+      <div className="fx-row">
+        <Field label={<>Length <span className="budget-value">{length}</span> characters</>}>
+          <input type="range" min={GENERATOR_LENGTH.min} max={64} value={length} aria-label="Password length" onChange={(e) => setLength(Number(e.target.value))} />
+        </Field>
+        <Field label=" ">
+          <Toggle checked={symbols} onChange={setSymbols} label="Include symbols" />
+        </Field>
+      </div>
+      <div className="pw-gen">
+        {list.map((p) => (
+          <div key={p} className="pw-gen-row">
+            <code className="mono">{p}</code>
+            <Button size="sm" variant="ghost" icon="copy" aria-label="Copy" onClick={() => void copySecret(p).then(() => toast.success('Copied', 'It leaves the clipboard again shortly.'))} />
+            {!learner && (
+              <Button size="sm" icon="key" onClick={() => saveToVault({ password: p })}>
+                Save to Vault
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="fx-actions">
+        <Button variant="primary" icon="refresh" onClick={() => setList(make())}>
+          New passwords
+        </Button>
+      </div>
+    </>
   );
 }
 
@@ -172,38 +214,7 @@ function Pane({ id, seed, fun }: { id: string; seed: Example | null; fun: boolea
         </>
       );
     case 'password':
-      return (
-        <>
-          <div className="fx-row">
-            <Field label="Length">
-              <Input type="number" min={8} max={128} value={input || '24'} onChange={(e) => setInput(e.target.value)} />
-            </Field>
-            <Field label=" ">
-              <Toggle checked={flag} onChange={setFlag} label="Include symbols" />
-            </Field>
-          </div>
-          {buttons([
-            [
-              'Generate',
-              () => {
-                const cs = `ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789${flag ? '!@#$%^&*()-_=+[]{};:,.?' : ''}`;
-                const n = Math.max(8, Math.min(128, Number(input) || 24));
-                // Rejection sampling keeps every character equally likely.
-                const pick = () => {
-                  const limit = 256 - (256 % cs.length);
-                  for (;;) {
-                    const b = crypto.getRandomValues(new Uint8Array(1))[0];
-                    if (b < limit) return cs[b % cs.length];
-                  }
-                };
-                return Array.from({ length: 5 }, () => Array.from({ length: n }, pick).join('')).join('\n');
-              },
-              true,
-            ],
-          ])}
-          <Out value={out} />
-        </>
-      );
+      return <PasswordTool />;
     case 'time':
       return (
         <>

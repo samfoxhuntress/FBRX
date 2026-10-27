@@ -2,7 +2,8 @@ import { clipboard } from 'electron';
 
 /**
  * Clipboard history for the Clipboard page: off unless turned on in Settings, kept in memory only (never written to
- * disk, gone when FBRX quits), text only, the last 50 copies. Copies that password managers mark as secret are skipped.
+ * disk, gone when FBRX quits), text only, the last 50 copies. Copies that password managers mark as secret are skipped,
+ * and so are the passwords and codes FBRX's own Vault copies.
  */
 
 export interface ClipEntry {
@@ -23,6 +24,8 @@ export class ClipHistory {
   private last = '';
   private nextId = 1;
   private busy = false;
+  /** A password or code FBRX itself just copied: never recorded. */
+  private secretCopy = '';
 
   constructor(private readonly changed: (entries: ClipEntry[]) => void) {}
 
@@ -64,6 +67,11 @@ export class ClipHistory {
     this.changed(this.entries);
   }
 
+  /** FBRX is copying a password or code: history skips it (other apps see the clipboard as usual). */
+  skip(text: string): void {
+    this.secretCopy = text;
+  }
+
   private async secret(): Promise<boolean> {
     for (const f of SECRET_FORMATS) {
       try {
@@ -90,7 +98,7 @@ export class ClipHistory {
       const text = await this.safeRead();
       if (!this.enabled || !text || text === this.last) return;
       this.last = text;
-      if (!text.trim() || text.length > MAX_TEXT || (await this.secret())) return;
+      if (!text.trim() || text.length > MAX_TEXT || text === this.secretCopy || (await this.secret())) return;
       const existing = this.entries.find((e) => e.text === text);
       const rest = this.entries.filter((e) => e.text !== text);
       const entry: ClipEntry = { id: this.nextId++, text, at: new Date().toISOString(), pinned: existing?.pinned ?? false };

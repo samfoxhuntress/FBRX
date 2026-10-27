@@ -42,6 +42,15 @@ await build({
   format: 'cjs',
   external: ['electron'],
 });
+// FBRX Browser's sign-in helper, in each web page's own isolated world (the Vault's browser extension).
+await build({
+  ...common,
+  entryPoints: [join(app, 'src/preload/autofill.ts')],
+  outfile: join(app, 'dist/preload/autofill.cjs'),
+  format: 'cjs',
+  platform: 'browser',
+  external: ['electron'],
+});
 copyFileSync(join(root, 'packages/core/src/plugins/plugin-worker.mjs'), join(app, 'dist/main/plugin-worker.mjs'));
 // MCP bridge for other AI apps: a self-contained Node script run by the app executable (ELECTRON_RUN_AS_NODE).
 await build({
