@@ -143,7 +143,7 @@ crisis. Click anywhere to make them stop.
   ("Hm. That rattled." … "Please stop. It's hanging by one screw."). On the sixth click it swings off its last screw
   and falls, revealing what was behind it: a lost sock, a shiny coin and a note in goose handwriting. **Screw it
   back on** puts it back.
-- Now and then the board says "FBRX GLASS / NOW 40% MORE SHINY" or "HONK / THE GOOSE SAYS HI".
+- Now and then the board says "FBRX DASH / NOW 40% MORE SHINY" or "HONK / THE GOOSE SAYS HI".
 
 ## Story time
 

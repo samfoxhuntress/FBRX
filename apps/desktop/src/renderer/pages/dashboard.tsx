@@ -286,7 +286,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
     m.push([status.aiHalt ? 'AI ON EMERGENCY STOP' : aiReady ? `${agentName} READY` : `${agentName} NEEDS A MODEL`, `HEALTH ${health.score} · ${health.label}`]);
     m.push([now.toLocaleDateString(undefined, { weekday: 'long' }), now.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })]);
     m.push(['UPTIME', formatDuration(cur?.uptime ?? status.uptimeSeconds)]);
-    if (easterEggs) m.push(Math.random() < 0.5 ? ['FBRX GLASS', 'NOW 40% MORE SHINY'] : ['HONK', 'THE GOOSE SAYS HI']);
+    if (easterEggs) m.push(Math.random() < 0.5 ? ['FBRX DASH', 'NOW 40% MORE SHINY'] : ['HONK', 'THE GOOSE SAYS HI']);
     return m;
     // Rebuilt every half minute (and when the big things change) so the board isn't restarted on every sample.
     // eslint-disable-next-line react-hooks/exhaustive-deps

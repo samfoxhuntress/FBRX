@@ -491,6 +491,37 @@ export const MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 17,
+    name: 'calendar-fbrx',
+    // The FBRX calendar: events kept on this computer (they may repeat, and be about a project, a note, a task or an
+    // automation), shown with the shared calendars as an account of its own that is always there.
+    up: `
+      CREATE TABLE calendar_items (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        start TEXT NOT NULL,
+        end TEXT NOT NULL,
+        all_day INTEGER NOT NULL DEFAULT 0,
+        location TEXT,
+        notes TEXT,
+        color TEXT,
+        link_kind TEXT,
+        link_id TEXT,
+        repeat TEXT NOT NULL DEFAULT 'none',
+        repeat_until TEXT,
+        show_as TEXT NOT NULL DEFAULT 'busy',
+        made_by TEXT NOT NULL DEFAULT 'person',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX calendar_items_start ON calendar_items (start);
+      INSERT OR IGNORE INTO calendar_accounts (id, kind, name, address, color, enabled, can_write, calendars, config, created_at)
+      VALUES ('fbrx', 'fbrx', 'FBRX', NULL, '#3b82f6', 1, 1,
+        '[{"id":"events","name":"Events","enabled":true,"canWrite":true,"isDefault":true},{"id":"tasks","name":"Tasks due","enabled":true,"canWrite":false,"isDefault":false},{"id":"projects","name":"Project deadlines","enabled":true,"canWrite":false,"isDefault":false},{"id":"automations","name":"Automations","enabled":true,"canWrite":false,"isDefault":false}]',
+        '{}', '2000-01-01T00:00:00.000Z');
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

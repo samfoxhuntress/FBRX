@@ -4,7 +4,7 @@ import type { VoiceDownloadId } from './settings';
 import type { AssistAction, AssistJob, HelpdeskScope, HelpdeskStatus, TicketCategory, TicketDetail, TicketPriority, TicketStatus, TicketSummary } from './helpdesk';
 import type { EditionStatus } from './editions';
 import type { Tier } from './license';
-import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
+import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarEventPatch, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
 import type { ProtectionState, ProtectionStatus, ScanJob, ScanType, ShieldDetection, ShieldVerdict } from './protection';
 import type { ImageBackupConfig, ImageBackupStatus } from './time';
 import type { AssistOffer, AssistPriority, AssistSession, AssistTools } from './mesh-assist';
@@ -1150,7 +1150,7 @@ export interface ExtMethods {
   'netenv.deviceAction': (p: { id: string; deviceId: string; action: NetEnvDeviceAction; siteId?: string }) => Ok;
   'netenv.vouchers': (p: { id: string; siteId?: string }) => NetEnvVoucher[];
   'netenv.createVouchers': (p: { id: string; name: string; count?: number; timeLimitMinutes: number; guestLimit?: number; siteId?: string }) => NetEnvVoucher[];
-  // Calendar: Outlook / Microsoft 365 accounts and calendar links.
+  // Calendar: the FBRX calendar on this computer, with Outlook / Microsoft 365 accounts and calendar links beside it.
   'calendar.status': () => CalendarStatus;
   /** Events between two times (ISO), across the accounts that are turned on. */
   'calendar.events': (p: { from: string; to: string; accountId?: string }) => CalendarEvent[];
@@ -1163,7 +1163,11 @@ export interface ExtMethods {
   'calendar.remove': (p: { id: string }) => Deleted;
   /** Fetch now (one account, or all of them). */
   'calendar.sync': (p?: { id?: string }) => CalendarStatus;
+  /** Adds an event: to the FBRX calendar, or to the Outlook calendar named. */
   'calendar.create': (p: NewCalendarEvent) => CalendarEvent;
+  /** Changes an FBRX calendar event (every occurrence, when it repeats). */
+  'calendar.edit': (p: CalendarEventPatch) => CalendarEvent;
+  /** Deletes an event (an FBRX event's every occurrence, when it repeats). */
   'calendar.delete': (p: { accountId: string; id: string }) => Deleted;
   // FBRX Time: an image of the whole computer.
   'imageBackup.status': () => ImageBackupStatus;
@@ -1412,6 +1416,7 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'calendar.remove',
   'calendar.sync',
   'calendar.create',
+  'calendar.edit',
   'calendar.delete',
   'console.connect',
   'console.write',

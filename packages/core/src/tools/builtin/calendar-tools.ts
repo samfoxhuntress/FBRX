@@ -1,4 +1,4 @@
-import type { CalendarEvent } from '@fbrx/shared';
+import { CALENDAR_REPEATS, FBRX_CALENDAR, type CalendarEvent, type CalendarRepeat } from '@fbrx/shared';
 import { CoreError } from '../../errors';
 import { localZone, parseWhen, type CalendarService } from '../../calendar/calendar-service';
 import type { ToolSpec } from '../types';
@@ -7,13 +7,15 @@ import type { ToolSpec } from '../types';
  * The agent's view of the person's calendars (Calendar page): what is on, when they are free, and adding an event.
  * Adding goes through approvals like any other change; reading needs none. Sign-ins and links are never visible.
  */
-export function calendarTools(cal: CalendarService): ToolSpec[] {
-  const unavailable = () => (cal.accounts().some((a) => a.enabled) ? null : 'No calendar is connected. The person can connect Outlook / Microsoft 365 or a calendar link in Calendar.');
+export function calendarTools(cal: CalendarService, projects: () => Array<{ id: string; name: string }>): ToolSpec[] {
+  const unavailable = () => (cal.accounts().some((a) => a.enabled) ? null : 'Every calendar is hidden. The person can show them again in Calendar → Calendars.');
   const tool = (t: Omit<ToolSpec, 'source' | 'sourceId' | 'unavailable'>): ToolSpec => ({ source: 'builtin', sourceId: null, unavailable, ...t });
   const day = (d: Date) => d.toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' });
   const time = (iso: string) => new Date(iso).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
+  // What FBRX puts on its calendar from elsewhere says what it is.
+  const what = (e: CalendarEvent) => (e.accountId !== FBRX_CALENDAR ? '' : e.calendarId === 'tasks' ? ' (task due)' : e.calendarId === 'projects' ? ' (project deadline)' : e.calendarId === 'automations' ? ' (automation runs)' : '');
   const line = (e: CalendarEvent) =>
-    `- ${e.allDay ? 'all day' : `${time(e.start)}–${time(e.end)}`} ${e.title}${e.cancelled ? ' (cancelled)' : ''}${e.showAs === 'tentative' ? ' (tentative)' : e.showAs === 'free' ? ' (free)' : e.showAs === 'oof' ? ' (away)' : ''}${e.location ? ` · ${e.location}` : ''}${e.organizer ? ` · organizer ${e.organizer}` : ''}${e.joinUrl ? ' · online meeting' : ''} [${e.accountName}]`;
+    `- ${e.allDay ? 'all day' : `${time(e.start)}–${time(e.end)}`} ${e.title}${what(e)}${e.cancelled ? ' (cancelled)' : ''}${e.showAs === 'tentative' ? ' (tentative)' : e.showAs === 'free' && !what(e) ? ' (free)' : e.showAs === 'oof' ? ' (away)' : ''}${e.repeat !== 'none' ? ` (repeats ${e.repeat})` : ''}${e.link?.project && e.link.kind !== 'project' ? ` · project ${e.link.project.name}` : e.link?.kind === 'project' && e.calendarId === 'events' ? ` · project ${e.link.name}` : ''}${e.location ? ` · ${e.location}` : ''}${e.organizer ? ` · organizer ${e.organizer}` : ''}${e.joinUrl ? ' · online meeting' : ''} [${e.accountName}]`;
   const startOf = (s?: string) => {
     if (!s) {
       const n = new Date();
@@ -27,7 +29,7 @@ export function calendarTools(cal: CalendarService): ToolSpec[] {
       name: 'calendar.agenda',
       title: 'Calendar agenda',
       description:
-        "What is on the person's calendars (Outlook / Microsoft 365 and calendar links): meetings and events day by day, with times, places, organizers and whether there is an online meeting. Use it for \"what's on today/tomorrow/this week\", \"when is my next meeting\" or to find an event by name.",
+        "What is on the person's calendars, day by day: the FBRX calendar (their own events, tasks due, project deadlines and when automations run) and any shared calendars (Outlook / Microsoft 365, calendar links), with times, places, projects, organizers and online meetings. Use it for \"what's on today/tomorrow/this week\", \"when is my next meeting\" or to find an event by name.",
       risk: 'read',
       inputSchema: {
         type: 'object',
@@ -85,7 +87,7 @@ export function calendarTools(cal: CalendarService): ToolSpec[] {
       name: 'calendar.create_event',
       title: 'Add a calendar event',
       description:
-        "Adds an event to the person's Outlook / Microsoft 365 calendar (calendar links are read-only). Give a start time (or a date for an all-day event) and either an end or a duration. It does not invite anyone. Check calendar.free_time first when the person asks for a free slot.",
+        "Adds an event to the person's FBRX calendar (or, when they name it, an Outlook / Microsoft 365 calendar; calendar links are read-only). Give a start time (or a date for an all-day event) and either an end or a duration; it can repeat and be about one of their projects (it takes the project's color). It does not invite anyone. Check calendar.free_time first when the person asks for a free slot.",
       risk: 'write',
       inputSchema: {
         type: 'object',
@@ -98,18 +100,28 @@ export function calendarTools(cal: CalendarService): ToolSpec[] {
           allDay: { type: 'boolean' },
           location: { type: 'string', maxLength: 255 },
           notes: { type: 'string', maxLength: 4000 },
-          account: { type: 'string', description: 'Account id or name (default: the first that can take events).' },
+          repeat: { type: 'string', enum: [...CALENDAR_REPEATS], description: 'How it repeats (FBRX calendar; default none).' },
+          repeatUntil: { type: 'string', description: 'The last day it repeats (YYYY-MM-DD); none: for good.' },
+          project: { type: 'string', description: 'The project it is about (its name or id), FBRX calendar only.' },
+          account: { type: 'string', description: 'Another calendar to add it to, by id or name (default: the FBRX calendar).' },
         },
       },
-      async run(i: { title: string; start: string; end?: string; durationMinutes?: number; allDay?: boolean; location?: string; notes?: string; account?: string }) {
+      async run(i: { title: string; start: string; end?: string; durationMinutes?: number; allDay?: boolean; location?: string; notes?: string; repeat?: CalendarRepeat; repeatUntil?: string; project?: string; account?: string }) {
         let accountId: string | undefined;
         if (i.account) {
           const a = cal.accounts().find((x) => x.id === i.account || x.name.toLowerCase() === i.account!.toLowerCase() || x.address?.toLowerCase() === i.account!.toLowerCase());
           if (!a) throw new CoreError('NOT_FOUND', `No calendar "${i.account}". Connected: ${cal.accounts().map((x) => x.name).join(', ')}`);
           accountId = a.id;
         }
-        const e = await cal.create({ accountId, title: i.title, start: i.start, end: i.end, durationMinutes: i.durationMinutes, allDay: i.allDay, location: i.location, notes: i.notes });
-        return { output: `Added "${e.title}" to ${e.accountName} (${e.calendarName}): ${day(new Date(e.start))} ${e.allDay ? 'all day' : `${time(e.start)}–${time(e.end)}`}.`, data: { event: e } };
+        let link: { kind: 'project'; id: string } | null = null;
+        if (i.project) {
+          const want = i.project.trim().toLowerCase();
+          const p = projects().find((x) => x.id === i.project || x.name.toLowerCase() === want) ?? projects().find((x) => x.name.toLowerCase().includes(want));
+          if (!p) throw new CoreError('NOT_FOUND', `No project "${i.project}". Projects: ${projects().map((x) => x.name).join(', ') || 'none yet'}`);
+          link = { kind: 'project', id: p.id };
+        }
+        const e = await cal.create({ accountId, title: i.title, start: i.start, end: i.end, durationMinutes: i.durationMinutes, allDay: i.allDay, location: i.location, notes: i.notes, repeat: i.repeat, repeatUntil: i.repeatUntil, link }, 'fabrix');
+        return { output: `Added "${e.title}" to ${e.accountName} (${e.calendarName}): ${day(new Date(e.start))} ${e.allDay ? 'all day' : `${time(e.start)}–${time(e.end)}`}${e.repeat !== 'none' ? `, repeating ${e.repeat}` : ''}${e.link ? `, for ${e.link.name}` : ''}.`, data: { event: e } };
       },
     }),
   ];

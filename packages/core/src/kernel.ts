@@ -622,6 +622,25 @@ export class Kernel {
       builtInClientId: this.platform.microsoftClientId ?? null,
       internet: () => this.internetAllowed(),
       notify: (title, body) => this.notify({ title, body, level: 'info', source: 'calendar' }),
+      sources: {
+        projects: () => this.workspace.listProjects(),
+        tasks: () => this.workspace.listTasks(),
+        note: (id) => {
+          try {
+            return this.workspace.getNote(id);
+          } catch {
+            return null;
+          }
+        },
+        task: (id) => {
+          try {
+            return this.workspace.getTask(id);
+          } catch {
+            return null;
+          }
+        },
+        automations: () => this.automations.list(),
+      },
     });
     this.shield = new Shield({
       db: this.db,
@@ -1103,7 +1122,7 @@ export class Kernel {
           ...workspaceTools(this.workspace),
           ...deviceConsoleTools(this.consoles),
           ...netEnvTools(this.netenv, () => this.blackHoleOnly('Network environments')),
-          ...calendarTools(this.calendar),
+          ...calendarTools(this.calendar, () => this.workspace.listProjects()),
           ...shieldTools(this.protection, this.shield),
           ...meshTools(this.assist, () => {
             const a = this.settings.get().mesh.assist;

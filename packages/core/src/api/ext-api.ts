@@ -3,6 +3,9 @@ import { basename, join } from 'node:path';
 import { z } from 'zod';
 import {
   ALERT_CHANNELS,
+  CALENDAR_LINKS,
+  CALENDAR_REPEATS,
+  CALENDAR_SHOW_AS,
   EVENT_LEVELS,
   VOICE_DOWNLOAD_IDS,
   LAB_FEATURES,
@@ -84,6 +87,22 @@ const SpotlightItemSchema = z.object({
  * Handlers for the command-center modules. Requests that do not come from the person at the workstation (Local API,
  * remote commands) may only read files inside the folders governance allows.
  */
+/** An event as the person enters it (the FBRX calendar takes all of it; an Outlook calendar, up to the notes). */
+const CalendarEventInput = z.object({
+  title: z.string().trim().min(1).max(255),
+  start: z.string().min(1).max(40),
+  end: z.string().max(40).optional(),
+  durationMinutes: z.number().int().min(5).max(1440).optional(),
+  allDay: z.boolean().optional(),
+  location: z.string().max(255).optional(),
+  notes: z.string().max(4000).optional(),
+  repeat: z.enum(CALENDAR_REPEATS).optional(),
+  repeatUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  link: z.object({ kind: z.enum(CALENDAR_LINKS), id: z.string().min(1).max(100) }).nullable().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  showAs: z.enum(CALENDAR_SHOW_AS).optional(),
+});
+
 export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
   const vt = () => (k.vault.isUnlocked ? k.vault.get(VIRUSTOTAL_SECRET) : undefined);
   const guardPath = (p: string, ctx: CallContext) => {
@@ -553,22 +572,8 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       else await k.calendar.syncAll();
       return k.calendar.status();
     },
-    'calendar.create': (p) =>
-      k.calendar.create(
-        z
-          .object({
-            accountId: z.string().max(80).optional(),
-            calendarId: z.string().max(400).optional(),
-            title: z.string().trim().min(1).max(255),
-            start: z.string().min(1).max(40),
-            end: z.string().max(40).optional(),
-            durationMinutes: z.number().int().min(5).max(1440).optional(),
-            allDay: z.boolean().optional(),
-            location: z.string().max(255).optional(),
-            notes: z.string().max(4000).optional(),
-          })
-          .parse(p),
-      ),
+    'calendar.create': (p) => k.calendar.create(CalendarEventInput.extend({ accountId: z.string().max(80).optional(), calendarId: z.string().max(400).optional() }).parse(p)),
+    'calendar.edit': (p) => k.calendar.edit(CalendarEventInput.partial().extend({ id: z.string().min(1).max(200) }).parse(p)),
     'calendar.delete': (p) => {
       const x = z.object({ accountId: z.string().min(1).max(80), id: z.string().min(1).max(400) }).parse(p);
       return k.calendar.delete(x.accountId, x.id);
