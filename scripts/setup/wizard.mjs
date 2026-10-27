@@ -7,7 +7,7 @@
  *   node scripts/setup/wizard.mjs [--name "Your Name"] [--no-launch] [--no-ai] [--allow-downgrade]
  *   node scripts/setup/wizard.mjs --share [--for "Their Name"] [--days 30] [--yes]        (Windows)
  *
- * There is nothing to answer: the license goes to --name (or this computer's user). Steps: download what the app is
+ * It asks no questions: the license goes to --name (or this computer's user). Steps: download what the app is
  * made of → build it for this machine (license signing keys, the FBRX Server installer and guides, the built-in AI
  * runtime, the app) → get the AI ready → install and license it → open it. On a computer without FBRX OS the starter
  * model (Qwen2.5 1.5B Instruct, about 1 GB) downloads into the app's models folder meanwhile, so the first thing the app
@@ -576,9 +576,9 @@ async function main() {
     console.log(`This builds a ${PRODUCT} installer for someone else, without installing anything on this PC. It takes`);
     console.log(`about 10 minutes the first time. The installer upgrades, repairs or removes an existing copy on their PC.\n`);
   } else {
-    console.log(`There is nothing to answer. Setup installs ${PRODUCT} on this ${platformName}, gets its AI ready and opens it,`);
-    console.log(`so the first thing you see is a chat with your own AI. The first time takes about 15–20 minutes and`);
-    console.log(`downloads about 2 GB. Leave this window open; you can use the computer meanwhile.\n`);
+    console.log(`Setup installs ${PRODUCT} on this ${platformName}, gets its AI ready and opens it, so the first thing you see`);
+    console.log(`is a chat with your own AI. The first time takes about 15–20 minutes and downloads about 2 GB. Leave this`);
+    console.log(`window open; you can use the computer meanwhile.\n`);
   }
   const free = freeGb(ROOT);
   if (free < 4) console.log(`${yellow('!')} Only ${free.toFixed(1)} GB free here; about 4 GB is needed while building.\n`);

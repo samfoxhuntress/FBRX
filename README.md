@@ -145,8 +145,8 @@ Downloads folder, offers to unzip it to `%USERPROFILE%\FBRX` (or a folder you ty
 | Mac | **`Install FBRX OS.command`** | System Settings → Privacy & Security → **Open Anyway**. Or open Terminal, type `bash ` and drag the file in, then press Enter |
 | Windows | **`Install FBRX OS.cmd`** | **More info → Run anyway** |
 
-There is nothing to answer. The installer does everything, in about 15–20 minutes the first time (about 2 GB of
-downloads), and when it is done FBRX OS opens straight into a chat with your own AI, running on your computer:
+The installer does everything, in about 15–20 minutes the first time (about 2 GB of downloads), and when it is done
+FBRX OS opens straight into a chat with your own AI, running on your computer:
 
 1. downloads a private copy of Node.js if this computer doesn't have a recent one (nothing is installed system-wide),
 2. downloads what FBRX OS is made of (the project's dependencies),
