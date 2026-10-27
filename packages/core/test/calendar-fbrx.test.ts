@@ -89,6 +89,10 @@ describe('The FBRX calendar', () => {
     await expect(kernel.call('calendar.edit', { id: e.id, title: 'x' }, { origin: 'agent', actor: 'agent' })).rejects.toThrow(/person at this workstation/);
     await kernel.call('calendar.delete', { accountId: 'fbrx', id: third.id }, USER);
     expect(mine(between('2027-03-01', '2027-03-10'))).toEqual([]);
+    // With the calendar hidden, what is added is still saved and shown to whoever added it.
+    await kernel.call('calendar.update', { id: 'fbrx', enabled: false }, USER);
+    expect(await create({ title: 'Quiet', start: '2027-03-09' })).toMatchObject({ title: 'Quiet', allDay: true });
+    expect(between('2027-03-09', '2027-03-10')).toEqual([]);
   });
 
   it('reminds before your events, not before tasks or automations, and lets Fabrix add to it', async () => {

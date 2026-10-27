@@ -638,11 +638,15 @@ export class CalendarService {
 
   // ------------------------------------------------------------------------------------- adding events
 
-  /** The FBRX calendar's event (or occurrence) as shown, just after it changed. */
+  /** An FBRX calendar event as shown (its first time), just after it changed, hidden calendar or not. */
   private shown(id: string): CalendarEvent {
+    const own = this.row(FBRX_CALENDAR);
     const row = this.d.db.get<{ start: string; end: string }>('SELECT start, end FROM calendar_items WHERE id = ?', id);
-    const ev = row && this.events(new Date(new Date(row.start).getTime() - 1), new Date(Math.max(new Date(row.end).getTime(), new Date(row.start).getTime() + 1) + 1), FBRX_CALENDAR).find((e) => e.series === id);
-    if (!ev) throw new CoreError('INTERNAL', 'The event was saved but could not be shown (is the FBRX calendar hidden?).');
+    if (!row) throw new CoreError('NOT_FOUND', 'That event is not in the FBRX calendar any more.');
+    const start = new Date(row.start).getTime();
+    const span = { from: new Date(start - 1), to: new Date(Math.max(new Date(row.end).getTime(), start + 1) + 1) };
+    const ev = this.fbrx.events(span.from, span.to, { name: own.name, color: own.color, shown: (c) => c === 'events' }).find((e) => e.series === id);
+    if (!ev) throw new CoreError('INTERNAL', 'The event was saved but could not be read back.');
     return ev;
   }
 
