@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Icons, Shell, Spinner, type NavItem } from '@fbrx/ui';
+import { Button, ErrorBoundary, Icons, Shell, Spinner, type NavItem } from '@fbrx/ui';
 import { api, session, setUnauthorizedHandler } from './api';
 import { AppStateProvider, useApp, useRoute, type Me } from './state';
 import { LoginPage, SetupPage } from './pages/login';
@@ -199,8 +199,10 @@ function Console() {
         </>
       }
     >
-      {app.has('gate') && <GateBanner />}
-      {page}
+      <ErrorBoundary resetKey={`${route.page}/${route.id ?? ''}/${route.tab ?? ''}`}>
+        {app.has('gate') && <GateBanner />}
+        {page}
+      </ErrorBoundary>
     </Shell>
   );
 }

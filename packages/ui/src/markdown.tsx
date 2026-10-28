@@ -96,7 +96,9 @@ export const Markdown = memo(function Markdown({ text, codeActions }: { text: st
       i++;
       continue;
     }
-    const para: string[] = [];
+    // The first line is the paragraph's whatever it looks like (a heading cut short by a stray character, say), so
+    // reading always moves on.
+    const para: string[] = [lines[i++]];
     while (i < lines.length && lines[i].trim() && !/^```|^#{1,4}\s|^\s*>/.test(lines[i]) && !LIST.test(lines[i]) && !isTableStart(lines, i)) para.push(lines[i++]);
     blocks.push(<p key={key++}>{inline(para.join('\n'))}</p>);
   }

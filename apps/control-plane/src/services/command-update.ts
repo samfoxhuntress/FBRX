@@ -255,17 +255,25 @@ export class CommandUpdater {
 }
 
 /**
+ * What the installer runs with: this computer's environment without FBRX Command's own settings. Its
+ * NODE_ENV=production would have npm leave out the tools the installer builds FBRX Command with.
+ */
+export function installerEnv(env: NodeJS.ProcessEnv = process.env): NodeJS.ProcessEnv {
+  return Object.fromEntries(Object.entries(env).filter(([k]) => k.toUpperCase() !== 'NODE_ENV' && !k.toUpperCase().startsWith('FBRX_CP_')));
+}
+
+/**
  * Starts "Install FBRX Command" in the FBRX folder, apart from this process (it stops FBRX Command, rebuilds it and
  * starts it again). Returns what to tell the person.
  */
 function launchInstaller(root: string, home: string): string {
   if (process.platform === 'win32') {
     const cmd = join(root, 'Install FBRX Command.cmd');
-    spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/c', 'start', '"FBRX Command update"', '/D', `"${root}"`, `"${cmd}"`, '--yes', '--no-open'], { detached: true, stdio: 'ignore', windowsVerbatimArguments: true }).unref();
+    spawn(process.env.ComSpec || 'cmd.exe', ['/d', '/c', 'start', '"FBRX Command update"', '/D', `"${root}"`, `"${cmd}"`, '--yes', '--no-open'], { detached: true, stdio: 'ignore', windowsVerbatimArguments: true, env: installerEnv() }).unref();
     return 'The installer is running in its own window on the FBRX Command computer. FBRX Command stops, updates and starts again by itself (a few minutes); then reload this page.';
   }
   if (process.platform === 'darwin') {
-    spawn('open', ['-a', 'Terminal', join(root, 'Install FBRX Command.command')], { detached: true, stdio: 'ignore' }).unref();
+    spawn('open', ['-a', 'Terminal', join(root, 'Install FBRX Command.command')], { detached: true, stdio: 'ignore', env: installerEnv() }).unref();
     return 'The installer opened in Terminal on the FBRX Command computer: press Return there to start. FBRX Command stops, updates and starts again by itself; then reload this page.';
   }
   // Linux: run the setup in the background with a copy of this Node.js (the installed one is replaced as it runs).
@@ -275,6 +283,6 @@ function launchInstaller(root: string, home: string): string {
   chmodSync(node, 0o755);
   mkdirSync(join(home, 'logs'), { recursive: true });
   const out = openSync(join(home, 'logs', 'update.log'), 'a');
-  spawn(node, [join(root, 'scripts', 'setup', 'command.mjs'), '--yes', '--no-open'], { cwd: root, detached: true, stdio: ['ignore', out, out] }).unref();
+  spawn(node, [join(root, 'scripts', 'setup', 'command.mjs'), '--yes', '--no-open'], { cwd: root, detached: true, stdio: ['ignore', out, out], env: installerEnv() }).unref();
   return `The installer is running on the FBRX Command computer (its log: ${join(home, 'logs', 'update.log')}). FBRX Command stops, updates and starts again by itself (a few minutes); then reload this page.`;
 }

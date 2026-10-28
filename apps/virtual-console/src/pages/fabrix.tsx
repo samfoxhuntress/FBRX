@@ -1,6 +1,29 @@
 import { useEffect, useRef, useState } from 'react';
-import type { ApprovalRequest, ChatMessage, ConversationSummary, OpenConversation, StarterAiStatus, ToolCallRecord } from '@fbrx/shared';
-import { Button, Callout, Card, CopyText, Empty, Markdown, Page, Spinner, Status, TextArea, Toggle, formatBytes, timeAgo, useAction, useConfirm, type StatusTone } from '@fbrx/ui';
+import type { ApprovalRequest, AttachmentInfo, ChatMessage, ConversationSummary, OpenConversation, StarterAiStatus, ToolCallRecord } from '@fbrx/shared';
+import {
+  AttachmentTray,
+  Button,
+  Callout,
+  Card,
+  CopyText,
+  CreatedFiles,
+  Empty,
+  Markdown,
+  MessageAttachments,
+  Page,
+  Spinner,
+  Status,
+  TextArea,
+  Toggle,
+  downloadFile,
+  formatBytes,
+  timeAgo,
+  useAction,
+  useAttachments,
+  useConfirm,
+  type PictureData,
+  type StatusTone,
+} from '@fbrx/ui';
 import { coreCall, useCore, type CoreState } from '../core';
 import { useApp, usePoll, useRoute } from '../state';
 
@@ -13,6 +36,23 @@ const TOOL_STATUS: Record<ToolCallRecord['status'], { tone: StatusTone; word: st
   denied: { tone: 'neutral', word: 'not allowed' },
 };
 const STEP_WORDS: Record<NonNullable<StarterAiStatus['step']>, string> = { runtime: 'Downloading the AI runtime', model: 'Downloading', starting: 'Starting' };
+
+// Files for a chat go to the server's core, which reads them; what it makes stays on the server and comes here to be
+// shown or downloaded.
+const ATTACHMENTS = { add: (p: { name: string; data: string; mime?: string }) => coreCall<AttachmentInfo>('ai.attachments.add', p), remove: (id: string) => coreCall('ai.attachments.remove', { id }) };
+const readAttachment = (id: string) => coreCall<PictureData>('ai.attachments.read', { id });
+const previewFile = (path: string) => coreCall<PictureData>('ai.files.preview', { path });
+const download = async (path: string) => downloadFile(await coreCall<{ name: string; mime: string; data: string }>('ai.files.read', { path }));
+
+/** Downloads a file from the server: one Fabrix made, or one attached to a chat. */
+function DownloadButton({ path, name }: { path: string; name: string }) {
+  const { run, busy } = useAction();
+  return (
+    <Button size="sm" variant="ghost" icon="download" loading={busy === 'dl'} aria-label={`Download ${name}`} onClick={() => void run('dl', () => download(path))}>
+      Download
+    </Button>
+  );
+}
 
 /** Things to ask a server's AI, for an empty chat. */
 const IDEAS = ['How is this server doing? Memory, disks and load.', 'Which virtual machines are running, and how much do they use?', 'What filled the disk lately?', 'Explain the last errors in the system log.'];
@@ -51,7 +91,7 @@ function ToolCalls({ calls }: { calls: ToolCallRecord[] }) {
     <div className="vt-chat-tools">
       {calls.map((c) => (
         <span key={c.id} title={c.error ?? undefined}>
-          <Status tone={TOOL_STATUS[c.status].tone}>{c.name}</Status> <span className="fx-muted">{TOOL_STATUS[c.status].word}</span>
+          <Status tone={TOOL_STATUS[c.status]?.tone ?? 'neutral'}>{c.name}</Status> <span className="fx-muted">{TOOL_STATUS[c.status]?.word ?? c.status}</span>
         </span>
       ))}
     </div>
@@ -59,10 +99,18 @@ function ToolCalls({ calls }: { calls: ToolCallRecord[] }) {
 }
 
 function Message({ m }: { m: ChatMessage }) {
-  if (m.role === 'user') return <div className="vt-chat-msg user">{m.content}</div>;
+  if (m.role === 'user')
+    return (
+      <>
+        {m.attachments?.length ? <MessageAttachments files={m.attachments} read={readAttachment} open={{ title: (a) => `Download ${a.name}`, run: (a) => void download(a.path) }} /> : null}
+        <div className="vt-chat-msg user">{m.content}</div>
+      </>
+    );
+  const made = (m.toolCalls ?? []).flatMap((c) => c.files ?? []);
   return (
     <div className="vt-chat-msg">
       {m.toolCalls?.length ? <ToolCalls calls={m.toolCalls} /> : null}
+      {made.length ? <CreatedFiles files={made} preview={previewFile} actions={(f) => <DownloadButton path={f.path} name={f.name} />} /> : null}
       {m.content && <Markdown text={m.content} />}
     </div>
   );
@@ -76,6 +124,8 @@ function Thread({ id, name, onSent }: { id: string | null; name: string; onSent:
   const approvals = useCore<ApprovalRequest[]>(fast ? 'approvals.list' : null, 1500);
   const [text, setText] = useState('');
   const [online, setOnline] = useState(false);
+  const files = useAttachments(ATTACHMENTS);
+  const picker = useRef<HTMLInputElement>(null);
   const { run, busy } = useAction();
   const end = useRef<HTMLDivElement>(null);
   const live = id && conv.data?.id === id ? conv.data.run : null;
@@ -84,10 +134,11 @@ function Thread({ id, name, onSent }: { id: string | null; name: string; onSent:
 
   const send = () => {
     const message = text.trim();
-    if (!message || busy === 'send' || live) return;
+    if (!message || busy === 'send' || live || files.reading) return;
     void run('send', async () => {
-      const r = await coreCall<{ runId: string; conversationId: string }>('ai.chat', { message, ...(id ? { conversationId: id } : { offline: !online }) });
+      const r = await coreCall<{ runId: string; conversationId: string }>('ai.chat', { message, ...(files.ids.length ? { attachments: files.ids } : {}), ...(id ? { conversationId: id } : { offline: !online }) });
       setText('');
+      files.clear();
       setFast(true);
       if (r.conversationId !== id) onSent(r.conversationId);
       else await conv.reload();
@@ -97,12 +148,20 @@ function Thread({ id, name, onSent }: { id: string | null; name: string; onSent:
   const messages = id && conv.data?.id === id ? conv.data.messages.filter((m) => m.role === 'user' || m.role === 'assistant') : [];
   const step = live?.steps.at(-1);
   return (
-    <div className="vt-chat-thread">
+    <div
+      className="vt-chat-thread"
+      onDragOver={(e) => e.dataTransfer.types.includes('Files') && e.preventDefault()}
+      onDrop={(e) => {
+        if (!e.dataTransfer.files.length) return;
+        e.preventDefault();
+        files.add(e.dataTransfer.files);
+      }}
+    >
       <div className="vt-chat-messages">
         {!id ? (
           <div className="vt-chat-hello">
             <h3>Ask {name} about this server</h3>
-            <p className="fx-muted">It works on this server under its policy: it looks things up freely, and asks an administrator before it changes anything.</p>
+            <p className="fx-muted">It works on this server under its policy: it looks things up freely, and asks an administrator before it changes anything. Attach files or pictures for it to read; what it makes can be downloaded here.</p>
             <div className="vt-chat-ideas">
               {IDEAS.map((i) => (
                 <button key={i} onClick={() => setText(i)}>
@@ -150,12 +209,18 @@ function Thread({ id, name, onSent }: { id: string | null; name: string; onSent:
         <div ref={end} />
       </div>
       <div className="vt-chat-composer">
+        <AttachmentTray items={files.items} onRemove={files.remove} />
         <TextArea
           rows={3}
           value={text}
           maxLength={20000}
           placeholder={`Ask ${name}… (Enter sends, Shift+Enter for a new line)`}
           onChange={(e) => setText(e.target.value)}
+          onPaste={(e) => {
+            if (!e.clipboardData.files.length) return;
+            e.preventDefault();
+            files.add(e.clipboardData.files);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Enter' && !e.shiftKey) {
               e.preventDefault();
@@ -164,6 +229,19 @@ function Thread({ id, name, onSent }: { id: string | null; name: string; onSent:
           }}
         />
         <div className="vt-chat-actions">
+          <input
+            ref={picker}
+            type="file"
+            multiple
+            hidden
+            onChange={(e) => {
+              files.add(e.target.files ?? []);
+              e.target.value = '';
+            }}
+          />
+          <Button icon="paperclip" variant="ghost" disabled={files.full} onClick={() => picker.current?.click()}>
+            Attach
+          </Button>
           {!id && <Toggle checked={online} onChange={setOnline} label="May use the internet" />}
           <span className="fx-spacer" />
           {live ? (
@@ -171,7 +249,7 @@ function Thread({ id, name, onSent }: { id: string | null; name: string; onSent:
               Stop
             </Button>
           ) : (
-            <Button variant="primary" icon="send" loading={busy === 'send'} disabled={!text.trim()} onClick={send}>
+            <Button variant="primary" icon="send" loading={busy === 'send'} disabled={!text.trim() || files.reading} onClick={send}>
               Send
             </Button>
           )}

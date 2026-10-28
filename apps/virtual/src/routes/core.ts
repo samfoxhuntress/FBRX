@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS, isCidr, MESH_TRAFFIC_CLASSES, type ApprovalRequest, type MeshNetworkStatus, type MeshTrafficClass, type EffectiveSettings, type MeshStatus, type SecretMeta, type SystemStatus, type VirtualRole } from '@fbrx/shared';
+import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS, ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, isCidr, MESH_TRAFFIC_CLASSES, type ApprovalRequest, type MeshNetworkStatus, type MeshTrafficClass, type EffectiveSettings, type MeshStatus, type SecretMeta, type SystemStatus, type VirtualRole } from '@fbrx/shared';
 import { allows } from '../auth';
 import { audited, need, type VirtualContext } from '../context';
 import { badRequest, forbidden } from '../errors';
@@ -21,6 +21,8 @@ interface Rule {
 type Runner = <T>(method: string, params?: unknown) => Promise<T>;
 
 const ROLE_NAME = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/);
+/** The largest attachment, as base64. */
+const ATTACHMENT_BASE64 = Math.ceil((ATTACHMENT_MAX_BYTES * 4) / 3) + 16;
 const MODEL_ID = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,99}$/);
 const AssistPatch = z
   .object({
@@ -128,8 +130,15 @@ const RULES: Record<string, Rule> = {
   'ai.conversations.delete': { role: 'admin', params: (p) => z.object({ id: z.string().max(80) }).strict().parse(p) },
   'ai.chat': {
     role: 'operator',
-    params: (p) => z.object({ conversationId: z.string().max(80).optional(), message: z.string().min(1).max(20000), offline: z.boolean().optional() }).strict().parse(p),
+    params: (p) =>
+      z.object({ conversationId: z.string().max(80).optional(), message: z.string().min(1).max(20000), offline: z.boolean().optional(), attachments: z.array(z.string().max(64)).max(ATTACHMENTS_PER_MESSAGE).optional() }).strict().parse(p),
   },
+  // Files for a chat (read on the server), and the ones it made, shown and downloaded here.
+  'ai.attachments.add': { role: 'operator', params: (p) => z.object({ name: z.string().min(1).max(260), data: z.string().max(ATTACHMENT_BASE64), mime: z.string().max(120).optional() }).strict().parse(p) },
+  'ai.attachments.remove': { role: 'operator', params: (p) => z.object({ id: z.string().max(64) }).strict().parse(p) },
+  'ai.attachments.read': { role: 'operator', params: (p) => z.object({ id: z.string().max(64) }).strict().parse(p) },
+  'ai.files.preview': { role: 'operator', params: (p) => z.object({ path: z.string().max(1000) }).strict().parse(p) },
+  'ai.files.read': { role: 'operator', params: (p) => z.object({ path: z.string().max(1000) }).strict().parse(p) },
   'ai.cancel': { role: 'operator', params: (p) => z.object({ runId: z.string().max(80) }).strict().parse(p) },
   // The server's AI getting itself ready (the best model it runs well, on the ai role's first start).
   'ai.starter': { role: 'viewer' },
@@ -190,6 +199,9 @@ const READS = new Set([
   'approvals.list',
   'ai.conversations.list',
   'ai.conversations.get',
+  'ai.attachments.read',
+  'ai.files.preview',
+  'ai.files.read',
   'ai.starter',
   'vault.list',
   'ai.models',
@@ -215,7 +227,8 @@ function target(method: string, p: Record<string, unknown>): string | null {
 function details(method: string, p: Record<string, unknown>): unknown {
   if (method === 'vault.set') return { name: p.name };
   if (method === 'mesh.assist.send' || method === 'mesh.assist.followUp') return { ...p, goal: undefined, text: undefined, length: String(p.goal ?? p.text ?? '').length };
-  if (method === 'ai.chat') return { conversationId: p.conversationId, offline: p.offline, length: String(p.message ?? '').length };
+  if (method === 'ai.chat') return { conversationId: p.conversationId, offline: p.offline, length: String(p.message ?? '').length, attachments: (p.attachments as unknown[] | undefined)?.length };
+  if (method === 'ai.attachments.add') return { name: p.name, mime: p.mime, bytes: Math.floor((String(p.data ?? '').length * 3) / 4) };
   return p;
 }
 
@@ -227,7 +240,8 @@ export async function coreRoutes(app: FastifyInstance, ctx: VirtualContext) {
     return { ...(await ctx.core.state()), role: user.role };
   });
 
-  app.post('/v1/core/call', async (req) => {
+  // A call may carry an attached file (as base64).
+  app.post('/v1/core/call', { bodyLimit: ATTACHMENT_BASE64 + 1024 * 1024 }, async (req) => {
     const user = need(req, 'viewer');
     const { method, params } = z.object({ method: z.string().max(80), params: z.unknown().optional() }).parse(req.body);
     const rule = RULES[method];

@@ -8,7 +8,7 @@ import { Db } from '@fbrx/shared/node';
 import { buildServer, type BuiltServer } from '../src/server';
 import { loadConfig } from '../src/config';
 import { CP_MIGRATIONS } from '../src/migrations';
-import { CommandUpdater, type CommandUpdateStatus } from '../src/services/command-update';
+import { CommandUpdater, installerEnv, type CommandUpdateStatus } from '../src/services/command-update';
 import { makeZip } from '../../../packages/core/test/helpers';
 
 const PASSWORD = 'Super-Secret-Admin-Pass-1';
@@ -146,6 +146,11 @@ describe('Update now', () => {
     } finally {
       db.close();
     }
+  });
+
+  it('starts the installer without FBRX Command’s own settings, so npm installs the build tools', () => {
+    // FBRX Command runs with NODE_ENV=production: passed on, npm ci would leave out Vite and the build would fail.
+    expect(installerEnv({ NODE_ENV: 'production', FBRX_CP_PORT: '8443', FBRX_CP_DATA_DIR: '/data', PATH: '/bin', FBRX_COMMAND_HOME: '/home/fbrx' })).toEqual({ PATH: '/bin', FBRX_COMMAND_HOME: '/home/fbrx' });
   });
 
   it('leaves new versions to FBRX Server when it is the server’s command role', async () => {

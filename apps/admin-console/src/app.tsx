@@ -1,6 +1,6 @@
 import { VERTICAL_NAMES } from '@fbrx/shared';
 import { useEffect, useState } from 'react';
-import { Button, Icons, Select, Shell, Spinner, type NavItem } from '@fbrx/ui';
+import { Button, ErrorBoundary, Icons, Select, Shell, Spinner, type NavItem } from '@fbrx/ui';
 import { api, session, setUnauthorizedHandler } from './api';
 import { AppStateProvider, useApp, useRoute, type Me } from './state';
 import { LoginPage, SetupPage } from './pages/login';
@@ -210,8 +210,10 @@ function Console() {
         </>
       }
     >
-      <CommandUpdateBanner onOpen={() => go('releases')} />
-      {page}
+      <ErrorBoundary resetKey={`${route.page}/${route.id ?? ''}`}>
+        <CommandUpdateBanner onOpen={() => go('releases')} />
+        {page}
+      </ErrorBoundary>
     </Shell>
   );
 }

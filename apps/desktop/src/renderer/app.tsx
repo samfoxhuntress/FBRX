@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { NotificationEvent, PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
 import { TIER_NAMES, TIER_SHORT, addressAs, atLeast, displayVersion, funEnabled } from '@fbrx/shared';
-import { Button, FBRX_MARK, FbrxMark, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
+import { Button, ErrorBoundary, FBRX_MARK, FbrxMark, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
 import { playChime } from './notify-sound';
 import { useConsoleSessions, useCore } from './hooks';
@@ -617,7 +617,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
               </div>
             }
           >
-            {page}
+            <ErrorBoundary resetKey={route}>{page}</ErrorBoundary>
           </Suspense>
         </PopoutFrame>
         {hosts}
@@ -677,7 +677,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
             </div>
           }
         >
-          {page}
+          <ErrorBoundary resetKey={route}>{page}</ErrorBoundary>
         </Suspense>
       </Shell>
       <VaultStartPrompt />

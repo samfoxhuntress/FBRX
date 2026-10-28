@@ -35,3 +35,19 @@ export interface CreatedFile {
 
 /** File types the app shows as pictures. */
 export const PICTURE_EXTENSIONS = new Set(['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg']);
+
+/** The media type of each kind of file the agent makes, for handing one to a browser. */
+export const FILE_MIME: Record<string, string> = {
+  md: 'text/markdown',
+  txt: 'text/plain',
+  html: 'text/html',
+  pdf: 'application/pdf',
+  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+  csv: 'text/csv',
+  svg: 'image/svg+xml',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  jpeg: 'image/jpeg',
+  gif: 'image/gif',
+  webp: 'image/webp',
+};

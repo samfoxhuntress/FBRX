@@ -276,8 +276,17 @@ written, with each step it takes; Stop ends a run. It works under the server's F
 it looks things up freely, and what needs a yes waits for an administrator (in the chat, or under Mesh & AI). A new
 chat stays offline unless *May use the internet* is on.
 
+**Attach** (or drop, or paste) files and pictures for it to read, up to ten a message and 25 MB each: they go to the
+server, where its agent reads them. What it makes (documents, drawings) shows under the step that made it, pictures as
+a thumbnail, and **Download** brings a file to the computer you are on; an attached file downloads the same way. It
+gives out only what it made or was given, nothing else on the server. Drawings come as SVG (the server has no window
+to turn them into PNG); pictures from a description need a picture maker, which the server does not run yet.
+
 Operators and administrators chat; administrators also delete chats. FBRX Virtual's audit log records who asked and
-how long the question was, never what it said.
+how long the question was, never what it said, and of an attached file only its name, type and size.
+
+If a page of the console ever fails to draw, it says what went wrong, with **Try again** and **Reload**; the rest of
+the console keeps working.
 
 ## FBRX Command on the server (the command role)
 

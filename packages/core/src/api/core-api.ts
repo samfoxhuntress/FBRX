@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
-import { isAbsolute } from 'node:path';
+import { basename, isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, LOGIN_LIMITS, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, THINKING_LEVELS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, FILE_MIME, LOGIN_LIMITS, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, THINKING_LEVELS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -277,6 +277,13 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       const data = await readFile(file);
       if (data.length > 10 * 1024 * 1024) throw new CoreError('INVALID_ARGUMENT', 'That picture is too large to show here');
       return { mime: ext === 'svg' ? 'image/svg+xml' : (IMAGE_MIME[ext] ?? 'image/png'), data: data.toString('base64') };
+    },
+    'ai.files.read': async (p) => {
+      const file = z.object({ path: z.string().min(1).max(1000) }).parse(p).path;
+      if (!isAbsolute(file) || !k.output.holds(file)) throw new CoreError('FORBIDDEN', 'Only files in the FBRX folder or the workspace are given out here');
+      const data = await readFile(file);
+      if (data.length > ATTACHMENT_MAX_BYTES) throw new CoreError('INVALID_ARGUMENT', 'That file is too large to download here');
+      return { name: basename(file), mime: FILE_MIME[fileExtension(file)] ?? 'application/octet-stream', data: data.toString('base64') };
     },
     'ai.files.folder': () => ({ path: k.output.path(), chosen: k.output.chosen(), allowed: k.output.allowed() }),
 

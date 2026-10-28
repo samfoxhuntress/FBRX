@@ -1,11 +1,14 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { AGENT_SCOPE_METHODS, PRODUCT_NAME, type CoreMethod, type LocalApiInfo } from '@fbrx/shared';
+import { AGENT_SCOPE_METHODS, ATTACHMENT_MAX_BYTES, PRODUCT_NAME, type CoreMethod, type LocalApiInfo } from '@fbrx/shared';
 import { safeEqual } from '@fbrx/shared/node';
 import { CoreError, toCoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
 import type { SettingsService } from '../settings/settings-service';
 import type { CallContext } from '../api/core-api';
+
+/** The largest request: an attached file (FBRX Server's console sends them here), as base64, with room to spare. */
+const MAX_BODY = Math.ceil((ATTACHMENT_MAX_BYTES * 4) / 3) + 1024 * 1024;
 
 export interface LocalApiDeps {
   call: (method: string, params: unknown, ctx: CallContext) => Promise<unknown>;
@@ -158,7 +161,7 @@ export class LocalApiServer {
     let size = 0;
     for await (const chunk of req) {
       size += (chunk as Buffer).length;
-      if (size > 2 * 1024 * 1024) throw new CoreError('INVALID_ARGUMENT', 'Request body too large');
+      if (size > MAX_BODY) throw new CoreError('INVALID_ARGUMENT', 'Request body too large');
       chunks.push(chunk as Buffer);
     }
     if (!size) return {};

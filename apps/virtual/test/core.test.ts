@@ -200,7 +200,8 @@ describe('FBRX Virtual and the server core', () => {
       kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
       const question = 'Which virtual machines are running on the secret-project host?';
       expect((await core(viewer, 'ai.chat', { message: question })).status).toBe(403);
-      expect((await core(operator, 'ai.chat', { message: question, attachments: ['att_1'] })).status).toBe(400);
+      // An attachment the core does not have.
+      expect((await core(operator, 'ai.chat', { message: question, attachments: ['att_1'] })).status).toBe(404);
       const sent = await core(operator, 'ai.chat', { message: question, offline: true });
       expect(sent.status).toBe(200);
       const id = sent.body.result.conversationId as string;
@@ -221,6 +222,42 @@ describe('FBRX Virtual and the server core', () => {
       // Chats go away by an administrator's hand.
       expect((await core(operator, 'ai.conversations.delete', { id })).status).toBe(403);
       expect((await core(admin, 'ai.conversations.delete', { id })).body.result).toEqual({ deleted: true });
+    } finally {
+      await llm.close();
+    }
+  });
+
+  it('takes files for a chat, larger than an ordinary request, and gives out the ones Fabrix made', async () => {
+    let turn = 0;
+    const llm = await mockOpenAI(() => (turn++ === 0 ? { tool: { name: 'docs__create', args: { title: 'Disk plan', format: 'md', content: '# Disk plan' } } } : { text: 'Wrote the plan.' }));
+    try {
+      kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
+      // Three megabytes: more than the 2 MB an ordinary request may be.
+      const log = `${'disk sda1 at 91% '.repeat(185_000)}\n`;
+      const data = Buffer.from(log).toString('base64');
+      expect((await core(viewer, 'ai.attachments.add', { name: 'disks.log', data })).status).toBe(403);
+      const added = await core(operator, 'ai.attachments.add', { name: 'disks.log', data, mime: 'text/plain' });
+      expect(added.status).toBe(200);
+      expect(added.body.result).toMatchObject({ name: 'disks.log', kind: 'text', size: log.length });
+      // The audit says what was attached, never what is in it.
+      const entry = s.ctx.audit.list(20).find((e) => e.action === 'core.ai.attachments.add');
+      expect(entry).toMatchObject({ actor: 'olly', target: 'disks.log' });
+      expect(JSON.stringify(entry)).not.toContain(data.slice(0, 40));
+
+      const sent = await core(operator, 'ai.chat', { message: 'Write me a disk plan', attachments: [added.body.result.id] });
+      const chat = await waitFor(async () => {
+        const c = (await core(operator, 'ai.conversations.get', { id: sent.body.result.conversationId })).body.result as OpenConversation;
+        return !c.run && c.messages.some((m) => m.role === 'assistant' && m.content) ? c : null;
+      });
+      expect(chat.messages[0]!.attachments).toMatchObject([{ name: 'disks.log' }]);
+      const made = chat.messages.flatMap((m) => m.toolCalls ?? []).flatMap((c) => c.files ?? []);
+      expect(made).toMatchObject([{ name: 'Disk plan.md', kind: 'document' }]);
+      const file = await core(operator, 'ai.files.read', { path: made[0]!.path });
+      expect(file.body.result).toMatchObject({ name: 'Disk plan.md', mime: 'text/markdown' });
+      expect(Buffer.from(file.body.result.data, 'base64').toString()).toContain('# Disk plan');
+      // Only what Fabrix made or was given: nothing else on the server.
+      expect((await core(operator, 'ai.files.read', { path: '/etc/passwd' })).status).toBe(403);
+      expect((await core(viewer, 'ai.files.read', { path: made[0]!.path })).status).toBe(403);
     } finally {
       await llm.close();
     }

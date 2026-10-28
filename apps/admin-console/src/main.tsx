@@ -1,7 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fbrx/ui/styles.css';
-import { ToastProvider } from '@fbrx/ui';
+import { ErrorBoundary, ToastProvider } from '@fbrx/ui';
 import { App } from './app';
 
 try {
@@ -14,7 +14,9 @@ try {
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <ToastProvider>
-      <App />
+      <ErrorBoundary>
+        <App />
+      </ErrorBoundary>
     </ToastProvider>
   </StrictMode>,
 );

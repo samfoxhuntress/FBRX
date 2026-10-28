@@ -117,8 +117,10 @@ async function step(title, fn) {
 
 // ------------------------------------------------------------------------------------------------ processes
 const nodeDir = dirname(process.execPath);
+/** Never "production" for the builds: npm would then leave out the tools they need (Vite, esbuild, the packager). */
+const buildEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(node_env|npm_config_(production|omit))$/i.test(k)));
 const childEnv = {
-  ...process.env,
+  ...buildEnv,
   // The Node.js running this wizard (possibly a private copy) must also run every build script.
   PATH: `${nodeDir}${delimiter}${process.env.PATH ?? process.env.Path ?? ''}`,
   npm_config_update_notifier: 'false',
@@ -226,11 +228,13 @@ async function installDependencies(ui) {
   const lock = join(ROOT, 'package-lock.json');
   const marker = join(STATE, 'dependencies.sha256');
   const digest = createHash('sha256').update(readFileSync(lock)).update(process.version).digest('hex');
-  if (existsSync(join(ROOT, 'node_modules', '.package-lock.json')) && existsSync(marker) && readFileSync(marker, 'utf8') === digest) {
+  // With the build tools: an install that left them out is done again.
+  const installed = existsSync(join(ROOT, 'node_modules', '.package-lock.json')) && existsSync(join(ROOT, 'node_modules', 'vite', 'package.json'));
+  if (installed && existsSync(marker) && readFileSync(marker, 'utf8') === digest) {
     return { note: 'already up to date' };
   }
   let packages = 0;
-  await npm(['ci', '--no-audit', '--no-fund', '--loglevel=http'], {
+  await npm(['ci', '--include=dev', '--no-audit', '--no-fund', '--loglevel=http'], {
     onLine: (l) => {
       if (/GET 200|fetch GET/.test(l)) ui.setDetail(`${++packages} downloads`);
       else if (/electron/i.test(l) && /postinstall|install/i.test(l)) ui.setDetail('downloading Electron');

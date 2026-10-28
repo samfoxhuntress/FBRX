@@ -694,6 +694,8 @@ export interface CoreMethods extends ExtMethods {
   'snapshots.folder': () => { path: string };
   /** A picture the agent made (in the output folder or the workspace), to show in the chat. */
   'ai.files.preview': (p: { path: string }) => { mime: string; data: string };
+  /** A file the agent made or was given (in the FBRX folder or the workspace), to download from FBRX Server's console. */
+  'ai.files.read': (p: { path: string }) => { name: string; mime: string; data: string };
   /** Where what the agent makes is saved: the folder in use, the one chosen, and whether the AI may write there. */
   'ai.files.folder': () => { path: string; chosen: string; allowed: boolean };
   'ai.cancel': (p: { runId: string }) => { cancelled: boolean };
