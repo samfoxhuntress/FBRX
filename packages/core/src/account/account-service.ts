@@ -1,4 +1,4 @@
-import { atLeast, tierRank, type AccountDevice, type AccountDeviceInfo, type AccountLicense, type AccountStatus, type AccountView, type InvitationPreview, type Tier, type Vertical } from '@fbrx/shared';
+import { CLOUD_AI_PATH, atLeast, tierRank, type AccountDevice, type AccountDeviceInfo, type AccountLicense, type AccountStatus, type AccountView, type CloudAiUsage, type InvitationPreview, type PromoRedeemed, type Tier, type Vertical } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
 import type { Vault } from '../vault/vault';
@@ -74,28 +74,33 @@ export class AccountService {
     };
   }
 
-  private async request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, token?: string | null, server = this.server): Promise<T> {
+  /** An address on the account's FBRX Command (https:// when only its name was given). */
+  private url(path: string, server = this.server): URL {
     if (!server) throw new CoreError('INVALID_ARGUMENT', 'Enter the address of your FBRX Command');
-    let url: URL;
     try {
-      url = new URL(path, server.includes('://') ? server : `https://${server}`);
+      return new URL(path, server.includes('://') ? server : `https://${server}`);
     } catch {
       throw new CoreError('INVALID_ARGUMENT', 'That is not an FBRX Command address');
     }
+  }
+
+  private async request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, token?: string | null, server = this.server, signal?: AbortSignal): Promise<T> {
+    const url = this.url(path, server);
+    const timeout = AbortSignal.timeout(20_000);
     let res: Response;
     try {
       res = await fetch(url, {
         method,
         headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
         body: body === undefined ? undefined : JSON.stringify(body),
-        signal: AbortSignal.timeout(20_000),
+        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
       });
     } catch (err) {
       throw new CoreError('UNAVAILABLE', `FBRX Command could not be reached at ${url.host}: ${(err as Error).message}`);
     }
     const json = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
     if (res.status === 401) throw new CoreError('UNAUTHENTICATED', json.error?.message ?? 'Sign in to your FBRX account again');
-    if (!res.ok) throw new CoreError(res.status === 403 ? 'FORBIDDEN' : res.status === 409 ? 'CONFLICT' : 'UNAVAILABLE', json.error?.message ?? `FBRX Command answered ${res.status}`);
+    if (!res.ok) throw new CoreError(res.status === 403 ? 'FORBIDDEN' : res.status === 409 ? 'CONFLICT' : res.status === 400 ? 'INVALID_ARGUMENT' : 'UNAVAILABLE', json.error?.message ?? `FBRX Command answered ${res.status}`);
     return json as T;
   }
 
@@ -250,6 +255,24 @@ export class AccountService {
   /** The billing portal (change plan or card, invoices, cancel), opened in the browser. */
   async portal(): Promise<{ url: string }> {
     return this.request<{ url: string }>('POST', '/v1/billing/portal', {}, this.requireToken());
+  }
+
+  /** Where FBRX Cloud AI is for the signed-in account, with its sign-in as the key; null when none is signed in. */
+  cloudAccess(): { baseUrl: string; token: string } | null {
+    const token = this.d.meta.get<string>('account.id') ? this.token() : null;
+    return token ? { baseUrl: this.url(CLOUD_AI_PATH).toString(), token } : null;
+  }
+
+  /** The account's FBRX Cloud AI this month: its allowance, what it used, extra tokens, and whether it takes chats. */
+  cloudAi(signal?: AbortSignal): Promise<CloudAiUsage> {
+    return this.request<CloudAiUsage>('GET', '/v1/accounts/ai', undefined, this.requireToken(), this.server, signal);
+  }
+
+  /** Uses a promo code on the account, and turns on an edition it gives. */
+  async redeemPromo(code: string, actor: string): Promise<{ redeemed: PromoRedeemed; status: AccountStatus; ai: CloudAiUsage }> {
+    const r = await this.request<{ redeemed: PromoRedeemed; ai: CloudAiUsage }>('POST', '/v1/accounts/promo', { code }, this.requireToken());
+    this.d.audit.append({ category: 'license', action: 'account.promoRedeemed', actor, target: r.redeemed.code, outcome: 'success' });
+    return { redeemed: r.redeemed, status: r.redeemed.tier ? await this.refresh({ adopt: true }) : this.status(), ai: r.ai };
   }
 
   /** Joins this computer to an organization the account belongs to, at the edition it gives the account. */

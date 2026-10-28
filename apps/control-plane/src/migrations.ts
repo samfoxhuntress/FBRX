@@ -550,4 +550,53 @@ export const CP_MIGRATIONS: Migration[] = [
       CREATE INDEX cp_invitations_tenant ON invitations (tenant_id);
     `,
   },
+  {
+    version: 13,
+    name: 'cloud-ai',
+    // FBRX Cloud AI: what each account used each month (token counts only, never what was said), what the operator set
+    // for an account (its own monthly limit, extra tokens, turned off, the limit lifted for a month), and promo codes
+    // (extra tokens, an edition for some days) with the accounts that used them, once each.
+    up: `
+      CREATE TABLE ai_usage (
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        month TEXT NOT NULL,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        counted INTEGER NOT NULL DEFAULT 0,
+        requests INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (account_id, month)
+      );
+      CREATE INDEX cp_ai_usage_month ON ai_usage (month);
+      CREATE TABLE ai_accounts (
+        account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+        monthly_limit INTEGER,
+        credit INTEGER NOT NULL DEFAULT 0,
+        off INTEGER NOT NULL DEFAULT 0,
+        lifted_month TEXT,
+        note TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE promo_codes (
+        id TEXT PRIMARY KEY,
+        code TEXT NOT NULL,
+        code_key TEXT NOT NULL UNIQUE,
+        tokens INTEGER NOT NULL DEFAULT 0,
+        tier TEXT,
+        days INTEGER,
+        max_redemptions INTEGER,
+        redemptions INTEGER NOT NULL DEFAULT 0,
+        expires_at TEXT,
+        disabled_at TEXT,
+        note TEXT NOT NULL DEFAULT '',
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE promo_redemptions (
+        promo_id TEXT NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        redeemed_at TEXT NOT NULL,
+        PRIMARY KEY (promo_id, account_id)
+      );
+    `,
+  },
 ];

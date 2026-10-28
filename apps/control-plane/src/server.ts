@@ -33,6 +33,7 @@ import { meshRoutes } from './routes/mesh';
 import { commandRoutes } from './routes/command';
 import { accountRoutes } from './routes/accounts';
 import { billingAdminRoutes } from './routes/billing-admin';
+import { cloudAiRoutes } from './routes/cloud-ai';
 import { stripeOf } from './billing/stripe';
 import { scheduleSeatSync, syncSeats, syncTenantLicense } from './billing/tenant-billing';
 import { tenantScope } from './auth';
@@ -55,6 +56,9 @@ function readVersion(): string {
   }
   return '1.0.0';
 }
+
+/** How long closing waits for requests under way before it closes their connections. */
+const CLOSE_GRACE_MS = 2000;
 
 export interface BuiltServer {
   app: FastifyInstance;
@@ -168,6 +172,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   await app.register(async (scoped) => adminFleetRoutes(scoped, ctx));
   await adminAssetRoutes(app, ctx);
   await accountRoutes(app, ctx);
+  await cloudAiRoutes(app, ctx);
   await app.register(async (scoped) => billingAdminRoutes(scoped, ctx));
   const updater = new CommandUpdater({
     version,
@@ -255,9 +260,18 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
       clearInterval(billingTimer);
       updater.stop();
       ctx.realtime.closeAll();
-      if (local) await new Promise<void>((r) => local!.close(() => r()));
-      local?.closeAllConnections?.();
-      await app.close();
+      // Requests under way get a moment to finish; then every connection goes, also ones that never sent a request (a
+      // browser's spare connection), which closing would otherwise wait on until they time out.
+      const force = setTimeout(() => {
+        local?.closeAllConnections();
+        app.server.closeAllConnections();
+      }, CLOSE_GRACE_MS);
+      try {
+        if (local) await new Promise<void>((r) => local!.close(() => r()));
+        await app.close();
+      } finally {
+        clearTimeout(force);
+      }
       db.close();
     },
   };

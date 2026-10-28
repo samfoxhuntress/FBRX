@@ -250,13 +250,16 @@ downgrade ends the purchase it replaced.
 | `GET /v1/accounts/license` | The license key the account signs a computer up to (`key: null` with nothing bought) |
 | `POST /v1/accounts/password` `{ current, password }` | Changes the password and signs out everywhere else |
 | `DELETE /v1/accounts/me` `{ password }` | Deletes the account and ends its Stripe subscriptions (store subscriptions end in the store's settings) |
+| `GET /v1/accounts/ai` | The account's FBRX Cloud AI this month: its allowance, what it used, extra tokens, and whether it takes chats ([CLOUD_AI.md](CLOUD_AI.md)) |
+| `POST /v1/accounts/promo` `{ code }` | Uses a promo code: extra FBRX Cloud AI tokens, an edition for some days, or both (once per account) |
 | `POST /v1/billing/checkout` `{ productId }` | A Stripe Checkout page for Standard or Ultra |
 | `POST /v1/billing/portal` | The Stripe customer portal: change plan or card, invoices, cancel |
 | `POST /v1/billing/apple/transactions` `{ signedTransaction }` | A purchase from the iPhone or iPad app |
 | `POST /v1/billing/google/purchases` `{ productId, purchaseToken }` | A purchase from the Android app |
 
 The platform operator (superadmin) also has `GET /v1/admin/accounts?q=`, `POST /v1/admin/accounts/:id/grant`
-`{ tier, days }` (an edition for support or a promotion; `days: null` for no end) and `POST /v1/admin/accounts/:id/status`.
+`{ tier, days }` (an edition for support or a promotion; `days: null` for no end) and `POST /v1/admin/accounts/:id/status`,
+and FBRX Cloud AI's allowances, per-account limits and promo codes ([CLOUD_AI.md → The API](CLOUD_AI.md#the-api)).
 
 ## Before charging anyone
 

@@ -366,6 +366,11 @@ export class Kernel {
         call: (peerId, method, params, timeoutMs) => this.mesh.call(peerId, method, params, timeoutMs),
         name: (peerId) => this.mesh.devices().find((d) => d.id === peerId)?.name ?? null,
       },
+      cloud: {
+        access: () => this.account.cloudAccess(),
+        usage: (signal) => this.account.cloudAi(signal),
+        learner: () => this.license.status().ceilingReason === 'learner',
+      },
     });
     this.agent = new AgentRuntime({
       store: this.conversations,

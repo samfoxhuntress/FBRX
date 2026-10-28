@@ -144,6 +144,7 @@ describe('FBRX accounts and what they buy', () => {
               allowTest: false,
             },
             mail: null,
+            ai: null,
           },
         },
       ),

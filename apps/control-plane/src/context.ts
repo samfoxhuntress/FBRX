@@ -78,4 +78,5 @@ export const ids = {
   accountToken: () => newId('act'),
   invitation: () => newId('inv'),
   entitlement: () => newId('ent'),
+  promo: () => newId('prm'),
 };

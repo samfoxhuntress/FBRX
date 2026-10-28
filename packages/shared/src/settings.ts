@@ -75,7 +75,7 @@ export const VOICE_DOWNLOAD_IDS = [...VOICE_MODEL_IDS, NATURAL_VOICE_PACK.id] as
 export const VOICE_WPM = { min: 120, max: 360, default: 210 } as const;
 
 /** mesh: another FBRX computer's own AI (an FBRX Server's, say), reached over FBRX Mesh. */
-export const PROVIDER_TYPES = ['local-runtime', 'ollama', 'openai-compatible', 'openai', 'anthropic', 'mesh'] as const;
+export const PROVIDER_TYPES = ['local-runtime', 'ollama', 'openai-compatible', 'openai', 'anthropic', 'mesh', 'fbrx-cloud'] as const;
 export type ProviderType = (typeof PROVIDER_TYPES)[number];
 
 export const ProviderConfigSchema = z.object({

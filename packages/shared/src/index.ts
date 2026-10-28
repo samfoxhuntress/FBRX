@@ -42,3 +42,5 @@ export * from './snapshots';
 export * from './passwords';
 export * from './essentials-home';
 export * from './vpn';
+export * from './cloud-ai';
+export * from './sse';

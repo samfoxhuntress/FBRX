@@ -1,7 +1,7 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { COMMAND_PLAN, EDITION_PLANS, TENANT_DISCOUNT, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, type AccountDevice, type AccountStatus, type InvitationPreview, type LocalAccountStatus, type Tier, type Vertical } from '@fbrx/shared';
+import { COMMAND_PLAN, EDITION_PLANS, TENANT_DISCOUNT, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, formatTokens, type AccountDevice, type AccountStatus, type CloudAiUsage, type InvitationPreview, type LocalAccountStatus, type Tier, type Vertical } from '@fbrx/shared';
 import { Button, Callout, Card, Field, Icons, Input, KeyValue, Status, Toggle, formatDate, formatDay, timeAgo, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
-import { call, openExternal } from './client';
+import { call, onEvent, openExternal } from './client';
 import { useCore } from './hooks';
 
 /**
@@ -195,10 +195,66 @@ export function BuyButtons({ account, only, short }: { account: AccountStatus; o
   );
 }
 
+/**
+ * The signed-in account's FBRX Cloud AI this month; null when no account is signed in, or its FBRX Command has no FBRX
+ * Cloud AI (an organization's own, say).
+ */
+export function useCloudAi(signedIn: boolean): { usage: CloudAiUsage | null; reload: () => void } {
+  const [usage, setUsage] = useState<CloudAiUsage | null>(null);
+  const [tick, setTick] = useState(0);
+  useEffect(() => {
+    if (!signedIn) return setUsage(null);
+    let cancelled = false;
+    call('account.cloudAi').then(
+      (u) => !cancelled && setUsage(u.state === 'unavailable' ? null : u),
+      () => !cancelled && setUsage(null),
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [signedIn, tick]);
+  useEffect(() => onEvent('account.changed', () => setTick((t) => t + 1)), []);
+  return { usage, reload: () => setTick((t) => t + 1) };
+}
+
+/** "120K of 1M tokens this month · 250K extra", or why it takes no chats now. */
+export function cloudAiSummary(u: CloudAiUsage): string {
+  if (u.message) return u.message;
+  return `${formatTokens(u.used)} of ${formatTokens(u.allowance)} tokens this month${u.credit ? ` · ${formatTokens(u.credit)} extra` : ''}${u.state === 'lifted' ? ' · limit lifted by FBRX' : ''}`;
+}
+
+/** A promo code from FBRX: extra FBRX Cloud AI tokens, an edition for some days, or both. */
+export function PromoCode({ onUsed }: { onUsed?: () => void }) {
+  const [code, setCode] = useState('');
+  const { run, busy } = useAction();
+  const toast = useToast();
+  return (
+    <form
+      className="fx-actions"
+      onSubmit={(e) => {
+        e.preventDefault();
+        void run('promo', () =>
+          call('account.redeemPromo', { code }).then((r) => {
+            toast.success(r.redeemed.message);
+            setCode('');
+            onUsed?.();
+          }),
+        );
+      }}
+    >
+      <Input value={code} maxLength={64} placeholder="Promo code" aria-label="Promo code" autoComplete="off" spellCheck={false} style={{ maxWidth: 220 }} onChange={(e) => setCode(e.target.value)} />
+      <Button size="sm" type="submit" disabled={!code.trim()} loading={busy === 'promo'}>
+        Use code
+      </Button>
+    </form>
+  );
+}
+
 /** Settings → Account. */
 export function AccountSettings() {
   const account = useAccount();
   const fleet = useCore('fleet.status', undefined, ['fleet.changed']).data;
+  const { usage: cloudAi, reload: reloadCloudAi } = useCloudAi(!!account?.signedIn);
   const { run, busy } = useAction();
   if (!account) return null;
   if (!account.signedIn) {
@@ -227,6 +283,7 @@ export function AccountSettings() {
           items={[
             ['Edition', <span className={`tier-badge ${account.tier}`}>{account.tier === 'essentials' ? 'Essentials (nothing bought yet)' : TIER_NAMES[account.tier]}</span>],
             ['Renews by itself', account.licenseUntil ? `Runs until ${formatDay(account.licenseUntil)}` : '—'],
+            ...(cloudAi ? [['FBRX Cloud AI', cloudAiSummary(cloudAi)] as [string, string]] : []),
             ['Last checked', account.lastSyncAt ? formatDate(account.lastSyncAt) : '—'],
           ]}
         />
@@ -255,6 +312,11 @@ export function AccountSettings() {
             The checkout opens in your browser. Once it is done, this computer turns on what you bought by itself.
           </p>
         )}
+        <div style={{ marginTop: 14 }}>
+          <Field label="Have a promo code?" help="From FBRX: extra FBRX Cloud AI tokens, an edition for some days, or both.">
+            <PromoCode onUsed={reloadCloudAi} />
+          </Field>
+        </div>
       </Card>
       <SignedInDevices />
       {account.memberships.length === 0 && <StartOrganization />}

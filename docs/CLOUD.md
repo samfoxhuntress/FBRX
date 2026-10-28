@@ -7,6 +7,7 @@ until someone with the accounts below sets it up.
 | --- | --- | --- |
 | **The account server** | FBRX Command in its cloud mode (`FBRX_CP_PUBLIC_SIGNUP=1`): FBRX accounts and their sign-ins, purchases, organizations' FBRX Command tenants, and the license keys computers are signed up to ([ACCOUNTS.md](ACCOUNTS.md)) | One Linux server you rent, in Docker (`deploy/control-plane`) |
 | **The website** | Home, pricing and the account page: plain files built from the price list (`apps/website`) | Any static host |
+| **FBRX Cloud AI** | FBRX's models for FBRX accounts: the account server counts each account's tokens and passes its chats on to a model provider ([CLOUD_AI.md](CLOUD_AI.md)) | The account server, and a model provider with an OpenAI-compatible API |
 | **Email** | Confirming an account's address and resetting its password | A transactional email service, over SMTP |
 | **Payments** | Cards and wallets on the website and computers; in-app purchases on phones | Stripe, the App Store and Google Play: no card number ever reaches FBRX |
 
@@ -64,6 +65,13 @@ in your DNS, so the email is not taken for spam), then give the account server `
 (an address on that domain). Without them, accounts still work, but no link is emailed: nobody can confirm an
 address or reset a password, so set it up before opening sign-up.
 
+## FBRX Cloud AI
+
+Give the account server a model provider's address and key and the models to offer (`FBRX_AI_UPSTREAM_URL`,
+`FBRX_AI_UPSTREAM_KEY`, `FBRX_AI_MODELS`), then set each edition's tokens a month and the service's monthly budget in
+its console (**Cloud AI**). Pick a provider that keeps none of the API's traffic, and set a spending limit there too.
+How it is counted, governed and sold is in [CLOUD_AI.md](CLOUD_AI.md).
+
 ## Going live, in order
 
 1. A domain, and the business accounts: a payment processor, an Apple Developer Program membership, a Google Play
@@ -75,3 +83,5 @@ address or reset a password, so set it up before opening sign-up.
 5. The apps built against the account server: the desktop app's next release, and the phone apps through TestFlight
    and Google Play's testing tracks ([STORES.md](STORES.md)).
 6. Turn on real payments (the live keys) and tell people.
+7. FBRX Cloud AI: the model provider's key with a small spending limit and a low service budget, a promo code for the
+   first people to try it, then the allowances you sell.

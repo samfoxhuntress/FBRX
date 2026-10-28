@@ -100,7 +100,9 @@ under **Settings → Logs & about**, and in FBRX Command next to each device's v
 **FBRX accounts.** Settings → **FBRX account** signs in to an FBRX account (or makes one): the computer turns on what
 the account bought, wherever it was bought, and a member of an organization can join the computer to it at the
 edition the organization gave them. Signed in, the locked editions in Settings → Edition have a **Get** button that
-opens the checkout in the browser. See ACCOUNTS.md.
+opens the checkout in the browser. See ACCOUNTS.md. Where the account's server offers it, **AI models → FBRX Cloud AI**
+shows the month's tokens and **Use for chats** makes FBRX's cloud models the agent's; both there and in Settings →
+FBRX account, **Have a promo code?** takes a code from FBRX (extra tokens, an edition for some days). See CLOUD_AI.md.
 
 **Try Standard free for 7 days.** A computer on its own with nothing bought may try Standard free, once, for 7 days,
 no card needed: **Try free for 7 days** in Settings → Edition, on a page that comes with Standard, or in the note on

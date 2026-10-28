@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { AssistOffer, DownloadProgress, ProviderConfig, ProviderStatus } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Grid, Input, KeyValue, Modal, Page, Select, Status, Table, Toggle, formatBytes, useAction, useConfirm } from '@fbrx/ui';
+import { formatTokens, type AssistOffer, type DownloadProgress, type ProviderConfig, type ProviderStatus } from '@fbrx/shared';
+import { Button, Callout, Card, Empty, Field, Grid, Input, KeyValue, Meter, Modal, Page, Select, Status, Table, Toggle, formatBytes, formatDay, useAction, useConfirm } from '@fbrx/ui';
 import { call, onEvent, pickFile } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { navigate, routeArg } from '../app';
 import { ModelPicker, useModels } from '../widgets';
+import { PromoCode, useAccount, useCloudAi } from '../account';
 
 export function RuntimePage() {
   const rt = useCore('runtime.status', undefined, ['runtime.changed', 'settings.changed']);
@@ -142,6 +143,7 @@ export function RuntimePage() {
           />
         </Card>
       </Grid>
+      {ai && <CloudAi providers={ai.providers} defaultProvider={ai.defaultProvider} locked={isLocked(locked, 'ai.providers') || isLocked(locked, 'ai.defaultProvider')} />}
       {ai && <MeshAi providers={ai.providers} defaultProvider={ai.defaultProvider} locked={isLocked(locked, 'ai.providers') || isLocked(locked, 'ai.defaultProvider')} />}
       {ai?.providers.some((p) => p.id === 'ollama' && p.enabled) && <OllamaModels defaultProvider={ai.defaultProvider} defaultModel={ai.defaultModel || (ai.providers.find((p) => p.id === 'ollama')?.defaultModel ?? '')} onUse={(m) => void useModel('ollama', m, m)} locked={isLocked(locked, 'ai.defaultProvider')} busy={busy === 'use'} />}
       <Card title="Model catalog" subtitle="Open-weight models tested with FBRX tool calling. Downloads resume if interrupted and are checksummed.">
@@ -189,7 +191,7 @@ export function RuntimePage() {
           rows={providers.data ?? []}
           rowKey={(p) => p.id}
           columns={[
-            { key: 'n', header: 'Provider', render: (p) => (<div><div className="fx-cell-title">{p.name}{ai?.defaultProvider === p.id && <span className="fx-badge accent" style={{ marginLeft: 6 }}>default</span>}</div><div className="fx-cell-sub">{p.type === 'mesh' ? 'Another FBRX computer, over FBRX Mesh' : `${p.cloud ? 'Cloud' : 'On this machine / network'} · ${p.type}`}</div></div>) },
+            { key: 'n', header: 'Provider', render: (p) => (<div><div className="fx-cell-title">{p.name}{ai?.defaultProvider === p.id && <span className="fx-badge accent" style={{ marginLeft: 6 }}>default</span>}</div><div className="fx-cell-sub">{p.type === 'mesh' ? 'Another FBRX computer, over FBRX Mesh' : p.type === 'fbrx-cloud' ? 'FBRX’s models in the cloud, with your FBRX account' : `${p.cloud ? 'Cloud' : 'On this machine / network'} · ${p.type}`}</div></div>) },
             { key: 's', header: 'Status', render: (p: ProviderStatus) => (!p.enabled ? <Status tone="neutral">Off</Status> : p.blockedByPolicy ? <Status tone="serious">{p.message}</Status> : p.available ? <Status tone="good">Ready</Status> : <Status tone="warning">{p.message ?? 'Unavailable'}</Status>) },
             { key: 'm', header: 'Model', render: (p) => <span className="mono fx-secondary">{p.defaultModel ?? '—'}</span> },
             {
@@ -267,17 +269,17 @@ function ProviderEditor({ provider, all, onClose }: { provider: ProviderConfig; 
         <Field label="Display name">
           <Input value={p.name} onChange={(e) => setP({ ...p, name: e.target.value })} />
         </Field>
-        {p.type !== 'local-runtime' && p.type !== 'mesh' && (
+        {p.type !== 'local-runtime' && p.type !== 'mesh' && p.type !== 'fbrx-cloud' && (
           <Field label="Base URL">
             <Input value={p.baseUrl ?? ''} onChange={(e) => setP({ ...p, baseUrl: e.target.value || undefined })} />
           </Field>
         )}
         {p.type !== 'local-runtime' && (
-          <Field label="Default model" help={p.type === 'anthropic' ? 'Recommended: claude-opus-5-5' : p.type === 'ollama' ? 'The models Ollama has downloaded on this computer. Automatic picks the best one for tools.' : p.type === 'mesh' ? 'The models that computer runs. Automatic uses the one it uses itself.' : undefined}>
+          <Field label="Default model" help={p.type === 'anthropic' ? 'Recommended: claude-opus-5-5' : p.type === 'ollama' ? 'The models Ollama has downloaded on this computer. Automatic picks the best one for tools.' : p.type === 'mesh' ? 'The models that computer runs. Automatic uses the one it uses itself.' : p.type === 'fbrx-cloud' ? 'The models FBRX Cloud AI offers. Some count each token more than once.' : undefined}>
             {isNew || p.baseUrl !== provider.baseUrl ? (
               <Input value={p.defaultModel ?? ''} placeholder="Model name" onChange={(e) => setP({ ...p, defaultModel: e.target.value || undefined })} />
             ) : (
-              <ModelPicker providerId={p.id} value={p.defaultModel ?? ''} onChange={(v) => setP({ ...p, defaultModel: v || undefined })} defaultLabel={p.type === 'ollama' ? 'Automatic (best installed model)' : p.type === 'mesh' ? 'Automatic (the one it uses)' : 'None'} />
+              <ModelPicker providerId={p.id} value={p.defaultModel ?? ''} onChange={(v) => setP({ ...p, defaultModel: v || undefined })} defaultLabel={p.type === 'ollama' ? 'Automatic (best installed model)' : p.type === 'mesh' ? 'Automatic (the one it uses)' : p.type === 'fbrx-cloud' ? 'Automatic (FBRX’s everyday model)' : 'None'} />
             )}
           </Field>
         )}
@@ -308,6 +310,63 @@ function ProviderEditor({ provider, all, onClose }: { provider: ProviderConfig; 
         {p.cloud && <Callout tone="info">Requests to cloud providers leave this machine. Your organization can disable cloud AI in the governance policy. <a href="#/governance" onClick={() => navigate('governance')}>Policy</a></Callout>}
       </div>
     </Modal>
+  );
+}
+
+/**
+ * FBRX Cloud AI, with the FBRX account signed in here: the month's tokens, using it for chats, and promo codes. Shown
+ * when the account's FBRX Command offers it, and not on a learner's computer.
+ */
+function CloudAi({ providers, defaultProvider, locked }: { providers: ProviderConfig[]; defaultProvider: string; locked: boolean }) {
+  const account = useAccount();
+  const license = useCore('license.status', undefined, ['license.changed']).data;
+  const { usage, reload } = useCloudAi(!!account?.signedIn);
+  const { run, busy } = useAction();
+  if (!usage || license?.ceilingReason === 'learner') return null;
+  const provider = providers.find((p) => p.type === 'fbrx-cloud');
+  const use = () =>
+    run(
+      'cloud',
+      async () => {
+        const id = provider?.id ?? 'fbrx-cloud';
+        const next = provider ? providers.map((p) => (p.id === id ? { ...p, enabled: true } : p)) : [...providers, { id, type: 'fbrx-cloud' as const, name: 'FBRX Cloud AI', enabled: true, cloud: true }];
+        await call('settings.update', { patch: { ai: { providers: next, defaultProvider: id, defaultModel: '' } } });
+      },
+      'FBRX Cloud AI answers your chats now',
+    );
+  return (
+    <Card
+      title="FBRX Cloud AI"
+      subtitle="FBRX’s bigger models in the cloud, with your FBRX account. FBRX counts the tokens and keeps nothing of what is said; as with any cloud AI, only your general memory goes along."
+      actions={
+        provider?.id === defaultProvider && provider.enabled ? (
+          <span className="fx-badge accent">In use</span>
+        ) : (
+          <Button size="sm" variant="primary" disabled={locked || !!usage.message} loading={busy === 'cloud'} onClick={() => void use()}>
+            Use for chats
+          </Button>
+        )
+      }
+    >
+      <KeyValue
+        items={[
+          ['This month', usage.allowance ? `${formatTokens(usage.used)} of ${formatTokens(usage.allowance)} tokens` : 'No monthly tokens with your edition'],
+          ['Extra tokens', usage.credit ? `${formatTokens(usage.credit)} (used once the month’s run out)` : 'None'],
+          ['Renews', formatDay(usage.renewsAt)],
+        ]}
+      />
+      {usage.allowance > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <Meter value={usage.used} max={usage.allowance} label="FBRX Cloud AI tokens used this month" />
+        </div>
+      )}
+      {usage.message && <Status tone="warning">{usage.message}</Status>}
+      <div style={{ marginTop: 14 }}>
+        <Field label="Have a promo code?">
+          <PromoCode onUsed={reload} />
+        </Field>
+      </div>
+    </Card>
   );
 }
 

@@ -47,6 +47,8 @@ license with a kind also sets it. Unattended installs can pick the first tenant'
 | Platform | **Releases** | FBRX Command's own version and new versions of it (**Update now**, **Skip this version**, automatic checks on or off); upload FBRX OS installers (or let CI do it), publish to `stable`/`beta`/`dev`, staged rollout percentage |
 | | **Licenses** | Issue and revoke signed licenses per tenant: the most the computers may run (up to Endpoint Standard or Ultra), the kind (Work, School or Home, which also sets the tenant's kind), seats and expiry, and whether computers that activate the key join the tenant automatically; copy keys for offline activation |
 | | **Tenants** | (superadmin) Create tenants (pick Work, School or Home first, then run its quick setup), see each one's kind, change it, suspend them |
+| | **FBRX accounts** | (superadmin) Everyone with an FBRX account here, the edition their purchases give them and their organizations; give one an edition (support, a promotion), disable one ([ACCOUNTS.md](ACCOUNTS.md)) |
+| | **Cloud AI** | (superadmin) FBRX Cloud AI: the month so far against the service's budget, each edition's tokens a month, every account's use (its own limit, extra tokens, the limit lifted for the month, turned off) and promo codes ([CLOUD_AI.md](CLOUD_AI.md)) |
 | Access | **Users & API keys** | Invite users with a role, reset access, create API keys for automation |
 | | **Webhooks** | Signed outgoing webhooks for fleet events |
 | | **Audit log** | Every admin action and device enrollment, hash-chained and verifiable |

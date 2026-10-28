@@ -39,7 +39,7 @@ const RESET_LINK_MS = 60 * 60_000;
 const INVITATION_DAYS = 14;
 const TEST_PURCHASE = 'That purchase was made in a test copy of the app, so nothing was charged and it does not turn on an edition.';
 
-interface AccountRow {
+export interface AccountRow {
   id: string;
   email: string;
   name: string;
@@ -153,7 +153,7 @@ function redeemLinkToken(ctx: AppContext, token: string, purpose: 'verify' | 're
   return row.account_id;
 }
 
-function accountAuth(ctx: AppContext) {
+export function accountAuth(ctx: AppContext) {
   return async (req: FastifyRequest) => {
     const h = req.headers.authorization;
     if (!h?.startsWith('Bearer ')) throw unauthorized('Sign in to your FBRX account');
@@ -171,7 +171,7 @@ function accountAuth(ctx: AppContext) {
   };
 }
 
-const accountActor = (a: AccountRow, req: FastifyRequest) => ({ type: 'account' as const, id: a.id, label: a.email, tenantId: null, ip: req.ip });
+export const accountActor = (a: AccountRow, req: FastifyRequest) => ({ type: 'account' as const, id: a.id, label: a.email, tenantId: null, ip: req.ip });
 
 /** Checks an account's password, counting wrong ones: ten in a row lock it for a quarter of an hour. */
 async function checkPassword(ctx: AppContext, a: AccountRow, password: string, wrong: string): Promise<void> {

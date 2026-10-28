@@ -59,6 +59,32 @@ export interface CloudConfig {
    * smtps://user:password@smtp.example.com:465 (FBRX_SMTP_URL) and who it comes from (FBRX_MAIL_FROM).
    */
   mail: { url: string; from: string } | null;
+  /**
+   * FBRX Cloud AI: the OpenAI-compatible model provider FBRX Command passes accounts' chats on to
+   * (FBRX_AI_UPSTREAM_URL, such as https://api.provider.example/v1, and FBRX_AI_UPSTREAM_KEY), and the models it offers
+   * under FBRX's names (FBRX_AI_MODELS: name=provider-model, comma-separated, the first one the default; *3 after one
+   * counts its tokens three times). The key never leaves FBRX Command.
+   */
+  ai: { baseUrl: string; apiKey: string; models: CloudAiUpstreamModel[] } | null;
+}
+
+/** A model FBRX Cloud AI offers: FBRX's name for it, the provider's, and how much each of its tokens counts. */
+export interface CloudAiUpstreamModel {
+  id: string;
+  upstream: string;
+  weight: number;
+}
+
+/** FBRX_AI_MODELS: "fbrx-everyday=org/model-a,fbrx-thorough=org/model-b*3" (a bare model goes by its own name). */
+export function parseAiModels(raw: string | undefined): CloudAiUpstreamModel[] {
+  return (raw ?? '')
+    .split(',')
+    .map((m) => m.trim())
+    .filter(Boolean)
+    .map((m) => {
+      const [, name, upstream, weight] = /^(?:([^=]+)=)?(.+?)(?:\*(\d+(?:\.\d+)?))?$/.exec(m)!;
+      return { id: (name ?? upstream!).trim(), upstream: upstream!.trim(), weight: weight ? Number(weight) : 1 };
+    });
 }
 
 function readPems(paths: string | undefined): string[] {
@@ -95,6 +121,10 @@ export function loadCloudConfig(env: NodeJS.ProcessEnv, publicUrl: string): Clou
           }
         : null,
     mail: env.FBRX_SMTP_URL ? { url: env.FBRX_SMTP_URL, from: env.FBRX_MAIL_FROM ?? `FBRX <no-reply@${new URL(publicUrl).hostname}>` } : null,
+    ai:
+      env.FBRX_AI_UPSTREAM_URL && env.FBRX_AI_UPSTREAM_KEY && parseAiModels(env.FBRX_AI_MODELS).length
+        ? { baseUrl: env.FBRX_AI_UPSTREAM_URL.replace(/\/+$/, ''), apiKey: env.FBRX_AI_UPSTREAM_KEY, models: parseAiModels(env.FBRX_AI_MODELS) }
+        : null,
   };
 }
 

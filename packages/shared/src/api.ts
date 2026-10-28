@@ -7,6 +7,7 @@
  */
 import type { LicenseStatus } from './license';
 import type { AccountDevice, AccountStatus, InvitationPreview, LocalAccountStatus } from './accounts';
+import type { CloudAiUsage, PromoRedeemed } from './cloud-ai';
 import type { AttachmentInfo } from './attachments';
 import type { Automation, AutomationInput, AutomationRun } from './automations';
 import type { ScreenSnapshot } from './snapshots';
@@ -817,6 +818,10 @@ export interface CoreMethods extends ExtMethods {
   'account.signOutDevice': (p: { id: string }) => { ok: true };
   /** Sends the email that confirms the account's address again. */
   'account.resendConfirmation': () => { sent: boolean };
+  /** The account's FBRX Cloud AI this month: its allowance, what it used, extra tokens, and whether it takes chats. */
+  'account.cloudAi': () => CloudAiUsage;
+  /** Uses a promo code on the account (extra FBRX Cloud AI tokens, an edition for some days) and turns its edition on. */
+  'account.redeemPromo': (p: { code: string }) => { redeemed: PromoRedeemed; status: AccountStatus; ai: CloudAiUsage };
   /** Emails a link to choose a new password (it opens on the website). */
   'account.forgotPassword': (p: { email: string; server?: string }) => { ok: true };
   /** Starts an FBRX Command for the person's organization (in the cloud); answers with its console's address. */
