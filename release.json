@@ -1,42 +1,40 @@
 {
   "product": "FBRX OS",
   "stage": "Beta",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "codename": "Warp",
   "released": "2026-10-28",
   "importance": "recommended",
-  "summary": "FBRX 2.1 Beta: home from anywhere. FBRX VPN through your FBRX Gate, your FBRX Server's bigger AI in your chats, a remote desktop to the server, a calendar of your own, and a password keeper.",
+  "summary": "FBRX 2.1.1 Beta: FBRX Cloud AI for FBRX accounts, FBRX Command updates that build again, and a page that fails shows what went wrong instead of a blank window.",
   "notes": [
-    "FBRX VPN (Orbit → FBRX VPN): connect to your FBRX Gate from anywhere with the settings it makes for this computer, then Check home to see your server answer.",
-    "Think with your FBRX Server's AI: AI models → Your other computers' AI → Use for chats. Fabrix keeps its tools, memory and approvals on your computer; only the thinking happens on the server, at home or over FBRX VPN. Each answer shows how long it took.",
-    "Remote desktop to FBRX Server: its console with a command line beside it (SSH), full screen or in its own window.",
-    "The FBRX calendar: add your own events, repeating if you like, tied to a project, note, task or automation and colored to match. Your tasks, project deadlines and automations show on it too; Outlook and calendar links stay as add-ons. New Month view.",
-    "The Vault is a password keeper: save a sign-in from anywhere (the password generator, Fabrix, the browser), and FBRX Browser fills sign-ins in from it.",
-    "Fabrix fits the AI you choose: a small local model gets a short, focused list of tools; a big one sees them all. Memory rides with your message so providers can reuse their work, and local models answer sooner.",
-    "Names: the Bridge section is now Glass, and FBRX Glass is now Dash.",
-    "Setup opens with what it does, and DEVELOPING.md explains how FBRX is built for anyone who wants to change it."
+    "FBRX Cloud AI: signed in to an FBRX account, AI models → FBRX Cloud AI → Use for chats. Each edition comes with tokens every month (Standard 1M, Ultra 3M, Black Hole 5M); the page shows what is left and when the month renews. Fabrix keeps its tools, memory and approvals on your computer.",
+    "Promo codes: enter one under AI models → FBRX Cloud AI or Settings → FBRX account for extra tokens, an edition for some days, or both.",
+    "A page that fails to draw no longer blanks the window: it shows what went wrong with Try again and Reload, and the rest of FBRX keeps working.",
+    "An answer with a line the formatting could not place (a heading cut short, say) no longer freezes the chat."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.1.0.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.1.0",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.1.1.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.1.1",
   "server": {
-    "version": "1.2.0",
+    "version": "1.2.1",
     "released": "2026-10-28",
-    "summary": "FBRX Server 1.2: FBRX Command as a role, a gate you can VPN into, and an AI it lends to your computers.",
+    "summary": "FBRX Server 1.2.1: Fabrix in the server console takes your files and hands over what it makes.",
     "notes": [
-      "FBRX Command is a server role: add it at install or from the console, and the server's own roles join it.",
-      "FBRX Gate lets FBRX VPN devices with full access reach the server's console, SSH and FBRX Mesh, and its Add a device result explains how an FBRX computer uses the settings.",
-      "With the ai role, paired computers can think with the server's own model (never a cloud provider), under the same lending setting and Help with AI permission as Mesh Assist.",
+      "Fabrix in the server console: attach files and pictures (or drop or paste them) for the server's agent to read, as in FBRX OS.",
+      "What Fabrix makes (documents, drawings) shows under its step, pictures as a thumbnail, each with Download; attached files download the same way.",
+      "The server console shows what went wrong with Try again and Reload instead of going blank.",
       "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
     ],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.1.0/fbrx-server-1.2.0.tar.gz",
-    "sha256": "e22f7735943e4a42bf0e2cd5d77d3477303e40c499ccd82fe183fd4bfc7e13f5",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.1.0"
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.1.1/fbrx-server-1.2.1.tar.gz",
+    "sha256": "97e02df9d46d735dcab80cc05287cb3e2b7fbe2b978a538177c573b00e4879fb",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.1.1"
   },
   "command": {
-    "summary": "FBRX Command 2.1: runs as an FBRX Server role.",
+    "summary": "FBRX Command 2.1.1: Update now works again, and FBRX Cloud AI is run from the Cloud AI page.",
     "notes": [
-      "On an FBRX Server, FBRX Command runs as a role the server manages (and updates with the server); the server's own roles can join it from the console.",
-      "From 2.0: invitations without a website, support passes, and billing, licenses and the Black Hole add-on in one place."
+      "Update now no longer fails at \"Building FBRX Command\" ('vite' is not recognized). If an update already failed, run Install FBRX Command again: it now sees the build tools are missing and installs them.",
+      "Cloud AI (on an account server set up for it): each edition's tokens a month, a budget for the whole service, and per account its own limit, extra tokens, lifting the limit for the month or turning it off.",
+      "Promo codes: extra FBRX Cloud AI tokens, Standard or Ultra for some days, or both, for a number of accounts and until a date; see who used each one.",
+      "The console shows what went wrong with Try again and Reload instead of going blank."
     ]
   }
 }
