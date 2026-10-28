@@ -142,6 +142,7 @@ describe('new versions', () => {
     expect(codenameFor('1.8.1')?.name).toBe('Spindle');
     expect(codenameFor('2.0.0')?.name).toBe('Loom');
     expect(codenameFor('2.1.0')?.name).toBe('Warp');
+    expect(codenameFor('2.1.1')?.name).toBe('Warp');
     expect(codenameFor('9.9.9')).toBeNull();
   });
 
