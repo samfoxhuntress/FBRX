@@ -1,48 +1,42 @@
 {
   "product": "FBRX OS",
   "stage": "Beta",
-  "version": "2.0.0",
-  "codename": "Loom",
-  "released": "2026-10-25",
+  "version": "2.1.0",
+  "codename": "Warp",
+  "released": "2026-10-28",
   "importance": "recommended",
-  "summary": "FBRX 2.0 Beta: an AI that works for you. Fabrix reads what you attach, makes documents and pictures, reads the web, does jobs on a schedule and looks at your screen with FBRX Snapshot. Now with FBRX accounts, four editions, and Linux.",
+  "summary": "FBRX 2.1 Beta: home from anywhere. FBRX VPN through your FBRX Gate, your FBRX Server's bigger AI in your chats, a remote desktop to the server, a calendar of your own, and a password keeper.",
   "notes": [
-    "FBRX is in Beta: versions read Beta 2.0.0, codename Loom.",
-    "Four editions on one price list: Endpoint Essentials (free: your AI on its own), Standard, Ultra and Black Hole. Try Standard free for 7 days from Settings → Edition.",
-    "FBRX accounts: sign in on your computers and your edition follows you. Reset a forgotten password, confirm your email, and see and sign out the devices you are signed in on. Offline accounts keep a computer to itself.",
-    "Attach files and pictures to a message (paperclip, drag or paste): PDFs, documents, spreadsheets, slides, text and code are read; pictures go to models that can see.",
-    "Ask Fabrix for a file and it makes it: PDF, .docx, web page, Markdown, text or CSV, and pictures (drawings offline, generated images with an image service). They land in Documents/FBRX with Open and Show in folder.",
-    "In online chats Fabrix reads web pages (and PDFs on the web), searches the web, and looks up stock quotes.",
-    "Automations (Studio → Automations): jobs Fabrix does by itself on a schedule, when FBRX starts or with a shortcut, and tells you every time or only when something changed. Start from an idea: new classified listings, my stocks, a price drop, a morning brief, news on a topic, a weekly report.",
-    "FBRX Snapshot (Workbench → Snapshot, Ctrl+Alt+S anywhere): an area, a window or the whole screen, marked up with pen, highlighter, arrows, boxes, text, blur and crop, then copied, saved or handed to Fabrix with Ask Fabrix. Print Screen can take one too.",
-    "FBRX Browser: a real web browser inside FBRX, with a Fabrix side panel that reads the page with your local AI, saved sign-ins from the vault, and every download checked by FBRX Shield.",
-    "Fabrix's live activity stays when you leave a chat and come back, and how much it thinks is one simple choice (Quick, Everyday or Thorough), with every detail from Standard.",
-    "Essentials Home: a split-flap board, tips and a quick way to bigger AI models.",
-    "Join an organization without a website: FBRX Command can now invite you with a code (Settings → FBRX account → I have an invitation).",
-    "Support mode: FBRX support can help you with a signed, short-lived pass for this one computer, and everything it does is audited.",
-    "FBRX OS for Linux: an AppImage that runs on any distribution and a .deb for Debian and Ubuntu, beside the Windows and Mac installers."
+    "FBRX VPN (Orbit → FBRX VPN): connect to your FBRX Gate from anywhere with the settings it makes for this computer, then Check home to see your server answer.",
+    "Think with your FBRX Server's AI: AI models → Your other computers' AI → Use for chats. Fabrix keeps its tools, memory and approvals on your computer; only the thinking happens on the server, at home or over FBRX VPN. Each answer shows how long it took.",
+    "Remote desktop to FBRX Server: its console with a command line beside it (SSH), full screen or in its own window.",
+    "The FBRX calendar: add your own events, repeating if you like, tied to a project, note, task or automation and colored to match. Your tasks, project deadlines and automations show on it too; Outlook and calendar links stay as add-ons. New Month view.",
+    "The Vault is a password keeper: save a sign-in from anywhere (the password generator, Fabrix, the browser), and FBRX Browser fills sign-ins in from it.",
+    "Fabrix fits the AI you choose: a small local model gets a short, focused list of tools; a big one sees them all. Memory rides with your message so providers can reuse their work, and local models answer sooner.",
+    "Names: the Bridge section is now Glass, and FBRX Glass is now Dash.",
+    "Setup opens with what it does, and DEVELOPING.md explains how FBRX is built for anyone who wants to change it."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.0.0.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.0.0",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.1.0.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.1.0",
   "server": {
-    "version": "1.1.0",
-    "released": "2026-10-25",
-    "summary": "FBRX Server 1.1: an AI that sets itself up, and Fabrix in the console.",
+    "version": "1.2.0",
+    "released": "2026-10-28",
+    "summary": "FBRX Server 1.2: FBRX Command as a role, a gate you can VPN into, and an AI it lends to your computers.",
     "notes": [
-      "The ai role gets its AI ready by itself on its first start: it picks the best model the server runs well (the biggest its graphics card holds, or a quick one on processors alone), downloads it and starts it, leaving 20 GB of disk free.",
-      "Fabrix in the console: chat with the server's own AI, with its answer as it is written, each step it takes, Stop, and approvals for administrators. The console's audit log keeps who asked, never what.",
-      "From 1.0: sudo fbrx-server update check, then sudo fbrx-server update commit."
+      "FBRX Command is a server role: add it at install or from the console, and the server's own roles join it.",
+      "FBRX Gate lets FBRX VPN devices with full access reach the server's console, SSH and FBRX Mesh, and its Add a device result explains how an FBRX computer uses the settings.",
+      "With the ai role, paired computers can think with the server's own model (never a cloud provider), under the same lending setting and Help with AI permission as Mesh Assist.",
+      "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
     ],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.0.0/fbrx-server-1.1.0.tar.gz",
-    "sha256": "f212a40d280badb76a7767505c77843a9d7e5e1bbd1850d6023b5c4e772e803f",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.0.0"
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.1.0/fbrx-server-1.2.0.tar.gz",
+    "sha256": "e22f7735943e4a42bf0e2cd5d77d3477303e40c499ccd82fe183fd4bfc7e13f5",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.1.0"
   },
   "command": {
-    "summary": "FBRX Command 2.0: accounts and billing, invitations, and support passes.",
+    "summary": "FBRX Command 2.1: runs as an FBRX Server role.",
     "notes": [
-      "Members without a website: Members → Add sends an invitation code (and emails it when email is set up); the person types it in FBRX OS. Withdraw any time.",
-      "Licenses → Support pass makes a signed, short-lived pass for one computer, for troubleshooting it with its owner's consent.",
-      "Billing, licenses and the Black Hole add-on in one place, with the accounts people sign in with on their computers."
+      "On an FBRX Server, FBRX Command runs as a role the server manages (and updates with the server); the server's own roles can join it from the console.",
+      "From 2.0: invitations without a website, support passes, and billing, licenses and the Black Hole add-on in one place."
     ]
   }
 }
