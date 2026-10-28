@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
-import { RELEASE_MANIFEST_URL, compareSemver, isValidSemver, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
+import { RELEASE_MANIFEST_URL, ReleaseManifestSchema, STORE_UPDATES, compareSemver, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
@@ -19,18 +19,6 @@ import { unzip } from '../util/unzip';
  * newer version, and, when asked, downloads the new version into the same folder and starts the installer there,
  * exactly what the person would otherwise do by hand. The installer closes FBRX, updates it and reopens it.
  */
-
-const ManifestSchema = z.object({
-  version: z.string().refine(isValidSemver, 'not a version'),
-  stage: z.string().max(40).default('Alpha'),
-  codename: z.string().max(60).default(''),
-  released: z.string().max(40).default(''),
-  importance: z.enum(['optional', 'recommended', 'important']).default('recommended'),
-  summary: z.string().max(600).default(''),
-  notes: z.array(z.string().max(400)).max(40).default([]),
-  download: z.string().url(),
-  page: z.string().url(),
-});
 
 /** Written by the setup wizard into the data folder: where FBRX was installed from. */
 export const INSTALL_SOURCE_FILE = 'install-source.json';
@@ -54,6 +42,8 @@ export interface ReleaseCheckerDeps {
   launchInstaller?: (root: string) => string;
   /** A good moment to install by itself (nobody presenting, the agent idle, the computer not in use). */
   quiet?: () => boolean;
+  /** Installed from an app store: the store updates FBRX, so it never looks for new versions itself. */
+  store?: boolean;
 }
 
 export class ReleaseChecker {
@@ -62,7 +52,7 @@ export class ReleaseChecker {
   private busy: Promise<ReleaseCheck> | null = null;
 
   constructor(private readonly d: ReleaseCheckerDeps) {
-    this.state = { state: 'idle', currentVersion: d.appVersion, latest: null, checkedAt: null, message: null, skipped: false, canInstall: false, installing: null };
+    this.state = { state: 'idle', currentVersion: d.appVersion, latest: null, checkedAt: null, message: null, skipped: false, canInstall: false, store: !!d.store, installing: null };
   }
 
   private get manifestUrl(): string {
@@ -71,6 +61,7 @@ export class ReleaseChecker {
 
   start(): void {
     this.stop();
+    if (this.d.store) return;
     const tick = () => {
       if (this.d.settings().updates.checkRepo && this.d.internet()) void this.check().catch(() => undefined);
     };
@@ -90,6 +81,7 @@ export class ReleaseChecker {
   }
 
   status(): ReleaseCheck {
+    if (this.d.store) return { ...this.state, state: 'off', canInstall: false, message: STORE_UPDATES };
     const off = !this.d.settings().updates.checkRepo && this.state.state === 'idle';
     return { ...this.state, state: off ? 'off' : this.state.state, skipped: !!this.state.latest && this.d.settings().updates.skipVersion === this.state.latest.version, canInstall: !!this.installRoot() };
   }
@@ -101,6 +93,7 @@ export class ReleaseChecker {
 
   /** Looks at release.json in the repository. */
   check(): Promise<ReleaseCheck> {
+    if (this.d.store) return Promise.resolve(this.status());
     this.busy ??= this.run().finally(() => (this.busy = null));
     return this.busy;
   }
@@ -111,7 +104,8 @@ export class ReleaseChecker {
     try {
       const res = await fetch(this.manifestUrl, { headers: { 'user-agent': `FBRX-OS/${this.d.appVersion}`, 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(20_000) });
       if (!res.ok) throw new Error(`The release list answered ${res.status}`);
-      const latest: ReleaseInfo = ManifestSchema.parse(await res.json());
+      // What is new in FBRX Command is for FBRX Command.
+      const { command: _command, ...latest } = ReleaseManifestSchema.parse(await res.json());
       const newer = compareSemver(latest.version, this.d.appVersion) > 0;
       this.set({ state: newer ? 'available' : 'current', latest, checkedAt: new Date().toISOString(), message: null });
       this.d.log.info('Checked for a new version', { current: this.d.appVersion, latest: latest.version });

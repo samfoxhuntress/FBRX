@@ -27,8 +27,22 @@ export type AssistTrigger = 'agent' | 'steps' | 'provider' | 'person' | 'control
 export type AssistStatus = 'waiting-approval' | 'queued' | 'running' | 'done' | 'denied' | 'error' | 'cancelled';
 
 /** Server roles a computer announces (FBRX Server runs one or more; more arrive with later products). */
-export const SERVER_ROLES = ['ai', 'virtual', 'command', 'dns', 'directory', 'files', 'gate', 'minidome'] as const;
+export const SERVER_ROLES = ['ai', 'virtual', 'command', 'dns', 'directory', 'files', 'gate', 'minidome', 'time'] as const;
 export type ServerRole = (typeof SERVER_ROLES)[number];
+
+/**
+ * A computer's answer to "may my agent think with your AI?": its own AI model, lent to a paired computer whose agent
+ * keeps working there (its tools, memory and approvals stay on that computer; only the model's work happens here).
+ */
+export interface LentModel {
+  accepts: AssistMode;
+  reason: string | null;
+  /** The model it would use, and the others its AI offers. */
+  model: string | null;
+  models: Array<{ id: string; name: string }>;
+  /** About how many characters of conversation the model holds. */
+  historyChars: number;
+}
 
 /** A computer's answer to "could you help?". */
 export interface AssistOffer {

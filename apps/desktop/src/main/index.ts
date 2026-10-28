@@ -3,14 +3,17 @@ import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
-import { userInfo } from 'node:os';
+import { hostname, userInfo } from 'node:os';
 import { Kernel, toCoreError } from '@fbrx/core';
-import { MANAGED_PREFERENCES_DOMAIN, PRODUCT_NAME, TIER_NAMES, funEnabled, provisioningFromPreferences } from '@fbrx/shared';
-import { createElectronPlatform, openExternalSafe } from './platform';
+import { MANAGED_PREFERENCES_DOMAIN, PRODUCT_NAME, TIER_NAMES, expandMacro, funEnabled, notificationDelivery, notificationKind, provisioningFromPreferences, shouldNotify, type NotificationEvent } from '@fbrx/shared';
+import { createElectronPlatform, openExternalSafe, systemNotification } from './platform';
 import { ElectronUpdateController } from './updater';
 import { ClipHistory } from './clip-history';
 import { PasteKeys } from './paste-keys';
 import { runJavaScript, stopJavaScript } from './code-sandbox';
+import { guardWebviews, setupServerBrowser } from './server-browser';
+import { browserWebContents, browserWindowOpen, openBrowserWindow, setupWebSessions, type BrowserDeps } from './browser';
+import { isSnapshotOverlay, registerSnapshotIpc, takeSnapshot, type SnapshotDeps } from './snapshot';
 
 const dataDir = process.env.FBRX_HOME ?? app.getPath('userData');
 const rendererUrl = process.env.FBRX_RENDERER_URL ?? null;
@@ -30,6 +33,10 @@ let spotlightKey: string | null = null;
 let picker: BrowserWindow | null = null;
 let pickerKey: string | null = null;
 let presenterKey: string | null = null;
+let snapshotKey: string | null = null;
+let printScreenKey: string | null = null;
+/** Your own shortcuts bound now: shortcut → what it does ("macro:<id>" or "automation:<id>"). */
+const ownKeys = new Map<string, string>();
 /** Whether FBRX's own window had the focus when the clipboard history opened (macOS gives the focus back otherwise). */
 let pickerFromMain = false;
 const pasteKeys = new PasteKeys();
@@ -106,13 +113,18 @@ function serveVoice() {
   });
 }
 
-/** The app's own pages may use the microphone (audio only) and the clipboard; other permissions are refused. */
+/**
+ * The app's own pages may use the microphone (audio only) and the clipboard, and FBRX Snapshot's overlay may capture a
+ * window; other permissions are refused.
+ */
 const ALLOWED_PERMISSIONS = new Set(['media', 'clipboard-read', 'clipboard-sanitized-write', 'notifications', 'fullscreen']);
 function guardPermissions() {
   const ownPage = (url: string) => (rendererUrl ? url.startsWith(rendererUrl) : url.startsWith('file://'));
   session.defaultSession.setPermissionRequestHandler((wc, permission, cb, details) => {
     if (!ownPage(details.requestingUrl || wc.getURL()) || !ALLOWED_PERMISSIONS.has(permission)) return cb(false);
     if (permission === 'media') {
+      // FBRX Snapshot's overlay capturing the window the person picked (a desktop capture names no media type).
+      if (isSnapshotOverlay(wc)) return cb(true);
       const types = (details as { mediaTypes?: string[] }).mediaTypes ?? [];
       return cb(types.length > 0 && types.every((t) => t === 'audio'));
     }
@@ -158,6 +170,38 @@ function provisioningLocations(): string[] {
   return out;
 }
 
+/** How the FBRX Browser window reaches the kernel, opens popups as tabs, and reports downloads it has checked. */
+function browserDeps(): BrowserDeps {
+  return {
+    kernel: () => kernel,
+    rendererUrl,
+    appPath: app.getAppPath(),
+    actor,
+    onPopup: (url) => openBrowserWindow(browserDeps(), url),
+    // A finding raises FBRX Shield's own alert; only a download with nothing found is announced here (one notice, not two).
+    onDownload: ({ name, checked }) =>
+      deliverNotification({ title: 'Download finished', body: checked ? `"${name}" is saved, and FBRX Shield found nothing wrong.` : `"${name}" is saved.`, level: 'success', source: 'shield' }),
+  };
+}
+
+function snapshotDeps(): SnapshotDeps {
+  return {
+    kernel: () => kernel,
+    load: loadRenderer,
+    preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
+    ownWindows: () => [win, ...popouts.values()].filter((w): w is BrowserWindow => !!w && !w.isDestroyed()),
+    open: (id) => popOut(`snapshots/${encodeURIComponent(id)}`, { wide: true }),
+    notify: deliverNotification,
+    trusted,
+  };
+}
+
+/** FBRX Snapshot comes with Standard and up (Essentials is the AI on its own), and not on student computers. */
+function snapshotsAllowed() {
+  const e = kernel?.edition();
+  return !!e && e.tier !== 'essentials' && !e.learner;
+}
+
 function showWindow(route?: string) {
   if (!win) createWindow();
   if (win!.isMinimized()) win!.restore();
@@ -186,8 +230,11 @@ function createWindow() {
       nodeIntegration: false,
       webSecurity: true,
       spellcheck: true,
+      // Server consoles open in a <webview> (Lab → FBRX Server), locked down by guardWebviews.
+      webviewTag: true,
     },
   });
+  guardWebviews(win);
   // Launched at sign-in with --hidden: start in the tray.
   win.once('ready-to-show', () => {
     if (!process.argv.includes('--hidden')) win?.show();
@@ -217,6 +264,118 @@ function createWindow() {
   });
   win.on('closed', () => (win = null));
   loadRenderer(win);
+}
+
+// ------------------------------------------------------------------------------------------- notifications
+
+/** The page a click on a notification opens, when it names none. */
+const NOTIFICATION_PAGE: Record<string, string> = { alerts: 'alerts', approvals: 'approvals', backup: 'backup', calendar: 'calendar', messages: 'messages', helpdesk: 'helpdesk', mesh: 'mesh' };
+
+/**
+ * Shows one notification in one place (Alerts → Notifications): by default a toast inside FBRX while one of its windows
+ * is in front, otherwise the system's notification center, never both. The sound plays once: FBRX's own chime (played
+ * by a window of FBRX, so the system notification stays silent), the system's sound, or none.
+ */
+function deliverNotification(n: NotificationEvent) {
+  const s = kernel?.settings.get().notifications;
+  if (!s) return;
+  const windows = [win, ...popouts.values()].filter((w): w is BrowserWindow => !!w && !w.isDestroyed());
+  const front = windows.find((w) => w.isVisible() && w.isFocused());
+  const main = win && !win.isDestroyed() ? win : null;
+  const d = notificationDelivery(s, n.source, { inFront: !!front, open: !!main });
+  const toastIn = front ?? main;
+  // The chime needs a window to play in; without one, the system's sound stands in.
+  const player = toastIn ?? windows[0] ?? null;
+  const sound = d.sound === 'fbrx' && !player ? 'system' : d.sound;
+  if (d.app && toastIn) toastIn.webContents.send('fbrx:toast', n);
+  if (d.system) {
+    const page = n.open ?? NOTIFICATION_PAGE[notificationKind(n.source)];
+    systemNotification(n, { silent: sound !== 'system', onClick: () => showWindow(page) });
+  }
+  if (sound === 'fbrx') player!.webContents.send('fbrx:chime', { level: n.level, volume: s.volume });
+  else if (sound === 'system' && !d.system) shell.beep();
+}
+
+/** Pages of FBRX in windows of their own (a terminal, the chat…), by the page they show. */
+const popouts = new Map<string, BrowserWindow>();
+const pageOf = (route: string) => route.split('/')[0];
+
+/**
+ * Opens a page in a window of its own beside the main one, or brings its window forward (and to that route) when the
+ * page already has one. The window shows the page without the sidebar; links to other pages open in the main window.
+ */
+function popOut(route: string, o: { wide?: boolean } = {}) {
+  const page = pageOf(route);
+  // A server's console is a web page of its own, shown in a locked-down <webview> (server-browser.ts).
+  const server = page === 'server';
+  const open = popouts.get(page);
+  if (open && !open.isDestroyed()) {
+    if (open.isMinimized()) open.restore();
+    open.show();
+    open.focus();
+    open.webContents.send('fbrx:navigate', route);
+    return;
+  }
+  const area = screen.getDisplayMatching(win?.getBounds() ?? screen.getPrimaryDisplay().bounds).workArea;
+  const wide = o.wide || server;
+  const width = wide ? Math.min(1280, Math.round(area.width * 0.8)) : Math.min(820, Math.round(area.width * 0.45));
+  const height = Math.min(wide ? 860 : 900, area.height - 40);
+  const main = win && !win.isDestroyed() && win.isVisible() ? win.getBounds() : null;
+  // To the right of the main window when there is room, otherwise on the right edge of the screen.
+  const x = main && main.x + main.width + 8 + width <= area.x + area.width ? main.x + main.width + 8 : area.x + area.width - width - 16;
+  const y = main ? Math.max(area.y, main.y) : area.y + 20;
+  const w = new BrowserWindow({
+    x,
+    y,
+    width,
+    height,
+    minWidth: 420,
+    minHeight: 360,
+    title: PRODUCT_NAME,
+    show: false,
+    backgroundColor: '#0d0d0d',
+    icon: asset('icon.png'),
+    webPreferences: {
+      preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
+      contextIsolation: true,
+      sandbox: true,
+      nodeIntegration: false,
+      webSecurity: true,
+      spellcheck: true,
+      webviewTag: server,
+    },
+  });
+  if (server) guardWebviews(w);
+  popouts.set(page, w);
+  w.on('closed', () => popouts.get(page) === w && popouts.delete(page));
+  w.once('ready-to-show', () => w.show());
+  w.webContents.setWindowOpenHandler(({ url }) => {
+    openExternalSafe(url);
+    return { action: 'deny' };
+  });
+  w.webContents.on('will-navigate', (e, url) => {
+    if (rendererUrl ? !url.startsWith(rendererUrl) : !url.startsWith('file://')) {
+      e.preventDefault();
+      openExternalSafe(url);
+    }
+  });
+  if (rendererUrl) void w.loadURL(`${rendererUrl}?popout=1#/${route}`);
+  else void w.loadFile(join(app.getAppPath(), 'dist', 'renderer', 'index.html'), { hash: `/${route}`, query: { popout: '1' } });
+}
+
+/** A popped-out window kept on top, or put side by side with the main window (the main one on the left). */
+function arrangePopout(w: BrowserWindow, action: string, on?: boolean) {
+  if (action === 'pin') w.setAlwaysOnTop(!!on, 'floating');
+  else if (action === 'tile') {
+    const area = screen.getDisplayMatching(w.getBounds()).workArea;
+    const right = Math.round(area.width * 0.42);
+    if (!win) createWindow();
+    if (win!.isMaximized()) win!.unmaximize();
+    win!.setBounds({ x: area.x, y: area.y, width: area.width - right, height: area.height });
+    win!.show();
+    w.setBounds({ x: area.x + area.width - right, y: area.y, width: right, height: area.height });
+    w.focus();
+  } else if (action === 'main') showWindow();
 }
 
 function loadRenderer(w: BrowserWindow, hash?: string) {
@@ -293,6 +452,70 @@ function bindMacroKeys() {
   spotlightKey = bindKey(spotlightKey, s?.spotlight.enabled ? s.spotlight.hotkey : null, showSpotlight, 'Spotlight');
   pickerKey = bindKey(pickerKey, s?.clipboard.hotkey || null, showClipPicker, 'Clipboard history');
   presenterKey = bindKey(presenterKey, s?.presenter.hotkey || null, togglePresenting, 'Presenter-safe mode');
+  const snap = () => void takeSnapshot(snapshotDeps(), { mode: 'region', delay: 0, fromApp: false });
+  snapshotKey = bindKey(snapshotKey, (snapshotsAllowed() && s?.snapshot.hotkey) || null, snap, 'Snapshot');
+  printScreenKey = bindKey(printScreenKey, snapshotsAllowed() && s?.snapshot.printScreen ? 'PrintScreen' : null, snap, 'Print Screen');
+  bindOwnKeys();
+}
+
+/**
+ * Your own shortcuts: macros (Settings → Macros) type their text into whatever app you are in, and automations run. A
+ * shortcut FBRX uses itself stays its own, and a macro keeps a shortcut an automation also asks for.
+ */
+function bindOwnKeys() {
+  const builtIn = new Set([spotlightKey, pickerKey, presenterKey, snapshotKey, printScreenKey]);
+  const want = new Map<string, string>();
+  for (const m of kernel?.settings.get().keyMacros ?? []) if (m.hotkey && !builtIn.has(m.hotkey)) want.set(m.hotkey, `macro:${m.id}`);
+  for (const a of kernel?.automations.hotkeys() ?? []) if (!builtIn.has(a.hotkey) && !want.has(a.hotkey)) want.set(a.hotkey, `automation:${a.id}`);
+  for (const [accel, what] of ownKeys) {
+    if (want.get(accel) === what) continue;
+    globalShortcut.unregister(accel);
+    ownKeys.delete(accel);
+  }
+  for (const [accel, what] of want) {
+    if (ownKeys.has(accel)) continue;
+    const [kind, id] = what.split(':');
+    const run = kind === 'macro' ? () => void typeMacro(id) : () => runAutomation(id);
+    try {
+      if (globalShortcut.register(accel, run)) ownKeys.set(accel, what);
+      else kernel?.log.warn(`A ${kind} shortcut is taken by another app`, { hotkey: accel });
+    } catch (err) {
+      kernel?.log.warn(`Invalid ${kind} shortcut`, { hotkey: accel, error: (err as Error).message });
+    }
+  }
+}
+
+/** An automation's shortcut: it runs now (its result is the one notification), or FBRX says why it can't. */
+function runAutomation(id: string) {
+  try {
+    kernel?.automations.runNow(id, 'hotkey');
+  } catch (err) {
+    kernel?.events.emit('notification', { title: 'Automation', body: (err as Error).message, level: 'warning', source: 'automation' });
+  }
+}
+
+/**
+ * Types a macro where you are: its text (placeholders filled in) goes on the clipboard and FBRX presses paste once the
+ * shortcut's keys are let go; what was on the clipboard comes back afterwards. Where FBRX can't press keys (a Mac), the
+ * text stays on the clipboard for ⌘V.
+ */
+async function typeMacro(id: string) {
+  const s = kernel?.settings.get();
+  const m = s?.keyMacros.find((x) => x.id === id);
+  if (!s || !m) return;
+  const before = await clipboard.readText();
+  const { text } = expandMacro(m.text, { name: s.profile.name, callMe: s.profile.callMe, host: hostname(), clipboard: before });
+  clipboard.writeText(text);
+  kernel?.audit.append({ category: 'system', action: 'macro.typed', actor, outcome: 'success', details: { macro: m.name, chars: text.length } });
+  if (!pasteKeys.paste({ afterKeysUp: true })) {
+    kernel?.events.emit('notification', { title: m.name, body: `Ready to paste: press ${process.platform === 'darwin' ? '⌘V' : 'Ctrl+V'}.`, level: 'info', source: 'macros' });
+    return;
+  }
+  setTimeout(() => {
+    void clipboard.readText().then(async (now) => {
+      if (now === text) await clipboard.writeText(before);
+    });
+  }, 3000);
 }
 
 /** Presenter-safe mode on or off (its shortcut, the tray). */
@@ -444,8 +667,10 @@ function trayMenu() {
     { type: 'separator' },
     { label: 'Open FBRX Endpoint', click: () => showWindow() },
     { label: 'New agent chat', click: () => showWindow('agent') },
+    ...(kernel.license.status().tier !== 'essentials' ? [{ label: browserWindowOpen() ? 'Show FBRX Browser' : 'Open FBRX Browser', click: () => openBrowserWindow(browserDeps()) }] : []),
     { label: `Spotlight${spotlightKey ? ` (${spotlightKey})` : ''}`, click: () => showSpotlight() },
     { label: `Clipboard history${pickerKey ? ` (${pickerKey.replace('Control', 'Ctrl')})` : ''}`, click: () => showClipPicker() },
+    ...(snapshotsAllowed() ? [{ label: `Take a snapshot${snapshotKey ? ` (${snapshotKey.replace('Control', 'Ctrl')})` : ''}`, click: () => void takeSnapshot(snapshotDeps(), { mode: 'region', delay: 0, fromApp: false }) }] : []),
     { label: pending ? `Review ${pending} pending approval${pending > 1 ? 's' : ''}` : 'No pending approvals', enabled: pending > 0, click: () => showWindow('approvals') },
     kernel.aiHalt()
       ? { label: 'Resume the AI (on emergency stop)', click: () => void kernel?.resumeAi(actor) }
@@ -507,6 +732,11 @@ function registerIpc() {
     return r.canceled ? null : r.filePaths[0] ?? null;
   });
   ipcMain.handle('fbrx:reveal', (e, p: string) => trusted(e) && typeof p === 'string' && shell.showItemInFolder(p));
+  // Opens a file the agent made or was given in its app; nothing outside the FBRX folder and the workspace.
+  ipcMain.handle('fbrx:openFile', async (e, p: unknown) => {
+    if (!trusted(e) || typeof p !== 'string' || !kernel?.output.holds(p) || !existsSync(p)) return false;
+    return (await shell.openPath(p)) === '';
+  });
   ipcMain.handle('fbrx:openExternal', (e, url: string) => trusted(e) && openExternalSafe(String(url)));
   ipcMain.handle('fbrx:app', (e) => (trusted(e) ? { version: app.getVersion(), platform: process.platform, arch: process.arch, dataDir, packaged: app.isPackaged } : null));
   ipcMain.handle('fbrx:spotlight', (e, action: string, arg?: string) => {
@@ -520,6 +750,46 @@ function registerIpc() {
     return true;
   });
   ipcMain.handle('fbrx:copy', (e, text: string) => trusted(e) && typeof text === 'string' && clipboard.writeText(text.slice(0, 1_000_000)));
+  // A password or 2-step code from the Vault: kept out of the clipboard history, and gone after a while (Settings →
+  // Vault) unless something else was copied since.
+  ipcMain.handle('fbrx:copySecret', async (e, text: string) => {
+    if (!trusted(e) || typeof text !== 'string' || text.length > 10_000) return false;
+    clips.skip(text);
+    await clipboard.writeText(text);
+    const seconds = kernel?.settings.get().passwords.clearClipboardSeconds ?? 30;
+    if (seconds > 0) {
+      setTimeout(async () => {
+        if ((await clipboard.readText()) === text) await clipboard.writeText('');
+      }, seconds * 1000).unref();
+    }
+    return true;
+  });
+  // A page in a window of its own, and arranging it beside the main window.
+  ipcMain.handle('fbrx:popout', (e, route: unknown) => {
+    if (!trusted(e) || typeof route !== 'string' || !/^[a-z][\w-]*(\/[^\s]*)?$/i.test(route) || route.length > 4000) return false;
+    popOut(route);
+    return true;
+  });
+  ipcMain.handle('fbrx:window', (e, action: unknown, on?: unknown) => {
+    const w = BrowserWindow.fromWebContents(e.sender);
+    if (!trusted(e) || !w || w === win || typeof action !== 'string') return false;
+    arrangePopout(w, action, on === true);
+    return true;
+  });
+  // The right-click menu's Cut, Copy, Paste and friends, on whatever has the focus in that window.
+  ipcMain.handle('fbrx:edit', (e, action: unknown) => {
+    if (!trusted(e)) return false;
+    const wc = e.sender;
+    if (action === 'cut') wc.cut();
+    else if (action === 'copy') wc.copy();
+    else if (action === 'paste') wc.paste();
+    else if (action === 'pasteAsText') wc.pasteAndMatchStyle();
+    else if (action === 'selectAll') wc.selectAll();
+    else if (action === 'undo') wc.undo();
+    else if (action === 'redo') wc.redo();
+    else return false;
+    return true;
+  });
   ipcMain.handle('fbrx:clip', async (e, action: string, id?: number, on?: boolean) => {
     if (!trusted(e)) return null;
     if (action === 'read') return (await clipboard.readText()).slice(0, 1_000_000);
@@ -576,6 +846,13 @@ function registerIpc() {
     if (url) void shell.openExternal(url);
     return !!url;
   });
+  // FBRX Browser: open or focus its own window (from the sidebar, the tray, or a link).
+  ipcMain.handle('fbrx:browser', (e, action: unknown, url?: unknown) => {
+    // Endpoint Essentials is the AI on its own; the browser comes with Standard and up (and on learners' computers).
+    if (!trusted(e) || action !== 'open' || kernel?.license.status().tier === 'essentials') return false;
+    openBrowserWindow(browserDeps(), typeof url === 'string' && /^https?:\/\//i.test(url) ? url : undefined);
+    return true;
+  });
   ipcMain.handle('fbrx:goose', (e, action: string, on?: boolean) => {
     if (!trusted(e)) return false;
     if (action === 'summon') summonGoose();
@@ -589,15 +866,17 @@ function registerIpc() {
 }
 
 async function boot() {
-  const updates = new ElectronUpdateController(() => {
-    const u = kernel?.settings.get().updates;
-    return { autoDownload: u?.autoDownload ?? true, autoInstall: u?.autoInstall ?? false, channel: u?.channel ?? 'stable' };
-  });
+  // A copy from the Microsoft Store is updated by the Store, never by FBRX.
+  const updates = process.windowsStore
+    ? null
+    : new ElectronUpdateController(() => {
+        const u = kernel?.settings.get().updates;
+        return { autoDownload: u?.autoDownload ?? true, autoInstall: u?.autoInstall ?? false, channel: u?.channel ?? 'stable' };
+      });
   const platform = createElectronPlatform({
     dataDir,
     updates,
-    onNotify: () => undefined,
-    onOpen: (route) => showWindow(route),
+    onNotify: (n) => deliverNotification(n),
     requestRestart: (reason) => {
       quitting = true;
       void kernel?.stop().finally(() => {
@@ -611,6 +890,8 @@ async function boot() {
   kernel.setIdleProbe(() => powerMonitor.getSystemIdleTime());
   kernel.events.onAny((name, payload) => {
     win?.webContents.send('fbrx:event', name, payload);
+    for (const p of popouts.values()) if (!p.isDestroyed()) p.webContents.send('fbrx:event', name, payload);
+    browserWebContents()?.send('fbrx:event', name, payload);
     if (name === 'settings.changed') {
       bindMacroKeys();
       clips.setEnabled(!!kernel?.settings.get().clipboard.history);
@@ -618,6 +899,9 @@ async function boot() {
       trayMenu();
     }
     if (name === 'license.changed' && !funAllowed()) goose?.close();
+    // The edition decides whether automations and snapshots have shortcuts.
+    if (name === 'license.changed' || name === 'fleet.changed') bindMacroKeys();
+    else if (name === 'automations.changed') bindOwnKeys();
     if (name === 'presenter.changed') {
       const p = payload as { active: boolean };
       // Presenting: the goose goes home and the clipboard history masks what it shows.
@@ -629,8 +913,9 @@ async function boot() {
   });
   kernel.events.on('approval.requested', (r) => {
     const p = kernel?.presenterStatus();
-    if (!win?.isFocused() && !(p?.active && p.hideNotifications)) {
-      platform.notify({ title: 'Approval needed', body: `${r.toolTitle}: ${r.reason}`.slice(0, 200), level: 'warning', source: 'governance' });
+    // In front, FBRX asks in its own window; otherwise a notification says it is waiting.
+    if (!win?.isFocused() && !(p?.active && p.hideNotifications) && shouldNotify(kernel!.settings.get().notifications, 'governance')) {
+      deliverNotification({ title: 'Approval needed', body: `${r.toolTitle}: ${r.reason}`.slice(0, 200), level: 'warning', source: 'governance' });
     }
   });
   await kernel.start();
@@ -641,7 +926,7 @@ async function boot() {
   kernel.settings.onChange((s) => app.isPackaged && app.setLoginItemSettings({ openAtLogin: s.settings.general.launchAtLogin, args: ['--hidden'] }));
   // Check shortly after launch and then every few hours, so machines that live in the tray still pick up releases.
   const checkUpdates = () => {
-    if (kernel?.fleet.enrolled) void updates.check();
+    if (kernel?.fleet.enrolled) void updates?.check();
   };
   setTimeout(checkUpdates, 15_000);
   setInterval(checkUpdates, UPDATE_CHECK_INTERVAL_MS).unref();
@@ -658,8 +943,11 @@ async function boot() {
 app.whenReady().then(async () => {
   if (!primary) return;
   registerIpc();
+  registerSnapshotIpc(snapshotDeps());
   serveVoice();
   guardPermissions();
+  setupServerBrowser(() => kernel);
+  setupWebSessions(browserDeps());
   appMenu();
   try {
     await boot();

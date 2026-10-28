@@ -3,6 +3,7 @@ import { PLATFORMS } from './constants';
 import { PolicySchema } from './policy';
 import type { DeviceCommand } from './commands';
 import { AUDIENCES, type DeviceEdition } from './editions';
+import { TIERS } from './license';
 import type { OrgChatMessage } from './messages';
 
 /** Hardware/OS facts a device reports at enrollment and in heartbeats. */
@@ -58,6 +59,8 @@ export const HeartbeatSchema = z.object({
     vaultState: z.string(),
     licenseEdition: z.string(),
     licenseState: z.string(),
+    /** The edition it runs (FBRX Endpoint 1.9.6+): essentials, basic (Standard) or ultra. */
+    editionTier: z.enum(TIERS).optional(),
     activeAgentRuns: z.number().int(),
     pendingApprovals: z.number().int(),
     agentRuns24h: z.number().int(),
@@ -80,9 +83,63 @@ export const HeartbeatSchema = z.object({
       })
       .nullable()
       .optional(),
+    /** Whole-computer images (FBRX Time, Windows; FBRX Endpoint 1.9.8+): set up or not, and the last one. */
+    imageBackup: z
+      .object({
+        configured: z.boolean(),
+        lastAt: z.string().nullable(),
+        ok: z.boolean().nullable(),
+        running: z.boolean(),
+      })
+      .nullable()
+      .optional(),
+    /** This computer on FBRX Mesh, so FBRX Command can introduce the organization's computers to each other (1.9.5+). */
+    mesh: z
+      .object({
+        enabled: z.boolean(),
+        running: z.boolean(),
+        /** Its mesh key (base64) and fingerprint: the identity the other computers trust. */
+        publicKey: z.string().max(100),
+        fingerprint: z.string().max(100),
+        port: z.number().int().min(1).max(65535),
+        addresses: z.array(z.string().max(64)).max(16),
+        roles: z.array(z.string().max(32)).max(16),
+      })
+      .nullable()
+      .optional(),
   }),
 });
 export type Heartbeat = z.infer<typeof HeartbeatSchema>;
+
+/**
+ * An organization's computer on FBRX Mesh, as FBRX Command introduces it: the organization vouches for its key, so
+ * the computers trust each other without pairing codes. "permissions" is what it may do on the computer that asked.
+ */
+export interface OrgMeshPeer {
+  deviceId: string;
+  name: string;
+  publicKey: string;
+  fingerprint: string;
+  port: number;
+  addresses: string[];
+  roles: string[];
+  permissions: Partial<Record<'status' | 'chat' | 'ask' | 'approve' | 'workspace' | 'alerts' | 'control' | 'assist' | 'command' | 'network', boolean>>;
+}
+
+/** The organization's mesh for one computer (GET /v1/device/mesh/roster). */
+export interface OrgMeshRoster {
+  /** The organization meshes its computers (when off, introduced computers are forgotten). */
+  enabled: boolean;
+  tenantId: string;
+  tenantName: string;
+  peers: OrgMeshPeer[];
+}
+
+/** Who may use the organization's server AI (the hive): every group, or the groups listed. */
+export interface HivePolicy {
+  groups: 'all' | string[];
+}
+export const DEFAULT_HIVE: HivePolicy = { groups: 'all' };
 
 export interface HeartbeatResponse {
   serverTime: string;
@@ -141,7 +198,9 @@ export type ServerToDeviceMessage =
   /** A help desk ticket this computer asked or receives changed (new ticket, reply, status). */
   | { type: 'helpdesk.changed'; ticketId: string; number: number; reason: 'created' | 'message' | 'updated'; subject: string }
   /** A message for this computer (Messages, organization chat). */
-  | { type: 'chat.message'; message: OrgChatMessage };
+  | { type: 'chat.message'; message: OrgChatMessage }
+  /** The organization's mesh changed (a computer joined or left, or the settings): fetch the roster again. */
+  | { type: 'mesh.roster' };
 
 export type DeviceToServerMessage =
   | { type: 'heartbeat'; heartbeat: Heartbeat }

@@ -1,19 +1,40 @@
 {
   "product": "FBRX OS",
-  "stage": "Alpha",
-  "version": "1.9.5",
-  "codename": "Bobbin",
-  "released": "2026-10-06",
+  "stage": "Beta",
+  "version": "2.1.1",
+  "codename": "Warp",
+  "released": "2026-10-28",
   "importance": "recommended",
-  "summary": "FBRX Shield, FBRX's own antivirus, and the choice of what protects your computer: FBRX Shield, Microsoft Defender, or the antivirus you already have.",
+  "summary": "FBRX 2.1.1 Beta: FBRX Cloud AI for FBRX accounts, FBRX Command updates that build again, and a page that fails shows what went wrong instead of a blank window.",
   "notes": [
-    "FBRX Shield is now FBRX's antivirus: it checks new downloads as they arrive, scans (quick, full or a folder), keeps a threat database of known malware up to date every day, and spots disguised programs, scripts that delete backups or turn off antivirus, risky files from the internet and documents with macros.",
-    "Malware goes into an encrypted quarantine straight away; suspicious files wait for you (quarantine, trust or delete), and Fabrix can explain any finding.",
-    "Choose what protects this computer: FBRX Shield, Microsoft Defender, or an antivirus already installed (Sophos, CrowdStrike, SentinelOne, ESET and more). FBRX shows its status everywhere and warns you when it is off or out of date.",
-    "The sidebar's Shield section is now Stronghold: FBRX Shield, approvals, credentials, governance and backups.",
-    "FBRX Command shows each computer's antivirus and can choose it for a group.",
-    "Endpoint Ultra adds scheduled scans and second engines (ClamAV, VirusTotal)."
+    "FBRX Cloud AI: signed in to an FBRX account, AI models → FBRX Cloud AI → Use for chats. Each edition comes with tokens every month (Standard 1M, Ultra 3M, Black Hole 5M); the page shows what is left and when the month renews. Fabrix keeps its tools, memory and approvals on your computer.",
+    "Promo codes: enter one under AI models → FBRX Cloud AI or Settings → FBRX account for extra tokens, an edition for some days, or both.",
+    "A page that fails to draw no longer blanks the window: it shows what went wrong with Try again and Reload, and the rest of FBRX keeps working.",
+    "An answer with a line the formatting could not place (a heading cut short, say) no longer freezes the chat."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v1.9.5.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.5"
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.1.1.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.1.1",
+  "server": {
+    "version": "1.2.1",
+    "released": "2026-10-28",
+    "summary": "FBRX Server 1.2.1: Fabrix in the server console takes your files and hands over what it makes.",
+    "notes": [
+      "Fabrix in the server console: attach files and pictures (or drop or paste them) for the server's agent to read, as in FBRX OS.",
+      "What Fabrix makes (documents, drawings) shows under its step, pictures as a thumbnail, each with Download; attached files download the same way.",
+      "The server console shows what went wrong with Try again and Reload instead of going blank.",
+      "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
+    ],
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.1.1/fbrx-server-1.2.1.tar.gz",
+    "sha256": "97e02df9d46d735dcab80cc05287cb3e2b7fbe2b978a538177c573b00e4879fb",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.1.1"
+  },
+  "command": {
+    "summary": "FBRX Command 2.1.1: Update now works again, and FBRX Cloud AI is run from the Cloud AI page.",
+    "notes": [
+      "Update now no longer fails at \"Building FBRX Command\" ('vite' is not recognized). If an update already failed, run Install FBRX Command again: it now sees the build tools are missing and installs them.",
+      "Cloud AI (on an account server set up for it): each edition's tokens a month, a budget for the whole service, and per account its own limit, extra tokens, lifting the limit for the month or turning it off.",
+      "Promo codes: extra FBRX Cloud AI tokens, Standard or Ultra for some days, or both, for a number of accounts and until a date; see who used each one.",
+      "The console shows what went wrong with Try again and Reload instead of going blank."
+    ]
+  }
 }

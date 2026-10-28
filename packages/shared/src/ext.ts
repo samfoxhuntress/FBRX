@@ -1,9 +1,12 @@
+import type { VpnCheck, VpnProfile, VpnStatus } from './vpn';
 import type { TrophyState } from './fun';
 import type { VoiceDownloadId } from './settings';
 import type { AssistAction, AssistJob, HelpdeskScope, HelpdeskStatus, TicketCategory, TicketDetail, TicketPriority, TicketStatus, TicketSummary } from './helpdesk';
 import type { EditionStatus } from './editions';
-import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
+import type { Tier } from './license';
+import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarEventPatch, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
 import type { ProtectionState, ProtectionStatus, ScanJob, ScanType, ShieldDetection, ShieldVerdict } from './protection';
+import type { ImageBackupConfig, ImageBackupStatus } from './time';
 import type { AssistOffer, AssistPriority, AssistSession, AssistTools } from './mesh-assist';
 import type { MeshNetworkStatus, MeshPathTest } from './net';
 import type { MessagesOverview, MessageState, ThreadMessage } from './messages';
@@ -38,6 +41,49 @@ export interface ServerResourcesInfo {
   /** The installer ISO is among them. */
   iso: boolean;
   files: ServerResourceFile[];
+}
+
+/** The built-in browser's own storage (cookies, sign-ins) for server consoles, apart from everything else in FBRX. */
+export const SERVER_BROWSER_PARTITION = 'persist:fbrx-servers';
+
+/** FBRX Browser's own storage for ordinary web browsing (cookies, sign-ins), kept apart from FBRX's own pages. */
+export const WEB_BROWSER_PARTITION = 'persist:fbrx-web';
+/** A private tab's session: nothing is kept once the tab closes. */
+export const WEB_BROWSER_PRIVATE_PARTITION = 'fbrx-web-private';
+
+/** A server whose web console opens inside FBRX (Lab → FBRX Server → Your servers). */
+export interface SavedServer {
+  id: string;
+  name: string;
+  scheme: 'https' | 'http';
+  host: string;
+  port: number;
+  /** Where the console opens, e.g. https://192.168.1.20:9443/. */
+  url: string;
+  /** The certificate trusted for it (SHA-256, "AB:CD:…") when no certificate authority vouches for it. */
+  fingerprint: string | null;
+  notes: string;
+  createdAt: string;
+  lastOpenedAt: string | null;
+}
+/** A paired computer on FBRX Mesh that announces server roles and is not saved yet. */
+export interface ServerSuggestion {
+  name: string;
+  host: string;
+  port: number;
+  roles: string[];
+}
+/** What a saved server's console answers before it is opened. */
+export interface ServerCheck {
+  url: string;
+  reachable: boolean;
+  /** https only: the certificate it presents. */
+  certificate: { fingerprint: string; subject: string; issuer: string; validTo: string; trustedBySystem: boolean } | null;
+  /** It can open: a certificate authority vouches for it, or it is the one trusted before (or http). */
+  ok: boolean;
+  /** A certificate was trusted before and this is a different one. */
+  changed: boolean;
+  error: string | null;
 }
 
 // ------------------------------------------------------------------------------------------- workspace
@@ -592,6 +638,8 @@ export interface ConsoleConnectInput {
   profileId?: string;
   vendor?: string;
   label?: string;
+  /** Keep it in Saved connections (default yes). */
+  save?: boolean;
 }
 export type ConsoleConnectResult =
   | { session: ConsoleSession }
@@ -602,6 +650,23 @@ export interface ConsoleLogin {
   protocol: ConsoleProtocol;
   username: string;
   savedAt: string;
+}
+/** A device in Saved connections: one click to connect again, with its guide and (if saved) its password. */
+export interface ConsoleBookmark {
+  id: string;
+  label: string;
+  host: string;
+  port: number;
+  protocol: ConsoleProtocol;
+  username: string | null;
+  /** Device guide (see DEVICE_PROFILES). */
+  profileId: string | null;
+  vendor: string | null;
+  notes: string;
+  createdAt: string;
+  lastConnectedAt: string | null;
+  /** A password is saved for this user (encrypted in the vault). */
+  passwordSaved: boolean;
 }
 
 // ------------------------------------------------------------------------------------------ FBRX/1
@@ -768,6 +833,8 @@ export interface MeshDevice {
   fingerprint: string;
   pairedAt: string;
   permissions: MeshPermissions;
+  /** "org": introduced by your organization (FBRX Command), which also decides what it may do here. */
+  source?: 'paired' | 'org';
 }
 export interface MeshMessage {
   id: string;
@@ -796,6 +863,8 @@ export interface MeshStatus {
   nearby: Array<{ id: string; name: string; addr: string }>;
   pairing: MeshPairing | null;
   error: string | null;
+  /** Enrolled in FBRX Command: the organization's mesh (its computers are introduced, not paired). */
+  organization?: { organization: string; enabled: boolean; peers: number; syncedAt: string; error: string | null } | null;
 }
 export interface MeshJob {
   jobId: string;
@@ -986,6 +1055,18 @@ export interface ExtMethods {
   'net.scanGet': (p: { id: string }) => LanScan;
   'net.scanDelete': (p: { id: string }) => Deleted;
   'net.compare': (p: { a: string; b: string }) => LanScanCompare;
+
+  /** FBRX VPN: tunnels to FBRX Gates (home from anywhere). */
+  'vpn.status': () => VpnStatus;
+  /** Keeps a gate's device settings: the text of the file DNS & VPN → Add a device gives, or the file itself. */
+  'vpn.add': (p: { name: string; settings?: string; path?: string }) => VpnProfile;
+  'vpn.remove': (p: { id: string }) => { removed: boolean };
+  'vpn.connect': (p: { id: string }) => VpnStatus;
+  'vpn.disconnect': () => VpnStatus;
+  /** Installs the system's VPN tools when they are missing. */
+  'vpn.install': () => VpnStatus;
+  /** Pings the gate and the paired FBRX computers behind the tunnel, and asks those over FBRX Mesh. */
+  'vpn.check': () => VpnCheck;
   'net.exportCsv': (p: { id: string; path: string }) => { path: string; rows: number };
   'net.speedTest': (p: { reqId: string }) => SpeedTestResult;
   'net.speedHistory': () => SpeedTestResult[];
@@ -1050,6 +1131,12 @@ export interface ExtMethods {
   'helpdesk.assistJobs': (p: { ticketId: string }) => AssistJob[];
   /** What this computer is: its edition, organization kind and who uses it. */
   'edition.status': () => EditionStatus;
+  /** Settings → Edition: anything up to what this computer may run (the person only). */
+  'edition.choose': (p: { tier: Tier }) => EditionStatus;
+  /** Starts this computer's free Standard trial and turns Standard on (once; the person only). */
+  'edition.startTrial': () => EditionStatus;
+  /** The Essentials walkthrough was finished or skipped; false shows it again (the person only). */
+  'edition.tourDone': (p: { done: boolean }) => EditionStatus;
   'presenter.status': () => PresenterStatus;
   /** Turn presenter-safe mode on or off now (off also snoozes the automatic switch until the screen is unplugged). */
   'presenter.set': (p: { on: boolean }) => PresenterStatus;
@@ -1063,7 +1150,7 @@ export interface ExtMethods {
   'netenv.deviceAction': (p: { id: string; deviceId: string; action: NetEnvDeviceAction; siteId?: string }) => Ok;
   'netenv.vouchers': (p: { id: string; siteId?: string }) => NetEnvVoucher[];
   'netenv.createVouchers': (p: { id: string; name: string; count?: number; timeLimitMinutes: number; guestLimit?: number; siteId?: string }) => NetEnvVoucher[];
-  // Calendar: Outlook / Microsoft 365 accounts and calendar links.
+  // Calendar: the FBRX calendar on this computer, with Outlook / Microsoft 365 accounts and calendar links beside it.
   'calendar.status': () => CalendarStatus;
   /** Events between two times (ISO), across the accounts that are turned on. */
   'calendar.events': (p: { from: string; to: string; accountId?: string }) => CalendarEvent[];
@@ -1076,8 +1163,18 @@ export interface ExtMethods {
   'calendar.remove': (p: { id: string }) => Deleted;
   /** Fetch now (one account, or all of them). */
   'calendar.sync': (p?: { id?: string }) => CalendarStatus;
+  /** Adds an event: to the FBRX calendar, or to the Outlook calendar named. */
   'calendar.create': (p: NewCalendarEvent) => CalendarEvent;
+  /** Changes an FBRX calendar event (every occurrence, when it repeats). */
+  'calendar.edit': (p: CalendarEventPatch) => CalendarEvent;
+  /** Deletes an event (an FBRX event's every occurrence, when it repeats). */
   'calendar.delete': (p: { accountId: string; id: string }) => Deleted;
+  // FBRX Time: an image of the whole computer.
+  'imageBackup.status': () => ImageBackupStatus;
+  /** Sets it up or changes it (asks for administrator once). password: for a network folder; null: none; left out: keep the saved one. */
+  'imageBackup.configure': (p: ImageBackupConfig & { password?: string | null }) => ImageBackupStatus;
+  'imageBackup.run': () => ImageBackupStatus;
+  'imageBackup.remove': () => ImageBackupStatus;
   // Antivirus: what protects this computer, and FBRX Shield.
   'protection.status': (p?: { refresh?: boolean }) => ProtectionStatus;
   /** "auto", "shield", "defender" or "product:<id>". */
@@ -1089,6 +1186,10 @@ export interface ExtMethods {
   'protection.job': () => ScanJob | null;
   'shield.detections': (p?: { limit?: number }) => ShieldDetection[];
   'shield.act': (p: { id: string; action: 'quarantine' | 'restore' | 'delete' | 'allow' }) => ShieldDetection;
+  /** Trusts the findings picked, or every suspicious one still waiting (in one folder, if named). Never malware in bulk. */
+  'shield.allowMany': (p: { ids?: string[]; folder?: string }) => { allowed: number };
+  /** Looks at the findings still waiting again with today's rules, and clears the ones it no longer flags. */
+  'shield.recheck': () => { cleared: number; gone: number };
   'shield.updateSignatures': () => { added: number; total: number };
   /** Adds fingerprints from a text file (one SHA-256 per line). */
   'shield.importSignatures': (p: { path: string }) => { added: number; total: number };
@@ -1101,6 +1202,12 @@ export interface ExtMethods {
   'console.list': () => ConsoleSession[];
   'console.transcript': (p: { id: string }) => { text: string };
   'console.logins': () => ConsoleLogin[];
+  /** Saved connections, most recently used first. */
+  'console.bookmarks': () => ConsoleBookmark[];
+  /** Adds a device to Saved connections, or changes one (id). */
+  'console.saveBookmark': (p: { id?: string; label?: string; host: string; port?: number; protocol: ConsoleProtocol; username?: string | null; profileId?: string | null; notes?: string }) => ConsoleBookmark;
+  /** Removes one; forgetPassword also deletes its saved password. */
+  'console.removeBookmark': (p: { id: string; forgetPassword?: boolean }) => Ok;
   'console.forgetLogin': (p: { host: string; port: number; username: string }) => Ok;
   'console.forgetHostKey': (p: { host: string; port: number }) => Ok;
 
@@ -1157,6 +1264,14 @@ export interface ExtMethods {
   /** Copies a resource to Downloads. */
   'server.copy': (p: { name: string }) => { path: string };
   'server.readDoc': (p: { name: string }) => { text: string };
+  'server.saved': () => { servers: SavedServer[]; suggestions: ServerSuggestion[] };
+  /** Adds or changes a saved server. "address" may be a host, host:port or a whole URL. */
+  'server.save': (p: { id?: string; name?: string; address: string; port?: number; notes?: string }) => SavedServer;
+  'server.remove': (p: { id: string }) => { ok: true };
+  'server.check': (p: { id: string }) => ServerCheck;
+  /** Trusts the certificate a saved server presents (compared with `fbrx-server fingerprint` on the server). */
+  'server.trust': (p: { id: string; fingerprint: string }) => SavedServer;
+  'server.opened': (p: { id: string }) => { ok: true };
   /** Prefer Mesh: this computer's mesh networks, their MTU, and whether mesh traffic is marked for priority. */
   'mesh.network.status': () => MeshNetworkStatus;
   /** Which address each paired computer is reached on, the round trip, and (jumbo frames on) whether 9000-byte packets get through. */
@@ -1208,11 +1323,26 @@ export interface ExtEvents {
   'messages.changed': { threadId: string | null; message?: ThreadMessage; unread: number };
   'mesh.job': { reqId: string; job: MeshJob };
   'mesh.assist': AssistSession;
+  'vpn.changed': { at: string };
 }
 
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
+  'vpn.add',
+  'vpn.remove',
+  'vpn.connect',
+  'vpn.disconnect',
+  'vpn.install',
+  'edition.choose',
+  'edition.startTrial',
+  'edition.tourDone',
   'server.copy',
+  'server.saved',
+  'server.save',
+  'server.remove',
+  'server.check',
+  'server.trust',
+  'server.opened',
   'helpdesk.assist',
   'mesh.network.applyQos',
   'processes.kill',
@@ -1266,10 +1396,15 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'netenv.remove',
   'netenv.deviceAction',
   'netenv.createVouchers',
+  'imageBackup.configure',
+  'imageBackup.run',
+  'imageBackup.remove',
   'protection.setProvider',
   'protection.scan',
   'protection.cancelScan',
   'shield.act',
+  'shield.allowMany',
+  'shield.recheck',
   'shield.updateSignatures',
   'shield.importSignatures',
   'shield.check',
@@ -1281,6 +1416,7 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'calendar.remove',
   'calendar.sync',
   'calendar.create',
+  'calendar.edit',
   'calendar.delete',
   'console.connect',
   'console.write',
@@ -1291,6 +1427,9 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'console.logins',
   'console.forgetLogin',
   'console.forgetHostKey',
+  'console.bookmarks',
+  'console.saveBookmark',
+  'console.removeBookmark',
   'fun.unlock',
   'ai.resume',
   'cli.exec',

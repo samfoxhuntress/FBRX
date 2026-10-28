@@ -13,6 +13,7 @@ export function expandPathVars(p: string, dirs: SpecialDirs & { workspace: strin
     .replace(/\$\{DOCUMENTS\}/g, dirs.documents)
     .replace(/\$\{DESKTOP\}/g, dirs.desktop)
     .replace(/\$\{DOWNLOADS\}/g, dirs.downloads)
+    .replace(/\$\{PICTURES\}/g, dirs.pictures)
     .replace(/\$\{WORKSPACE\}/g, dirs.workspace)
     .replace(/\$\{DATA\}/g, dirs.data);
   return normalize(out);

@@ -486,6 +486,7 @@ export class FleetAgent {
         break;
       case 'helpdesk.changed':
       case 'chat.message':
+      case 'mesh.roster':
         this.d.onMessage?.(msg);
         break;
     }

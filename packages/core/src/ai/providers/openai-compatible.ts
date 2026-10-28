@@ -83,6 +83,10 @@ export class OpenAICompatibleProvider implements ChatProvider {
           };
         case 'tool':
           return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
+        case 'user':
+          return m.images?.length
+            ? { role: 'user', content: [...m.images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.data}` } })), { type: 'text', text: m.content }] }
+            : { role: 'user', content: m.content };
         default:
           return { role: m.role, content: m.content };
       }
@@ -98,6 +102,8 @@ export class OpenAICompatibleProvider implements ChatProvider {
     };
     if (req.temperature !== undefined) body.temperature = req.temperature;
     if (req.maxTokens) body.max_tokens = req.maxTokens;
+    // The built-in runtime (llama.cpp) hands this to the model's chat template: Qwen3 and the like skip their thinking.
+    if (this.type === 'local-runtime' && req.reasoning !== undefined) body.chat_template_kwargs = { enable_thinking: req.reasoning };
     if (req.tools.length) {
       body.tools = req.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
       body.tool_choice = 'auto';

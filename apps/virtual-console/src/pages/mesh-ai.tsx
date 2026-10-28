@@ -8,7 +8,12 @@ import {
   type AssistPriority,
   type AssistSession,
   type AssistTools,
+  type CatalogModel,
+  type DownloadProgress,
+  type InstalledModel,
   isCidr,
+  modelFit,
+  type ModelFit,
   MESH_TRAFFIC_CLASSES,
   MESH_TRAFFIC_CLASS_WORDS,
   networkOf,
@@ -21,50 +26,20 @@ import {
   type ModelInfo,
   type ProviderConfig,
   type ProviderStatus,
+  type RuntimeHardware,
+  type RuntimeStatus,
   type Settings,
 } from '@fbrx/shared';
-import { Button, Callout, Card, CopyText, Empty, Field, Grid, Input, KeyValue, Page, Select, Status, Tabs, TextArea, Toggle, timeAgo, useAction, useConfirm, type StatusTone } from '@fbrx/ui';
+import { Button, Callout, Card, CopyText, Empty, Field, Grid, Input, KeyValue, Page, Select, Status, Tabs, TextArea, Toggle, formatBytes, timeAgo, useAction, useConfirm, type StatusTone } from '@fbrx/ui';
 import { api } from '../api';
+import { coreCall, useCore, type CoreState } from '../core';
 import { useApp, usePoll, useRoute } from '../state';
 
-/** The server's FBRX core (the "ai" role), reached through FBRX Virtual. */
-interface CoreState {
-  installed: boolean;
-  running: boolean;
-  version: string | null;
-  error: string | null;
-}
 interface CoreSettings {
   settings: { general: { deviceName: string }; ai: Pick<Settings['ai'], 'defaultProvider' | 'defaultModel' | 'agentName' | 'providers'>; mesh: Settings['mesh'] };
   locked: string[];
 }
 type AssistSettings = Settings['mesh']['assist'];
-
-const coreCall = async <T,>(method: string, params?: unknown): Promise<T> => (await api<{ result: T }>('POST', '/v1/core/call', { method, params })).result;
-
-/** Polls a core method while the page is open. */
-function useCore<T>(method: string | null, ms: number, params?: unknown) {
-  const [data, setData] = useState<T | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const key = JSON.stringify(params ?? null);
-  const load = async () => {
-    if (!method) return;
-    try {
-      setData(await coreCall<T>(method, params));
-      setError(null);
-    } catch (e) {
-      setError((e as Error).message);
-    }
-  };
-  useEffect(() => {
-    if (!method) return;
-    void load();
-    const t = setInterval(() => document.visibilityState === 'visible' && void load(), ms);
-    return () => clearInterval(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [method, ms, key]);
-  return { data, error, reload: load, set: setData };
-}
 
 const MODES: Array<{ value: AssistMode; label: string }> = [
   { value: 'off', label: 'Never' },
@@ -87,7 +62,7 @@ const PERMS: Array<{ key: keyof MeshPermissions; label: string; help: string }> 
   { key: 'command', label: 'Controller', help: 'Its work runs here without asking, may be urgent, and may stop lower-priority help. Still follows this server’s policy.' },
 ];
 
-type Tab = 'assist' | 'computers' | 'network' | 'provider';
+type Tab = 'assist' | 'computers' | 'network' | 'provider' | 'models';
 
 /**
  * Mesh & AI: the FBRX core on this server lends its AI to the other computers on FBRX Mesh and borrows theirs (Mesh
@@ -97,7 +72,7 @@ type Tab = 'assist' | 'computers' | 'network' | 'provider';
 export function MeshAiPage({ tab }: { tab?: string }) {
   const [, go] = useRoute();
   const state = usePoll<CoreState>('/v1/core', 15000);
-  const active = (['assist', 'computers', 'network', 'provider'].includes(tab ?? '') ? tab : 'assist') as Tab;
+  const active = (['assist', 'computers', 'network', 'provider', 'models'].includes(tab ?? '') ? tab : 'assist') as Tab;
   const s = state.data;
   return (
     <Page title="Mesh & AI" description="This server's AI, the computers it works with on FBRX Mesh, and Mesh Assist: lending AI to each other when one runs out of steps or credits, and handing out work.">
@@ -123,6 +98,7 @@ export function MeshAiPage({ tab }: { tab?: string }) {
               { id: 'assist', label: 'Mesh Assist' },
               { id: 'computers', label: 'Computers on the mesh' },
               { id: 'network', label: 'Prefer Mesh' },
+              { id: 'models', label: 'Models on this server' },
               { id: 'provider', label: 'AI provider' },
             ]}
           />
@@ -130,6 +106,7 @@ export function MeshAiPage({ tab }: { tab?: string }) {
           {active === 'computers' && <Computers />}
           {active === 'network' && <PreferMesh />}
           {active === 'provider' && <Provider />}
+          {active === 'models' && <Models />}
         </>
       )}
     </Page>
@@ -596,6 +573,236 @@ function Provider() {
           );
         })}
         <div className="fx-help">Keys are kept encrypted in this server's FBRX vault and never shown again, here or anywhere else.</div>
+      </Card>
+    </>
+  );
+}
+
+// ------------------------------------------------------------------------------------ models on this server
+
+const FIT: Record<ModelFit, { tone: StatusTone; words: string }> = {
+  gpu: { tone: 'good', words: 'fits the graphics card' },
+  memory: { tone: 'good', words: 'fits in memory (processors)' },
+  tight: { tone: 'warning', words: 'only just fits' },
+  'too-big': { tone: 'critical', words: 'too big for this server' },
+};
+const TIER_ORDER: Record<CatalogModel['tier'], number> = { server: 0, large: 1, medium: 2, small: 3 };
+const RUNTIME_WORDS: Record<RuntimeStatus['state'], string> = { 'not-installed': 'not installed', 'no-model': 'no model chosen', stopped: 'stopped (starts at the first question)', starting: 'starting', running: 'running', failed: 'failed', disabled: 'off' };
+
+/**
+ * A model on this server, run by the FBRX core's built-in runtime (llama.cpp): this server's own AI, which the other
+ * computers on the mesh borrow through Mesh Assist when theirs is too small, out of steps or not answering.
+ */
+function Models() {
+  const app = useApp();
+  const admin = app.can('admin');
+  const operator = app.can('operator');
+  const status = useCore<RuntimeStatus>('runtime.status', 5000);
+  const hw = useCore<RuntimeHardware>('runtime.hardware', 60000);
+  const catalog = useCore<CatalogModel[]>('runtime.catalog', 300000);
+  const installed = useCore<InstalledModel[]>('runtime.installed', 10000);
+  const downloads = useCore<DownloadProgress[]>('runtime.downloads', 2000);
+  const settings = useCore<CoreSettings>('settings.get', 30000);
+  const { run, busy } = useAction();
+  const { confirm, dialog } = useConfirm();
+  const st = status.data;
+  const h = hw.data;
+  if (status.error) return <Callout tone="critical">{status.error}</Callout>;
+  if (!st || !h || !catalog.data || !installed.data) return <Empty title="Loading…" />;
+  const dl = new Map((downloads.data ?? []).map((d) => [d.modelId, d]));
+  const busyDl = (d: DownloadProgress | undefined) => !!d && (d.state === 'downloading' || d.state === 'verifying');
+  const runtimeDl = dl.get('llama-runtime');
+  const have = new Map(installed.data.map((m) => [m.id, m]));
+  const active = installed.data.find((m) => m.active);
+  const ai = settings.data?.settings.ai;
+  const localId = ai?.providers.find((p) => p.type === 'local-runtime')?.id;
+  const usesLocal = !!ai && ai.defaultProvider === localId;
+  const refresh = () => Promise.all([status.reload(), installed.reload(), downloads.reload(), settings.reload()]);
+  const act = (key: string, method: string, params?: unknown, ok?: string) => void run(key, () => coreCall(method, params), ok).then(() => refresh());
+  const vram = Math.max(0, ...h.gpus.map((g) => g.vramBytes));
+  const models = [...catalog.data].sort((a, b) => TIER_ORDER[a.tier] - TIER_ORDER[b.tier] || b.sizeBytes - a.sizeBytes);
+  const progress = (d: DownloadProgress) => (
+    <div className="fx-form" style={{ gap: 4 }}>
+      <div className="fx-progress" role="progressbar" aria-valuenow={d.totalBytes ? Math.round((d.receivedBytes / d.totalBytes) * 100) : 0}>
+        <div style={{ width: `${d.totalBytes ? (d.receivedBytes / d.totalBytes) * 100 : 5}%` }} />
+      </div>
+      <div className="fx-row" style={{ justifyContent: 'space-between', fontSize: 12 }}>
+        <span className="fx-muted">{d.state === 'verifying' ? 'Checking and unpacking…' : d.totalBytes ? `${formatBytes(d.receivedBytes)} of ${formatBytes(d.totalBytes)}` : 'Starting…'}</span>
+        {admin && (
+          <Button size="sm" variant="ghost" onClick={() => act(`c${d.modelId}`, 'runtime.cancelDownload', { modelId: d.modelId })}>
+            Cancel
+          </Button>
+        )}
+      </div>
+    </div>
+  );
+  return (
+    <>
+      {dialog}
+      <Grid cols={2}>
+        <Card
+          title="This server's own AI"
+          subtitle="A model run right here by FBRX's built-in runtime (llama.cpp). The other computers on FBRX Mesh borrow it through Mesh Assist when their own AI is too small, runs out of steps or stops answering."
+          actions={
+            operator &&
+            st.state !== 'not-installed' &&
+            (st.state === 'running' || st.state === 'starting' ? (
+              <Button size="sm" icon="stop" loading={busy === 'stop'} onClick={() => act('stop', 'runtime.stop', undefined, 'Stopped')}>
+                Stop
+              </Button>
+            ) : (
+              active && (
+                <Button size="sm" variant="primary" icon="play" loading={busy === 'start'} onClick={() => act('start', 'runtime.start', undefined, 'Running')}>
+                  Start
+                </Button>
+              )
+            ))
+          }
+        >
+          <div className="fx-form">
+            <KeyValue
+              items={[
+                ['Runtime', <Status key="r" tone={st.state === 'running' ? 'good' : st.state === 'failed' ? 'critical' : st.state === 'not-installed' || st.state === 'no-model' ? 'warning' : 'neutral'}>{RUNTIME_WORDS[st.state]}</Status>],
+                ['Model', active ? active.name : 'none yet'],
+                ['This server\'s AI uses', usesLocal ? 'this model' : ai ? (ai.providers.find((p) => p.id === ai.defaultProvider)?.name ?? ai.defaultProvider) : '…'],
+              ]}
+            />
+            {st.message && st.state !== 'not-installed' && <Callout tone={st.state === 'failed' ? 'critical' : 'info'}>{st.message}</Callout>}
+            {runtimeDl && busyDl(runtimeDl) ? (
+              progress(runtimeDl)
+            ) : st.state === 'not-installed' ? (
+              <div className="fx-form">
+                <div className="fx-secondary">The runtime is not on this server yet. It comes from the llama.cpp project's own releases (a small download), in the build for {h.variant === 'vulkan' ? 'the graphics card found here (Vulkan)' : 'processors'}.</div>
+                {admin && (
+                  <Button variant="primary" icon="download" loading={busy === 'rt'} onClick={() => act('rt', 'runtime.installRuntime', undefined, 'Installing the runtime')}>
+                    Install the runtime
+                  </Button>
+                )}
+              </div>
+            ) : (
+              admin && (
+                <div className="fx-row" style={{ gap: 6 }}>
+                  <Button size="sm" variant="ghost" icon="refresh" loading={busy === 'rt'} onClick={() => act('rt', 'runtime.installRuntime', undefined, 'Updating the runtime')}>
+                    Update the runtime
+                  </Button>
+                  {active && !usesLocal && (
+                    <Button size="sm" variant="primary" loading={busy === 'use'} onClick={() => act('use', 'runtime.useModel', { modelId: active.id }, `${active.name} is this server's AI`)}>
+                      Make {active.name} this server's AI
+                    </Button>
+                  )}
+                </div>
+              )
+            )}
+            {runtimeDl?.state === 'failed' && <Callout tone="critical">The runtime could not be installed: {runtimeDl.error}</Callout>}
+          </div>
+        </Card>
+        <Card title="What this server has for a model" subtitle="A model needs its size in memory, plus room for what it is working on.">
+          <KeyValue
+            items={[
+              ['Memory', `${formatBytes(h.memoryBytes)} (${formatBytes(h.freeMemoryBytes)} free now)`],
+              ['Processors', `${h.cpus} threads`],
+              ['Graphics', h.gpus.length ? h.gpus.map((g) => `${g.name}${g.vramBytes ? ` (${formatBytes(g.vramBytes)})` : ''}`).join(', ') : 'none found'],
+              ['Runtime build', h.variant === 'vulkan' ? 'graphics card (Vulkan)' : h.variant === 'metal' ? 'Apple graphics (Metal)' : 'processors only'],
+            ]}
+          />
+          <div className="fx-help">
+            {vram > 0
+              ? 'Models that fit the graphics card answer fastest; bigger ones still run, partly on the processors.'
+              : 'No graphics card the runtime can use: pick a model that fits in memory. Qwen3 30B-A3B is made for this, answering quickly on processors alone.'}{' '}
+            Virtual machines need memory too: leave them room.
+          </div>
+        </Card>
+      </Grid>
+
+      <Card title="Models" subtitle="Open models tested with FBRX's tools. Downloads come straight from their publishers, resume if interrupted, and are checked before use.">
+        <div className="vt-model-grid">
+          {models.map((m) => {
+            const d = dl.get(m.id);
+            const mine = have.get(m.id);
+            const fit = FIT[modelFit(m.sizeBytes, h)];
+            return (
+              <div key={m.id} className={`vt-model${mine?.active ? ' active' : ''}`}>
+                <div className="fx-row" style={{ justifyContent: 'space-between', gap: 8 }}>
+                  <strong>{m.name}</strong>
+                  {m.tier === 'server' && <span className="vt-tag">for servers</span>}
+                </div>
+                <div className="fx-muted" style={{ fontSize: 12 }}>
+                  {m.parameters} · {formatBytes(m.sizeBytes)} · {m.license}
+                </div>
+                <div className="fx-secondary" style={{ fontSize: 12.5 }}>
+                  {m.description}
+                </div>
+                <Status tone={fit.tone}>{fit.words}</Status>
+                {busyDl(d) ? (
+                  progress(d!)
+                ) : mine ? (
+                  <div className="fx-row" style={{ gap: 6 }}>
+                    {mine.active && usesLocal ? (
+                      <Status tone="good">this server's AI</Status>
+                    ) : (
+                      admin && (
+                        <Button size="sm" variant="primary" loading={busy === `u${m.id}`} onClick={() => act(`u${m.id}`, 'runtime.useModel', { modelId: m.id }, `${m.name} is this server's AI`)}>
+                          Use it
+                        </Button>
+                      )
+                    )}
+                    {admin && !mine.active && (
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        icon="trash"
+                        aria-label={`Delete ${m.name}`}
+                        onClick={async () => {
+                          if (await confirm({ title: `Delete ${m.name}?`, body: `Frees ${formatBytes(mine.sizeBytes)} on this server.`, danger: true, confirmLabel: 'Delete' })) act(`d${m.id}`, 'runtime.deleteModel', { modelId: m.id }, 'Deleted');
+                        }}
+                      />
+                    )}
+                  </div>
+                ) : (
+                  admin && (
+                    <div className="fx-form" style={{ gap: 4 }}>
+                      {d?.state === 'failed' && <div className="fx-error-text">{d.error}</div>}
+                      <Button
+                        size="sm"
+                        icon="download"
+                        loading={busy === `g${m.id}`}
+                        onClick={async () => {
+                          if (fit.tone === 'critical' && !(await confirm({ title: `${m.name} is too big for this server`, body: 'It needs more memory than this server has, so it would not start. Download it anyway (for a memory upgrade on the way)?', confirmLabel: 'Download anyway' }))) return;
+                          act(`g${m.id}`, 'runtime.download', { modelId: m.id }, `Downloading ${m.name}`);
+                        }}
+                      >
+                        Download ({formatBytes(m.sizeBytes)})
+                      </Button>
+                    </div>
+                  )
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </Card>
+
+      <Card title="A model of your own" subtitle="Any GGUF model file (llama.cpp's format) works.">
+        <div className="fx-form">
+          <div className="fx-secondary">Copy it to the server (to /srv, say), then on the server:</div>
+          <CopyText value="sudo fbrx-server ai import /srv/my-model.gguf" />
+          {installed.data.filter((m) => m.source === 'imported').map((m) => (
+            <div key={m.id} className="fx-row" style={{ gap: 8 }}>
+              <strong style={{ flex: 1 }}>{m.name}</strong>
+              <span className="fx-muted">{formatBytes(m.sizeBytes)}</span>
+              {m.active && usesLocal ? (
+                <Status tone="good">this server's AI</Status>
+              ) : (
+                admin && (
+                  <Button size="sm" variant="primary" onClick={() => act(`u${m.id}`, 'runtime.useModel', { modelId: m.id }, `${m.name} is this server's AI`)}>
+                    Use it
+                  </Button>
+                )
+              )}
+            </div>
+          ))}
+          <div className="fx-help">From the command line too: sudo fbrx-server ai (status, models, download, use, import, start, stop).</div>
+        </div>
       </Card>
     </>
   );

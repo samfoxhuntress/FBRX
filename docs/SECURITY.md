@@ -17,6 +17,7 @@ design assumes the model can be wrong or manipulated and puts every action behin
 | Paired devices → workstation | Mesh off by default; one-time pairing codes proven with HMAC over both public keys; every request sealed with NaCl box, timestamped and replay-checked; per-device permissions and instant revocation ([details](MESH.md)) |
 | Other AI apps → workstation | MCP bridge over the Local API with the agent-scoped token, so calls get the same policy, guardian, approvals and audit as Fabrix; the token is read from the data folder, never copied into other apps' configuration |
 | FBRX → network devices (device consoles) | Opened only by the person at the workstation; SSH host keys pinned on first use and a changed key refused until confirmed; saved passwords kept in the vault as internal secrets (not readable by plugins, the Local API or the agent); the agent can type into a console the person opened only through `device_console.send`, an execute-risk tool that asks for approval by default; connections audited |
+| FBRX VPN → system tunnel | Added, connected and removed only by the person at the workstation (never the agent, the Local API or FBRX Command); the gate's settings are read strictly (no `PreUp`/`PostUp`/`PreDown`/`PostDown` or unknown settings) and the tunnel's file is rebuilt from them; keys sealed with the vault key, the file on disk only while the tunnel starts or stops (Windows: while it runs), readable by the user alone ([details](VPN.md)) |
 | FBRX → Windows administrator rights | Only for actions the person starts at the workstation (never the Local API, the agent's read tools or mesh peers); scripts go to the elevated PowerShell as an encoded command, not a file, and Windows shows the UAC prompt every time |
 
 ## Policy defaults
@@ -59,7 +60,12 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   passphrase is entered (FBRX asks when it opens). Services that need credentials wait for the unlock instead of
   failing.
 * The model never sees secret values. Connectors and plugins reference secrets by name; the redactor removes any
-  secret value from tool output, logs and the conversation.
+  secret value, and every password in the password keeper, from tool output, logs and the conversation.
+* **The password keeper** (Vault → Passwords) seals each sign-in whole (site and username too) with the vault key,
+  bound to the sign-in's id. Its methods are for the person at the computer only, never the Local API or a remote
+  command. FBRX Browser's sign-in helper runs in each page's main frame in an isolated world the page cannot reach,
+  fills in only on the person's pick, only into visible boxes, and only on a page of one of the sign-in's sites (the
+  core checks the address; an `https` sign-in is never offered on `http`). See [VAULT.md](VAULT.md).
 * Organization credentials are created in the console, encrypted at rest with the control plane's master key,
   delivered over the authenticated device channel and stored as read-only managed secrets.
 * Snapshots contain the vault key encrypted under the snapshot passphrase — protect snapshot files and passphrases
@@ -143,6 +149,33 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   unchanged, as its API requires; they never go to another model.) Thinking can be hidden in Settings →
   Agent (`ai.showThinking`). The work budget's step limit is part of the policy (`ai.maxStepsPerRun`), so an
   organization can fix it; the answer length and context sizes are ordinary settings an organization can lock.
+
+## The AI's memory and personal details
+
+The agent's memory (`packages/core/src/ai/memory.ts`, Settings → Memory) lives in FBRX's database on the computer and
+is never synced or sent anywhere. A backup made for FBRX Command leaves it out (and vacuums the copy so nothing of it
+remains in free pages); a backup the person makes, encrypted with their passphrase, keeps it, so moving to a new
+computer keeps it too.
+
+* **Never stored**: national ID / Social Security, driver's license, passport and tax ID numbers, bank account,
+  routing and IBAN numbers, full payment card numbers (13–19 digits passing the Luhn check) and security codes, and
+  passwords, PINs and security answers (`packages/shared/src/privacy.ts`). They are found by shape and nearby words and
+  removed before a fact is saved, whether the person, the agent or the learning step wrote it; the short-term summary
+  of recent chats is scrubbed the same way.
+* **Private kinds** (addresses, location, email and phone, birthday, cards by last four digits) are stored only when
+  the person allows that kind, and are sent only to providers marked local. With a cloud provider the agent gets
+  general facts or nothing (the person's choice), never private facts and never the last 24 hours.
+* **Online tools**: when a tool goes online (network risk, a connector, or a call with URLs), the guardian blocks any
+  identity or money number in its input as **critical** (refused, never sent), and a remembered private value in its
+  input as a **warning** that needs approval.
+* Memory is off on student and child computers. Adding, changing and forgetting memories is for the person at the
+  computer (not the Local API or FBRX Command).
+
+## Folders the AI may use
+
+`filesystem.allowedRoots` is edited from Governance on the computer (local policy only: a managed policy cannot be
+changed there). System folders and FBRX's data folder are refused. The agent's `files.request_access` tool only asks;
+the folder is added when the person picks it in the window, and the request lapses after the approval timeout.
 
 ## Single sign-on to FBRX Command
 
@@ -266,6 +299,11 @@ tenant, and a deliberate *Disconnect* is respected.
   the SHA-512 in the authenticated feed, as before, and accepts the first signed update.
 * Update feeds are served per device by your control plane over authenticated HTTPS; files carry SHA-512 checksums
   verified by electron-updater.
+* **FBRX Server updates itself only when asked.** `sudo fbrx-server update check` reads the same `release.json`
+  (its `server` entry) and downloads the bundle only from a GitHub release (any host only when the server's
+  administrator names another release list), refuses it unless it matches the SHA-256 in the list or the `.sha256`
+  published next to it, and unpacks it without changing what runs. `update commit` (root) keeps the running version
+  aside, runs the new version's installer, and goes back by itself when the console does not answer afterwards.
 * **New versions offered from the repository.** The desktop app reads `release.json` from the public FBRX repository
   (`raw.githubusercontent.com/samfoxhuntress/FBRX/HEAD/release.json`) a minute and a half after it starts and every
   six hours, only while internet access is allowed and **Check for new versions automatically** is on. A newer

@@ -1,3 +1,12 @@
+# The built-in AI
+
+| Component | Used for | License | Where |
+| --- | --- | --- | --- |
+| [llama.cpp](https://github.com/ggml-org/llama.cpp) (`llama-server`) | Running AI models on the computer | MIT | Official release builds, bundled with the app (or downloaded by it), run as their own program |
+| [Qwen2.5 1.5B Instruct](https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct), GGUF by [bartowski](https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF) | The starter model every new computer gets | Apache-2.0 | Downloaded from Hugging Face by Install FBRX OS or on first start; not bundled |
+
+Other models in **AI models** are downloaded only when someone picks them, under their own licenses (shown beside each).
+
 # Third-party components in voice
 
 Voice in FBRX OS runs entirely on the computer with these components. Models are downloaded on request from Hugging
@@ -41,3 +50,11 @@ No GPL component is included: the eSpeak NG phonemizer that other Kokoro front e
 | wireguard-tools | FBRX Gate's VPN keys and status (the VPN itself is in the Linux kernel) | GPL-2.0 | Installed from Debian's package (gate role). WireGuard is a registered trademark of Jason A. Donenfeld; FBRX Gate uses it and is not affiliated with it |
 | conntrack-tools | FBRX MiniDome: following new connections | GPL-2.0 | Installed from Debian's package (minidome role), run as its own program |
 | [qrcode](https://github.com/soldair/node-qrcode) | QR codes for VPN devices | MIT | Bundled (npm `qrcode`) |
+
+# Third-party components in Fabrix's files
+
+| Component | Used for | License | Where |
+| --- | --- | --- | --- |
+| [unpdf](https://github.com/unjs/unpdf), with its build of [PDF.js](https://github.com/mozilla/pdf.js) | Reading the text of attached PDFs | MIT (unpdf), Apache-2.0 (PDF.js) | Bundled (npm `unpdf`, unmodified) |
+
+Office documents (.docx, .xlsx, .pptx, OpenDocument) are read, and .docx documents and PDFs written, by FBRX's own code.

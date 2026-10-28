@@ -35,6 +35,107 @@ export interface DeviceProfile {
 
 export const DEVICE_PROFILES: DeviceProfile[] = [
   {
+    id: 'fbrx-gate',
+    name: 'FBRX Gate & MiniDome',
+    match: /fbrx[\s_-]*(gate|dome|minidome)/i,
+    kind: 'FBRX Server as router and firewall',
+    webPorts: [9443],
+    login: [
+      'Log in with the administrator you made when installing FBRX Server (the server\'s screen shows it under "Sign in").',
+      'fbrx-gate runs as root: put sudo in front. Changes wait in a candidate until you commit them.',
+      'commit confirmed 5 rolls back by itself in 5 minutes unless you confirm: use it for anything that could cut you off.',
+    ],
+    commands: [
+      {
+        group: 'Look',
+        items: [
+          { cmd: 'sudo fbrx-gate status', what: 'Ports, the internet side, DHCP leases and any problem' },
+          { cmd: 'sudo fbrx-gate show running', what: 'The configuration in use' },
+          { cmd: 'sudo fbrx-gate show networks', what: 'The networks (LAN, VLANs) being edited' },
+          { cmd: 'sudo fbrx-gate leases', what: 'Devices that got an address from the gate' },
+          { cmd: 'sudo fbrx-gate history', what: 'Commits, newest first' },
+          { cmd: 'sudo fbrx-gate preview nftables', what: 'The firewall rules the configuration turns into' },
+        ],
+      },
+      {
+        group: 'Change safely',
+        items: [
+          { cmd: 'sudo fbrx-gate set networks lan dhcp end 192.168.1.200', what: 'Change a setting in the candidate (paths are words)' },
+          { cmd: 'sudo fbrx-gate set networks lan vmSwitch true', what: 'Let virtual machines join the LAN (a virtual switch)' },
+          { cmd: 'sudo fbrx-gate check', what: 'Problems and warnings in what you changed' },
+          { cmd: 'sudo fbrx-gate compare', what: 'What a commit would change' },
+          { cmd: 'sudo fbrx-gate commit confirmed 5 comment "LAN change"', what: 'Apply, rolling back in 5 minutes unless confirmed', danger: true },
+          { cmd: 'sudo fbrx-gate confirm', what: 'Keep the commit', danger: true },
+          { cmd: 'sudo fbrx-gate rollback now', what: 'Undo the commit waiting to be confirmed, now', danger: true },
+          { cmd: 'sudo fbrx-gate reset', what: 'Throw the uncommitted edits away' },
+        ],
+      },
+      {
+        group: 'MiniDome and logs',
+        items: [
+          { cmd: 'sudo fbrx-server status', what: 'Roles, the console address and whether MiniDome is watching' },
+          { cmd: 'sudo journalctl -u dnsmasq -n 50 --no-pager', what: 'DHCP and DNS log' },
+          { cmd: 'sudo nft list table inet fbrx_gate', what: 'The firewall as loaded, with counters' },
+        ],
+      },
+    ],
+    docs: [
+      { label: 'FBRX Gate guide (GATE.md)', url: 'https://github.com/samfoxhuntress/FBRX/blob/main/docs/GATE.md' },
+      { label: 'FBRX MiniDome guide (MINIDOME.md)', url: 'https://github.com/samfoxhuntress/FBRX/blob/main/docs/MINIDOME.md' },
+    ],
+  },
+  {
+    id: 'fbrx-server',
+    name: 'FBRX Server (FBRX Virtual)',
+    match: /fbrx/i,
+    kind: 'FBRX Server: hypervisor, AI and more',
+    webPorts: [9443],
+    login: [
+      'Log in with the administrator you made when installing FBRX Server (the server\'s screen shows it under "Sign in").',
+      'fbrx-server status shows the console address and the certificate fingerprint to check in your browser.',
+    ],
+    commands: [
+      {
+        group: 'FBRX Server',
+        items: [
+          { cmd: 'fbrx-server status', what: 'What runs, the console address, roles and the certificate fingerprint' },
+          { cmd: 'fbrx-server url', what: 'The web console\'s address' },
+          { cmd: 'sudo fbrx-server setup-code', what: 'The first-time setup code (until someone sets the server up)' },
+          { cmd: 'sudo fbrx-server users', what: 'Who can sign in to the console' },
+          { cmd: 'sudo fbrx-server reset-password admin', what: 'A new password for someone locked out', danger: true },
+          { cmd: 'sudo fbrx-server logs -f', what: 'FBRX Virtual\'s log, live (Ctrl+C to stop)' },
+          { cmd: 'sudo fbrx-server logs ai -f', what: 'The FBRX core\'s log (agent, FBRX Mesh, Mesh Assist)' },
+          { cmd: 'sudo fbrx-server restart', what: 'Restart FBRX Virtual (virtual machines keep running)', danger: true },
+        ],
+      },
+      {
+        group: 'Virtual machines (libvirt)',
+        items: [
+          { cmd: 'sudo virsh list --all', what: 'Every virtual machine and its state' },
+          { cmd: 'sudo virsh dominfo NAME', what: 'One machine: processors, memory, autostart (replace NAME)' },
+          { cmd: 'sudo virsh domifaddr NAME', what: 'The addresses a machine got' },
+          { cmd: 'sudo virsh shutdown NAME', what: 'Ask a machine to shut down', danger: true },
+          { cmd: 'sudo virsh net-list --all', what: 'Private networks for machines' },
+          { cmd: 'ip -br link show type bridge', what: 'Bridges and gate switches machines plug into' },
+        ],
+      },
+      {
+        group: 'The server',
+        items: [
+          { cmd: 'cat /etc/fbrx-server-release', what: 'FBRX Server version and roles' },
+          { cmd: 'df -h /var/lib/libvirt', what: 'Free space where machines live' },
+          { cmd: 'free -h', what: 'Memory use' },
+          { cmd: 'systemctl --failed', what: 'Services that failed' },
+          { cmd: 'sudo apt update && sudo apt full-upgrade', what: 'Debian updates', danger: true },
+        ],
+      },
+    ],
+    docs: [
+      { label: 'FBRX Server guide (SERVER.md)', url: 'https://github.com/samfoxhuntress/FBRX/blob/main/docs/SERVER.md' },
+      { label: 'Releases (ISO and bundle)', url: 'https://github.com/samfoxhuntress/FBRX/releases' },
+    ],
+  },
+  {
     id: 'ubiquiti',
     name: 'Ubiquiti UniFi / EdgeMAX',
     match: /ubiquiti|unifi|ubnt|edgerouter|\bu6\b|\busw\b|\budm\b|\buxg\b/i,

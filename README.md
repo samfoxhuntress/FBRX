@@ -7,7 +7,8 @@
 
 # FBRX OS — Fabrics Operating System
 
-> **Alpha 1.9.5 "Bobbin".** FBRX is in alpha testing. Downloads are on the
+> **Alpha 1.9.9 "Bobbin".** FBRX is in alpha testing. **[Download FBRX-OS.zip](https://github.com/samfoxhuntress/FBRX/releases/latest/download/FBRX-OS.zip)**
+> (always the newest version; the link to share). Every version is on the
 > [Releases](https://github.com/samfoxhuntress/FBRX/releases) page; installed copies check this repository's
 > [`release.json`](release.json) and offer new versions in the app.
 
@@ -20,18 +21,25 @@ Server**, powered by FBRX OS, and the products below for the computers you alrea
   passthrough, and the server's health, power and **BIOS settings** through its management controller (Dell iDRAC
   and other Redfish ones). With the **ai** role the server is also an AI agent on FBRX Mesh: **Mesh Assist** lets
   your servers and computers lend each other their AI when one runs out of steps or credits, and lets a server you
-  make a controller hand out work. Install it from the FBRX Server ISO or on Debian 13 ([docs/SERVER.md](docs/SERVER.md));
+  make a controller hand out work. With the **command** role it runs your organization's FBRX Command, and servers
+  join it like any computer. Install it from the FBRX Server ISO or on Debian 13 ([docs/SERVER.md](docs/SERVER.md));
   for now the FBRX Endpoint installer carries the ISO, the server bundle and the guides (*Lab → FBRX Server*).
 * **FBRX Gate** and **FBRX MiniDome** — FBRX Server as the network's router and firewall: VLANs, DHCP and DNS, port
   forwards, a VPN with QR-code setup, traffic priority and **Prefer Mesh** (a fast lane, with jumbo frames, for FBRX
   computers whose AI helps each other), all changed by commits that undo themselves unless kept, from the console or
   the `fbrx-gate` command line ([docs/GATE.md](docs/GATE.md)). MiniDome watches the network through the gate for
   threats and tells the FBRX computer concerned, where FBRX Shield takes it from there ([docs/MINIDOME.md](docs/MINIDOME.md)).
+* **FBRX Time** — image backups that prove they work. FBRX Server (the **time** role) backs up its virtual machines on
+  a schedule while they run and keeps the images computers send it, and checks every image by starting it as a
+  throwaway virtual machine with no network, then deleting it. FBRX Endpoint makes an image of the whole computer by
+  hand or on a schedule (*Backup & restore → Whole computer*), and FBRX Command starts one on any computer
+  ([docs/TIME.md](docs/TIME.md)). Server roles can be added or changed from the server's console.
 
 * **FBRX Endpoint** — a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is
   governed end to end and an everyday **command center** (dashboard, tasks, notes, Spotlight, a Ctrl+Alt+Z clipboard
-  history, calendars from Outlook / Microsoft 365 and calendar links, alerts, PC care, Network Center, your phone) and
-  **FBRX Shield**, FBRX's own antivirus, next to the choice of Microsoft Defender or an antivirus already installed. **Endpoint Basic** runs without a license key: the everyday
+  history, the FBRX calendar with Outlook / Microsoft 365 and calendar links beside it, alerts, PC care, Network Center,
+  your phone) and
+  **FBRX Shield**, FBRX's own antivirus, next to the choice of Microsoft Defender or an antivirus already installed. **Endpoint Essentials** is where every computer starts (with a walkthrough), **Standard** is a switch away in Settings, and **Ultra** comes through FBRX Command. Without a license key: the everyday
   tools and the agent, in a plain light or dark look. A license key turns on **Endpoint Ultra**: IT and developer tool
   sets (Terminal, FBRX/1, Task Manager, virtual lab, device consoles, UniFi network environments…), Mesh and AI
   coordination, connections and plugins, the theme studio and the easter eggs. Every edition has presenter-safe mode
@@ -44,7 +52,7 @@ Server**, powered by FBRX OS, and the products below for the computers you alrea
   tenant is a **Work**, **School** or **Home** tenant, picked at setup, with a one-click setup of its usual groups. A
   license key from FBRX Command joins the computer to the tenant on its own, and staff sign in to it with Google
   Workspace or Microsoft 365. It routes help desk tickets to IT (or a child's request for help to a parent), pushes
-  updates and makes Mac profiles and Intune scripts for device managers. A School runs staff on Basic in classroom
+  updates and makes Mac profiles and Intune scripts for device managers. A School runs staff up to Standard in classroom
   mode, IT on Ultra and students on FBRX OS Education ([docs/EDUCATION.md](docs/EDUCATION.md)); a Home runs parents on
   FBRX Endpoint and children on FBRX OS Home ([docs/HOME.md](docs/HOME.md)).
 
@@ -72,15 +80,20 @@ Server**, powered by FBRX OS, and the products below for the computers you alrea
 
 | Need | Where it lives |
 | --- | --- |
-| A local AI agent that works offline | Bundled llama.cpp runtime + model catalog (Local AI page). Cloud providers (Claude, OpenAI-compatible, Ollama) are optional and can be blocked by policy. Talk to it and hear it answer (on-device Whisper speech recognition, the computer's own voices at the speed you pick), watch what it is doing and thinking while it works, and set its work budget (steps per task, answer length, context size). |
+| A local AI agent that works offline | Bundled llama.cpp runtime + model catalog (Local AI page). Cloud providers (Claude, OpenAI-compatible, Ollama) are optional and can be blocked by policy. Talk to it and hear it answer (on-device Whisper speech recognition, the computer's own voices at the speed you pick), watch what it is doing and thinking while it works, and choose how much it does on a task (Quick, Everyday or Thorough; each part on its own from Standard). |
 | Agents and services that govern it | Policy engine, guardian (dangerous-command and prompt-injection detection, optional model review), human approvals, rate limits, secret redaction, tamper-evident audit log, service watchdog. |
 | Back up, redeploy, carry on as if nothing happened | Encrypted `.fbrxsnap` snapshots (manual, scheduled or remote) restored in **migrate** mode — same identity, same fleet enrollment, same vault. See [docs/BACKUP_RESTORE.md](docs/BACKUP_RESTORE.md). |
 | Deploy to other Macs and PCs | Signed `.dmg`/`.zip` and NSIS `.exe` installers, zero-touch provisioning files, golden template snapshots, auto-updates by channel, pin and staged rollout. See [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md). |
-| Sell it | Endpoint Basic and Ultra, tenants per customer, editions (Community / Pro / Enterprise), offline-verifiable Ed25519 license keys that can join their FBRX Command tenant by themselves, seats, expiry, version caps. See [docs/LICENSING.md](docs/LICENSING.md). |
+| Sell it | Endpoint Essentials (free), Standard, Ultra and Black Hole, one price list, tenants per customer, editions (Community / Pro / Enterprise), offline-verifiable Ed25519 license keys that can join their FBRX Command tenant by themselves, seats, expiry, version caps. See [docs/LICENSING.md](docs/LICENSING.md). FBRX accounts that buy with Stripe, the App Store or Google Play: [docs/ACCOUNTS.md](docs/ACCOUNTS.md). Where the accounts, the website and email run: [docs/CLOUD.md](docs/CLOUD.md). FBRX Cloud AI, FBRX's models for accounts, counted by the token, with allowances, promo codes and the operator's controls: [docs/CLOUD_AI.md](docs/CLOUD_AI.md). The phone apps and the Microsoft Store: [docs/STORES.md](docs/STORES.md). |
 | FBRX Command (admin console), credentials management, real-time backend | Fleet dashboard, device detail and live commands, managed settings/policy with locks, secrets pushed into device vaults, users/roles/MFA/API keys, a help desk, releases and automatic updates, packages, snapshots, webhooks, audit. See [docs/ADMIN_CONSOLE.md](docs/ADMIN_CONSOLE.md). |
 | Run it for work, a school or a family | Pick Work, School or Home for each tenant and set up its groups in one click. Schools: staff and student computers, FBRX OS Education with a safe learning helper, presenter-safe mode for projectors, help desk to IT, Google / Microsoft sign-in, Mac and Windows device-manager files ([docs/EDUCATION.md](docs/EDUCATION.md)). Families: parents' and children's computers, FBRX OS Home, requests for help that go to a parent ([docs/HOME.md](docs/HOME.md)). |
 | Build in other tools and connect to other apps | Plugin SDK (sandboxed workers), REST / MCP / webhook / FBRX-peer connectors, Local API for scripts and other apps. See [docs/PLUGINS.md](docs/PLUGINS.md). |
-| An everyday command center | FBRX Glass (the live dashboard), a calendar for Outlook / Microsoft 365 and calendar links with meeting reminders ([docs/CALENDAR.md](docs/CALENDAR.md)), tasks / notes / projects / snippets, Spotlight (Alt+Space), files, Task Manager with an AI-assisted Event Viewer, a Clipboard processor with a Ctrl+Alt+Z clipboard history (W/S to move, Tab/~ for paste formats, type to search), snippets in a `/` menu, keyboard-shortcut macros, Copy & migrate (Robocopy / rsync), terminal with a sandboxed code lab and *What if?*, the FBRX/1 management console, toolbox, library, alerts to desktop / phone / Slack / Teams / e-mail / your admin console, an AI emergency stop, and a theme studio with eleven looks. See [docs/COMMAND_CENTER.md](docs/COMMAND_CENTER.md). |
+| An AI that works for you | Fabrix reads the files and pictures you attach (PDFs and office documents too), makes documents (PDF, `.docx`, spreadsheets) and pictures, reads web pages, searches and looks up stock quotes; **Automations** do jobs on a schedule or a shortcut and tell you what they found (new listings, price drops, a morning brief); **FBRX Snapshot** takes a picture of the screen to mark up, copy or ask Fabrix about. See [docs/FABRIX.md](docs/FABRIX.md). |
+| A password keeper | The Vault keeps your sign-ins encrypted on the computer, with 2-step codes, earlier passwords, checks for weak, reused and old passwords, and import from other browsers; save one from anywhere (the password generator, the right-click menu, Fabrix, FBRX Browser), and FBRX Browser fills them in. See [docs/VAULT.md](docs/VAULT.md). |
+| Home from anywhere | FBRX VPN connects this computer to your FBRX Gate from anywhere: your FBRX Server, its AI over FBRX Mesh and your network, as if you were home. See [docs/VPN.md](docs/VPN.md). |
+| A web browser inside FBRX | FBRX Browser: tabs, bookmarks, history, private tabs, downloads checked by FBRX Shield, and a Fabrix side panel that reads the page with the local AI. Sign-ins filled in from the Vault (and new ones saved), save to Notes, an organization's allowed/blocked sites on every page, and safe browsing on students' and children's computers. See [docs/BROWSER.md](docs/BROWSER.md). |
+| An everyday command center | Dash (the live dashboard), the FBRX calendar (repeating events colored by their project, note or automation, with your tasks, deadlines and automations on it; Outlook / Microsoft 365 and calendar links as add-ons; reminders; [docs/CALENDAR.md](docs/CALENDAR.md)), tasks / notes / projects / snippets, Spotlight (Alt+Space), files, Task Manager with an AI-assisted Event Viewer, a Clipboard processor with a Ctrl+Alt+Z clipboard history (W/S to move, Tab/~ for paste formats, type to search), snippets in a `/` menu, keyboard-shortcut macros, Copy & migrate (Robocopy / rsync), terminal with a sandboxed code lab and *What if?*, the FBRX/1 management console, toolbox, library, alerts to desktop / phone / Slack / Teams / e-mail / your admin console, an AI emergency stop, and a theme studio with eleven looks. See [docs/COMMAND_CENTER.md](docs/COMMAND_CENTER.md). |
+| Support and troubleshooting | Support mode: a signed, short-lived pass (FBRX Command or `npm run support:pass`) tied to one computer gives FBRX support full access to its apps for troubleshooting (on an organization's computers, only if the organization allows it); `418teapotadmin` asks for it, `refusetobrew` ends it, everything is audited. See [docs/SUPPORT.md](docs/SUPPORT.md). |
 | Antivirus | FBRX Shield (download checks, scans, a daily threat database, FBRX's own rules for disguised programs and malicious scripts, quarantine), or Microsoft Defender, or the antivirus already installed (Sophos, CrowdStrike, SentinelOne, ESET…): one status everywhere and in FBRX Command. See [docs/SHIELD.md](docs/SHIELD.md). |
 | PC care for Windows | Storage clean-up and disk health, Microsoft Defender and firewall, link and file checks, Windows Sandbox, winget / Windows Update / drivers, a bug catcher with one-click repairs, a Hyper-V lab, and a Network Center (trace route, device discovery, speed, Wi-Fi, Bluetooth, printers, and in Ultra your UniFi console: every gateway, switch, access point and client, restarts and guest Wi-Fi codes). |
 | Your other devices and AI apps | An encrypted mesh with your other FBRX computers and the FBRX Mobile phone app (per-device permissions, one-time pairing codes); one-click MCP connection for Claude Desktop, Claude Code, Cursor, Windsurf and VS Code. See [docs/MESH.md](docs/MESH.md). |
@@ -116,12 +129,13 @@ Every version is on the **[Releases](https://github.com/samfoxhuntress/FBRX/rele
 
 | Download | What it is |
 | --- | --- |
-| **Source code (zip)**, `FBRX-1.9.5.zip` | The whole project. Unzip it and run **Install FBRX OS** (below): it builds FBRX OS on your computer with your own license signing key. This is how you install your own copy. |
-| `FBRX-OS-Setup-1.9.5.exe`, `FBRX-OS-1.9.5-arm64.dmg`, `FBRX-OS-1.9.5-x64.dmg` | Ready-made installers built by GitHub. They carry your license key and a publisher signature only when the repository's signing secrets are set ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); otherwise they run as Endpoint Basic until a license or your FBRX Command turns on more. |
-| `fbrx-server-0.1.0-amd64.iso`, `fbrx-server-0.1.0.tar.gz` | FBRX Server: the installer ISO, and the bundle for a Debian 13 server you already have ([docs/SERVER.md](docs/SERVER.md)). |
+| **`FBRX-OS.zip`** | The whole project in a folder called `FBRX-OS`. Unzip it and run **Install FBRX OS** (below): it builds FBRX OS on your computer with your own license signing key. This is how you install your own copy. [This link](https://github.com/samfoxhuntress/FBRX/releases/latest/download/FBRX-OS.zip) always gives the newest release: share it. (GitHub's own *Source code (zip)*, `FBRX-1.9.9.zip`, is the same project with the version in its name.) |
+| `FBRX-OS-Setup-1.9.9.exe`, `FBRX-OS-1.9.9-arm64.dmg`, `FBRX-OS-1.9.9-x64.dmg` (and, from 2.0, `FBRX-OS-<version>-x86_64.AppImage` and `FBRX-OS-<version>-amd64.deb` for Linux) | Ready-made installers built by GitHub. They carry your license key and a publisher signature only when the repository's signing secrets are set ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); otherwise they open in Endpoint Essentials, go up to Standard, and reach Ultra when your FBRX Command allows it. |
+| `fbrx-server-1.0.0-amd64.iso`, `fbrx-server-1.0.0.tar.gz` | FBRX Server: the installer ISO, and the bundle for a Debian 13 server you already have ([docs/SERVER.md](docs/SERVER.md)). |
 
-**Code → Download ZIP** on the main page gives the newest work (`FBRX-main.zip`), which can be ahead of the latest
-release. Installed copies are offered releases only.
+**Code → Download ZIP** on the main page gives the newest work, which can be ahead of the latest release; GitHub
+names that zip and its folder after the working branch, a long name, so share `FBRX-OS.zip` instead. Installed copies
+are offered releases only.
 
 ## Install on your own laptop
 
@@ -135,30 +149,36 @@ Downloads folder, offers to unzip it to `%USERPROFILE%\FBRX` (or a folder you ty
 | Mac | **`Install FBRX OS.command`** | System Settings → Privacy & Security → **Open Anyway**. Or open Terminal, type `bash ` and drag the file in, then press Enter |
 | Windows | **`Install FBRX OS.cmd`** | **More info → Run anyway** |
 
-The installer asks for your name or company (it goes on your license), then does everything else, in about
-10–20 minutes the first time:
+The installer does everything, in about 15–20 minutes the first time (about 2 GB of downloads), and when it is done
+FBRX OS opens straight into a chat with your own AI, running on your computer:
 
 1. downloads a private copy of Node.js if this computer doesn't have a recent one (nothing is installed system-wide),
-2. installs the project's dependencies,
-3. creates your license signing key (in `.fbrx-keys/`, with a copy in `~/.fbrx-keys`), which you should **back up**:
-   it signs every license you sell,
-4. builds FBRX OS for this exact machine (Apple silicon or Intel, x64 or ARM),
-5. installs it in Applications (Mac) or for your user with Start menu and desktop shortcuts (Windows),
-6. issues you an Enterprise license that activates automatically, and opens the app.
+2. downloads what FBRX OS is made of (the project's dependencies),
+3. builds FBRX OS for this exact machine (Apple silicon or Intel, x64 or ARM), with the AI runtime (llama.cpp's
+   `llama-server`) inside, and creates your license signing key (in `.fbrx-keys/`, with a copy in `~/.fbrx-keys`),
+   which you should **back up**: it signs every license you sell,
+4. gets your AI ready: the starter model, Qwen2.5 1.5B Instruct (about 1 GB), downloads meanwhile into FBRX OS's data
+   folder (only on a computer that doesn't have FBRX OS yet),
+5. installs it in Applications (Mac) or for your user with Start menu and desktop shortcuts (Windows), with an
+   Enterprise license in your name (this computer's user) that activates automatically, and opens the app.
 
 To update later, choose **Update now** when FBRX OS offers a new version (Settings → Updates), or download the new
 version into the same place and run the installer again; your data, settings and keys are kept, and a running FBRX OS
-is closed for you. Options: `--yes` (no questions), `--name "Acme Ltd"`,
-`--no-launch`, `--allow-downgrade`. The full log is in `.fbrx-setup/setup.log`.
+is closed for you. Options: `--name "Acme Ltd"` (the name on your license), `--no-launch`, `--no-ai` (leave the model
+to the app), `--allow-downgrade`. The full log is in `.fbrx-setup/setup.log`.
+
+**Giving FBRX OS to someone who isn't technical?** Send them a ready-made installer instead of the folder: the
+release's `FBRX-OS-Setup-….exe` or `.dmg`, or one made for them (below). They double-click it, there is no terminal
+window and no build, and FBRX OS downloads its AI when it first opens, showing the progress in the chat.
 
 ### Sending FBRX OS to someone else (Windows)
 
-Run `Install FBRX OS.cmd` and choose **2 — Make an installer to send to someone else**. Enter their name to build a
-trial license into the installer (30 days by default; Enterprise features, then the free Community features), or
-leave it blank to send an update to someone who is already set up. The result is one file in the `Share` folder,
+Open a Command Prompt in the FBRX folder and run `"Install FBRX OS.cmd" --share`. Enter their name to build a trial
+license into the installer (30 days by default; Enterprise features, then the free Community features), or leave it
+blank to send an update to someone who is already set up (`--for "Alex" --days 30 --yes` skips the questions). The result is one file in the `Share` folder,
 for example `Share\FBRX-OS-Setup-1.6.0-for-Alex.exe`, plus a short *How to install* note to send along.
 
-On their PC they double-click it. A new install asks the usual questions. If FBRX OS is already there, Setup opens on
+On their PC they double-click it. A new install opens FBRX OS straight to the chat while its AI downloads. If FBRX OS is already there, Setup opens on
 a choice instead:
 
 * **Upgrade** (when the file is newer) — installs it and keeps all their data, settings, license and paired devices,
@@ -192,7 +212,8 @@ license an installer yourself.
 
 ## Quick start (development)
 
-Requirements: Node.js 22.15+ (see `.nvmrc`). No native modules, no Python, no compilers.
+Requirements: Node.js 22.15+ (see `.nvmrc`). No native modules, no Python, no compilers. How the code fits together
+and how to change it: [docs/DEVELOPING.md](docs/DEVELOPING.md).
 
 ```bash
 npm install

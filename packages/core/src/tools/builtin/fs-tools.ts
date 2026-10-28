@@ -2,7 +2,7 @@ import { appendFile, mkdir, readdir, readFile, stat, unlink, writeFile } from 'n
 import { dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import type { ToolSpec } from '../types';
-import { globToRegExp } from '../../util/misc';
+import { formatBytes, globToRegExp } from '../../util/misc';
 
 export interface FsToolDeps {
   workspace: string;
@@ -14,13 +14,6 @@ export function resolveToolPath(p: string, workspace: string): string {
   if (!s) throw new Error('path is required');
   if (s === '~' || s.startsWith('~/') || s.startsWith('~\\')) return resolve(homedir(), s.slice(2));
   return isAbsolute(s) ? resolve(s) : resolve(workspace, s);
-}
-
-function fmtSize(n: number) {
-  if (n < 1024) return `${n} B`;
-  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
-  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
-  return `${(n / 1024 ** 3).toFixed(2)} GB`;
 }
 
 export function fsTools(d: FsToolDeps): ToolSpec[] {
@@ -60,7 +53,7 @@ export function fsTools(d: FsToolDeps): ToolSpec[] {
           rows.push({ name: e.name, type: e.isDirectory() ? 'dir' : e.isSymbolicLink() ? 'link' : 'file', size, modified });
         }
         rows.sort((a, b) => (a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'dir' ? -1 : 1));
-        const text = rows.map((r) => `${r.type === 'dir' ? '[dir] ' : '      '}${r.name}${r.size !== null ? `  (${fmtSize(r.size)})` : ''}`).join('\n');
+        const text = rows.map((r) => `${r.type === 'dir' ? '[dir] ' : '      '}${r.name}${r.size !== null ? `  (${formatBytes(r.size)})` : ''}`).join('\n');
         return { output: `${dir}\n${text || '(empty)'}${entries.length > 500 ? `\n… ${entries.length - 500} more` : ''}`, data: rows };
       },
     },
@@ -85,7 +78,7 @@ export function fsTools(d: FsToolDeps): ToolSpec[] {
         const file = P(i.path);
         const s = await stat(file);
         if (s.isDirectory()) throw new Error('Path is a directory; use fs.list_dir');
-        if (s.size > d.maxFileBytes()) throw new Error(`File is larger than the policy limit (${fmtSize(d.maxFileBytes())})`);
+        if (s.size > d.maxFileBytes()) throw new Error(`File is larger than the policy limit (${formatBytes(d.maxFileBytes())})`);
         const buf = await readFile(file);
         const slice = buf.subarray(i.offset, i.offset + i.maxBytes);
         if (slice.includes(0)) throw new Error('File appears to be binary');

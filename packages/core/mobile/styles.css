@@ -6,7 +6,7 @@
   --line: rgba(246, 226, 196, 0.12);
   --text: #f6f1e9;
   --muted: #a39887;
-  --accent: #f0a530;
+  --accent: #f4b942;
   --accent-ink: #1a1408;
   --good: #3fbf6f;
   --warn: #f2b33d;
@@ -22,7 +22,7 @@
     --line: rgba(27, 22, 16, 0.12);
     --text: #1b1610;
     --muted: #6f6556;
-    --accent: #a35f08;
+    --accent: #946000;
     --accent-ink: #ffffff;
   }
 }
@@ -250,4 +250,99 @@ textarea {
   background: none;
   padding: 0;
   flex: none;
+}
+
+/* Essentials Home: the split-flap board and notes from FBRX. */
+.flapwrap {
+  margin: 14px 0 12px;
+}
+.flap {
+  display: grid;
+  grid-template-columns: repeat(16, 1fr);
+  gap: 3px;
+  padding: 10px;
+  border-radius: var(--radius);
+  background: #0b0a08;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06), 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+.flap span {
+  position: relative;
+  display: grid;
+  place-items: center;
+  aspect-ratio: 3 / 4.4;
+  border-radius: 3px;
+  background: linear-gradient(#1f1c18 0 49%, #000 49% 51%, #191613 51%);
+  color: #f6eedd;
+  font: 700 clamp(12px, 4.2vw, 20px) / 1 ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+}
+button.wide {
+  width: 100%;
+  margin-bottom: 4px;
+}
+.note {
+  position: relative;
+}
+.note.upgrade {
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--line));
+}
+.note .x {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  min-width: 0;
+  padding: 2px 8px;
+  background: none;
+  border: 0;
+  color: var(--muted);
+  font-size: 18px;
+}
+.note-act {
+  margin-top: 8px;
+}
+
+/* The store app: pairing by address or code, and the FBRX account. */
+button.small {
+  padding: 6px 12px;
+  font-size: 13px;
+  flex: none;
+}
+.stack {
+  display: grid;
+  gap: 8px;
+}
+.center {
+  text-align: center;
+}
+.fine {
+  font-size: 12px;
+  margin-top: 6px;
+}
+.acct-list {
+  margin-top: 8px;
+}
+.perks {
+  margin: 6px 0 0;
+  padding-left: 18px;
+}
+.typed {
+  margin-top: 12px;
+}
+.typed summary {
+  color: var(--muted);
+  cursor: pointer;
+}
+.typed input {
+  margin-top: 8px;
+}
+a {
+  color: var(--accent);
+}
+.ed {
+  flex: none;
+  padding: 3px 10px;
+  border-radius: 99px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
+  font-weight: 700;
+  font-size: 13px;
 }

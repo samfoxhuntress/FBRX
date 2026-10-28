@@ -45,6 +45,7 @@ export const ALERT_RULES: RuleDef[] = [
   { id: 'mesh_online', group: 'Mesh', label: 'One of my devices came online', unit: null, threshold: null, enabled: false, severity: 'info', help: '' },
   { id: 'approval_waiting', group: 'Agent', label: 'An action is waiting for my approval', unit: null, threshold: null, enabled: true, severity: 'warning', help: 'So you can approve from your phone' },
   { id: 'update_available', group: 'Updates', label: 'FBRX OS update available', unit: null, threshold: null, enabled: true, severity: 'info', help: '' },
+  { id: 'edition_trial', group: 'Edition', label: 'My Standard trial is ending, or has ended', unit: null, threshold: null, enabled: true, severity: 'info', help: 'The day before the free trial ends, and when it has' },
 ];
 
 export interface AlertEngineDeps {
@@ -54,13 +55,15 @@ export interface AlertEngineDeps {
   settings: () => Settings;
   monitor: SystemMonitor;
   workspace: WorkspaceStore;
-  notify: (title: string, body: string, level: 'info' | 'warning' | 'error') => void;
+  notify: (title: string, body: string, level: 'info' | 'warning' | 'error', ruleId: string) => void;
   /** Pushes an alert to paired phones; returns how many received it. */
   toMobile: (alert: AlertItem) => number;
   /** Forwards an alert to the organization's control plane; false when not enrolled. */
   toOrganisation: (alert: AlertItem) => boolean;
   secret: (name: string) => string | undefined;
   meshPeers: () => Array<{ id: string; name: string; online: boolean }>;
+  /** What to tell the person about this computer's edition (its Standard trial ending, or over), once each. */
+  editionNotice: () => { title: string; body: string } | null;
 }
 
 /**
@@ -217,7 +220,7 @@ export class AlertEngine {
     };
     if (routes.has('desktop') && ch.desktop) {
       if (quiet) out.desktop = 'held (quiet hours)';
-      else await attempt('desktop', () => (this.d.notify(a.title, a.body, a.severity === 'critical' ? 'error' : a.severity === 'warning' ? 'warning' : 'info'), 'ok'));
+      else await attempt('desktop', () => (this.d.notify(a.title, a.body, a.severity === 'critical' ? 'error' : a.severity === 'warning' ? 'warning' : 'info', a.ruleId), 'ok'));
     }
     if (routes.has('mobile') && ch.mobile) await attempt('mobile', () => `${this.d.toMobile(a)} device(s)`);
     if (routes.has('organisation') && ch.organisation) await attempt('organisation', () => (this.d.toOrganisation(a) ? 'ok' : 'not enrolled'));
@@ -277,7 +280,7 @@ export class AlertEngine {
       let result = 'ok';
       if (channel === 'webhook') result = await this.sendWebhook(a);
       else if (channel === 'email') result = await this.sendEmail(a);
-      else if (channel === 'desktop') this.d.notify(a.title, a.body, 'info');
+      else if (channel === 'desktop') this.d.notify(a.title, a.body, 'info', a.ruleId);
       else if (channel === 'mobile') result = `${this.d.toMobile(a)} device(s) reached`;
       else if (channel === 'organisation') result = this.d.toOrganisation(a) ? 'sent to the control plane' : 'this device is not enrolled';
       else if (channel === 'inbox') await this.fire('test', a.title, a.body, { force: true });
@@ -311,6 +314,10 @@ export class AlertEngine {
       if (prev === false && p.online) this.raise('mesh_online', `${p.name} is online`, `${p.name} is reachable again.`, { key: p.id });
     }
     if (this.ticks % 20 === 2) this.taskCheck();
+    if (this.ticks % 20 === 3) {
+      const n = this.d.editionNotice();
+      if (n) this.raise('edition_trial', n.title, n.body);
+    }
     if (IS_WIN && this.ticks % 10 === 1) await this.windowsChecks(rules.signatures_old.threshold ?? 3).catch(() => undefined);
   }
 

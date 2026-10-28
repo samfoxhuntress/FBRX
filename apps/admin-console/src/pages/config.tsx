@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { AUDIENCE_NAMES, AUTO_UPDATE_MODES, isLearner, AUTO_UPDATE_NAMES, DEFAULT_POLICY, PROFILE_PRESETS, presetApplied, UPDATE_CHANNELS, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_NAMES, type Audience, type AutoUpdateMode, type Vertical } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Grid, Input, JsonEditor, Modal, More, Page, Select, Table, TextArea, Toggle, timeAgo, useAction, useConfirm } from '@fbrx/ui';
+import { AUDIENCE_NAMES, AUTO_UPDATE_MODES, isLearner, AUTO_UPDATE_NAMES, DEFAULT_POLICY, PROFILE_PRESETS, presetApplied, UPDATE_CHANNELS, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_NAMES, type Audience, type AutoUpdateMode, type Tier, type Vertical } from '@fbrx/shared';
+import { Button, Callout, Card, Empty, Field, Grid, Input, JsonEditor, Modal, More, Page, Select, Status, Table, TextArea, Toggle, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
 import { QUICK_SETUP_TITLE, QuickSetup, quickSetupDone } from './quick-setup';
 import { SettingsBuilder, type SettingsDraft } from './settings-builder';
+import { tierLimitOptions, tierLimitWords } from './common';
 
 interface Profile {
   id: string;
@@ -24,7 +25,7 @@ interface Group {
   updateChannel: string | null;
   pinnedVersion: string | null;
   audience: Audience | null;
-  tier: 'basic' | 'ultra' | null;
+  tier: Tier | null;
   autoUpdate: AutoUpdateMode | null;
   deviceCount: number;
 }
@@ -40,7 +41,7 @@ interface Tenant {
 }
 
 const VERTICAL_HELP: Record<Vertical, string> = {
-  business: 'Staff computers run FBRX Endpoint Basic or Ultra.',
+  business: 'Staff computers run FBRX Endpoint: they open in Essentials and go up to Standard, Ultra or Black Hole as their group allows.',
   education: 'Staff computers start in classroom mode (presenter-safe with a projector, chats offline first, no jokes), and student computers run FBRX OS Education.',
   home: "Parents' computers run FBRX Endpoint and get the children's requests for help; children's computers run FBRX OS Home with the same protections as students.",
 };
@@ -102,6 +103,7 @@ export function ConfigPage() {
           </div>
         </Card>
       )}
+      {tenant && <OrgMeshCard />}
       <Grid cols={2}>
         <Card title="Configuration profiles" actions={<Button size="sm" icon="plus" onClick={() => setEditProfile({ name: '', description: '', settings: {}, locked: [], policy: null })}>New profile</Button>} flush>
           <Table
@@ -129,7 +131,7 @@ export function ConfigPage() {
               { key: 'd', header: 'Devices', className: 'num', render: (g) => g.deviceCount },
               { key: 'p', header: 'Profile', render: (g) => profileName(g.profileId) },
               { key: 'a', header: 'Used by', render: (g) => (g.audience ? <span className={`fx-badge${isLearner(g.audience) ? ' accent' : ''}`}>{AUDIENCE_NAMES[g.audience]}</span> : <span className="fx-muted">inherit</span>) },
-              { key: 't', header: 'Edition', render: (g) => (g.audience === 'student' ? 'FBRX OS Education' : g.audience === 'child' ? 'FBRX OS Home' : g.tier === 'basic' ? 'Basic' : <span className="fx-muted">license</span>) },
+              { key: 't', header: 'Edition', render: (g) => (g.audience === 'student' ? 'FBRX OS Education' : g.audience === 'child' ? 'FBRX OS Home' : tierLimitWords(g.tier) ?? <span className="fx-muted">up to the license</span>) },
               { key: 'c', header: 'Channel', render: (g) => g.pinnedVersion ? <span className="fx-badge">pinned {g.pinnedVersion}</span> : g.updateChannel ?? <span className="fx-muted">inherit</span> },
             ]}
           />
@@ -169,8 +171,7 @@ function ProfileEditor({ profile, onClose, onSaved, onDelete }: { profile: Parti
   const [name, setName] = useState(profile.name ?? '');
   const [description, setDescription] = useState(profile.description ?? '');
   const [draft, setDraft] = useState<SettingsDraft>({ settings: profile.settings ?? {}, locked: profile.locked ?? [] });
-  const [policy, setPolicy] = useState(profile.policy ? JSON.stringify(profile.policy, null, 2) : '');
-  const [ok, setOk] = useState({ s: true, p: true });
+  const [ok, setOk] = useState({ s: true });
   const { busy, run } = useAction();
   const save = () =>
     run(
@@ -181,7 +182,8 @@ function ProfileEditor({ profile, onClose, onSaved, onDelete }: { profile: Parti
           description,
           settings: draft.settings,
           locked: draft.locked,
-          policy: policy.trim() ? JSON.parse(policy) : null,
+          // The policy is written in Governance; a new profile starts with none (each computer's own).
+          ...(profile.id ? {} : { policy: null }),
         }).then(onSaved),
       'Profile saved; devices are syncing',
     );
@@ -198,7 +200,7 @@ function ProfileEditor({ profile, onClose, onSaved, onDelete }: { profile: Parti
             </Button>
           )}
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={busy === 'save'} disabled={!name.trim() || !ok.s || !ok.p} onClick={() => void save()}>
+          <Button variant="primary" loading={busy === 'save'} disabled={!name.trim() || !ok.s} onClick={() => void save()}>
             Save profile
           </Button>
         </>
@@ -214,18 +216,11 @@ function ProfileEditor({ profile, onClose, onSaved, onDelete }: { profile: Parti
           </Field>
         </div>
         <SettingsBuilder value={draft} onChange={setDraft} onJsonValidity={(v) => setOk((o) => (o.s === v ? o : { ...o, s: v }))} />
-        <More label="Governance policy (what the agent may do)">
-          <Field label="Governance policy (JSON)" help="Replaces the computer's own policy: tool rules, folders, network, shell, AI providers, approvals. Empty keeps each computer's own.">
-            <JsonEditor value={policy} onChange={setPolicy} rows={10} onValidity={(v) => setOk((o) => (o.p === v ? o : { ...o, p: v }))} />
-          </Field>
-          {!policy.trim() && (
-            <div>
-              <Button size="sm" onClick={() => setPolicy(JSON.stringify(DEFAULT_POLICY, null, 2))}>
-                Start from the default policy
-              </Button>
-            </div>
-          )}
-        </More>
+        <Callout tone="info">
+          What the AI may do on these computers (folders, the web, the shell, approvals, rules) is this profile's policy, in{' '}
+          <a href={`#/governance/${profile.id ?? ''}`}>Governance</a>
+          {profile.policy ? ': it has one.' : ': it has none yet, so each computer uses its own.'}
+        </Callout>
       </div>
     </Modal>
   );
@@ -282,8 +277,15 @@ function GroupEditor({ group, vertical, profiles, versions, onClose, onSaved, on
           <Field label="Used by" help={vertical === 'education' ? 'Student computers run FBRX OS Education' : vertical === 'home' ? "Children's computers run FBRX OS Home" : undefined}>
             <Select value={f.audience} onChange={(e) => setF({ ...f, audience: e.target.value as Audience | '' })} options={[{ value: '', label: 'Organization default' }, ...VERTICAL_AUDIENCES[vertical].map((a) => ({ value: a, label: AUDIENCE_NAMES[a] }))]} />
           </Field>
-          <Field label="Edition" help={vertical === 'home' ? "Hold parents' computers to Endpoint Basic if they don't need the IT tools" : 'Hold the group to Endpoint Basic, e.g. teachers on Basic and IT on Ultra'}>
-            <Select value={f.tier} disabled={isLearner((f.audience || null) as Audience | null)} onChange={(e) => setF({ ...f, tier: e.target.value as 'basic' | '' })} options={[{ value: '', label: 'What the license gives' }, { value: 'basic', label: 'Endpoint Basic' }]} />
+          <Field
+            label="Edition"
+            help={
+              vertical === 'home'
+                ? "Computers open in Essentials; people switch up to this in Settings. Black Hole is only there when this allows it."
+                : 'Computers open in Essentials; people switch up to this in Settings (teachers up to Standard, IT up to Black Hole, say). Black Hole is only there when this allows it.'
+            }
+          >
+            <Select value={f.tier} disabled={isLearner((f.audience || null) as Audience | null)} onChange={(e) => setF({ ...f, tier: e.target.value as Tier | '' })} options={tierLimitOptions('Up to what the license allows')} />
           </Field>
           <Field label="New versions">
             <Select value={f.autoUpdate} onChange={(e) => setF({ ...f, autoUpdate: e.target.value as AutoUpdateMode | '' })} options={[{ value: '', label: 'Organization default' }, ...AUTO_UPDATE_MODES.map((m) => ({ value: m, label: AUTO_UPDATE_NAMES[m] }))]} />
@@ -299,5 +301,86 @@ function GroupEditor({ group, vertical, profiles, versions, onClose, onSaved, on
         </div>
       </div>
     </Modal>
+  );
+}
+
+interface OrgMeshView {
+  meshAuto: boolean;
+  hive: { groups: 'all' | string[] };
+  groups: Array<{ id: string; name: string }>;
+  computers: Array<{ deviceId: string; name: string; group: string | null; online: boolean; meshOn: boolean; roles: string[]; addresses: string[]; lastSeenAt: string | null }>;
+  servers: Array<{ deviceId: string; name: string; group: string | null; online: boolean; meshOn: boolean; roles: string[] }>;
+}
+
+/**
+ * The organization's FBRX Mesh: its computers meet each other without pairing codes (FBRX Command vouches for their
+ * keys), and the organization picks which groups may use its servers' AI (the hive).
+ */
+function OrgMeshCard() {
+  const app = useApp();
+  const mesh = useQuery<OrgMeshView>('/v1/admin/mesh');
+  const { busy, run } = useAction();
+  const m = mesh.data;
+  if (!m) return null;
+  const canEdit = app.can('config.manage');
+  const save = (body: Partial<Pick<OrgMeshView, 'meshAuto' | 'hive'>>, ok: string) => void run('mesh', () => api('PUT', '/v1/admin/mesh', body).then(() => mesh.reload()), ok);
+  const chosen = m.hive.groups === 'all' ? null : new Set(m.hive.groups);
+  const meshed = m.computers.filter((c) => c.meshOn).length;
+  return (
+    <Card
+      title="FBRX Mesh"
+      subtitle="The organization's computers find and trust each other on FBRX Mesh without pairing codes. They see each other, message each other, and borrow a server's AI when theirs is too small, out of steps or not answering."
+      actions={canEdit && <Toggle checked={m.meshAuto} disabled={busy === 'mesh'} onChange={(v) => save({ meshAuto: v }, v ? 'The computers mesh together' : 'The computers no longer mesh together')} label={m.meshAuto ? 'On' : 'Off'} />}
+    >
+      <div className="fx-form">
+        <div className="fx-muted" style={{ fontSize: 12.5 }}>
+          {m.meshAuto ? `${meshed} of ${m.computers.length} computers are on the mesh. Turning this on turns FBRX Mesh on at each computer (unless a profile keeps it off).` : 'Off: computers keep only the ones paired by hand.'}
+        </div>
+        <Field label="Who may use the servers' AI (the hive)" help="Servers with the ai role lend their AI to these groups through Mesh Assist; each server's own Mesh Assist settings still decide whether someone there approves first.">
+          <div className="fx-row" style={{ gap: 6, flexWrap: 'wrap' }}>
+            <Button size="sm" variant={chosen ? 'ghost' : 'primary'} disabled={!canEdit} onClick={() => save({ hive: { groups: 'all' } }, 'Every group may use the hive')}>
+              Every group
+            </Button>
+            {m.groups.map((g) => {
+              const on = !!chosen?.has(g.id);
+              return (
+                <Button
+                  key={g.id}
+                  size="sm"
+                  variant={on ? 'primary' : 'ghost'}
+                  icon={on ? 'check' : undefined}
+                  disabled={!canEdit}
+                  onClick={() => {
+                    const next = new Set(chosen ?? []);
+                    if (on) next.delete(g.id);
+                    else next.add(g.id);
+                    save({ hive: { groups: [...next] } }, `${g.name} ${on ? 'no longer uses' : 'may use'} the hive`);
+                  }}
+                >
+                  {g.name}
+                </Button>
+              );
+            })}
+          </div>
+        </Field>
+        {chosen && chosen.size === 0 && <Callout tone="warning">No group is chosen: nobody may use the servers' AI.</Callout>}
+        {m.servers.length ? (
+          <div className="fx-form" style={{ gap: 4 }}>
+            <div style={{ fontWeight: 600, fontSize: 13 }}>Servers in the hive</div>
+            {m.servers.map((s) => (
+              <div key={s.deviceId} className="fx-row" style={{ gap: 8 }}>
+                <Status tone={s.online && s.meshOn ? 'good' : 'neutral'}>{s.online ? (s.meshOn ? 'on the mesh' : 'mesh off') : 'offline'}</Status>
+                <strong>{s.name}</strong>
+                <span className="fx-muted">{s.roles.join(', ')}</span>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="fx-muted" style={{ fontSize: 12.5 }}>
+            No server with the ai role has joined yet. On FBRX Server, install the ai role and enroll it in this organization (its Mesh & AI page, or sudo fbrx-server ai).
+          </div>
+        )}
+      </div>
+    </Card>
   );
 }

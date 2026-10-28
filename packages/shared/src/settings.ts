@@ -2,9 +2,12 @@ import { z } from 'zod';
 import type { Tier } from './license';
 import { DEFAULT_LOCAL_API_PORT, DEFAULT_RUNTIME_PORT, UPDATE_CHANNELS } from './constants';
 import { ALERT_CHANNELS } from './ext';
-import { PROTECTION_DEFAULT_FEED } from './protection';
+import { PROTECTION_DEFAULT_FEED, SCAN_TIME_PATTERN } from './protection';
 import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS } from './mesh-assist';
 import { isCidr, MESH_TRAFFIC_CLASSES } from './net';
+import { BROWSER_SEARCH_ENGINES } from './browser';
+import { DEFAULT_OUTPUT_FOLDER, IMAGE_GENERATORS, IMAGE_SIZES, WEB_SEARCH_ENGINES } from './creations';
+import { DEFAULT_SNAPSHOT_FOLDER, SNAPSHOT_AFTER } from './snapshots';
 
 /** Built-in color themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
 export const THEME_PRESETS = ['fabrics', 'tropical', 'neon', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
@@ -71,7 +74,8 @@ export const VOICE_DOWNLOAD_IDS = [...VOICE_MODEL_IDS, NATURAL_VOICE_PACK.id] as
 /** Speaking speed, in words per minute. 180 is an ordinary conversational pace; FBRX starts a little brisker. */
 export const VOICE_WPM = { min: 120, max: 360, default: 210 } as const;
 
-export const PROVIDER_TYPES = ['local-runtime', 'ollama', 'openai-compatible', 'openai', 'anthropic'] as const;
+/** mesh: another FBRX computer's own AI (an FBRX Server's, say), reached over FBRX Mesh. */
+export const PROVIDER_TYPES = ['local-runtime', 'ollama', 'openai-compatible', 'openai', 'anthropic', 'mesh', 'fbrx-cloud'] as const;
 export type ProviderType = (typeof PROVIDER_TYPES)[number];
 
 export const ProviderConfigSchema = z.object({
@@ -85,6 +89,13 @@ export const ProviderConfigSchema = z.object({
   defaultModel: z.string().optional(),
   /** True when requests leave the machine. Governed by policy.ai.allowCloudProviders. */
   cloud: z.boolean(),
+  /**
+   * The tools this agent is shown: "all", "focused" (the ones the chat is about, briefly described, for a small model)
+   * or "auto" (by how much it holds). Any tool it may use still works either way.
+   */
+  tools: z.enum(['auto', 'all', 'focused']).optional(),
+  /** For a mesh provider: the paired computer whose AI it is (its mesh device id). */
+  peer: z.string().max(64).optional(),
 });
 export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
 
@@ -117,8 +128,28 @@ export const SettingsSchema = z.object({
     maxOutputTokens: z.number().int().min(0).max(128000),
     /** Context window for Ollama models, in tokens (0 = Ollama's own setting). The built-in runtime uses runtime.contextSize. */
     ollamaContext: z.number().int().min(0).max(262144),
+    /**
+     * Let a model on this computer that can think before answering (Qwen3 and the like) do so. Off, it answers
+     * straight away: on a processor, its thinking can take minutes before the first word.
+     */
+    localThinking: z.boolean(),
     /** Show what the agent is thinking and doing while it works. */
     showThinking: z.boolean(),
+    /** Where the documents and pictures the agent makes are saved (${DOCUMENTS}, ${DESKTOP} and ${HOME} work). */
+    outputFolder: z.string().min(1).max(500),
+    /**
+     * How the agent makes pictures from a description (creations.ts): which generator, the AI provider whose images
+     * endpoint it uses (images-api), the image server's address (txt2img), the model, and the size.
+     */
+    images: z.object({
+      generator: z.enum(IMAGE_GENERATORS),
+      providerId: z.string().max(64),
+      url: z.string().max(500),
+      model: z.string().max(200),
+      size: z.enum(IMAGE_SIZES),
+    }),
+    /** Where the agent searches the web (and the SearXNG server's address). */
+    webSearch: z.object({ engine: z.enum(WEB_SEARCH_ENGINES), url: z.string().max(500) }),
   }),
   voice: z.object({
     /** Speech recognition model (see VOICE_MODELS). */
@@ -151,6 +182,15 @@ export const SettingsSchema = z.object({
     /** How strong the texture is, 0–100 %. Older versions saved subtle / medium / bold. */
     textureStrength: z.preprocess((v) => (typeof v === 'string' ? (({ subtle: 35, medium: 50, bold: 100 }) as Record<string, number>)[v] ?? v : v), z.number().min(0).max(100)),
     radius: z.enum(['sharp', 'rounded', 'soft']),
+    /**
+     * The sidebar's icons: all in the theme's accent (one color, the default), each section in its own color, all in
+     * one color you pick (navIconColor), or plain.
+     */
+    navIcons: z.enum(['accent', 'sections', 'custom', 'plain']),
+    /** The color for navIcons "custom" (#rrggbb). */
+    navIconColor: z.string().regex(/^(#[0-9a-fA-F]{6})?$/),
+    /** How strong the tint behind the sidebar's icons is, 0–100 % (50: as it always was). */
+    navIconStrength: z.number().min(0).max(100),
     reduceMotion: z.boolean(),
     splash: z.boolean(),
     splashSound: z.boolean(),
@@ -181,6 +221,28 @@ export const SettingsSchema = z.object({
       }),
     )
     .max(200),
+  /** Pages that open in a window of their own, so they sit beside FBRX (and any other app). */
+  windows: z.object({
+    terminal: z.boolean(),
+    /** The chat with the agent. */
+    agent: z.boolean(),
+  }),
+  /**
+   * Your own macros: a keyboard shortcut that types a command or text into whatever app you are in (FBRX puts it on the
+   * clipboard and pastes it; on a Mac you press ⌘V). Placeholders as in quick snippets. Added in Settings → Macros, or
+   * from a command anywhere in FBRX with "Add to macros".
+   */
+  keyMacros: z
+    .array(
+      z.object({
+        id: z.string().max(40),
+        name: z.string().min(1).max(80),
+        /** An Electron accelerator ("Control+Alt+1"); empty while it has no shortcut yet. */
+        hotkey: z.string().max(60),
+        text: z.string().min(1).max(5000),
+      }),
+    )
+    .max(50),
   clipboard: z.object({
     /** Keep a history of copied text while FBRX runs (in memory only; never written to disk). */
     history: z.boolean(),
@@ -200,6 +262,33 @@ export const SettingsSchema = z.object({
       .max(100),
   }),
   /**
+   * What the AI remembers about the person (memory.ts), kept on this computer only: the last day of conversations
+   * (short term) and lasting facts (long term). Identity and money numbers are never kept (privacy.ts).
+   */
+  memory: z.object({
+    enabled: z.boolean(),
+    /** The last 24 hours of conversations, in every new chat. */
+    shortTerm: z.boolean(),
+    /** Lasting facts about the person, in every chat. */
+    longTerm: z.boolean(),
+    /** Picks up facts from what the person says ("I live in…", "my email is…"), besides what the AI is told to remember. */
+    learn: z.boolean(),
+    /** Private kinds of fact the person lets it keep (they never leave this computer). */
+    keep: z.object({ address: z.boolean(), location: z.boolean(), contact: z.boolean(), payment: z.boolean(), birthday: z.boolean() }),
+    /** With a cloud AI: general facts go along with the messages (never private ones), or nothing does. */
+    cloud: z.enum(['general', 'none']),
+  }),
+  /** Pop-up notifications (notifications.ts): which kinds, where they show and their sound. */
+  notifications: z.object({
+    enabled: z.boolean(),
+    /** auto: in FBRX while it is in front, otherwise the system's notification center; app; system; both. */
+    show: z.enum(['auto', 'app', 'system', 'both']),
+    sound: z.enum(['fbrx', 'system', 'off']),
+    volume: z.number().min(0).max(1),
+    /** Kinds turned off (NOTIFICATION_KINDS ids). */
+    muted: z.array(z.string().max(64)).max(64),
+  }),
+  /**
    * Presenter-safe mode, for when the screen is on a projector or shared in a meeting: notifications stay quiet,
    * clipboard history is masked, private lists (chats, alerts, credentials, tickets) are blurred, and the goose stays home.
    */
@@ -214,7 +303,19 @@ export const SettingsSchema = z.object({
     /** The macro (global keyboard shortcut) that switches it on and off; empty turns it off. */
     hotkey: z.string().max(60),
   }),
-  /** Who uses this computer: shown on FBRX Glass and used by the agent. */
+  /** FBRX Snapshot: pictures of the screen, marked up and shared (snapshots.ts). */
+  snapshot: z.object({
+    /** Where they are saved; ${PICTURES} and the other folder names work here. */
+    folder: z.string().min(1).max(500),
+    /** The shortcut that starts one (an area to drag out, or a window or screen); empty turns it off. */
+    hotkey: z.string().max(60),
+    /** The Print Screen key starts one too (instead of the system's own). */
+    printScreen: z.boolean(),
+    /** Each new snapshot goes on the clipboard, ready to paste. */
+    copy: z.boolean(),
+    after: z.enum(SNAPSHOT_AFTER),
+  }),
+  /** Who uses this computer: shown on Dash and used by the agent. */
   profile: z.object({
     name: z.string().max(60),
     /** What FBRX and the agent call you ("Sam", "Sir"); empty uses the first name. */
@@ -344,6 +445,38 @@ export const SettingsSchema = z.object({
   fleet: z.object({
     heartbeatSeconds: z.number().int().min(10).max(3600),
   }),
+  /**
+   * Support mode on a computer that belongs to an organization: off unless the organization turns it on (a managed
+   * setting from FBRX Command). A computer on its own may always use a support pass.
+   */
+  support: z.object({
+    allowOnManaged: z.boolean(),
+  }),
+  /** FBRX Browser (the web browser inside FBRX OS). The allow/block lists are usually set by an organization. */
+  browser: z.object({
+    homepage: z.string().max(2000),
+    searchEngine: z.enum(Object.keys(BROWSER_SEARCH_ENGINES) as [keyof typeof BROWSER_SEARCH_ENGINES]),
+    /** Ask sites not to track you (sends the Do Not Track / Global Privacy Control signals). */
+    doNotTrack: z.boolean(),
+    /** Open new tabs in a private view by default (nothing kept once the tab closes). */
+    privateByDefault: z.boolean(),
+    /** Fabrix reads the page to answer questions about it (off keeps page text on the computer, unread). */
+    aiAssist: z.boolean(),
+    /** Addresses only an organization may change (managed). The person adds their own blocks too. */
+    blocked: z.array(z.string().max(300)).max(500),
+    allowed: z.array(z.string().max(300)).max(500),
+    /** Safe browsing on a student's or child's computer (set by the organization). */
+    safeBrowsing: z.boolean(),
+  }),
+  /** The Vault's password keeper. */
+  passwords: z.object({
+    /** FBRX Browser offers to save a sign-in after you sign in to a site. */
+    offerToSave: z.boolean(),
+    /** Sites FBRX Browser never offers to save a sign-in for (what siteOf gives). */
+    neverSave: z.array(z.string().max(253)).max(500),
+    /** A copied password or 2-step code leaves the clipboard after this many seconds (0 = it stays). */
+    clearClipboardSeconds: z.number().int().min(0).max(600),
+  }),
   updates: z.object({
     channel: z.enum(UPDATE_CHANNELS),
     autoDownload: z.boolean(),
@@ -353,7 +486,7 @@ export const SettingsSchema = z.object({
     /** A version the person chose to skip (no more reminders for it). */
     skipVersion: z.string().max(40),
   }),
-  /** Calendars (Outlook / Microsoft 365 accounts and calendar links) shown in Calendar, on FBRX Glass and to the agent. */
+  /** Calendars (Outlook / Microsoft 365 accounts and calendar links) shown in Calendar, on Dash and to the agent. */
   calendar: z.object({
     /** Remind this many minutes before a meeting starts (0 = no reminders). */
     remindMinutes: z.number().int().min(0).max(120),
@@ -387,8 +520,12 @@ export const SettingsSchema = z.object({
       updateSignatures: z.boolean(),
       /** Where the threat database comes from: a list of SHA-256 fingerprints, one per line. */
       feedUrl: z.string().max(500),
-      /** Endpoint Ultra: a quick scan every day or week. */
+      /** A quick scan every day or week (a computer that was off at the time scans when it is next on). */
       schedule: z.enum(['off', 'daily', 'weekly']),
+      /** When it runs, 24-hour local time ("21:30"). Endpoint Ultra chooses it; other editions run at the default. */
+      scheduleTime: z.string().regex(SCAN_TIME_PATTERN),
+      /** The day a weekly scan runs: 0 = Sunday … 6 = Saturday (Endpoint Ultra chooses it). */
+      scheduleDay: z.number().int().min(0).max(6),
       /** Endpoint Ultra: also scan with ClamAV when it is installed. */
       useClamAV: z.boolean(),
       /** Endpoint Ultra: ask VirusTotal about suspicious files (needs a VIRUSTOTAL_API_KEY in Credentials). */
@@ -448,8 +585,12 @@ export const DEFAULT_SETTINGS: Settings = {
     newChatsOffline: true,
     resources: 'balanced',
     maxOutputTokens: 0,
+    localThinking: false,
     ollamaContext: 0,
     showThinking: true,
+    outputFolder: DEFAULT_OUTPUT_FOLDER,
+    images: { generator: 'draw', providerId: '', url: '', model: '', size: '1024x1024' },
+    webSearch: { engine: 'public', url: '' },
   },
   voice: {
     sttModel: 'whisper-base.en',
@@ -471,6 +612,9 @@ export const DEFAULT_SETTINGS: Settings = {
     texture: 'theme',
     textureStrength: 50,
     radius: 'rounded',
+    navIcons: 'accent',
+    navIconColor: '',
+    navIconStrength: 50,
     reduceMotion: false,
     splash: true,
     splashSound: true,
@@ -485,6 +629,8 @@ export const DEFAULT_SETTINGS: Settings = {
     { id: 'm-ts', trigger: 'stamp', description: 'Date and time stamp', text: '[{datetime}]', scope: 'everywhere' },
     { id: 'm-flush', trigger: 'flushdns', description: 'Flush DNS and renew the address', text: 'ipconfig /flushdns; ipconfig /release; ipconfig /renew', scope: 'terminal' },
   ],
+  keyMacros: [],
+  windows: { terminal: false, agent: false },
   clipboard: {
     history: false,
     hotkey: 'Control+Alt+Z',
@@ -494,6 +640,8 @@ export const DEFAULT_SETTINGS: Settings = {
       { id: 'c-ps', name: 'Lines → PowerShell array', steps: [{ op: 'trimLines' }, { op: 'removeBlank' }, { op: 'dedupe' }, { op: 'wrapLines', a: "'", b: "'" }, { op: 'join', a: ', ' }, { op: 'wrap', a: '@(', b: ')' }] },
     ],
   },
+  memory: { enabled: true, shortTerm: true, longTerm: true, learn: true, keep: { address: true, location: true, contact: true, payment: false, birthday: true }, cloud: 'general' },
+  notifications: { enabled: true, show: 'auto', sound: 'fbrx', volume: 0.7, muted: [] },
   presenter: {
     enabled: false,
     auto: false,
@@ -501,6 +649,13 @@ export const DEFAULT_SETTINGS: Settings = {
     maskClipboard: true,
     blurPrivate: true,
     hotkey: 'Control+Alt+P',
+  },
+  snapshot: {
+    folder: DEFAULT_SNAPSHOT_FOLDER,
+    hotkey: 'Control+Alt+S',
+    printScreen: false,
+    copy: true,
+    after: 'editor',
   },
   profile: {
     name: '',
@@ -579,6 +734,24 @@ export const DEFAULT_SETTINGS: Settings = {
   fleet: {
     heartbeatSeconds: 30,
   },
+  support: {
+    allowOnManaged: false,
+  },
+  browser: {
+    homepage: '',
+    searchEngine: 'duckduckgo',
+    doNotTrack: true,
+    privateByDefault: false,
+    aiAssist: true,
+    blocked: [],
+    allowed: [],
+    safeBrowsing: false,
+  },
+  passwords: {
+    offerToSave: true,
+    neverSave: [],
+    clearClipboardSeconds: 30,
+  },
   updates: {
     channel: 'stable',
     autoDownload: true,
@@ -600,6 +773,8 @@ export const DEFAULT_SETTINGS: Settings = {
       updateSignatures: true,
       feedUrl: PROTECTION_DEFAULT_FEED,
       schedule: 'off',
+      scheduleTime: '12:00',
+      scheduleDay: 1,
       useClamAV: true,
       useVirusTotal: false,
       exclusions: [],
@@ -611,11 +786,12 @@ export const DEFAULT_SETTINGS: Settings = {
 export const PROTECTED_SETTING_PATHS: readonly string[] = [];
 
 /**
- * Fun extras live in FBRX Endpoint Ultra, stay hidden until someone enters 418 as a license key, and can be switched
- * off again (an organization can lock them off).
+ * Fun extras come with every edition (Essentials, Standard and Ultra), stay hidden until someone enters 418 as a
+ * license key (Settings → License; student computers have no License page), and can be switched off again (an
+ * organization can lock them off). `tier` is undefined while the license loads.
  */
 export function funEnabled(s: Pick<Settings, 'appearance'> | null | undefined, tier: Tier | null | undefined): boolean {
-  return !!s && tier === 'ultra' && s.appearance.funUnlocked && s.appearance.easterEggs;
+  return !!s && !!tier && s.appearance.funUnlocked && s.appearance.easterEggs;
 }
 
 /** What to call the user: their chosen form of address, else their first name, else null. */

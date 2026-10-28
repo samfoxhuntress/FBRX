@@ -1,4 +1,4 @@
-import { AUDIENCES, AUDIENCE_NAMES, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_INFO, VERTICAL_NAMES, isLearner, type Audience, type Vertical } from '@fbrx/shared';
+import { AUDIENCES, AUDIENCE_NAMES, TIER_SHORT, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_INFO, VERTICAL_NAMES, isLearner, type Audience, type Tier, type Vertical } from '@fbrx/shared';
 import { ChoiceCards, Status, timeAgo, type IconName } from '@fbrx/ui';
 
 export interface DeviceSummary {
@@ -25,6 +25,10 @@ export interface DeviceSummary {
   /** Who uses it (null = its group's or the organization's default). */
   audience: 'staff' | 'student' | 'parent' | 'child' | null;
   helpdeskReceiver: boolean;
+  /** The most it may run, set for this computer (null = its group's). */
+  tier: Tier | null;
+  /** What it runs now, as it last reported. */
+  editionTier: Tier | null;
   settingsOverride: Record<string, unknown>;
   lockedOverride: string[];
   policyOverride: unknown;
@@ -51,7 +55,18 @@ export interface DeviceSummary {
     uptimeSeconds: number;
     services: Array<{ name: string; state: string; message?: string | null }>;
     protection: { provider: string; name: string; state: 'protected' | 'attention' | 'at-risk' | 'unknown'; realtime: boolean | null; threats: number } | null;
+    /** Whole-computer images (FBRX Time), on Windows computers with FBRX Endpoint 1.9.8+. */
+    imageBackup?: { configured: boolean; lastAt: string | null; ok: boolean | null; running: boolean } | null;
   };
+}
+
+/** A computer's whole-computer images (FBRX Time), as its last heartbeat reported them. */
+export function ImageBackupCell({ b }: { b: NonNullable<DeviceSummary['health']>['imageBackup'] | undefined }) {
+  if (!b) return <span className="fx-muted">Not reported</span>;
+  if (b.running) return <Status tone="busy">Making an image</Status>;
+  if (!b.configured) return <span className="fx-muted">Not set up on this computer</span>;
+  if (!b.lastAt) return <Status tone="neutral">Set up · no image yet</Status>;
+  return <Status tone={b.ok ? 'good' : 'critical'}>{b.ok ? `Last image ${timeAgo(b.lastAt)}` : `Failed ${timeAgo(b.lastAt)}`}</Status>;
 }
 
 const PROTECTION_LABEL = { protected: 'Protected', attention: 'Needs attention', 'at-risk': 'At risk', unknown: 'Status unknown' } as const;
@@ -129,6 +144,27 @@ export function KindPicker({ value, onChange }: { value: Vertical; onChange: (v:
 export function audienceOptions(kind: Vertical | null): Array<{ value: Audience; label: string }> {
   return (kind ? VERTICAL_AUDIENCES[kind] : AUDIENCES).map((a) => ({ value: a, label: AUDIENCE_NAMES[a] }));
 }
+
+/**
+ * The most a group or a computer may run. Every computer opens in Essentials and its person may switch up to this in
+ * Settings → Edition. Black Hole only ever comes from here (and the organization's license).
+ */
+export function tierLimitOptions(inherit: string): Array<{ value: Tier | ''; label: string }> {
+  return [
+    { value: '', label: inherit },
+    { value: 'essentials', label: 'Essentials only' },
+    { value: 'basic', label: 'Up to Standard' },
+    { value: 'ultra', label: 'Up to Ultra' },
+    { value: 'blackhole', label: 'Up to Black Hole' },
+  ];
+}
+
+export function tierLimitWords(t: Tier | null | undefined): string | null {
+  return t === 'essentials' ? 'Essentials only' : t ? `Up to ${TIER_SHORT[t]}` : null;
+}
+
+/** "Essentials", "Standard", "Ultra", "Black Hole": what a computer runs. */
+export const tierShort = (t: Tier | null | undefined): string | null => (t ? TIER_SHORT[t] : null);
 
 export function audienceHelp(kind: Vertical | null): string | undefined {
   if (kind === 'education') return 'Student computers run FBRX OS Education';

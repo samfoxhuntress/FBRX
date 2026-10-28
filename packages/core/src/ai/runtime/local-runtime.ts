@@ -1,9 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs';
-import { freemem, setPriority, totalmem } from 'node:os';
+import { availableParallelism, freemem, setPriority, totalmem } from 'node:os';
 import { delimiter, join } from 'node:path';
-import type { RuntimeStatus } from '@fbrx/shared';
+import type { DownloadProgress, RuntimeHardware, RuntimeStatus } from '@fbrx/shared';
 import { CoreError } from '../../errors';
 import type { EventBus } from '../../events';
 import type { Logger } from '../../logger';
@@ -274,6 +274,8 @@ export class LocalRuntime {
       '--threads', String(threads),
       // One conversation at a time: the whole context goes to it and the memory for extra slots is not reserved.
       '--parallel', '1',
+      // When the oldest messages drop out of a long chat, what follows them is moved up instead of read again.
+      '--cache-reuse', '256',
     ];
     this.stopping = false;
     this.recentOutput = [];
@@ -376,14 +378,34 @@ export class LocalRuntime {
   }
 
   private installing: AbortController | null = null;
+  /** The runtime's own download, as the model downloads report theirs (kept a few minutes after it ends). */
+  private installProgress: { progress: DownloadProgress; at: number } | null = null;
+
+  installState(): DownloadProgress | null {
+    const p = this.installProgress;
+    if (!p) return null;
+    const ended = p.progress.state !== 'downloading' && p.progress.state !== 'verifying';
+    return ended && p.at < Date.now() - 10 * 60_000 ? null : p.progress;
+  }
+
+  /** Memory and graphics cards, for picking a model that fits. */
+  async hardware(): Promise<RuntimeHardware> {
+    const gpus = await si
+      .graphics()
+      .then((g) => g.controllers.filter((c) => (c.vram ?? 0) > 0 || /nvidia|radeon|amd|intel/i.test(`${c.vendor} ${c.model}`)).map((c) => ({ name: [c.vendor, c.model].filter(Boolean).join(' ').trim() || 'Graphics', vramBytes: (c.vram ?? 0) * 1024 * 1024 })))
+      .catch(() => []);
+    return { memoryBytes: totalmem(), freeMemoryBytes: freemem(), cpus: availableParallelism(), gpus, variant: process.platform === 'darwin' ? 'metal' : await gpuVariant() };
+  }
 
   /** Downloads the official llama.cpp runtime into the data folder (for builds that did not bundle it). */
   install(): void {
     if (this.installing) throw new CoreError('CONFLICT', 'The runtime is already being installed');
     const controller = new AbortController();
     this.installing = controller;
-    const emit = (p: { receivedBytes: number; totalBytes: number; state: 'downloading' | 'verifying' | 'completed' | 'failed' | 'cancelled'; error?: string }) =>
+    const emit = (p: { receivedBytes: number; totalBytes: number; state: 'downloading' | 'verifying' | 'completed' | 'failed' | 'cancelled'; error?: string }) => {
+      this.installProgress = { progress: { modelId: 'llama-runtime', ...p }, at: Date.now() };
       this.d.events?.emit('runtime.download', { modelId: 'llama-runtime', ...p });
+    };
     emit({ receivedBytes: 0, totalBytes: 0, state: 'downloading' });
     void gpuVariant()
       .then((variant) => {

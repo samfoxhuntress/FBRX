@@ -3,6 +3,9 @@ import { basename, join } from 'node:path';
 import { z } from 'zod';
 import {
   ALERT_CHANNELS,
+  CALENDAR_LINKS,
+  CALENDAR_REPEATS,
+  CALENDAR_SHOW_AS,
   EVENT_LEVELS,
   VOICE_DOWNLOAD_IDS,
   LAB_FEATURES,
@@ -26,6 +29,7 @@ import {
   VM_ACTIONS,
   type ExtMethods,
   type SpotlightItem,
+  TIERS,
 } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
@@ -83,6 +87,22 @@ const SpotlightItemSchema = z.object({
  * Handlers for the command-center modules. Requests that do not come from the person at the workstation (Local API,
  * remote commands) may only read files inside the folders governance allows.
  */
+/** An event as the person enters it (the FBRX calendar takes all of it; an Outlook calendar, up to the notes). */
+const CalendarEventInput = z.object({
+  title: z.string().trim().min(1).max(255),
+  start: z.string().min(1).max(40),
+  end: z.string().max(40).optional(),
+  durationMinutes: z.number().int().min(5).max(1440).optional(),
+  allDay: z.boolean().optional(),
+  location: z.string().max(255).optional(),
+  notes: z.string().max(4000).optional(),
+  repeat: z.enum(CALENDAR_REPEATS).optional(),
+  repeatUntil: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  link: z.object({ kind: z.enum(CALENDAR_LINKS), id: z.string().min(1).max(100) }).nullable().optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).nullable().optional(),
+  showAs: z.enum(CALENDAR_SHOW_AS).optional(),
+});
+
 export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
   const vt = () => (k.vault.isUnlocked ? k.vault.get(VIRUSTOTAL_SECRET) : undefined);
   const guardPath = (p: string, ctx: CallContext) => {
@@ -300,6 +320,20 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return { ok: true };
     },
 
+    // ------------------------------------------------------------------------------------------- vpn
+    'vpn.status': () => k.vpn.status(),
+    'vpn.add': async (p) => {
+      const q = z.object({ name: z.string().max(60), settings: z.string().min(20).max(4000).optional(), path: z.string().min(1).max(1000).optional() }).parse(p);
+      if (!q.settings && !q.path) throw new CoreError('INVALID_ARGUMENT', 'Paste the settings, or pick the file the gate gave');
+      const settings = q.settings ?? (await readFile(expandPath(q.path!), 'utf8')).slice(0, 4000);
+      return k.vpn.add({ name: q.name, settings });
+    },
+    'vpn.remove': async (p) => ({ removed: await k.vpn.remove(z.object({ id: z.string().min(1).max(80) }).parse(p).id) }),
+    'vpn.connect': (p) => k.vpn.connect(z.object({ id: z.string().min(1).max(80) }).parse(p).id),
+    'vpn.disconnect': () => k.vpn.disconnect(),
+    'vpn.install': () => k.vpn.install(),
+    'vpn.check': () => k.vpn.check(),
+
     // --------------------------------------------------------------------------------------- network
     'net.context': () => k.net.context(),
     'net.publicIp': () => k.net.publicIp(),
@@ -404,6 +438,9 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     },
     'helpdesk.assistJobs': (p) => k.helpdesk.assistJobs(z.object({ ticketId: z.string().min(1).max(80) }).parse(p).ticketId),
     'edition.status': () => k.edition(),
+    'edition.choose': (p, ctx) => k.chooseEdition(z.object({ tier: z.enum(TIERS) }).parse(p).tier, ctx.actor),
+    'edition.startTrial': (_p, ctx) => k.startTrial(ctx.actor),
+    'edition.tourDone': (p) => k.setTourDone(z.object({ done: z.boolean() }).parse(p).done),
     'presenter.status': () => k.presenterStatus(),
     'presenter.set': (p, ctx) => k.setPresenting(z.object({ on: z.boolean() }).parse(p).on, ctx.actor),
     'netenv.list': () => k.netenv.list(),
@@ -444,6 +481,24 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return k.netenv.createVouchers(x.id, x);
     },
 
+    // ---------------------------------------------------------------------------------------- FBRX Time
+    'imageBackup.status': () => k.imageBackup.status(),
+    'imageBackup.configure': (p) => {
+      const x = z
+        .object({
+          target: z.string().min(2).max(400),
+          user: z.string().max(200).default(''),
+          password: z.string().max(500).nullable().optional(),
+          schedule: z.enum(['off', 'daily', 'weekly']),
+          time: z.string().max(5),
+          day: z.number().int().min(0).max(6),
+        })
+        .parse(p);
+      return k.imageBackup.configure({ target: x.target, user: x.user, schedule: x.schedule, time: x.time, day: x.day }, x.password);
+    },
+    'imageBackup.run': (_p, ctx) => k.imageBackup.run(ctx.actor),
+    'imageBackup.remove': () => k.imageBackup.remove(),
+
     // ---------------------------------------------------------------------------------------- antivirus
     'protection.status': (p) => k.protection.status(z.object({ refresh: z.boolean().optional() }).optional().parse(p)?.refresh ?? false),
     'protection.setProvider': (p) => k.protection.setProvider(z.object({ provider: z.string().min(1).max(80) }).parse(p).provider),
@@ -463,6 +518,15 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       void k.protection.status(true).catch(() => undefined);
       return d;
     },
+    'shield.allowMany': (p) => {
+      const x = z.object({ ids: z.array(z.string().min(1).max(80)).max(5000).optional(), folder: z.string().max(4096).optional() }).parse(p ?? {});
+      const r = k.shield.allowMany(x);
+      for (const id of r.ids) k.alerts.resolve('shield_threat', id);
+      void k.protection.status(true).catch(() => undefined);
+      k.events.emit('protection.changed', { state: k.protection.summary()?.state ?? 'unknown' });
+      return { allowed: r.allowed };
+    },
+    'shield.recheck': () => k.protection.recheck(),
     'shield.updateSignatures': async () => {
       const r = await k.shield.updateSignatures();
       void k.protection.status(true).catch(() => undefined);
@@ -508,22 +572,8 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       else await k.calendar.syncAll();
       return k.calendar.status();
     },
-    'calendar.create': (p) =>
-      k.calendar.create(
-        z
-          .object({
-            accountId: z.string().max(80).optional(),
-            calendarId: z.string().max(400).optional(),
-            title: z.string().trim().min(1).max(255),
-            start: z.string().min(1).max(40),
-            end: z.string().max(40).optional(),
-            durationMinutes: z.number().int().min(5).max(1440).optional(),
-            allDay: z.boolean().optional(),
-            location: z.string().max(255).optional(),
-            notes: z.string().max(4000).optional(),
-          })
-          .parse(p),
-      ),
+    'calendar.create': (p) => k.calendar.create(CalendarEventInput.extend({ accountId: z.string().max(80).optional(), calendarId: z.string().max(400).optional() }).parse(p)),
+    'calendar.edit': (p) => k.calendar.edit(CalendarEventInput.partial().extend({ id: z.string().min(1).max(200) }).parse(p)),
     'calendar.delete': (p) => {
       const x = z.object({ accountId: z.string().min(1).max(80), id: z.string().min(1).max(400) }).parse(p);
       return k.calendar.delete(x.accountId, x.id);
@@ -647,6 +697,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
             profileId: z.string().max(40).optional(),
             vendor: z.string().max(200).optional(),
             label: z.string().max(200).optional(),
+            save: z.boolean().optional(),
           })
           .parse(p),
       ),
@@ -667,6 +718,27 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'console.list': () => k.consoles.list(),
     'console.transcript': (p) => ({ text: k.consoles.transcript(Id.parse(p).id) }),
     'console.logins': () => k.consoles.logins(),
+    'console.bookmarks': () => k.consoles.bookmarks(),
+    'console.saveBookmark': (p) =>
+      k.consoles.saveBookmark(
+        z
+          .object({
+            id: z.string().max(64).optional(),
+            label: z.string().max(200).optional(),
+            host: z.string().min(1).max(253),
+            port: z.number().int().min(1).max(65535).optional(),
+            protocol: z.enum(['ssh', 'telnet']),
+            username: z.string().max(64).nullable().optional(),
+            profileId: z.string().max(40).nullable().optional(),
+            notes: z.string().max(2000).optional(),
+          })
+          .parse(p),
+      ),
+    'console.removeBookmark': (p) => {
+      const q = z.object({ id: z.string().min(1).max(64), forgetPassword: z.boolean().optional() }).parse(p);
+      k.consoles.removeBookmark(q.id, q.forgetPassword);
+      return { ok: true };
+    },
     'console.forgetLogin': (p) => {
       const q = z.object({ host: z.string().max(253), port: z.number().int(), username: z.string().max(64) }).parse(p);
       k.consoles.forgetLogin(q.host, q.port, q.username);
@@ -679,7 +751,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     },
 
     // ------------------------------------------------------------------------------------------ mesh
-    'mesh.status': () => k.mesh.status(),
+    'mesh.status': () => ({ ...k.mesh.status(), organization: k.orgMesh.state() }),
     'mesh.setEnabled': async (p) => {
       k.settings.update({ mesh: { enabled: z.object({ enabled: z.boolean() }).parse(p).enabled } });
       await k.services.reconcile();
@@ -759,6 +831,20 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'server.verify': (p) => k.serverResources.verify(z.object({ name: z.string().max(200) }).parse(p).name),
     'server.copy': (p) => k.serverResources.copy(z.object({ name: z.string().max(200) }).parse(p).name),
     'server.readDoc': (p) => k.serverResources.readDoc(z.object({ name: z.string().max(200) }).parse(p).name),
+    'server.saved': () => ({ servers: k.servers.list(), suggestions: k.servers.suggestions() }),
+    'server.save': (p) =>
+      k.servers.save(
+        z
+          .object({ id: z.string().max(64).optional(), name: z.string().max(200).optional(), address: z.string().min(1).max(300), port: z.number().int().min(1).max(65535).optional(), notes: z.string().max(2000).optional() })
+          .parse(p),
+      ),
+    'server.remove': (p) => (k.servers.remove(z.object({ id: z.string().max(64) }).parse(p).id), { ok: true as const }),
+    'server.check': (p) => k.servers.check(z.object({ id: z.string().max(64) }).parse(p).id),
+    'server.trust': (p) => {
+      const q = z.object({ id: z.string().max(64), fingerprint: z.string().min(32).max(200) }).parse(p);
+      return k.servers.trust(q.id, q.fingerprint);
+    },
+    'server.opened': (p) => (k.servers.opened(z.object({ id: z.string().max(64) }).parse(p).id), { ok: true as const }),
     'mesh.network.status': () => k.meshNetwork.status(),
     'mesh.network.test': (p) => k.meshNetwork.test(z.object({ peerId: z.string().max(80).optional() }).parse(p ?? {}).peerId),
     'mesh.network.computers': () => k.mesh.networkComputers(),

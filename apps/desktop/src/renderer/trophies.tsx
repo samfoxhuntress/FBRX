@@ -37,6 +37,7 @@ const COLORS: Record<string, [string, string]> = {
   synergy: ['#5fb0c9', '#1f5d73'],
   wingman: ['#3fcf9a', '#0f5b48'],
   topwing: ['#f2c14e', '#8a5a00'],
+  operator: ['#5ad1e6', '#17606f'],
 };
 
 /** The picture on each badge, drawn in a 64 × 64 box. */
@@ -305,6 +306,19 @@ function Glyph({ id }: { id: string }): ReactNode {
           <circle cx="32" cy="30" r="5.5" fill="#f2c14e" stroke="#8a5a00" strokeWidth="1.2" />
           <path d="M32 27 l1 2 2 .2 -1.6 1.3 .6 2 -2 -1.1 -2 1.1 .6 -2 -1.6 -1.3 2 -.2z" fill="#8a5a00" />
           <path d="M24 44 h16" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" opacity="0.8" />
+        </g>
+      );
+    case 'operator':
+      return (
+        <g>
+          <rect x="12" y="17" width="40" height="30" rx="3" fill="#0e1b21" stroke="#c9f4fb" strokeWidth="1.4" />
+          <path d="M12 23 H52" stroke="#c9f4fb" strokeWidth="1" opacity="0.7" />
+          <circle cx="16" cy="20" r="1" fill="#ff6b6b" />
+          <circle cx="19.5" cy="20" r="1" fill="#ffd34d" />
+          <circle cx="23" cy="20" r="1" fill="#3fcf7a" />
+          <path d="M18 29 L23 33 L18 37" stroke="#5ad1e6" strokeWidth="2.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M26 38 H34" stroke="#5ad1e6" strokeWidth="2.2" strokeLinecap="round" />
+          <text x="44" y="40" textAnchor="middle" fontSize="7" fontWeight="900" fill="#c9f4fb">#</text>
         </g>
       );
     case 'golden':

@@ -152,6 +152,15 @@ describe('control plane ⇄ device fleet', () => {
     });
     expect(d2.result.auditVerify.ok).toBe(true);
     await expect(api('POST', `/v1/admin/devices/${device.id}/commands`, { type: 'not.a.command' })).rejects.toThrow(/400/);
+
+    // Whole-computer images (FBRX Time): made on Windows once set up there; the device says why it cannot.
+    const img = await api('POST', `/v1/admin/devices/${device.id}/commands`, { type: 'backup.image' });
+    const i2 = await waitFor(async () => {
+      const c = await api('GET', `/v1/admin/commands/${img.id}`);
+      return ['succeeded', 'failed'].includes(c.status) ? c : null;
+    });
+    expect(i2.status).toBe('failed');
+    expect(JSON.stringify(i2.error)).toMatch(process.platform === 'win32' ? /not set up on this computer/ : /made on Windows/);
   });
 
   it('backs up a device to the control plane with the org passphrase', async () => {
@@ -245,7 +254,7 @@ describe('control plane ⇄ device fleet', () => {
     expect((await full.json()).error.message).toMatch(/seat limit/);
   });
 
-  it('joins its tenant on its own when an Endpoint Basic computer activates a license from FBRX Command', async () => {
+  it('joins its tenant on its own when a computer activates a license from FBRX Command, which unlocks Ultra', async () => {
     const d = await api('POST', '/v1/admin/tenants', { name: 'Customer D' });
     const asD = { 'x-fbrx-tenant': d.id };
     const lic = await api('POST', '/v1/admin/licenses', { edition: 'pro', seats: 3, joinTenant: true }, asD);
@@ -257,9 +266,13 @@ describe('control plane ⇄ device fleet', () => {
     try {
       k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, protection: { shield: { updateSignatures: false } } });
       await k.start();
-      expect(k.license.status().tier).toBe('basic');
+      // A new computer on its own: Essentials, free (Standard and Ultra are bought).
+      expect(k.license.status()).toMatchObject({ tier: 'essentials', ceiling: 'essentials', ceilingReason: 'standalone' });
+      await expect(k.call('edition.choose', { tier: 'ultra' }, USER)).rejects.toThrow(/\$11\.99 a month/);
       const st = (await k.call('license.activate', { key: lic.key }, USER)) as any;
-      expect(st).toMatchObject({ state: 'valid', tier: 'ultra', commandUrl: base });
+      // In the organization, Ultra is there to turn on (the person still chooses).
+      expect(st).toMatchObject({ state: 'valid', tier: 'essentials', ceiling: 'ultra', commandUrl: base });
+      expect(await k.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra' });
       expect(st.message).toMatch(/Joined Customer D/);
       expect(k.fleet.status().tenantName).toBe('Customer D');
       expect(await api('GET', '/v1/admin/devices', undefined, asD)).toHaveLength(1);
@@ -267,7 +280,9 @@ describe('control plane ⇄ device fleet', () => {
       await k.call('fleet.unenroll', {}, USER);
       expect(await k.joinLicenseTenant('test')).toMatchObject({ joined: false });
       expect(k.fleet.enrolled).toBe(false);
-      // The tenant decides the product: an Enterprise license can still run Endpoint Basic.
+      // Out of the organization, Ultra goes with it: the organization's license counts only there.
+      expect(k.license.status()).toMatchObject({ tier: 'essentials', chosen: 'ultra', ceiling: 'essentials', ceilingReason: 'standalone' });
+      // The tenant decides the product: an Enterprise license can still allow only Endpoint Standard.
       expect(await api('POST', '/v1/admin/licenses', { edition: 'enterprise', seats: 0, tier: 'basic' }, asD)).toMatchObject({ tier: 'basic', commandUrl: null });
     } finally {
       await k.stop();

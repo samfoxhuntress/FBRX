@@ -1,0 +1,68 @@
+# Support mode
+
+Support mode is the way an FBRX support engineer, or the person who runs an organization's FBRX Command, gets full
+access to **one computer's** FBRX apps (FBRX OS and FBRX Browser) to troubleshoot — without that power being free for
+anyone who learns a phrase.
+
+Typing the support phrase alone does nothing. It asks for a **support pass**: a short-lived token, signed by FBRX's
+own license key and tied to that one computer, that the apps verify offline. While a valid pass is active the computer
+runs as Black Hole with every feature on, settings an organization locked can be changed, and everything done is
+written to the audit log (and reported to FBRX Command on a managed computer). The resume phrase, or the pass running
+out, puts the computer back exactly as it was.
+
+## On an organization's computers
+
+A computer that belongs to an organization (joined to its FBRX Command) takes a support pass only when **the
+organization has turned FBRX support access on**: the managed setting `support.allowOnManaged`, off by default, set in
+FBRX Command's settings for its computers. Until then, even a valid pass is refused, so FBRX cannot unlock an
+organization's computer, or settings it locked, without the organization's say-so. If the organization turns it off
+again, support mode ends at once. A computer on its own always takes a valid pass.
+
+## Using it
+
+1. On the computer, type **`418teapotadmin`** into the license box (Settings → License), Spotlight, or FBRX Browser's
+   address bar. It asks for a support pass.
+2. Paste the support pass. The computer goes into support mode: full access, with a bar across every FBRX window
+   saying so.
+3. When you are done, type **`refusetobrew`** (anywhere the phrase is taken, or the “End support” button on the
+   banner). The computer goes back to the edition and settings it had. It also ends on its own when the pass runs out.
+
+A pass is for one computer only. Its install id is on Settings → License (with a copy button), and the FBRX/1 command
+`show version` prints it. Nothing on a server changes.
+
+## Making a support pass
+
+**From FBRX Command** (an admin with the `licenses.manage` permission): **Licenses → Support pass**. Paste the
+computer's install id, pick how long (1 to 12 hours) and what it runs as, add a note (a ticket number), and **Make the
+pass**. It is shown once, with a copy button. The same, by API:
+
+```
+POST /v1/admin/support-passes
+{ "installId": "<the computer's install id>", "hours": 4, "tier": "blackhole", "note": "Ticket 1234" }
+```
+
+It returns `{ pass, expiresAt, tier }`. Hand the pass to the computer.
+
+**Offline, with the signing key** (`npm run keys:generate`), no FBRX Command needed:
+
+```bash
+npm run support:pass -- --install-id <id> [--hours 4] [--tier blackhole|ultra|basic] [--note "Ticket 1234"] [--by you@fbrx]
+```
+
+The build must carry the matching public key (the same one that verifies license keys), so a pass made with the
+project's signing key works on the builds made from it. Release builds carry the key in the `FBRX_LICENSE_PUBLIC_KEY`
+repository secret; FBRX Command shows its own on the Licenses page. A build made on your own computer without a key
+(`npm run dev:desktop`) already runs as Black Hole, so it needs no pass.
+
+## Why it is safe
+
+- **A pass cannot be forged.** It is Ed25519-signed by the control plane's license key; a build only trusts passes
+  signed by the key it carries.
+- **A pass is for one computer.** It names that computer's install id; a pass for another computer is refused.
+- **A pass is short-lived.** At most 12 hours (4 by default), and it ends on its own.
+- **Everything is audited.** Starting and ending support, and every change made while it is on, are in the tamper-
+  evident audit log; on a computer in an organization, FBRX Command is told too.
+- **An organization decides for its computers.** On a computer in an organization, support mode needs the
+  organization's permission (above), and its FBRX Command is told when a session starts and ends.
+- **It reaches the apps on a computer only** — FBRX OS and FBRX Browser. FBRX Command and FBRX Server have their own
+  administrator accounts; support mode does not touch them.

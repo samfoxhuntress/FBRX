@@ -3,6 +3,7 @@ import type { SnapshotHeader, SnapshotInfo } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Input, KeyValue, Modal, Page, Table, Toggle, formatBytes, formatDate, useAction, useConfirm } from '@fbrx/ui';
 import { bridge, call, pickFile } from '../client';
 import { isLocked, useCore } from '../hooks';
+import { WholeComputer } from './backup-image';
 
 export function BackupPage() {
   const list = useCore('backup.list', undefined, ['audit.appended']);
@@ -22,7 +23,7 @@ export function BackupPage() {
   return (
     <Page
       title="Backup & restore"
-      description="A snapshot captures this whole workstation — settings, credentials, conversations, agent memory, plugins, connections, workspace files and audit log — in one encrypted file. Restore it on any Mac or Windows machine and continue exactly where you left off."
+      description="Two kinds of backup. FBRX Time makes an image of the whole computer that puts it back exactly as it was. A snapshot captures FBRX itself — settings, credentials, conversations, agent memory, plugins, connections, workspace files and audit log — in one encrypted file you can restore on any Mac or Windows machine."
       actions={
         <>
           <Button
@@ -40,8 +41,9 @@ export function BackupPage() {
         </>
       }
     >
+      <WholeComputer />
       <Grid cols={2}>
-        <Card title="Scheduled backups" subtitle={cfg?.directory || 'Saved in the FBRX data folder'}>
+        <Card title="Scheduled snapshots" subtitle={cfg?.directory || 'Saved in the FBRX data folder'}>
           {cfg && (
             <div className="fx-form">
               <Toggle

@@ -1,6 +1,6 @@
 import { VERTICAL_NAMES } from '@fbrx/shared';
 import { useEffect, useState } from 'react';
-import { Button, Icons, Select, Shell, Spinner, type NavItem } from '@fbrx/ui';
+import { Button, ErrorBoundary, Icons, Select, Shell, Spinner, type NavItem } from '@fbrx/ui';
 import { api, session, setUnauthorizedHandler } from './api';
 import { AppStateProvider, useApp, useRoute, type Me } from './state';
 import { LoginPage, SetupPage } from './pages/login';
@@ -8,9 +8,11 @@ import { OverviewPage } from './pages/overview';
 import { DevicesPage } from './pages/devices';
 import { DeviceDetailPage } from './pages/device-detail';
 import { ConfigPage } from './pages/config';
+import { GovernancePage } from './pages/governance';
 import { EnrollmentPage } from './pages/enrollment';
 import { SecretsPage } from './pages/secrets';
 import { ReleasesPage } from './pages/releases';
+import { CommandUpdateBanner } from './pages/command-update';
 import { PackagesPage } from './pages/packages';
 import { SnapshotsPage } from './pages/snapshots';
 import { LicensesPage } from './pages/licenses';
@@ -22,6 +24,8 @@ import { EventsPage } from './pages/events';
 import { AccountPage } from './pages/account';
 import { HelpdeskPage } from './pages/helpdesk';
 import { MessagesPage } from './pages/messages';
+import { AccountsPage, BillingPage, MembersPage } from './pages/billing';
+import { CloudAiPage } from './pages/cloud-ai';
 
 export function App() {
   const [phase, setPhase] = useState<'loading' | 'setup' | 'login' | 'ready'>('loading');
@@ -96,6 +100,7 @@ function Console() {
     { id: 'events', label: 'Alerts & events', icon: 'activity', section: 'Fleet' },
     ...(app.can('helpdesk.read') ? [{ id: 'helpdesk', label: 'Help desk', icon: 'lifebuoy', section: 'Fleet' } as NavItem] : []),
     ...(app.can('messages.read') ? [{ id: 'messages', label: 'Messages', icon: 'message', section: 'Fleet' } as NavItem] : []),
+    ...(app.can('config.manage') ? [{ id: 'governance', label: 'Governance', icon: 'shield', section: 'Configuration' } as NavItem] : []),
     ...(app.can('config.manage') ? [{ id: 'config', label: 'Profiles & groups', icon: 'settings', section: 'Configuration' } as NavItem] : []),
     ...(app.can('enrollment.manage') ? [{ id: 'enrollment', label: 'Deploy & enroll', icon: 'download', section: 'Configuration' } as NavItem] : []),
     ...(app.can('secrets.manage') ? [{ id: 'secrets', label: 'Credentials', icon: 'key', section: 'Configuration' } as NavItem] : []),
@@ -104,12 +109,16 @@ function Console() {
     { id: 'releases', label: 'Releases', icon: 'upload', section: 'Platform' },
     ...(app.can('licenses.read') ? [{ id: 'licenses', label: 'Licenses', icon: 'tag', section: 'Platform' } as NavItem] : []),
     ...(superadmin ? [{ id: 'tenants', label: 'Tenants', icon: 'globe', section: 'Platform' } as NavItem] : []),
+    ...(superadmin ? [{ id: 'accounts', label: 'FBRX accounts', icon: 'users', section: 'Platform' } as NavItem] : []),
+    ...(superadmin ? [{ id: 'cloud-ai', label: 'Cloud AI', icon: 'sparkles', section: 'Platform' } as NavItem] : []),
+    ...(app.can('users.manage') ? [{ id: 'members', label: 'Members', icon: 'users', section: 'Access' } as NavItem] : []),
+    ...(app.can('billing.read') ? [{ id: 'billing', label: 'Billing', icon: 'tag', section: 'Access' } as NavItem] : []),
     ...(app.can('users.manage') ? [{ id: 'users', label: 'Users & API keys', icon: 'users', section: 'Access' } as NavItem] : []),
     ...(app.can('webhooks.manage') ? [{ id: 'webhooks', label: 'Webhooks', icon: 'link', section: 'Access' } as NavItem] : []),
     ...(app.can('audit.read') ? [{ id: 'audit', label: 'Audit log', icon: 'history', section: 'Access' } as NavItem] : []),
   ];
   const activeNav = route.page === 'device' ? 'devices' : route.page;
-  const needsTenant = !app.tenantId && !['overview', 'tenants', 'releases', 'account', 'audit', 'licenses', 'devices', 'events', 'helpdesk'].includes(route.page);
+  const needsTenant = !app.tenantId && !['overview', 'tenants', 'releases', 'account', 'accounts', 'cloud-ai', 'audit', 'licenses', 'devices', 'events', 'helpdesk'].includes(route.page);
 
   const page = (() => {
     if (needsTenant) return <div className="fx-page"><h1>Select a tenant</h1><p className="fx-secondary">Choose an organization in the top bar to manage its configuration.</p></div>;
@@ -126,6 +135,8 @@ function Console() {
         return <MessagesPage />;
       case 'config':
         return <ConfigPage />;
+      case 'governance':
+        return <GovernancePage />;
       case 'enrollment':
         return <EnrollmentPage />;
       case 'secrets':
@@ -148,6 +159,14 @@ function Console() {
         return <AuditPage />;
       case 'account':
         return <AccountPage />;
+      case 'members':
+        return <MembersPage />;
+      case 'billing':
+        return <BillingPage />;
+      case 'accounts':
+        return <AccountsPage />;
+      case 'cloud-ai':
+        return <CloudAiPage />;
       default:
         return <OverviewPage />;
     }
@@ -191,7 +210,10 @@ function Console() {
         </>
       }
     >
-      {page}
+      <ErrorBoundary resetKey={`${route.page}/${route.id ?? ''}`}>
+        <CommandUpdateBanner onOpen={() => go('releases')} />
+        {page}
+      </ErrorBoundary>
     </Shell>
   );
 }

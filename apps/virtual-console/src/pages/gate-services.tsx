@@ -255,7 +255,7 @@ function AddPeer({ onClose }: { onClose: () => void }) {
     return (
       <Modal
         title={`${made.peer.name} is ready`}
-        description="Scan the code with the WireGuard app on the device (Add tunnel → Scan from QR code), or send it the settings file. This is shown once: the gate does not keep the device's private key."
+        description="On an FBRX computer: FBRX VPN → Add your gate, and paste the settings (or pick the file). On a phone: scan the code with the WireGuard app (Add tunnel → Scan from QR code). This is shown once: the gate does not keep the device's private key."
         onClose={onClose}
         footer={
           <>

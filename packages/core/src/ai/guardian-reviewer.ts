@@ -11,7 +11,7 @@ Use "block" for clear harm (data destruction, credential theft, disabling securi
 /** Optional model-assisted guardian review, enabled by policy (ai.guardianModelReview). */
 export function installModelReviewer(k: Kernel): void {
   k.guardian.setModelReviewer(async (tool, input): Promise<GuardianFinding[]> => {
-    const { provider, model } = k.providers.resolve();
+    const { provider, config, model } = k.providers.resolve();
     const signal = AbortSignal.timeout(20_000);
     let text = '';
     for await (const chunk of provider.chat({
@@ -19,6 +19,8 @@ export function installModelReviewer(k: Kernel): void {
       signal,
       tools: [],
       maxTokens: 300,
+      // A verdict within seconds: a model on this computer answers without thinking first.
+      ...(config.cloud ? {} : { reasoning: false }),
       messages: [
         { role: 'system', content: PROMPT },
         { role: 'user', content: `Tool: ${tool.name} (${tool.title}, risk ${tool.risk})\nDescription: ${tool.description}\nInput:\n${JSON.stringify(input, null, 2).slice(0, 8000)}` },

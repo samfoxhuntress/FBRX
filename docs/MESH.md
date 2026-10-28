@@ -36,6 +36,12 @@ under this computer's policy: each risky tool call still waits for an approval.
 the home screen. It shows status, alerts, tasks, messages and waiting approvals, lets you ask the agent, and can
 make the phone ring (*Find my phone*). It refreshes while open; phones are not woken in the background.
 
+When the computer runs **Endpoint Essentials**, FBRX Mobile is as simple as the computer: **Home** is the split-flap
+board (a greeting, the date, whether the AI is ready) and a few notes from FBRX: tips and tricks (each can be
+dismissed), **AI models** (the models on the computer, and *Use* to switch to one, for a phone that may ask the AI)
+and what Standard and Ultra add. Its tabs are Home, Ask, AI (and Approve when something waits). The notes are the
+same ones as on the computer's Home (`packages/shared/src/essentials-home.ts`).
+
 ## Mesh Assist: computers lending each other their AI
 
 When the agent on one computer runs out of room, another computer on the mesh finishes the job, and the two can talk
@@ -84,6 +90,26 @@ stop lower-priority help that is running. Without the Controller permission a co
 * Everything is in both computers' audit logs (`assist.*`, `run.handoff`), and either side can stop a request.
 * Requests travel over the same sealed, authenticated mesh connection as everything else.
 
+## Think with your FBRX Server's AI
+
+Mesh Assist hands a task to another computer's agent. A paired computer can also lend just its **AI model**: the agent
+here keeps working here (its tools, files, memory, approvals and audit log stay on this computer) and only the thinking
+happens there. A laptop that runs a small model, or none, gets the answers of your FBRX Server's big one.
+
+* **On this computer:** *AI models → Your other computers' AI* lists the paired computers that would lend the AI they
+  run themselves; **Use for chats** makes one your default (it is an AI provider like any other, so it can also be
+  chosen per chat, or set up by hand with type *mesh*). Each answer in a chat shows the model, the computer, and how
+  long it took, so you can compare it with the AI on this computer.
+* **On the server:** the same setting lends it as Mesh Assist (*Lend the agent to other computers*, or *Mesh & AI* in
+  the server console) and the same **Help with AI** permission. With *Ask me first*, its person is asked once per
+  computer (until FBRX restarts there); a "no" holds for ten minutes.
+* **Only an AI it runs itself.** A computer whose AI is a cloud provider does not lend it, so a conversation never
+  leaves your computers this way. The server's own *Thinking* setting decides whether its model thinks first.
+* **How it travels:** the conversation goes to the server over the sealed mesh connection (up to 1 MiB a request, so
+  about 160,000 characters of conversation; pictures stay here), and the answer streams back as the model writes it.
+  Stopping the answer here stops the model there. From away, connect [FBRX VPN](VPN.md) first: the server is reached at
+  its address at home.
+
 ## Prefer Mesh
 
 A fast lane for traffic between FBRX computers, so their AI helping each other does not wait behind a backup or a
@@ -118,7 +144,8 @@ allow it, per paired server.
 
 1. **Mesh & phone → Add a device → Show a code on this computer** shows a QR code and a 20-character one-time code (100 bits), valid for five
    minutes.
-2. A phone scans the QR code (it contains the computer's address, the code and the computer's key fingerprint);
+2. A phone scans the QR code (it contains the computer's address, the code and the computer's key fingerprint), with
+   the camera (FBRX Mobile opens in the browser) or with **Scan the code** in the FBRX app ([STORES.md](STORES.md));
    another computer uses **Add a device → Enter a code from another computer** (or **Join** beside it under *FBRX
    computers nearby*) and types the code.
 3. The joining device creates its own X25519 key pair and sends its public key with
@@ -144,7 +171,8 @@ the phone's browser storage for the FBRX Mobile page.
 ## Limits to know about
 
 * **Local network only.** The mesh is meant for your home or office network. To reach your devices from elsewhere,
-  use a VPN into that network rather than forwarding the port.
+  connect with **FBRX VPN** to your FBRX Gate ([VPN.md](VPN.md)) rather than forwarding the port: the mesh then works
+  through the tunnel, your FBRX Server's AI included.
 * **The phone app arrives over plain HTTP.** Requests are end-to-end encrypted, but the web page itself is served
   unencrypted by your computer, so someone actively attacking your local network at the moment you open FBRX
   Mobile could tamper with the page. Pair and use the phone app on networks you trust. (A future native app removes
@@ -154,6 +182,28 @@ the phone's browser storage for the FBRX Mobile page.
 
 ## Organizations
 
-The mesh is per person. Administrators can switch it off for a tenant or group by locking `mesh.enabled` to `false`
-in managed settings (and Mesh Assist on its own with the `mesh.assist.*` settings); device pairing, requests and
-permission changes are written to the audit log (`category: mesh`).
+**An organization's computers mesh by themselves.** Every computer enrolled in FBRX Command reports its mesh key,
+port, addresses and server roles in its heartbeat. FBRX Command hands each computer a roster of the organization's
+other computers, and because it vouches for their keys over the enrolled connection, they trust each other without
+pairing codes. FBRX Mesh turns itself on at each computer (unless a profile locks `mesh.enabled` off). The roster
+comes again whenever a computer joins, moves or changes roles (FBRX Command nudges every online computer), when a
+computer reconnects, and every ten minutes.
+
+What the organization's computers may do on each other is the organization's choice, not each computer's:
+
+| | |
+| --- | --- |
+| See each other and message | Always (messages only while Messages is on for the organization) |
+| Borrow a server's AI (Mesh Assist) | On a server with the **ai** role, for the groups the **hive** allows (every group by default) |
+| Network protection | A server with the **minidome** role may warn the others about threats it sees |
+| The agent, approvals, tasks, control, controller | Never through the organization; pair by hand for those |
+
+In FBRX Command: *Profiles & groups → FBRX Mesh*: the computers mesh together (on or off), and *Who may use the
+servers' AI*: every group, or the groups chosen. Changes reach online computers at once. On each computer the
+organization's computers show *from your organization* on the Mesh page; they cannot be removed or given more
+rights there, and leaving the organization (or the organization turning its mesh off) forgets them. Computers and
+phones paired by hand stay as they are.
+
+The mesh is otherwise per person. Administrators can switch it off for a tenant or group by locking `mesh.enabled` to
+`false` in managed settings (and Mesh Assist on its own with the `mesh.assist.*` settings); device pairing, the
+organization's introductions, requests and permission changes are written to the audit log (`category: mesh`).

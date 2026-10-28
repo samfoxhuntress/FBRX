@@ -80,7 +80,7 @@ function Pairing({ onClose }: { onClose: () => void }) {
           {p.qrDataUrl && <img src={p.qrDataUrl} alt="Pairing QR code" width={220} height={220} />}
           <div className="pair-steps">
             <p>
-              <strong>Phone:</strong> on the same Wi-Fi, scan the code with the camera and open the link. FBRX Mobile opens and pairs itself.
+              <strong>Phone:</strong> on the same Wi-Fi, scan the code with the FBRX app (Scan the code), or with the camera and open the link. It pairs itself.
             </p>
             <p>
               <strong>Another FBRX computer:</strong> open Mesh &amp; phone there, choose <em>Add a device → Enter a code</em>, and type:
@@ -227,6 +227,8 @@ function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => 
   const agent = useAgentName();
   const toast = useToast();
   const access = accessOf(d);
+  // Introduced by the organization (FBRX Command), which also decides what it may do here.
+  const org = d.source === 'org';
   const preset = ACCESS.find((a) => a.id === access);
   const setPerms = (permissions: Partial<MeshPermissions>) => void run('perm', () => call('mesh.setPermissions', { id: d.id, permissions }));
   const remove = async () => {
@@ -243,10 +245,16 @@ function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => 
           {d.name}
         </span>
       }
-      subtitle={`${d.kind === 'mobile' ? 'Phone' : d.platform || 'Computer'}${d.version ? ` · FBRX ${d.version}` : ''} · paired ${timeAgo(d.pairedAt)}`}
+      subtitle={`${d.kind === 'mobile' ? 'Phone' : d.platform || 'Computer'}${d.version ? ` · FBRX ${d.version}` : ''} · ${org ? 'from your organization' : `paired ${timeAgo(d.pairedAt)}`}`}
       actions={<Status tone={d.online ? 'good' : 'neutral'}>{d.online ? 'online' : d.lastSeen ? `seen ${timeAgo(d.lastSeen)}` : 'offline'}</Status>}
     >
       <div className="fx-grid" style={{ gap: 12 }}>
+        {org ? (
+          <div className="fx-muted" style={{ fontSize: 12.5 }}>
+            Your organization introduced this computer and decides what it may do here: {(['status', 'chat', 'assist', 'network'] as const).filter((k) => d.permissions[k]).map((k) => PERMS.concat(SPECIAL).find((p) => p.key === k)?.label.toLowerCase() ?? k).join(', ') || 'nothing yet'}.
+          </div>
+        ) : (
+        <>
         <Field
           label={`What ${d.name} may do here`}
           info="Pick a level of trust. You can change it at any time, and Choose one by one lets you set each permission yourself."
@@ -279,6 +287,8 @@ function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => 
             Fingerprint <span className="mono">{fingerprint(d.fingerprint)}</span>
           </div>
         </More>
+        </>
+        )}
         <div className="fx-actions">
           <Button size="sm" icon="message" onClick={() => navigate(`messages/mesh:${d.id}`)}>
             Message
@@ -306,7 +316,7 @@ function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => 
               d.kind === 'mobile' && { label: 'Find my phone', icon: 'phone', hint: 'It rings when FBRX Mobile is open', onSelect: () => void run('loc', () => call('mesh.action', { id: d.id, action: 'locate' }), 'Your phone will ring when FBRX Mobile is open') },
               d.kind === 'desktop' && { label: 'Lock it', icon: 'lock', hint: 'Needs Lock and sleep on that computer', onSelect: () => void run('lock', () => call('mesh.action', { id: d.id, action: 'lock' }), 'Lock sent') },
               d.kind === 'desktop' && { label: 'Put it to sleep', icon: 'moon', hint: 'Needs Lock and sleep on that computer', onSelect: () => void run('sleep', () => call('mesh.action', { id: d.id, action: 'sleep' }), 'Sleep sent') },
-              { label: 'Remove', icon: 'trash', danger: true, hint: 'Unpair it from this computer', onSelect: () => void remove() },
+              !org && { label: 'Remove', icon: 'trash', danger: true, hint: 'Unpair it from this computer', onSelect: () => void remove() },
             ]}
           />
         </div>

@@ -4,7 +4,7 @@ import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addPath, deletePath, getPath, netDevice, parseValue, setPath, type GateCommit, type GateConfig, type GateIssue, type GateLive, type GateState } from '@fbrx/gate';
+import { addPath, deletePath, getPath, netDevice, parseValue, renumberNetwork, setPath, type GateCommit, type GateConfig, type GateIssue, type GateLive, type GateState } from '@fbrx/gate';
 import { loadConfig } from './config';
 
 /**
@@ -26,6 +26,10 @@ const HELP = `fbrx-gate: FBRX Gate's command line
   confirm                        keep a commit made with "confirmed"
   rollback <commit>              go back to an earlier commit
   rollback now                   undo the commit waiting to be confirmed, now
+  renumber <network> <address>   move a network to other addresses; its range, reservations, forwards and rules
+                                 follow                renumber lan 192.168.50.1/24
+  wan dhcp                       the internet port takes its address from the modem or router
+  wan static <address> <gateway> a fixed internet address    wan static 203.0.113.2/29 203.0.113.1
   reset                          throw the edits away
   history                        commits, newest first
   leases                         devices that got an address
@@ -177,6 +181,21 @@ async function main(argv: string[]): Promise<number> {
       } finally {
         rmSync(dir, { recursive: true, force: true });
       }
+      return 0;
+    }
+    case 'renumber': {
+      if (rest.length !== 2) throw new Error('Usage: fbrx-gate renumber <network> <address>   (like renumber lan 192.168.50.1/24)');
+      const s = await state();
+      await save(renumberNetwork(s.candidate, rest[0], rest[1]));
+      console.log(dim('Then: fbrx-gate commit (devices get their new addresses as their leases renew; restart them to hurry it).'));
+      return 0;
+    }
+    case 'wan': {
+      const s = await state();
+      const wan = s.candidate.wan;
+      if (rest[0] === 'dhcp' && rest.length === 1) await save({ ...s.candidate, wan: { interface: wan.interface, mode: 'dhcp', ping: wan.ping } });
+      else if (rest[0] === 'static' && rest.length === 3) await save({ ...s.candidate, wan: { ...wan, mode: 'static', address: rest[1], gateway: rest[2] } });
+      else throw new Error('Usage: fbrx-gate wan dhcp · fbrx-gate wan static <address/size> <gateway>   (like wan static 203.0.113.2/29 203.0.113.1)');
       return 0;
     }
     case 'check':

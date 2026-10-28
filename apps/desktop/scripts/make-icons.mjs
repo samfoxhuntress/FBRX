@@ -239,6 +239,32 @@ function sidebar() {
   return bmp(w, h, rgb);
 }
 
+/** A tile of any shape: the white mark centered on black, box pixels across (Store tiles and splash screens). */
+function tile(w, h, box) {
+  const ink = coverage(INK, w, h, (w - box) / 2, (h - box) / 2, box);
+  const buf = Buffer.alloc(w * h * 4);
+  for (let i = 0; i < w * h; i++) {
+    const v = Math.round(BLACK + (255 - BLACK) * ink[i]);
+    buf.writeUInt32BE(((v << 24) | (v << 16) | (v << 8) | 255) >>> 0, i * 4);
+  }
+  return png(w, h, buf);
+}
+
+/** The white mark on transparent, box pixels across (the foreground of Android's adaptive icon). */
+function foreground(size, box) {
+  const ink = coverage(INK, size, size, (size - box) / 2, (size - box) / 2, box);
+  const buf = Buffer.alloc(size * size * 4);
+  for (let i = 0; i < size * size; i++) buf.writeUInt32BE((0xffffff00 | Math.round(ink[i] * 255)) >>> 0, i * 4);
+  return png(size, size, buf);
+}
+
+/** A plain black square (the background of Android's adaptive icon). */
+function solid(size) {
+  const buf = Buffer.alloc(size * size * 4);
+  for (let i = 0; i < size * size; i++) buf.writeUInt32BE(((BLACK << 24) | (BLACK << 16) | (BLACK << 8) | 255) >>> 0, i * 4);
+  return png(size, size, buf);
+}
+
 const out = (p, data) => {
   mkdirSync(dirname(p), { recursive: true });
   writeFileSync(p, data);
@@ -254,4 +280,19 @@ out(join(app, 'dist', 'assets', 'tray@2x.png'), icon(32));
 out(join(app, 'dist', 'assets', 'trayTemplate.png'), template(22));
 out(join(app, 'dist', 'assets', 'trayTemplate@2x.png'), template(44));
 out(join(app, 'src', 'renderer', 'public', 'icon.png'), icon(128));
+// Microsoft Store package tiles (electron-builder's appx target reads build/appx).
+out(join(app, 'build', 'appx', 'StoreLogo.png'), tile(50, 50, 40));
+out(join(app, 'build', 'appx', 'Square44x44Logo.png'), icon(44));
+out(join(app, 'build', 'appx', 'Square150x150Logo.png'), tile(150, 150, 96));
+out(join(app, 'build', 'appx', 'Wide310x150Logo.png'), tile(310, 150, 96));
+out(join(app, 'build', 'appx', 'LargeTile.png'), tile(310, 310, 196));
+out(join(app, 'build', 'appx', 'SmallTile.png'), tile(71, 71, 48));
+out(join(app, 'build', 'appx', 'SplashScreen.png'), tile(620, 300, 160));
+// The phone app's source images (store/mobile: the icon and splash generator reads them).
+const mobile = join(app, '..', '..', 'store', 'mobile', 'assets');
+out(join(mobile, 'icon-only.png'), tile(1024, 1024, 760));
+out(join(mobile, 'icon-foreground.png'), foreground(1024, 560));
+out(join(mobile, 'icon-background.png'), solid(1024));
+out(join(mobile, 'splash.png'), tile(2732, 2732, 520));
+out(join(mobile, 'splash-dark.png'), tile(2732, 2732, 520));
 console.log('Icons generated');

@@ -61,7 +61,20 @@ with `bash`) in the unzipped FBRX folder. It uses the same Node.js bootstrap as 
   router. Windows and macOS ask once whether Node.js may accept connections: allow it.
 * **Only this computer**: plain HTTP on `127.0.0.1:8787`, to try FBRX Command or join FBRX on the same computer.
 
-Run the installer again to update (same data, certificate and setup); `--uninstall` stops FBRX Command and removes
+**New versions.** FBRX Command carries the version of the FBRX release it was installed from (the same number as
+FBRX OS: *FBRX Command 1.9.8* at the bottom of the console). It checks the FBRX release list by itself a minute and a
+half after it starts and every six hours, and shows a newer version on **Releases** (and in a line across the top of
+the console for the platform operator). **Update now** downloads the new FBRX folder over the one it was installed
+from (keeping `.fbrx-keys`, `.fbrx-setup` and `node_modules`), then runs `Install FBRX Command` there on the FBRX
+Command computer: in its own window on Windows, in Terminal on a Mac (press Return), in the background on Linux
+(`logs/update.log`). FBRX Command stops for a few minutes and starts again with all its data. **Skip this version**
+stops the reminder; the switch on the card (or `FBRX_CP_UPDATE_CHECK=off`) turns the checks off. Only the platform
+operator (the account that set FBRX Command up) checks or installs; administrators see the version. FBRX Command as
+FBRX Server's command role updates with the server instead (`FBRX_CP_MANAGED_BY=fbrx-server`). FBRX Command
+from before 1.9.8 cannot update itself yet: update it once by hand (below), and from then on Update now works.
+
+Run the installer again to update by hand (same data, certificate and setup): download and unzip the new FBRX zip and
+double-click `Install FBRX Command` in the new folder. `--uninstall` stops FBRX Command and removes
 the program, icons and login item but keeps `data/`; add `--delete-data` to erase it too. Other options: `--port`
 (default 8787; the local console uses the next port), `--yes`, `--no-open`. The installed launcher also works on
 its own: `<folder>/app/node <folder>/app/launcher.mjs open | start | stop | status`. Log: `.fbrx-setup/command-setup.log`;
@@ -71,6 +84,12 @@ FBRX Command's own log: `logs/command.log` in its folder.
 code like `4qZy-…`) and opening FBRX Command from its icon fills it in; it is also `setupToken` in `config.json` in
 FBRX Command's folder until setup is done. The long `AB:CD:…` code under *Certificate* is the certificate's
 fingerprint, not the token: the setup page says so if it is pasted there.
+
+### On FBRX Server
+
+FBRX Server runs FBRX Command as a role (`install.sh --roles …,command`, or *Roles* in the server's console): its own
+certificate, a setup token, updates with the server, and the server itself joins it. See
+[SERVER.md](SERVER.md#fbrx-command-on-the-server-the-command-role).
 
 ### Docker (recommended for a hosted service)
 
@@ -130,11 +149,15 @@ unit), users and API keys. Health endpoint: `GET /healthz`.
 
 1. Set the version in `apps/desktop/package.json` and in `release.json` (with its summary and notes), and point
    `release.json`'s `download` at the tag's source zip, `https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v<version>.zip`,
-   and `page` at `https://github.com/samfoxhuntress/FBRX/releases/tag/v<version>`.
+   and `page` at `https://github.com/samfoxhuntress/FBRX/releases/tag/v<version>`. When FBRX Server changed, raise its
+   version in `apps/virtual/package.json` and set `release.json`'s `server` entry: `version`, `summary`, `notes` and
+   `bundle` (`https://github.com/samfoxhuntress/FBRX/releases/download/v<version>/fbrx-server-<server version>.tar.gz`).
+   Its checksum is published next to the bundle (`.sha256`), so `sha256` can stay out; servers find the update with
+   `sudo fbrx-server update check` (see [SERVER.md](SERVER.md#updating-fbrx-server)).
 2. Merge into `main` (the default branch: installed copies read `release.json` from it).
 3. Tag that commit `v<version>` and push the tag, or run the **Release** workflow on `main` (Actions → Release →
    Run workflow) with *channel* `stable` and *Also publish a GitHub release* ticked, which creates the tag itself. It
-   builds the Mac and Windows installers, the FBRX Server ISO and bundle and the FBRX Command image, and publishes them
+   builds the Mac, Windows and Linux installers, the FBRX Server ISO and bundle and the FBRX Command image, and publishes them
    as a GitHub release named after the version (a version with a `-` in it, such as `2.0.0-beta.1`, or the beta or
    dev channel, is published as a pre-release).
 
@@ -148,15 +171,20 @@ npm run runtime:fetch -- --platform darwin --arch arm64,x64     # optional: bund
 npm run package:mac                                              # → apps/desktop/release/<version>/
 npm run runtime:fetch -- --platform win32 --arch x64,arm64
 npm run package:win
+npm run runtime:fetch -- --platform linux --arch x64
+npm run package:linux
 ```
 
-macOS packages must be built on a Mac and Windows packages are most reliably built on Windows (the Release
-workflow does both). Without a Developer ID certificate, Mac builds are ad-hoc signed: they run on the Mac that built
+macOS packages must be built on a Mac, Windows packages are most reliably built on Windows, and Linux packages on
+Linux (the Release workflow does all three). Without a Developer ID certificate, Mac builds are ad-hoc signed: they run on the Mac that built
 them, but other Macs will refuse them until you sign and notarize. Artifacts:
 
 * macOS: `FBRX-OS-<v>-arm64.dmg`, `FBRX-OS-<v>-x64.dmg` (installers) and matching `.zip` files (auto-update).
 * Windows: `FBRX-OS-Setup-<v>.exe` — one NSIS installer containing x64 and arm64; per-user by default, per-machine
   with elevation.
+* Linux (x64): `FBRX-OS-<v>-x86_64.AppImage` (runs on any distribution: make it executable and open it; it updates
+  itself) and `FBRX-OS-<v>-amd64.deb` (Debian and Ubuntu: `sudo apt install ./FBRX-OS-<v>-amd64.deb`). Linux
+  packages are not code-signed; `latest-linux.yml` carries their checksums for updates.
 
 If the runtime is not bundled, users can install it from **Local AI → Install runtime**, and onboarding offers it.
 

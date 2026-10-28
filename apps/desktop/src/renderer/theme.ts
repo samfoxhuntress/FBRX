@@ -1,9 +1,9 @@
 import { useEffect } from 'react';
-import type { Settings, Texture, ThemePreset, Tier } from '@fbrx/shared';
+import { atLeast, type Settings, type Texture, type ThemePreset, type Tier } from '@fbrx/shared';
 
 /** Swatch colors for the preset picker: [page, sidebar, accent, glow] for light and dark. */
 export const PRESETS: Array<{ id: ThemePreset; name: string; light: [string, string, string, string?]; dark: [string, string, string, string?]; texture: Exclude<Texture, 'theme'> }> = [
-  { id: 'fabrics', name: 'Fabrics', light: ['#f6f2ea', '#fbf7f0', '#a35f08', '#c7c7c4'], dark: ['#100e0b', '#1a1714', '#f0a530', '#b4b4b0'], texture: 'weave' },
+  { id: 'fabrics', name: 'Fabrics', light: ['#f6f2ea', '#fbf7f0', '#946000', '#e6c06a'], dark: ['#0d1015', '#10141a', '#f4b942', '#a87614'], texture: 'weave' },
   { id: 'tropical', name: 'Tropical', light: ['#fff6ec', '#fff3e4', '#e8590c', '#ff9f6b'], dark: ['#150b07', '#180d08', '#ffa23a', '#ff4f81'], texture: 'palms' },
   { id: 'neon', name: 'Neon Grid', light: ['#eef6fa', '#f3f9fc', '#0090b8', '#5ccfff'], dark: ['#03060c', '#050a12', '#00e5ff', '#0066ff'], texture: 'grid' },
   { id: 'ember', name: 'Ember', light: ['#f7f1ee', '#fcf7f4', '#c2410c', '#ef9a7a'], dark: ['#110c0a', '#1b1412', '#ff6b3d', '#7c2410'], texture: 'grain' },
@@ -174,12 +174,13 @@ export function resolvedMode(theme: Settings['general']['theme']): 'light' | 'da
 }
 
 /**
- * Applies appearance settings to <html> (presets live in theme.css). Endpoint Basic gets the plain look: light or
- * dark, no theme colors, gradients or textures (those come with Ultra). `tier` is undefined while the license loads.
+ * Applies appearance settings to <html> (presets live in theme.css). Endpoint Essentials and Standard get the plain
+ * look: light or dark, no theme colors, gradients or textures (those come with Ultra). `tier` is undefined while the
+ * license loads.
  */
 export function useAppearance(settings: Settings | undefined, tier: Tier | undefined) {
   const theme = settings?.general.theme ?? 'dark';
-  const basic = tier === 'basic';
+  const basic = !!tier && !atLeast(tier, 'ultra');
   const a = settings && basic ? { ...settings.appearance, preset: 'graphite' as const, texture: 'none' as const, accent: '' } : settings?.appearance;
   useEffect(() => {
     // Wait for the license, so Basic never flashes the Ultra look (or the other way round).
@@ -189,6 +190,7 @@ export function useAppearance(settings: Settings | undefined, tier: Tier | undef
       const mode = resolvedMode(theme);
       root.dataset.theme = mode;
       root.dataset.edition = basic ? 'basic' : 'ultra';
+      root.dataset.tier = tier;
       root.dataset.preset = a?.preset ?? 'fabrics';
       root.dataset.density = a?.density ?? 'comfortable';
       root.dataset.radius = a?.radius ?? 'rounded';
@@ -201,6 +203,18 @@ export function useAppearance(settings: Settings | undefined, tier: Tier | undef
       else root.style.removeProperty('--texture');
       if (nav) root.style.setProperty('--texture-nav', nav);
       else root.style.removeProperty('--texture-nav');
+      // Sidebar icons: one color (the accent, or one picked) or each section's own, with a tint behind them.
+      const icons = a?.navIcons ?? 'accent';
+      const iconColor = icons === 'custom' && /^#[0-9a-f]{6}$/i.test(a?.navIconColor ?? '') ? a!.navIconColor : null;
+      root.dataset.navIcons = icons === 'custom' && !iconColor ? 'accent' : icons;
+      if (iconColor) {
+        root.style.setProperty('--nav-hue', iconColor);
+        root.style.setProperty('--nav-hue-ink', luminance(hexToRgb(iconColor)) > 0.4 ? '#111111' : '#ffffff');
+      } else {
+        root.style.removeProperty('--nav-hue');
+        root.style.removeProperty('--nav-hue-ink');
+      }
+      root.style.setProperty('--nav-tint', String((a?.navIconStrength ?? 50) / 50));
       root.dataset.effects = resolvedEffects(a?.effects ?? 'auto');
       root.dataset.motion = a?.reduceMotion ? 'reduce' : 'full';
       root.style.zoom = String(a?.fontScale ?? 1);
@@ -221,7 +235,7 @@ export function useAppearance(settings: Settings | undefined, tier: Tier | undef
     const mq = window.matchMedia('(prefers-color-scheme: dark)');
     mq.addEventListener('change', apply);
     return () => mq.removeEventListener('change', apply);
-  }, [theme, tier, a?.preset, a?.density, a?.radius, a?.texture, a?.textureStrength, a?.reduceMotion, a?.fontScale, a?.accent, a?.effects]);
+  }, [theme, tier, a?.preset, a?.density, a?.radius, a?.texture, a?.textureStrength, a?.reduceMotion, a?.fontScale, a?.accent, a?.effects, a?.navIcons, a?.navIconColor, a?.navIconStrength]);
 }
 
 const STARTUP_VOLUME = 0.85;

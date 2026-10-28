@@ -1,12 +1,15 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import type { PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
-import { TIER_NAMES, addressAs, displayVersion, funEnabled } from '@fbrx/shared';
-import { Button, FBRX_MARK, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import type { NotificationEvent, PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
+import { TIER_NAMES, TIER_SHORT, addressAs, atLeast, displayVersion, funEnabled } from '@fbrx/shared';
+import { Button, ErrorBoundary, FBRX_MARK, FbrxMark, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
+import { playChime } from './notify-sound';
 import { useConsoleSessions, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
 import { AgentNameContext, EmergencyStop } from './widgets';
+import { LocalAccountLock } from './account';
 import { GooseOverlay, summonGoose, unlockTrophy, useKonami } from './fun';
+import { SnapOverlay } from './snap-overlay';
 import { TrophyBadge } from './trophies';
 import { DashboardPage } from './pages/dashboard';
 import { Onboarding } from './pages/onboarding';
@@ -14,8 +17,13 @@ import { VaultStartPrompt } from './vault-lock';
 import { UpdatePill } from './release';
 import { SpotlightView } from './pages/spotlight';
 import { ClipPicker } from './pages/clip-picker';
-import { LearnerContext, TierContext, UltraOnly, VerticalContext, useLicenseTier } from './edition';
+import { LearnerContext, StandardOnly, TierContext, UltraOnly, VerticalContext, useLicenseTier } from './edition';
+import { Tour, type TourStep } from './tour';
 import { PresenterPill, usePresenter } from './presenter';
+import { ContextMenuHost } from './context-menu';
+import { MacroAddHost } from './macro-add';
+import { VaultSaveHost } from './vault-save';
+import { FolderRequestHost } from './pages/governance-folders';
 
 // Pages load when first opened, so the app starts with only what the first screen needs.
 const AgentPage = lazy(() => import('./pages/agent').then((m) => ({ default: m.AgentPage })));
@@ -30,6 +38,7 @@ const RuntimePage = lazy(() => import('./pages/runtime').then((m) => ({ default:
 const BackupPage = lazy(() => import('./pages/backup').then((m) => ({ default: m.BackupPage })));
 const FleetPage = lazy(() => import('./pages/fleet').then((m) => ({ default: m.FleetPage })));
 const SettingsPage = lazy(() => import('./pages/settings').then((m) => ({ default: m.SettingsPage })));
+const AutomationsPage = lazy(() => import('./pages/automations').then((m) => ({ default: m.AutomationsPage })));
 const TasksPage = lazy(() => import('./pages/tasks').then((m) => ({ default: m.TasksPage })));
 const NotesPage = lazy(() => import('./pages/notes').then((m) => ({ default: m.NotesPage })));
 const ProjectsPage = lazy(() => import('./pages/projects').then((m) => ({ default: m.ProjectsPage })));
@@ -39,6 +48,7 @@ const FilesPage = lazy(() => import('./pages/files').then((m) => ({ default: m.F
 const ProcessesPage = lazy(() => import('./pages/processes').then((m) => ({ default: m.ProcessesPage })));
 const TerminalPage = lazy(() => import('./pages/terminal').then((m) => ({ default: m.TerminalPage })));
 const ToolboxPage = lazy(() => import('./pages/toolbox').then((m) => ({ default: m.ToolboxPage })));
+const EssentialsHome = lazy(() => import('./pages/essentials-home').then((m) => ({ default: m.EssentialsHome })));
 const LibraryPage = lazy(() => import('./pages/library').then((m) => ({ default: m.LibraryPage })));
 const AlertsPage = lazy(() => import('./pages/alerts').then((m) => ({ default: m.AlertsPage })));
 const StoragePage = lazy(() => import('./pages/storage').then((m) => ({ default: m.StoragePage })));
@@ -50,9 +60,12 @@ const BugsPage = lazy(() => import('./pages/bugs').then((m) => ({ default: m.Bug
 const LabPage = lazy(() => import('./pages/lab').then((m) => ({ default: m.LabPage })));
 const ServerPage = lazy(() => import('./pages/server').then((m) => ({ default: m.ServerPage })));
 const MeshPage = lazy(() => import('./pages/mesh').then((m) => ({ default: m.MeshPage })));
+const VpnPage = lazy(() => import('./pages/vpn').then((m) => ({ default: m.VpnPage })));
 const AiCoordPage = lazy(() => import('./pages/aicoord').then((m) => ({ default: m.AiCoordPage })));
 const MigratePage = lazy(() => import('./pages/migrate').then((m) => ({ default: m.MigratePage })));
+const SnapshotsPage = lazy(() => import('./pages/snapshots').then((m) => ({ default: m.SnapshotsPage })));
 const ClipboardPage = lazy(() => import('./pages/clipboard').then((m) => ({ default: m.ClipboardPage })));
+const BrowserApp = lazy(() => import('./pages/browser').then((m) => ({ default: m.BrowserApp })));
 
 export type Route =
   | 'home'
@@ -65,6 +78,7 @@ export type Route =
   | 'projects'
   | 'calendar'
   | 'snippets'
+  | 'automations'
   | 'storage'
   | 'security'
   | 'shield'
@@ -77,10 +91,13 @@ export type Route =
   | 'processes'
   | 'migrate'
   | 'clipboard'
+  | 'snapshots'
+  | 'browser'
   | 'terminal'
   | 'toolbox'
   | 'library'
   | 'mesh'
+  | 'vpn'
   | 'aicoord'
   | 'connections'
   | 'tools'
@@ -94,16 +111,38 @@ export type Route =
   | 'spotlight'
   | 'clips'
   | 'goose'
-  | 'goose-overlay';
+  | 'goose-overlay'
+  | 'snap-overlay';
+
+/** This window shows one page on its own, beside the main window (opened with "Open in a new window"). */
+export const POPOUT = new URLSearchParams(location.search).has('popout');
+/** This window is the FBRX Browser (its own window, opened from the sidebar or tray). */
+export const BROWSER_WINDOW = new URLSearchParams(location.search).has('browser');
+const popoutPage = location.hash.replace(/^#\/?/, '').split('/')[0];
+/** Pages set to open in their own window (Settings → General → Windows); kept up to date by the main window. */
+let ownWindows: Record<string, boolean> = {};
 
 /** Navigates to a page; `to` may carry a sub-path such as `notes/note_123` or `settings/appearance`. */
 export function navigate(to: string) {
+  const page = to.split('/')[0];
+  // The browser lives in its own window: opening it from the main window focuses that window, not a page here.
+  if (page === 'browser' && !BROWSER_WINDOW && bridge.openBrowser) return bridge.openBrowser(to.split('/').slice(1).join('/') || undefined);
+  // A popped-out page keeps to itself: links to other pages open in the main window.
+  if (POPOUT && page !== popoutPage && bridge.openMain) return bridge.openMain(to);
+  const here = location.hash.replace(/^#\/?/, '').split('/')[0];
+  if (!POPOUT && ownWindows[page] && page !== here && bridge.popOut) return void bridge.popOut(to);
   location.hash = `#/${to}`;
 }
 
 /** The part of the route after the page name (`notes/abc` → `abc`). */
 export function routeArg(): string | null {
   return location.hash.replace(/^#\/?/, '').split('/').slice(1).join('/') || null;
+}
+
+/** Opens the chat the agent is working in (the first one, when it works in several). */
+async function openWorkingChat() {
+  const [first] = await call('ai.runs');
+  navigate(first ? `agent/chat/${encodeURIComponent(first.conversationId)}` : 'agent');
 }
 
 function useRoute(): Route {
@@ -147,7 +186,7 @@ function Splash({ tier }: { tier: Tier | undefined }) {
           <path className="splash-letters" d={FBRX_MARK.letters} fillRule="evenodd" />
         </svg>
         <div className="splash-word">FBRX Endpoint</div>
-        <div className="splash-sub">{tier === 'ultra' ? 'Ultra' : tier === 'basic' ? 'Basic' : 'Fabrics Operating System'}</div>
+        <div className="splash-sub">{tier ? TIER_SHORT[tier] : 'Fabrics Operating System'}</div>
       </div>
     </div>
   );
@@ -157,16 +196,33 @@ export function App() {
   const route = useRoute();
   const { data: settings } = useCore('settings.get', undefined, ['settings.changed']);
   const tier = useLicenseTier();
+  const localLocked = useCore('localAccount.status', undefined, ['localAccount.changed']).data?.locked ?? false;
   useAppearance(settings?.settings, tier);
+  // The offline account's start password covers every window; the small ones show only the lock until it is given
+  // (Spotlight would otherwise take the keyboard back for its own search box).
+  if ((route === 'spotlight' || route === 'clips') && localLocked) return <LocalAccountLock />;
   if (route === 'spotlight') return settings ? <SpotlightView agentName={settings.settings.ai.agentName} fun={funEnabled(settings.settings, tier)} /> : null;
+  // The FBRX Browser runs in its own window (opened from the sidebar or tray): just the browser, no FBRX shell.
+  if (BROWSER_WINDOW)
+    return (
+      <>
+        <SupportBanner />
+        <LocalAccountLock />
+        <Suspense fallback={<div style={{ display: 'grid', placeItems: 'center', height: '100%' }}><Spinner /></div>}>
+          {settings ? <BrowserApp agentName={settings.settings.ai.agentName} /> : null}
+        </Suspense>
+        <VaultSaveHost listen={false} />
+      </>
+    );
   if (route === 'clips') return <ClipPicker />;
   if (route === 'goose-overlay') return <GooseOverlay />;
+  if (route === 'snap-overlay') return <SnapOverlay />;
   return <MainApp route={route} settings={settings} />;
 }
 
 function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeof useCore<'settings.get'>>['data'] }) {
   const toast = useToast();
-  const { data: status } = useCore('system.status', undefined, ['service.changed', 'vault.changed', 'fleet.changed', 'license.changed', 'approval.requested', 'approval.resolved', 'runtime.changed', 'ai.halted'], 15_000);
+  const { data: status } = useCore('system.status', undefined, ['service.changed', 'vault.changed', 'fleet.changed', 'license.changed', 'approval.requested', 'approval.resolved', 'runtime.changed', 'ai.halted', 'agent.runs'], 15_000);
   const { data: trophies } = useCore('fun.trophies', undefined, ['fun.trophy']);
   const { data: alertCounts } = useCore('alerts.counts', undefined, ['alerts.changed'], 60_000);
   // The Help desk tab's number: new tickets in the queue on a receiver, tickets waiting on you everywhere else.
@@ -179,6 +235,19 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   // FBRX Shield's number: findings waiting for a decision.
   const shieldCount = useCore('protection.status', undefined, ['protection.changed', 'shield.detected'], 300_000).data?.shield.open ?? 0;
   const [forceOnboarding, setForceOnboarding] = useState(false);
+  // The Essentials walkthrough: closed for this window once finished or skipped; it waits for the start-up animation.
+  const [tourClosed, setTourClosed] = useState(false);
+  const [tourReady, setTourReady] = useState(false);
+  useEffect(() => {
+    const t = setTimeout(() => setTourReady(true), sessionStorage.getItem('fbrx.splashShown') ? 600 : 2900);
+    // Settings → Edition → Take the tour again.
+    const again = () => setTourClosed(false);
+    window.addEventListener('fbrx:tour', again);
+    return () => {
+      clearTimeout(t);
+      window.removeEventListener('fbrx:tour', again);
+    };
+  }, []);
   const [collapsed, setCollapsedState] = useState(() => {
     try {
       return localStorage.getItem('fbrx.sidebar') === 'icons';
@@ -194,8 +263,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       /* remembered for this session only */
     }
   };
-  // First start of this window: show the start-up animation and play the start-up sound once.
-  const [firstStart] = useState(() => !sessionStorage.getItem('fbrx.splashShown'));
+  // First start of this window: show the start-up animation and play the start-up sound once (not in a popped-out page).
+  const [firstStart] = useState(() => !POPOUT && !sessionStorage.getItem('fbrx.splashShown'));
   const startupSound = settings?.settings.appearance.splashSound;
   const soundDone = useRef(false);
   useEffect(() => {
@@ -218,25 +287,31 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const presenter = usePresenter();
   const presenting = useRef(presenter);
   presenting.current = presenter;
-  useEffect(
-    () =>
-      onEvent('notification', (n) => {
-        // Presenting: no pop-ups with private text on the projector; the alert inbox still has them.
-        const p = presenting.current;
-        if (p?.active && p.hideNotifications) {
-          if (n.level === 'error') toast.error('FBRX needs your attention', 'Open Alerts when you have finished presenting.');
-          return;
-        }
-        // A message: one click opens the conversation (and none while it is already on screen).
-        if (n.open) {
-          if (location.hash === `#/${n.open}`) return;
-          toast.info(n.title, n.body, { label: 'Open', onClick: () => navigate(n.open!) });
-          return;
-        }
-        toast[n.level === 'error' ? 'error' : n.level === 'warning' ? 'warning' : n.level === 'success' ? 'success' : 'info'](n.title, n.body);
-      }),
-    [toast],
-  );
+  useEffect(() => {
+    const show = (n: NotificationEvent) => {
+      // A message: one click opens the conversation (and none while it is already on screen).
+      if (n.open) {
+        if (location.hash === `#/${n.open}`) return;
+        toast.info(n.title, n.body, { label: 'Open', onClick: () => navigate(n.open!) });
+        return;
+      }
+      toast[n.level === 'error' ? 'error' : n.level === 'warning' ? 'warning' : n.level === 'success' ? 'success' : 'info'](n.title, n.body);
+    };
+    // The desktop app decides where each notification shows (Alerts → Notifications) and sends this window its toasts.
+    if (bridge.onToast) return bridge.onToast(show);
+    // In a browser, every notification the core sends is a toast here.
+    return onEvent('notification', (n) => {
+      // Presenting: no pop-ups with private text on the projector; the alert inbox still has them.
+      const p = presenting.current;
+      if (p?.active && p.hideNotifications) {
+        if (n.level === 'error') toast.error('FBRX needs your attention', 'Open Alerts when you have finished presenting.');
+        return;
+      }
+      show(n);
+    });
+  }, [toast]);
+  // FBRX's notification sound, played here once when the desktop app asks.
+  useEffect(() => bridge.onChime?.((c) => playChime(c.level, c.volume)), []);
   // A badge for the trophy case, with a way to go and look at it.
   useEffect(
     () =>
@@ -251,7 +326,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     [toast],
   );
   const tier: Tier = status?.license.tier ?? 'basic';
-  const ultra = tier === 'ultra';
+  const ultra = atLeast(tier, 'ultra');
+  const blackhole = atLeast(tier, 'blackhole');
   const fun = funEnabled(settings?.settings, tier);
   useEffect(() => {
     if (status) document.title = status.edition?.productName ?? TIER_NAMES[tier];
@@ -306,8 +382,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const vertical = status.edition?.vertical ?? 'business';
   const helpdeskShown = vertical !== 'home' || ultra;
 
-  const all: Array<NavItem & { ultra?: boolean }> = [
-    { id: 'home', label: 'FBRX Glass', icon: 'dashboard', section: 'Command' },
+  const all: Array<NavItem & { need?: Tier }> = [
+    { id: 'home', label: 'Dash', icon: 'dashboard', section: 'Command' },
     { id: 'agent', label: agentName, icon: 'sparkles', section: 'Command' },
     { id: 'alerts', label: 'Alerts', icon: 'bell', count: alertCounts?.unread, section: 'Command' },
     // Chat with your other devices and the organization's (or family's) computers, in every edition.
@@ -320,42 +396,114 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'notes', label: 'Notes', icon: 'note', section: 'Workspace' },
     { id: 'projects', label: 'Projects', icon: 'layers', section: 'Workspace' },
     { id: 'snippets', label: 'Snippets', icon: 'code', section: 'Workspace' },
+    { id: 'automations', label: 'Automations', icon: 'repeat', section: 'Workspace' },
     { id: 'storage', label: 'Storage', icon: 'drive', section: 'PC care' },
     { id: 'security', label: 'Security', icon: 'lock', section: 'PC care' },
     { id: 'updates', label: 'Updates', icon: 'download', section: 'PC care' },
-    { id: 'bugs', label: 'Bug catcher', icon: 'bug', section: 'PC care', ultra: true },
+    { id: 'bugs', label: 'Bug catcher', icon: 'bug', section: 'PC care', need: 'ultra' },
     { id: 'network', label: 'Network Center', icon: 'network', section: 'PC care' },
+    { id: 'browser', label: 'Browser', icon: 'globe', section: 'Utilities' },
     { id: 'files', label: 'Files', icon: 'folder', section: 'Utilities' },
-    { id: 'processes', label: 'Task Manager', icon: 'activity', section: 'Utilities', ultra: true },
+    { id: 'processes', label: 'Task Manager', icon: 'activity', section: 'Utilities', need: 'ultra' },
     { id: 'clipboard', label: 'Clipboard', icon: 'clipboard', section: 'Utilities' },
-    { id: 'migrate', label: 'Copy & migrate', icon: 'copy', section: 'Utilities', ultra: true },
+    { id: 'snapshots', label: 'Snapshot', icon: 'camera', section: 'Utilities' },
+    { id: 'migrate', label: 'Copy & migrate', icon: 'copy', section: 'Utilities', need: 'ultra' },
     { id: 'toolbox', label: 'Toolbox', icon: 'toolbox', section: 'Utilities' },
     { id: 'library', label: 'Library', icon: 'book', section: 'Utilities' },
-    { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect', ultra: true },
+    { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect', need: 'ultra' },
+    { id: 'vpn', label: 'FBRX VPN', icon: 'lock', section: 'Connect', need: 'ultra' },
     { id: 'runtime', label: 'AI models', icon: 'cpu', section: 'Connect' },
-    { id: 'aicoord', label: 'AI coordination', icon: 'zap', section: 'Connect', ultra: true },
-    { id: 'connections', label: 'Connections', icon: 'link', section: 'Connect', ultra: true },
-    { id: 'tools', label: 'Tools & plugins', icon: 'wrench', section: 'Connect', ultra: true },
+    { id: 'aicoord', label: 'AI coordination', icon: 'zap', section: 'Connect', need: 'ultra' },
+    { id: 'connections', label: 'Connections', icon: 'link', section: 'Connect', need: 'ultra' },
+    { id: 'tools', label: 'Tools & plugins', icon: 'wrench', section: 'Connect', need: 'ultra' },
     { id: 'shield', label: 'FBRX Shield', icon: 'shield', count: shieldCount || undefined, section: 'Protect' },
     { id: 'approvals', label: 'Approvals', icon: 'check', count: status.pendingApprovals, section: 'Protect' },
-    { id: 'vault', label: 'Credentials', icon: 'key', section: 'Protect' },
-    { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect', ultra: true },
+    { id: 'vault', label: 'Vault', icon: 'key', section: 'Protect' },
+    { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect', need: 'ultra' },
     { id: 'backup', label: 'Backup & restore', icon: 'archive', section: 'Protect' },
-    { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', ultra: true },
-    { id: 'lab', label: 'Virtual lab', icon: 'box', section: 'Advanced', ultra: true },
-    { id: 'server', label: 'FBRX Server', icon: 'server', section: 'Advanced', ultra: true },
-    // A Basic computer that belongs to an FBRX Command tenant still sees its organization.
-    { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System', ultra: !enrolled },
+    { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', need: 'ultra' },
+    { id: 'lab', label: 'Virtual lab', icon: 'box', section: 'Advanced', need: 'ultra' },
+    { id: 'server', label: 'FBRX Server', icon: 'server', section: 'Advanced', need: 'blackhole' },
+    // Every edition sees its organization, or how to join one (Black Hole only ever comes through FBRX Command).
+    { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System' },
     { id: 'settings', label: 'Settings', icon: 'settings', section: 'System' },
   ];
-  // Endpoint Basic: the everyday tools and the agent. Ultra adds the rest. Student computers keep only LEARNER_PAGES.
-  const nav = all
-    .filter((i) => (learner ? LEARNER_PAGES.has(i.id) : ultra || !i.ultra))
-    .map(({ ultra: _u, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
-  const groups: NavGroup[] = SECTIONS.map(({ basicHint, learnerHint, ...g }) => ({ ...g, hint: learner && learnerHint ? learnerHint : !ultra && basicHint ? basicHint : g.hint, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
+  // Endpoint Essentials: the everyday pages in one short list (no sections to open). Standard: the everyday tools and
+  // the agent. Ultra adds the expert ones, Black Hole the FBRX Server page. Student computers keep only LEARNER_PAGES.
+  const essentials = tier === 'essentials' && !learner;
+  const byId = new Map(all.map((i) => [i.id, i]));
+  const nav: NavItem[] = essentials
+    ? ESSENTIALS_NAV.flatMap(([id, section, label]) => {
+        const item = byId.get(id);
+        if (!item || (id === 'fleet' && !enrolled)) return [];
+        const { need: _n, ...rest } = item;
+        return [{ ...rest, section, ...(label ? { label } : {}) }];
+      })
+    : all
+        .filter((i) => (learner ? LEARNER_PAGES.has(i.id) : !i.need || atLeast(tier, i.need)))
+        .map(({ need: _n, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
+  const groups: NavGroup[] | undefined = essentials
+    ? undefined
+    : SECTIONS.map(({ basicHint, learnerHint, ...g }) => ({ ...g, hint: learner && learnerHint ? learnerHint : !ultra && basicHint ? basicHint : g.hint, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
   const ultraOnly = (title: string, what: string) => <UltraOnly title={title} what={what} />;
 
+  // The Essentials walkthrough, once, on a new computer (after the start-up animation).
+  const tourSteps: TourStep[] = [
+    {
+      title: 'Welcome to FBRX Essentials',
+      body: (
+        <>
+          <p>Your own AI, running on this computer. Here is a quick look around: well under a minute.</p>
+          <p className="fx-muted">Esc skips it. Settings → Edition shows it again.</p>
+        </>
+      ),
+    },
+    {
+      target: 'agent',
+      title: agentName,
+      body: (
+        <>
+          <p>Ask anything in plain words: “help me write a thank-you note”, “why is my computer slow?”, “explain this error”.</p>
+          <p>Chats start offline, and {agentName} asks before it uses the internet or changes anything. Your earlier chats are kept here too.</p>
+        </>
+      ),
+    },
+    {
+      target: 'runtime',
+      title: 'AI models',
+      body: 'The AI runs on this computer, starting with a small, quick model. Pick a bigger one here when you want more, or connect another AI.',
+    },
+    {
+      target: 'settings',
+      title: 'Settings',
+      body: (
+        <>
+          <p><b>Memory</b> (what {agentName} remembers about you, on this computer only), <b>Voice</b> (talk instead of typing) and the look.</p>
+          <p className="fx-muted"><b>Edition</b>: switch to Standard whenever you want everyday tools too (storage, antivirus, notes…), and back any time.</p>
+        </>
+      ),
+    },
+    {
+      title: 'You’re all set',
+      body: s.spotlight.enabled ? (
+        <p>
+          One more thing: press <kbd>{s.spotlight.hotkey}</kbd> anywhere to ask {agentName} without opening this window.
+        </p>
+      ) : (
+        <p>Say hello to {agentName}.</p>
+      ),
+    },
+  ];
+  const showTour = !POPOUT && essentials && !tourClosed && status.edition?.tourDone === false && tourReady;
+  // Terminal and chat in their own windows (Ultra has the Terminal; the chat is in every edition).
+  ownWindows = POPOUT ? {} : { terminal: ultra && s.windows.terminal, agent: s.windows.agent };
+
   const page = (() => {
+    // Essentials Home: the split-flap board and a few notes from FBRX (no dashboard).
+    if (essentials && route === 'home') return <EssentialsHome status={status} agentName={agentName} who={addressAs(s)} />;
+    if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && !byId.get(route)?.need) {
+      return <StandardOnly title={byId.get(route)?.label ?? 'That page'} what={STANDARD_WHAT[route] ?? 'More of the everyday tools.'} />;
+    }
     if (learner && route !== 'home' && !LEARNER_PAGES.has(route)) {
       return <UltraOnly title="That page" what={vertical === 'home' ? 'This computer keeps things simple. Ask a parent if you need something that is not here.' : 'Student computers keep things simple. Ask your teacher or the IT team if you need something that is not here.'} learner />;
     }
@@ -379,6 +527,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return <ProjectsPage />;
       case 'snippets':
         return <SnippetsPage />;
+      case 'automations':
+        return <AutomationsPage />;
       case 'storage':
         return <StoragePage advanced={ultra} />;
       case 'shield':
@@ -388,13 +538,13 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'updates':
         return <UpdatesPage />;
       case 'bugs':
-        return ultra ? <BugsPage agentName={agentName} advanced={ultra} /> : ultraOnly('The bug catcher', 'Crash and error logs from Windows and your apps, explained by the agent. In Basic, ask the agent what went wrong, or send it to your organization from Help desk.');
+        return ultra ? <BugsPage agentName={agentName} advanced={ultra} /> : ultraOnly('The bug catcher', 'Crash and error logs from Windows and your apps, explained by the agent. Meanwhile, ask the agent what went wrong, or send it to your organization from Help desk.');
       case 'server':
-        return ultra ? <ServerPage /> : ultraOnly('FBRX Server', 'The FBRX Server installer ISO, the bundle for a Debian 13 server you already have, and the guides.');
+        return blackhole ? <ServerPage /> : <UltraOnly need="blackhole" title="FBRX Server" what="The FBRX Server installer ISO, the bundle for a Debian 13 server you already have, and the guides." />;
       case 'lab':
         return ultra ? <LabPage /> : ultraOnly('The virtual lab', 'Test machines in Hyper-V or Windows Sandbox, with capacity gauges and one-click starts.');
       case 'network':
-        return <NetworkPage advanced={ultra} easterEggs={fun} />;
+        return <NetworkPage advanced={ultra} everything={blackhole} easterEggs={fun} />;
       case 'files':
         return <FilesPage />;
       case 'processes':
@@ -403,14 +553,21 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return ultra ? <MigratePage /> : ultraOnly('Copy & migrate', 'Copy whole folders or move to a new computer with Robocopy or rsync, verified and resumable.');
       case 'clipboard':
         return <ClipboardPage />;
+      case 'snapshots':
+        return <SnapshotsPage />;
+      case 'browser':
+        // In the desktop app this opens its own window (see navigate); this inline view is the development fallback.
+        return <BrowserApp agentName={agentName} />;
       case 'terminal':
         return ultra ? <TerminalPage easterEggs={fun} /> : ultraOnly('The Terminal', 'PowerShell, the command prompt and device consoles, with a code lab, commands and snippets beside them.');
       case 'toolbox':
         return <ToolboxPage advanced={ultra} easterEggs={fun} />;
       case 'library':
-        return <LibraryPage agentName={agentName} advanced={ultra} easterEggs={fun} />;
+        return <LibraryPage agentName={agentName} everything={blackhole} easterEggs={fun} />;
       case 'mesh':
         return ultra ? <MeshPage /> : ultraOnly('Mesh & phone', 'Link your computers and your phone over an encrypted mesh, and reach FBRX from anywhere.');
+      case 'vpn':
+        return ultra ? <VpnPage /> : ultraOnly('FBRX VPN', 'Reach home from anywhere through your FBRX Gate: your FBRX Server, its AI and your network.');
       case 'aicoord':
         return ultra ? <AiCoordPage agentName={agentName} /> : ultraOnly('AI coordination', 'Let other AI apps on this computer (such as Claude) use FBRX tools safely, through MCP.');
       case 'approvals':
@@ -428,13 +585,47 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'backup':
         return <BackupPage />;
       case 'fleet':
-        return ultra || enrolled ? <FleetPage /> : ultraOnly('Organization', 'Join your organization’s FBRX Command tenant. A license key from your organization joins it for you.');
+        return <FleetPage />;
       case 'settings':
         return <SettingsPage onRerunSetup={() => setForceOnboarding(true)} />;
       default:
         return <DashboardPage status={status} agentName={agentName} easterEggs={fun} who={addressAs(s)} />;
     }
   })();
+
+  const hosts = (
+    <>
+      <SupportBanner />
+      <LocalAccountLock />
+      <ContextMenuHost agentName={agentName} ultra={ultra} essentials={essentials} />
+      <MacroAddHost />
+      <VaultSaveHost listen={!POPOUT} />
+      {!POPOUT && <FolderRequestHost />}
+    </>
+  );
+  if (POPOUT)
+    return (
+      <TierContext.Provider value={tier}>
+      <LearnerContext.Provider value={learner}>
+      <VerticalContext.Provider value={vertical}>
+      <AgentNameContext.Provider value={agentName}>
+        <PopoutFrame title={byId.get(route)?.label ?? (route === 'agent' ? agentName : 'FBRX')}>
+          <Suspense
+            fallback={
+              <div style={{ display: 'grid', placeItems: 'center', height: '40vh' }}>
+                <Spinner />
+              </div>
+            }
+          >
+            <ErrorBoundary resetKey={route}>{page}</ErrorBoundary>
+          </Suspense>
+        </PopoutFrame>
+        {hosts}
+      </AgentNameContext.Provider>
+      </VerticalContext.Provider>
+      </LearnerContext.Provider>
+      </TierContext.Provider>
+    );
 
   return (
     <TierContext.Provider value={tier}>
@@ -450,7 +641,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
             </>
           ) : (
             <>
-              FBRX Endpoint <span className={`tier-badge ${tier}`}>{ultra ? 'Ultra' : 'Basic'}</span>
+              FBRX Endpoint <span className={`tier-badge ${tier}`}>{TIER_SHORT[tier]}</span>
             </>
           )
         }
@@ -486,14 +677,85 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
             </div>
           }
         >
-          {page}
+          <ErrorBoundary resetKey={route}>{page}</ErrorBoundary>
         </Suspense>
       </Shell>
       <VaultStartPrompt />
+      {hosts}
+      {showTour && (
+        <Tour
+          steps={tourSteps}
+          onDone={() => {
+            setTourClosed(true);
+            void call('edition.tourDone', { done: true });
+          }}
+        />
+      )}
     </AgentNameContext.Provider>
     </VerticalContext.Provider>
     </LearnerContext.Provider>
     </TierContext.Provider>
+  );
+}
+
+/**
+ * While a support pass is active, a bar across the top of every FBRX window says so and offers to end it — so nobody
+ * forgets the computer is running with full access. The pass ends on its own when it runs out.
+ */
+function SupportBanner() {
+  const { data: support } = useCore('support.status', undefined, ['support.changed']);
+  if (!support?.active) return null;
+  const until = support.until ? new Date(support.until).toLocaleString() : null;
+  return (
+    <div className="support-banner" role="status">
+      <Icons.wrench size={14} />
+      <span>
+        Support mode is on{support.note ? ` — ${support.note}` : ''}. This computer is running with full access for troubleshooting{until ? `, until ${until}` : ''}.
+      </span>
+      <button onClick={() => void call('support.end').catch(() => undefined)}>End support</button>
+    </div>
+  );
+}
+
+/**
+ * A page in a window of its own: a slim bar with its name, "Side by side" (FBRX on the left, this on the right), "Keep
+ * on top", and the way back to FBRX, over the page itself.
+ */
+function PopoutFrame({ title, children }: { title: string; children: ReactNode }) {
+  const [pinned, setPinned] = useState(false);
+  useEffect(() => {
+    document.body.classList.add('popout');
+    document.title = `${title} · FBRX`;
+  }, [title]);
+  return (
+    <div className="popout-frame">
+      <div className="popout-bar">
+        <span className="popout-title">
+          <FbrxMark size={18} /> {title}
+        </span>
+        <span style={{ flex: 1 }} />
+        <Button size="sm" variant="ghost" icon="sidebar" title="FBRX on the left, this window on the right" onClick={() => void bridge.popOutWindow?.('tile')}>
+          Side by side
+        </Button>
+        <Button
+          size="sm"
+          variant={pinned ? 'primary' : 'ghost'}
+          icon="layers"
+          aria-pressed={pinned}
+          title="Keep this window above other windows"
+          onClick={() => {
+            setPinned(!pinned);
+            void bridge.popOutWindow?.('pin', !pinned);
+          }}
+        >
+          Keep on top
+        </Button>
+        <Button size="sm" variant="ghost" icon="external" title="Bring the main FBRX window forward" onClick={() => void bridge.popOutWindow?.('main')}>
+          FBRX
+        </Button>
+      </div>
+      <div className="fx-content popout-content">{children}</div>
+    </div>
   );
 }
 
@@ -533,7 +795,7 @@ function TopBar({
       </button>
       {status.vault.state === 'locked' ? (
         <button className="status-link" onClick={() => navigate('vault')} title="Open the vault to unlock">
-          <Status tone={status.vault.lockReason === 'keychain' ? 'warning' : 'neutral'}>Credentials locked</Status>
+          <Status tone={status.vault.lockReason === 'keychain' ? 'warning' : 'neutral'}>Vault locked</Status>
         </button>
       ) : failing.length ? (
         <Status tone="critical">{failing.length} service(s) failing</Status>
@@ -560,7 +822,12 @@ function TopBar({
           {openConsoles} console{openConsoles > 1 ? 's' : ''}
         </button>
       )}
-      {status.activeRuns > 0 && <Status tone="busy">{agentName} working</Status>}
+      {status.activeRuns > 0 && (
+        <button className="model-pill working-pill" onClick={() => void openWorkingChat()} title={`See what ${agentName} is doing`}>
+          <span className="fx-spinner" aria-hidden />
+          {agentName} working
+        </button>
+      )}
       {status.pendingApprovals > 0 && (
         <Button size="sm" variant="primary" icon="shield" onClick={() => navigate('approvals')}>
           {status.pendingApprovals} approval{status.pendingApprovals > 1 ? 's' : ''} waiting
@@ -587,14 +854,55 @@ function TopBar({
  * it; collapsed to icons, its pages slide out beside it.
  */
 /** What a student's or child's computer (FBRX OS Education or Home) shows. */
-const LEARNER_PAGES = new Set(['home', 'agent', 'messages', 'helpdesk', 'calendar', 'tasks', 'notes', 'toolbox', 'library', 'settings']);
+const LEARNER_PAGES = new Set(['home', 'agent', 'messages', 'helpdesk', 'calendar', 'tasks', 'notes', 'browser', 'toolbox', 'library', 'settings']);
+
+/**
+ * Endpoint Essentials is the AI on its own: the chat (with its history), the AI models, and Settings (memory, voice,
+ * Spotlight, the edition). An organization's computer also gets its help desk and the Organization page. Its pages in
+ * order, the short list's headings, and plainer names where they help.
+ */
+const ESSENTIALS_NAV: Array<[Route, string, string?]> = [
+  ['home', 'Your AI', 'Home'],
+  ['agent', 'Your AI'],
+  ['runtime', 'Your AI', 'AI models'],
+  ['helpdesk', 'Help & settings', 'Get help'],
+  ['fleet', 'Help & settings'],
+  ['settings', 'Help & settings'],
+];
+const ESSENTIALS_PAGES = new Set<string>(ESSENTIALS_NAV.map(([id]) => id));
+
+/** What a Standard page does, said on its place in Essentials. */
+const STANDARD_WHAT: Partial<Record<Route, string>> = {
+  home: 'Dash: your computer at a glance, how it is doing and anything that needs you.',
+  alerts: 'What FBRX keeps an eye on (space running low, a threat stopped, an update waiting), in one place.',
+  messages: 'Chat with your other devices and your organization’s computers.',
+  calendar: 'Your calendar, with your Outlook or Google account if you connect one.',
+  tasks: 'Your to-do list, with reminders.',
+  notes: 'Quick notes, kept on this computer.',
+  projects: 'Group notes, tasks and chats by project.',
+  snippets: 'Text you type again and again, a shortcut away.',
+  automations: 'Jobs the AI does by itself on a schedule (watch listings, check stocks, a morning brief) and tells you what it found.',
+  storage: 'See what fills your disk and clear out what you don’t need, safely.',
+  security: 'Windows and macOS security settings, checked and explained.',
+  updates: 'Keeps this computer’s apps and system up to date.',
+  network: 'Your connection: speed, Wi‑Fi and the devices on your network.',
+  files: 'Find, preview and tidy files, with the agent to help.',
+  clipboard: 'Everything you copied, with handy transforms (Ctrl+Alt+Z).',
+  snapshots: 'Pictures of the screen (an area, a window or all of it), marked up and copied (Ctrl+Alt+S).',
+  toolbox: 'Quick tools: password generator, unit converter, QR codes and more.',
+  library: 'Short guides for everyday things: Wi‑Fi, printers, backups, and more.',
+  shield: 'FBRX Shield, the antivirus: checks new downloads and keeps threats out.',
+  approvals: 'What the agent asked to do, waiting for your yes or no.',
+  vault: 'Your passwords, kept encrypted: FBRX Browser fills them in, with 2-step codes and checks for weak or reused ones.',
+  backup: 'Snapshots of FBRX and images of the whole computer, to move or restore it.',
+};
 
 const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; basicHint?: string; learnerHint?: string; icon: IconName }> = [
-  { id: 'bridge', section: 'Command', label: 'Bridge', hint: 'Glass, agent, messages, alerts', learnerHint: 'Home, helper, messages', icon: 'compass' },
-  { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Calendar, tasks, notes', learnerHint: 'Calendar, notes and to-dos', icon: 'layers' },
+  { id: 'glass', section: 'Command', label: 'Glass', hint: 'Dash, agent, messages, alerts', learnerHint: 'Home, helper, messages', icon: 'compass' },
+  { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Calendar, tasks, notes, automations', learnerHint: 'Calendar, notes and to-dos', icon: 'layers' },
   { id: 'pitstop', section: 'PC care', label: 'Pit Stop', hint: 'Storage, security, repairs', icon: 'wrench' },
   { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', learnerHint: 'Tools and stories', icon: 'toolbox' },
-  { id: 'orbit', section: 'Connect', label: 'Orbit', hint: 'Phone, mesh, AI models', basicHint: 'AI models', icon: 'orbit' },
+  { id: 'orbit', section: 'Connect', label: 'Orbit', hint: 'Phone, mesh, VPN, AI models', basicHint: 'AI models', icon: 'orbit' },
   { id: 'stronghold', section: 'Protect', label: 'Stronghold', hint: 'Antivirus, approvals, keys, backups', icon: 'castle' },
   { id: 'lab', section: 'Advanced', label: 'Lab', hint: 'Terminal, virtual lab, FBRX Server', icon: 'flask' },
   { id: 'control', section: 'System', label: 'Control', hint: 'Organization, settings', basicHint: 'Settings, license', learnerHint: 'Settings', icon: 'settings' },

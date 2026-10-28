@@ -138,7 +138,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
     pinnedVersion: z.string().refine(isValidSemver, 'Invalid version').nullable().optional(),
     /** Who uses the group's computers (Education: staff or student). */
     audience: z.enum(AUDIENCES).nullable().optional(),
-    /** Hold the group to Endpoint Basic, or null for what the license gives. */
+    /** The most the group's computers may run (essentials, basic = Standard, ultra), or null for what the license allows. */
     tier: z.enum(TIERS).nullable().optional(),
     autoUpdate: z.enum(AUTO_UPDATE_MODES).nullable().optional(),
   });
@@ -399,16 +399,18 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
         audience: z.enum(AUDIENCES).nullable().optional(),
         /** This computer receives the organization's help desk tickets. */
         helpdeskReceiver: z.boolean().optional(),
+        /** The most this computer may run (null = its group's, or what the license allows). */
+        tier: z.enum(TIERS).nullable().optional(),
       })
       .parse(req.body);
-    const configFields = ['groupId', 'settingsOverride', 'lockedOverride', 'policyOverride', 'updateChannel', 'pinnedVersion', 'audience', 'helpdeskReceiver'];
+    const configFields = ['groupId', 'settingsOverride', 'lockedOverride', 'policyOverride', 'updateChannel', 'pinnedVersion', 'audience', 'helpdeskReceiver', 'tier'];
     if (configFields.some((f) => f in body) && !can(req.principal!.role, 'config.manage')) throw forbidden('Changing device configuration requires an admin');
     if (body.groupId && !ctx.db.get('SELECT 1 FROM groups WHERE id = ? AND tenant_id = ?', body.groupId, d.tenant_id)) throw badRequest('Unknown group');
     if (body.settingsOverride || body.lockedOverride) validateSettingsPatch(body.settingsOverride ?? {}, body.lockedOverride ?? []);
     const policy = body.policyOverride === undefined ? undefined : body.policyOverride === null ? null : PolicySchema.parse(body.policyOverride);
     ctx.db.run(
       `UPDATE devices SET name = ?, group_id = ?, tags = ?, notes = ?, status = ?, settings_override = ?, locked_override = ?, policy_override = ?,
-         update_channel = ?, pinned_version = ?, audience = ?, helpdesk_receiver = ?, updated_at = ? WHERE id = ?`,
+         update_channel = ?, pinned_version = ?, audience = ?, helpdesk_receiver = ?, tier = ?, updated_at = ? WHERE id = ?`,
       body.name ?? d.name,
       body.groupId !== undefined ? body.groupId : d.group_id,
       body.tags ? JSON.stringify(body.tags) : d.tags,
@@ -421,6 +423,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
       body.pinnedVersion !== undefined ? body.pinnedVersion : d.pinned_version,
       body.audience !== undefined ? body.audience : (d.audience ?? null),
       body.helpdeskReceiver !== undefined ? (body.helpdeskReceiver ? 1 : 0) : Number(d.helpdesk_receiver ?? 0),
+      body.tier !== undefined ? body.tier : (d.tier ?? null),
       new Date().toISOString(),
       d.id,
     );

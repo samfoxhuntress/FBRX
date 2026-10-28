@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { TIER_NAMES, codenameFor, displayVersion, type ReleaseCheck } from '@fbrx/shared';
+import { STORE_UPDATES, TIER_NAMES, codenameFor, displayVersion, type ReleaseCheck } from '@fbrx/shared';
 import { Button, Callout, Card, Icons, KeyValue, Modal, Status, Toggle, timeAgo, useAction } from '@fbrx/ui';
 import { call, openExternal } from './client';
 import { useCore } from './hooks';
@@ -111,6 +111,12 @@ export function ReleasePanel({ checkRepo, locked, onToggle, autoInstall }: { che
   const { run, busy } = useAction();
   const [open, setOpen] = useState(false);
   if (!r) return null;
+  if (r.store)
+    return (
+      <Card title="New versions" subtitle={`${STORE_UPDATES}, like your other apps.`}>
+        <KeyValue items={[['This computer', displayVersion(r.currentVersion)]]} />
+      </Card>
+    );
   const tone = r.state === 'available' ? 'warning' : r.state === 'current' ? 'good' : r.state === 'error' ? 'critical' : r.state === 'checking' ? 'busy' : 'neutral';
   const label = { idle: 'Not checked yet', checking: 'Checking…', current: 'Up to date', available: r.skipped ? `${r.latest?.version} skipped` : `${r.latest?.version} available`, error: 'Could not check', off: 'Not checking' }[r.state];
   return (

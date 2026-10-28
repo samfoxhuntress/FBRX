@@ -1,6 +1,39 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import type { DeepPartial, Settings, Texture } from '@fbrx/shared';
-import { AUDIENCE_NAMES, TIER_NAMES, UPDATE_CHANNELS, displayVersion, funEnabled } from '@fbrx/shared';
+import type { DeepPartial, EditionStatus, EffectivePolicy, Settings, Texture } from '@fbrx/shared';
+import {
+  AUDIENCE_NAMES,
+  BROWSER_SEARCH_ENGINES,
+  EDITION_PLANS,
+  IMAGE_GENERATORS,
+  IMAGE_SIZES,
+  MAX_STEPS_PER_TASK,
+  STANDARD_TRIAL_DAYS,
+  SUPPORT_ENTER_PHRASE,
+  SUPPORT_EXIT_PHRASE,
+  SUPPORT_PASS_PREFIX,
+  THINKING_BUDGETS,
+  THINKING_LEVELS,
+  THINKING_NAMES,
+  THINKING_SETTINGS,
+  TIERS,
+  TIER_NAMES,
+  TIER_SHORT,
+  UPDATE_CHANNELS,
+  atLeast,
+  displayVersion,
+  editionPoints,
+  formatPrice,
+  funEnabled,
+  thinkingBudget,
+  thinkingLevelOf,
+  tierRank,
+  withSteps,
+  type ImageGenerator,
+  type ImageSize,
+  type ThinkingLevel,
+  type Tier,
+  type WebSearchEngine,
+} from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
@@ -12,8 +45,10 @@ import { AskButton, EmergencyStop, ProfileFields, saveProfile } from '../widgets
 import { KeyRecorder, MacroSettings } from './settings-macros';
 import { SnippetSettings } from './settings-snippets';
 import { VoiceSettings } from './settings-voice';
+import { MemorySettings } from './settings-memory';
 import { AboutVersion, ReleasePanel } from '../release';
-import { UltraHint, useLearner, useTier, useVertical } from '../edition';
+import { AccountSettings, BuyButtons, useAccount } from '../account';
+import { EditionHint, trialLine, howToGet, useAtLeast, useChooseEdition, useEditionStatus, useLearner, useTier, useVertical } from '../edition';
 
 function Locked({ show }: { show: boolean }) {
   return show ? (
@@ -23,19 +58,23 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'trophies' | 'updates' | 'license' | 'api' | 'logs';
-const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string }> = [
+type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'memory' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'browser' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'api' | 'logs';
+const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
-  { id: 'presenting', label: 'Presenting', icon: 'presentation', group: 'You' },
-  { id: 'messages', label: 'Messages', icon: 'message', group: 'You' },
+  { id: 'presenting', label: 'Presenting', icon: 'presentation', group: 'You', notEssentials: true },
+  { id: 'messages', label: 'Messages', icon: 'message', group: 'You', notEssentials: true },
   { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
+  { id: 'memory', label: 'Memory', icon: 'brain', group: 'You' },
   { id: 'voice', label: 'Voice', icon: 'mic', group: 'You' },
-  { id: 'snippets', label: 'Snippets', icon: 'code', group: 'You' },
-  { id: 'macros', label: 'Macros', icon: 'zap', group: 'You' },
+  { id: 'snippets', label: 'Snippets', icon: 'code', group: 'You', notEssentials: true },
+  { id: 'macros', label: 'Macros', icon: 'zap', group: 'You', notEssentials: true },
   { id: 'spotlight', label: 'Spotlight', icon: 'search', group: 'You' },
-  { id: 'trophies', label: 'Trophy case', icon: 'trophy', group: 'You', ultra: true },
+  { id: 'browser', label: 'Browser', icon: 'globe', group: 'You', notEssentials: true },
+  { id: 'trophies', label: 'Trophy case', icon: 'trophy', group: 'You' },
   { id: 'updates', label: 'Updates', icon: 'download', group: 'This computer' },
+  { id: 'account', label: 'FBRX account', icon: 'user', group: 'This computer' },
+  { id: 'edition', label: 'Edition', icon: 'layers', group: 'This computer' },
   { id: 'license', label: 'License', icon: 'key', group: 'This computer' },
   { id: 'api', label: 'Local API', icon: 'link', group: 'For experts', ultra: true },
   { id: 'logs', label: 'Logs & about', icon: 'book', group: 'For experts', basicLabel: 'About' },
@@ -47,11 +86,12 @@ const LEARNER_SECTIONS = new Set<SectionId>(['general', 'appearance', 'presentin
 const sectionFromRoute = (): SectionId | null => (SECTIONS.some((x) => x.id === routeArg()) ? (routeArg() as SectionId) : null);
 
 export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
-  const ultra = useTier() === 'ultra';
+  const tier = useTier();
+  const ultra = atLeast(tier, 'ultra');
   const funUnlocked = useCore('settings.get', undefined, ['settings.changed']).data?.settings.appearance.funUnlocked ?? false;
   const learner = useLearner();
   const vertical = useVertical();
-  const sections = SECTIONS.filter((x) => (learner ? LEARNER_SECTIONS.has(x.id) : ultra || !x.ultra));
+  const sections = SECTIONS.filter((x) => (learner ? LEARNER_SECTIONS.has(x.id) : (ultra || !x.ultra) && !(tier === 'essentials' && x.notEssentials)));
   const [picked, setTab] = useState<SectionId>(() => sectionFromRoute() ?? 'general');
   const tab = sections.some((x) => x.id === picked) ? picked : 'general';
   // A link to a section (such as "See it" on a trophy) while Settings is already open.
@@ -91,12 +131,16 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'presenting' && <PresentingSettings />}
           {tab === 'messages' && <MessagesSettings />}
           {tab === 'agent' && <AgentSettings />}
+          {tab === 'memory' && <MemorySettings />}
           {tab === 'voice' && <VoiceSettings />}
           {tab === 'snippets' && <SnippetSettings />}
           {tab === 'macros' && <MacroSettings />}
           {tab === 'spotlight' && <SpotlightSettings />}
+          {tab === 'browser' && <BrowserSettings />}
           {tab === 'trophies' && <Trophies />}
           {tab === 'updates' && <Updates />}
+          {tab === 'account' && <AccountSettings />}
+          {tab === 'edition' && <EditionSettings />}
           {tab === 'license' && <License />}
           {tab === 'api' && <LocalApi />}
           {tab === 'logs' && <Logs />}
@@ -106,7 +150,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   );
 }
 
-/** Which FBRX Endpoint this is, at the top of Settings: Basic with a way up to Ultra, or Ultra and who it is licensed to. */
+/** Which FBRX Endpoint this is, at the top of Settings, who set it, and the way to Settings → Edition. */
 function EditionCard() {
   const { data: l } = useCore('license.status', undefined, ['license.changed']);
   const { data: fleet } = useCore('fleet.status', undefined, ['fleet.changed']);
@@ -128,28 +172,142 @@ function EditionCard() {
       </div>
     );
   }
-  const ultra = l.tier === 'ultra';
   const by = l.source === 'managed' ? `Set by ${fleet?.tenantName ?? 'your organization'} (FBRX Command)` : l.source === 'development' ? 'Development build' : l.customer ? `Licensed to ${l.customer}` : null;
+  const more = ed && tierRank(ed.ceiling) > tierRank(l.tier);
   return (
     <div className={`mode-card edition-card ${l.tier}`}>
       <div>
         <div className="mode-card-title">
-          {TIER_NAMES[l.tier]} <span className={`tier-badge ${l.tier}`}>{ultra ? 'Ultra' : 'Basic'}</span>
+          {TIER_NAMES[l.tier]} <span className={`tier-badge ${l.tier}`}>{TIER_SHORT[l.tier]}</span>
           {ed && ed.vertical !== 'business' && <span className="tier-badge student" style={{ marginLeft: 6 }}>{ed.vertical === 'home' ? 'Home' : 'Education'}</span>}
         </div>
         <div className="fx-muted" style={{ fontSize: 12.5 }}>
-          {ultra
-            ? 'Everything is on: expert tool sets, Mesh, AI coordination, connections and plugins, and every theme.'
-            : 'The everyday tools and the agent, with a simple light or dark look. A license key turns on Endpoint Ultra.'}
+          {EDITION_PLANS[l.tier].summary}
           {by && <> · {by}</>}
         </div>
       </div>
-      {!ultra && l.source !== 'managed' && (
-        <Button variant="primary" icon="key" onClick={() => navigate('settings/license')}>
-          Upgrade to Ultra
-        </Button>
-      )}
+      <Button variant={more ? 'primary' : undefined} icon="layers" onClick={() => navigate('settings/edition')}>
+        {more ? 'More tools' : 'Edition'}
+      </Button>
     </div>
+  );
+}
+
+/** "$4.99 a month", "Free", "$24.99 a month, through FBRX Command". */
+function priceLine(t: Tier): ReactNode {
+  const p = EDITION_PLANS[t];
+  if (p.monthly === 0) return 'Free';
+  if (p.monthly == null) return <>{formatPrice(p.tenantMonthly)} <small>a month per computer, through FBRX Command</small></>;
+  return <>{formatPrice(p.monthly)} <small>a month, or {formatPrice(p.tenantMonthly)} through FBRX Command</small></>;
+}
+
+/** Why this computer may run what it may, in a sentence (Settings → Edition). */
+function ceilingLine(ed: EditionStatus): string {
+  switch (ed.ceilingReason) {
+    case 'development':
+      return 'Development build: every edition can be turned on.';
+    case 'trial':
+      return `${trialLine(ed)} Then Standard is ${formatPrice(EDITION_PLANS.basic.monthly!)} a month; Essentials stays free.`;
+    case 'standalone':
+      return `On its own, this computer runs Essentials for free.${ed.trialAvailable ? ` Standard can be tried free for ${STANDARD_TRIAL_DAYS} days, once.` : ''} Standard and Ultra are bought on your FBRX account or with a license key (Settings → License), or come through your organization’s FBRX Command. Black Hole comes only through FBRX Command.`;
+    case 'organization':
+      return `Your organization (FBRX Command) lets this computer go up to ${TIER_SHORT[ed.ceiling]}.`;
+    default:
+      return ed.enrolled ? `Your organization's license allows up to ${TIER_SHORT[ed.ceiling]}.` : `Your license allows up to ${TIER_SHORT[ed.ceiling]}. Black Hole comes only through an organization's FBRX Command.`;
+  }
+}
+
+/**
+ * Settings → Edition: Essentials (free, where a new computer starts), Standard and Ultra (bought, or through an
+ * organization's FBRX Command) and Black Hole (only through FBRX Command), with why a choice is locked and the
+ * walkthrough again.
+ */
+function EditionSettings() {
+  const ed = useEditionStatus();
+  const account = useAccount();
+  const { choose, startTrial, busy } = useChooseEdition();
+  if (!ed) return null;
+  return (
+    <>
+      <Card title="Edition" subtitle="How much of FBRX this computer shows. Switch any time: nothing you saved goes away.">
+        <div className="ed-choices">
+          {TIERS.map((t) => {
+            const current = ed.tier === t;
+            const locked = tierRank(t) > tierRank(ed.ceiling);
+            return (
+              <div key={t} className={`ed-choice${current ? ' current' : ''}${locked ? ' locked' : ''}`}>
+                <h4>
+                  {TIER_SHORT[t]} {locked && <Icons.lock size={13} />}
+                </h4>
+                <div className="ed-price">{priceLine(t)}</div>
+                <ul>
+                  {editionPoints(t).map((p) => (
+                    <li key={p}>{p}</li>
+                  ))}
+                </ul>
+                <div className="ed-choice-foot">
+                  {current ? (
+                    <Status tone="good">On now</Status>
+                  ) : locked && t === 'basic' && ed.trialAvailable ? (
+                    <Button size="sm" variant="primary" icon="sparkles" loading={busy === t} onClick={() => void startTrial()}>
+                      Try free for {STANDARD_TRIAL_DAYS} days
+                    </Button>
+                  ) : locked && account?.signedIn && account.canBuy && !ed.enrolled && EDITION_PLANS[t].sold === 'personal' && !atLeast(account.tier, t) ? (
+                    <BuyButtons account={account} only={[t]} short />
+                  ) : locked ? (
+                    <span className="fx-muted" style={{ fontSize: 12.5 }}>
+                      {howToGet(t, ed)}
+                    </span>
+                  ) : (
+                    <Button size="sm" variant={tierRank(t) > tierRank(ed.tier) ? 'primary' : undefined} loading={busy === t} onClick={() => void choose(t)}>
+                      Switch to {TIER_SHORT[t]}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+        <p className="fx-muted" style={{ margin: '12px 0 0' }}>
+          {ceilingLine(ed)}
+          {ed.chosen !== ed.tier && tierRank(ed.chosen) > tierRank(ed.tier) && <> You chose {TIER_SHORT[ed.chosen]}; it runs {TIER_SHORT[ed.tier]} until that is allowed.</>}
+        </p>
+        {!ed.enrolled && ed.ceilingReason !== 'development' && (
+          <div className="fx-actions" style={{ marginTop: 10 }}>
+            {!account?.signedIn && (
+              <Button size="sm" variant="primary" icon="user" onClick={() => navigate('settings/account')}>
+                Sign in to your FBRX account
+              </Button>
+            )}
+            <Button size="sm" icon="key" onClick={() => navigate('settings/license')}>
+              Enter a license key
+            </Button>
+            <Button size="sm" icon="globe" onClick={() => navigate('fleet')}>
+              Join your organization
+            </Button>
+          </div>
+        )}
+      </Card>
+      <Card title="The walkthrough" subtitle="A short look around Essentials: your AI, its models and Settings.">
+        {ed.tier === 'essentials' ? (
+          <Button
+            icon="compass"
+            onClick={() =>
+              void call('edition.tourDone', { done: false }).then(() => {
+                navigate('home');
+                window.dispatchEvent(new Event('fbrx:tour'));
+              })
+            }
+          >
+            Take the tour again
+          </Button>
+        ) : (
+          <p className="fx-muted" style={{ margin: 0 }}>
+            The walkthrough shows the Essentials pages: switch to Essentials to take it.
+          </p>
+        )}
+      </Card>
+    </>
   );
 }
 
@@ -166,6 +324,7 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
   const [profile, setProfile] = useState<{ name: string; callMe: string } | null>(null);
   const toast = useToast();
   const tier = useTier();
+  const ultra = atLeast(tier, 'ultra');
   const learner = useLearner();
   const enrolled = useCore('fleet.status', undefined, ['fleet.changed']).data?.state !== 'unenrolled';
   if (!s) return null;
@@ -174,7 +333,7 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
   return (
     <Grid cols={2}>
       <div style={{ gridColumn: '1 / -1' }}>
-        <Card title="You" subtitle={`FBRX Glass and ${s.ai.agentName} greet you by this name.`}>
+        <Card title="You" subtitle={`Dash and ${s.ai.agentName} greet you by this name.`}>
           <div className="fx-form">
             <ProfileFields name={prof.name} callMe={prof.callMe} onChange={setProfile} />
             <div>
@@ -200,17 +359,25 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
           </Field>
           <Toggle checked={s.general.launchAtLogin} disabled={L('general.launchAtLogin')} onChange={(v) => void patch({ general: { launchAtLogin: v } })} label="Start FBRX when I sign in" />
           <Toggle checked={s.general.minimizeToTray} disabled={L('general.minimizeToTray')} onChange={(v) => void patch({ general: { minimizeToTray: v } })} label="Keep running in the tray when the window is closed" />
-          {(tier === 'ultra' || enrolled) && <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organization's control plane" />}
+          {(ultra || enrolled) && <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organization's control plane" />}
         </div>
       </Card>
+      {bridge.popOut && !learner && (
+        <Card title="Windows" subtitle="Open these in a window of their own, to keep them beside FBRX or any other app. Right-click a page in the sidebar to open any page in a new window.">
+          <div className="fx-form">
+            {ultra && <Toggle checked={s.windows.terminal} disabled={L('windows.terminal')} onChange={(v) => void patch({ windows: { terminal: v } })} label="The Terminal opens in its own window" />}
+            <Toggle checked={s.windows.agent} disabled={L('windows.agent')} onChange={(v) => void patch({ windows: { agent: v } })} label={`The chat with ${s.ai.agentName} opens in its own window`} />
+          </div>
+        </Card>
+      )}
       {!learner && <Card title={`${s.ai.agentName}'s behavior`}>
         <div className="fx-form">
-          {tier === 'ultra' && (
+          {ultra && (
             <Field label={<>Creativity (temperature): {s.ai.temperature} <Locked show={L('ai.temperature')} /></>} help="Lower is more precise. Ignored by models that manage this themselves.">
               <input type="range" min={0} max={1} step={0.05} disabled={L('ai.temperature')} value={s.ai.temperature} onChange={(e) => void patch({ ai: { temperature: Number(e.target.value) } })} />
             </Field>
           )}
-          <Field label={<>Agent instructions <Locked show={L('ai.systemPrompt')} /></>} help={tier === 'ultra' ? 'Standing instructions included in every conversation' : 'Included in every conversation. Add anything it should always know, such as "I teach 4th grade; keep answers short."'}>
+          <Field label={<>Agent instructions <Locked show={L('ai.systemPrompt')} /></>} help={ultra ? 'Standing instructions included in every conversation' : 'Included in every conversation. Add anything it should always know, such as "I teach 4th grade; keep answers short."'}>
             <TextArea rows={8} disabled={L('ai.systemPrompt')} defaultValue={s.ai.systemPrompt} onBlur={(e) => e.target.value !== s.ai.systemPrompt && void patch({ ai: { systemPrompt: e.target.value } })} />
           </Field>
           <div>
@@ -224,9 +391,81 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
   );
 }
 
+const NAV_ICON_STYLES: Array<{ id: Settings['appearance']['navIcons']; label: string; ultra?: boolean }> = [
+  { id: 'accent', label: 'Theme color' },
+  { id: 'sections', label: 'A color for each section' },
+  { id: 'custom', label: 'One color you pick', ultra: true },
+  { id: 'plain', label: 'Plain' },
+];
+const NAV_PREVIEW: Array<{ icon: IconName; sec: string }> = [
+  { icon: 'compass', sec: 'command' },
+  { icon: 'layers', sec: 'workspace' },
+  { icon: 'wrench', sec: 'care' },
+  { icon: 'castle', sec: 'protect' },
+];
+
+/** Settings → Appearance → Sidebar icons: one color for a calm, single-color look, or a color for each section. */
+function NavIconsCard() {
+  const { s, locked, patch } = useSettings();
+  const ultra = useAtLeast('ultra');
+  if (!s) return null;
+  const a = s.appearance;
+  const L = (p: string) => isLocked(locked, p);
+  const mode = resolvedMode(s.general.theme);
+  const picked = a.navIconColor || themeAccent(a, mode);
+  const hueFor = (style: Settings['appearance']['navIcons'], sec: string) =>
+    style === 'accent' ? 'var(--accent)' : style === 'sections' ? `var(--sec-${sec})` : style === 'custom' ? picked : 'var(--text-secondary)';
+  const tint = a.navIconStrength / 50;
+  return (
+    <Card title="Sidebar icons" subtitle="All in one color for a calm look (your theme's, or one you pick), or a color for each section.">
+      <div className="fx-form">
+        <div className="tex-tiles">
+          {NAV_ICON_STYLES.filter((x) => ultra || !x.ultra).map((x) => (
+            <button
+              key={x.id}
+              className={`tex-tile${a.navIcons === x.id ? ' selected' : ''}`}
+              disabled={L('appearance.navIcons')}
+              aria-pressed={a.navIcons === x.id}
+              onClick={() => void patch({ appearance: { navIcons: x.id, ...(x.id === 'custom' && !a.navIconColor ? { navIconColor: picked } : {}) } })}
+            >
+              <span className="nav-icons-preview">
+                {NAV_PREVIEW.map((p) => {
+                  const hue = hueFor(x.id, p.sec);
+                  const Ico = Icons[p.icon];
+                  return (
+                    <span key={p.icon} style={{ color: hue, background: `color-mix(in srgb, ${hue} ${13 * tint}%, var(--surface-2))`, borderColor: `color-mix(in srgb, ${hue} ${28 * tint}%, transparent)` }}>
+                      <Ico size={14} />
+                    </span>
+                  );
+                })}
+              </span>
+              <span className="tex-tile-label">{x.label}</span>
+            </button>
+          ))}
+        </div>
+        {ultra && a.navIcons === 'custom' && (
+          <Field label="Icon color">
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <input type="color" aria-label="Icon color" value={picked} disabled={L('appearance.navIconColor')} onChange={(e) => void patch({ appearance: { navIconColor: e.target.value } })} style={{ width: 44, height: 32, border: 0, background: 'none' }} />
+              <span className="mono">{picked}</span>
+            </div>
+          </Field>
+        )}
+        <Field label={`Tint behind the icons: ${a.navIconStrength === 0 ? 'off' : `${Math.round(a.navIconStrength)}%`}`} help="From just the colored icon to a rich colored tile. 50% is the usual look.">
+          <div className="tex-strength">
+            <span>None</span>
+            <input type="range" min={0} max={100} step={5} disabled={a.navIcons === 'plain' || L('appearance.navIconStrength')} value={a.navIconStrength} onChange={(e) => void patch({ appearance: { navIconStrength: Number(e.target.value) } })} />
+            <span>Rich</span>
+          </div>
+        </Field>
+      </div>
+    </Card>
+  );
+}
+
 function Appearance() {
   const { s, locked, patch } = useSettings();
-  const ultra = useTier() === 'ultra';
+  const ultra = useAtLeast('ultra');
   if (!s) return null;
   const a = s.appearance;
   const mode = resolvedMode(s.general.theme);
@@ -247,7 +486,7 @@ function Appearance() {
           <Field label={<>Mode <Locked show={L('general.theme')} /></>}>
             {seg(s.general.theme, [{ value: 'system', label: 'Match Windows' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], (v) => void patch({ general: { theme: v } }), L('general.theme'))}
           </Field>
-          {!ultra && <UltraHint>More themes, accent colors, gradients and textures come with Endpoint Ultra.</UltraHint>}
+          {!ultra && <EditionHint>More themes, accent colors, gradients and textures come with Endpoint Ultra.</EditionHint>}
           {ultra && <>
           <div className="swatches">
             {PRESETS.map((p) => {
@@ -301,6 +540,7 @@ function Appearance() {
           </Field>
         </div>
       </Card>}
+      <NavIconsCard />
       <Grid cols={2}>
         <Card title="Layout">
           <div className="fx-form">
@@ -327,7 +567,7 @@ function Appearance() {
           </div>
         </Card>
       </Grid>
-      {ultra && a.funUnlocked && <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and the Silly Goose. Nothing here touches your files or settings.">
+      {a.funUnlocked && <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and the Silly Goose. Nothing here touches your files or settings.">
         <div className="fx-form">
           <Toggle checked={a.easterEggs} disabled={L('appearance.easterEggs')} onChange={(v) => void patch({ appearance: { easterEggs: v } })} label="Easter eggs and jokes" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
@@ -503,7 +743,9 @@ const RESOURCE_HELP = {
 function AgentSettings() {
   const { s, locked, patch } = useSettings();
   const [name, setName] = useState<string | null>(null);
-  const ultra = useTier() === 'ultra';
+  const ultra = useAtLeast('ultra');
+  // Unloading the local model when idle comes with Standard (Thinking, in every edition, is a card of its own).
+  const standard = useAtLeast('basic');
   if (!s) return null;
   const L = (p: string) => isLocked(locked, p);
   return (
@@ -531,7 +773,7 @@ function AgentSettings() {
               ))}
             </div>
           </Field>
-          {ultra && <Field label={<>Unload the local model when idle <Locked show={L('runtime.idleStopMinutes')} /></>} help="Gives its memory back to the computer; it loads again with the next question (a few seconds).">
+          {standard && <Field label={<>Unload the local model when idle <Locked show={L('runtime.idleStopMinutes')} /></>} help="Gives its memory back to the computer; it loads again with the next question (a few seconds).">
             <Select
               value={String(s.runtime.idleStopMinutes)}
               disabled={L('runtime.idleStopMinutes')}
@@ -546,11 +788,12 @@ function AgentSettings() {
           </Field>}
         </div>
       </Card>
-      {ultra && (
-        <div style={{ gridColumn: '1 / -1' }}>
-          <WorkBudget />
-        </div>
-      )}
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Thinking />
+      </div>
+      <div style={{ gridColumn: '1 / -1' }}>
+        <Creations />
+      </div>
       <Card title={ultra ? 'Models and permissions' : 'AI model'}>
         <div className="fx-form">
           <p className="fx-muted" style={{ margin: 0 }}>{ultra ? <>Choose which AI model {s.ai.agentName} uses in AI models, and what it may do without asking in Governance.</> : <>Choose which AI model {s.ai.agentName} uses. {s.ai.agentName} always asks before it changes anything on this computer.</>}</p>
@@ -569,6 +812,130 @@ function AgentSettings() {
   );
 }
 
+const IMAGE_GENERATOR_NAMES: Record<ImageGenerator, string> = { draw: 'The agent draws them (vector art, works offline)', 'images-api': 'An AI provider’s images endpoint', txt2img: 'A local image server (txt2img)' };
+const IMAGE_SIZE_NAMES: Record<ImageSize, string> = { '1024x1024': 'Square (1024 × 1024)', '1536x1024': 'Wide (1536 × 1024)', '1024x1536': 'Tall (1024 × 1536)' };
+
+/** What the agent makes and reads: where its files go, how it makes pictures, where it searches. */
+function Creations() {
+  const { s, locked, patch } = useSettings();
+  const folder = useCore('ai.files.folder', undefined, ['settings.changed', 'policy.changed']).data;
+  const [url, setUrl] = useState<{ images?: string; search?: string; model?: string }>({});
+  if (!s) return null;
+  const L = (p: string) => isLocked(locked, p);
+  const img = s.ai.images;
+  const providers = s.ai.providers.filter((p) => p.type === 'openai' || p.type === 'openai-compatible');
+  const pick = async () => {
+    const dir = await bridge.dialog?.({ kind: 'folder', title: `Where ${s.ai.agentName} saves what it makes`, defaultPath: folder?.path });
+    if (dir) await patch({ ai: { outputFolder: dir } });
+  };
+  return (
+    <Card title="Files, pictures and the web" subtitle={`${s.ai.agentName} writes documents (PDF, .docx, web pages, Markdown, text, CSV), draws or makes pictures, reads web pages and looks up stock quotes. What it makes appears in the chat with an Open button.`}>
+      <div className="fx-form">
+        <Field label={<>Saved in <Locked show={L('ai.outputFolder')} /></>} help={folder && !folder.allowed ? `${s.ai.agentName} may not write in ${folder.chosen} (the folders it may use are set in Governance), so it saves in FBRX’s workspace instead.` : 'A new file never replaces one already there.'}>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center', minWidth: 0 }}>
+            <code style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={folder?.path}>
+              {folder?.path ?? '…'}
+            </code>
+            {bridge.dialog && (
+              <Button size="sm" disabled={L('ai.outputFolder')} onClick={() => void pick()}>
+                Change…
+              </Button>
+            )}
+            {folder && bridge.reveal && (
+              <Button size="sm" variant="ghost" icon="folder" onClick={() => void bridge.reveal?.(folder.path)}>
+                Show
+              </Button>
+            )}
+          </div>
+        </Field>
+        <Field label={<>Pictures from a description <Locked show={L('ai.images')} /></>} help={img.generator === 'draw' ? `${s.ai.agentName} draws illustrations, icons, logos, charts and diagrams itself. For photo-like pictures, choose a picture maker.` : 'The description goes to the picture maker; the picture is saved as PNG.'}>
+          <Select value={img.generator} disabled={L('ai.images')} options={IMAGE_GENERATORS.map((g) => ({ value: g, label: IMAGE_GENERATOR_NAMES[g] }))} onChange={(e) => void patch({ ai: { images: { generator: e.target.value as ImageGenerator } } })} />
+        </Field>
+        {img.generator === 'images-api' && (
+          <Grid cols={2}>
+            <Field label="AI provider" help={providers.length ? 'Its address and key are used (AI models).' : 'Add an OpenAI-compatible provider in AI models first.'}>
+              <Select value={img.providerId} disabled={L('ai.images')} options={[{ value: '', label: 'Choose…' }, ...providers.map((p) => ({ value: p.id, label: p.name }))]} onChange={(e) => void patch({ ai: { images: { providerId: e.target.value } } })} />
+            </Field>
+            <Field label="Model" help="The provider’s picture model">
+              <Input value={url.model ?? img.model} placeholder="gpt-image-1" disabled={L('ai.images')} onChange={(e) => setUrl({ ...url, model: e.target.value })} onBlur={() => url.model !== undefined && void patch({ ai: { images: { model: url.model.trim() } } })} />
+            </Field>
+          </Grid>
+        )}
+        {img.generator === 'txt2img' && (
+          <Field label="Image server’s address" help="A picture server on this computer or your network that offers the txt2img API (/sdapi/v1/txt2img).">
+            <Input value={url.images ?? img.url} placeholder="http://127.0.0.1:7860" disabled={L('ai.images')} onChange={(e) => setUrl({ ...url, images: e.target.value })} onBlur={() => url.images !== undefined && void patch({ ai: { images: { url: url.images.trim() } } })} />
+          </Field>
+        )}
+        {img.generator !== 'draw' && (
+          <Field label="Picture size">
+            <Select value={img.size} disabled={L('ai.images')} options={IMAGE_SIZES.map((z) => ({ value: z, label: IMAGE_SIZE_NAMES[z] }))} onChange={(e) => void patch({ ai: { images: { size: e.target.value as ImageSize } } })} />
+          </Field>
+        )}
+        <Field label={<>Web search <Locked show={L('ai.webSearch')} /></>} help={s.ai.webSearch.engine === 'public' ? 'A public search page, no account needed.' : 'Your own SearXNG server, with its JSON format turned on.'}>
+          <Select
+            value={s.ai.webSearch.engine}
+            disabled={L('ai.webSearch')}
+            options={[
+              { value: 'public', label: 'DuckDuckGo (no account)' },
+              { value: 'searxng', label: 'My SearXNG server' },
+            ]}
+            onChange={(e) => void patch({ ai: { webSearch: { engine: e.target.value as WebSearchEngine } } })}
+          />
+        </Field>
+        {s.ai.webSearch.engine === 'searxng' && (
+          <Field label="SearXNG server’s address">
+            <Input value={url.search ?? s.ai.webSearch.url} placeholder="http://searxng.lan:8080" disabled={L('ai.webSearch')} onChange={(e) => setUrl({ ...url, search: e.target.value })} onBlur={() => url.search !== undefined && void patch({ ai: { webSearch: { url: url.search.trim() } } })} />
+          </Field>
+        )}
+      </div>
+    </Card>
+  );
+}
+
+const THINKING_HELP: Record<ThinkingLevel, string> = {
+  quick: `Small jobs and quick answers: up to ${THINKING_BUDGETS.quick.steps} steps a task, so it checks in with you sooner. A local model answers straight away.`,
+  everyday: `Everyday tasks: up to ${THINKING_BUDGETS.everyday.steps} steps a task, and a local model answers straight away (fast on any computer). Recommended.`,
+  thorough: `Big jobs and long documents: up to ${THINKING_BUDGETS.thorough.steps} steps a task (the most there is); a local model keeps twice as much in mind (about 1 GB more memory) and thinks before it answers, which on a computer's processor can take minutes.`,
+};
+
+/**
+ * How much the agent does on one task. Every edition picks a level (Quick, Everyday or Thorough); from Standard up,
+ * each part is also set on its own, which makes the level Custom.
+ */
+function Thinking() {
+  const { s, locked, patch } = useSettings();
+  const pol = useCore('governance.policy', undefined, ['policy.changed']);
+  const standard = useAtLeast('basic');
+  const { run, busy } = useAction();
+  if (!s || !pol.data) return null;
+  const L = (p: string) => isLocked(locked, p);
+  const name = s.ai.agentName;
+  // An organization that sets any part of it sets the level too.
+  const managed = pol.data.source === 'managed' || THINKING_SETTINGS.some(L);
+  const level = thinkingLevelOf(thinkingBudget(pol.data.policy, s));
+  return (
+    <Card title="Thinking" subtitle={`How much ${name} may do on one task, and how much of the conversation it keeps in mind.`}>
+      <div className="fx-form">
+        <Field label={<>How much {name} does on one task <Locked show={managed} /></>} help={level === 'custom' ? 'Custom: set part by part below. Pick a level to go back to one.' : THINKING_HELP[level]}>
+          <div className="seg" role="group" aria-label={`How much ${name} does on one task`}>
+            {THINKING_LEVELS.map((l) => (
+              <button key={l} className={level === l ? 'on' : ''} disabled={managed || !!busy} onClick={() => void run(l, () => call('ai.setThinking', { level: l }), `Thinking: ${THINKING_NAMES[l]}, up to ${THINKING_BUDGETS[l].steps} steps a task`)}>
+                {THINKING_NAMES[l]}
+              </button>
+            ))}
+          </div>
+        </Field>
+        {standard ? (
+          <WorkBudget policy={pol.data} />
+        ) : (
+          <EditionHint tier="basic">Standard sets each part on its own: steps per task, the longest answer, how much a local model keeps in mind and whether it thinks first.</EditionHint>
+        )}
+        <Toggle checked={s.ai.showThinking} disabled={L('ai.showThinking')} onChange={(v) => void patch({ ai: { showThinking: v } })} label={`Show what ${name} is thinking and doing while it works`} />
+      </div>
+    </Card>
+  );
+}
+
 const ANSWER_LENGTHS = [
   { value: '0', label: 'Automatic (the model decides)' },
   { value: '2048', label: 'Short (2,000 tokens, about 1,500 words)' },
@@ -582,77 +949,77 @@ const ctxLabel = (n: number) => `${n / 1024}K tokens${n === 8192 ? ' (default)' 
 // Rough extra memory for the conversation itself (the KV cache of a typical 7–8B model).
 const ctxMemory = (n: number) => (n <= 8192 ? 'about 1 GB extra memory' : n <= 16384 ? 'about 2 GB' : n <= 32768 ? 'about 4 GB' : n <= 65536 ? 'about 8 GB' : 'about 16 GB');
 
-/** How much the agent may do in one task: steps, answer length and how much of the conversation a local model keeps in mind. */
-function WorkBudget() {
+/** Each part of the work budget on its own (Standard and up): steps, answer length, what a model keeps in mind. */
+function WorkBudget({ policy }: { policy: EffectivePolicy }) {
   const { s, locked, patch } = useSettings();
-  const pol = useCore('governance.policy', undefined, ['policy.changed']);
   const providers = useCore('ai.providers', undefined, ['settings.changed']);
-  const [steps, setSteps] = useState<number | null>(null);
+  const [moving, setMoving] = useState<number | null>(null);
   const { run } = useAction();
   if (!s) return null;
   const L = (p: string) => isLocked(locked, p);
-  const managedPolicy = pol.data?.source === 'managed';
-  const maxSteps = pol.data?.policy.ai.maxStepsPerRun ?? 30;
-  const shownSteps = steps ?? maxSteps;
+  const policyManaged = policy.source === 'managed';
+  const steps = policy.policy.ai.maxStepsPerRun;
+  const shownSteps = moving ?? steps;
   const saveSteps = (n: number) => {
-    if (!pol.data || n === maxSteps) return;
-    const next = structuredClone(pol.data.policy);
-    next.ai.maxStepsPerRun = n;
-    next.ai.maxToolCallsPerRun = Math.max(next.ai.maxToolCallsPerRun, n * 3);
-    void run('steps', () => call('governance.updatePolicy', { policy: next }), `${s.ai.agentName} may now take up to ${n} steps per task`).then(() => setSteps(null));
+    if (n === steps) return;
+    void run('steps', () => call('governance.updatePolicy', { policy: withSteps(policy.policy, n) }), `${s.ai.agentName} may now take up to ${n} steps per task`).then(() => setMoving(null));
   };
   const hasOllama = (providers.data ?? []).some((p) => p.type === 'ollama' && p.enabled);
   return (
-    <Card title="Work budget" subtitle={`How much ${s.ai.agentName} may do before it stops to check in. Raise these for big jobs; lower them to keep answers quick and the computer light.`}>
-      <div className="budget-grid">
-        <Field
-          label={
-            <>
-              Steps per task <span className="budget-value">{shownSteps}</span> {managedPolicy && <Locked show />}
-            </>
-          }
-          help={`A step is one round of thinking and using tools. When ${s.ai.agentName} runs out, it says so and you can tell it to continue.`}
-        >
-          <input
-            type="range"
-            min={5}
-            max={100}
-            step={1}
-            value={shownSteps}
-            disabled={managedPolicy || !pol.data}
-            aria-label="Steps per task"
-            onChange={(e) => setSteps(Number(e.target.value))}
-            onPointerUp={() => steps !== null && saveSteps(steps)}
-            onKeyUp={() => steps !== null && saveSteps(steps)}
-          />
-        </Field>
-        <Field label={<>Longest answer <Locked show={L('ai.maxOutputTokens')} /></>} help="The most the model may write in one reply. Long code or reports need more; a token is about three quarters of a word.">
-          <Select value={String(s.ai.maxOutputTokens)} disabled={L('ai.maxOutputTokens')} onChange={(e) => void patch({ ai: { maxOutputTokens: Number(e.target.value) } })} options={ANSWER_LENGTHS} />
-        </Field>
-        <Field
-          label={<>Memory of the built-in model <Locked show={L('runtime.contextSize')} /></>}
-          help={`How much of the conversation (including tool results) the built-in model keeps in mind. More lets it work on bigger tasks but uses ${ctxMemory(s.runtime.contextSize)}. The model reloads to apply it.`}
-        >
+    <div className="budget-grid">
+      <Field
+        label={
+          <>
+            Steps per task <span className="budget-value">{shownSteps}</span> <Locked show={policyManaged} />
+          </>
+        }
+        help={`A step is one round of thinking and using tools. When ${s.ai.agentName} runs out, it says so and you can tell it to continue.`}
+      >
+        <input
+          type="range"
+          min={5}
+          max={MAX_STEPS_PER_TASK}
+          step={1}
+          value={shownSteps}
+          disabled={policyManaged}
+          aria-label="Steps per task"
+          onChange={(e) => setMoving(Number(e.target.value))}
+          onPointerUp={() => moving !== null && saveSteps(moving)}
+          onKeyUp={() => moving !== null && saveSteps(moving)}
+        />
+      </Field>
+      <Field label={<>Longest answer <Locked show={L('ai.maxOutputTokens')} /></>} help="The most the model may write in one reply. Long code or reports need more; a token is about three quarters of a word.">
+        <Select value={String(s.ai.maxOutputTokens)} disabled={L('ai.maxOutputTokens')} onChange={(e) => void patch({ ai: { maxOutputTokens: Number(e.target.value) } })} options={ANSWER_LENGTHS} />
+      </Field>
+      <Field
+        label={<>Memory of the built-in model <Locked show={L('runtime.contextSize')} /></>}
+        help={`How much of the conversation (including tool results) the built-in model keeps in mind. More lets it work on bigger tasks but uses ${ctxMemory(s.runtime.contextSize)}. The model reloads to apply it.`}
+      >
+        <Select
+          value={String(s.runtime.contextSize)}
+          disabled={L('runtime.contextSize')}
+          onChange={(e) => void patch({ runtime: { contextSize: Number(e.target.value) } })}
+          options={[...new Set([...CONTEXTS, s.runtime.contextSize])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: ctxLabel(n) }))}
+        />
+      </Field>
+      <Toggle
+        checked={s.ai.localThinking}
+        disabled={L('ai.localThinking')}
+        onChange={(v) => void patch({ ai: { localThinking: v } })}
+        label={<>A local model thinks before it answers <Locked show={L('ai.localThinking')} /></>}
+        info="Models such as Qwen3 can reason first. Better on hard tasks, but on a computer's processor that can take minutes before the first word; off, they answer straight away. Cloud AI is not affected."
+      />
+      {hasOllama && (
+        <Field label={<>Memory of Ollama models <Locked show={L('ai.ollamaContext')} /></>} help="Ollama's own setting is often 4K, which a long task fills quickly. 32K suits most tool-using work on a 16 GB computer.">
           <Select
-            value={String(s.runtime.contextSize)}
-            disabled={L('runtime.contextSize')}
-            onChange={(e) => void patch({ runtime: { contextSize: Number(e.target.value) } })}
-            options={[...new Set([...CONTEXTS, s.runtime.contextSize])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: ctxLabel(n) }))}
+            value={String(s.ai.ollamaContext)}
+            disabled={L('ai.ollamaContext')}
+            onChange={(e) => void patch({ ai: { ollamaContext: Number(e.target.value) } })}
+            options={[{ value: '0', label: "Ollama's setting" }, ...CONTEXTS.map((n) => ({ value: String(n), label: `${n / 1024}K tokens` }))]}
           />
         </Field>
-        {hasOllama && (
-          <Field label={<>Memory of Ollama models <Locked show={L('ai.ollamaContext')} /></>} help="Ollama's own setting is often 4K, which a long task fills quickly. 32K suits most tool-using work on a 16 GB computer.">
-            <Select
-              value={String(s.ai.ollamaContext)}
-              disabled={L('ai.ollamaContext')}
-              onChange={(e) => void patch({ ai: { ollamaContext: Number(e.target.value) } })}
-              options={[{ value: '0', label: "Ollama's setting" }, ...CONTEXTS.map((n) => ({ value: String(n), label: `${n / 1024}K tokens` }))]}
-            />
-          </Field>
-        )}
-        <Toggle checked={s.ai.showThinking} disabled={L('ai.showThinking')} onChange={(v) => void patch({ ai: { showThinking: v } })} label={`Show what ${s.ai.agentName} is thinking and doing while it works`} />
-      </div>
-    </Card>
+      )}
+    </div>
   );
 }
 
@@ -680,10 +1047,86 @@ function SpotlightSettings() {
   );
 }
 
+/** Settings → Browser: FBRX Browser's home page, search, privacy, Fabrix, and the sites blocked on this computer. */
+function BrowserSettings() {
+  const { s, locked, patch } = useSettings();
+  const { data: b } = useCore('browser.state', undefined, ['browser.changed', 'settings.changed']);
+  const [block, setBlock] = useState('');
+  const { run, busy } = useAction();
+  if (!s || !b) return null;
+  const br = s.browser;
+  const lock = (path: string) => isLocked(locked, `browser.${path}`);
+  const org = b.policy;
+  return (
+    <>
+      <Card title="Browser" subtitle="FBRX Browser opens in its own window, from the sidebar or the tray." actions={<Button size="sm" icon="globe" onClick={() => navigate('browser')}>Open it</Button>}>
+        <div className="fx-form">
+          <Field label="Home page" help="Where the home button goes. Empty: the FBRX start page.">
+            <Input value={br.homepage} disabled={lock('homepage')} placeholder="https://" onChange={(e) => void patch({ browser: { homepage: e.target.value.trim() } })} />
+          </Field>
+          <Field label="Search with">
+            <Select
+              value={br.searchEngine}
+              disabled={lock('searchEngine')}
+              onChange={(e) => void patch({ browser: { searchEngine: e.target.value as typeof br.searchEngine } })}
+              options={Object.entries(BROWSER_SEARCH_ENGINES).map(([value, e]) => ({ value, label: e.name }))}
+            />
+          </Field>
+          <Toggle checked={br.doNotTrack} disabled={lock('doNotTrack')} onChange={(v) => void patch({ browser: { doNotTrack: v } })} label="Ask sites not to track me (Do Not Track and Global Privacy Control)" />
+          <Toggle checked={br.privateByDefault} disabled={lock('privateByDefault')} onChange={(v) => void patch({ browser: { privateByDefault: v } })} label="Open new tabs as private tabs (nothing is kept once they close)" />
+          <Toggle checked={br.aiAssist} disabled={lock('aiAssist')} onChange={(v) => void patch({ browser: { aiAssist: v } })} label="Let Fabrix read the page when I ask about it (on this computer only)" />
+        </div>
+      </Card>
+      <Card title="Blocked sites" subtitle="Sites that never open in FBRX Browser on this computer, with their subdomains.">
+        <form
+          className="fx-actions"
+          onSubmit={(e) => {
+            e.preventDefault();
+            void run('add', () => call('browser.addBlocked', { host: block }).then(() => setBlock('')));
+          }}
+        >
+          <Input value={block} placeholder="example.com" onChange={(e) => setBlock(e.target.value)} />
+          <Button type="submit" size="sm" loading={busy === 'add'} disabled={!block.trim()}>
+            Block
+          </Button>
+        </form>
+        {b.blockedByMe.length > 0 && (
+          <div className="fx-form" style={{ marginTop: 10 }}>
+            {b.blockedByMe.map((h) => (
+              <div key={h} className="account-org">
+                <span className="mono">{h}</span>
+                <Button size="sm" variant="ghost" onClick={() => void run(h, () => call('browser.removeBlocked', { host: h }))}>
+                  Unblock
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </Card>
+      {(org.managed || org.safeBrowsing) && (
+        <Card title="Set by your organization" subtitle="These come from FBRX Command and apply to every page, not only what is typed.">
+          <KeyValue
+            items={[
+              ['Only these sites', org.allowed.length ? org.allowed.join(', ') : 'Any site'],
+              ['Blocked', br.blocked.length ? br.blocked.join(', ') : 'None'],
+              ['Safe browsing', org.safeBrowsing ? 'On: strict SafeSearch on Google, Bing, DuckDuckGo and Brave, and YouTube Restricted Mode' : 'Off'],
+            ]}
+          />
+        </Card>
+      )}
+      <Card title="History">
+        <Button size="sm" variant="danger" loading={busy === 'clear'} onClick={() => void run('clear', () => call('browser.clearHistory', {}), 'Browsing history cleared')}>
+          Clear browsing history
+        </Button>
+      </Card>
+    </>
+  );
+}
+
 function Updates() {
   const { data: u } = useCore('updates.status', undefined, ['updates.changed']);
   const { s, locked, patch } = useSettings();
-  const ultra = useTier() === 'ultra';
+  const ultra = useAtLeast('ultra');
   const { run, busy } = useAction();
   if (!u || !s) return null;
   const release = (
@@ -739,28 +1182,51 @@ function Updates() {
 
 function License() {
   const { data: l } = useCore('license.status', undefined, ['license.changed']);
+  const { data: support } = useCore('support.status', undefined, ['support.changed']);
   const { s, patch } = useSettings();
   const [key, setKey] = useState('');
+  // When the support phrase is typed, the box turns into a support-pass prompt.
+  const [awaitingPass, setAwaitingPass] = useState(false);
   const { run, busy } = useAction();
   const toast = useToast();
   if (!l || !s) return null;
-  const ultra = l.tier === 'ultra';
   const activate = () => {
-    // 418: not a license at all, just a teapot. It unlocks the easter eggs, which live in Endpoint Ultra.
+    const trimmed = key.trim();
+    // Support mode (troubleshooting): the phrase asks for a signed pass; the resume phrase, or a pass, acts at once.
+    if (trimmed.toLowerCase() === SUPPORT_ENTER_PHRASE) {
+      setKey('');
+      setAwaitingPass(true);
+      return;
+    }
+    if (trimmed.toLowerCase() === SUPPORT_EXIT_PHRASE) {
+      setKey('');
+      setAwaitingPass(false);
+      if (support?.active) void run('a', () => call('support.end'), 'Support mode ended');
+      return;
+    }
+    if (trimmed.startsWith(`${SUPPORT_PASS_PREFIX}.`)) {
+      void run('a', () =>
+        call('support.activate', { pass: trimmed }).then((st) => {
+          setKey('');
+          setAwaitingPass(false);
+          toast.success('Support mode on', `This computer runs as ${TIER_NAMES[(st as { tier: Tier }).tier ?? 'blackhole']} until the pass runs out. Type "${SUPPORT_EXIT_PHRASE}" to end it.`);
+        }),
+      );
+      return;
+    }
+    // 418: not a license at all, just a teapot. It unlocks the easter eggs, in every edition.
     if (key === '418') {
       setKey('');
       if (s.appearance.funUnlocked && s.appearance.easterEggs) {
-        toast.info('Still a teapot', ultra ? 'Short and stout, and already unlocked.' : 'Short and stout, and already unlocked. They come out with Endpoint Ultra.');
+        toast.info('Still a teapot', 'Short and stout, and already unlocked.');
         return;
       }
       void patch({ appearance: { funUnlocked: true, easterEggs: true } }).then(() =>
         toast.custom({
           title: '418 I\'m a teapot',
-          body: ultra
-            ? 'Short and stout, and now unlocked: easter eggs, the Silly Goose and the Trophy case. Have fun.'
-            : 'Short and stout, and now unlocked. The easter eggs come out as soon as Endpoint Ultra is on.',
+          body: 'Short and stout, and now unlocked: easter eggs, the Silly Goose and the Trophy case. Have fun.',
           icon: <TrophyBadge id="teapot" found size={36} />,
-          ...(ultra ? { action: { label: 'Open the trophy case', onClick: () => navigate('settings/trophies') } } : {}),
+          action: { label: 'Open the trophy case', onClick: () => navigate('settings/trophies') },
         }),
       );
       return;
@@ -770,7 +1236,7 @@ function License() {
       () =>
         call('license.activate', { key }).then((r) => {
           setKey('');
-          toast.success(r.tier === 'ultra' ? 'Welcome to Endpoint Ultra' : 'License activated', r.message ?? (r.tier === 'ultra' ? 'Every tool and theme is on.' : undefined));
+          toast.success(atLeast(r.ceiling ?? r.tier, 'ultra') ? 'License activated: Ultra is there to turn on' : 'License activated', r.message ?? (atLeast(r.ceiling ?? r.tier, 'ultra') ? 'Settings → Edition turns it on.' : undefined));
         }),
     );
   };
@@ -785,21 +1251,45 @@ function License() {
             ['Licensed to', l.customer ?? '—'],
             ['Seats', l.seats === 0 ? 'Unlimited' : l.seats ?? '—'],
             ['Expires', l.expiresAt ? formatDate(l.expiresAt) : l.state === 'valid' ? 'Never' : '—'],
-            ['Source', { managed: 'Your organization (FBRX Command)', local: 'License key on this device', development: 'Development build', none: '—' }[l.source]],
+            ['Source', { managed: 'Your organization (FBRX Command)', local: 'License key on this device', account: 'Your FBRX account', development: 'Development build', support: 'Support mode', none: '—' }[l.source]],
+            ...(support ? [['Install id', <CopyText value={support.installId} />] as [string, ReactNode]] : []),
             ...(l.commandUrl ? [['FBRX Command', <span className="mono">{l.commandUrl}</span>] as [string, ReactNode]] : []),
             ['Features', l.features.join(', ')],
           ]}
         />
         {l.message && <Callout tone="info">{l.message}</Callout>}
+        {support?.active && (
+          <Callout tone="warning">
+            Support mode is on until {support.until ? formatDate(support.until) : 'the pass runs out'}. This computer runs with full access for troubleshooting. Type “{SUPPORT_EXIT_PHRASE}” below, or{' '}
+            <button className="fx-link" onClick={() => void run('a', () => call('support.end'), 'Support mode ended')}>
+              end support now
+            </button>
+            .
+          </Callout>
+        )}
       </Card>
-      <Card title={ultra ? 'Change the license key' : 'Upgrade to Endpoint Ultra'} subtitle={ultra ? 'Enrolled devices receive their license automatically' : 'Paste the license key from your organization or from FBRX. If it belongs to an FBRX Command tenant, this computer joins it too.'}>
+      <Card
+        title={awaitingPass ? 'Enter the support pass' : l.state === 'valid' ? 'Change the license key' : 'Enter a license key'}
+        subtitle={
+          awaitingPass
+            ? 'Paste the support pass FBRX gave you for this computer. It turns on full access for a short while, for troubleshooting.'
+            : l.source === 'managed'
+              ? 'Computers in an organization receive their license automatically'
+              : 'Paste the license key you bought or got from your organization. If it belongs to an FBRX Command tenant, this computer joins it too.'
+        }
+      >
         <div className="fx-form">
-          <TextArea code rows={4} value={key} onChange={(e) => setKey(e.target.value.trim())} placeholder="FBRX1.…" />
+          <TextArea code rows={4} value={key} onChange={(e) => setKey(e.target.value)} placeholder={awaitingPass ? `${SUPPORT_PASS_PREFIX}.…` : 'FBRX1.…'} />
           <div className="fx-actions">
-            <Button variant="primary" loading={busy === 'a'} disabled={!key} onClick={activate}>
-              Activate
+            <Button variant="primary" loading={busy === 'a'} disabled={!key.trim()} onClick={activate}>
+              {awaitingPass ? 'Start support mode' : 'Activate'}
             </Button>
-            {l.source === 'local' && (
+            {awaitingPass && (
+              <Button variant="ghost" onClick={() => (setAwaitingPass(false), setKey(''))}>
+                Cancel
+              </Button>
+            )}
+            {!awaitingPass && l.source === 'local' && (
               <Button variant="danger" onClick={() => void run('r', () => call('license.remove'), 'License removed')}>
                 Remove license
               </Button>
@@ -864,7 +1354,7 @@ curl -N "${i.url}/v1/events?token=$FBRX_TOKEN"`}</pre>
 }
 
 function Logs() {
-  const ultra = useTier() === 'ultra';
+  const ultra = useAtLeast('ultra');
   const status = useCore('system.status');
   const [info, setInfo] = useState<{ version: string; dataDir: string; packaged: boolean } | null>(null);
   if (!info && bridge.appInfo) void bridge.appInfo().then((x) => x && setInfo(x));

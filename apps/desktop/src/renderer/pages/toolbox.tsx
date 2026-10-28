@@ -1,14 +1,15 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import QRCode from 'qrcode';
-import type { MacLookup } from '@fbrx/shared';
+import { GENERATOR_DEFAULTS, GENERATOR_LENGTH, generatePassword, type MacLookup } from '@fbrx/shared';
 import { AdvancedTag, Button, Card, Field, Input, Page, Select, TextArea, Toggle, useToast } from '@fbrx/ui';
-import { call } from '../client';
+import { call, copySecret } from '../client';
 import { navigate } from '../app';
 import { useCore } from '../hooks';
 import { AskButton } from '../widgets';
 import { COMMAND_GROUPS } from '../command-library';
 import { unlockTrophy } from '../fun';
-import { UltraHint } from '../edition';
+import { EditionHint, useLearner } from '../edition';
+import { saveToVault } from '../vault-save';
 
 interface Example {
   label: string;
@@ -30,7 +31,7 @@ const TOOLS: Tool[] = [
   { id: 'diff', name: 'Compare text', hint: 'What changed between two versions or lists', examples: [{ label: 'Two guest lists', input: 'Anna\nBen\nChloe\nDavid', extra: 'Anna\nChloe\nDavid\nEmma' }] },
   { id: 'sizes', name: 'Sizes & numbers', hint: 'GB vs GiB, and decimal, hex, binary', examples: [{ label: 'Why 1 TB shows as 931 GB', input: '1 TB' }, { label: 'Hex color part', input: '0xF0' }, { label: 'A big file', input: '4.7 GB' }] },
   { id: 'decide', name: 'Decision maker', hint: 'Flip a coin, roll dice, pick from a list', examples: [{ label: 'Lunch', input: 'Pizza\nSushi\nTacos\nSalad' }] },
-  { id: 'color', name: 'Colors', hint: 'HEX ↔ RGB ↔ HSL', examples: [{ label: 'FBRX amber', input: '#f0a530' }, { label: 'Tropical mango', input: '#ffa23a' }, { label: 'An HSL color', input: 'hsl(200, 80%, 50%)' }] },
+  { id: 'color', name: 'Colors', hint: 'HEX ↔ RGB ↔ HSL', examples: [{ label: 'FBRX honey', input: '#f4b942' }, { label: 'Tropical mango', input: '#ffa23a' }, { label: 'An HSL color', input: 'hsl(200, 80%, 50%)' }] },
   { id: 'time', name: 'Timestamps', hint: 'Unix time ↔ dates', advanced: true, examples: [{ label: 'The 2038 problem', input: '2147483647' }, { label: 'Right now', input: '' }] },
   { id: 'json', name: 'JSON formatter', hint: 'Format, minify and validate JSON', advanced: true, examples: [{ label: 'Settings sample', input: '{"name":"FBRX","features":["agent","mesh"],"limits":{"tabs":12,"geese":1},"enabled":true}' }] },
   { id: 'base64', name: 'Base64', hint: 'Encode and decode text', advanced: true, examples: [{ label: 'Encode', input: 'Hello, FBRX!' }, { label: 'Decode a secret', input: 'SG9uayBob25r' }] },
@@ -60,6 +61,47 @@ function Out({ value }: { value: string }) {
         Copy
       </Button>
     </div>
+  );
+}
+
+/** Strong passwords from the Vault's own generator, each ready to copy or save to the Vault. */
+function PasswordTool() {
+  const [length, setLength] = useState(GENERATOR_DEFAULTS.length);
+  const [symbols, setSymbols] = useState(true);
+  const make = () => Array.from({ length: 5 }, () => generatePassword({ length, symbols }));
+  const [list, setList] = useState(make);
+  const learner = useLearner();
+  const toast = useToast();
+  useEffect(() => setList(make()), [length, symbols]); // eslint-disable-line react-hooks/exhaustive-deps
+  return (
+    <>
+      <div className="fx-row">
+        <Field label={<>Length <span className="budget-value">{length}</span> characters</>}>
+          <input type="range" min={GENERATOR_LENGTH.min} max={64} value={length} aria-label="Password length" onChange={(e) => setLength(Number(e.target.value))} />
+        </Field>
+        <Field label=" ">
+          <Toggle checked={symbols} onChange={setSymbols} label="Include symbols" />
+        </Field>
+      </div>
+      <div className="pw-gen">
+        {list.map((p) => (
+          <div key={p} className="pw-gen-row">
+            <code className="mono">{p}</code>
+            <Button size="sm" variant="ghost" icon="copy" aria-label="Copy" onClick={() => void copySecret(p).then(() => toast.success('Copied', 'It leaves the clipboard again shortly.'))} />
+            {!learner && (
+              <Button size="sm" icon="key" onClick={() => saveToVault({ password: p })}>
+                Save to Vault
+              </Button>
+            )}
+          </div>
+        ))}
+      </div>
+      <div className="fx-actions">
+        <Button variant="primary" icon="refresh" onClick={() => setList(make())}>
+          New passwords
+        </Button>
+      </div>
+    </>
   );
 }
 
@@ -172,38 +214,7 @@ function Pane({ id, seed, fun }: { id: string; seed: Example | null; fun: boolea
         </>
       );
     case 'password':
-      return (
-        <>
-          <div className="fx-row">
-            <Field label="Length">
-              <Input type="number" min={8} max={128} value={input || '24'} onChange={(e) => setInput(e.target.value)} />
-            </Field>
-            <Field label=" ">
-              <Toggle checked={flag} onChange={setFlag} label="Include symbols" />
-            </Field>
-          </div>
-          {buttons([
-            [
-              'Generate',
-              () => {
-                const cs = `ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789${flag ? '!@#$%^&*()-_=+[]{};:,.?' : ''}`;
-                const n = Math.max(8, Math.min(128, Number(input) || 24));
-                // Rejection sampling keeps every character equally likely.
-                const pick = () => {
-                  const limit = 256 - (256 % cs.length);
-                  for (;;) {
-                    const b = crypto.getRandomValues(new Uint8Array(1))[0];
-                    if (b < limit) return cs[b % cs.length];
-                  }
-                };
-                return Array.from({ length: 5 }, () => Array.from({ length: n }, pick).join('')).join('\n');
-              },
-              true,
-            ],
-          ])}
-          <Out value={out} />
-        </>
-      );
+      return <PasswordTool />;
     case 'time':
       return (
         <>
@@ -269,14 +280,14 @@ function Pane({ id, seed, fun }: { id: string; seed: Example | null; fun: boolea
       return (
         <>
           <div style={{ display: 'flex', gap: 8 }}>
-            <Input className="mono" placeholder="#f0a530, rgb(240,165,48) or hsl(36,86%,56%)" value={input} onChange={(e) => setInput(e.target.value)} />
-            <input type="color" aria-label="Pick a color" value={/^#[0-9a-f]{6}$/i.test(input) ? input : '#f0a530'} onChange={(e) => setInput(e.target.value)} style={{ width: 44, height: 34, border: 0, background: 'none' }} />
+            <Input className="mono" placeholder="#f4b942, rgb(244,185,66) or hsl(40,89%,61%)" value={input} onChange={(e) => setInput(e.target.value)} />
+            <input type="color" aria-label="Pick a color" value={/^#[0-9a-f]{6}$/i.test(input) ? input : '#f4b942'} onChange={(e) => setInput(e.target.value)} style={{ width: 44, height: 34, border: 0, background: 'none' }} />
           </div>
           {buttons([
             [
               'Convert',
               () => {
-                const v = input.trim() || '#f0a530';
+                const v = input.trim() || '#f4b942';
                 let r: number, g: number, b: number;
                 let m: RegExpMatchArray | null;
                 if ((m = v.match(/^#?([0-9a-f]{6})$/i))) {
@@ -846,7 +857,7 @@ export function ToolboxPage({ advanced, easterEggs }: { advanced: boolean; easte
           ))}
           {!advanced && (
             <div style={{ padding: '10px 12px' }}>
-              <UltraHint>Developer and network tools (JSON, hashes, subnets, ports) come with Endpoint Ultra.</UltraHint>
+              <EditionHint>Developer and network tools (JSON, hashes, subnets, ports) come with Endpoint Ultra.</EditionHint>
             </div>
           )}
         </Card>

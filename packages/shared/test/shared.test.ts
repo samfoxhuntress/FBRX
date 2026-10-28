@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compareSemver, deepMerge, isPathLocked, satisfies, newId, decodeLicenseUnverified, parseVertical, productNameFor, resolveAudience, KIND_GROUPS, VERTICALS, VERTICAL_AUDIENCES, type LicensePayload } from '../src';
+import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIERS, atLeast, editionPoints, formatPrice, maxTier, parseTier, priceOf, tenantMonthlyTotal } from '../src';
+import { DEFAULT_POLICY, DEFAULT_SETTINGS, THINKING_BUDGETS, thinkingBudget, thinkingLevelOf } from '../src';
 import { generateSigningKeyPair, hashPassword, licenseStatusFrom, openString, sealString, signLicense, verifyLicense, verifyPassword } from '../src/node';
 import { randomBytes } from 'node:crypto';
 
@@ -47,6 +49,31 @@ describe('licensing', () => {
     expect(expired.edition).toBe('community');
     const capped = licenseStatusFrom(signLicense(payload({ maxMajorVersion: 1 }), keys.privateKeyPem), [keys.publicKeyPem], 'local', 2);
     expect(capped.state).toBe('invalid');
+  });
+});
+
+describe('editions and prices', () => {
+  it('orders the four editions, Black Hole having everything', () => {
+    expect(TIERS).toEqual(['essentials', 'basic', 'ultra', 'blackhole']);
+    expect(atLeast('blackhole', 'ultra')).toBe(true);
+    expect(atLeast('ultra', 'blackhole')).toBe(false);
+    expect(atLeast('basic', 'basic')).toBe(true);
+    expect(atLeast(null, 'essentials')).toBe(false);
+    expect(maxTier('basic', 'ultra')).toBe('ultra');
+    expect(['Black Hole', 'black-hole', 'blackhole', 'Standard', 'ESSENTIALS'].map(parseTier)).toEqual(['blackhole', 'blackhole', 'blackhole', 'basic', 'essentials']);
+  });
+
+  it('carries the price list: Standard $4.99, Ultra $11.99, Black Hole $24.99 per computer in a tenant, FBRX Command $54.99', () => {
+    expect([priceOf('essentials', 'personal'), priceOf('basic', 'personal'), priceOf('ultra', 'personal'), priceOf('blackhole', 'personal')]).toEqual([0, 499, 1199, null]);
+    // 20% off Standard and Ultra in a tenant; Black Hole always full price; Essentials free everywhere.
+    expect([priceOf('essentials', 'tenant'), priceOf('basic', 'tenant'), priceOf('ultra', 'tenant'), priceOf('blackhole', 'tenant')]).toEqual([0, 399, 959, 2499]);
+    expect(COMMAND_PLAN.monthly).toBe(5499);
+    expect(tenantMonthlyTotal({ essentials: 40, basic: 10, ultra: 2, blackhole: 1 })).toBe(5499 + 3990 + 1918 + 2499);
+    expect(SERVER_OFFER).toMatchObject({ available: false, price: 10000 });
+    expect([0, 499, 1199, 10000].map(formatPrice)).toEqual(['Free', '$4.99', '$11.99', '$100']);
+    // Every paid edition has a product id for Stripe and the stores, and Black Hole is sold only in a tenant.
+    for (const t of TIERS) expect(EDITION_PLANS[t].tenantProductId === null).toBe(t === 'essentials');
+    expect(EDITION_PLANS.blackhole).toMatchObject({ sold: 'tenant', productId: null });
   });
 });
 
@@ -122,5 +149,21 @@ describe('kinds of tenant (Work, School, Home)', () => {
       for (const g of KIND_GROUPS[v]) expect(VERTICAL_AUDIENCES[v]).toContain(g.audience);
     }
     expect(KIND_GROUPS.home.map((g) => g.name)).toEqual(['Parents', 'Children']);
+  });
+});
+
+describe('thinking levels and the editions list', () => {
+  it('starts every computer at Everyday, and tells a fine-tuned budget apart', () => {
+    expect(thinkingLevelOf(thinkingBudget(DEFAULT_POLICY, DEFAULT_SETTINGS))).toBe('everyday');
+    expect(thinkingLevelOf({ ...THINKING_BUDGETS.thorough, steps: 61 })).toBe('custom');
+    // Each level asks a little more than the one before.
+    expect(THINKING_BUDGETS.quick.steps).toBeLessThan(THINKING_BUDGETS.everyday.steps);
+    expect(THINKING_BUDGETS.everyday.steps).toBeLessThan(THINKING_BUDGETS.thorough.steps);
+  });
+
+  it('lists each edition as everything in the one before, then what it adds', () => {
+    expect(editionPoints('essentials')).toEqual(EDITION_PLANS.essentials.highlights);
+    expect(editionPoints('ultra')).toEqual(['Everything in Standard', ...EDITION_PLANS.ultra.highlights]);
+    expect(editionPoints('blackhole')[0]).toBe('Everything in Ultra');
   });
 });

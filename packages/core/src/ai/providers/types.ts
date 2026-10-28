@@ -14,9 +14,15 @@ export interface ProviderData {
   raw: unknown;
 }
 
+/** An image the person attached, for a model that can see (base64, no data: prefix). */
+export interface ProviderImage {
+  mime: string;
+  data: string;
+}
+
 export type ProviderMessage =
   | { role: 'system'; content: string }
-  | { role: 'user'; content: string }
+  | { role: 'user'; content: string; images?: ProviderImage[] }
   | { role: 'assistant'; content: string; toolCalls?: ProviderToolCall[]; providerData?: ProviderData | null }
   | { role: 'tool'; toolCallId: string; name: string; content: string; isError?: boolean };
 
@@ -32,6 +38,11 @@ export interface ChatRequest {
   tools: ProviderTool[];
   temperature?: number;
   maxTokens?: number;
+  /**
+   * Whether a model that can think before answering should. False asks it to answer straight away (much faster on a
+   * computer's processor); unset leaves it to the model.
+   */
+  reasoning?: boolean;
   signal: AbortSignal;
 }
 

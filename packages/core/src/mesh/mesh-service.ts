@@ -47,10 +47,13 @@ export const MOBILE_PERMISSIONS: MeshPermissions = { status: true, chat: true, a
 // Computers may ask each other's AI for help (each computer's Mesh Assist settings still decide); controllers are chosen by hand.
 export const DESKTOP_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false, network: false };
 const PERMISSION_KEYS = Object.keys(MOBILE_PERMISSIONS) as Array<keyof MeshPermissions>;
+const NO_PERMISSIONS = Object.fromEntries(PERMISSION_KEYS.map((k) => [k, false])) as unknown as MeshPermissions;
 
 const PAIRING_TTL_MS = 5 * 60_000;
 const MAX_PAIR_FAILURES = 5;
 const MAX_BODY = 256 * 1024;
+/** A sealed request from a paired computer may be bigger: a whole conversation for this computer's AI to answer. */
+const MAX_RPC_BODY = 1024 * 1024;
 const MOBILE_ONLINE_MS = 90_000;
 
 interface DeviceRow {
@@ -69,6 +72,8 @@ interface DeviceRow {
   addrs: string | null;
   /** Roles it announces (JSON array). */
   roles: string | null;
+  /** "paired" by hand, or "org": introduced by the organization (FBRX Command). */
+  source: 'paired' | 'org';
 }
 
 interface RpcRequest {
@@ -100,6 +105,11 @@ export interface MeshHost {
   keyPair: () => KeyPair;
   mobileDir: string | null;
   status: () => Promise<unknown>;
+  /** What the phone's Home shows: the computer's edition, its AI, and the notes from FBRX (essentials-home.ts). */
+  home?: () => Promise<unknown>;
+  /** The AI models on this computer, and switching to one (a phone that may ask the AI may pick its model). */
+  models?: () => Promise<unknown>;
+  useModel?: (id: string, by: string) => Promise<unknown>;
   approvals: () => ApprovalRequest[];
   resolveApproval: (id: string, decision: 'approve' | 'deny', by: string) => boolean;
   requestApproval: (deviceName: string, prompt: string, deviceId: string) => Promise<boolean>;
@@ -114,6 +124,8 @@ export interface MeshHost {
   audit: (action: string, actor: string, outcome: 'success' | 'failure' | 'denied', details?: Record<string, unknown>) => void;
   /** Mesh Assist requests (assist.offer / start / status / cancel) from a paired computer. */
   assist?: (device: MeshDevice, method: string, params: any) => Promise<unknown>;
+  /** A paired computer's agent thinking with this computer's AI (assist.model.offer / start / read / cancel). */
+  lend?: (device: MeshDevice, method: string, params: any) => Promise<unknown>;
   /** A gate's FBRX MiniDome saw something coming from this computer (Network protection). */
   networkFinding?: (device: MeshDevice, finding: MeshNetworkFinding) => void;
   /** How this computer is protected (antivirus, threats), for a MiniDome allowed to ask. */
@@ -330,6 +342,7 @@ export class MeshService {
       fingerprint: r.id,
       pairedAt: r.paired_at,
       permissions: perms,
+      source: r.source ?? 'paired',
     };
   }
 
@@ -492,8 +505,67 @@ export class MeshService {
     return this.toDevice(this.row(id));
   }
 
+  /** This computer on the mesh, for FBRX Command (the heartbeat), so it can introduce it to the organization. */
+  identity(): { publicKey: string; fingerprint: string; port: number; addresses: string[]; roles: string[] } {
+    const self = this.self;
+    return { publicKey: self.publicKey, fingerprint: self.id, port: this.host.settings().port, addresses: this.addresses().slice(0, 16), roles: (this.host.settings().assist?.roles ?? []).slice(0, 16) };
+  }
+
+  /**
+   * The organization's computers, as FBRX Command introduces them: trusted by the key it vouches for, with the
+   * permissions it decides. Computers paired by hand stay as they are (only their addresses are refreshed); ones the
+   * organization no longer lists are forgotten.
+   */
+  syncOrg(peers: Array<{ name: string; publicKey: string; fingerprint: string; port: number; addresses: string[]; roles: string[]; permissions: Partial<MeshPermissions> }>): { added: number; removed: number } {
+    // This computer's own key only when there is someone to compare it with (forgetting needs none, and it may be
+    // locked away in the vault).
+    const me = peers.length ? this.self.id : '';
+    const keep = new Set<string>();
+    let added = 0;
+    const now = new Date().toISOString();
+    for (const p of peers) {
+      if (Buffer.from(p.publicKey, 'base64').length !== 32 || fingerprint(p.publicKey) !== p.fingerprint || p.fingerprint === me) continue;
+      const addrs = p.addresses.filter((a) => isIP(a)).slice(0, 16);
+      const port = Number.isInteger(p.port) && p.port > 0 && p.port < 65536 ? p.port : null;
+      const roles = p.roles.filter((x) => /^[a-z][a-z0-9-]{0,31}$/.test(x)).slice(0, 16);
+      keep.add(p.fingerprint);
+      const existing = this.db.get<DeviceRow>('SELECT * FROM mesh_devices WHERE id = ?', p.fingerprint);
+      if (existing && existing.source !== 'org') {
+        this.db.run('UPDATE mesh_devices SET addrs = ?, port = COALESCE(port, ?) WHERE id = ?', JSON.stringify(addrs), port, p.fingerprint);
+        continue;
+      }
+      const perms: MeshPermissions = { ...NO_PERMISSIONS };
+      for (const k of PERMISSION_KEYS) if (typeof p.permissions[k] === 'boolean') perms[k] = p.permissions[k]!;
+      if (!existing) added++;
+      this.db.run(
+        `INSERT INTO mesh_devices (id, name, kind, platform, version, public_key, addr, port, last_seen, paired_at, permissions, addrs, roles, source) VALUES (?, ?, 'desktop', '', '', ?, ?, ?, NULL, ?, ?, ?, ?, 'org')
+         ON CONFLICT(id) DO UPDATE SET name = excluded.name, public_key = excluded.public_key, addr = COALESCE(mesh_devices.addr, excluded.addr), port = excluded.port, permissions = excluded.permissions, addrs = excluded.addrs, roles = excluded.roles`,
+        p.fingerprint,
+        p.name.slice(0, 80) || 'Computer',
+        p.publicKey,
+        addrs[0] ?? null,
+        port,
+        now,
+        JSON.stringify(perms),
+        JSON.stringify(addrs),
+        JSON.stringify(roles),
+      );
+    }
+    const gone = this.db.all<{ id: string; name: string }>("SELECT id, name FROM mesh_devices WHERE source = 'org'").filter((r) => !keep.has(r.id));
+    for (const r of gone) {
+      this.db.run('DELETE FROM mesh_devices WHERE id = ?', r.id);
+      this.outbox.delete(r.id);
+    }
+    if (added || gone.length) {
+      this.host.audit('org.synced', 'fleet', 'success', { added, removed: gone.length });
+      this.changed();
+    }
+    return { added, removed: gone.length };
+  }
+
   removeDevice(id: string): MeshStatus {
     const r = this.row(id);
+    if (r.source === 'org') throw new CoreError('MANAGED', `${r.name} is part of your organization's mesh; your organization decides who is in it`);
     this.db.run('DELETE FROM mesh_devices WHERE id = ?', id);
     this.outbox.delete(id);
     this.host.audit('device.removed', 'user', 'success', { device: r.name, id });
@@ -503,6 +575,7 @@ export class MeshService {
 
   setPermissions(id: string, patch: Partial<MeshPermissions>): MeshDevice {
     const d = this.toDevice(this.row(id));
+    if (d.source === 'org') throw new CoreError('MANAGED', `Your organization decides what ${d.name} may do here`);
     const next = { ...d.permissions };
     for (const k of PERMISSION_KEYS) if (typeof patch[k] === 'boolean') next[k] = patch[k]!;
     this.db.run('UPDATE mesh_devices SET permissions = ? WHERE id = ?', JSON.stringify(next), id);
@@ -814,7 +887,7 @@ export class MeshService {
         return json(res, 200, this.acceptPairing(body, remote));
       }
       if (req.method === 'POST' && url.pathname === '/mesh/rpc') {
-        const env = (await readJson(req)) as Envelope;
+        const env = (await readJson(req, MAX_RPC_BODY)) as Envelope;
         return json(res, 200, await this.rpc(env, remote));
       }
       json(res, 404, { error: { code: 'NOT_FOUND', message: 'Not found' } });
@@ -900,8 +973,17 @@ export class MeshService {
           items: items.filter((i) => (i.type === 'alert' ? d.permissions.alerts : i.type === 'message' ? d.permissions.chat : true)),
           approvals: d.permissions.approve ? this.approvalsFor(d.id) : [],
           jobs: [...this.jobs.values()].filter((j) => j.deviceId === d.id).map(publicJob),
+          home: this.host.home ? await this.host.home() : null,
         };
       }
+      case 'models':
+        need('ask');
+        if (!this.host.models) throw new CoreError('UNAVAILABLE', 'Not on this computer');
+        return this.host.models();
+      case 'models.use':
+        need('ask');
+        if (!this.host.useModel) throw new CoreError('UNAVAILABLE', 'Not on this computer');
+        return this.host.useModel(String(p.id ?? ''), actor);
       case 'chat.send': {
         need('chat');
         if (this.host.acceptMessages && !this.host.acceptMessages()) throw new CoreError('FORBIDDEN', 'Messages are turned off on this computer');
@@ -978,6 +1060,12 @@ export class MeshService {
       case 'assist.cancel':
         if (d.kind !== 'desktop' || !this.host.assist) throw new CoreError('NOT_FOUND', 'Mesh Assist is not available here');
         return this.host.assist(d, method, p);
+      case 'assist.model.offer':
+      case 'assist.model.start':
+      case 'assist.model.read':
+      case 'assist.model.cancel':
+        if (d.kind !== 'desktop' || !this.host.lend) throw new CoreError('NOT_FOUND', 'This computer does not lend its AI');
+        return this.host.lend(d, method, p);
       case 'action': {
         const a = String(p.action ?? '');
         if (a === 'notify') {
@@ -1117,13 +1205,13 @@ function json(res: ServerResponse, status: number, body: unknown) {
   res.end(JSON.stringify(body));
 }
 
-function readJson(req: IncomingMessage): Promise<any> {
+function readJson(req: IncomingMessage, limit = MAX_BODY): Promise<any> {
   return new Promise((resolve, reject) => {
     let size = 0;
     const chunks: Buffer[] = [];
     req.on('data', (c: Buffer) => {
       size += c.length;
-      if (size > MAX_BODY) {
+      if (size > limit) {
         reject(new CoreError('INVALID_ARGUMENT', 'Request too large'));
         req.destroy();
       } else chunks.push(c);

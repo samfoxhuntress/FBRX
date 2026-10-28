@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react';
-import { DEFAULT_POLICY, UPDATE_CHANNELS } from '@fbrx/shared';
+import { useEffect, useState, type ReactNode } from 'react';
+import { DEFAULT_POLICY, TIER_SHORT, UPDATE_CHANNELS, type Tier } from '@fbrx/shared';
 import {
   Button,
   Callout,
@@ -31,7 +31,7 @@ import { api, download } from '../api';
 import { SettingsBuilder, type SettingsDraft } from './settings-builder';
 import { useApp, useQuery } from '../state';
 import { CommandComposer } from './command-composer';
-import { CommandStatus, HealthStatus, audienceHelp, audienceOptions, OnlineStatus, PLATFORM_LABEL, ProtectionCell, ServiceState, SeverityStatus, type DeviceSummary } from './common';
+import { CommandStatus, HealthStatus, audienceHelp, audienceOptions, ImageBackupCell, OnlineStatus, PLATFORM_LABEL, ProtectionCell, ServiceState, SeverityStatus, tierLimitOptions, tierLimitWords, type DeviceSummary } from './common';
 
 interface Detail extends DeviceSummary {
   group: { id: string; name: string } | null;
@@ -66,7 +66,7 @@ export function DeviceDetailPage({ id }: { id: string }) {
           {d.name} <OnlineStatus d={d} />
         </span>
       }
-      description={`${d.hostname} · ${PLATFORM_LABEL[d.platform] ?? d.platform} ${d.arch} · FBRX OS ${d.appVersion}${d.group ? ` · ${d.group.name}` : ''}`}
+      description={`${d.hostname} · ${PLATFORM_LABEL[d.platform] ?? d.platform} ${d.arch} · FBRX OS ${d.appVersion}${d.editionTier ? ` ${TIER_SHORT[d.editionTier]}` : ''}${d.group ? ` · ${d.group.name}` : ''}`}
       actions={
         app.can('commands.send') && d.status === 'active' ? (
           <>
@@ -79,6 +79,11 @@ export function DeviceDetailPage({ id }: { id: string }) {
             {app.can('commands.privileged') && (
               <Button icon="archive" loading={busy === 'backup.create'} onClick={() => void quick('backup.create', { upload: true, label: 'Admin backup' }, 'Backup')}>
                 Back up now
+              </Button>
+            )}
+            {app.can('commands.privileged') && d.health?.imageBackup?.configured && (
+              <Button icon="drive" disabled={d.health.imageBackup.running} loading={busy === 'backup.image'} onClick={() => void quick('backup.image', {}, 'Image backup')}>
+                Image backup now
               </Button>
             )}
             <Button variant="primary" icon="send" onClick={() => setComposer(true)}>
@@ -130,6 +135,7 @@ export function DeviceDetailPage({ id }: { id: string }) {
                   ['Last IP', d.lastIp],
                   ['Enrolled', formatDate(d.enrolledAt)],
                   ['Antivirus', <ProtectionCell p={h?.protection} />],
+                  ...(d.platform === 'win32' ? ([['Whole-computer image', <ImageBackupCell b={h?.imageBackup} />]] as Array<[string, ReactNode]>) : []),
                   ['Vault', h?.vaultState],
                   ['License', h ? `${h.licenseEdition} (${h.licenseState})` : null],
                   ['Local model', h?.runtimeModel ?? 'none'],
@@ -309,7 +315,8 @@ function CommandsTab({ d }: { d: Detail }) {
 
 function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
   const app = useApp();
-  const groups = useQuery<Array<{ id: string; name: string }>>('/v1/admin/groups').data ?? [];
+  const groupsFull = useQuery<Array<{ id: string; name: string; tier: Tier | null; audience: string | null }>>('/v1/admin/groups').data ?? [];
+  const groups = groupsFull;
   const releases = useQuery<Array<{ version: string; published: boolean }>>('/v1/admin/releases').data ?? [];
   const [name, setName] = useState(d.name);
   const [groupId, setGroupId] = useState(d.groupId ?? '');
@@ -321,6 +328,8 @@ function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
   const [policy, setPolicy] = useState(d.policyOverride ? JSON.stringify(d.policyOverride, null, 2) : '');
   const [audience, setAudience] = useState<string>(d.audience ?? '');
   const [receiver, setReceiver] = useState(!!d.helpdeskReceiver);
+  const [tier, setTier] = useState<Tier | ''>(d.tier ?? '');
+  const groupTier = groupsFull.find((g) => g.id === (groupId || null))?.tier ?? null;
   const [valid, setValid] = useState({ s: true, p: true });
   const { busy, run } = useAction();
   const canConfig = app.can('config.manage');
@@ -343,6 +352,7 @@ function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
                 policyOverride: policy.trim() ? JSON.parse(policy) : null,
                 audience: audience || null,
                 helpdeskReceiver: receiver,
+                tier: tier || null,
               }
             : {}),
         }).then(onSaved),
@@ -374,6 +384,17 @@ function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
           </div>
           <Field label="Used by" help={audienceHelp(app.kind)}>
             <Select disabled={!canConfig} value={audience} onChange={(e) => setAudience(e.target.value)} options={[{ value: '', label: 'Its group (or the organization default)' }, ...audienceOptions(app.kind)]} />
+          </Field>
+          <Field
+            label="Edition"
+            help={`It opens in Essentials; whoever uses it switches up to this in Settings → Edition. Black Hole is only there when this (and the license) allows it.${d.editionTier ? ` Runs ${TIER_SHORT[d.editionTier]} now.` : ''}`}
+          >
+            <Select
+              disabled={!canConfig || audience === 'student' || audience === 'child'}
+              value={tier}
+              onChange={(e) => setTier(e.target.value as Tier | '')}
+              options={tierLimitOptions(`Its group's (${tierLimitWords(groupTier) ?? 'up to what the license allows'})`)}
+            />
           </Field>
           <Toggle checked={receiver} disabled={!canConfig} onChange={setReceiver} label={app.kind === 'home' ? "Receives the family's requests for help (a parent's computer)" : 'Receives help desk tickets (the IT computer)'} />
         </div>

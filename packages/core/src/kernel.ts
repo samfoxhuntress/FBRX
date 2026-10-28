@@ -1,4 +1,4 @@
-import { chmodSync, existsSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, existsSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { cpus, freemem, hostname, loadavg, userInfo, platform as osPlatform, arch as osArch, totalmem, uptime as osUptime } from 'node:os';
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
@@ -7,13 +7,22 @@ import {
   decodeLicenseUnverified,
   PRODUCT_NAME,
   ProvisioningFileSchema,
+  STORE_UPDATES,
   addressAs,
   funEnabled,
+  shouldNotify,
+  essentialsNotifies,
   TIER_NAMES,
+  EDITION_PLANS,
+  formatPrice,
+  homeBoard,
+  notesFor,
+  atLeast,
   type DeviceCommand,
   type Heartbeat,
   type NotificationEvent,
   type PresenterStatus,
+  type RuntimeStatus,
   type Audience,
   type DeviceEdition,
   type EditionStatus,
@@ -21,8 +30,11 @@ import {
   VERTICAL_AUDIENCES,
   isLearner,
   productNameFor,
+  parseTier,
+  type Tier,
   type SystemStatus,
   type UpdateStatus,
+  type OrgMeshRoster,
 } from '@fbrx/shared';
 import { CoreError, errorMessage, toCoreError } from './errors';
 import { EventBus } from './events';
@@ -34,8 +46,15 @@ import { MIGRATIONS } from './storage/migrations';
 import { MetaStore } from './storage/meta';
 import { SettingsService } from './settings/settings-service';
 import { Vault } from './vault/vault';
+import { Passwords } from './vault/passwords';
 import { AuditLog } from './audit/audit-log';
 import { PolicyEngine } from './governance/policy-engine';
+import { FolderAccess } from './governance/folder-access';
+import { KnowledgeBase } from './knowledge/knowledge-base';
+import { MemoryService } from './ai/memory';
+import { runDoctor, type DoctorFinding } from './knowledge/doctor';
+import { fbrx1Commands } from './cli/fbrx1';
+import { expandPathVars } from './governance/path-guard';
 import { Guardian } from './governance/guardian';
 import { ApprovalQueue } from './governance/approvals';
 import { Redactor } from './governance/redactor';
@@ -44,7 +63,7 @@ import { ToolGate } from './governance/tool-gate';
 import { checkUrl } from './governance/network-guard';
 import { LicenseService } from './license/license-service';
 import { ToolRegistry } from './tools/registry';
-import { fbrxTools, fsTools, memoryTools, netTools, shellTools, systemTools, diskFreeGb } from './tools/builtin';
+import { fbrxTools, folderTools, fsTools, knowledgeTools, memoryTools, netTools, shellTools, systemTools, diskFreeGb } from './tools/builtin';
 import { pcTools, workspaceTools } from './tools/builtin/command-center-tools';
 import { WorkspaceStore } from './workspace/workspace-store';
 import { SystemMonitor } from './system/system-monitor';
@@ -55,6 +74,7 @@ import { FileBrowser, TerminalSessions } from './system/files';
 import { Spotlight } from './spotlight/spotlight';
 import { AlertEngine } from './alerts/alert-engine';
 import { NetDiag } from './network/netdiag';
+import { LinuxVpnDriver, MacVpnDriver, VpnService, WindowsVpnDriver, type VpnDriver } from './network/vpn';
 import { Trophies } from './fun/trophies';
 import { Fbrx1Cli } from './cli/fbrx1';
 import { VendorDb } from './network/vendors';
@@ -65,6 +85,8 @@ import { calendarTools } from './tools/builtin/calendar-tools';
 import { CalendarService } from './calendar/calendar-service';
 import { Shield } from './protection/shield';
 import { ProtectionService } from './protection/protection-service';
+import { ImageBackupService } from './time/image-backup';
+import { elevated as runElevated, exec, ps as runPs } from './windows/ps';
 import { shieldTools } from './tools/builtin/shield-tools';
 import { helpdeskTools } from './tools/builtin/helpdesk-tools';
 import { NetEnvironments } from './network/environments';
@@ -75,12 +97,23 @@ import { sleep } from './util/misc';
 import { MeshService } from './mesh/mesh-service';
 import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
 import { MeshAssist, runsElevated } from './mesh/mesh-assist';
+import { ModelLender } from './mesh/model-lending';
 import { MeshNetwork } from './mesh/mesh-network';
 import { ServerResources } from './system/server-resources';
+import { SavedServers } from './system/saved-servers';
+import { OrgMesh } from './mesh/org-mesh';
 import { meshTools } from './tools/builtin/mesh-tools';
 import { AiCoordination } from './aicoord/aicoord';
 import { ConversationStore } from './ai/conversations';
+import { AttachmentStore } from './ai/attachments';
+import { OutputFolder } from './docs/output-folder';
+import { AutomationService } from './automations/automation-service';
+import { ScreenSnapshots } from './snapshots/screen-snapshots';
+import { createTools } from './tools/builtin/create-tools';
+import { webTools } from './tools/builtin/web-tools';
+import { passwordTools } from './tools/builtin/password-tools';
 import { ModelManager } from './ai/runtime/model-manager';
+import { StarterAi } from './ai/runtime/starter';
 import { LocalRuntime } from './ai/runtime/local-runtime';
 import { ProviderManager } from './ai/provider-manager';
 import { AgentRuntime } from './ai/agent';
@@ -90,6 +123,10 @@ import { PluginHost } from './plugins/plugin-host';
 import { ConnectorHub } from './connectors/hub';
 import { BackupService } from './backup/backup-service';
 import { applyStagedRestore, stageRestore } from './backup/snapshot';
+import { AccountService } from './account/account-service';
+import { LocalAccountService } from './account/local-account-service';
+import { SupportService } from './support/support-service';
+import { BrowserService } from './browser/browser-service';
 import { FleetAgent } from './fleet/fleet-agent';
 import { deviceFacts } from './fleet/machine';
 import { LocalApiServer } from './localapi/local-api';
@@ -97,7 +134,7 @@ import { ServiceManager } from './services/service-manager';
 import { buildCoreApi, isReadOnly, isUserOnly, scrubParams, type CallContext } from './api/core-api';
 import { buildExtApi } from './api/ext-api';
 import { installConsoleGuard } from './windows/hide-consoles';
-import { ReleaseChecker } from './updates/release-check';
+import { INSTALL_SOURCE_FILE, ReleaseChecker } from './updates/release-check';
 import { pinnedAgent, pinnedFetch } from './util/pinned-tls';
 
 export interface KernelOptions {
@@ -107,6 +144,8 @@ export interface KernelOptions {
   logLevel?: 'debug' | 'info' | 'warn' | 'error';
   /** Extra locations to look for an fbrx-provision.json (e.g. next to the installer). */
   provisioningFiles?: string[];
+  /** FBRX Server's own core (the ai role): its AI sets itself up with the best model the server runs well. */
+  server?: boolean;
 }
 
 const LOCAL_API_TOKEN = 'fbrx.localapi.token';
@@ -126,6 +165,8 @@ export class Kernel {
   readonly log: Logger;
   readonly paths: DataPaths;
   readonly platform: PlatformAdapter;
+  /** FBRX Server's own core (KernelOptions.server). */
+  readonly server: boolean;
   readonly startedAt = new Date();
 
   readonly db: Db;
@@ -133,16 +174,31 @@ export class Kernel {
   readonly settings: SettingsService;
   readonly audit: AuditLog;
   readonly vault: Vault;
+  /** The Vault's password keeper: sign-ins sealed with the vault key. */
+  readonly passwords: Passwords;
   readonly policy: PolicyEngine;
   readonly guardian = new Guardian();
   readonly approvals: ApprovalQueue;
+  /** The folders the AI may use, and its requests for more (Governance → Folders). */
+  readonly folders: FolderAccess;
+  /** FBRX's own guides, playbooks and commands, in a local search database (fbrx.help). */
+  readonly knowledge: KnowledgeBase;
+  /** What the AI remembers about the person, on this computer only (Settings → Memory). */
+  readonly memory: MemoryService;
   readonly redactor = new Redactor();
   readonly limiter: RateLimiter;
   readonly license: LicenseService;
   readonly registry: ToolRegistry;
   readonly gate: ToolGate;
   readonly conversations: ConversationStore;
+  readonly attachments: AttachmentStore;
+  /** Where what the agent makes is saved. */
+  readonly output: OutputFolder;
+  /** FBRX Snapshot's folder of screen snapshots. */
+  readonly snapshots: ScreenSnapshots;
+  readonly automations: AutomationService;
   readonly models: ModelManager;
+  readonly starter: StarterAi;
   readonly runtime: LocalRuntime;
   readonly providers: ProviderManager;
   readonly agent: AgentRuntime;
@@ -150,6 +206,10 @@ export class Kernel {
   readonly connectors: ConnectorHub;
   readonly backup: BackupService;
   readonly fleet: FleetAgent;
+  readonly account: AccountService;
+  readonly localAccount: LocalAccountService;
+  readonly support: SupportService;
+  readonly browser: BrowserService;
   readonly localApi: LocalApiServer;
   readonly services: ServiceManager;
   readonly workspace: WorkspaceStore;
@@ -159,10 +219,14 @@ export class Kernel {
   readonly spotlight: Spotlight;
   readonly alerts: AlertEngine;
   readonly net: NetDiag;
+  /** FBRX VPN: this computer's tunnel to an FBRX Gate. */
+  readonly vpn: VpnService;
   readonly netenv: NetEnvironments;
   readonly calendar: CalendarService;
   readonly shield: Shield;
   readonly protection: ProtectionService;
+  /** FBRX Time on this computer: whole-computer images (Windows). */
+  readonly imageBackup: ImageBackupService;
   readonly helpdesk: Helpdesk;
   /** The help desk working on this computer from a ticket it sent. */
   readonly helpdeskAssist: HelpdeskAssistHost;
@@ -176,11 +240,15 @@ export class Kernel {
   readonly release: ReleaseChecker;
   readonly cli: Fbrx1Cli;
   readonly mesh: MeshService;
+  readonly orgMesh: OrgMesh;
   readonly assist: MeshAssist;
+  /** This computer's own AI, lent to the paired computers' agents that think with it. */
+  readonly lender: ModelLender;
   /** Prefer Mesh: mesh networks, priority marking and path tests. */
   readonly meshNetwork: MeshNetwork;
   /** FBRX Server resources (installer ISO, bundle, guides) shipped inside the app. */
   readonly serverResources: ServerResources;
+  readonly servers: SavedServers;
   readonly aicoord: AiCoordination;
   private readonly api: Record<string, (p: any, ctx: CallContext) => unknown>;
   private disposers: Array<() => void> = [];
@@ -190,6 +258,7 @@ export class Kernel {
 
   constructor(opts: KernelOptions) {
     this.platform = opts.platform;
+    this.server = !!opts.server;
     this.paths = resolveDataPaths(opts.dataDir);
     ensureDataDirs(this.paths);
     this.logSink = new LogSink({ dir: this.paths.logs, console: opts.logToConsole, level: opts.logLevel ?? (opts.platform.devMode ? 'debug' : 'info') });
@@ -217,14 +286,37 @@ export class Kernel {
     this.settings = new SettingsService(this.db, this.events);
     this.audit = new AuditLog(this.db, this.meta, this.events);
     this.vault = new Vault(this.db, this.platform.keychain, L('vault'), this.events, this.platform.movedKeychain ?? null);
+    this.passwords = new Passwords(this.db, this.vault);
     this.policy = new PolicyEngine(
       this.db,
       () => ({ ...this.platform.specialDirs(), workspace: this.paths.workspace, data: this.paths.root }),
       this.events,
     );
     this.approvals = new ApprovalQueue(this.events);
+    this.folders = new FolderAccess({
+      policy: this.policy,
+      events: this.events,
+      audit: this.audit,
+      expand: (entry) => expandPathVars(entry, { ...this.platform.specialDirs(), workspace: this.paths.workspace, data: this.paths.root }),
+      agentName: () => this.settings.get().ai.agentName,
+      notify: (title, body) => this.notify({ title, body, level: 'warning', source: 'governance', open: 'governance' }),
+      timeoutSeconds: () => this.policy.policy.approvals.timeoutSeconds,
+    });
+    this.memory = new MemoryService({ db: this.db, settings: () => this.settings.get().memory, learner: () => this.edition().learner, events: this.events });
+    this.guardian.setPrivateValues(() => this.memory.privateValues());
+    this.knowledge = new KnowledgeBase({ file: join(this.paths.root, 'knowledge.db'), appVersion: this.platform.appVersion, commands: fbrx1Commands, log: L('knowledge') });
     this.limiter = new RateLimiter(() => this.policy.policy.rateLimits.toolCallsPerMinute);
     this.license = new LicenseService(this.meta, this.platform.licensePublicKeys, this.platform.appVersion, this.platform.devMode, this.events);
+    // The edition a computer starts in: a new one opens in Essentials (with its walkthrough); one set up before
+    // Essentials existed keeps what it had (up to what it may run now). One set up before 2.0 starts its Standard trial
+    // (Standard is bought from 2.0).
+    const setUpBefore = this.meta.get<Tier>('edition.chosen') != null || this.settings.get().general.onboardingComplete;
+    if (this.meta.get<Tier>('edition.chosen') == null) {
+      const tried = this.platform.devMode ? parseTier(process.env.FBRX_EDITION) : null;
+      this.meta.set('edition.chosen', this.platform.devMode ? (tried ?? 'blackhole') : this.settings.get().general.onboardingComplete ? 'ultra' : 'essentials');
+      if (this.settings.get().general.onboardingComplete) this.meta.set('edition.tourDone', true);
+    }
+    this.license.beginV2(setUpBefore && !this.platform.devMode);
     this.registry = new ToolRegistry(this.db);
     this.gate = new ToolGate({
       registry: this.registry,
@@ -239,6 +331,10 @@ export class Kernel {
       agentToolsBlocked: () => (this.edition().learner ? 'The learning helper on student computers does not use tools' : null),
     });
     this.conversations = new ConversationStore(this.db);
+    this.attachments = new AttachmentStore({ db: this.db, root: join(this.paths.workspace, 'Attachments'), log: L('attachments') });
+    const dirs = () => ({ ...this.platform.specialDirs(), workspace: this.paths.workspace, data: this.paths.root });
+    this.output = new OutputFolder({ settings: this.settings, policy: this.policy, workspace: this.paths.workspace, dirs });
+    this.snapshots = new ScreenSnapshots({ folder: () => expandPathVars(this.settings.get().snapshot.folder, dirs()), events: this.events, log: L('snapshots'), images: () => this.platform.images });
     this.models = new ModelManager(this.db, this.paths.models, () => this.settings.get().runtime.modelId, L('models'), this.events);
     this.runtime = new LocalRuntime({
       settings: this.settings,
@@ -248,7 +344,34 @@ export class Kernel {
       log: L('runtime'),
       events: this.events,
     });
-    this.providers = new ProviderManager({ settings: this.settings, vault: this.vault, policy: this.policy, license: this.license, runtime: this.runtime });
+    this.starter = new StarterAi({
+      models: this.models,
+      runtime: this.runtime,
+      settings: () => this.settings.get(),
+      meta: this.meta,
+      events: this.events,
+      log: L('starter-ai'),
+      use: (id) => this.useLocalModel(id),
+      server: this.server,
+      // Models go in the data folder, which is there from the first start (the models folder may not be yet).
+      diskFree: async () => ((await diskFreeGb(this.paths.root)) ?? 0) * 1024 ** 3,
+    });
+    this.providers = new ProviderManager({
+      settings: this.settings,
+      vault: this.vault,
+      policy: this.policy,
+      license: this.license,
+      runtime: this.runtime,
+      mesh: {
+        call: (peerId, method, params, timeoutMs) => this.mesh.call(peerId, method, params, timeoutMs),
+        name: (peerId) => this.mesh.devices().find((d) => d.id === peerId)?.name ?? null,
+      },
+      cloud: {
+        access: () => this.account.cloudAccess(),
+        usage: (signal) => this.account.cloudAi(signal),
+        learner: () => this.license.status().ceilingReason === 'learner',
+      },
+    });
     this.agent = new AgentRuntime({
       store: this.conversations,
       providers: this.providers,
@@ -263,12 +386,14 @@ export class Kernel {
       log: L('agent'),
       workspace: this.paths.workspace,
       allowedRoots: () => this.policy.allowedRoots(),
+      attachments: this.attachments,
       halt: () => this.aiHalt(),
       learner: () => {
         const e = this.edition();
         return e.learner ? { vertical: e.vertical } : null;
       },
       onConcern: (category) => this.reportConcern(category),
+      memory: { context: (o) => this.memory.context(o), learn: (text) => this.memory.learn(text) },
       assist: {
         canHandoff: (trigger) => this.assist.canHandoff(trigger),
         handoff: (h) => this.assist.handoff(h),
@@ -280,6 +405,23 @@ export class Kernel {
           get: (c) => this.meta.get<string>(`agent.persona.${c}`),
           set: (c, v) => (v ? this.meta.set(`agent.persona.${c}`, v) : this.meta.delete(`agent.persona.${c}`)),
         },
+      },
+    });
+    this.automations = new AutomationService({
+      db: this.db,
+      agent: this.agent,
+      events: this.events,
+      log: L('automations'),
+      audit: this.audit,
+      notify: (n) => this.notify(n),
+      blocked: () => {
+        const e = this.edition();
+        if (e.learner) return 'Automations are not on student computers';
+        return e.tier === 'essentials' ? 'Automations come with FBRX Endpoint Standard (Settings → Edition)' : null;
+      },
+      takenHotkeys: () => {
+        const s = this.settings.get();
+        return [s.spotlight.hotkey, s.clipboard.hotkey, s.presenter.hotkey, s.snapshot.hotkey, s.snapshot.printScreen ? 'PrintScreen' : '', ...s.keyMacros.map((m) => m.hotkey)].filter(Boolean);
       },
     });
     const urlCheck = (u: string) => checkUrl(u, this.policy.policy.network);
@@ -344,8 +486,49 @@ export class Kernel {
       onMessage: (msg) => {
         this.helpdesk.onPush(msg);
         this.messages.onPush(msg);
+        if (msg.type === 'mesh.roster') void this.orgMesh.sync();
       },
     });
+    this.account = new AccountService({
+      meta: this.meta,
+      vault: this.vault,
+      license: this.license,
+      audit: this.audit,
+      events: this.events,
+      log: L('account'),
+      defaultServer: this.platform.accountServer ?? '',
+      device: () => ({
+        name: this.deviceName(),
+        kind: 'computer',
+        platform: ({ win32: 'Windows', darwin: 'macOS', linux: 'Linux' } as Record<string, string>)[process.platform] ?? process.platform,
+        appVersion: this.platform.appVersion,
+        installId: this.meta.get<string>('install.id') ?? undefined,
+      }),
+      enroll: (serverUrl, token, fingerprint, actor) => this.fleet.enroll(serverUrl, token, undefined, actor, undefined, fingerprint ?? undefined),
+      enrolled: () => this.fleet.enrolled,
+    });
+    this.localAccount = new LocalAccountService(this.meta, this.audit, this.events);
+    // Support mode: a signed pass elevates this computer; the license and settings services read its state.
+    this.support = new SupportService({
+      meta: this.meta,
+      license: this.license,
+      publicKeys: this.platform.licensePublicKeys,
+      audit: this.audit,
+      events: this.events,
+      log: L('support'),
+      installId: () => this.meta.get<string>('install.id') ?? '',
+      allowed: () => !this.fleet.enrolled || this.settings.get().support.allowOnManaged,
+      report: (message, data) => this.fleet.enrolled && this.fleet.reportEvent({ kind: 'alert', severity: 'warning', message, data, at: new Date().toISOString() }),
+    });
+    this.settings.setSupportActive(() => this.support.status().active);
+    this.settings.onChange(() => this.support.settingsChanged());
+    this.browser = new BrowserService(
+      this.meta,
+      this.events,
+      () => this.settings.get(),
+      () => this.settings.get().protection.provider === 'shield',
+      () => this.edition().learner,
+    );
     this.helpdesk = new Helpdesk({
       fleet: this.fleet,
       events: this.events,
@@ -359,11 +542,15 @@ export class Kernel {
       approvals: this.approvals,
       approvalSeconds: () => Math.max(this.policy.policy.approvals.timeoutSeconds, 180),
       diagnostics: async () => {
-        const top = await this.monitor.processes({ sort: 'cpu', limit: 8 }).catch(() => null);
-        // Protection as it is now (a few seconds at most: the antivirus is asked again).
-        const prot = await Promise.race([this.protection.status().catch(() => null), sleep(5000).then(() => null)]);
+        // All at once: each one asks the system (PowerShell on Windows), which takes seconds.
+        const [base, top, prot] = await Promise.all([
+          this.ticketDiagnostics(),
+          this.monitor.processes({ sort: 'cpu', limit: 8 }).catch(() => null),
+          // Protection as it is now (a few seconds at most: the antivirus is asked again).
+          Promise.race([this.protection.status().catch(() => null), sleep(5000).then(() => null)]),
+        ]);
         return {
-          ...(await this.ticketDiagnostics()),
+          ...base,
           busiestApps: top?.list.map((x) => ({ name: x.name, pid: x.pid, cpuPct: x.cpu, memoryMb: Math.round(x.memBytes / 1048576) })) ?? [],
           protection: prot ? { name: prot.active.name, state: prot.state, realtime: prot.realtime, threats: prot.threats } : this.protection.summary(),
           checkedAt: new Date().toISOString(),
@@ -409,7 +596,27 @@ export class Kernel {
       internet: () => this.internetAllowed(),
     });
     this.net = new NetDiag({ db: this.db, events: this.events, vendors: this.vendors, internet: () => this.internetAllowed() });
-    this.netenv = new NetEnvironments({ meta: this.meta, vault: this.vault, events: this.events, log: L('netenv'), unavailable: () => this.ultraOnly('Network environments') });
+    const vpnDriver: VpnDriver =
+      process.platform === 'win32'
+        ? new WindowsVpnDriver({ run: exec, elevate: (script) => runElevated(script, { workDir: this.paths.tmp }) })
+        : process.platform === 'darwin'
+          ? new MacVpnDriver({ run: exec })
+          : new LinuxVpnDriver({ run: exec, root: process.getuid?.() === 0 });
+    this.vpn = new VpnService({
+      db: this.db,
+      meta: this.meta,
+      vault: this.vault,
+      events: this.events,
+      dir: join(this.paths.tmp, 'vpn'),
+      driver: vpnDriver,
+      ping: async (host) => {
+        const r = await this.net.ping(host, 2, 1500);
+        return { ok: r.received > 0, ms: r.avg };
+      },
+      computers: async () => (await this.mesh.networkComputers()).map((c) => ({ id: c.id, name: c.name, addresses: c.addresses, roles: this.mesh.rolesOf(c.id) })),
+      meshAnswers: (id) => this.mesh.hello(id).then(() => true),
+    });
+    this.netenv = new NetEnvironments({ meta: this.meta, vault: this.vault, events: this.events, log: L('netenv'), unavailable: () => this.blackHoleOnly('Network environments') });
     this.calendar = new CalendarService({
       db: this.db,
       vault: this.vault,
@@ -420,6 +627,25 @@ export class Kernel {
       builtInClientId: this.platform.microsoftClientId ?? null,
       internet: () => this.internetAllowed(),
       notify: (title, body) => this.notify({ title, body, level: 'info', source: 'calendar' }),
+      sources: {
+        projects: () => this.workspace.listProjects(),
+        tasks: () => this.workspace.listTasks(),
+        note: (id) => {
+          try {
+            return this.workspace.getNote(id);
+          } catch {
+            return null;
+          }
+        },
+        task: (id) => {
+          try {
+            return this.workspace.getTask(id);
+          } catch {
+            return null;
+          }
+        },
+        automations: () => this.automations.list(),
+      },
     });
     this.shield = new Shield({
       db: this.db,
@@ -436,7 +662,8 @@ export class Kernel {
           return undefined;
         }
       },
-      skip: () => [this.paths.root],
+      // FBRX's own folders: its data, where it is installed and its update cache, and its whole-computer image files.
+      skip: () => [this.paths.root, ...(this.platform.ownDirs?.() ?? []), ...(process.platform === 'win32' ? [join(process.env.ProgramData ?? 'C:\\ProgramData', 'FBRX')] : [])],
       landing: () => {
         const d = this.platform.specialDirs();
         // Never the home folder itself (some systems report it as Downloads).
@@ -454,6 +681,16 @@ export class Kernel {
       setProvider: (provider) => void this.settings.update({ protection: { provider } }),
       dirs: () => this.platform.specialDirs(),
       alert: (rule, title, body, key) => void this.alerts.fire(rule, title, body, { key }).catch((err) => this.log.debug('Alert failed', { rule, error: errorMessage(err) })),
+      resolve: (ids) => ids.forEach((id) => this.alerts.resolve('shield_threat', id)),
+      notify: (title, body) => this.notify({ title, body, level: 'info', source: 'alerts' }),
+    });
+    this.imageBackup = new ImageBackupService({
+      platform: process.platform,
+      dir: join(process.env.ProgramData ?? 'C:\\ProgramData', 'FBRX', 'Time'),
+      ps: (script, timeoutMs) => runPs(script, timeoutMs),
+      elevated: (script, o) => runElevated(script, { timeoutMs: o?.timeoutMs }),
+      audit: (action, outcome, details) => this.audit.append({ category: 'system', action, actor: 'user', outcome, details }),
+      log: L('time'),
     });
     this.trophies = new Trophies({ meta: this.meta, events: this.events, enabled: () => funEnabled(this.settings.get(), this.license.status().tier) });
     this.migrator = new Migrator({
@@ -473,6 +710,7 @@ export class Kernel {
       internet: () => this.internetAllowed(),
       notify: (title, body, version) => this.alerts.fire('update_available', title, body, { key: version }),
       quiet: () => !this.presenterStatus().active && this.agent.activeCount === 0 && this.idleSeconds() >= 300,
+      store: !!this.platform.store,
     });
     // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
     this.cli = new Fbrx1Cli({
@@ -500,6 +738,14 @@ export class Kernel {
       keyPair: () => this.meshKeyPair(),
       mobileDir: this.platform.meshMobileDir ?? null,
       status: () => this.meshStatusSummary(),
+      home: () => this.meshHome(),
+      models: async () => ({ current: this.settings.get().runtime.modelId || null, installed: this.models.installed().map((m) => ({ id: m.id, name: m.name, sizeBytes: m.sizeBytes })) }),
+      useModel: async (id, by) => {
+        if (!this.models.installed().some((m) => m.id === id)) throw new CoreError('NOT_FOUND', 'That model is not on this computer');
+        await this.useLocalModel(id);
+        this.audit.append({ category: 'user', action: 'runtime.useModel', actor: by, target: id, outcome: 'success' });
+        return { current: id };
+      },
       approvals: () => this.approvals.list(),
       resolveApproval: (id, decision, by) => this.approvals.resolve(id, decision, by),
       requestApproval: async (deviceName, prompt, deviceId) => {
@@ -538,6 +784,7 @@ export class Kernel {
       system: (cmd) => this.spotlight.system(cmd),
       audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
       assist: (device, method, params) => this.assist.handle(device, method, params),
+      lend: (device, method, params) => this.lender.handle(device, method, params),
       // A gate's FBRX MiniDome saw something coming from this computer: an alert here (critical when it is serious).
       networkFinding: (device, f) =>
         void this.alerts
@@ -558,6 +805,36 @@ export class Kernel {
       notify: (title, body, open) => this.notify({ title, body, level: 'info', source: 'messages', open }),
     });
     this.serverResources = new ServerResources(this.platform.resourcesDir, () => this.platform.specialDirs().downloads);
+    this.orgMesh = new OrgMesh({
+      enrolled: () => this.fleet.enrolled,
+      roster: () => this.fleet.request<OrgMeshRoster>('GET', '/v1/device/mesh/roster'),
+      syncPeers: (peers) => this.mesh.syncOrg(peers),
+      meshEnabled: () => this.settings.get().mesh.enabled,
+      enableMesh: () => {
+        try {
+          this.settings.update({ mesh: { enabled: true } });
+          this.audit.append({ category: 'mesh', action: 'org.enabled', actor: 'fleet', outcome: 'success', details: {} });
+          return true;
+        } catch {
+          return false;
+        }
+      },
+      log: L('org-mesh'),
+    });
+    // Joining or leaving an organization, or reconnecting to it: look at its mesh again.
+    this.events.on('fleet.changed', (f) => {
+      if (f.state === 'online' || f.state === 'unenrolled') void this.orgMesh.sync();
+    });
+    this.servers = new SavedServers({
+      meta: this.meta,
+      audit: (action, details) => this.audit.append({ category: 'server', action, actor: 'user', outcome: 'success', details }),
+      meshServers: () =>
+        this.mesh
+          .devices()
+          .filter((d) => d.kind === 'desktop')
+          .map((d) => ({ name: d.name, host: this.mesh.addressFor(d.id) ?? '', roles: this.mesh.rolesOf(d.id) }))
+          .filter((d) => d.host && d.roles.length),
+    });
     this.meshNetwork = new MeshNetwork({
       settings: () => this.settings.get().mesh.network,
       port: () => this.settings.get().mesh.port,
@@ -602,6 +879,21 @@ export class Kernel {
       emit: (session) => this.events.emit('mesh.assist', session),
       log: L('mesh'),
     });
+    this.lender = new ModelLender({
+      accepts: (peer) => this.assist.acceptance(peer, false),
+      resolve: (model) => this.providers.resolve(undefined, model),
+      models: (providerId) => this.providers.models(providerId),
+      reasoning: () => this.settings.get().ai.localThinking,
+      approve: async (p) => {
+        const r = await this.approvals.request(
+          { runId: null, tool: 'mesh.assist', toolTitle: p.title, risk: 'execute', input: p.input, reason: p.reason, origin: 'remote', findings: [] },
+          this.policy.policy.approvals.timeoutSeconds,
+        );
+        return r.decision === 'approve';
+      },
+      agentName: () => this.settings.get().ai.agentName,
+      audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
+    });
     this.alerts = new AlertEngine({
       db: this.db,
       events: this.events,
@@ -609,7 +901,7 @@ export class Kernel {
       settings: () => this.settings.get(),
       monitor: this.monitor,
       workspace: this.workspace,
-      notify: (title, body, level) => this.notify({ title, body, level, source: 'alerts' }),
+      notify: (title, body, level, ruleId) => this.notify({ title, body, level, source: ruleId === 'update_available' ? 'updates' : 'alerts', open: ruleId === 'update_available' ? 'settings/updates' : 'alerts' }),
       toMobile: (a) => this.mesh.pushAlert(a),
       toOrganisation: (a) => {
         if (!this.fleet.enrolled) return false;
@@ -618,6 +910,7 @@ export class Kernel {
       },
       secret: (name) => (this.vault.isUnlocked ? this.vault.get(name) : undefined),
       meshPeers: () => (this.mesh.running ? this.mesh.peers() : []),
+      editionNotice: () => this.trialNotice(),
     });
     this.aicoord = new AiCoordination({
       shim: () => {
@@ -695,6 +988,11 @@ export class Kernel {
     this.disposers.push(
       this.events.on('notification', (n) => {
         try {
+          // Notifications switched off, all of them or this kind (Alerts → Notifications).
+          if (!shouldNotify(this.settings.get().notifications, n.source)) return;
+          // Endpoint Essentials (the AI on its own): nothing about pages it does not have.
+          const e = this.edition();
+          if (e.tier === 'essentials' && !e.learner && !essentialsNotifies(n.source)) return;
           // Presenting: nothing private pops up on the projector. Urgent ones still say that something needs a look.
           const p = this.presenterStatus();
           if (p.active && p.hideNotifications) {
@@ -710,7 +1008,7 @@ export class Kernel {
       this.events.on('settings.changed', () => this.calendar.schedule()),
       this.events.on('settings.changed', () => this.protection.applyWatch()),
     );
-    this.disposers.push(this.vault.onChange(() => this.redactor.setSecrets(this.vault.valuesForRedaction())));
+    this.disposers.push(this.vault.onChange(() => this.updateRedaction()));
     // Licensed features (plugins, connectors, …) start or stop as soon as a license is activated, pushed or revoked.
     this.disposers.push(
       this.events.on('license.changed', () => {
@@ -786,7 +1084,7 @@ export class Kernel {
       dependsOn: ['storage', 'audit'],
       start: async () => {
         await this.vault.open();
-        this.redactor.setSecrets(this.vault.valuesForRedaction());
+        this.updateRedaction();
       },
       stop: () => undefined,
       health: async () => {
@@ -821,12 +1119,15 @@ export class Kernel {
           ...shellTools({ workspace: ws, timeoutSeconds: () => this.policy.policy.shell.timeoutSeconds }),
           ...netTools({ checkUrl: (u) => checkUrl(u, this.policy.policy.network) }),
           ...systemTools({ workspace: ws, notify: (title, body) => this.notify({ title, body, level: 'info', source: 'agent' }) }),
-          ...memoryTools(this.db),
+          ...memoryTools(this.memory),
+          ...passwordTools({ passwords: this.passwords, offerSave: (d) => this.events.emit('passwords.saveRequested', d) }),
+          ...folderTools(this.folders),
+          ...knowledgeTools({ kb: this.knowledge, doctor: () => this.doctor(), fix: (id) => this.applyFix(id) }),
           ...fbrxTools({ status: () => this.status(), recentAudit: (n) => this.audit.query({ limit: n }) }),
           ...workspaceTools(this.workspace),
           ...deviceConsoleTools(this.consoles),
-          ...netEnvTools(this.netenv, () => this.ultraOnly('Network environments')),
-          ...calendarTools(this.calendar),
+          ...netEnvTools(this.netenv, () => this.blackHoleOnly('Network environments')),
+          ...calendarTools(this.calendar, () => this.workspace.listProjects()),
           ...shieldTools(this.protection, this.shield),
           ...meshTools(this.assist, () => {
             const a = this.settings.get().mesh.assist;
@@ -835,6 +1136,13 @@ export class Kernel {
           }),
           ...helpdeskTools(this.helpdesk, () => (this.fleet.enrolled ? null : 'This computer is not part of an organization, so there is no help desk to send to')),
           ...pcTools({ monitor: this.monitor, net: this.net, alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined) }),
+          ...createTools({
+            output: this.output,
+            renderer: () => this.platform.renderer ?? null,
+            images: () => this.settings.get().ai.images,
+            imagesEndpoint: (id) => this.providers.endpoint(id),
+          }),
+          ...webTools({ checkUrl: (u) => checkUrl(u, this.policy.policy.network), search: () => this.settings.get().ai.webSearch, appVersion: this.platform.appVersion }),
         ]);
       },
       stop: () => undefined,
@@ -982,6 +1290,15 @@ export class Kernel {
     });
   }
 
+  /** "Install FBRX OS --no-ai" (its own test runs, for one) leaves the AI to whoever opens the app. */
+  private starterAiWanted(): boolean {
+    try {
+      return (JSON.parse(readFileSync(join(this.paths.root, INSTALL_SOURCE_FILE), 'utf8')) as { starterAi?: boolean }).starterAi !== false;
+    } catch {
+      return true;
+    }
+  }
+
   async start(): Promise<void> {
     await this.services.startAll();
     this.services.startWatchdog();
@@ -990,15 +1307,92 @@ export class Kernel {
     this.applyLicenseFile();
     // Look for new versions in the FBRX repository (the desktop app only; servers and tests don't).
     if (this.platform.shell === 'desktop') this.release.start();
+    // A new computer's AI, ready before the first question (the starter model, picked up or downloaded once); a
+    // server's, the best model it runs well.
+    if (this.server || (this.platform.shell === 'desktop' && this.starterAiWanted())) void this.starter.prepare({ auto: true });
     this.messages.start();
+    this.orgMesh.start();
+    // The FBRX account's license, renewed now and every few hours (when someone signed in).
+    this.account.start();
+    this.support.start();
+    this.automations.start();
     // A provisioning file (IT deployment) goes first; a license that names an FBRX Command tenant joins after it.
     void this.applyProvisioning()
       .catch((err) => this.log.error('Provisioning failed', { error: errorMessage(err) }))
       .then(() => this.joinLicenseTenant('license'));
     this.audit.prune(365);
+    void this.attachments.sweep().catch((err) => this.log.warn('Could not tidy old attachments', { error: errorMessage(err) }));
+  }
+
+  /** FBRX's check-up of itself (fbrx.doctor). */
+  doctor(): Promise<DoctorFinding[]> {
+    const s = this.settings.get();
+    const rt = this.runtime.status();
+    const p = this.presenterStatus();
+    const rel = this.release.status();
+    const size = (f: string) => {
+      try {
+        return statSync(f).size;
+      } catch {
+        return 0;
+      }
+    };
+    return runDoctor({
+      services: () => this.services.list(),
+      logs: () => this.logSink.tail(400, 'warn'),
+      runtime: () => rt,
+      modelBytes: () => (rt.modelId ? (this.models.get(rt.modelId)?.sizeBytes ?? null) : s.runtime.modelId ? (this.models.get(s.runtime.modelId)?.sizeBytes ?? null) : null),
+      settings: () => s,
+      scanRunning: () => this.protection.job()?.state === 'running',
+      shieldWaiting: () => this.shield.status(null).open,
+      databaseBytes: () => size(this.paths.db) + size(`${this.paths.db}-wal`),
+      diskFreeGb: () => diskFreeGb(this.paths.root),
+      halted: () => !!this.aiHalt(),
+      vaultLocked: () => !this.vault.isUnlocked,
+      presenting: () => p.active,
+      updateAvailable: () => (rel.state === 'available' && rel.latest ? rel.latest.version : null),
+      appVersion: this.platform.appVersion,
+    });
+  }
+
+  /** Applies a fix fbrx.doctor offers (fbrx.fix, after the person agrees). Returns what happened. */
+  async applyFix(id: string): Promise<string> {
+    const svc = /^restart-service:([a-z0-9-]{1,40})$/.exec(id);
+    if (svc) {
+      if (!this.services.get(svc[1])) throw new CoreError('NOT_FOUND', `There is no service called ${svc[1]}`);
+      const st = await this.services.restart(svc[1]);
+      return `Restarted ${st.title}: it is ${st.state}${st.message ? ` (${st.message})` : ''}.`;
+    }
+    switch (id) {
+      case 'cancel-scan':
+        if (this.protection.job()?.state !== 'running') return 'No scan is running.';
+        this.protection.cancel();
+        return 'Stopped the scan. What it found so far is still in FBRX Shield.';
+      case 'recheck-shield': {
+        const r = await this.protection.recheck();
+        return `Cleared ${r.cleared} finding${r.cleared === 1 ? '' : 's'} FBRX Shield no longer flags, and ${r.gone} whose file is gone.`;
+      }
+      case 'unload-model':
+        await this.runtime.stop();
+        return 'Unloaded the local AI model; its memory is free. It loads again the next time the AI is asked something.';
+      case 'lower-context': {
+        const ai = this.settings.get().ai;
+        await this.settings.update({ runtime: { contextSize: 8192 }, ...(ai.ollamaContext > 8192 ? { ai: { ollamaContext: 8192 } } : {}) });
+        return 'Set the local model’s context window to 8,192 tokens. It takes effect the next time the model loads.';
+      }
+      case 'compact-database': {
+        const before = statSync(this.paths.db).size;
+        this.db.exec('PRAGMA wal_checkpoint(TRUNCATE); VACUUM;');
+        const after = statSync(this.paths.db).size;
+        return `Tidied FBRX’s database: ${(before / 1024 ** 2).toFixed(0)} MB → ${(after / 1024 ** 2).toFixed(0)} MB.`;
+      }
+      default:
+        throw new CoreError('INVALID_ARGUMENT', `FBRX has no fix called ${id}`);
+    }
   }
 
   async stop(): Promise<void> {
+    this.knowledge.close();
     if (!this.started) {
       this.db.close();
       this.logSink.flush();
@@ -1006,7 +1400,12 @@ export class Kernel {
     }
     this.started = false;
     this.release.stop();
+    this.account.stop();
+    this.support.stop();
+    this.automations.stop();
     this.messages.stop();
+    this.orgMesh.stop();
+    this.lender.close();
     this.terminal.killAll();
     this.consoles.closeAll();
     this.migrator.cancelAll();
@@ -1020,8 +1419,13 @@ export class Kernel {
     this.logSink.flush();
   }
 
+  /** What the output redactor scrubs: the vault's credentials and the password keeper's passwords. */
+  private updateRedaction(): void {
+    this.redactor.setSecrets([...this.vault.valuesForRedaction(), ...this.passwords.valuesForRedaction()]);
+  }
+
   async onVaultUnlocked(): Promise<void> {
-    this.redactor.setSecrets(this.vault.valuesForRedaction());
+    this.updateRedaction();
     for (const name of ['localapi', 'plugins', 'connectors', 'mesh']) {
       const st = this.services.get(name);
       if (st && st.state !== 'disabled') await this.services.restart(name);
@@ -1096,7 +1500,11 @@ export class Kernel {
         progressPct: null,
         channel: this.settings.get().updates.channel,
         feedUrl: null,
-        message: this.platform.shell === 'headless' ? 'Headless installs are updated by redeploying the package' : 'Updates are not available in development builds',
+        message: this.platform.store
+          ? STORE_UPDATES
+          : this.platform.shell === 'headless'
+            ? 'Headless installs are updated by redeploying the package'
+            : 'Updates are not available in development builds',
       }
     );
   }
@@ -1203,7 +1611,19 @@ export class Kernel {
       runtimeModel: this.runtime.status().modelId,
       auditHead: this.audit.headInfo(),
       protection: this.protection.summary(),
+      imageBackup: this.imageBackup.summary(),
+      mesh: this.meshIdentityForCommand(),
+      editionTier: lic.tier,
     };
+  }
+
+  /** This computer's mesh identity for FBRX Command; none while its key is out of reach (a locked vault). */
+  private meshIdentityForCommand(): { enabled: boolean; running: boolean; publicKey: string; fingerprint: string; port: number; addresses: string[]; roles: string[] } | null {
+    try {
+      return { enabled: this.settings.get().mesh.enabled, running: this.mesh.running, ...this.mesh.identity() };
+    } catch {
+      return null;
+    }
   }
 
   /** Executes a command sent by an administrator from the control plane. */
@@ -1220,11 +1640,14 @@ export class Kernel {
       case 'update.install':
         return this.installUpdate({ restartNow: !!p.restartNow, source: p.source ?? 'auto' });
       case 'backup.create': {
-        const info = await this.backup.create({ label: p.label, actor: 'control-plane' });
+        // One that goes to FBRX Command leaves out the AI's memory of the person (it never leaves the computer).
+        const info = await this.backup.create({ label: p.label, actor: 'control-plane', withoutMemory: !!p.upload });
         let uploaded: string | null = null;
         if (p.upload) uploaded = (await this.fleet.uploadSnapshot(info.file, p.label ?? null)).snapshotId;
         return { file: info.name, sizeBytes: info.sizeBytes, snapshotId: info.header?.snapshotId, uploadedSnapshotId: uploaded };
       }
+      case 'backup.image':
+        return this.imageBackup.run('control-plane');
       case 'plugin.install': {
         this.license.require('plugins');
         const file = await this.fleet.download(p.url, p.sha256, `${p.packageId}.tgz`);
@@ -1297,13 +1720,71 @@ export class Kernel {
 
   // ------------------------------------------------------------------------------- command center
 
-  /** What this computer is: Endpoint Basic or Ultra, or FBRX OS Education on a student computer. */
+  /** What this computer is: Endpoint Essentials, Standard or Ultra, or FBRX OS Education on a student computer. */
+  /** Makes an installed model the one the agent uses, with the built-in runtime as the default AI, and starts it. */
+  async useLocalModel(modelId: string): Promise<RuntimeStatus> {
+    if (!this.models.get(modelId)) throw new CoreError('NOT_FOUND', 'Model is not installed');
+    const ai = this.settings.get().ai;
+    const local = ai.providers.find((x) => x.type === 'local-runtime');
+    if (!local) throw new CoreError('UNAVAILABLE', 'This computer has no built-in runtime provider');
+    this.settings.update({ runtime: { enabled: true, modelId }, ai: { providers: ai.providers.map((x) => (x.id === local.id ? { ...x, enabled: true } : x)), defaultProvider: local.id, defaultModel: '' } });
+    if (this.runtime.isRunning) await this.runtime.stop();
+    // Starts now when the runtime is there (otherwise at the first question, once it is installed).
+    if (this.runtime.status().state === 'stopped') await this.runtime.start().catch(() => undefined);
+    return this.runtime.status();
+  }
+
   edition(): EditionStatus {
     const lic = this.license.status();
     const ed = this.meta.get<DeviceEdition>('fleet.edition');
     const vertical: Vertical = ed?.vertical ?? lic.vertical ?? 'business';
     const audience: Audience = ed?.audience ?? VERTICAL_AUDIENCES[vertical][0];
-    return { tier: lic.tier, vertical, audience, learner: isLearner(audience), productName: productNameFor(lic.tier, vertical, audience) };
+    return {
+      tier: lic.tier,
+      chosen: lic.chosen ?? lic.tier,
+      ceiling: lic.ceiling ?? lic.tier,
+      ceilingReason: lic.ceilingReason ?? 'standalone',
+      trialUntil: lic.trialUntil ?? null,
+      trialAvailable: !!lic.trialAvailable,
+      enrolled: this.fleet.enrolled,
+      tourDone: !!this.meta.get<boolean>('edition.tourDone'),
+      vertical,
+      audience,
+      learner: isLearner(audience),
+      productName: productNameFor(lic.tier, vertical, audience),
+    };
+  }
+
+  /** The person's choice in Settings → Edition (anything up to what this computer may run). */
+  chooseEdition(tier: Tier, actor: string): EditionStatus {
+    const before = this.license.status().tier;
+    this.license.choose(tier);
+    this.audit.append({ category: 'user', action: 'edition.chosen', actor, target: tier, outcome: 'success', details: { from: before } });
+    return this.edition();
+  }
+
+  /** The day before the Standard trial ends, and when it has: what to say (alerts, once each). */
+  private trialNotice(): { title: string; body: string } | null {
+    const notice = this.license.takeTrialNotice();
+    if (!notice) return null;
+    const price = formatPrice(EDITION_PLANS.basic.monthly!);
+    return notice === 'ending'
+      ? { title: 'Your Standard trial ends tomorrow', body: `To keep Standard, get it for ${price} a month in Settings → Edition. Otherwise this computer goes back to Essentials, free, and nothing you saved goes away.` }
+      : { title: 'Your Standard trial has ended', body: `This computer runs Essentials again, free, and nothing you saved went away. Standard is ${price} a month in Settings → Edition.` };
+  }
+
+  /** Starts this computer's free Standard trial (Settings → Edition), once. */
+  startTrial(actor: string): EditionStatus {
+    const until = this.license.startTrial().trialUntil;
+    this.audit.append({ category: 'user', action: 'edition.trial', actor, target: 'basic', outcome: 'success', details: { until } });
+    return this.edition();
+  }
+
+  /** The Essentials walkthrough was finished or skipped (or is to be shown again). */
+  setTourDone(done: boolean): EditionStatus {
+    this.meta.set('edition.tourDone', done);
+    this.events.emit('license.changed', this.license.status());
+    return this.edition();
   }
 
   /**
@@ -1370,6 +1851,7 @@ export class Kernel {
    * release feed from FBRX Command use it; computers installed from the GitHub repository download and run the installer.
    */
   private async installUpdate(p: { restartNow: boolean; source: 'auto' | 'command' | 'repository' }): Promise<unknown> {
+    if (this.platform.store) throw new Error(STORE_UPDATES);
     const feed = this.platform.updates;
     if (p.source !== 'repository' && feed && feed.status().feedUrl) {
       const st = await feed.check();
@@ -1386,9 +1868,14 @@ export class Kernel {
     throw new Error('This computer has no way to update itself: it was not installed from the repository and has no update feed');
   }
 
-  /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Basic), or null. */
+  /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Essentials or Standard), or null. */
   ultraOnly(what: string): string | null {
-    return this.license.status().tier === 'ultra' ? null : `${what} come with ${TIER_NAMES.ultra}`;
+    return atLeast(this.license.status().tier, 'ultra') ? null : `${what} come with ${TIER_NAMES.ultra}`;
+  }
+
+  /** Why a Black Hole feature cannot be used on this computer (it runs a lighter edition), or null. */
+  blackHoleOnly(what: string): string | null {
+    return atLeast(this.license.status().tier, 'blackhole') ? null : `${what} come with ${TIER_NAMES.blackhole}, through your organization's FBRX Command`;
   }
 
   /** False when the organization's network policy blocks every internet host. */
@@ -1432,6 +1919,22 @@ export class Kernel {
       pendingApprovals: st.pendingApprovals,
       alerts: this.alerts.counts(),
       openTasks: this.workspace.listTasks().filter((t) => t.status !== 'done').length,
+    };
+  }
+
+  /** What a paired phone's Home shows: this computer's edition and AI, the split-flap board and the notes from FBRX. */
+  private async meshHome() {
+    const st = this.settings.get();
+    const tier = this.license.status().tier;
+    const modelName = this.models.installed().find((m) => m.id === st.runtime.modelId)?.name ?? null;
+    const aiReady = (await this.providers.status().catch(() => [])).some((p) => p.available);
+    return {
+      tier,
+      agentName: st.ai.agentName,
+      aiReady,
+      modelName,
+      board: homeBoard({ name: addressAs(st), agentName: st.ai.agentName, aiReady, deviceName: this.deviceName(), tier }),
+      notes: notesFor({ tier, agentName: st.ai.agentName, modelName, paired: true }),
     };
   }
 
@@ -1488,7 +1991,8 @@ export class Kernel {
     };
     const timeout = setTimeout(() => ctrl.abort(), 300_000);
     try {
-      for await (const chunk of provider.chat({ model, messages, tools: [], temperature: 0.3, signal: ctrl.signal })) {
+      // A quick answer: a model on this computer answers straight away instead of thinking first.
+      for await (const chunk of provider.chat({ model, messages, tools: [], temperature: 0.3, ...(config.cloud ? {} : { reasoning: false }), signal: ctrl.signal })) {
         if (chunk.type === 'text') {
           answer += chunk.delta;
           pending += chunk.delta;

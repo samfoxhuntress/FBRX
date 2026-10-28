@@ -1,4 +1,4 @@
-import type { ModelInfo, ProviderConfig, ProviderStatus } from '@fbrx/shared';
+import type { CloudAiUsage, LentModel, ModelInfo, ProviderConfig, ProviderStatus } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { SettingsService } from '../settings/settings-service';
 import type { Vault } from '../vault/vault';
@@ -10,6 +10,8 @@ import { OllamaProvider, ollamaModelsOnDisk } from './providers/ollama';
 import { OpenAICompatibleProvider } from './providers/openai-compatible';
 import type { ChatProvider, ChatRequest, ProviderChunk } from './providers/types';
 import { resourcePlan } from './resources';
+import { MAX_LENT_HISTORY, MeshModelProvider } from '../mesh/model-lending';
+import { FbrxCloudProvider, type CloudAiAccess } from './providers/fbrx-cloud';
 
 /** Builds chat providers from settings, resolves API keys from the vault and enforces AI policy. */
 export class ProviderManager {
@@ -20,8 +22,15 @@ export class ProviderManager {
       policy: PolicyEngine;
       license: LicenseService;
       runtime: LocalRuntime;
+      /** FBRX Mesh, for another computer's AI: a sealed request to it, and its name. */
+      mesh?: { call: <T>(peerId: string, method: string, params: unknown, timeoutMs?: number) => Promise<T>; name: (peerId: string) => string | null };
+      /** FBRX Cloud AI, through the signed-in FBRX account: where it is, and the account's month there. */
+      cloud?: { access: () => CloudAiAccess | null; usage: (signal?: AbortSignal) => Promise<CloudAiUsage>; learner: () => boolean };
     },
   ) {}
+
+  /** What each mesh provider's computer last offered (how much its AI holds). */
+  private readonly lent = new Map<string, LentModel>();
 
   configs(): ProviderConfig[] {
     return this.d.settings.get().ai.providers;
@@ -41,6 +50,10 @@ export class ProviderManager {
     if (ai.allowedProviders.length && !ai.allowedProviders.includes(cfg.id)) return 'Provider is not on the policy allow-list';
     if (cfg.cloud && !this.d.license.has('agent.cloud')) return 'Cloud AI requires a Pro or Enterprise license';
     if (!cfg.cloud && !this.d.license.has('agent.local')) return 'Local AI is not licensed';
+    if (cfg.type === 'fbrx-cloud') {
+      if (this.d.cloud?.learner()) return 'FBRX Cloud AI is off on this computer: it runs the learner edition your organization chose';
+      if (!this.d.cloud?.access()) return 'Sign in to your FBRX account to use FBRX Cloud AI';
+    }
     return null;
   }
 
@@ -101,7 +114,36 @@ export class ProviderManager {
           defaultModel: cfg.defaultModel,
           historyBudgetChars: cfg.cloud ? 400_000 : 60_000,
         });
+      case 'mesh': {
+        const mesh = this.d.mesh;
+        const peer = cfg.peer;
+        if (!mesh || !peer) throw new CoreError('INVALID_ARGUMENT', `${cfg.name} needs a paired computer`);
+        return new MeshModelProvider({
+          id: cfg.id,
+          peerName: mesh.name(peer) ?? cfg.name,
+          call: (method, params, timeoutMs) => mesh.call(peer, method, params, timeoutMs),
+          historyChars: Math.min(MAX_LENT_HISTORY, this.lent.get(cfg.id)?.historyChars || 60_000),
+          remember: (offer) => this.lent.set(cfg.id, offer),
+        });
+      }
+      case 'fbrx-cloud': {
+        const cloud = this.d.cloud;
+        if (!cloud) throw new CoreError('UNAVAILABLE', 'FBRX Cloud AI is not available here');
+        return new FbrxCloudProvider({ id: cfg.id, access: cloud.access, usage: cloud.usage, defaultModel: cfg.defaultModel });
+      }
     }
+  }
+
+  /**
+   * An OpenAI-compatible provider's address and key, for its endpoints besides chat (making pictures). The same
+   * governance applies as for chatting with it.
+   */
+  endpoint(id: string): { baseUrl: string; apiKey: string | undefined } {
+    const cfg = this.config(id);
+    const blocked = this.blockReason(cfg);
+    if (blocked) throw new CoreError('POLICY_DENIED', `${cfg.name}: ${blocked}`);
+    if ((cfg.type !== 'openai' && cfg.type !== 'openai-compatible') || !cfg.baseUrl) throw new CoreError('INVALID_ARGUMENT', `${cfg.name} has no images endpoint: pick an OpenAI-compatible provider`);
+    return { baseUrl: cfg.baseUrl, apiKey: this.apiKey(cfg)() };
   }
 
   /** Picks the provider + model for a run, applying defaults and governance. */
@@ -111,16 +153,18 @@ export class ProviderManager {
     const cfg = this.config(id);
     const blocked = this.blockReason(cfg);
     if (blocked) throw new CoreError('POLICY_DENIED', `${cfg.name}: ${blocked}`);
+    if (cfg.type === 'mesh' && !cfg.peer) throw new CoreError('INVALID_ARGUMENT', `${cfg.name} needs a paired computer`);
     if (cfg.type === 'local-runtime' && !this.d.runtime.isRunning && !this.d.runtime.canStart) {
       throw new CoreError('UNAVAILABLE', 'The local AI runtime has no model to run. Download one in AI models, or pick another provider.');
     }
-    // Ollama picks its best installed model when none is chosen (see OllamaProvider.pickModel).
+    // Ollama picks its best installed model when none is chosen (see OllamaProvider.pickModel), another computer's AI
+    // the one it runs, and FBRX Cloud AI its first.
     const chosen =
       model ||
       (id === ai.defaultProvider ? ai.defaultModel : '') ||
       cfg.defaultModel ||
       (cfg.type === 'local-runtime' ? (this.d.runtime.status().modelId ?? 'local') : cfg.type === 'ollama' ? (this.known.get(cfg.id)?.[0] ?? '') : '');
-    if (!chosen && cfg.type !== 'local-runtime' && cfg.type !== 'ollama') throw new CoreError('INVALID_ARGUMENT', `Choose a model for ${cfg.name}`);
+    if (!chosen && cfg.type !== 'local-runtime' && cfg.type !== 'ollama' && cfg.type !== 'mesh' && cfg.type !== 'fbrx-cloud') throw new CoreError('INVALID_ARGUMENT', `Choose a model for ${cfg.name}`);
     return { provider: this.build(cfg), config: cfg, model: chosen };
   }
 
@@ -172,7 +216,7 @@ export class ProviderManager {
           available,
           blockedByPolicy: !!blocked && cfg.enabled,
           message,
-          defaultModel: cfg.defaultModel ?? (cfg.type === 'ollama' ? (this.known.get(cfg.id)?.[0] ?? null) : null),
+          defaultModel: cfg.defaultModel ?? (cfg.type === 'ollama' ? (this.known.get(cfg.id)?.[0] ?? null) : cfg.type === 'mesh' ? (this.lent.get(cfg.id)?.model ?? null) : null),
         };
       }),
     );

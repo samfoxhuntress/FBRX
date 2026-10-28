@@ -1,6 +1,6 @@
 # FBRX at a school
 
-FBRX Command with an **Education license** runs a school's computers: staff on **FBRX Endpoint** (Basic for teachers,
+FBRX Command with an **Education license** runs a school's computers: staff on **FBRX Endpoint** (up to Standard for teachers,
 Ultra for IT), students on **FBRX OS Education**, a help desk from every classroom to IT, and updates that install
 themselves. This guide walks through setting one up, using a K-12 co-op as the example: teachers on MacBooks, a
 network on UniFi, staff accounts in Google Workspace.
@@ -9,7 +9,7 @@ network on UniFi, staff accounts in Google Workspace.
 
 | | Teachers and staff | IT | Students |
 | --- | --- | --- | --- |
-| Runs | FBRX Endpoint **Basic** | FBRX Endpoint **Ultra** | **FBRX OS Education** |
+| Runs | FBRX Endpoint, up to **Standard** | FBRX Endpoint, up to **Ultra** | **FBRX OS Education** |
 | Agent | Fabrix with every tool, asking before it changes anything | Fabrix with every tool, plus the network | A learning helper that only talks: no files, apps, websites or commands |
 | Pages | The everyday ones (see COMMAND_CENTER.md) | Everything, including Network Center → Environments (UniFi), Task Manager, Terminal | Home, the helper, Get help, Calendar, Tasks, Notes, Toolbox, Library, Settings |
 | Classroom defaults | Presenter-safe mode turns on with a projector, chats start offline, no jokes | Same, changeable | Same, and the fun extras, mesh and local API locked off |
@@ -28,7 +28,7 @@ Pick **School** when FBRX Command asks what it will run: on the first-run setup 
 for each further school. An existing tenant changes kind under **Profiles & groups → Organization defaults → Kind**.
 
 Then **Licenses → Issue license** with *School (Education)* as the kind of license (the edition decides Ultra; groups
-can hold computers to Basic). Issuing a license with a kind also sets the tenant's kind. From the command line:
+can hold computers to Essentials or Standard). Issuing a license with a kind also sets the tenant's kind. From the command line:
 `npm run license:issue -- … --vertical education`.
 
 ## 2. Groups and tokens in one click
@@ -36,11 +36,11 @@ can hold computers to Basic). Issuing a license with a kind also sets the tenant
 **Profiles & groups → Set up for a school** (or the step right after **New tenant**) creates three groups, each with
 an enrollment token and a provisioning file to download:
 
-* **Teachers**: staff, held to Endpoint Basic.
+* **Teachers**: staff, up to Endpoint Standard.
 * **IT**: staff, Endpoint Ultra (what the license gives).
 * **Students**: student computers, FBRX OS Education.
 
-Copy the tokens when they are shown. Any group can be edited later: *Used by* (staff or student), *Edition* (Basic or
+Copy the tokens when they are shown. Any group can be edited later: *Used by* (staff or student), *Edition* (Essentials only, up to Standard, or
 what the license gives) and *New versions* (see below).
 
 ## 3. Put FBRX on the computers

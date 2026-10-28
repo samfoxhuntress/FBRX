@@ -22,10 +22,18 @@ export class SettingsService {
   private cache: EffectiveSettings | null = null;
   private listeners = new Set<(s: EffectiveSettings, prev: Settings | null) => void>();
 
+  /** During a support session, settings an organization locked can be changed (every change is still audited). */
+  private supportActive: (() => boolean) | null = null;
+
   constructor(
     private readonly db: Db,
     private readonly events?: EventBus,
   ) {}
+
+  /** SupportService wires this so locked settings become editable while a support pass is active. */
+  setSupportActive(fn: () => boolean): void {
+    this.supportActive = fn;
+  }
 
   private layer(layer: Layer): { data: Record<string, unknown>; locked: string[] } {
     const row = this.db.get<{ data: string; locked: string }>('SELECT data, locked FROM settings_layers WHERE layer = ?', layer);
@@ -77,7 +85,7 @@ export class SettingsService {
   update(patch: DeepPartial<Settings>): EffectiveSettings {
     const { locked } = this.effective();
     const touched = leafPaths(patch);
-    const blocked = touched.filter((p) => isPathLocked(p, locked));
+    const blocked = this.supportActive?.() ? [] : touched.filter((p) => isPathLocked(p, locked));
     if (blocked.length) {
       throw new CoreError('MANAGED', `These settings are managed by your organization: ${blocked.join(', ')}`);
     }

@@ -14,7 +14,7 @@ const PRESETS: Partial<Record<CommandType, unknown>> = {
   'plugin.uninstall': { id: '' },
 };
 
-const PRIVILEGED = new Set(['agent.run', 'plugin.install', 'plugin.uninstall', 'update.install', 'vault.lock', 'app.restart', 'backup.create']);
+const PRIVILEGED = new Set(['agent.run', 'plugin.install', 'plugin.uninstall', 'update.install', 'vault.lock', 'app.restart', 'backup.create', 'backup.image']);
 
 /** Sends a remote command to one device, a set of devices, a group, or the whole tenant. */
 export function CommandComposer({ target, onClose, onSent }: { target: { deviceId?: string; deviceIds?: string[]; groupId?: string; all?: boolean; label: string }; onClose: () => void; onSent?: () => void }) {

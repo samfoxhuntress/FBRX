@@ -69,6 +69,7 @@ export function createNodePlatform(o: NodePlatformOptions): PlatformAdapter {
     pluginWorkerPath: defaultPluginWorkerPath(),
     licensePublicKeys: keys,
     microsoftClientId: process.env.FBRX_MS_CLIENT_ID || null,
+    accountServer: process.env.FBRX_ACCOUNT_SERVER || null,
     sandboxPlugins: o.sandboxPlugins ?? process.env.FBRX_PLUGIN_SANDBOX !== '0',
     updates: null,
     meshMobileDir: defaultMobileDir(),

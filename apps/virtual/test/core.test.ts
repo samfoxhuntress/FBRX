@@ -1,11 +1,14 @@
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { createServer, type AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { loadConfig } from '../src/config';
 import { buildServer, type BuiltVirtual } from '../src/server';
 import { SimulatedHypervisor } from '../src/drivers/simulated';
-import { makeKernel } from '../../../packages/core/test/helpers';
+import { makeKernel, waitFor } from '../../../packages/core/test/helpers';
+import { mockOpenAI } from '../../../packages/core/test/mock-llm';
+import { DEFAULT_PROVIDERS, type OpenConversation } from '@fbrx/shared';
 import type { Kernel } from '../../../packages/core/src/kernel';
 
 // FBRX Virtual reaching the server's own FBRX core (the "ai" role) with the console token, as on FBRX Server.
@@ -36,7 +39,15 @@ const core = (token: string, method: string, params?: unknown) => req('POST', '/
 
 beforeAll(async () => {
   dir = mkdtempSync(join(tmpdir(), 'fbrx-virtual-core-'));
-  const port = 49000 + Math.floor(Math.random() * 900);
+  // A port the system says is free (a random one can fall in a range Windows keeps for itself).
+  const port = await new Promise<number>((resolve, reject) => {
+    const probe = createServer();
+    probe.once('error', reject);
+    probe.listen(0, '127.0.0.1', () => {
+      const p = (probe.address() as AddressInfo).port;
+      probe.close(() => resolve(p));
+    });
+  });
   ({ kernel, cleanup: cleanupKernel } = await makeKernel({ localApiPort: port }));
   kernel.localApi.setConsoleToken('fbrx_console_one');
   tokenFile = join(dir, 'console.token');
@@ -153,6 +164,103 @@ describe('FBRX Virtual and the server core', () => {
     await req('POST', '/v1/core/network/mark', admin, { remove: true });
     expect(nftTable).toBeNull();
     expect(s.ctx.audit.list(10).map((e) => e.action)).toContain('mesh.mark.remove');
+  });
+
+  it('shows the models on this server; administrators download and choose, operators start and stop', async () => {
+    const hw = (await core(viewer, 'runtime.hardware')).body.result;
+    expect(hw.memoryBytes).toBeGreaterThan(0);
+    expect(['cpu', 'vulkan', 'metal']).toContain(hw.variant);
+    const catalog = (await core(viewer, 'runtime.catalog')).body.result as Array<{ id: string; tier: string }>;
+    expect(catalog.filter((m) => m.tier === 'server').map((m) => m.id)).toEqual(['qwen3-30b-a3b-q4km', 'qwen3-32b-q4km', 'llama-3.3-70b-instruct-q4km']);
+    expect((await core(viewer, 'runtime.downloads')).body.result).toEqual([]);
+    // Filling the disk and choosing this server's AI are for administrators.
+    expect((await core(viewer, 'runtime.download', { modelId: 'qwen3-30b-a3b-q4km' })).status).toBe(403);
+    expect((await core(operator, 'runtime.download', { modelId: 'qwen3-30b-a3b-q4km' })).status).toBe(403);
+    expect((await core(admin, 'runtime.download', { modelId: '../../etc/passwd' })).status).toBe(400);
+    expect((await core(operator, 'runtime.logs')).status).toBe(200);
+    expect((await core(viewer, 'runtime.logs')).status).toBe(403);
+
+    // A model copied to the server and imported (fbrx-server ai import), then made this server's AI.
+    const file = join(dir, 'My-Model-Q4.gguf');
+    writeFileSync(file, Buffer.concat([Buffer.from('GGUF'), Buffer.alloc(64)]));
+    const m = await kernel.models.import(file, 'My model');
+    expect((await core(viewer, 'runtime.useModel', { modelId: m.id })).status).toBe(403);
+    const used = await core(admin, 'runtime.useModel', { modelId: m.id });
+    expect(used.status).toBe(200);
+    expect(kernel.settings.get().runtime.modelId).toBe(m.id);
+    expect(kernel.settings.get().ai.defaultProvider).toBe('local');
+    expect(((await core(viewer, 'runtime.installed')).body.result as Array<{ id: string; active: boolean }>).find((x) => x.id === m.id)?.active).toBe(true);
+    expect(s.ctx.audit.list(10).map((e) => e.action)).toContain('core.runtime.useModel');
+    expect((await core(admin, 'runtime.useModel', { modelId: 'not-there' })).status).toBe(404);
+  });
+
+  it('lets operators chat with the server’s AI, and keeps only how long the questions were', async () => {
+    const llm = await mockOpenAI(() => ({ text: 'Two virtual machines are running.' }));
+    try {
+      kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
+      const question = 'Which virtual machines are running on the secret-project host?';
+      expect((await core(viewer, 'ai.chat', { message: question })).status).toBe(403);
+      // An attachment the core does not have.
+      expect((await core(operator, 'ai.chat', { message: question, attachments: ['att_1'] })).status).toBe(404);
+      const sent = await core(operator, 'ai.chat', { message: question, offline: true });
+      expect(sent.status).toBe(200);
+      const id = sent.body.result.conversationId as string;
+      const chat = await waitFor(async () => {
+        const c = (await core(operator, 'ai.conversations.get', { id })).body.result as OpenConversation;
+        return !c.run && c.messages.some((m) => m.role === 'assistant') ? c : null;
+      });
+      expect(chat.messages.map((m) => [m.role, m.content])).toEqual([
+        ['user', question],
+        ['assistant', 'Two virtual machines are running.'],
+      ]);
+      expect(((await core(operator, 'ai.conversations.list')).body.result as Array<{ id: string }>).map((c) => c.id)).toContain(id);
+      expect((await core(viewer, 'ai.conversations.list')).status).toBe(403);
+      expect((await core(viewer, 'ai.starter')).body.result).toMatchObject({ state: expect.any(String) });
+      // The console's audit says who asked and how much, never what.
+      expect(s.ctx.audit.list(20).find((e) => e.action === 'core.ai.chat')).toMatchObject({ actor: 'olly', target: 'new chat', outcome: 'success' });
+      expect(JSON.stringify(s.ctx.audit.list(50))).not.toContain('secret-project');
+      // Chats go away by an administrator's hand.
+      expect((await core(operator, 'ai.conversations.delete', { id })).status).toBe(403);
+      expect((await core(admin, 'ai.conversations.delete', { id })).body.result).toEqual({ deleted: true });
+    } finally {
+      await llm.close();
+    }
+  });
+
+  it('takes files for a chat, larger than an ordinary request, and gives out the ones Fabrix made', async () => {
+    let turn = 0;
+    const llm = await mockOpenAI(() => (turn++ === 0 ? { tool: { name: 'docs__create', args: { title: 'Disk plan', format: 'md', content: '# Disk plan' } } } : { text: 'Wrote the plan.' }));
+    try {
+      kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
+      // Three megabytes: more than the 2 MB an ordinary request may be.
+      const log = `${'disk sda1 at 91% '.repeat(185_000)}\n`;
+      const data = Buffer.from(log).toString('base64');
+      expect((await core(viewer, 'ai.attachments.add', { name: 'disks.log', data })).status).toBe(403);
+      const added = await core(operator, 'ai.attachments.add', { name: 'disks.log', data, mime: 'text/plain' });
+      expect(added.status).toBe(200);
+      expect(added.body.result).toMatchObject({ name: 'disks.log', kind: 'text', size: log.length });
+      // The audit says what was attached, never what is in it.
+      const entry = s.ctx.audit.list(20).find((e) => e.action === 'core.ai.attachments.add');
+      expect(entry).toMatchObject({ actor: 'olly', target: 'disks.log' });
+      expect(JSON.stringify(entry)).not.toContain(data.slice(0, 40));
+
+      const sent = await core(operator, 'ai.chat', { message: 'Write me a disk plan', attachments: [added.body.result.id] });
+      const chat = await waitFor(async () => {
+        const c = (await core(operator, 'ai.conversations.get', { id: sent.body.result.conversationId })).body.result as OpenConversation;
+        return !c.run && c.messages.some((m) => m.role === 'assistant' && m.content) ? c : null;
+      });
+      expect(chat.messages[0]!.attachments).toMatchObject([{ name: 'disks.log' }]);
+      const made = chat.messages.flatMap((m) => m.toolCalls ?? []).flatMap((c) => c.files ?? []);
+      expect(made).toMatchObject([{ name: 'Disk plan.md', kind: 'document' }]);
+      const file = await core(operator, 'ai.files.read', { path: made[0]!.path });
+      expect(file.body.result).toMatchObject({ name: 'Disk plan.md', mime: 'text/markdown' });
+      expect(Buffer.from(file.body.result.data, 'base64').toString()).toContain('# Disk plan');
+      // Only what Fabrix made or was given: nothing else on the server.
+      expect((await core(operator, 'ai.files.read', { path: '/etc/passwd' })).status).toBe(403);
+      expect((await core(viewer, 'ai.files.read', { path: made[0]!.path })).status).toBe(403);
+    } finally {
+      await llm.close();
+    }
   });
 
   it('follows the core through a restart and says when it is missing', async () => {

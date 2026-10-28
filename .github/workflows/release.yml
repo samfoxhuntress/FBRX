@@ -1,9 +1,14 @@
-# Builds signed FBRX OS installers for macOS and Windows (carrying the FBRX Server installer ISO, bundle and guides for
-# now), publishes the control-plane image to GHCR,
+# Builds FBRX OS installers for macOS and Windows (signed) and Linux (an AppImage and a .deb), carrying the FBRX Server
+# installer ISO, bundle and guides for now, publishes the control-plane image to GHCR,
 # attaches everything to a GitHub release and (optionally) pushes the build to your control plane so
 # enrolled workstations can update to it.
 #
 # Trigger: push a tag like v1.2.0 (v1.2.0-beta.1 goes to the beta channel), or run it manually.
+#
+# A manual run can build only the Windows, macOS or Linux installers (installers), for example when GitHub has no
+# macOS runners for a while: the release publishes with what was built (FBRX-OS.zip always has both setups). Add the
+# others later by running it again on the release's tag (Use workflow from: v<version>) with them picked: they join
+# the same release, same version.
 #
 # Repository secrets (all optional; unsigned builds are produced when signing secrets are missing):
 #   FBRX_LICENSE_PUBLIC_KEY      PEM from `npm run keys:generate` (embedded so installs verify licenses offline)
@@ -45,6 +50,11 @@ on:
         description: Also publish a GitHub release and create its v<version> tag on this commit (a pushed tag does this by itself)
         type: boolean
         default: false
+      installers:
+        description: Ready-made installers to build. The release publishes with these; run again with the others to add them to the same release (same version)
+        type: choice
+        options: [all, Windows, macOS, Linux]
+        default: all
 
 permissions:
   contents: write
@@ -56,6 +66,7 @@ jobs:
     outputs:
       version: ${{ steps.v.outputs.version }}
       channel: ${{ steps.v.outputs.channel }}
+      desktop: ${{ steps.v.outputs.desktop }}
     steps:
       - uses: actions/checkout@v5
       - id: v
@@ -65,10 +76,15 @@ jobs:
           [[ -z "$V" ]] && V=$(node -p "require('./apps/desktop/package.json').version")
           C="${{ inputs.channel }}"; [[ -z "$C" ]] && { [[ "$V" == *-* ]] && C=beta || C=stable; }
           echo "version=$V" >> "$GITHUB_OUTPUT"; echo "channel=$C" >> "$GITHUB_OUTPUT"
-          echo "Building FBRX OS $V for the $C channel"
+          # The ready-made installers to build (all of them unless a manual run picks one).
+          D='[{"name":"macOS","os":"macos-latest","platform":"darwin","arches":"arm64,x64","package":"package:mac"},{"name":"Windows","os":"windows-latest","platform":"win32","arches":"x64,arm64","package":"package:win"},{"name":"Linux","os":"ubuntu-latest","platform":"linux","arches":"x64","package":"package:linux"}]'
+          P="${{ inputs.installers }}"
+          if [[ -n "$P" && "$P" != "all" ]]; then D=$(jq -c --arg p "$P" 'map(select(.name == $p))' <<<"$D"); fi
+          echo "desktop=$D" >> "$GITHUB_OUTPUT"
+          echo "Building FBRX OS $V for the $C channel; installers: $(jq -r 'map(.name) | join(", ")' <<<"$D")"
 
   # FBRX Server travels inside FBRX Endpoint for now: the installer ISO, the server bundle and the guides are built
-  # first and packed into the macOS and Windows installers (scripts/server/endpoint-resources.mjs).
+  # first and packed into the macOS, Windows and Linux installers (scripts/server/endpoint-resources.mjs).
   server:
     needs: meta
     name: FBRX Server (ISO, bundle, guides)
@@ -103,17 +119,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - name: macOS
-            os: macos-latest
-            platform: darwin
-            arches: arm64,x64
-            package: package:mac
-          - name: Windows
-            os: windows-latest
-            platform: win32
-            arches: x64,arm64
-            package: package:win
+        include: ${{ fromJSON(needs.meta.outputs.desktop) }}
     env:
       FBRX_LICENSE_PUBLIC_KEY: ${{ secrets.FBRX_LICENSE_PUBLIC_KEY }}
       FBRX_MS_CLIENT_ID: ${{ vars.FBRX_MS_CLIENT_ID || secrets.FBRX_MS_CLIENT_ID }}
@@ -151,6 +157,11 @@ jobs:
           AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
           WIN_PUBLISHER_NAME: ${{ secrets.WIN_PUBLISHER_NAME }}
         run: |
+          if [[ "${{ matrix.platform }}" == "linux" ]]; then
+            # Linux packages are not code-signed: the release's checksums (latest-linux.yml) vouch for them.
+            unset CSC_LINK CSC_KEY_PASSWORD
+            exec npm run ${{ matrix.package }} -w @fbrx/desktop
+          fi
           EXTRA=()
           SIGNED=""
           if [[ "${{ matrix.platform }}" == "win32" ]]; then
@@ -185,6 +196,8 @@ jobs:
             apps/desktop/release/${{ needs.meta.outputs.version }}/*.dmg
             apps/desktop/release/${{ needs.meta.outputs.version }}/*.zip
             apps/desktop/release/${{ needs.meta.outputs.version }}/*.exe
+            apps/desktop/release/${{ needs.meta.outputs.version }}/*.AppImage
+            apps/desktop/release/${{ needs.meta.outputs.version }}/*.deb
             apps/desktop/release/${{ needs.meta.outputs.version }}/*.blockmap
             apps/desktop/release/${{ needs.meta.outputs.version }}/latest*.yml
           if-no-files-found: error
@@ -255,3 +268,11 @@ jobs:
           ARGS=(--dir dist-release --version "${{ needs.meta.outputs.version }}" --channel "${{ needs.meta.outputs.channel }}" --rollout "${{ inputs.rollout || '100' }}")
           if [[ "${{ inputs.publish }}" == "true" ]]; then ARGS+=(--publish); fi
           node scripts/publish-release.mjs "${ARGS[@]}"
+
+  # FBRX-OS.zip: the FBRX folder as a simply named download (see fbrx-os-download.yml).
+  fbrx-os-download:
+    needs: [meta, publish]
+    if: github.ref_type == 'tag' || inputs.release
+    uses: ./.github/workflows/fbrx-os-download.yml
+    with:
+      tag: v${{ needs.meta.outputs.version }}

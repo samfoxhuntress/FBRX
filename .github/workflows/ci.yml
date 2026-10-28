@@ -34,12 +34,13 @@ jobs:
       - run: npm ci --no-audit --no-fund
       - run: npm run typecheck
       - run: npm test
-      - name: Build admin console, control plane, desktop and FBRX Virtual bundles
+      - name: Build admin console, control plane, desktop, FBRX Virtual bundles and the website
         run: |
           npm run build -w @fbrx/admin-console
           npm run build -w @fbrx/control-plane
           npm run build -w @fbrx/desktop
           npm run build:server
+          npm run build -w @fbrx/website
       - name: Pack example plugin
         run: node scripts/pack-plugin.mjs plugins/example-toolkit
 
@@ -55,7 +56,7 @@ jobs:
       - name: Install libvirt, QEMU and UEFI firmware
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends libvirt-daemon-system libvirt-clients qemu-system-x86 qemu-utils ovmf dnsmasq-base nftables iproute2 conntrack busybox shellcheck >/dev/null
+          sudo apt-get install -y -qq --no-install-recommends libvirt-daemon-system libvirt-clients qemu-system-x86 qemu-utils ovmf dnsmasq-base nftables iproute2 conntrack busybox shellcheck wireguard-tools >/dev/null
           sudo systemctl start libvirtd
           sudo virsh -c qemu:///system net-start default || true
       - run: npm ci --no-audit --no-fund
@@ -65,6 +66,8 @@ jobs:
         run: scripts/server/bundle.sh --with-node
       - name: Smoke-test the bundle (the FBRX core in server mode, managed by FBRX Virtual)
         run: scripts/server/smoke.sh "$(ls -d dist/fbrx-server-*/ | head -1)"
+      - name: fbrx-server update commit and rollback (in a throwaway folder)
+        run: scripts/server/test-update.sh
       - name: The ISO's first start on Debian 13 (a fresh Debian root, the install disc still a package source)
         run: |
           sudo apt-get install -y -qq --no-install-recommends debootstrap debian-archive-keyring >/dev/null
@@ -76,7 +79,7 @@ jobs:
       - name: FBRX Virtual against the real hypervisor
         # As root, like FBRX Server, against libvirt's system hypervisor (after the build, so root leaves no files in
         # the way). Software emulation keeps it independent of the runner's KVM.
-        run: sudo -E env "PATH=$PATH" FBRX_TEST_LIBVIRT=1 FBRX_V_DOMAIN_TYPE=qemu npx vitest run apps/virtual/test/libvirt.integration.test.ts
+        run: sudo -E env "PATH=$PATH" FBRX_TEST_LIBVIRT=1 FBRX_V_DOMAIN_TYPE=qemu npx vitest run --no-file-parallelism apps/virtual/test/libvirt.integration.test.ts apps/virtual/test/time.libvirt.integration.test.ts
       - uses: actions/upload-artifact@v4
         with:
           name: fbrx-server-bundle

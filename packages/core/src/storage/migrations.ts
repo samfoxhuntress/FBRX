@@ -379,6 +379,149 @@ export const MIGRATIONS: Migration[] = [
       INSERT INTO message_reads (thread, read_at) VALUES ('mesh:all', strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
     `,
   },
+  {
+    version: 11,
+    name: 'org-mesh',
+    // Computers introduced by the organization (FBRX Command), which also decides what they may do here, next to the
+    // ones paired by hand.
+    up: `ALTER TABLE mesh_devices ADD COLUMN source TEXT NOT NULL DEFAULT 'paired';`,
+  },
+  {
+    version: 12,
+    name: 'agent-memory',
+    // What the AI remembers about the person: a kind of fact (private kinds never leave the computer), where it came
+    // from, and a key for facts that replace older ones (where they live, their email…).
+    up: `
+      ALTER TABLE memories ADD COLUMN category TEXT NOT NULL DEFAULT 'general';
+      ALTER TABLE memories ADD COLUMN source TEXT NOT NULL DEFAULT 'agent';
+      ALTER TABLE memories ADD COLUMN private INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE memories ADD COLUMN key TEXT;
+      ALTER TABLE memories ADD COLUMN updated_at TEXT;
+      CREATE INDEX memories_key ON memories (key);
+      CREATE TRIGGER memories_au AFTER UPDATE OF content, tags ON memories BEGIN
+        INSERT INTO memories_fts(memories_fts, rowid, content, tags) VALUES ('delete', old.rowid, old.content, old.tags);
+        INSERT INTO memories_fts(rowid, content, tags) VALUES (new.rowid, new.content, new.tags);
+      END;
+    `,
+  },
+  {
+    version: 13,
+    name: 'attachments',
+    // Files and images attached to messages for the AI: the file is in the workspace (Attachments/<id>), the text read
+    // out of it is kept here. An attachment belongs to its chat once sent (and goes with it); the message keeps what
+    // was attached.
+    up: `
+      CREATE TABLE attachments (
+        id TEXT PRIMARY KEY,
+        conversation_id TEXT REFERENCES conversations(id) ON DELETE CASCADE,
+        name TEXT NOT NULL,
+        mime TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        size INTEGER NOT NULL,
+        path TEXT NOT NULL,
+        text TEXT,
+        pages INTEGER,
+        note TEXT,
+        created_at TEXT NOT NULL
+      );
+      CREATE INDEX attachments_conversation ON attachments (conversation_id);
+      ALTER TABLE messages ADD COLUMN attachments TEXT;
+    `,
+  },
+  {
+    version: 14,
+    name: 'automations',
+    // Automations (jobs the agent does by itself) and their runs; a run keeps the start of what the agent answered.
+    up: `
+      CREATE TABLE automations (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        prompt TEXT NOT NULL,
+        schedule TEXT NOT NULL,
+        notify TEXT NOT NULL,
+        online INTEGER NOT NULL,
+        hotkey TEXT NOT NULL DEFAULT '',
+        enabled INTEGER NOT NULL,
+        conversation_id TEXT,
+        next_run_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE automation_runs (
+        id TEXT PRIMARY KEY,
+        automation_id TEXT NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+        trigger TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        finished_at TEXT,
+        status TEXT NOT NULL,
+        changed INTEGER NOT NULL DEFAULT 0,
+        summary TEXT NOT NULL DEFAULT ''
+      );
+      CREATE INDEX automation_runs_automation ON automation_runs (automation_id, started_at);
+    `,
+  },
+  {
+    version: 15,
+    name: 'vault-logins',
+    // The password keeper's sign-ins. All of each one (its site and username too) is sealed with the vault key, so
+    // the table says nothing without the vault.
+    up: `
+      CREATE TABLE vault_logins (
+        id TEXT PRIMARY KEY,
+        data_enc TEXT NOT NULL,
+        favorite INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        password_changed_at TEXT NOT NULL,
+        last_used_at TEXT
+      );
+    `,
+  },
+  {
+    version: 16,
+    name: 'vpn-profiles',
+    // FBRX VPN's tunnels to FBRX Gates: each one's settings (its private key among them) sealed with the vault key.
+    up: `
+      CREATE TABLE vpn_profiles (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        data_enc TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_connected_at TEXT
+      );
+    `,
+  },
+  {
+    version: 17,
+    name: 'calendar-fbrx',
+    // The FBRX calendar: events kept on this computer (they may repeat, and be about a project, a note, a task or an
+    // automation), shown with the shared calendars as an account of its own that is always there.
+    up: `
+      CREATE TABLE calendar_items (
+        id TEXT PRIMARY KEY,
+        title TEXT NOT NULL,
+        start TEXT NOT NULL,
+        end TEXT NOT NULL,
+        all_day INTEGER NOT NULL DEFAULT 0,
+        location TEXT,
+        notes TEXT,
+        color TEXT,
+        link_kind TEXT,
+        link_id TEXT,
+        repeat TEXT NOT NULL DEFAULT 'none',
+        repeat_until TEXT,
+        show_as TEXT NOT NULL DEFAULT 'busy',
+        made_by TEXT NOT NULL DEFAULT 'person',
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX calendar_items_start ON calendar_items (start);
+      INSERT OR IGNORE INTO calendar_accounts (id, kind, name, address, color, enabled, can_write, calendars, config, created_at)
+      VALUES ('fbrx', 'fbrx', 'FBRX', NULL, '#3b82f6', 1, 1,
+        '[{"id":"events","name":"Events","enabled":true,"canWrite":true,"isDefault":true},{"id":"tasks","name":"Tasks due","enabled":true,"canWrite":false,"isDefault":false},{"id":"projects","name":"Project deadlines","enabled":true,"canWrite":false,"isDefault":false},{"id":"automations","name":"Automations","enabled":true,"canWrite":false,"isDefault":false}]',
+        '{}', '2000-01-01T00:00:00.000Z');
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

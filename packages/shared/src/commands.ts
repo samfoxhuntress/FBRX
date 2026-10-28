@@ -17,6 +17,8 @@ export const CommandPayloadSchemas = {
       upload: z.boolean().default(true),
     })
     .default({ upload: true }),
+  /** A whole-computer image now (FBRX Time), where the computer is set up to make them. */
+  'backup.image': z.object({}).default({}),
   'plugin.install': z.object({ packageId: z.string(), url: z.string(), sha256: z.string().length(64) }),
   'plugin.setEnabled': z.object({ id: z.string(), enabled: z.boolean() }),
   'plugin.uninstall': z.object({ id: z.string() }),
@@ -46,6 +48,7 @@ export const COMMAND_DESCRIPTIONS: Record<CommandType, string> = {
   'update.check': 'Check the update feed for a newer version',
   'update.install': 'Download and install the newest assigned version (from FBRX Command or the repository)',
   'backup.create': 'Create an encrypted snapshot (optionally uploaded to the control plane)',
+  'backup.image': 'Make a whole-computer image now (FBRX Time; Windows computers with image backups set up)',
   'plugin.install': 'Install a plugin package from the control plane',
   'plugin.setEnabled': 'Enable or disable a plugin',
   'plugin.uninstall': 'Remove a plugin',

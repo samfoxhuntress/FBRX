@@ -6,12 +6,23 @@
  * method is validated and audited by the core before it runs.
  */
 import type { LicenseStatus } from './license';
+import type { AccountDevice, AccountStatus, InvitationPreview, LocalAccountStatus } from './accounts';
+import type { CloudAiUsage, PromoRedeemed } from './cloud-ai';
+import type { AttachmentInfo } from './attachments';
+import type { Automation, AutomationInput, AutomationRun } from './automations';
+import type { ScreenSnapshot } from './snapshots';
+import type { Login, LoginInput, LoginSummary } from './passwords';
+import type { CreatedFile } from './creations';
+import type { SupportStatus } from './support';
+import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './browser';
+import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
 import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
+import type { ThinkingBudget, ThinkingLevel } from './thinking';
 import type { ExtEvents, ExtMethods } from './ext';
 import type { Settings } from './settings';
 import type { UpdateChannel } from './constants';
 import type { ReleaseCheck } from './release';
-import type { EditionStatus } from './editions';
+import type { EditionStatus, Vertical } from './editions';
 
 export type DeepPartial<T> = T extends (infer U)[] ? U[] : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
 
@@ -43,6 +54,8 @@ export interface VaultStatus {
   keychainKind: 'os' | 'file' | 'env' | 'memory';
   secretCount: number;
   managedCount: number;
+  /** Sign-ins in the password keeper. */
+  loginCount: number;
   hasRecovery: boolean;
   lockReason: VaultLockReason | null;
   /** The vault asks for its password every time FBRX OS starts. */
@@ -157,6 +170,8 @@ export interface ToolCallRecord {
   error?: string;
   durationMs?: number;
   findings?: GuardianFinding[];
+  /** Files the call made (documents, pictures), shown under it in the chat. */
+  files?: CreatedFile[];
 }
 
 export interface ChatMessage {
@@ -171,6 +186,8 @@ export interface ChatMessage {
   model?: string;
   /** What the model said it was thinking before this answer (a summary, when the provider shares one). */
   thinking?: string;
+  /** Files and images the person attached to this message. */
+  attachments?: AttachmentInfo[];
 }
 
 export interface ConversationSummary {
@@ -192,6 +209,11 @@ export interface Conversation extends ConversationSummary {
   messages: ChatMessage[];
 }
 
+/** A conversation as the chat opens it: its messages, and what the agent is doing in it right now. */
+export interface OpenConversation extends Conversation {
+  run: RunActivity | null;
+}
+
 export interface TokenUsage {
   inputTokens: number;
   outputTokens: number;
@@ -200,7 +222,11 @@ export interface TokenUsage {
 /** "mesh": another computer's agent is taking over or being consulted (Mesh Assist). */
 export type AgentPhase = 'model' | 'thinking' | 'writing' | 'tool' | 'approval' | 'reading' | 'mesh';
 
-export type AgentEvent =
+/**
+ * Events of a run carry its sequence number (seq, from 1), so what someone saw of a run can be put together exactly
+ * from its RunActivity and the events after it.
+ */
+export type AgentEvent = { seq?: number } & (
   | { type: 'run.started'; runId: string; conversationId: string; providerId: string; model: string }
   | { type: 'message.delta'; runId: string; conversationId: string; messageId: string; delta: string }
   | { type: 'thinking.delta'; runId: string; conversationId: string; messageId: string; delta: string }
@@ -211,7 +237,37 @@ export type AgentEvent =
   | { type: 'run.completed'; runId: string; conversationId: string; steps: number; usage: TokenUsage }
   | { type: 'run.failed'; runId: string; conversationId: string; error: string }
   | { type: 'run.cancelled'; runId: string; conversationId: string }
-  | { type: 'mode.changed'; runId: string | null; conversationId: string; offline: boolean };
+  | { type: 'mode.changed'; runId: string | null; conversationId: string; offline: boolean }
+);
+
+/** One step of a run, as the activity panel lists it. */
+export interface RunStep {
+  phase: AgentPhase;
+  detail: string;
+  at: number;
+}
+
+/**
+ * What a run is doing right now: its steps, its thinking and the answer it is writing. The core keeps one for each run
+ * while it works (foldRunActivity over the run's events), so a chat opened in the middle of a run shows it too.
+ */
+export interface RunActivity {
+  runId: string;
+  conversationId: string;
+  /** The sequence number of the last event in it. */
+  seq: number;
+  startedAt: number;
+  /** The steps so far, the current one last. */
+  steps: RunStep[];
+  step: number;
+  maxSteps: number;
+  usage: TokenUsage;
+  /** The thinking behind the reply being written (it starts over with each reply). */
+  thinking: string;
+  thinkingFor: string | null;
+  /** The reply being written, until it is complete. */
+  reply: { messageId: string; text: string } | null;
+}
 
 export interface ProviderStatus {
   id: string;
@@ -250,6 +306,21 @@ export interface RuntimeStatus {
   problem?: 'gpu-memory' | 'memory' | 'damaged' | 'unsupported' | 'other' | null;
 }
 
+/** The model a new computer starts with, ready before the first question (small and quick: about 1 GB). */
+export const STARTER_MODEL_ID = 'qwen2.5-1.5b-instruct-q4km';
+
+/** Getting the AI ready on a new computer: the built-in runtime and the starter model (ai.starter). */
+export interface StarterAiStatus {
+  /** not-needed: someone chose an AI already (another model, another provider). */
+  state: 'idle' | 'preparing' | 'ready' | 'failed' | 'not-needed';
+  step: 'runtime' | 'model' | 'starting' | null;
+  receivedBytes: number;
+  totalBytes: number;
+  message: string | null;
+  modelId: string;
+  modelName: string;
+}
+
 export interface CatalogModel {
   id: string;
   name: string;
@@ -262,8 +333,57 @@ export interface CatalogModel {
   sha256: string | null;
   license: string;
   description: string;
-  tier: 'small' | 'medium' | 'large';
+  /** "server": for FBRX Server or a workstation with a lot of memory (the hive other computers call on). */
+  tier: 'small' | 'medium' | 'large' | 'server';
   toolCalling: boolean;
+  /** A mixture of experts: only a few billion of its parameters work at a time, so it answers quickly on processors. */
+  moe?: boolean;
+}
+
+/** What this computer offers a model: memory, and a graphics card the runtime can use. */
+export interface RuntimeHardware {
+  memoryBytes: number;
+  freeMemoryBytes: number;
+  cpus: number;
+  /** The graphics cards found; the runtime uses one through Vulkan (Metal on a Mac). */
+  gpus: Array<{ name: string; vramBytes: number }>;
+  /** Which runtime build suits it. */
+  variant: 'cpu' | 'vulkan' | 'metal';
+}
+
+export type ModelFit = 'gpu' | 'memory' | 'tight' | 'too-big';
+
+/**
+ * Whether a model runs well here: all of it on the graphics card, in memory on the processor (slower, fine for a
+ * server doing background work), only just, or not at all. The model needs its file size plus room for its context.
+ */
+export function modelFit(sizeBytes: number, hw: Pick<RuntimeHardware, 'memoryBytes' | 'gpus' | 'variant'>): ModelFit {
+  const need = sizeBytes * 1.1 + 1.5e9;
+  const vram = Math.max(0, ...hw.gpus.map((g) => g.vramBytes));
+  if (hw.variant === 'metal' ? need <= hw.memoryBytes * 0.7 : hw.variant === 'vulkan' && need <= vram) return 'gpu';
+  // Leave the operating system (and, on a server, its virtual machines) a quarter.
+  if (need <= hw.memoryBytes * 0.75) return 'memory';
+  if (need <= hw.memoryBytes * 0.9) return 'tight';
+  return 'too-big';
+}
+
+/** The biggest dense model that answers at a comfortable speed on processors alone (the 8B class). */
+const DENSE_ON_PROCESSORS_MAX_BYTES = 6e9;
+/** Room a server keeps on its disk after a model (virtual machines, backups, updates). */
+const DISK_TO_SPARE_BYTES = 20e9;
+
+/**
+ * The model a server picks for itself: the biggest one its graphics card runs, or, when processors do better (no card,
+ * or a small one), a mixture of experts first and then dense models up to the 8B class (bigger ones are slow without
+ * a card). Only models that call tools and that leave the disk room to spare; null when none does.
+ */
+export function bestModelFor(catalog: CatalogModel[], hw: RuntimeHardware, diskFreeBytes: number): CatalogModel | null {
+  const usable = catalog.filter((m) => m.toolCalling && m.sizeBytes + DISK_TO_SPARE_BYTES <= diskFreeBytes);
+  const biggest = (list: CatalogModel[]) => list.reduce<CatalogModel | null>((a, m) => (!a || m.sizeBytes > a.sizeBytes ? m : a), null);
+  const onCard = biggest(usable.filter((m) => modelFit(m.sizeBytes, hw) === 'gpu'));
+  const inMemory = usable.filter((m) => modelFit(m.sizeBytes, hw) === 'memory');
+  const onProcessors = biggest(inMemory.filter((m) => m.moe)) ?? biggest(inMemory.filter((m) => m.sizeBytes <= DENSE_ON_PROCESSORS_MAX_BYTES));
+  return onCard && (!onProcessors || onCard.sizeBytes >= onProcessors.sizeBytes) ? onCard : onProcessors;
 }
 
 export interface InstalledModel {
@@ -428,6 +548,26 @@ export interface EffectiveSettings {
   locked: string[];
 }
 
+/** The AI asking the person for a folder it may not use yet (Governance → Folders). */
+export interface FolderRequest {
+  id: string;
+  /** The folder asked for, or null when the AI asks the person to pick one. */
+  path: string | null;
+  reason: string;
+  at: string;
+  agentName: string;
+}
+
+export interface FolderAccessStatus {
+  /** Decided by the organization (FBRX Command → Governance): no changes here. */
+  managed: boolean;
+  /** The policy's entries, as written (${HOME}…), what they are on this computer, and a friendly name. */
+  folders: Array<{ entry: string; path: string; label: string | null }>;
+  readOnly: boolean;
+  /** Requests from the AI waiting for an answer. */
+  requests: FolderRequest[];
+}
+
 export interface EffectivePolicy {
   policy: Policy;
   source: 'default' | 'local' | 'managed';
@@ -450,7 +590,7 @@ export interface SystemStatus {
   services: ServiceStatus[];
   vault: VaultStatus;
   license: LicenseStatus;
-  /** Endpoint Basic or Ultra, or FBRX OS Education on a student computer; the organization kind and who uses it. */
+  /** Endpoint Essentials, Standard or Ultra, or FBRX OS Education on a student computer; the organization kind and who uses it. */
   edition: EditionStatus;
   fleet: FleetStatus;
   runtime: RuntimeStatus;
@@ -502,14 +642,70 @@ export interface CoreMethods extends ExtMethods {
   'vault.passwordOnStart': (p: { enabled: boolean; passphrase: string }) => VaultStatus;
   /** Deletes every saved credential and starts a new, empty vault (FBRX OS restarts). */
   'vault.reset': (p: { confirm: 'DELETE' }) => VaultStatus;
+  /** The password keeper's sign-ins, as lists show them (no passwords). */
+  'passwords.list': () => LoginSummary[];
+  /** The sign-ins for a web address (FBRX Browser offers these), the closest match first. */
+  'passwords.query': (p: { url: string }) => LoginSummary[];
+  /** A sign-in with its password, 2-step secret and notes. */
+  'passwords.reveal': (p: { id: string }) => Login;
+  /** Adds a sign-in, or changes one (id): only the fields given change. */
+  'passwords.save': (p: { id?: string } & Partial<LoginInput>) => LoginSummary;
+  'passwords.remove': (p: { id: string }) => { removed: boolean };
+  /** What FBRX Browser types into a sign-in form: only for a page on one of the sign-in's sites. */
+  'passwords.fill': (p: { id: string; url: string }) => { username: string; password: string };
+  /**
+   * Whether the Vault already has what was just typed into a site's sign-in form (FBRX Browser offers to save or
+   * update it): a sign-in for that site and username with the same password, a different one, or none.
+   */
+  'passwords.verify': (p: { url: string; username: string; password: string }) => { found: 'none' | 'same' | 'changed'; id: string | null; title: string | null };
+  /** The sign-in's 2-step code now, and for how many more seconds it is good. */
+  'passwords.code': (p: { id: string }) => { code: string; remaining: number; period: number };
+  /** Sign-ins from a CSV file another browser or password manager exported. */
+  'passwords.import': (p: { csv: string }) => { added: number; updated: number; skipped: number };
 
   'ai.providers': () => ProviderStatus[];
   'ai.models': (p: { providerId: string }) => ModelInfo[];
-  'ai.chat': (p: { conversationId?: string; message: string; providerId?: string; model?: string; offline?: boolean }) => { runId: string; conversationId: string };
+  /** attachments: ids from ai.attachments.add, sent with this message. */
+  'ai.chat': (p: { conversationId?: string; message: string; providerId?: string; model?: string; offline?: boolean; attachments?: string[] }) => { runId: string; conversationId: string };
+  /** Attaches a file (its bytes in base64) for the next message; it is read and kept until sent or removed. */
+  'ai.attachments.add': (p: { name: string; data: string; mime?: string }) => AttachmentInfo;
+  /** Removes an attachment that was not sent. */
+  'ai.attachments.remove': (p: { id: string }) => { removed: boolean };
+  /** An attachment's bytes (base64), to show it again in the chat. */
+  'ai.attachments.read': (p: { id: string }) => { mime: string; data: string };
+  /** An attachment not sent yet, to put it in the composer (another page attached it). */
+  'ai.attachments.get': (p: { id: string }) => AttachmentInfo;
+  'automations.list': () => Automation[];
+  'automations.create': (p: AutomationInput) => Automation;
+  'automations.update': (p: { id: string } & Partial<AutomationInput>) => Automation;
+  /** Deletes an automation and its runs (its chat stays in Conversations). */
+  'automations.remove': (p: { id: string }) => { removed: boolean };
+  /** Runs an automation now (it waits its turn behind one already running). */
+  'automations.run': (p: { id: string; trigger?: 'manual' | 'hotkey' }) => Automation;
+  'automations.runs': (p: { id: string; limit?: number }) => AutomationRun[];
+  /** FBRX Snapshot: the newest screen snapshots in the snapshot folder. */
+  'snapshots.list': () => ScreenSnapshot[];
+  /** A snapshot's picture (base64): the PNG itself, or a small JPEG of it when `size` (its longest side) is given. */
+  'snapshots.read': (p: { id: string; size?: number }) => { mime: string; data: string };
+  /** Saves a snapshot (a PNG in base64): over the one named `id` (marked up), or as a new one. */
+  'snapshots.save': (p: { data: string; id?: string }) => ScreenSnapshot;
+  'snapshots.remove': (p: { id: string }) => { removed: boolean };
+  /** Where snapshots are saved (the setting with its folder names filled in). */
+  'snapshots.folder': () => { path: string };
+  /** A picture the agent made (in the output folder or the workspace), to show in the chat. */
+  'ai.files.preview': (p: { path: string }) => { mime: string; data: string };
+  /** A file the agent made or was given (in the FBRX folder or the workspace), to download from FBRX Server's console. */
+  'ai.files.read': (p: { path: string }) => { name: string; mime: string; data: string };
+  /** Where what the agent makes is saved: the folder in use, the one chosen, and whether the AI may write there. */
+  'ai.files.folder': () => { path: string; chosen: string; allowed: boolean };
   'ai.cancel': (p: { runId: string }) => { cancelled: boolean };
+  /** What every run in progress is doing right now. */
+  'ai.runs': () => RunActivity[];
+  /** How much the agent does on one task (a thinking level): its whole work budget at once (thinking.ts). */
+  'ai.setThinking': (p: { level: ThinkingLevel }) => ThinkingBudget;
   /** projectId: only that project's chats ("none": chats in no project). */
   'ai.conversations.list': (p?: { projectId?: string | 'none' }) => ConversationSummary[];
-  'ai.conversations.get': (p: { id: string }) => Conversation;
+  'ai.conversations.get': (p: { id: string }) => OpenConversation;
   'ai.conversations.rename': (p: { id: string; title: string }) => ConversationSummary;
   'ai.conversations.delete': (p: { id: string }) => { deleted: boolean };
   /** Deletes several chats at once (a chat the agent is still answering in is skipped). */
@@ -539,6 +735,16 @@ export interface CoreMethods extends ExtMethods {
   /** The runtime's last lines of output, for troubleshooting. */
   'runtime.logs': () => string[];
   'runtime.selectModel': (p: { modelId: string }) => RuntimeStatus;
+  /** Memory and graphics cards, for choosing a model that fits. */
+  'runtime.hardware': () => RuntimeHardware;
+  /** Downloads under way (models and the runtime itself), and ones that finished in the last few minutes. */
+  'runtime.downloads': () => DownloadProgress[];
+  /** Makes a model this computer's AI: the built-in runtime on, the model selected, the local provider the default. */
+  'runtime.useModel': (p: { modelId: string }) => RuntimeStatus;
+  /** The AI ready on a new computer (the built-in runtime and the starter model). */
+  'ai.starter': () => StarterAiStatus;
+  /** Gets it ready now (again, after a failure, or after it was turned down). */
+  'ai.prepareStarter': () => StarterAiStatus;
 
   'tools.list': () => ToolInfo[];
   'tools.setEnabled': (p: { name: string; enabled: boolean }) => ToolInfo;
@@ -547,6 +753,18 @@ export interface CoreMethods extends ExtMethods {
   'governance.policy': () => EffectivePolicy;
   'governance.updatePolicy': (p: { policy: Policy }) => EffectivePolicy;
   'governance.removeRememberedRule': (p: { id: string }) => EffectivePolicy;
+  /** What the AI remembers about the person (Settings → Memory). */
+  'memory.status': () => MemoryStatus;
+  'memory.add': (p: { content: string; category?: MemoryCategory }) => MemoryEntry;
+  'memory.update': (p: { id: string; content: string }) => MemoryEntry;
+  'memory.forget': (p: { id: string }) => { ok: boolean };
+  'memory.forgetAll': () => { forgotten: number };
+  'governance.folders': () => FolderAccessStatus;
+  /** Lets the AI use a folder (picked by the person). */
+  'governance.addFolder': (p: { path: string }) => FolderAccessStatus;
+  'governance.removeFolder': (p: { entry: string }) => FolderAccessStatus;
+  /** Answers the AI's request: a folder (the one asked for, or another), or null to say no. */
+  'governance.answerFolder': (p: { id: string; path: string | null }) => FolderAccessStatus;
   'approvals.list': () => ApprovalRequest[];
   'approvals.resolve': (p: { id: string; decision: 'approve' | 'deny'; remember?: boolean }) => { resolved: boolean };
 
@@ -585,6 +803,65 @@ export interface CoreMethods extends ExtMethods {
   'license.status': () => LicenseStatus;
   'license.activate': (p: { key: string }) => LicenseStatus;
   'license.remove': () => LicenseStatus;
+  'account.status': () => AccountStatus;
+  /** Signs in to an FBRX account (or makes one, `create`), and turns on what it bought. */
+  'account.signIn': (p: { server?: string; email: string; password: string; name?: string; create?: boolean }) => AccountStatus;
+  'account.signOut': () => AccountStatus;
+  'account.refresh': () => AccountStatus;
+  /** A page to buy Standard or Ultra (Stripe Checkout), to open in the browser. */
+  'account.checkout': (p: { productId: string }) => { url: string };
+  /** The billing portal: change the plan or the card, invoices, cancel. */
+  'account.portal': () => { url: string };
+  /** Joins this computer to an organization the account belongs to, at the edition it gives the account. */
+  'account.join': (p: { tenantId: string }) => AccountStatus;
+  /** Where the account is signed in: computers, phones and browsers (`current` is this computer). */
+  'account.devices': () => AccountDevice[];
+  /** Signs the account out somewhere else. */
+  'account.signOutDevice': (p: { id: string }) => { ok: true };
+  /** Sends the email that confirms the account's address again. */
+  'account.resendConfirmation': () => { sent: boolean };
+  /** The account's FBRX Cloud AI this month: its allowance, what it used, extra tokens, and whether it takes chats. */
+  'account.cloudAi': () => CloudAiUsage;
+  /** Uses a promo code on the account (extra FBRX Cloud AI tokens, an edition for some days) and turns its edition on. */
+  'account.redeemPromo': (p: { code: string }) => { redeemed: PromoRedeemed; status: AccountStatus; ai: CloudAiUsage };
+  /** Emails a link to choose a new password (it opens on the website). */
+  'account.forgotPassword': (p: { email: string; server?: string }) => { ok: true };
+  /** Starts an FBRX Command for the person's organization (in the cloud); answers with its console's address. */
+  'account.startOrganization': (p: { name: string; kind: Vertical }) => { consoleUrl: string; tenantId: string };
+  /** What an invitation code from an organization is for (its name, the email and edition), before using it. */
+  'account.previewInvitation': (p: { code: string; server?: string }) => InvitationPreview;
+  /**
+   * Uses an invitation code: makes the FBRX account (or, when the email has one, signs in to it with its password),
+   * joins the organization at the edition it gives, and signs in here.
+   */
+  'account.acceptInvitation': (p: { code: string; server?: string; name?: string; password: string }) => AccountStatus;
+
+  /** The offline, local-only FBRX account on this computer (works with no cloud; see accounts.ts). */
+  'localAccount.status': () => LocalAccountStatus;
+  'localAccount.create': (p: { name: string; email?: string; password?: string }) => LocalAccountStatus;
+  'localAccount.update': (p: { name?: string; email?: string | null }) => LocalAccountStatus;
+  /** Turn the start password on (with a password) or off; and unlock FBRX at start with it. */
+  'localAccount.setPassword': (p: { password: string; current?: string }) => LocalAccountStatus;
+  'localAccount.clearPassword': (p: { current: string }) => LocalAccountStatus;
+  'localAccount.unlock': (p: { password: string }) => LocalAccountStatus;
+  'localAccount.remove': (p: { confirm: 'DELETE' }) => LocalAccountStatus;
+
+  /** Support mode (troubleshooting): a signed pass elevates this computer; the resume phrase or expiry restores it. */
+  'support.status': () => SupportStatus;
+  'support.activate': (p: { pass: string }) => SupportStatus;
+  'support.end': () => SupportStatus;
+
+  /** FBRX Browser: what the browser window needs that lives in the core (bookmarks, history, policy, homepage). */
+  'browser.state': () => BrowserState;
+  'browser.check': (p: { input: string }) => BrowserCheck;
+  'browser.bookmark': (p: { url: string; title: string }) => Bookmark[];
+  'browser.removeBookmark': (p: { id: string }) => Bookmark[];
+  'browser.history': (p?: { limit?: number; query?: string }) => HistoryEntry[];
+  'browser.visited': (p: { url: string; title: string }) => { ok: true };
+  'browser.clearHistory': (p?: { since?: string }) => { cleared: number };
+  'browser.setHomepage': (p: { url: string }) => BrowserState;
+  'browser.addBlocked': (p: { host: string }) => BrowserState;
+  'browser.removeBlocked': (p: { host: string }) => BrowserState;
 
   'updates.status': () => UpdateStatus;
   'updates.check': () => UpdateStatus;
@@ -607,6 +884,8 @@ export type CoreResult<M extends CoreMethod> = ReturnType<CoreMethods[M]>;
 
 export interface CoreEvents extends ExtEvents {
   agent: AgentEvent;
+  /** The runs in progress, each time one starts or ends. */
+  'agent.runs': Array<Pick<RunActivity, 'runId' | 'conversationId'>>;
   'approval.requested': ApprovalRequest;
   'approval.resolved': { id: string; decision: 'approve' | 'deny' | 'expired'; by: string };
   'service.changed': ServiceStatus;
@@ -614,13 +893,25 @@ export interface CoreEvents extends ExtEvents {
   'audit.appended': AuditEntry;
   'runtime.changed': RuntimeStatus;
   'runtime.download': DownloadProgress;
+  'ai.starter': StarterAiStatus;
   'settings.changed': EffectiveSettings;
   'policy.changed': EffectivePolicy;
+  'governance.folderRequest': FolderRequest & { state: 'open' | 'closed' };
+  /** The AI's memory of the person changed (how many facts it holds now). */
+  'memory.changed': { count: number };
   'plugins.changed': PluginInfo[];
   'connectors.changed': ConnectorInfo[];
   'tools.changed': ToolInfo[];
   'fleet.changed': FleetStatus;
   'license.changed': LicenseStatus;
+  'account.changed': AccountStatus;
+  'automations.changed': Automation[];
+  'snapshots.changed': { id: string };
+  /** Fabrix asked to open the Save to Vault window, filled in, for the person to type the password. */
+  'passwords.saveRequested': { title: string; url: string; username: string };
+  'support.changed': SupportStatus;
+  'localAccount.changed': LocalAccountStatus;
+  'browser.changed': BrowserState;
   'updates.changed': UpdateStatus;
   'release.changed': ReleaseCheck;
   notification: NotificationEvent;
@@ -634,6 +925,7 @@ export const AGENT_SCOPE_METHODS: readonly CoreMethod[] = [
   'ai.models',
   'ai.chat',
   'ai.cancel',
+  'ai.runs',
   'ai.conversations.list',
   'ai.conversations.get',
   'tools.list',

@@ -1,5 +1,4 @@
 import { memo, type ReactNode } from 'react';
-import { openExternal } from './client';
 
 /**
  * Minimal, safe Markdown → React (no HTML injection): code fences, headings, nested lists, tables, quotes, rules,
@@ -97,7 +96,9 @@ export const Markdown = memo(function Markdown({ text, codeActions }: { text: st
       i++;
       continue;
     }
-    const para: string[] = [];
+    // The first line is the paragraph's whatever it looks like (a heading cut short by a stray character, say), so
+    // reading always moves on.
+    const para: string[] = [lines[i++]];
     while (i < lines.length && lines[i].trim() && !/^```|^#{1,4}\s|^\s*>/.test(lines[i]) && !LIST.test(lines[i]) && !isTableStart(lines, i)) para.push(lines[i++]);
     blocks.push(<p key={key++}>{inline(para.join('\n'))}</p>);
   }
@@ -208,7 +209,7 @@ function inline(s: string): ReactNode[] {
       const label = /^\[([^\]]+)\]/.exec(t)![1];
       const url = m[5];
       out.push(
-        <a key={k++} href={url} onClick={(e) => (e.preventDefault(), openExternal(url))}>
+        <a key={k++} href={url} target="_blank" rel="noopener noreferrer">
           {label}
         </a>,
       );

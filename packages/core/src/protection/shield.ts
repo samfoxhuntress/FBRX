@@ -1,8 +1,8 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { createReadStream, createWriteStream, existsSync, mkdirSync, watch, type FSWatcher } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, watch, type FSWatcher } from 'node:fs';
 import { chmod, lstat, open, opendir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, extname, join, resolve, sep } from 'node:path';
+import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { newId, type Settings, type ShieldAction, type ShieldDetection, type ShieldEngine as EngineName, type ShieldStatus, type ShieldVerdict } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
@@ -28,7 +28,8 @@ import { scanCommand } from './products';
  * soon as they arrive. It does not (yet) block programs as they start: on Windows, Microsoft Defender keeps doing that.
  */
 
-export const SHIELD_ENGINE_VERSION = '1.0';
+/** 1.1: FBRX's own files are never flagged, and packages' code (node_modules) does not count as downloaded. */
+export const SHIELD_ENGINE_VERSION = '1.1';
 
 const MAX_HASH_BYTES = 100 * 1024 * 1024;
 const MAX_SCRIPT_BYTES = 2 * 1024 * 1024;
@@ -45,6 +46,8 @@ const MACRO_OOXML = ['docm', 'xlsm', 'pptm', 'dotm', 'xltm', 'docx', 'xlsx', 'pp
 /** Photos, music and video: not where malware lives, and hashing them would make scans crawl. */
 const NO_HASH = ['mp4', 'mov', 'mkv', 'avi', 'wmv', 'm4v', 'mp3', 'flac', 'wav', 'm4a', 'aac', 'ogg', 'jpg', 'jpeg', 'png', 'gif', 'heic', 'webp', 'bmp', 'tif', 'tiff', 'psd', 'raw', 'cr2', 'nef', 'arw'];
 const PARTIAL_DOWNLOAD = /\.(?:crdownload|part|partial|download|opdownload|tmp)$|^\.com\.google\.chrome/i;
+/** Code a package manager installed (npm and the like): not something a person downloaded and might open. */
+const PACKAGED = /[\\/]node_modules[\\/]/i;
 
 /** The standard antivirus test string, assembled so this file is not itself a test file. */
 const EICAR = ['X5O!P%@AP[4\\PZX54(P^)7CC)7}$', 'EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'].join('');
@@ -199,7 +202,7 @@ export interface ShieldDeps {
   internet: () => boolean;
   /** Vault secrets: VIRUSTOTAL_API_KEY, ABUSECH_AUTH_KEY. */
   secret: (name: string) => string | undefined;
-  /** Never scanned (FBRX's own data folder). */
+  /** Never scanned: FBRX's own folders (its data, where it is installed, its update cache). */
   skip: () => string[];
   /** Downloads, desktop and the temp folder: files there count as downloaded. */
   landing: () => string[];
@@ -225,6 +228,8 @@ export class Shield {
   private readonly pending = new Map<string, NodeJS.Timeout>();
   private readonly seen = new Map<string, string>();
   private signatureCount: number | null = null;
+  /** Folders known to be (or not to be) the top of a copy of FBRX's source or build. */
+  private readonly fbrxRoots = new Map<string, boolean>();
 
   constructor(private readonly d: ShieldDeps) {
     mkdirSync(d.dir, { recursive: true });
@@ -232,8 +237,42 @@ export class Shield {
 
   // ------------------------------------------------------------------------------------------- verdicts
 
-  private excluded(file: string): boolean {
+  /** FBRX's own folders and the person's exclusions. */
+  private skipped(file: string): boolean {
     return [...this.d.skip(), ...this.d.settings().exclusions].some((x) => x && under(file, x));
+  }
+
+  /** The top of a copy of FBRX itself: its source (the release zip, a clone) or a build of it. */
+  private isFbrxRoot(dir: string): boolean {
+    let v = this.fbrxRoots.get(dir);
+    if (v === undefined) {
+      v = false;
+      try {
+        if (existsSync(join(dir, 'apps', 'desktop'))) v = (JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { name?: string }).name === 'fbrx-os';
+      } catch {
+        v = false;
+      }
+      if (this.fbrxRoots.size > 50_000) this.fbrxRoots.clear();
+      this.fbrxRoots.set(dir, v);
+    }
+    return v;
+  }
+
+  /** Inside a copy of FBRX's source or build, wherever it is (Downloads, say). */
+  private inFbrxTree(file: string): boolean {
+    let dir = dirname(file);
+    for (let i = 0; i < 32; i++) {
+      if (this.isFbrxRoot(dir)) return true;
+      const up = dirname(dir);
+      if (up === dir) return false;
+      dir = up;
+    }
+    return false;
+  }
+
+  /** Never looked at: FBRX's own files and folders, and the person's exclusions. */
+  excluded(file: string): boolean {
+    return this.skipped(file) || this.inFbrxTree(file);
   }
 
   private allowed(sha256: string): boolean {
@@ -261,7 +300,7 @@ export class Shield {
       if (sig) return done(v('malware', 'signature', sig.name || 'Known malware', `Its fingerprint is in FBRX Shield's threat database (${sig.source}).`));
     }
     if (!this.d.settings().heuristics) return done(null);
-    const downloaded = !!o.downloaded || this.d.landing().some((dir) => under(file, dir)) || (await fromInternet(file));
+    const downloaded = !PACKAGED.test(file) && (!!o.downloaded || this.d.landing().some((dir) => under(file, dir)) || (await fromInternet(file)));
     let found: ShieldVerdict | null = null;
 
     if (BIDI.test(name)) found = v('suspicious', 'heuristic', 'Disguised file name', 'Its name uses hidden right-to-left characters, a trick to make a program look like a document.');
@@ -425,6 +464,52 @@ export class Shield {
     return this.setAction(id, 'allowed');
   }
 
+  /**
+   * Trusts many findings at once: the ones picked, or every suspicious one still waiting (in one folder, if named).
+   * Malware is only trusted when picked by hand.
+   */
+  allowMany(p: { ids?: string[]; folder?: string }): { allowed: number; ids: string[] } {
+    const rows = p.ids?.length
+      ? p.ids.map((id) => this.d.db.get<DetectionRow>("SELECT * FROM shield_detections WHERE id = ? AND action = 'open'", id)).filter((r): r is DetectionRow => !!r)
+      : this.d.db.all<DetectionRow>("SELECT * FROM shield_detections WHERE action = 'open' AND kind != 'malware'").filter((r) => !p.folder || under(r.path, p.folder));
+    const now = new Date().toISOString();
+    this.d.db.tx(() => {
+      for (const r of rows) {
+        if (r.sha256) this.d.db.run('INSERT OR REPLACE INTO shield_allow (sha256, path, at) VALUES (?, ?, ?)', r.sha256, r.path, now);
+        this.d.db.run("UPDATE shield_detections SET action = 'allowed', action_at = ? WHERE id = ?", now, r.id);
+      }
+    });
+    return { allowed: rows.length, ids: rows.map((r) => r.id) };
+  }
+
+  /**
+   * Looks at the findings still waiting again, with today's rules: ones FBRX Shield would no longer flag (FBRX's own
+   * files, packages' code) are cleared, and ones whose file is gone are closed. Returns what it cleared.
+   */
+  async recheck(signal?: AbortSignal): Promise<{ cleared: number; gone: number; ids: string[] }> {
+    const open = this.d.db.all<DetectionRow>("SELECT * FROM shield_detections WHERE action = 'open'");
+    let cleared = 0;
+    let gone = 0;
+    const ids: string[] = [];
+    for (const r of open) {
+      if (signal?.aborted) break;
+      const st = await stat(r.path).catch(() => null);
+      if (!st?.isFile()) {
+        this.setAction(r.id, 'deleted');
+        gone++;
+        ids.push(r.id);
+        continue;
+      }
+      const still = this.excluded(r.path) ? null : (await this.verdictFor(r.path).catch(() => null))?.verdict;
+      if (!still) {
+        this.setAction(r.id, 'allowed');
+        cleared++;
+        ids.push(r.id);
+      }
+    }
+    return { cleared, gone, ids };
+  }
+
   /** A finding: recorded, quarantined when it is malware and that is wanted, and passed on. */
   async handle(file: string, r: FileVerdict, source: ShieldDetection['source'], quarantine: boolean): Promise<ShieldDetection> {
     let det = this.record(file, r, source);
@@ -467,7 +552,8 @@ export class Shield {
       tick();
     };
     const walk = async (dir: string): Promise<void> => {
-      if (o.signal.aborted || this.excluded(dir)) return;
+      // A copy of FBRX itself (its source or a build, in Downloads, say) is skipped whole.
+      if (o.signal.aborted || this.skipped(dir) || this.isFbrxRoot(dir)) return;
       let handle;
       try {
         handle = await opendir(dir);
@@ -478,14 +564,14 @@ export class Shield {
       for await (const ent of handle) {
         if (o.signal.aborted) break;
         const full = join(dir, ent.name);
-        if (ent.isSymbolicLink() || this.excluded(full)) continue;
+        if (ent.isSymbolicLink() || this.skipped(full)) continue;
         if (ent.isDirectory()) await walk(full);
         else if (ent.isFile()) await visit(full);
       }
     };
     for (const t of targets) {
       const st = await stat(t).catch(() => null);
-      if (!st) continue;
+      if (!st || this.inFbrxTree(t)) continue;
       if (st.isDirectory()) await walk(t);
       else if (st.isFile() && !this.excluded(t)) await visit(t);
     }
@@ -639,6 +725,19 @@ export class Shield {
     if (this.seen.size > 5000) this.seen.clear();
     const r = await this.verdictFor(file, { downloaded: true });
     if (r.verdict && this.watchers.length) await this.handle(file, r, 'download', true);
+  }
+
+  /**
+   * A file FBRX Browser just finished downloading: checked as a download (the rules for files from the internet
+   * apply), malware quarantined when that is on, and the finding passed on, exactly as the Downloads watcher does.
+   * The watcher then skips the same file.
+   */
+  async checkDownload(file: string): Promise<ShieldDetection | null> {
+    const st = await stat(file).catch(() => null);
+    if (!st?.isFile() || this.excluded(file)) return null;
+    this.seen.set(file, `${st.size}:${st.mtimeMs}`);
+    const r = await this.verdictFor(file, { downloaded: true });
+    return r.verdict ? this.handle(file, r, 'download', true) : null;
   }
 
   /** Checks one file on request (Security → Check a file, the agent). */

@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS, isCidr, MESH_TRAFFIC_CLASSES, type ApprovalRequest, type MeshNetworkStatus, type MeshTrafficClass, type EffectiveSettings, type MeshStatus, type SecretMeta, type SystemStatus, type VirtualRole } from '@fbrx/shared';
+import { ASSIST_MODES, ASSIST_PRIORITIES, ASSIST_TOOLS, ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, isCidr, MESH_TRAFFIC_CLASSES, type ApprovalRequest, type MeshNetworkStatus, type MeshTrafficClass, type EffectiveSettings, type MeshStatus, type SecretMeta, type SystemStatus, type VirtualRole } from '@fbrx/shared';
 import { allows } from '../auth';
 import { audited, need, type VirtualContext } from '../context';
 import { badRequest, forbidden } from '../errors';
@@ -21,6 +21,9 @@ interface Rule {
 type Runner = <T>(method: string, params?: unknown) => Promise<T>;
 
 const ROLE_NAME = z.string().regex(/^[a-z][a-z0-9-]{0,31}$/);
+/** The largest attachment, as base64. */
+const ATTACHMENT_BASE64 = Math.ceil((ATTACHMENT_MAX_BYTES * 4) / 3) + 16;
+const MODEL_ID = z.string().regex(/^[a-z0-9][a-z0-9._-]{0,99}$/);
 const AssistPatch = z
   .object({
     request: z.enum(ASSIST_MODES),
@@ -120,6 +123,27 @@ const RULES: Record<string, Rule> = {
     },
   },
 
+  // Fabrix in the console: operators talk with this server's agent (it follows this server's policy, and anything it
+  // wants to do that needs a yes waits for an administrator); administrators also delete chats.
+  'ai.conversations.list': { role: 'operator' },
+  'ai.conversations.get': { role: 'operator', params: (p) => z.object({ id: z.string().max(80) }).strict().parse(p) },
+  'ai.conversations.delete': { role: 'admin', params: (p) => z.object({ id: z.string().max(80) }).strict().parse(p) },
+  'ai.chat': {
+    role: 'operator',
+    params: (p) =>
+      z.object({ conversationId: z.string().max(80).optional(), message: z.string().min(1).max(20000), offline: z.boolean().optional(), attachments: z.array(z.string().max(64)).max(ATTACHMENTS_PER_MESSAGE).optional() }).strict().parse(p),
+  },
+  // Files for a chat (read on the server), and the ones it made, shown and downloaded here.
+  'ai.attachments.add': { role: 'operator', params: (p) => z.object({ name: z.string().min(1).max(260), data: z.string().max(ATTACHMENT_BASE64), mime: z.string().max(120).optional() }).strict().parse(p) },
+  'ai.attachments.remove': { role: 'operator', params: (p) => z.object({ id: z.string().max(64) }).strict().parse(p) },
+  'ai.attachments.read': { role: 'operator', params: (p) => z.object({ id: z.string().max(64) }).strict().parse(p) },
+  'ai.files.preview': { role: 'operator', params: (p) => z.object({ path: z.string().max(1000) }).strict().parse(p) },
+  'ai.files.read': { role: 'operator', params: (p) => z.object({ path: z.string().max(1000) }).strict().parse(p) },
+  'ai.cancel': { role: 'operator', params: (p) => z.object({ runId: z.string().max(80) }).strict().parse(p) },
+  // The server's AI getting itself ready (the best model it runs well, on the ai role's first start).
+  'ai.starter': { role: 'viewer' },
+  'ai.prepareStarter': { role: 'admin' },
+
   'ai.models': { role: 'admin', params: (p) => z.object({ providerId: z.string().max(64) }).strict().parse(p) },
   'settings.update': { role: 'admin', params: (p) => ({ patch: z.object({ patch: SettingsPatch }).strict().parse(p).patch }), result: settingsView },
   // Which provider keys are saved (names and dates, never values).
@@ -137,6 +161,22 @@ const RULES: Record<string, Rule> = {
       return { name: a.name, value: a.value, kind: 'api-key', description: 'AI provider key (set from FBRX Virtual)' };
     },
   },
+  // Models on this server (the built-in llama.cpp runtime): anyone looks, operators start and stop it, administrators
+  // download, delete and choose (they decide what fills the disk and what this server's AI is).
+  'runtime.status': { role: 'viewer' },
+  'runtime.hardware': { role: 'viewer' },
+  'runtime.catalog': { role: 'viewer' },
+  'runtime.installed': { role: 'viewer' },
+  'runtime.downloads': { role: 'viewer' },
+  'runtime.logs': { role: 'operator' },
+  'runtime.start': { role: 'operator' },
+  'runtime.stop': { role: 'operator' },
+  'runtime.installRuntime': { role: 'admin' },
+  'runtime.download': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
+  'runtime.cancelDownload': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
+  'runtime.redownload': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
+  'runtime.deleteModel': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
+  'runtime.useModel': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
   'mesh.setEnabled': { role: 'admin', params: (p) => z.object({ enabled: z.boolean() }).strict().parse(p) },
   'mesh.rename': { role: 'admin', params: (p) => z.object({ name: z.string().min(1).max(120) }).strict().parse(p) },
   'mesh.startPairing': { role: 'admin' },
@@ -149,20 +189,46 @@ const RULES: Record<string, Rule> = {
   },
 };
 
-const READS = new Set(['system.status', 'settings.get', 'ai.providers', 'mesh.status', 'mesh.assist.helpers', 'mesh.assist.sessions', 'approvals.list', 'vault.list', 'ai.models', 'mesh.network.test']);
+const READS = new Set([
+  'system.status',
+  'settings.get',
+  'ai.providers',
+  'mesh.status',
+  'mesh.assist.helpers',
+  'mesh.assist.sessions',
+  'approvals.list',
+  'ai.conversations.list',
+  'ai.conversations.get',
+  'ai.attachments.read',
+  'ai.files.preview',
+  'ai.files.read',
+  'ai.starter',
+  'vault.list',
+  'ai.models',
+  'mesh.network.test',
+  'runtime.status',
+  'runtime.hardware',
+  'runtime.catalog',
+  'runtime.installed',
+  'runtime.downloads',
+  'runtime.logs',
+]);
 
 function target(method: string, p: Record<string, unknown>): string | null {
   if (method === 'vault.set') return String(p.name);
   if (method === 'mesh.assist.send') return Array.isArray(p.peerIds) ? p.peerIds.join(', ') : 'best helper';
   if (method === 'settings.update') return Object.keys((p.patch as object) ?? {}).join(', ');
-  for (const k of ['sessionId', 'id', 'host', 'name']) if (typeof p[k] === 'string') return p[k] as string;
+  if (method === 'ai.chat') return (p.conversationId as string | undefined) ?? 'new chat';
+  for (const k of ['sessionId', 'id', 'runId', 'host', 'name', 'modelId']) if (typeof p[k] === 'string') return p[k] as string;
   return null;
 }
 
-/** What the audit log keeps of the arguments (never a key). */
+/** What the audit log keeps of the arguments (never a key, and of what someone asked only how long it was). */
 function details(method: string, p: Record<string, unknown>): unknown {
   if (method === 'vault.set') return { name: p.name };
   if (method === 'mesh.assist.send' || method === 'mesh.assist.followUp') return { ...p, goal: undefined, text: undefined, length: String(p.goal ?? p.text ?? '').length };
+  if (method === 'ai.chat') return { conversationId: p.conversationId, offline: p.offline, length: String(p.message ?? '').length, attachments: (p.attachments as unknown[] | undefined)?.length };
+  if (method === 'ai.attachments.add') return { name: p.name, mime: p.mime, bytes: Math.floor((String(p.data ?? '').length * 3) / 4) };
   return p;
 }
 
@@ -174,7 +240,8 @@ export async function coreRoutes(app: FastifyInstance, ctx: VirtualContext) {
     return { ...(await ctx.core.state()), role: user.role };
   });
 
-  app.post('/v1/core/call', async (req) => {
+  // A call may carry an attached file (as base64).
+  app.post('/v1/core/call', { bodyLimit: ATTACHMENT_BASE64 + 1024 * 1024 }, async (req) => {
     const user = need(req, 'viewer');
     const { method, params } = z.object({ method: z.string().max(80), params: z.unknown().optional() }).parse(req.body);
     const rule = RULES[method];

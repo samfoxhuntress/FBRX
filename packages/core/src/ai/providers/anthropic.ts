@@ -9,9 +9,9 @@ type MessageParam = Anthropic.Beta.BetaMessageParam;
 const FALLBACK_DEFAULT = /^claude-(opus-5(-5)?|fable-5-1|sonnet-5-5)$/;
 /** Models where sampling parameters (temperature) were removed and return a 400. */
 const NO_SAMPLING = /^claude-(opus-(4-[78]|5)|sonnet-5|fable|mythos)/;
-/** Models that accept `output_config.effort`. */
 /** Models with adaptive thinking (older ones would need a fixed thinking budget, so they are left as they are). */
 const ADAPTIVE = /^claude-(opus-(4-[6-9]|5)|sonnet-(4-6|5)|fable|mythos)/;
+/** Models that accept `output_config.effort`. */
 const SUPPORTS_EFFORT = /^claude-(opus-(4-[5-9]|5)|sonnet-(4-6|5)|fable|mythos)/;
 
 export interface AnthropicProviderOptions {
@@ -87,7 +87,12 @@ export class AnthropicProvider implements ChatProvider {
       }
       flushResults();
       if (m.role === 'user') {
-        out.push({ role: 'user', content: m.content });
+        out.push({
+          role: 'user',
+          content: m.images?.length
+            ? [...m.images.map((i): Anthropic.Beta.BetaImageBlockParam => ({ type: 'image', source: { type: 'base64', media_type: i.mime as 'image/png', data: i.data } })), { type: 'text', text: m.content }]
+            : m.content,
+        });
       } else if (m.providerData?.providerType === 'anthropic' && Array.isArray(m.providerData.raw)) {
         out.push({ role: 'assistant', content: m.providerData.raw as Anthropic.Beta.BetaContentBlockParam[] });
       } else {

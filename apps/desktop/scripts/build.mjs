@@ -31,7 +31,7 @@ await build({
   format: 'esm',
   // ssh2's optional native speed-ups: without them it uses its pure-JavaScript code.
   external: ['electron', 'bufferutil', 'utf-8-validate', 'cpu-features', '*.node'],
-  define: { __FBRX_LICENSE_PUBKEYS__: JSON.stringify(keys), __FBRX_MS_CLIENT_ID__: JSON.stringify(process.env.FBRX_MS_CLIENT_ID ?? ''), 'process.env.FBRX_APP_VERSION': JSON.stringify(pkg.version) },
+  define: { __FBRX_LICENSE_PUBKEYS__: JSON.stringify(keys), __FBRX_MS_CLIENT_ID__: JSON.stringify(process.env.FBRX_MS_CLIENT_ID ?? ''), __FBRX_ACCOUNT_SERVER__: JSON.stringify(process.env.FBRX_ACCOUNT_SERVER ?? ''), 'process.env.FBRX_APP_VERSION': JSON.stringify(pkg.version) },
   // CommonJS dependencies (ssh2 among them) expect require, __filename and __dirname.
   banner: { js: ESM_BANNER },
 });
@@ -40,6 +40,15 @@ await build({
   entryPoints: [join(app, 'src/preload/index.ts')],
   outfile: join(app, 'dist/preload/index.cjs'),
   format: 'cjs',
+  external: ['electron'],
+});
+// FBRX Browser's sign-in helper, in each web page's own isolated world (the Vault's browser extension).
+await build({
+  ...common,
+  entryPoints: [join(app, 'src/preload/autofill.ts')],
+  outfile: join(app, 'dist/preload/autofill.cjs'),
+  format: 'cjs',
+  platform: 'browser',
   external: ['electron'],
 });
 copyFileSync(join(root, 'packages/core/src/plugins/plugin-worker.mjs'), join(app, 'dist/main/plugin-worker.mjs'));

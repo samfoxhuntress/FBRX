@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { Button, Callout, FbrxMark, Modal, TextArea } from '@fbrx/ui';
+import { Button, Callout, FbrxMark, Markdown, Modal, TextArea } from '@fbrx/ui';
 import { call, onEvent } from './client';
 import { useAgentName } from './hooks';
-import { Markdown } from './markdown';
 import { useSlashMenu } from './slash-menu';
 import { navigate } from './app';
 

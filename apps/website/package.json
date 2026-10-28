@@ -1,0 +1,10 @@
+{
+  "name": "@fbrx/website",
+  "version": "2.1.1",
+  "private": true,
+  "description": "The FBRX website: what FBRX is, the price list, FBRX accounts (static, built from packages/shared)",
+  "type": "module",
+  "scripts": {
+    "build": "node --import tsx build.mjs"
+  }
+}
