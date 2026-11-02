@@ -9,6 +9,7 @@ import { renderHtml } from '../../docs/render-html';
 import { renderDocx } from '../../docs/render-docx';
 import { renderPdf } from '../../docs/render-pdf';
 import { formatBytes } from '../../util/misc';
+import { SCENE_BACKDROPS, SCENE_HOLD, SCENE_PARTS, SCENE_SHAPES, SCENE_WEAR, renderScene, sceneCatalog, type Scene } from '../../docs/scene';
 
 export interface CreateToolDeps {
   output: OutputFolder;
@@ -60,6 +61,17 @@ export function svgSize(svg: string, long: number): { width: number; height: num
 }
 
 export function createTools(d: CreateToolDeps): ToolSpec[] {
+  /** A drawing saved as SVG, with a PNG copy where this computer can make one (that one comes first). */
+  const drawing = async (name: string, svg: string, size = 1024) => {
+    const files = [await save(d.output.newFile(name, 'svg', 'Pictures'), svg, 'image')];
+    const renderer = d.renderer();
+    if (renderer) {
+      const { width, height } = svgSize(svg, size);
+      const png = await renderer.rasterizeSvg(svg, width, height);
+      files.unshift(await save(files[0].path.replace(/\.svg$/, '.png'), png, 'image'));
+    }
+    return files;
+  };
   return [
     {
       name: 'docs.create',
@@ -117,8 +129,9 @@ export function createTools(d: CreateToolDeps): ToolSpec[] {
       name: 'image.draw',
       title: 'Draw picture',
       description:
-        'Draw a picture as SVG vector art (illustrations, icons, logos, diagrams, charts, maps, simple scenes) and save it, with a PNG copy, in the FBRX folder. ' +
-        'Write one complete, self-contained <svg> with a viewBox, using shapes, paths, gradients and text; no scripts, no outside images or fonts.',
+        'Draw a picture as SVG vector art (icons, logos, diagrams, charts, maps, patterns) and save it, with a PNG copy, in the FBRX folder. For a scene with characters, animals, buildings or nature, use image.compose instead. ' +
+        'Write one complete, self-contained <svg> with a viewBox, using shapes, paths, gradients and text; no scripts, no outside images or fonts. ' +
+        'Work in layers: a background that fills the frame, then the large shapes, then details, with an outline on each shape, a lighter highlight and a darker shade, and three to six colors that go together.',
       risk: 'write',
       source: 'builtin',
       sourceId: null,
@@ -136,14 +149,59 @@ export function createTools(d: CreateToolDeps): ToolSpec[] {
       async run(i) {
         const svg = cleanSvg(i.svg);
         if (!svg) throw new Error('That is not an SVG drawing: send one complete <svg>…</svg>');
-        const files = [await save(d.output.newFile(i.name, 'svg', 'Pictures'), svg, 'image')];
-        const renderer = d.renderer();
-        if (renderer) {
-          const { width, height } = svgSize(svg, i.size ?? 1024);
-          const png = await renderer.rasterizeSvg(svg, width, height);
-          files.unshift(await save(files[0].path.replace(/\.svg$/, '.png'), png, 'image'));
-        }
+        const files = await drawing(i.name, svg, i.size);
         return { output: `Saved the drawing:\n${made(files)}`, data: { files } };
+      },
+    },
+    {
+      name: 'image.compose',
+      title: 'Compose picture',
+      description:
+        "Make a storybook picture from FBRX's own art: a backdrop, then characters and scenery placed by name and position (x and y in percent; y is where its feet stand, about 86 on the ground and 20 in the sky), with names under them and a title. " +
+        'No drawing needed: FBRX draws every piece, outlined and shaded. Characters can wear a hat or hood and hold up to two things; flip turns one to face left; color and accent recolor any piece. ' +
+        `Saved as SVG with a PNG copy in the FBRX folder. ${sceneCatalog()}`,
+      risk: 'write',
+      source: 'builtin',
+      sourceId: null,
+      timeoutMs: 60_000,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', description: 'What to call the picture (the file name)', maxLength: 120 },
+          backdrop: { type: 'string', enum: [...SCENE_BACKDROPS] },
+          shape: { type: 'string', enum: Object.keys(SCENE_SHAPES), default: 'wide' },
+          title: { type: 'string', maxLength: 80 },
+          caption: { type: 'string', maxLength: 160 },
+          items: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 40,
+            items: {
+              type: 'object',
+              properties: {
+                part: { type: 'string', enum: SCENE_PARTS },
+                x: { type: 'number', minimum: 0, maximum: 100 },
+                y: { type: 'number', minimum: 0, maximum: 100 },
+                size: { type: 'number', minimum: 2, maximum: 100, description: 'Height in percent of the picture (a person about 30, a castle about 55)' },
+                flip: { type: 'boolean' },
+                color: { type: 'string', maxLength: 20, description: 'A color name (brown, mud, gold, navy…) or #rrggbb' },
+                accent: { type: 'string', maxLength: 20 },
+                wear: { type: 'string', enum: SCENE_WEAR },
+                hold: { type: 'array', items: { type: 'string', enum: SCENE_HOLD }, maxItems: 2 },
+                label: { type: 'string', maxLength: 40 },
+              },
+              required: ['part', 'x'],
+            },
+          },
+          size: { type: 'integer', minimum: 256, maximum: 2048, default: 1600, description: 'Pixels along the longer side of the PNG copy' },
+        },
+        required: ['backdrop', 'items'],
+      },
+      resources: () => ({ paths: [{ path: d.output.path(), access: 'write' }] }),
+      async run(i) {
+        const svg = renderScene(i as Scene);
+        const files = await drawing(i.name || i.title || 'Picture', svg, i.size ?? 1600);
+        return { output: `Composed the picture:\n${made(files)}`, data: { files } };
       },
     },
     {

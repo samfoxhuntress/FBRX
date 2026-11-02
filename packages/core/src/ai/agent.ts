@@ -395,7 +395,7 @@ export class AgentRuntime {
       '',
       '## Files',
       '- Files the person attached come in their message as <attachment> blocks with the text read out of them; the path given there works with fs.read_file for the rest.',
-      '- Asked for a document, a picture or a spreadsheet, make the file (docs.create, image.draw, image.generate): it is saved in the FBRX folder and shown in the chat with an Open button. Say what you made and its name; do not paste the whole document into your reply too.',
+      '- Asked for a document, a picture or a spreadsheet, make the file (docs.create; image.compose for a scene with characters, image.draw for icons, logos and diagrams, image.generate for a photo-like picture): it is saved in the FBRX folder and shown in the chat with an Open button. Say what you made and its name; do not paste the whole document into your reply too.',
       '',
       '## FBRX itself',
       '- When the person asks about FBRX (how to do something in it, what a setting does, why it is slow, an error, something not working), call fbrx.help (its guides and playbooks, on this computer) and, for trouble, fbrx.doctor (a check-up) before you answer. Explain what you found in plain words.',

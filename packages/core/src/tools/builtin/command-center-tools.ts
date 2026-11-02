@@ -16,7 +16,15 @@ const tool = (t: Omit<ToolSpec, 'source' | 'sourceId'>): ToolSpec => ({ source: 
 
 /** Notes, tasks, projects and snippets for the agent. They stay inside FBRX OS (allowed by a built-in rule). */
 export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
-  const project = (name?: string) => (name ? (w.listProjects().find((p) => p.name.toLowerCase() === name.toLowerCase() || p.id === name)?.id ?? null) : undefined);
+  const named = (name: string) => w.listProjects().find((p) => p.name.toLowerCase() === name.trim().toLowerCase() || p.id === name);
+  /** The project a call names (by name or id). One that does not exist is an error, never a silent "no project". */
+  const project = (name?: string): string | undefined => {
+    if (!name) return undefined;
+    const p = named(name);
+    if (!p) throw new Error(`No project is called "${name}". workspace.list_projects lists them; workspace.create_project makes one.`);
+    return p.id;
+  };
+  const inProject = (id: string | null | undefined) => (id ? ` in project "${w.getProject(id).name}"` : '');
   return [
     tool({
       name: 'workspace.list_tasks',
@@ -50,7 +58,7 @@ export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
       },
       async run(i) {
         const t = w.saveTask({ title: i.title, details: i.details, priority: i.priority, due: i.due, projectId: project(i.project) ?? null });
-        return { output: `Added task "${t.title}" (id ${t.id})`, data: t };
+        return { output: `Added task "${t.title}" (id ${t.id})${inProject(t.projectId)}`, data: t };
       },
     }),
     tool({
@@ -89,7 +97,7 @@ export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
     tool({
       name: 'workspace.create_note',
       title: 'Create note',
-      description: 'Save a note (Markdown) in the FBRX workspace.',
+      description: 'Save a note (Markdown) in the FBRX workspace, in a project when one is named (it must exist: create it first with workspace.create_project).',
       risk: 'write',
       inputSchema: {
         type: 'object',
@@ -98,7 +106,7 @@ export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
       },
       async run(i) {
         const n = w.saveNote({ title: i.title, content: i.content, tags: i.tags, projectId: project(i.project) ?? null });
-        return { output: `Saved note "${n.title}" (id ${n.id})`, data: n };
+        return { output: `Saved note "${n.title}" (id ${n.id})${inProject(n.projectId)}`, data: n };
       },
     }),
     tool({
@@ -114,6 +122,28 @@ export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
       },
     }),
     tool({
+      name: 'workspace.create_project',
+      title: 'Create project',
+      description: 'Make a project in the FBRX workspace (Projects), to gather notes, tasks and chats. One with the same name is reused, not made twice. Due dates use YYYY-MM-DD.',
+      risk: 'write',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', minLength: 1, maxLength: 120 },
+          description: { type: 'string', maxLength: 5000 },
+          due: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+          milestones: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30 },
+        },
+        required: ['name'],
+      },
+      async run(i) {
+        const had = named(i.name);
+        if (had) return { output: `Project "${had.name}" already exists (id ${had.id}): use it.`, data: had };
+        const p = w.saveProject({ name: i.name, description: i.description, due: i.due ?? null, milestones: (i.milestones ?? []).map((title: string) => ({ title })) });
+        return { output: `Created project "${p.name}" (id ${p.id})`, data: p };
+      },
+    }),
+    tool({
       name: 'workspace.list_projects',
       title: 'List projects',
       description: 'Projects with their task progress, overdue tasks and milestones.',
@@ -123,7 +153,7 @@ export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
         const ps = w.listProjects();
         return {
           output: ps.length
-            ? ps.map((p) => `- ${p.name} [${p.status}] ${p.done}/${p.tasks} tasks done${p.overdue ? `, ${p.overdue} overdue` : ''}${p.due ? `, due ${p.due.slice(0, 10)}` : ''}${p.milestones.length ? `; milestones: ${p.milestones.map((m) => `${m.done ? '✓' : '○'} ${m.title}`).join(', ')}` : ''}`).join('\n')
+            ? ps.map((p) => `- ${p.name} (id ${p.id}) [${p.status}] ${p.done}/${p.tasks} tasks done${p.overdue ? `, ${p.overdue} overdue` : ''}${p.due ? `, due ${p.due.slice(0, 10)}` : ''}${p.milestones.length ? `; milestones: ${p.milestones.map((m) => `${m.done ? '✓' : '○'} ${m.title}`).join(', ')}` : ''}`).join('\n')
             : 'No projects',
           data: ps,
         };

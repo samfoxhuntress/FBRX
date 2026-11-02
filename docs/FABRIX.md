@@ -61,8 +61,15 @@ Ask for a file and Fabrix makes it: *"make a PDF report of my open tasks"*, *"pu
 * **Documents:** PDF, `.docx` (for any word processor), web page (`.html`), Markdown, plain text and CSV, written from
   Markdown: headings, lists, tables, links, quotes and code. PDFs are printed by the app's own engine, with page
   numbers; on FBRX Server, FBRX writes them itself.
-* **Pictures:** drawings (charts, diagrams, icons, simple illustrations) are drawn on the computer, offline, as SVG
-  and PNG. Generated images (photos and paintings from a description) need an image service: an OpenAI-compatible
+* **Scenes:** *"draw a mouse knight facing a giant by a castle"* becomes a storybook picture made from FBRX's own art:
+  a backdrop (day, sunset, night, forest, sea, desert, snow, space, a castle hall), characters (a person, a giant, a
+  mouse, a cat, a dog, a bird, a dragon) that can wear a helmet, crown, wizard hat, cap or hood and hold a sword,
+  shield, staff, club, flag, lantern or torch, and scenery (trees, mountains, houses, castles, tents, a campfire, a
+  treasure chest, boats, cars, rockets, the sun, the moon, clouds, stars), each recolored and named as asked. Fabrix
+  only says what goes where; FBRX draws every piece, outlined and shaded, so even a small model on a laptop makes a
+  good picture.
+* **Pictures:** other drawings (charts, diagrams, icons, logos) are drawn on the computer, offline, as SVG and PNG.
+  Generated images (photos and paintings from a description) need an image service: an OpenAI-compatible
   images endpoint, or an image server on your network (Settings → Agent → *Files, pictures and the web*).
 * **Where they go:** the FBRX folder in Documents (Settings → Agent; any folder the AI may use). A new file never
   replaces one already there: *Report (2).pdf*. Each one shows in the chat with a picture of it, **Open** and **Show in

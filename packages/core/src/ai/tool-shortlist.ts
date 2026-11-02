@@ -19,7 +19,7 @@ const starts = (...stems: string[]) => new RegExp(`(?:^|[^a-z0-9])(?:${stems.joi
 /** Each group of tools (by name) and the words that bring it in. */
 const GROUPS: Array<{ tools: RegExp; words: RegExp }> = [
   { tools: /^(fs|files)\./, words: starts('file', 'folder', 'director', 'document', 'desktop', 'download', 'path', 'txt', 'csv', 'log', 'rename', 'attach') },
-  { tools: /^(docs|image)\./, words: starts('pdf', 'docx', 'word doc', 'report', 'spreadsheet', 'excel', 'slide', 'markdown', 'html', 'picture', 'image', 'photo', 'draw', 'diagram', 'chart', 'graph', 'icon', 'logo', 'poster', 'flyer', 'letter', 'resume', 'invoice', 'make a', 'create a', 'write a') },
+  { tools: /^(docs|image)\./, words: starts('pdf', 'docx', 'word doc', 'report', 'spreadsheet', 'excel', 'slide', 'markdown', 'html', 'picture', 'image', 'photo', 'draw', 'scene', 'cartoon', 'illustrat', 'storybook', 'comic', 'diagram', 'chart', 'graph', 'icon', 'logo', 'poster', 'flyer', 'letter', 'resume', 'invoice', 'make a', 'create a', 'write a') },
   { tools: /^(web|http|finance)\./, words: starts('http', 'www', 'web', 'site', 'page', 'link', 'url', 'search', 'look up', 'lookup', 'news', 'latest', 'price', 'stock', 'quote', 'ticker', 'market', 'weather', 'online', 'internet', 'article') },
   { tools: /^net\./, words: starts('network', 'wifi', 'wi-fi', 'internet', 'ping', 'dns', 'router', 'ip ', 'ip address', 'port', 'speed', 'latency', 'lag', 'trace', 'connect', 'lan', 'offline') },
   { tools: /^(network_env|device_console)\./, words: starts('unifi', 'controller', 'access point', 'switch', 'firewall', 'vlan', 'ssh', 'console', 'device', 'guest', 'client', 'wlan') },
