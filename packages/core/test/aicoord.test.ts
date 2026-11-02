@@ -66,13 +66,14 @@ describe('AI coordination', () => {
 
   it("connects Hermes Agent through its YAML config, keeping the person's own servers", async () => {
     const home = mkdtempSync(join(tmpdir(), 'fbrx-hermes-'));
-    const before = process.env.HOME;
+    // The home folder comes from HOME, and from USERPROFILE on Windows.
+    const before = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
     const config = join(home, '.hermes', 'config.yaml');
     const own = 'model:\n  default: m\n\nmcp_servers:\n  files:\n    command: npx\n';
     mkdirSync(join(home, '.hermes'));
     writeFileSync(config, own);
     try {
-      process.env.HOME = home;
+      Object.assign(process.env, { HOME: home, USERPROFILE: home });
       vi.resetModules();
       const { AiCoordination: Fresh } = await import('../src/aicoord/aicoord');
       const co = new Fresh({ shim: () => ({ command: process.execPath, args: ['fbrx-mcp.mjs'], env: { FBRX_DATA_DIR: '/data' } }), localApiRunning: () => true });
@@ -87,11 +88,14 @@ describe('AI coordination', () => {
       await co.remove('hermes');
       expect(readFileSync(config, 'utf8')).toBe(own);
     } finally {
-      process.env.HOME = before;
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
       vi.resetModules();
       rmSync(home, { recursive: true, force: true });
     }
-  });
+  }, 90_000); // on Windows each look also reads the Start menu and installed programs
 
   it('is reachable from the core API', async () => {
     const { kernel, cleanup } = await makeKernel();
