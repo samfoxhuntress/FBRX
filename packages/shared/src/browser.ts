@@ -65,6 +65,25 @@ export interface BrowserState {
   blockedByMe: string[];
 }
 
+/**
+ * A page on this computer or the home network whose certificate no authority vouches for (a router, a NAS, FBRX
+ * Server): FBRX Browser shows it, and goes on only once the person has compared its fingerprint.
+ */
+export interface BrowserCertificateProblem {
+  /** The tab's page (its webview's web contents). */
+  webContentsId: number;
+  url: string;
+  host: string;
+  /** Chromium's reason, such as net::ERR_CERT_AUTHORITY_INVALID. */
+  error: string;
+  /** "AB:CD:…", as FBRX Server and most devices show their own. */
+  fingerprint: string;
+  issuer: string;
+  validTo: string;
+  /** Whether it may be trusted here: only for an address on this computer or the home network, without safe browsing. */
+  canTrust: boolean;
+}
+
 /** Why an address was refused (browser.check), so the page can say so. */
 export type BrowserBlockReason = 'blocked' | 'not-allowed';
 
@@ -77,16 +96,34 @@ export interface BrowserCheck {
 
 /**
  * Turns what was typed in the address bar into an address to open: a URL as-is (adding https:// when it is a bare
- * host), otherwise a search on the chosen engine. Shared so the window and tests agree.
+ * host), otherwise a search on the chosen engine. A bare host is a name with a dot (example.com, 192.168.10.1), a name
+ * or IPv6 address with a port (fbrx-server:9443, [fd00::1]:8080), or localhost (http://, as local tools serve it).
+ * Shared so the window and tests agree.
  */
 export function addressBarToUrl(input: string, engine: BrowserSearchEngine): string {
   const text = input.trim();
   if (!text) return '';
   if (/^(https?|file|about|fbrx):/i.test(text)) return text;
-  // A bare host or host/path with a dot and no spaces: treat as a web address.
-  if (!/\s/.test(text) && /^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/.test(text)) return `https://${text}`;
   if (text === 'localhost' || /^localhost[:/]/.test(text)) return `http://${text}`;
+  if (!/\s/.test(text) && (/^[\w-]+(\.[\w-]+)+(:\d+)?(\/.*)?$/.test(text) || /^[\w-]+:\d{1,5}(\/.*)?$/.test(text) || /^\[[\da-f:.]+\](:\d+)?(\/.*)?$/i.test(text))) return `https://${text}`;
   return BROWSER_SEARCH_ENGINES[engine].url.replace('%s', encodeURIComponent(text));
+}
+
+/**
+ * Whether a host is on this computer or the local network: loopback, private and link-local addresses, and names no
+ * public authority hands out (a single word, .local, .lan, .home.arpa, .internal). Such a host often speaks plain
+ * http:// or has a certificate of its own, so FBRX Browser offers both, and never does either for a public site.
+ */
+export function isLocalHost(host: string): boolean {
+  const h = host.toLowerCase().replace(/^\[|\]$/g, '');
+  if (h === 'localhost' || (!h.includes('.') && !h.includes(':'))) return true;
+  if (/\.(local|lan|home\.arpa|internal|localdomain)$/.test(h)) return true;
+  const v4 = /^(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(h);
+  if (v4) {
+    const [a, b] = [Number(v4[1]), Number(v4[2])];
+    return a === 10 || a === 127 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168) || (a === 169 && b === 254) || (a === 100 && b >= 64 && b <= 127);
+  }
+  return h === '::1' || /^f[cd][\da-f]{2}:/.test(h) || /^fe80:/.test(h);
 }
 
 /** Whether a host matches a policy pattern (`example.com` matches it and its subdomains; `*` matches all). */

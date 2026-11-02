@@ -31,6 +31,7 @@ import { api, download } from '../api';
 import { SettingsBuilder, type SettingsDraft } from './settings-builder';
 import { useApp, useQuery } from '../state';
 import { CommandComposer } from './command-composer';
+import { SupportPassModal } from './licenses';
 import { CommandStatus, HealthStatus, audienceHelp, audienceOptions, ImageBackupCell, OnlineStatus, PLATFORM_LABEL, ProtectionCell, ServiceState, SeverityStatus, tierLimitOptions, tierLimitWords, type DeviceSummary } from './common';
 
 interface Detail extends DeviceSummary {
@@ -47,6 +48,7 @@ export function DeviceDetailPage({ id }: { id: string }) {
   const app = useApp();
   const [tab, setTab] = useState<Tab>('overview');
   const [composer, setComposer] = useState(false);
+  const [supportPass, setSupportPass] = useState(false);
   const { confirm, dialog } = useConfirm();
   const { busy, run } = useAction();
   const { data: d, reload } = useQuery<Detail>(`/v1/admin/devices/${id}`, [id], (e) => ('deviceId' in e && e.deviceId === id) || (e.type === 'command.updated' && e.command?.deviceId === id));
@@ -84,6 +86,11 @@ export function DeviceDetailPage({ id }: { id: string }) {
             {app.can('commands.privileged') && d.health?.imageBackup?.configured && (
               <Button icon="drive" disabled={d.health.imageBackup.running} loading={busy === 'backup.image'} onClick={() => void quick('backup.image', {}, 'Image backup')}>
                 Image backup now
+              </Button>
+            )}
+            {app.can('licenses.manage') && (
+              <Button icon="lifebuoy" title="Full access to this computer's FBRX apps for a few hours, for troubleshooting (typed after 418teapotadmin)" onClick={() => setSupportPass(true)}>
+                Support pass
               </Button>
             )}
             <Button variant="primary" icon="send" onClick={() => setComposer(true)}>
@@ -262,6 +269,7 @@ export function DeviceDetailPage({ id }: { id: string }) {
         </Card>
       )}
       {composer && <CommandComposer target={{ deviceId: id, label: d.name }} onClose={() => setComposer(false)} onSent={reload} />}
+      {supportPass && <SupportPassModal installId={d.installId ?? ''} onClose={() => setSupportPass(false)} />}
       {dialog}
     </Page>
   );

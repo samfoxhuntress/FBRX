@@ -1,4 +1,4 @@
-import type { CoreEventName, CoreEvents, CoreMethod, CoreMethods, NotificationEvent } from '@fbrx/shared';
+import type { BrowserCertificateProblem, CoreEventName, CoreEvents, CoreMethod, CoreMethods, NotificationEvent } from '@fbrx/shared';
 
 type Result<M extends CoreMethod> = Awaited<ReturnType<CoreMethods[M]>>;
 
@@ -44,6 +44,8 @@ interface Bridge {
   openBrowser?(url?: string): void;
   /** A URL to open as a new tab in the browser window. */
   onBrowserOpen?(cb: (url: string) => void): () => void;
+  onBrowserCertificate?(cb: (problem: BrowserCertificateProblem) => void): () => void;
+  trustBrowserCertificate?(host: string, fingerprint: string): Promise<boolean>;
   /** The pointer's position (the click-through overlay can't see it), honks and shoos, for the goose. */
   onGoose?(cb: (e: { type: 'cursor'; x: number; y: number } | { type: 'honk' } | { type: 'shoo' }) => void): () => void;
   /** Clipboard history, kept in memory by the desktop app (Electron only). */

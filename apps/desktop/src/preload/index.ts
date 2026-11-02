@@ -51,6 +51,14 @@ const api = {
     ipcRenderer.on('fbrx:browser-open', h);
     return () => ipcRenderer.removeListener('fbrx:browser-open', h);
   },
+  /** A tab's page has a certificate no authority vouches for (BrowserCertificateProblem). */
+  onBrowserCertificate(cb: (problem: unknown) => void): () => void {
+    const h = (_e: unknown, problem: unknown) => cb(problem);
+    ipcRenderer.on('fbrx:browser-certificate', h);
+    return () => ipcRenderer.removeListener('fbrx:browser-certificate', h);
+  },
+  /** Goes on with that certificate for its address, until FBRX quits. */
+  trustBrowserCertificate: (host: string, fingerprint: string) => ipcRenderer.invoke('fbrx:browser-certificate', host, fingerprint) as Promise<boolean>,
   onGoose(cb: (e: unknown) => void): () => void {
     const h = (_e: unknown, payload: unknown) => cb(payload);
     ipcRenderer.on('fbrx:goose', h);

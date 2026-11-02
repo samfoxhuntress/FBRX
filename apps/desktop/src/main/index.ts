@@ -12,7 +12,7 @@ import { ClipHistory } from './clip-history';
 import { PasteKeys } from './paste-keys';
 import { runJavaScript, stopJavaScript } from './code-sandbox';
 import { guardWebviews, setupServerBrowser } from './server-browser';
-import { browserWebContents, browserWindowOpen, openBrowserWindow, setupWebSessions, type BrowserDeps } from './browser';
+import { browserWebContents, browserWindowOpen, openBrowserWindow, setupWebSessions, trustBrowserCertificate, type BrowserDeps } from './browser';
 import { isSnapshotOverlay, registerSnapshotIpc, takeSnapshot, type SnapshotDeps } from './snapshot';
 
 const dataDir = process.env.FBRX_HOME ?? app.getPath('userData');
@@ -852,6 +852,11 @@ function registerIpc() {
     if (!trusted(e) || action !== 'open' || kernel?.license.status().tier === 'essentials') return false;
     openBrowserWindow(browserDeps(), typeof url === 'string' && /^https?:\/\//i.test(url) ? url : undefined);
     return true;
+  });
+  // FBRX Browser's "It matches: go on" for a certificate of its own on the home network; only the browser window asks.
+  ipcMain.handle('fbrx:browser-certificate', (e, host: unknown, fingerprint: unknown) => {
+    if (!trusted(e) || e.sender !== browserWebContents() || typeof host !== 'string' || typeof fingerprint !== 'string') return false;
+    return trustBrowserCertificate(browserDeps(), host, fingerprint);
   });
   ipcMain.handle('fbrx:goose', (e, action: string, on?: boolean) => {
     if (!trusted(e)) return false;

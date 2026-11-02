@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AUTOFILL_CHANNEL, BROWSER_SEARCH_ENGINES, SUPPORT_ENTER_PHRASE, SUPPORT_EXIT_PHRASE, SUPPORT_PASS_PREFIX, WEB_BROWSER_PARTITION, WEB_BROWSER_PRIVATE_PARTITION, type AutofillReport, type Bookmark, type BrowserState, type HistoryEntry } from '@fbrx/shared';
-import { Button, FbrxMark, Icons, useToast } from '@fbrx/ui';
+import { AUTOFILL_CHANNEL, BROWSER_SEARCH_ENGINES, SUPPORT_ENTER_PHRASE, SUPPORT_EXIT_PHRASE, SUPPORT_PASS_PREFIX, WEB_BROWSER_PARTITION, WEB_BROWSER_PRIVATE_PARTITION, isLocalHost, type AutofillReport, type Bookmark, type BrowserCertificateProblem, type BrowserState, type HistoryEntry } from '@fbrx/shared';
+import { Button, FbrxMark, Icons, formatDay, useToast } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
 import { useQuickAi, QuickAiPanel } from '../quick-ai';
 import { FillMenuView, SaveBar, SignInsPanel, useBrowserVault } from './browser-vault';
@@ -23,6 +23,7 @@ export type WebviewElement = HTMLElement & {
   stop(): void;
   getURL(): string;
   getTitle(): string;
+  getWebContentsId(): number;
   loadURL(url: string): Promise<void>;
   executeJavaScript(code: string): Promise<unknown>;
   findInPage(text: string): void;
@@ -47,7 +48,12 @@ export interface Tab {
   priv: boolean;
   /** The policy refused this address. */
   blocked: null | { reason: string; url: string };
+  /** Why the page did not open, when it did not. */
+  problem: TabProblem | null;
 }
+
+/** A certificate no authority vouches for (asked about before going on), or an address that did not answer. */
+type TabProblem = { kind: 'certificate'; cert: BrowserCertificateProblem } | { kind: 'unreachable'; url: string; error: string; http: string | null };
 
 const BLOCK_WORDS: Record<string, string> = {
   blocked: 'This site is on the block list.',
@@ -55,6 +61,20 @@ const BLOCK_WORDS: Record<string, string> = {
 };
 /** Chromium's net::ERR_BLOCKED_BY_CLIENT: the browser's session refused the page (the policy, main/browser.ts). */
 const BLOCKED_BY_POLICY = -20;
+/** Chromium's net errors: a load replaced by another, and the ones that mean the address does not speak https://. */
+const ABORTED = -3;
+const NOT_HTTPS = new Set([-100, -101, -102, -107, -113, -324]);
+const isCertificateError = (code: number) => code <= -200 && code > -300;
+
+/** The same address over http://, for one on this computer or the home network (never for a public site). */
+function httpTwin(url: string): string | null {
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && isLocalHost(u.hostname) ? url.replace(/^https:/i, 'http:') : null;
+  } catch {
+    return null;
+  }
+}
 
 function host(url: string): string {
   try {
@@ -68,7 +88,7 @@ const WEBVIEW_POPUPS = { allowpopups: 'true' } as object;
 /** The address the window was opened at (from FBRX's main window, a link, Spotlight…), for its first tab. */
 const OPENED_AT = new URLSearchParams(location.search).get('open');
 let seq = 0;
-const makeTab = (over: Partial<Tab> = {}): Tab => ({ id: `t${Date.now().toString(36)}-${seq++}`, url: '', current: over.url ?? '', title: 'New tab', loading: false, canBack: false, canForward: false, priv: false, blocked: null, ...over });
+const makeTab = (over: Partial<Tab> = {}): Tab => ({ id: `t${Date.now().toString(36)}-${seq++}`, url: '', current: over.url ?? '', title: 'New tab', loading: false, canBack: false, canForward: false, priv: false, blocked: null, problem: null, ...over });
 
 export function BrowserApp({ agentName }: { agentName: string }) {
   const toast = useToast();
@@ -82,6 +102,9 @@ export function BrowserApp({ agentName }: { agentName: string }) {
   const [supportAsk, setSupportAsk] = useState(false);
   const [zoom, setZoom] = useState(1);
   const views = useRef<Map<string, WebviewElement>>(new Map());
+  // An address on the home network typed without https:// or http:// opens as https://, then as http:// if it does not
+  // speak https (tab id → the http:// address to try).
+  const fallbacks = useRef<Map<string, string>>(new Map());
   const vault = useBrowserVault(views, zoom, toast);
   const { report: vaultReport, navigated: vaultNavigated } = vault;
   const addressRef = useRef<HTMLInputElement>(null);
@@ -116,6 +139,9 @@ export function BrowserApp({ agentName }: { agentName: string }) {
       }
       const check = await call('browser.check', { input }).catch(() => null);
       if (!check || !check.url) return;
+      const twin = /^[a-z][\w+.-]*:/i.test(input) ? null : httpTwin(check.url);
+      if (twin) fallbacks.current.set(tabId, twin);
+      else fallbacks.current.delete(tabId);
       if (!check.ok) {
         patchTab(tabId, { blocked: { reason: BLOCK_WORDS[check.reason ?? 'blocked'] ?? 'This site is blocked.', url: check.url }, url: '', current: '', title: 'Blocked', loading: false });
         return;
@@ -123,11 +149,11 @@ export function BrowserApp({ agentName }: { agentName: string }) {
       // A tab already showing a page loads the address in place (its src may already be this very address).
       const live = views.current.get(tabId);
       if (live) {
-        patchTab(tabId, { current: check.url, blocked: null, loading: true });
+        patchTab(tabId, { current: check.url, blocked: null, problem: null, loading: true });
         void live.loadURL(check.url).catch(() => undefined);
         return;
       }
-      patchTab(tabId, { url: check.url, current: check.url, blocked: null, loading: true });
+      patchTab(tabId, { url: check.url, current: check.url, blocked: null, problem: null, loading: true });
     },
     [patchTab],
   );
@@ -138,6 +164,24 @@ export function BrowserApp({ agentName }: { agentName: string }) {
       const t = makeTab({ url, loading: true });
       setTabs((ts) => [...ts, t]);
       setActiveId(t.id);
+    });
+    return off;
+  }, []);
+
+  // A page whose certificate no authority vouches for: the tab says so, with the fingerprint to compare (a picture or
+  // script from such a host on another page is simply left out, as Chromium does).
+  useEffect(() => {
+    const off = bridge.onBrowserCertificate?.((cert) => {
+      for (const [tabId, el] of views.current) {
+        let id = -1;
+        try {
+          id = el.getWebContentsId();
+        } catch {
+          /* not attached yet */
+        }
+        if (id !== cert.webContentsId) continue;
+        setTabs((ts) => ts.map((t) => (t.id === tabId && host(t.current || t.url) === host(cert.url) ? { ...t, problem: { kind: 'certificate', cert }, title: host(cert.url), loading: false } : t)));
+      }
     });
     return off;
   }, []);
@@ -185,15 +229,28 @@ export function BrowserApp({ agentName }: { agentName: string }) {
         ['did-navigate-in-page', sync],
         ['page-title-updated', (e) => patchTab(tab.id, { title: (e as Event & { title: string }).title })],
         [
-          // A page (or a link on one) the policy refuses in the session: show why, as for a typed address.
+          // A page (or a link on one) the policy refuses in the session: show why, as for a typed address. An address
+          // on the home network that does not speak https:// is tried again over http://; anything else that did not
+          // answer says so. (A certificate problem arrives on its own, from the main process.)
           'did-fail-load',
           (e) => {
-            const f = e as Event & { errorCode: number; validatedURL: string; isMainFrame: boolean };
-            if (!f.isMainFrame || f.errorCode !== BLOCKED_BY_POLICY) return;
-            void call('browser.check', { input: f.validatedURL }).then((c) => {
-              if (c.ok) return;
-              patchTab(tab.id, { blocked: { reason: BLOCK_WORDS[c.reason ?? 'blocked'] ?? 'This site is blocked.', url: c.url }, url: '', current: '', title: 'Blocked', loading: false });
-            });
+            const f = e as Event & { errorCode: number; errorDescription: string; validatedURL: string; isMainFrame: boolean };
+            if (!f.isMainFrame || f.errorCode === ABORTED || isCertificateError(f.errorCode)) return;
+            if (f.errorCode === BLOCKED_BY_POLICY) {
+              void call('browser.check', { input: f.validatedURL }).then((c) => {
+                if (c.ok) return;
+                patchTab(tab.id, { blocked: { reason: BLOCK_WORDS[c.reason ?? 'blocked'] ?? 'This site is blocked.', url: c.url }, url: '', current: '', title: 'Blocked', loading: false });
+              });
+              return;
+            }
+            const twin = fallbacks.current.get(tab.id);
+            fallbacks.current.delete(tab.id);
+            if (twin && NOT_HTTPS.has(f.errorCode) && httpTwin(f.validatedURL) === twin) {
+              patchTab(tab.id, { current: twin, loading: true });
+              void el.loadURL(twin).catch(() => undefined);
+              return;
+            }
+            patchTab(tab.id, { problem: { kind: 'unreachable', url: f.validatedURL, error: f.errorDescription.replace(/^ERR_/, '').replace(/_/g, ' ').toLowerCase(), http: httpTwin(f.validatedURL) }, title: host(f.validatedURL), loading: false });
           },
         ],
       ];
@@ -234,7 +291,7 @@ export function BrowserApp({ agentName }: { agentName: string }) {
     const hp = state?.homepage;
     if (hp) void go(hp);
     else {
-      patchTab(active.id, { url: '', current: '', title: 'New tab', blocked: null });
+      patchTab(active.id, { url: '', current: '', title: 'New tab', blocked: null, problem: null });
       setAddress('');
     }
   };
@@ -389,6 +446,18 @@ export function BrowserApp({ agentName }: { agentName: string }) {
             <div key={t.id} className="br-view" hidden={t.id !== activeId}>
               {t.blocked ? (
                 <BlockedPage block={t.blocked} />
+              ) : t.problem ? (
+                <ProblemPage
+                  problem={t.problem}
+                  onRetry={() => patchTab(t.id, { problem: null, loading: true })}
+                  onGo={(u) => void go(u, t.id)}
+                  onTrust={(c) =>
+                    void bridge.trustBrowserCertificate?.(c.host, c.fingerprint).then((ok) => {
+                      if (ok) patchTab(t.id, { problem: null, url: c.url, current: c.url, loading: true });
+                      else toast.error('Not trusted', 'FBRX Browser goes on with a certificate of its own only for an address on this computer or your home network, with safe browsing off.');
+                    })
+                  }
+                />
               ) : t.url ? (
                 // eslint-disable-next-line react/no-unknown-property
                 <webview ref={(el) => bindView(t, el as WebviewElement | null)} className="br-webview" src={t.url} partition={partitionFor(t)} {...WEBVIEW_POPUPS} />
@@ -503,6 +572,59 @@ function BlockedPage({ block }: { block: { reason: string; url: string } }) {
         <h2>This page is blocked</h2>
         <p>{block.reason}</p>
         <p className="br-muted mono">{host(block.url)}</p>
+      </div>
+    </div>
+  );
+}
+
+/** Why a page did not open: a certificate to compare before going on, or an address that did not answer. */
+function ProblemPage({ problem, onRetry, onGo, onTrust }: { problem: TabProblem; onRetry: () => void; onGo: (url: string) => void; onTrust: (cert: BrowserCertificateProblem) => void }) {
+  if (problem.kind === 'certificate') {
+    const c = problem.cert;
+    return (
+      <div className="br-blocked">
+        <div className="br-blocked-card br-problem">
+          <Icons.lock size={40} />
+          <h2>{c.host} uses its own certificate</h2>
+          <p>
+            {c.canTrust
+              ? 'No authority vouches for it: normal for a router, a NAS or FBRX Server on your network. Go on only if this fingerprint is the one the device shows.'
+              : 'No authority vouches for it, so FBRX Browser does not open it: someone could be standing in between.'}
+          </p>
+          <code className="join-fp">{c.fingerprint}</code>
+          <p className="br-muted">
+            {c.issuer} · until {formatDay(c.validTo)} · {c.error.replace(/^net::/, '')}
+          </p>
+          <div className="fx-actions" style={{ justifyContent: 'center' }}>
+            {c.canTrust && (
+              <Button variant="primary" icon="shield" onClick={() => onTrust(c)}>
+                It matches: go on
+              </Button>
+            )}
+            <Button icon="refresh" onClick={onRetry}>
+              Try again
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="br-blocked">
+      <div className="br-blocked-card br-problem">
+        <Icons.globe size={40} />
+        <h2>{host(problem.url)} did not answer</h2>
+        <p>{problem.error ? `It said: ${problem.error}.` : 'The address could not be reached.'} Check that it is on and on this network, and the address and port.</p>
+        <div className="fx-actions" style={{ justifyContent: 'center' }}>
+          <Button icon="refresh" onClick={onRetry}>
+            Try again
+          </Button>
+          {problem.http && (
+            <Button onClick={() => onGo(problem.http!)} title={problem.http}>
+              Open with http://
+            </Button>
+          )}
+        </div>
       </div>
     </div>
   );

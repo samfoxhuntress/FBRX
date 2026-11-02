@@ -232,10 +232,11 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
 
 /**
  * A support pass for one computer (docs/SUPPORT.md): signed with this FBRX Command's license key, so it works on
- * builds that carry the public key above. The person at the computer reads its install id from Settings → License.
+ * builds that carry the public key above. The person at the computer reads its install id from Settings → License; a
+ * computer's page in Devices fills it in.
  */
-function SupportPassModal({ onClose }: { onClose: () => void }) {
-  const [f, setF] = useState({ installId: '', hours: String(SUPPORT_PASS_DEFAULT_HOURS), tier: 'blackhole' as Tier, note: '' });
+export function SupportPassModal({ installId = '', onClose }: { installId?: string; onClose: () => void }) {
+  const [f, setF] = useState({ installId, hours: String(SUPPORT_PASS_DEFAULT_HOURS), tier: 'blackhole' as Tier, note: '' });
   const [made, setMade] = useState<{ pass: string; expiresAt: string; tier: Tier } | null>(null);
   const { busy, run } = useAction();
   const make = () =>

@@ -805,7 +805,7 @@ export interface CoreMethods extends ExtMethods {
   'license.remove': () => LicenseStatus;
   'account.status': () => AccountStatus;
   /** Signs in to an FBRX account (or makes one, `create`), and turns on what it bought. */
-  'account.signIn': (p: { server?: string; email: string; password: string; name?: string; create?: boolean }) => AccountStatus;
+  'account.signIn': (p: { server?: string; fingerprint?: string; email: string; password: string; name?: string; create?: boolean }) => AccountStatus;
   'account.signOut': () => AccountStatus;
   'account.refresh': () => AccountStatus;
   /** A page to buy Standard or Ultra (Stripe Checkout), to open in the browser. */
@@ -825,16 +825,16 @@ export interface CoreMethods extends ExtMethods {
   /** Uses a promo code on the account (extra FBRX Cloud AI tokens, an edition for some days) and turns its edition on. */
   'account.redeemPromo': (p: { code: string }) => { redeemed: PromoRedeemed; status: AccountStatus; ai: CloudAiUsage };
   /** Emails a link to choose a new password (it opens on the website). */
-  'account.forgotPassword': (p: { email: string; server?: string }) => { ok: true };
+  'account.forgotPassword': (p: { email: string; server?: string; fingerprint?: string }) => { ok: true };
   /** Starts an FBRX Command for the person's organization (in the cloud); answers with its console's address. */
   'account.startOrganization': (p: { name: string; kind: Vertical }) => { consoleUrl: string; tenantId: string };
   /** What an invitation code from an organization is for (its name, the email and edition), before using it. */
-  'account.previewInvitation': (p: { code: string; server?: string }) => InvitationPreview;
+  'account.previewInvitation': (p: { code: string; server?: string; fingerprint?: string }) => InvitationPreview;
   /**
    * Uses an invitation code: makes the FBRX account (or, when the email has one, signs in to it with its password),
    * joins the organization at the edition it gives, and signs in here.
    */
-  'account.acceptInvitation': (p: { code: string; server?: string; name?: string; password: string }) => AccountStatus;
+  'account.acceptInvitation': (p: { code: string; server?: string; fingerprint?: string; name?: string; password: string }) => AccountStatus;
 
   /** The offline, local-only FBRX account on this computer (works with no cloud; see accounts.ts). */
   'localAccount.status': () => LocalAccountStatus;

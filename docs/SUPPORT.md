@@ -32,9 +32,10 @@ A pass is for one computer only. Its install id is on Settings → License (with
 
 ## Making a support pass
 
-**From FBRX Command** (an admin with the `licenses.manage` permission): **Licenses → Support pass**. Paste the
-computer's install id, pick how long (1 to 12 hours) and what it runs as, add a note (a ticket number), and **Make the
-pass**. It is shown once, with a copy button. The same, by API:
+**From FBRX Command** (an admin with the `licenses.manage` permission): **Devices → the computer → Support pass**, with
+its install id filled in (computers report it from FBRX OS 2.1.2), or **Licenses → Support pass** for any computer:
+paste its install id (Settings → License on that computer). Pick how long (1 to 12 hours) and what it runs as, add a
+note (a ticket number), and **Make the pass**. It is shown once, with a copy button. The same, by API:
 
 ```
 POST /v1/admin/support-passes

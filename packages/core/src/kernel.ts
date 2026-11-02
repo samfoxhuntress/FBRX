@@ -480,7 +480,7 @@ export class Kernel {
       log: L('fleet'),
       tmpDir: this.paths.tmp,
       updates: this.platform.updates,
-      facts: () => deviceFacts(this.platform.appVersion, this.deviceName()),
+      facts: () => deviceFacts(this.platform.appVersion, this.deviceName(), this.meta.get<string>('install.id') ?? undefined),
       heartbeatStatus: () => this.heartbeatStatus(),
       executeCommand: (cmd) => this.executeRemoteCommand(cmd),
       onMessage: (msg) => {

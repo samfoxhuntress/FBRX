@@ -504,7 +504,7 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'account.status': () => k.account.status(),
     'account.signIn': (p, ctx) =>
       k.account.signIn(
-        z.object({ server: z.string().max(300).optional(), email: z.string().email().max(200), password: z.string().min(1).max(200), name: z.string().max(120).optional(), create: z.boolean().optional() }).parse(p),
+        z.object({ server: z.string().max(300).optional(), fingerprint: z.string().max(200).optional(), email: z.string().email().max(200), password: z.string().min(1).max(200), name: z.string().max(120).optional(), create: z.boolean().optional() }).parse(p),
         ctx.actor,
       ),
     'account.signOut': (_p, ctx) => k.account.signOut(ctx.actor),
@@ -518,11 +518,11 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'account.redeemPromo': (p, ctx) => k.account.redeemPromo(z.object({ code: z.string().trim().min(1).max(64) }).parse(p).code, ctx.actor),
     'account.signOutDevice': (p, ctx) => k.account.signOutDevice(z.object({ id: z.string().min(1).max(80) }).parse(p).id, ctx.actor),
     'account.resendConfirmation': () => k.account.resendConfirmation(),
-    'account.forgotPassword': (p) => k.account.forgotPassword(z.object({ email: z.string().email().max(200), server: z.string().max(300).optional() }).parse(p)),
-    'account.previewInvitation': (p) => k.account.previewInvitation(z.object({ code: z.string().min(1).max(60), server: z.string().max(300).optional() }).parse(p)),
+    'account.forgotPassword': (p) => k.account.forgotPassword(z.object({ email: z.string().email().max(200), server: z.string().max(300).optional(), fingerprint: z.string().max(200).optional() }).parse(p)),
+    'account.previewInvitation': (p) => k.account.previewInvitation(z.object({ code: z.string().min(1).max(60), server: z.string().max(300).optional(), fingerprint: z.string().max(200).optional() }).parse(p)),
     'account.acceptInvitation': (p, ctx) =>
       k.account.acceptInvitation(
-        z.object({ code: z.string().min(1).max(60), server: z.string().max(300).optional(), name: z.string().max(120).optional(), password: z.string().min(1).max(200) }).parse(p),
+        z.object({ code: z.string().min(1).max(60), server: z.string().max(300).optional(), fingerprint: z.string().max(200).optional(), name: z.string().max(120).optional(), password: z.string().min(1).max(200) }).parse(p),
         ctx.actor,
       ),
 

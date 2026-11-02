@@ -16,6 +16,8 @@ export const DeviceFactsSchema = z.object({
   appVersion: z.string().max(64),
   /** Stable, non-reversible fingerprint of the hardware (sha256 of machine identifiers). */
   machineId: z.string().max(128),
+  /** The FBRX install's own id (Settings → License): what a support pass for this computer is made for. */
+  installId: z.string().max(80).optional(),
 });
 export type DeviceFacts = z.infer<typeof DeviceFactsSchema>;
 

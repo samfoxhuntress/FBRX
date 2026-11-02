@@ -1,5 +1,6 @@
 import type { CloudAiUsage, ModelInfo } from '@fbrx/shared';
 import { CoreError } from '../../errors';
+import { pinnedAgent, pinnedFetch } from '../../util/pinned-tls';
 import { OpenAICompatibleProvider } from './openai-compatible';
 import type { ChatProvider, ChatRequest, ProviderChunk } from './types';
 
@@ -7,6 +8,8 @@ import type { ChatProvider, ChatRequest, ProviderChunk } from './types';
 export interface CloudAiAccess {
   baseUrl: string;
   token: string;
+  /** The fingerprint of the FBRX Command's own certificate, when the account trusted one (FBRX Command at home). */
+  fingerprint: string | null;
 }
 
 export interface FbrxCloudOptions {
@@ -37,7 +40,16 @@ export class FbrxCloudProvider implements ChatProvider {
   private inner(): OpenAICompatibleProvider {
     const a = this.o.access();
     if (!a) throw new CoreError('UNAUTHENTICATED', 'Sign in to your FBRX account to use FBRX Cloud AI');
-    return new OpenAICompatibleProvider({ id: this.id, type: this.type, baseUrl: a.baseUrl, apiKey: () => a.token, defaultModel: this.o.defaultModel, historyBudgetChars: this.historyBudgetChars });
+    const pin = a.fingerprint;
+    return new OpenAICompatibleProvider({
+      id: this.id,
+      type: this.type,
+      baseUrl: a.baseUrl,
+      apiKey: () => a.token,
+      defaultModel: this.o.defaultModel,
+      historyBudgetChars: this.historyBudgetChars,
+      ...(pin ? { fetch: (url: string, init: RequestInit) => pinnedFetch(url, init, pinnedAgent(pin)) } : {}),
+    });
   }
 
   listModels(signal?: AbortSignal): Promise<ModelInfo[]> {

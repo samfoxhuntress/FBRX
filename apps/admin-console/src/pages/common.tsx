@@ -11,6 +11,8 @@ export interface DeviceSummary {
   arch: string;
   osVersion: string;
   appVersion: string;
+  /** What a support pass for it is made for (null until it reports it). */
+  installId: string | null;
   status: string;
   online: boolean;
   realtime: boolean;

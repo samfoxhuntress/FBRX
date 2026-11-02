@@ -21,3 +21,4 @@ export { openMacSafeStorage } from './vault/oscrypt';
 export { createSnapshot, inspectSnapshot, readHeader, stageRestore, SNAPSHOT_EXT } from './backup/snapshot';
 export { WEBHOOK_EVENTS } from './connectors/webhook';
 export { MODEL_CATALOG } from './ai/runtime/catalog';
+export { certificateFingerprint } from './system/saved-servers';

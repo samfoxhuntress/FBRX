@@ -20,6 +20,8 @@ export function deviceView(ctx: AppContext, d: any) {
     arch: d.arch,
     osVersion: d.os_version,
     appVersion: d.app_version,
+    /** What a support pass for it is made for (as it last reported; older versions did not say). */
+    installId: hb?.facts.installId ?? null,
     status: d.status,
     online,
     realtime: ctx.realtime.isOnline(d.id),

@@ -1,8 +1,8 @@
 import { app, BrowserWindow, screen, session, shell, type IpcMainInvokeEvent, type Session } from 'electron';
 import { basename, join } from 'node:path';
 import { existsSync } from 'node:fs';
-import type { Kernel } from '@fbrx/core';
-import { PRODUCT_NAME, WEB_BROWSER_PARTITION, WEB_BROWSER_PRIVATE_PARTITION, YOUTUBE_RESTRICT_HOSTS, hostMatches, policyAllows, safeSearchUrl } from '@fbrx/shared';
+import { certificateFingerprint, type Kernel } from '@fbrx/core';
+import { PRODUCT_NAME, WEB_BROWSER_PARTITION, WEB_BROWSER_PRIVATE_PARTITION, YOUTUBE_RESTRICT_HOSTS, hostMatches, isLocalHost, policyAllows, safeSearchUrl, type BrowserCertificateProblem } from '@fbrx/shared';
 import { openExternalSafe } from './platform';
 
 /**
@@ -14,6 +14,32 @@ import { openExternalSafe } from './platform';
  */
 
 let browserWin: BrowserWindow | null = null;
+
+/**
+ * Certificates the person chose to go on with, as "host fingerprint": for this run of FBRX only, as browsers do, and
+ * only for an address on this computer or the home network (a public site with a bad certificate stays refused).
+ */
+const trustedCertificates = new Set<string>();
+
+const hostOf = (url: string) => {
+  try {
+    return new URL(url).host;
+  } catch {
+    return '';
+  }
+};
+
+/** Whether a certificate may be trusted for a host here: a local address, and safe browsing off. */
+function mayTrust(deps: BrowserDeps, host: string): boolean {
+  return !!host && isLocalHost(host.replace(/:\d+$/, '')) && !deps.kernel()?.browser.policy().safeBrowsing;
+}
+
+/** Goes on with a certificate the person compared (FBRX Browser's "It matches: go on"). */
+export function trustBrowserCertificate(deps: BrowserDeps, host: string, fingerprint: string): boolean {
+  if (!mayTrust(deps, host)) return false;
+  trustedCertificates.add(`${host} ${fingerprint}`);
+  return true;
+}
 
 /** The web permissions FBRX Browser allows at all (others — camera, microphone, location… — are refused). */
 const WEB_PERMISSIONS = new Set(['fullscreen', 'clipboard-sanitized-write']);
@@ -86,6 +112,20 @@ export function setupWebSessions(deps: BrowserDeps): void {
       });
     });
   }
+  // A certificate no authority vouches for: refused, unless the person already went on with it for that address. The
+  // tab says why and shows its fingerprint (pages/browser). Server consoles (server-browser.ts) answer for their own.
+  app.on('certificate-error', (event, wc, url, error, certificate, callback) => {
+    if (!sessions.includes(wc.session)) return;
+    const host = hostOf(url);
+    const fingerprint = certificateFingerprint(certificate.fingerprint);
+    if (trustedCertificates.has(`${host} ${fingerprint}`)) {
+      event.preventDefault();
+      return callback(true);
+    }
+    callback(false);
+    const problem: BrowserCertificateProblem = { webContentsId: wc.id, url, host, error, fingerprint, issuer: certificate.issuerName, validTo: new Date(certificate.validExpiry * 1000).toISOString(), canTrust: mayTrust(deps, host) };
+    browserWin?.webContents.send('fbrx:browser-certificate', problem);
+  });
   // A page in the browser that opens a new window gets a new tab instead; anything not on the web goes to the system
   // browser. Server consoles (their own session, server-browser.ts) keep their own handling.
   app.on('web-contents-created', (_e, wc) => {

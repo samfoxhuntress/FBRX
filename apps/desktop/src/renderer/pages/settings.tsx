@@ -1272,7 +1272,7 @@ function License() {
         title={awaitingPass ? 'Enter the support pass' : l.state === 'valid' ? 'Change the license key' : 'Enter a license key'}
         subtitle={
           awaitingPass
-            ? 'Paste the support pass FBRX gave you for this computer. It turns on full access for a short while, for troubleshooting.'
+            ? 'Paste the support pass made for this computer: in FBRX Command, Devices → this computer → Support pass (or Licenses → Support pass, with the install id above). It turns on full access for a short while, for troubleshooting.'
             : l.source === 'managed'
               ? 'Computers in an organization receive their license automatically'
               : 'Paste the license key you bought or got from your organization. If it belongs to an FBRX Command tenant, this computer joins it too.'

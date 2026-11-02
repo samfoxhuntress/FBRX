@@ -6,12 +6,16 @@ import type { LicenseService } from '../license/license-service';
 import type { AuditLog } from '../audit/audit-log';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
+import { formatFingerprint, pinnedAgent, pinnedFetch, untrustedCertificate } from '../util/pinned-tls';
 
 /** The account token is a secret: it lives in the vault, like the computer's FBRX Command credential. */
 const TOKEN_SECRET = 'fbrx.account.token';
 /** How often the account's license is renewed while FBRX runs. */
 const REFRESH_MS = 6 * 3600_000;
-/** What this computer keeps about the account, forgotten at sign-out (the FBRX Command address stays for next time). */
+/**
+ * What this computer keeps about the account, forgotten at sign-out (the FBRX Command address stays for next time, with
+ * the fingerprint of its own certificate when it has one: account.server, account.fingerprint).
+ */
 const ACCOUNT_META = ['account.id', 'account.view', 'account.tier', 'account.licenseUntil', 'account.lastSyncAt', 'account.error', 'account.canBuy'];
 
 export interface AccountDeps {
@@ -84,18 +88,36 @@ export class AccountService {
     }
   }
 
-  private async request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, token?: string | null, server = this.server, signal?: AbortSignal): Promise<T> {
+  /**
+   * The fingerprint of the certificate to trust for an FBRX Command that uses its own (one on this computer or the home
+   * network): the one just given, or the one kept for the account's FBRX Command.
+   */
+  private pinFor(server: string, given?: string): string | null {
+    if (given) {
+      const pin = formatFingerprint(given);
+      if (pin.length !== 95) throw new CoreError('INVALID_ARGUMENT', 'That certificate fingerprint is not a SHA-256 fingerprint (32 pairs like AB:CD:…)');
+      return pin;
+    }
+    return server === this.server ? (this.d.meta.get<string>('account.fingerprint') ?? null) : null;
+  }
+
+  private async request<T>(method: 'GET' | 'POST' | 'DELETE', path: string, body?: unknown, token?: string | null, at: { server?: string; pin?: string | null; signal?: AbortSignal } = {}): Promise<T> {
+    const server = at.server ?? this.server;
     const url = this.url(path, server);
+    const pin = at.pin !== undefined ? at.pin : this.pinFor(server);
     const timeout = AbortSignal.timeout(20_000);
+    const init: RequestInit = {
+      method,
+      headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+      body: body === undefined ? undefined : JSON.stringify(body),
+      signal: at.signal ? AbortSignal.any([at.signal, timeout]) : timeout,
+    };
     let res: Response;
     try {
-      res = await fetch(url, {
-        method,
-        headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
-        body: body === undefined ? undefined : JSON.stringify(body),
-        signal: signal ? AbortSignal.any([signal, timeout]) : timeout,
-      });
+      res = pin && url.protocol === 'https:' ? await pinnedFetch(url.toString(), init, pinnedAgent(pin, `FBRX Command at ${url.host} presented a different certificate than the one this computer trusts. If it was reinstalled, check its fingerprint and trust it again.`)) : await fetch(url, init);
     } catch (err) {
+      if (err instanceof CoreError) throw err;
+      if (url.protocol === 'https:' && untrustedCertificate(err)) throw new CoreError('FORBIDDEN', `FBRX Command at ${url.host} uses its own certificate: check its fingerprint and trust it to go on.`);
       throw new CoreError('UNAVAILABLE', `FBRX Command could not be reached at ${url.host}: ${(err as Error).message}`);
     }
     const json = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
@@ -110,22 +132,24 @@ export class AccountService {
   }
 
   /** Signs in (or makes a new account first), brings the account's edition and turns it on. */
-  async signIn(p: { server?: string; email: string; password: string; name?: string; create?: boolean }, actor: string): Promise<AccountStatus> {
+  async signIn(p: { server?: string; fingerprint?: string; email: string; password: string; name?: string; create?: boolean }, actor: string): Promise<AccountStatus> {
     if (!this.d.vault.isUnlocked) throw new CoreError('LOCKED', 'Unlock the vault before signing in');
     const server = this.serverFor(p.server);
+    const pin = this.pinFor(server, p.fingerprint);
     const r = await this.request<{ token: string; account: AccountView }>(
       'POST',
       p.create ? '/v1/accounts/signup' : '/v1/accounts/login',
       { email: p.email.trim(), password: p.password, device: this.d.device(), ...(p.create ? { name: p.name?.trim() || p.email.split('@')[0] } : {}) },
       null,
-      server,
+      { server, pin },
     );
-    return this.signedIn(server, r, actor, p.create ? 'account.created' : 'account.signedIn');
+    return this.signedIn(server, pin, r, actor, p.create ? 'account.created' : 'account.signedIn');
   }
 
   /** What an invitation code from an organization is for, before using it. */
-  previewInvitation(p: { code: string; server?: string }): Promise<InvitationPreview> {
-    return this.request<InvitationPreview>('POST', '/v1/accounts/invitations/preview', { code: p.code }, null, this.serverFor(p.server));
+  async previewInvitation(p: { code: string; server?: string; fingerprint?: string }): Promise<InvitationPreview> {
+    const server = this.serverFor(p.server);
+    return this.request<InvitationPreview>('POST', '/v1/accounts/invitations/preview', { code: p.code }, null, { server, pin: this.pinFor(server, p.fingerprint) });
   }
 
   /**
@@ -133,18 +157,21 @@ export class AccountService {
    * email has), adds it to the organization, and signs in here; then this computer joins the organization too, unless
    * it is in one already (the organization is then listed with its Join button, like any other membership).
    */
-  async acceptInvitation(p: { code: string; server?: string; name?: string; password: string }, actor: string): Promise<AccountStatus> {
+  async acceptInvitation(p: { code: string; server?: string; fingerprint?: string; name?: string; password: string }, actor: string): Promise<AccountStatus> {
     if (!this.d.vault.isUnlocked) throw new CoreError('LOCKED', 'Unlock the vault before signing in');
     const server = this.serverFor(p.server);
-    const r = await this.request<{ token: string; account: AccountView; tenantId: string }>('POST', '/v1/accounts/invitations/accept', { code: p.code, name: p.name?.trim() || undefined, password: p.password, device: this.d.device() }, null, server);
-    await this.signedIn(server, r, actor, 'account.invitationAccepted');
+    const pin = this.pinFor(server, p.fingerprint);
+    const r = await this.request<{ token: string; account: AccountView; tenantId: string }>('POST', '/v1/accounts/invitations/accept', { code: p.code, name: p.name?.trim() || undefined, password: p.password, device: this.d.device() }, null, { server, pin });
+    await this.signedIn(server, pin, r, actor, 'account.invitationAccepted');
     return this.d.enrolled() ? this.status() : this.join(r.tenantId, actor);
   }
 
   /** Keeps a new sign-in's token and account, and turns on what the account brings. */
-  private async signedIn(server: string, r: { token: string; account: AccountView }, actor: string, action: string): Promise<AccountStatus> {
+  private async signedIn(server: string, pin: string | null, r: { token: string; account: AccountView }, actor: string, action: string): Promise<AccountStatus> {
     this.d.vault.set({ name: TOKEN_SECRET, value: r.token, kind: 'token', description: 'FBRX account sign-in' }, { internal: true });
     this.d.meta.set('account.server', server);
+    if (pin) this.d.meta.set('account.fingerprint', pin);
+    else this.d.meta.delete('account.fingerprint');
     this.d.meta.set('account.id', r.account.id);
     this.d.audit.append({ category: 'license', action, actor, target: r.account.email, outcome: 'success', details: { server } });
     await this.refresh({ adopt: true });
@@ -242,8 +269,9 @@ export class AccountService {
   }
 
   /** Emails a link to choose a new password (opened on the website); says the same whether the account exists or not. */
-  async forgotPassword(p: { email: string; server?: string }): Promise<{ ok: true }> {
-    await this.request('POST', '/v1/accounts/password/forgot', { email: p.email.trim() }, null, this.serverFor(p.server));
+  async forgotPassword(p: { email: string; server?: string; fingerprint?: string }): Promise<{ ok: true }> {
+    const server = this.serverFor(p.server);
+    await this.request('POST', '/v1/accounts/password/forgot', { email: p.email.trim() }, null, { server, pin: this.pinFor(server, p.fingerprint) });
     return { ok: true };
   }
 
@@ -258,14 +286,14 @@ export class AccountService {
   }
 
   /** Where FBRX Cloud AI is for the signed-in account, with its sign-in as the key; null when none is signed in. */
-  cloudAccess(): { baseUrl: string; token: string } | null {
+  cloudAccess(): { baseUrl: string; token: string; fingerprint: string | null } | null {
     const token = this.d.meta.get<string>('account.id') ? this.token() : null;
-    return token ? { baseUrl: this.url(CLOUD_AI_PATH).toString(), token } : null;
+    return token ? { baseUrl: this.url(CLOUD_AI_PATH).toString(), token, fingerprint: this.pinFor(this.server) } : null;
   }
 
   /** The account's FBRX Cloud AI this month: its allowance, what it used, extra tokens, and whether it takes chats. */
   cloudAi(signal?: AbortSignal): Promise<CloudAiUsage> {
-    return this.request<CloudAiUsage>('GET', '/v1/accounts/ai', undefined, this.requireToken(), this.server, signal);
+    return this.request<CloudAiUsage>('GET', '/v1/accounts/ai', undefined, this.requireToken(), { signal });
   }
 
   /** Uses a promo code on the account, and turns on an edition it gives. */

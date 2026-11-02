@@ -12,38 +12,64 @@ export function useAccount(): AccountStatus | null {
   return useCore('account.status', undefined, ['account.changed', 'license.changed']).data;
 }
 
+/** Where a sign-in goes: the FBRX Command typed, and its certificate's fingerprint when the person trusted it. */
+type Target = { server?: string; fingerprint?: string };
+
 /**
  * Sign in, make an account, or use an organization's invitation code (which makes the account and joins the
- * organization, with no website or email needed). Asks for the FBRX Command address only when none is built in.
+ * organization, with no website or email needed). Asks for the FBRX Command address when none is built in, or when the
+ * person picks another (FBRX Command on this computer or the home network). An FBRX Command with its own certificate is
+ * trusted by its fingerprint, as when joining one (join.tsx), before anything is sent to it.
  */
 export function AccountSignInForm({ onDone, extraActions, startCreating = false }: { onDone?: () => void; extraActions?: ReactNode; startCreating?: boolean }) {
   const account = useAccount();
   const [mode, setMode] = useState<'signin' | 'create' | 'invite'>(startCreating ? 'create' : 'signin');
   const [f, setF] = useState({ server: '', email: '', password: '', name: '', code: '' });
   const [invite, setInvite] = useState<InvitationPreview | null>(null);
+  const [other, setOther] = useState(false);
+  /** The address typed, once looked at: its certificate's fingerprint when the person trusted it, or null. */
+  const [trust, setTrust] = useState<{ server: string; fingerprint: string | null } | null>(null);
+  const [askTrust, setAskTrust] = useState<{ server: string; fingerprint: string; go: (t: Target) => void } | null>(null);
   const { run, busy } = useAction();
   const toast = useToast();
   const needServer = !account?.server;
-  const server = needServer || f.server ? { server: f.server } : {};
-  const forgot = () =>
-    run('forgot', async () => {
-      await call('account.forgotPassword', { email: f.email, ...server });
-      toast.success('Check your email', `If ${f.email} has an FBRX account, a link to choose a new password is on its way. It opens in your browser.`);
+  const typed = needServer || other ? f.server.trim() : '';
+
+  /** Goes on once the FBRX Command typed is known: the system vouches for its certificate, or the person trusts it. */
+  const reach = (go: (t: Target) => void) => {
+    if (!typed) return go({});
+    if (trust?.server === typed) return go({ server: typed, ...(trust.fingerprint ? { fingerprint: trust.fingerprint } : {}) });
+    void run('look', async () => {
+      const cert = (await call('fleet.probe', { serverUrl: typed })).certificate;
+      if (cert && !cert.trusted) return setAskTrust({ server: typed, fingerprint: cert.fingerprint, go });
+      setTrust({ server: typed, fingerprint: null });
+      go({ server: typed });
     });
-  const lookUp = () => run('look', () => call('account.previewInvitation', { code: f.code, ...server }).then(setInvite));
+  };
+  const forgot = () =>
+    reach((t) =>
+      run('forgot', async () => {
+        await call('account.forgotPassword', { email: f.email, ...t });
+        toast.success('Check your email', `If ${f.email} has an FBRX account, a link to choose a new password is on its way. It opens in your browser.`);
+      }),
+    );
+  const lookUp = () => reach((t) => run('look', () => call('account.previewInvitation', { code: f.code, ...t }).then(setInvite)));
   const submit = () => {
-    if (mode === 'invite' && !invite) return void lookUp();
+    if (mode === 'invite' && !invite) return lookUp();
     const done = <T,>(s: T) => {
       onDone?.();
       return s;
     };
-    void run(
-      'signin',
-      () =>
-        mode === 'invite'
-          ? call('account.acceptInvitation', { code: f.code, password: f.password, ...server, ...(f.name.trim() ? { name: f.name } : {}) }).then(done)
-          : call('account.signIn', { email: f.email, password: f.password, ...server, ...(mode === 'create' ? { create: true, name: f.name } : {}) }).then(done),
-      mode === 'invite' ? `Welcome to ${invite!.tenantName}` : mode === 'create' ? 'Your FBRX account is ready' : 'Signed in',
+    reach(
+      (t) =>
+        void run(
+          'signin',
+          () =>
+            mode === 'invite'
+              ? call('account.acceptInvitation', { code: f.code, password: f.password, ...t, ...(f.name.trim() ? { name: f.name } : {}) }).then(done)
+              : call('account.signIn', { email: f.email, password: f.password, ...t, ...(mode === 'create' ? { create: true, name: f.name } : {}) }).then(done),
+          mode === 'invite' ? `Welcome to ${invite!.tenantName}` : mode === 'create' ? 'Your FBRX account is ready' : 'Signed in',
+        ),
     );
   };
   const switchTo = (m: typeof mode) => {
@@ -59,10 +85,44 @@ export function AccountSignInForm({ onDone, extraActions, startCreating = false 
         submit();
       }}
     >
-      {needServer && (
-        <Field label="FBRX Command address" help={mode === 'invite' ? 'It is with your invitation code, such as https://command.example.com' : 'Where your FBRX account lives, such as https://command.example.com'}>
-          <Input value={f.server} placeholder="https://" onChange={(e) => setF({ ...f, server: e.target.value.trim() })} />
+      {(needServer || other) && (
+        <Field
+          label="FBRX Command address"
+          help={`${mode === 'invite' ? 'It is with your invitation code' : 'Where your FBRX account lives'}, such as https://command.example.com, or https://127.0.0.1:8787 for FBRX Command on this computer`}
+        >
+          <Input
+            value={f.server}
+            placeholder="https://"
+            onChange={(e) => {
+              setF({ ...f, server: e.target.value.trim() });
+              setAskTrust(null);
+              setInvite(null);
+            }}
+          />
         </Field>
+      )}
+      {askTrust && (
+        <Callout tone="warning" title="Check FBRX Command's certificate">
+          <p style={{ margin: '4px 0 8px' }}>
+            {askTrust.server} uses its own certificate (normal for FBRX Command on this computer or a home or school network). Make sure this fingerprint is the same as the one in FBRX Command → Deploy & enroll before you trust it:
+          </p>
+          <code className="join-fp">{askTrust.fingerprint}</code>
+          <div className="fx-actions" style={{ marginTop: 10 }}>
+            <Button
+              variant="primary"
+              icon="shield"
+              onClick={() => {
+                const t = { server: askTrust.server, fingerprint: askTrust.fingerprint };
+                setTrust(t);
+                setAskTrust(null);
+                askTrust.go(t);
+              }}
+            >
+              It matches: trust it
+            </Button>
+            <Button onClick={() => setAskTrust(null)}>Cancel</Button>
+          </div>
+        </Callout>
       )}
       {mode === 'invite' && (
         <Field label="Invitation code" help={invite ? undefined : 'From your organization: FBRX- and four groups of four letters and numbers'}>
@@ -101,11 +161,11 @@ export function AccountSignInForm({ onDone, extraActions, startCreating = false 
       )}
       <div className="fx-actions">
         {mode === 'invite' && !invite ? (
-          <Button type="submit" variant="primary" icon="search" loading={busy === 'look'} disabled={!f.code.trim() || (needServer && !f.server)}>
+          <Button type="submit" variant="primary" icon="search" loading={busy === 'look'} disabled={!f.code.trim() || ((needServer || other) && !f.server) || !!askTrust}>
             Look up the invitation
           </Button>
         ) : (
-          <Button type="submit" variant="primary" icon="key" loading={busy === 'signin'} disabled={(mode !== 'invite' && !f.email) || !f.password || (needServer && !f.server)}>
+          <Button type="submit" variant="primary" icon="key" loading={busy === 'signin'} disabled={(mode !== 'invite' && !f.email) || !f.password || ((needServer || other) && !f.server) || !!askTrust}>
             {mode === 'invite' ? `Join ${invite!.tenantName}` : mode === 'create' ? 'Make my account' : 'Sign in'}
           </Button>
         )}
@@ -125,8 +185,13 @@ export function AccountSignInForm({ onDone, extraActions, startCreating = false 
           </Button>
         )}
         {mode === 'signin' && (
-          <Button variant="ghost" loading={busy === 'forgot'} disabled={!f.email || (needServer && !f.server)} title={f.email ? undefined : 'Type your email first'} onClick={() => void forgot()}>
+          <Button variant="ghost" loading={busy === 'forgot'} disabled={!f.email || ((needServer || other) && !f.server)} title={f.email ? undefined : 'Type your email first'} onClick={forgot}>
             Forgot your password?
+          </Button>
+        )}
+        {!needServer && !other && (
+          <Button variant="ghost" icon="server" title={`Your FBRX account is on ${account?.server}`} onClick={() => setOther(true)}>
+            Use another FBRX Command
           </Button>
         )}
         {extraActions}

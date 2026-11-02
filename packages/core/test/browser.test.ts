@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addressBarToUrl, hostMatches, policyAllows, safeSearchUrl } from '@fbrx/shared';
+import { addressBarToUrl, hostMatches, isLocalHost, policyAllows, safeSearchUrl } from '@fbrx/shared';
 import { makeKernel, USER } from './helpers';
 
 describe('browser address bar and policy (shared)', () => {
@@ -9,6 +9,16 @@ describe('browser address bar and policy (shared)', () => {
     expect(addressBarToUrl('localhost:3000', 'duckduckgo')).toBe('http://localhost:3000');
     expect(addressBarToUrl('how tall is everest', 'duckduckgo')).toContain('duckduckgo.com');
     expect(addressBarToUrl('fbrx weather', 'google')).toContain('google.com/search');
+  });
+  it('opens addresses on this computer and the home network', () => {
+    expect(addressBarToUrl('192.168.10.1:9443', 'duckduckgo')).toBe('https://192.168.10.1:9443');
+    expect(addressBarToUrl('127.0.0.1', 'duckduckgo')).toBe('https://127.0.0.1');
+    expect(addressBarToUrl('fbrx-server:9443/#/vms', 'duckduckgo')).toBe('https://fbrx-server:9443/#/vms');
+    expect(addressBarToUrl('[fd00::1]:8080', 'duckduckgo')).toBe('https://[fd00::1]:8080');
+    expect(addressBarToUrl('http://127.0.0.1:8080', 'duckduckgo')).toBe('http://127.0.0.1:8080');
+    expect(addressBarToUrl('router', 'duckduckgo')).toContain('duckduckgo.com');
+    for (const h of ['127.0.0.1', '192.168.10.1', '10.0.0.5', '172.20.1.1', '169.254.1.1', 'localhost', 'fbrx-server', 'nas.local', 'pi.lan', '[::1]', 'fd00::1']) expect(isLocalHost(h)).toBe(true);
+    for (const h of ['example.com', '8.8.8.8', '172.32.0.1', '2606:4700::1111']) expect(isLocalHost(h)).toBe(false);
   });
   it('matches hosts and applies allow/block lists', () => {
     expect(hostMatches('www.example.com', 'example.com')).toBe(true);

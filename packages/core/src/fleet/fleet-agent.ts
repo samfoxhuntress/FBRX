@@ -37,18 +37,9 @@ import type { LicenseService } from '../license/license-service';
 import type { Vault } from '../vault/vault';
 import type { UpdateController } from '../platform';
 import { sleep } from '../util/misc';
-import { formatFingerprint, peerCertificate, pinnedAgent, pinnedFetch } from '../util/pinned-tls';
+import { formatFingerprint, peerCertificate, pinnedAgent, pinnedFetch, untrustedCertificate } from '../util/pinned-tls';
 
 const CERT_CHANGED = "FBRX Command presented a different certificate than the one this computer trusts. If FBRX Command was reinstalled, disconnect and join again with its new address and fingerprint.";
-
-/** TLS errors that mean "no authority vouches for this certificate" (self-signed, or signed by a private CA). */
-const UNTRUSTED_CERT = /SELF_SIGNED|UNABLE_TO_VERIFY|UNABLE_TO_GET_ISSUER|CERT_UNTRUSTED|ERR_TLS_CERT_ALTNAME_INVALID|self[- ]signed/i;
-const certProblem = (err: unknown): boolean => {
-  for (let e = err as { code?: string; message?: string; cause?: unknown } | undefined, i = 0; e && i < 4; e = e.cause as typeof e, i++) {
-    if (UNTRUSTED_CERT.test(`${e.code ?? ''} ${e.message ?? ''}`)) return true;
-  }
-  return false;
-};
 
 const TOKEN_SECRET = 'fbrx.fleet.deviceToken';
 
@@ -239,7 +230,7 @@ export class FleetAgent {
       res = pin ? await pinnedFetch(enrollUrl, init, pinnedAgent(pin, `FBRX Command at ${base.host} presented a different certificate than the fingerprint you were given. Check the address and fingerprint in FBRX Command → Deploy & enroll.`)) : await fetch(enrollUrl, init);
     } catch (err) {
       if (err instanceof CoreError) throw err;
-      if (!pin && base.protocol === 'https:' && certProblem(err)) {
+      if (!pin && base.protocol === 'https:' && untrustedCertificate(err)) {
         throw new CoreError('FORBIDDEN', `FBRX Command at ${base.host} uses its own certificate. Check its fingerprint (FBRX Command → Deploy & enroll) and trust it to join.`);
       }
       throw new CoreError('UNAVAILABLE', `FBRX Command could not be reached at ${base.host}: ${errorMessage(err)}`);

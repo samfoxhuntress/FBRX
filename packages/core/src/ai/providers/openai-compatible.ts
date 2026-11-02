@@ -20,6 +20,8 @@ export interface OpenAICompatibleOptions {
   historyBudgetChars?: number;
   /** Send `stream_options.include_usage` (supported by OpenAI and llama.cpp). */
   includeUsage?: boolean;
+  /** How requests go out, when not the plain fetch (FBRX Cloud AI on an FBRX Command trusted by its fingerprint). */
+  fetch?: (url: string, init: RequestInit) => Promise<Response>;
 }
 
 /**
@@ -41,6 +43,10 @@ export class OpenAICompatibleProvider implements ChatProvider {
     return `${this.o.baseUrl.replace(/\/+$/, '')}${path}`;
   }
 
+  private send(url: string, init: RequestInit): Promise<Response> {
+    return this.o.fetch ? this.o.fetch(url, init) : fetch(url, init);
+  }
+
   private headers(): Record<string, string> {
     const h: Record<string, string> = { 'content-type': 'application/json' };
     const key = this.o.apiKey?.();
@@ -49,7 +55,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
   }
 
   async listModels(signal?: AbortSignal): Promise<ModelInfo[]> {
-    const res = await fetch(this.url('/models'), { headers: this.headers(), signal: signal ?? AbortSignal.timeout(8000) });
+    const res = await this.send(this.url('/models'), { headers: this.headers(), signal: signal ?? AbortSignal.timeout(8000) });
     if (!res.ok) throw new ProviderHttpError(res.status, await readErrorBody(res));
     const body = (await res.json()) as { data?: Array<{ id: string }> };
     return (body.data ?? []).map((m) => ({ id: m.id, name: m.id, providerId: this.id }));
@@ -108,7 +114,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
       body.tools = req.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
       body.tool_choice = 'auto';
     }
-    const res = await fetch(this.url('/chat/completions'), {
+    const res = await this.send(this.url('/chat/completions'), {
       method: 'POST',
       headers: this.headers(),
       body: JSON.stringify(body),
