@@ -1,40 +1,43 @@
 {
   "product": "FBRX OS",
   "stage": "Beta",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "codename": "Warp",
-  "released": "2026-10-28",
+  "released": "2026-11-02",
   "importance": "recommended",
-  "summary": "FBRX 2.1.1 Beta: FBRX Cloud AI for FBRX accounts, FBRX Command updates that build again, and a page that fails shows what went wrong instead of a blank window.",
+  "summary": "FBRX 2.1.2 Beta: sign in to FBRX Command on the same computer, the FBRX Browser on your home network, a Fabrix that knows its budget and builds with care, and Hermes Agent in AI coordination.",
   "notes": [
-    "FBRX Cloud AI: signed in to an FBRX account, AI models → FBRX Cloud AI → Use for chats. Each edition comes with tokens every month (Standard 1M, Ultra 3M, Black Hole 5M); the page shows what is left and when the month renews. Fabrix keeps its tools, memory and approvals on your computer.",
-    "Promo codes: enter one under AI models → FBRX Cloud AI or Settings → FBRX account for extra tokens, an edition for some days, or both.",
-    "A page that fails to draw no longer blanks the window: it shows what went wrong with Try again and Reload, and the rest of FBRX keeps working.",
-    "An answer with a line the formatting could not place (a heading cut short, say) no longer freezes the chat."
+    "Sign in to FBRX Command running on this computer or your home network (https://127.0.0.1:8787 or its address): FBRX shows the certificate's fingerprint, and once you trust it, sign-in, invitations and FBRX Cloud AI use that certificate only.",
+    "The FBRX Browser opens IP addresses, names with a port and local names (127.0.0.1:8080, 192.168.1.20, nas.local). A home server with its own certificate shows its fingerprint to trust for the session; a page that only answers on http:// offers to open it that way.",
+    "Fabrix builds alongside you and leaves what it touches better: it does no harm whoever asks, tells you what else it noticed that needs fixing, and only says it did something a tool confirmed.",
+    "The context gauge under the chat shows the context window and how much of it the conversation uses. Long conversations fold their older turns into a short digest that keeps names, ids and decisions, and Fabrix paces itself and warns you as it nears the limit.",
+    "AI usage (in Connect) shows the tokens used this month and before, by model, and what is left of FBRX Cloud AI. Settings → Agent → Thinking sets a monthly budget for cloud models: Fabrix stops cleanly when it is reached.",
+    "Ask Fabrix to create a project and add a note to it and it does: workspace.create_project makes the project, and a name that does not exist is reported instead of guessed.",
+    "Pictures: image.compose draws storybook scenes from FBRX's own art (people, animals, a dragon, trees, castles, a sky by day or night) with helmets, crowns, swords and shields where you ask for them.",
+    "AI coordination connects Hermes Agent: FBRX adds itself to ~/.hermes/config.yaml and leaves the rest of the file as it was; run /reload-mcp in Hermes to load the FBRX tools.",
+    "FBRX OS for Mac is back: a .dmg for Apple silicon (arm64) and Intel (x64) Macs, with the Windows and Linux installers."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.1.1.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.1.1",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.1.2.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.1.2",
   "server": {
-    "version": "1.2.1",
-    "released": "2026-10-28",
-    "summary": "FBRX Server 1.2.1: Fabrix in the server console takes your files and hands over what it makes.",
+    "version": "1.2.2",
+    "released": "2026-11-02",
+    "summary": "FBRX Server 1.2.2: support passes from a computer's page in FBRX Command, and the server's Fabrix with the same 2.1.2 rules and tools.",
     "notes": [
-      "Fabrix in the server console: attach files and pictures (or drop or paste them) for the server's agent to read, as in FBRX OS.",
-      "What Fabrix makes (documents, drawings) shows under its step, pictures as a thumbnail, each with Download; attached files download the same way.",
-      "The server console shows what went wrong with Try again and Reload instead of going blank.",
+      "FBRX Command: a computer's page shows its install id and makes a support pass for it (Devices → the computer → Support pass).",
+      "Fabrix on the server (the ai role) gets FBRX OS 2.1.2's rules, folded history, create_project and image.compose.",
       "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
     ],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.1.1/fbrx-server-1.2.1.tar.gz",
-    "sha256": "97e02df9d46d735dcab80cc05287cb3e2b7fbe2b978a538177c573b00e4879fb",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.1.1"
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.1.2/fbrx-server-1.2.2.tar.gz",
+    "sha256": "9a2b8b50c5d218b3f147cfddc09b7300a488cb06ccbce9862c27b02b1428ad6c",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.1.2"
   },
   "command": {
-    "summary": "FBRX Command 2.1.1: Update now works again, and FBRX Cloud AI is run from the Cloud AI page.",
+    "summary": "FBRX Command 2.1.2: support passes from a computer's page, and computers on the same machine join with a trusted certificate.",
     "notes": [
-      "Update now no longer fails at \"Building FBRX Command\" ('vite' is not recognized). If an update already failed, run Install FBRX Command again: it now sees the build tools are missing and installs them.",
-      "Cloud AI (on an account server set up for it): each edition's tokens a month, a budget for the whole service, and per account its own limit, extra tokens, lifting the limit for the month or turning it off.",
-      "Promo codes: extra FBRX Cloud AI tokens, Standard or Ultra for some days, or both, for a number of accounts and until a date; see who used each one.",
-      "The console shows what went wrong with Try again and Reload instead of going blank."
+      "Support pass: open Devices, pick the computer, and choose Support pass: its install id is filled in, so the code works at the 418teapotadmin prompt on that computer.",
+      "Each computer reports its install id, shown on its page.",
+      "FBRX OS on the same computer as FBRX Command signs in and accepts invitations at https://127.0.0.1:8787 after trusting its certificate's fingerprint."
     ]
   }
 }
