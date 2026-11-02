@@ -38,9 +38,8 @@ describe('the agent knows its room: context window, folded history and the month
       const done = (await waitFor(() => events.find((e) => e.type === 'run.completed'))) as Extract<AgentEvent, { type: 'run.completed' }>;
       expect(seen.messages[0].content).toContain('## How you work');
       expect(seen.messages[0].content).toContain('Also noticed');
-      const last = seen.messages.filter((m: any) => m.role === 'user').pop().content;
-      expect(last).toMatch(/^<budget>\nContext window: about [\d,]+ tokens; this conversation fills about [\d,]+/);
-      expect(last).toContain('Hello');
+      // A short chat goes as written: the agent hears where it stands once its room fills.
+      expect(seen.messages.filter((m: any) => m.role === 'user').pop().content).toBe('Hello');
       expect(done.context).toMatchObject({ usedTokens: 120, estimated: false });
       expect(kernel.usage.month().models['mock/mock-model']).toMatchObject({ inputTokens: 100, outputTokens: 20, runs: 1, cloud: false });
       const report = (await kernel.call('ai.usage', {}, USER)) as any;
@@ -77,7 +76,7 @@ describe('the agent knows its room: context window, folded history and the month
       const first = seen.messages.find((m: any) => m.role === 'user').content;
       expect(first).toContain('<earlier>');
       expect(first).toContain('prj_garden0001');
-      expect(seen.messages.at(-1).content).toContain('older request');
+      expect(seen.messages.at(-1).content).toMatch(/^<budget>\nContext window: about [\d,]+ tokens; this conversation fills about [\d,]+ \(\d+%\)\. \d+ older requests? (is|are) folded/);
     } finally {
       await llm.close();
       await cleanup();

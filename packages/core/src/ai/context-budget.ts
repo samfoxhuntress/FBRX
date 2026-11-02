@@ -58,8 +58,17 @@ export function digestTurns(turns: StoredMessage[][], maxChars: number): string 
   return text(left).slice(0, Math.max(0, maxChars));
 }
 
-/** What the agent is told about its room, with the person's latest message (once per run, so requests stay cacheable). */
-export function budgetNote(b: { windowTokens: number; usedTokens: number; folded: number; maxOutputTokens: number; maxSteps: number; month: { used: number; budget: number } | null }): string {
+/** How full the window or the month is before the agent hears about it: early enough to pace itself to the end. */
+export const BUDGET_NOTE_FROM = 0.5;
+
+/**
+ * What the agent is told about its room, with the person's latest message (once per run, so requests stay cacheable).
+ * Null while there is plenty: past half of the context window or the month's cloud AI budget, or once older requests
+ * are folded. Until then the message goes as written.
+ */
+export function budgetNote(b: { windowTokens: number; usedTokens: number; folded: number; maxOutputTokens: number; maxSteps: number; month: { used: number; budget: number } | null }): string | null {
+  const filling = b.usedTokens >= b.windowTokens * BUDGET_NOTE_FROM || (!!b.month?.budget && b.month.used >= b.month.budget * BUDGET_NOTE_FROM);
+  if (!filling && !b.folded) return null;
   const pct = (a: number, of: number) => Math.min(100, Math.round((a / Math.max(1, of)) * 100));
   const lines = [
     `Context window: about ${b.windowTokens.toLocaleString('en-US')} tokens; this conversation fills about ${b.usedTokens.toLocaleString('en-US')} (${pct(b.usedTokens, b.windowTokens)}%).${b.folded ? ` ${b.folded} older request${b.folded === 1 ? ' is' : 's are'} folded into <earlier>.` : ''}`,
