@@ -244,6 +244,8 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
 
     'ai.providers': () => k.providers.status(),
     'ai.models': (p) => k.providers.models(z.object({ providerId: z.string() }).parse(p).providerId),
+    'ai.context': (p) => k.agent.context(z.object({ conversationId: z.string().max(80).optional(), providerId: z.string().max(80).optional(), model: z.string().max(200).optional() }).parse(p)),
+    'ai.usage': () => k.aiUsage(),
     'ai.chat': (p, ctx) => {
       const q = z
         .object({ conversationId: z.string().optional(), message: z.string(), providerId: z.string().optional(), model: z.string().optional(), offline: z.boolean().optional(), attachments: z.array(z.string().max(64)).max(ATTACHMENTS_PER_MESSAGE).optional() })

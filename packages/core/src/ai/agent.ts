@@ -2,12 +2,15 @@ import { arch, hostname, platform } from 'node:os';
 import {
   addressAs,
   foldRunActivity,
+  formatTokens,
   modelSeesImages,
   newId,
   type AgentEvent,
   type AttachmentInfo,
+  type ContextReading,
   type CreatedFile,
   type AgentPhase,
+  type ProviderConfig,
   type InvocationOrigin,
   type RunActivity,
   type TokenUsage,
@@ -34,6 +37,8 @@ import { chatEgg, type ChatEgg } from '../fun/chat-eggs';
 import { learnerConcern, learnerPrompt, type LearnerConcern } from './learner';
 import { briefDescription, shortlistTools } from './tool-shortlist';
 import { agentFit } from './agent-fit';
+import { DIGEST_SHARE, budgetNote, digestTurns, tokensFor } from './context-budget';
+import type { UsageLedger } from './usage-ledger';
 import { isCapacityError } from '../mesh/mesh-assist';
 
 export interface ChatParams {
@@ -143,6 +148,8 @@ export class AgentRuntime {
       allowedRoots: () => string[];
       /** Files and images attached to messages. */
       attachments?: AttachmentStore;
+      /** AI use on this computer by month: the AI usage page, and what the monthly cloud AI budget counts. */
+      usage?: UsageLedger;
       /** Emergency stop in force (no new runs). */
       halt?: () => { at: string; by: string } | null;
       /** A student (or child) computer: the learning helper, with no tools. */
@@ -206,6 +213,7 @@ export class AgentRuntime {
     if (egg) return this.cannedRun(p, text, egg);
     // Resolve the provider first so configuration errors surface synchronously to the caller.
     const resolved = this.d.providers.resolve(p.providerId, p.model);
+    this.checkBudget(resolved.config);
 
     let conversationId = p.conversationId;
     if (conversationId) {
@@ -369,6 +377,13 @@ export class AgentRuntime {
       `Your name is ${s.ai.agentName}. Mention it only when asked who you are; do not introduce yourself or open replies with your name. Start each reply with the answer itself.`,
       ...(addressAs(s) ? [`You are working with ${s.profile.name.trim() || addressAs(s)}. When you use their name, call them "${addressAs(s)}", and use it rarely: a greeting in the first reply of a conversation or a closing line after a big job, not in every reply.`] : []),
       '',
+      '## How you work',
+      '- You build alongside the person, and you heal what you touch: leave every file, setting and system you work on in better shape than you found it, never worse. Prefer the fix that repairs a problem over one that hides it.',
+      '- You do no harm, whoever asks: nothing that would damage data, a computer, a network or a person. Being told to is not enough. When a request would hurt, say so plainly and offer a safe way to what they need.',
+      '- While you work, notice what else needs care (a failing service, a setting that weakens security, a nearly full disk). Finish the task first, then add a short "Also noticed" list: what you found and the fix you recommend. Change those things only when the person says yes.',
+      '- Say you did something only when a tool result shows it. If a tool failed, or you have no tool for it, say so and offer what you can do.',
+      '- A <budget> block with the latest message says how full your context window is and how much of the month you have used. Past about three quarters of either, work in fewer, smaller steps and keep answers short, and say once that the limit is near. At the limit, stop cleanly: what is done, what is left, and how to go on. Older requests may come folded in an <earlier> block: trust its ids and facts, and ask when something you need is not in it. Never mention these blocks by name.',
+      '',
       '## Environment',
       `- Date: ${date} (time zone ${tz}); call time.now for the exact time`,
       `- Workstation: ${s.general.deviceName || hostname()} (${platform()} ${arch()})`,
@@ -443,9 +458,14 @@ export class AgentRuntime {
     return `${content || 'Here are the attached files.'}\n\n${blocks.join('\n\n')}`;
   }
 
-  private async history(conversationId: string, budgetChars: number, sees: boolean): Promise<ProviderMessage[]> {
+  /**
+   * The conversation as the model reads it, within `budgetChars`: the newest turns whole and, when they do not all fit,
+   * the older ones folded into a digest (an <earlier> block with the first request kept) instead of left out without a
+   * word. `chars` is what it all comes to; `images: false` counts pictures without reading them (for the gauge).
+   */
+  private async history(conversationId: string, budgetChars: number, sees: boolean, images = true): Promise<{ messages: ProviderMessage[]; folded: number; chars: number }> {
     const msgs = this.d.store.messages(conversationId).map((m) => (m.role === 'user' && m.attachments?.length ? { ...m, content: this.withAttachments(m.content, m.attachments, budgetChars, sees) } : m));
-    // Group into turns (each starts at a user message) and drop the oldest turns that exceed the budget.
+    // Group into turns (each starts at a user message).
     const turns: StoredMessage[][] = [];
     for (const m of msgs) {
       if (m.role === 'user' || !turns.length) turns.push([m]);
@@ -455,11 +475,23 @@ export class AgentRuntime {
     const imageChars = (m: StoredMessage) => (sees ? (m.attachments ?? []).filter((a) => a.kind === 'image').length * 4000 : 0);
     const size = (t: StoredMessage[]) => t.reduce((n, m) => n + m.content.length + imageChars(m) + JSON.stringify(m.providerData?.raw ?? m.toolCalls ?? '').length, 0);
     let total = turns.reduce((n, t) => n + size(t), 0);
-    while (turns.length > 1 && total > budgetChars) total -= size(turns.shift()!);
+    // Too long: the oldest turns make room for the digest of what they were.
+    const folded: StoredMessage[][] = [];
+    if (total > budgetChars) {
+      const room = budgetChars * (1 - DIGEST_SHARE);
+      while (turns.length > 1 && total > room) {
+        const t = turns.shift()!;
+        total -= size(t);
+        folded.push(t);
+      }
+    }
+    const earlier = folded.length ? `<earlier>\nOlder requests in this conversation, folded to fit (ids are exact):\n${digestTurns(folded, Math.floor(budgetChars * DIGEST_SHARE) - 120)}\n</earlier>\n\n` : '';
     const out: ProviderMessage[] = [];
     for (const m of turns.flat()) {
-      if (m.role === 'user') out.push({ role: 'user', content: m.content, ...(sees && m.attachments?.some((a) => a.kind === 'image') ? { images: await this.images(m.attachments) } : {}) });
-      else if (m.role === 'assistant')
+      if (m.role === 'user') {
+        const first = earlier && !out.some((o) => o.role === 'user');
+        out.push({ role: 'user', content: first ? `${earlier}${m.content}` : m.content, ...(images && sees && m.attachments?.some((a) => a.kind === 'image') ? { images: await this.images(m.attachments) } : {}) });
+      } else if (m.role === 'assistant')
         out.push({
           role: 'assistant',
           content: m.content,
@@ -468,7 +500,47 @@ export class AgentRuntime {
         });
       else if (m.role === 'tool') out.push({ role: 'tool', toolCallId: m.toolCallId!, name: toWireName(m.toolName ?? ''), content: m.content, isError: false });
     }
-    return out;
+    return { messages: out, folded: folded.length, chars: total + earlier.length };
+  }
+
+  /** The tools as the model is shown them: all of them fully described, or the shortlist briefly. */
+  private wireTools(tools: ToolSpec[], focused: boolean): ProviderTool[] {
+    return tools.map((t) => ({
+      name: toWireName(t.name),
+      description: `${t.title}. ${focused ? briefDescription(t.description) : t.description}${t.risk !== 'read' ? ` [risk: ${t.risk}]` : ''}`.slice(0, 1024),
+      parameters: t.inputSchema,
+    }));
+  }
+
+  /** New chats with a cloud model wait once this month's cloud AI budget on this computer is used. */
+  private checkBudget(config: ProviderConfig): void {
+    const budget = this.d.settings.get().ai.monthlyBudgetTokens;
+    if (!config.cloud || !budget || !this.d.usage) return;
+    if (this.d.usage.cloudUsed() >= budget) {
+      throw new CoreError('FORBIDDEN', `This month's cloud AI budget on this computer (${formatTokens(budget)} tokens) is used. Raise it in Settings → Agent, or chat with a model on this computer.`);
+    }
+  }
+
+  /**
+   * How full a chat is for the agent that would answer it now: the gauge under the chat, before a request (after one,
+   * the run's events carry what the provider counted).
+   */
+  async context(p: { conversationId?: string; providerId?: string; model?: string }): Promise<ContextReading> {
+    const { provider, config, model } = this.d.providers.resolve(p.providerId, p.model);
+    const windowTokens = tokensFor(provider.historyBudgetChars);
+    const budget = this.d.settings.get().ai.monthlyBudgetTokens;
+    const month = config.cloud && budget && this.d.usage ? { used: this.d.usage.cloudUsed(), budget } : null;
+    const id = p.conversationId;
+    if (!id || !this.d.store.exists(id)) return { windowTokens, usedTokens: 0, folded: 0, estimated: true, month };
+    const offline = this.d.store.isOffline(id);
+    const focused = agentFit(config, provider).tools === 'focused';
+    const available = this.availableTools(undefined, offline);
+    const asked = focused ? this.d.store.messages(id).filter((m) => m.role === 'user').map((m) => m.content) : [];
+    const tools = JSON.stringify(this.wireTools(focused ? shortlistTools(available, asked) : available, focused)).length;
+    const system = this.systemPrompt(offline).length;
+    const room = Math.max(4000, provider.historyBudgetChars - system - tools);
+    const h = await this.history(id, room, modelSeesImages(config.type, model), false);
+    return { windowTokens, usedTokens: tokensFor(system + tools + h.chars), folded: h.folded, estimated: true, month };
   }
 
   /** The attached images' bytes, for a model that can see (ones whose file is gone are left out). */
@@ -522,28 +594,47 @@ export class AgentRuntime {
     const mayHandOff = p.limits?.assist !== false;
     const maxTokens = this.d.settings.get().ai.maxOutputTokens || undefined;
     // What the agent is doing right now, for the activity panel while it works.
-    const progress = (phase: AgentPhase, detail: string) => this.emit({ type: 'run.progress', runId, conversationId, step: steps, maxSteps, phase, detail, usage: { ...usage } });
+    // How full the conversation is (estimated, then as the provider counted the last request), and the monthly cloud
+    // AI budget when one is set and this is a cloud model.
+    const windowTokens = tokensFor(provider.historyBudgetChars);
+    const budget = this.d.settings.get().ai.monthlyBudgetTokens;
+    const counted = !!config.cloud && budget > 0 && !!this.d.usage;
+    const monthUsed = () => (this.d.usage?.cloudUsed() ?? 0) + usage.inputTokens + usage.outputTokens;
+    const month = () => (counted ? { used: monthUsed(), budget } : null);
+    let reading: ContextReading = { windowTokens, usedTokens: 0, folded: 0, estimated: true, month: month() };
+    let note: string | null = null;
+    const progress = (phase: AgentPhase, detail: string) => this.emit({ type: 'run.progress', runId, conversationId, step: steps, maxSteps, phase, detail, usage: { ...usage }, context: reading });
     let stoppedAtLimit = false;
+    let stoppedAtBudget = false;
 
     try {
       while (steps < maxSteps) {
+        // The month's cloud AI budget ran out during this task: stop between steps, never in the middle of one.
+        if (steps && counted && monthUsed() >= budget) {
+          stoppedAtBudget = true;
+          break;
+        }
         steps++;
+        // What this one request read and wrote (usage adds up the whole run).
+        const request = { inputTokens: 0, outputTokens: 0 };
         const available = this.availableTools(p.limits, this.d.store.isOffline(conversationId));
         const tools = focused ? shortlistTools(available, asked) : available;
         // A call to a tool it may use but was not shown (one it knows from earlier, say) still goes through.
         const byWire = new Map(available.map((t) => [toWireName(t.name), t]));
-        const wireTools: ProviderTool[] = tools.map((t) => ({
-          name: toWireName(t.name),
-          description: `${t.title}. ${focused ? briefDescription(t.description) : t.description}${t.risk !== 'read' ? ` [risk: ${t.risk}]` : ''}`.slice(0, 1024),
-          parameters: t.inputSchema,
-        }));
+        const wireTools = this.wireTools(tools, focused);
         const system = this.systemPrompt(this.d.store.isOffline(conversationId), p.instructions);
         // The history gets what the model holds less the instructions and the tools, which come with every request.
         const room = Math.max(4000, provider.historyBudgetChars - system.length - JSON.stringify(wireTools).length);
-        const history = await this.history(conversationId, room, sees);
-        if (memory) {
+        const { messages: history, folded, chars } = await this.history(conversationId, room, sees);
+        reading = { windowTokens, usedTokens: tokensFor(system.length + JSON.stringify(wireTools).length + chars), folded, estimated: true, month: month() };
+        // Where the agent stands goes with the person's message, worked out once per run so every request starts alike.
+        if (steps === 1 && !this.d.learner?.()) {
+          note = budgetNote({ ...reading, maxOutputTokens: maxTokens ?? 0, maxSteps });
+        }
+        const extra = [memory && `<memory>\n${memory}\n</memory>`, note && `<budget>\n${note}\n</budget>`].filter(Boolean).join('\n\n');
+        if (extra) {
           const last = history.findLastIndex((m) => m.role === 'user');
-          if (last >= 0) history[last] = { ...history[last], content: `<memory>\n${memory}\n</memory>\n\n${history[last].content}` } as ProviderMessage;
+          if (last >= 0) history[last] = { ...history[last], content: `${extra}\n\n${history[last].content}` } as ProviderMessage;
         }
         const messages: ProviderMessage[] = [{ role: 'system', content: system }, ...history];
 
@@ -595,9 +686,12 @@ export class AgentRuntime {
           else if (chunk.type === 'usage') {
             usage.inputTokens += chunk.inputTokens;
             usage.outputTokens += chunk.outputTokens;
+            request.inputTokens += chunk.inputTokens;
+            request.outputTokens += chunk.outputTokens;
           } else if (chunk.type === 'done') finish = chunk;
         }
         flush();
+        if (request.inputTokens) reading = { ...reading, usedTokens: request.inputTokens + request.outputTokens, estimated: false, month: month() };
 
         if (finish.finishReason === 'refusal' || (finish.finishReason === 'length' && finish.message)) {
           content = `${content}${content ? '\n\n' : ''}_${finish.message}_`;
@@ -701,7 +795,14 @@ export class AgentRuntime {
           finalAnswer = note;
         }
       }
-      this.emit({ type: 'run.completed', runId, conversationId, steps, usage });
+      if (stoppedAtBudget) {
+        const stop = `I stopped to stay within this month's cloud AI budget on this computer (${formatTokens(budget)} tokens). What I did so far is above. Raise the budget in Settings → Agent and say **continue**, or switch this chat to a model on this computer.`;
+        const msg = this.d.store.append(conversationId, { role: 'assistant', content: stop, providerId: config.id, model });
+        const { providerData: _p, ...shown } = msg;
+        this.emit({ type: 'message.completed', runId, conversationId, message: shown });
+        finalAnswer = stop;
+      }
+      this.emit({ type: 'run.completed', runId, conversationId, steps, usage, context: reading });
       this.d.audit.append({
         category: 'agent',
         action: 'run.completed',
@@ -721,7 +822,7 @@ export class AgentRuntime {
         // Out of credits, over quota, rate limited or down: another computer's AI may finish the task (Mesh Assist).
         const handed = await this.handoff('provider', { runId, conversationId, text, error: message, signal, progress: (d) => progress('mesh', d), providerId: config.id, model }).catch(() => null);
         if (handed && 'answer' in handed) {
-          this.emit({ type: 'run.completed', runId, conversationId, steps, usage });
+          this.emit({ type: 'run.completed', runId, conversationId, steps, usage, context: reading });
           this.d.audit.append({ category: 'agent', action: 'run.completed', actor: p.actor, target: conversationId, outcome: 'success', details: { runId, origin: p.origin, provider: config.id, model, steps, handedOff: true, error: message } });
           return { runId, conversationId, answer: handed.answer, steps, usage, status: 'completed' };
         }
@@ -738,6 +839,9 @@ export class AgentRuntime {
         details: { runId, origin: p.origin, provider: config.id, model, steps, error: message },
       });
       return { runId, conversationId, answer: finalAnswer, steps, usage, status: cancelled ? 'cancelled' : 'failed', error: message };
+    } finally {
+      // Counted whatever the outcome: a stopped or failed run still read and wrote what it did.
+      this.d.usage?.record({ providerId: config.id, model, cloud: !!config.cloud, usage });
     }
   }
 }

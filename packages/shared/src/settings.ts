@@ -126,6 +126,11 @@ export const SettingsSchema = z.object({
     resources: z.enum(AI_RESOURCES),
     /** Longest answer the model may write in one go, in tokens (0 = the provider's own limit). */
     maxOutputTokens: z.number().int().min(0).max(128000),
+    /**
+     * The most cloud AI may read and write on this computer in a month, in tokens (0 = no limit). Past three quarters
+     * the agent works sparingly and says so; at the limit it stops cleanly and new chats with cloud models wait.
+     */
+    monthlyBudgetTokens: z.number().int().min(0).max(1_000_000_000),
     /** Context window for Ollama models, in tokens (0 = Ollama's own setting). The built-in runtime uses runtime.contextSize. */
     ollamaContext: z.number().int().min(0).max(262144),
     /**
@@ -585,6 +590,7 @@ export const DEFAULT_SETTINGS: Settings = {
     newChatsOffline: true,
     resources: 'balanced',
     maxOutputTokens: 0,
+    monthlyBudgetTokens: 0,
     localThinking: false,
     ollamaContext: 0,
     showThinking: true,

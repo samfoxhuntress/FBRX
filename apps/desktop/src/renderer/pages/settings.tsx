@@ -23,6 +23,7 @@ import {
   displayVersion,
   editionPoints,
   formatPrice,
+  formatTokens,
   funEnabled,
   thinkingBudget,
   thinkingLevelOf,
@@ -945,6 +946,10 @@ const ANSWER_LENGTHS = [
   { value: '65536', label: 'Huge (64,000 tokens)' },
 ];
 const CONTEXTS = [4096, 8192, 16384, 32768, 65536, 131072];
+const MONTHLY_BUDGETS = [
+  { value: '0', label: 'No limit' },
+  ...[250_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000, 25_000_000].map((n) => ({ value: String(n), label: `${formatTokens(n)} tokens a month` })),
+];
 const ctxLabel = (n: number) => `${n / 1024}K tokens${n === 8192 ? ' (default)' : ''}`;
 // Rough extra memory for the conversation itself (the KV cache of a typical 7–8B model).
 const ctxMemory = (n: number) => (n <= 8192 ? 'about 1 GB extra memory' : n <= 16384 ? 'about 2 GB' : n <= 32768 ? 'about 4 GB' : n <= 65536 ? 'about 8 GB' : 'about 16 GB');
@@ -1019,6 +1024,17 @@ function WorkBudget({ policy }: { policy: EffectivePolicy }) {
           />
         </Field>
       )}
+      <Field
+        label={<>Monthly cloud AI budget <Locked show={L('ai.monthlyBudgetTokens')} /></>}
+        help={`The most cloud AI may read and write on this computer in a month (models here cost nothing and are not counted). Near it, ${s.ai.agentName} works sparingly and says so; at it, a task stops cleanly and new chats with cloud AI wait for next month or a higher budget. AI usage shows where you are.`}
+      >
+        <Select
+          value={String(s.ai.monthlyBudgetTokens)}
+          disabled={L('ai.monthlyBudgetTokens')}
+          onChange={(e) => void patch({ ai: { monthlyBudgetTokens: Number(e.target.value) } })}
+          options={[...MONTHLY_BUDGETS, ...(MONTHLY_BUDGETS.some((o) => o.value === String(s.ai.monthlyBudgetTokens)) ? [] : [{ value: String(s.ai.monthlyBudgetTokens), label: `${formatTokens(s.ai.monthlyBudgetTokens)} tokens a month` }])]}
+        />
+      </Field>
     </div>
   );
 }

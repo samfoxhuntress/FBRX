@@ -219,6 +219,39 @@ export interface TokenUsage {
   outputTokens: number;
 }
 
+/** How full a conversation is for the agent that answers it (the gauge under the chat). */
+export interface ContextReading {
+  /** What the agent holds, in tokens. */
+  windowTokens: number;
+  /** What the last request took: as the provider counted it, or as FBRX estimates it before one. */
+  usedTokens: number;
+  /** Older requests folded into a digest so the conversation fits. */
+  folded: number;
+  /** Counted by FBRX (about 2.5 characters a token), not by the provider. */
+  estimated: boolean;
+  /** This month's cloud AI against the monthly budget, when one is set and the agent is a cloud model. */
+  month: { used: number; budget: number } | null;
+}
+
+/** AI use on this computer this month (the AI usage page). Only counts are kept, never what was said. */
+export interface AiUsageReport {
+  month: string;
+  inputTokens: number;
+  outputTokens: number;
+  runs: number;
+  /** What the monthly budget counts: cloud models' tokens, read and written. */
+  cloudTokens: number;
+  /** Settings → Agent → Monthly cloud AI budget, in tokens (0: none). */
+  budget: number;
+  models: Array<{ providerId: string; providerName: string; model: string; cloud: boolean; inputTokens: number; outputTokens: number; runs: number }>;
+  /** Each day of the month so far. */
+  days: Array<{ day: string; inputTokens: number; outputTokens: number }>;
+  /** The agent chats use now: its model and what it holds. */
+  agent: { providerName: string; model: string; cloud: boolean; windowTokens: number; maxOutputTokens: number; maxSteps: number } | null;
+  /** The FBRX account's FBRX Cloud AI this month, when one is signed in. */
+  cloudAi: CloudAiUsage | null;
+}
+
 /** "mesh": another computer's agent is taking over or being consulted (Mesh Assist). */
 export type AgentPhase = 'model' | 'thinking' | 'writing' | 'tool' | 'approval' | 'reading' | 'mesh';
 
@@ -231,10 +264,10 @@ export type AgentEvent = { seq?: number } & (
   | { type: 'message.delta'; runId: string; conversationId: string; messageId: string; delta: string }
   | { type: 'thinking.delta'; runId: string; conversationId: string; messageId: string; delta: string }
   /** What the agent is doing right now (shown while it works). */
-  | { type: 'run.progress'; runId: string; conversationId: string; step: number; maxSteps: number; phase: AgentPhase; detail: string; usage: TokenUsage }
+  | { type: 'run.progress'; runId: string; conversationId: string; step: number; maxSteps: number; phase: AgentPhase; detail: string; usage: TokenUsage; context?: ContextReading }
   | { type: 'message.completed'; runId: string; conversationId: string; message: ChatMessage }
   | { type: 'tool.updated'; runId: string; conversationId: string; messageId: string; call: ToolCallRecord }
-  | { type: 'run.completed'; runId: string; conversationId: string; steps: number; usage: TokenUsage }
+  | { type: 'run.completed'; runId: string; conversationId: string; steps: number; usage: TokenUsage; context?: ContextReading }
   | { type: 'run.failed'; runId: string; conversationId: string; error: string }
   | { type: 'run.cancelled'; runId: string; conversationId: string }
   | { type: 'mode.changed'; runId: string | null; conversationId: string; offline: boolean }
@@ -667,6 +700,10 @@ export interface CoreMethods extends ExtMethods {
   'ai.models': (p: { providerId: string }) => ModelInfo[];
   /** attachments: ids from ai.attachments.add, sent with this message. */
   'ai.chat': (p: { conversationId?: string; message: string; providerId?: string; model?: string; offline?: boolean; attachments?: string[] }) => { runId: string; conversationId: string };
+  /** How full a chat is for the agent that answers it (estimated until a request is made): the gauge under the chat. */
+  'ai.context': (p: { conversationId?: string; providerId?: string; model?: string }) => ContextReading;
+  /** This month's AI use on this computer, the monthly budget, and the FBRX account's FBRX Cloud AI. */
+  'ai.usage': () => AiUsageReport;
   /** Attaches a file (its bytes in base64) for the next message; it is read and kept until sent or removed. */
   'ai.attachments.add': (p: { name: string; data: string; mime?: string }) => AttachmentInfo;
   /** Removes an attachment that was not sent. */

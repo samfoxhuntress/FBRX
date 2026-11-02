@@ -5,6 +5,37 @@ pictures you give it, makes documents and pictures, reads the web, does jobs by 
 your screen when you hand it a snapshot. Everything here follows the computer's policy like any other tool: what
 needs a yes asks for one, and the audit log keeps what was done.
 
+## How Fabrix works
+
+Whatever model answers (on this computer, on your FBRX Server, FBRX Cloud AI or another cloud AI), FBRX gives it the
+same rules:
+
+- **Build alongside you, and heal what it touches.** It leaves files, settings and systems better than it found them,
+  never worse, and prefers the fix that repairs a problem over one that hides it.
+- **Do no harm, whoever asks.** Being told to is not enough: when a request would damage data, a computer, a network or
+  a person, it says so and offers a safe way to what you need.
+- **Point out what else needs care.** While it works it notices other problems (a failing service, a setting that
+  weakens security, a nearly full disk) and lists them after the task under *Also noticed*, with the fix it recommends.
+  It changes them only when you say yes.
+- **Only claim what a tool confirmed.** If a tool failed, or it has none for what you asked, it says so.
+
+## Its room: the context window and the monthly budget
+
+- **The gauge under the chat** shows how much of the model's context window the conversation takes, such as
+  *Context 9.8K / 16K tokens*: estimated when a chat opens, then as the provider counted each request. Amber past three
+  quarters, red when full. Click it for AI usage.
+- **Fabrix knows it too.** With your message it gets a short note of its context window, how full it is, its longest
+  answer, its steps for the task and, with a monthly budget, the month. Near a limit it works in fewer, smaller steps
+  and says so once; at a limit it stops cleanly, with what is done, what is left and how to go on.
+- **Long conversations are folded, not cut.** When the older requests no longer fit, they become a short digest: what
+  was asked, what came of it, the tools used and the ids made (a project's, a note's), exactly. Nothing in the digest is
+  made up, because no model is asked to summarize. The gauge says how many requests are folded.
+- **Monthly cloud AI budget** (Settings → Agent): the most cloud AI may read and write on this computer in a month.
+  Models on this computer are not counted. Past three quarters Fabrix works sparingly; at the limit a task stops between
+  steps and new chats with cloud AI wait for next month or a higher budget.
+- **AI usage** (next to AI models): this month's tokens by day and by model, the budget, what the agent's model holds,
+  and your FBRX account's FBRX Cloud AI. Only counts are kept, never what was said.
+
 ## Attach files and pictures
 
 The paperclip next to the chat box (or drag files onto the chat, or paste a picture) attaches up to 10 files to a

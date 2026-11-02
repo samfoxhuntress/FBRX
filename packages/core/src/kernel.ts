@@ -18,6 +18,7 @@ import {
   homeBoard,
   notesFor,
   atLeast,
+  type AiUsageReport,
   type DeviceCommand,
   type Heartbeat,
   type NotificationEvent,
@@ -117,6 +118,8 @@ import { StarterAi } from './ai/runtime/starter';
 import { LocalRuntime } from './ai/runtime/local-runtime';
 import { ProviderManager } from './ai/provider-manager';
 import { AgentRuntime } from './ai/agent';
+import { tokensFor } from './ai/context-budget';
+import { UsageLedger, usageReport } from './ai/usage-ledger';
 import type { ProviderMessage } from './ai/providers/types';
 import { installModelReviewer } from './ai/guardian-reviewer';
 import { PluginHost } from './plugins/plugin-host';
@@ -171,6 +174,8 @@ export class Kernel {
 
   readonly db: Db;
   readonly meta: MetaStore;
+  /** AI use on this computer by month (the AI usage page and the monthly cloud AI budget). */
+  readonly usage: UsageLedger;
   readonly settings: SettingsService;
   readonly audit: AuditLog;
   readonly vault: Vault;
@@ -277,6 +282,7 @@ export class Kernel {
     const mig = this.db.migrate(MIGRATIONS);
     if (mig.from !== mig.to) this.log.info('Database migrated', mig);
     this.meta = new MetaStore(this.db);
+    this.usage = new UsageLedger(this.meta);
     if (!this.meta.get('install.id')) {
       this.meta.set('install.id', randomBytes(8).toString('hex'));
       this.meta.set('install.createdAt', new Date().toISOString());
@@ -387,6 +393,7 @@ export class Kernel {
       workspace: this.paths.workspace,
       allowedRoots: () => this.policy.allowedRoots(),
       attachments: this.attachments,
+      usage: this.usage,
       halt: () => this.aiHalt(),
       learner: () => {
         const e = this.edition();
@@ -1512,6 +1519,21 @@ export class Kernel {
   // ------------------------------------------------------------------------------------ emergency stop
 
   /** The emergency stop in force, if any. It survives restarts until someone resumes the AI. */
+  /** This month's AI use on this computer, with the agent chats use now and the FBRX account's FBRX Cloud AI. */
+  aiUsage(): Promise<AiUsageReport> {
+    const s = this.settings.get();
+    return usageReport({
+      ledger: this.usage,
+      providerName: (id) => s.ai.providers.find((p) => p.id === id)?.name ?? id,
+      budget: s.ai.monthlyBudgetTokens,
+      agent: () => {
+        const { provider, config, model } = this.providers.resolve();
+        return { providerName: config.name, model, cloud: !!config.cloud, windowTokens: tokensFor(provider.historyBudgetChars), maxOutputTokens: s.ai.maxOutputTokens, maxSteps: this.policy.policy.ai.maxStepsPerRun };
+      },
+      cloudAi: () => (this.account.cloudAccess() ? this.account.cloudAi(AbortSignal.timeout(5000)) : null),
+    });
+  }
+
   aiHalt(): { at: string; by: string } | null {
     return this.meta.get<{ at: string; by: string }>('ai.halt');
   }

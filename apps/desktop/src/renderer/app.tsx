@@ -35,6 +35,7 @@ const ConnectionsPage = lazy(() => import('./pages/connections').then((m) => ({ 
 const VaultPage = lazy(() => import('./pages/vault').then((m) => ({ default: m.VaultPage })));
 const GovernancePage = lazy(() => import('./pages/governance').then((m) => ({ default: m.GovernancePage })));
 const RuntimePage = lazy(() => import('./pages/runtime').then((m) => ({ default: m.RuntimePage })));
+const AiUsagePage = lazy(() => import('./pages/ai-usage').then((m) => ({ default: m.AiUsagePage })));
 const BackupPage = lazy(() => import('./pages/backup').then((m) => ({ default: m.BackupPage })));
 const FleetPage = lazy(() => import('./pages/fleet').then((m) => ({ default: m.FleetPage })));
 const SettingsPage = lazy(() => import('./pages/settings').then((m) => ({ default: m.SettingsPage })));
@@ -102,6 +103,7 @@ export type Route =
   | 'connections'
   | 'tools'
   | 'runtime'
+  | 'ai-usage'
   | 'approvals'
   | 'vault'
   | 'governance'
@@ -413,6 +415,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect', need: 'ultra' },
     { id: 'vpn', label: 'FBRX VPN', icon: 'lock', section: 'Connect', need: 'ultra' },
     { id: 'runtime', label: 'AI models', icon: 'cpu', section: 'Connect' },
+    { id: 'ai-usage', label: 'AI usage', icon: 'gauge', section: 'Connect' },
     { id: 'aicoord', label: 'AI coordination', icon: 'zap', section: 'Connect', need: 'ultra' },
     { id: 'connections', label: 'Connections', icon: 'link', section: 'Connect', need: 'ultra' },
     { id: 'tools', label: 'Tools & plugins', icon: 'wrench', section: 'Connect', need: 'ultra' },
@@ -582,6 +585,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return ultra ? <GovernancePage /> : ultraOnly('Governance', 'Policies, the audit log and guardian review for everything the agent does.');
       case 'runtime':
         return <RuntimePage />;
+      case 'ai-usage':
+        return <AiUsagePage />;
       case 'backup':
         return <BackupPage />;
       case 'fleet':
@@ -865,6 +870,7 @@ const ESSENTIALS_NAV: Array<[Route, string, string?]> = [
   ['home', 'Your AI', 'Home'],
   ['agent', 'Your AI'],
   ['runtime', 'Your AI', 'AI models'],
+  ['ai-usage', 'Your AI', 'AI usage'],
   ['helpdesk', 'Help & settings', 'Get help'],
   ['fleet', 'Help & settings'],
   ['settings', 'Help & settings'],

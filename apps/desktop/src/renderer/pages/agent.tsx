@@ -18,6 +18,7 @@ import { summonGoose } from '../fun';
 import { useLearner, useTier } from '../edition';
 import { ChatHistory, type ChatFilter } from '../chat-history';
 import { AttachmentTray, CreatedFiles, MessageAttachments, useAttachments } from '../attachments';
+import { ContextGauge, useContextReading } from '../context-gauge';
 
 const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'activity', title: 'Check my PC', prompt: 'Give me a quick health check of this computer: performance right now, storage, security status and any recent errors. Tell me what (if anything) needs attention.' },
@@ -248,6 +249,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
   const [dropping, setDropping] = useState(false);
   const [providerId, setProviderId] = useState('');
   const [model, setModel] = useState('');
+  const reading = useContextReading(selected, providerId, model);
   const [approvals, setApprovals] = useState<ApprovalRequest[]>([]);
   const [offline, setOffline] = useState(true);
   const thread = useRef<HTMLDivElement>(null);
@@ -713,6 +715,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
                 </div>
               )}
               {currentProvider && !currentProvider.available && <span className="fx-muted" style={{ fontSize: 12 }}>{currentProvider.message}</span>}
+              <ContextGauge reading={reading} />
             </div>}
             <div className="composer-actions">
               {selected && !busy && (
