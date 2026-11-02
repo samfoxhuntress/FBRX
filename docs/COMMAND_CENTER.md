@@ -635,10 +635,10 @@ security model.
 ## AI coordination
 
 **AI coordination** finds other AI apps on the computer from the Start menu, the installed-programs list, running
-processes and their folders: Claude Desktop, Claude Code, Cursor, Windsurf, VS Code with GitHub Copilot, Gemini CLI,
-LM Studio, Perplexity, Comet, Grok, ChatGPT, Microsoft Copilot, Msty, AnythingLLM, Codex CLI, Ollama, Jan and GPT4All.
-Apps that support MCP (Claude Desktop and Code, Cursor, Windsurf, VS Code, Gemini CLI, LM Studio) connect with one
-click and then see FBRX tools plus `ask_fabrix` (apps that still call it by its old name, `ask_fabric`, keep working). Apps without MCP on Windows (Perplexity, Grok, ChatGPT) can be
+processes and their folders: Claude Desktop, Claude Code, Cursor, Windsurf, VS Code with GitHub Copilot, Hermes Agent,
+Gemini CLI, LM Studio, Perplexity, Comet, Grok, ChatGPT, Microsoft Copilot, Msty, AnythingLLM, Codex CLI, Ollama, Jan and
+GPT4All. Apps that support MCP (Claude Desktop and Code, Cursor, Windsurf, VS Code, Hermes Agent, Gemini CLI, LM Studio)
+connect with one click and then see FBRX tools plus `ask_fabrix` (apps that still call it by its old name, `ask_fabric`, keep working). Apps without MCP on Windows (Perplexity, Grok, ChatGPT) can be
 opened from FBRX, and their makers' APIs can be added as models for second opinions (*Add as a model*; you need an
 API key from them). **Look again** re-scans and reports what it found.
 
@@ -652,6 +652,13 @@ tools, so you know the link works before you switch apps. For Claude Desktop, FB
 the regular installer and the Microsoft Store version (which keeps its settings under
 `%LOCALAPPDATA%\Packages\Claude_…\LocalCache\Roaming\Claude`); quit Claude completely from its tray icon and start it
 again to load it. Then, in Claude, ask it to use FBRX ("use FBRX to check my disk space", "ask Fabrix …").
+
+**Hermes Agent** keeps its MCP servers in `~/.hermes/config.yaml` under `mcp_servers`. Connect adds one `fbrx` line
+there and leaves every other line as it was, comments included (the old file is kept as `config.yaml.fbrx-backup`);
+Disconnect takes the line out again. Run `/reload-mcp` in Hermes, or start it again, and the FBRX tools appear named
+`mcp_fbrx_…`. A `mcp_servers` list written on one line (`mcp_servers: {…}`) is left alone: put each server on its own
+line, then connect again. FBRX finds Hermes on Linux and macOS, where it keeps its settings in your home folder (inside
+WSL on Windows, its settings are out of FBRX's reach).
 
 **Second opinion** asks another configured model the same question without tools. Claude Code, when installed, is
 one of the choices: FBRX runs `claude -p` with the question and shows the answer, which is how to ask Claude from

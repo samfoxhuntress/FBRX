@@ -5,6 +5,7 @@ import { dirname, join } from 'node:path';
 import type { AiAppInfo, McpBridgeInfo } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import { exec, IS_WIN, psObject } from '../windows/ps';
+import { readYamlEntry, setYamlEntry } from './yaml-entry';
 
 const HOME = homedir();
 const APPDATA = process.env.APPDATA ?? join(HOME, 'AppData', 'Roaming');
@@ -18,8 +19,8 @@ interface CatalogEntry {
   paths: string[];
   cmd?: string;
   port?: number;
-  /** MCP configuration file and the key holding servers. */
-  config?: { file: string; key: 'mcpServers' | 'servers'; vscode?: boolean };
+  /** MCP configuration file, the key holding servers, and whether the file is YAML rather than JSON. */
+  config?: { file: string; key: 'mcpServers' | 'servers' | 'mcp_servers'; vscode?: boolean; yaml?: boolean };
   vscodeExt?: RegExp;
   /** Windows: matches the app's Start menu entry or installed-program name. */
   match?: RegExp;
@@ -51,6 +52,16 @@ function configFiles(c: CatalogEntry): string[] {
   return c.id === 'claude-desktop' ? [c.config.file, ...claudeMsixConfigs()] : [c.config.file];
 }
 
+/** What the person does after Connect so the app loads FBRX's tools. */
+function connected(c: CatalogEntry): string {
+  if (c.id === 'hermes') return 'Connected. In Hermes, run /reload-mcp (or start it again) to load the FBRX OS tools, named mcp_fbrx_….';
+  const quit = c.id === 'claude-desktop' ? ' Quit it completely (right-click its tray icon → Quit), start it again, then use Test to check the link.' : '';
+  return `Connected. Restart ${c.name} to load the FBRX OS tools.${quit}`;
+}
+
+/** The start of the hint after a passing Test: once the app has loaded FBRX's tools. */
+const reload = (c: CatalogEntry) => (c.id === 'hermes' ? 'After /reload-mcp in Hermes' : `After restarting ${c.name}`);
+
 const NO_MCP = (app: string) => `${app} cannot load tools from other apps (MCP) on Windows yet. You can still ask Fabrix from FBRX, and get second opinions from its model below.`;
 
 const CATALOG: CatalogEntry[] = [
@@ -74,6 +85,14 @@ const CATALOG: CatalogEntry[] = [
     match: /^Visual Studio Code$/i,
     vscodeExt: /^github\.copilot(-chat)?-/i,
     config: { file: IS_WIN ? join(APPDATA, 'Code', 'User', 'mcp.json') : process.platform === 'darwin' ? join(MAC_SUPPORT, 'Code', 'User', 'mcp.json') : join(HOME, '.config', 'Code', 'User', 'mcp.json'), key: 'servers', vscode: true },
+  },
+  {
+    id: 'hermes',
+    name: 'Hermes Agent',
+    kind: 'cli',
+    paths: [join(HOME, '.hermes')],
+    cmd: 'hermes',
+    config: { file: join(HOME, '.hermes', 'config.yaml'), key: 'mcp_servers', yaml: true },
   },
   { id: 'gemini', name: 'Gemini CLI', kind: 'cli', paths: [join(HOME, '.gemini')], cmd: 'gemini', config: { file: join(HOME, '.gemini', 'settings.json'), key: 'mcpServers' } },
   { id: 'lmstudio', name: 'LM Studio', kind: 'local-server', paths: [join(LOCAL, 'Programs', 'LM Studio'), join(HOME, '.lmstudio'), join(HOME, '.cache', 'lm-studio')], port: 1234, match: /^LM Studio$/i, process: /^LM Studio$/i, config: { file: join(HOME, '.lmstudio', 'mcp.json'), key: 'mcpServers' } },
@@ -163,6 +182,31 @@ function readJson(file: string): Record<string, any> {
   }
 }
 
+type BridgeEntry = { command: string; args: string[]; env?: Record<string, string> };
+
+/** FBRX's entry in one of the app's configuration files, or null. */
+function readEntry(c: CatalogEntry, file: string): BridgeEntry | null {
+  const { key, yaml } = c.config!;
+  if (!yaml) return readJson(file)[key]?.fbrx ?? null;
+  return existsSync(file) ? (readYamlEntry(readFileSync(file, 'utf8'), key, 'fbrx') as BridgeEntry | null) : null;
+}
+
+/** The text of one of the app's configuration files with FBRX's entry set (or with null removed), the rest kept. */
+function withEntry(c: CatalogEntry, file: string, entry: object | null): string {
+  const { key, yaml } = c.config!;
+  if (yaml) {
+    try {
+      return setYamlEntry(existsSync(file) ? readFileSync(file, 'utf8') : '', key, 'fbrx', entry);
+    } catch (e) {
+      throw new CoreError('INVALID_ARGUMENT', `In ${file}, ${(e as Error).message}`);
+    }
+  }
+  const j = readJson(file);
+  if (entry) j[key] = { ...(j[key] ?? {}), fbrx: entry };
+  else delete j[key]?.fbrx;
+  return `${JSON.stringify(j, null, 2)}\n`;
+}
+
 export interface AiCoordDeps {
   /** Command and arguments that start the MCP shim (the FBRX executable in Node mode, or node). */
   shim: () => { command: string; args: string[]; env: Record<string, string> } | null;
@@ -193,7 +237,7 @@ export class AiCoordination {
     if (!c.config) return false;
     return configFiles(c).some((f) => {
       try {
-        return !!readJson(f)[c.config!.key]?.fbrx;
+        return !!readEntry(c, f);
       } catch {
         return false;
       }
@@ -301,14 +345,12 @@ export class AiCoordination {
     }
     const files = configFiles(c);
     for (const file of files) {
+      const next = withEntry(c, file, c.config.vscode ? { type: 'stdio', ...s } : s);
       mkdirSync(dirname(file), { recursive: true });
-      const j = readJson(file);
       if (existsSync(file)) writeFileSync(`${file}.fbrx-backup`, readFileSync(file));
-      j[c.config.key] = { ...(j[c.config.key] ?? {}), fbrx: c.config.vscode ? { type: 'stdio', ...s } : s };
-      writeFileSync(file, `${JSON.stringify(j, null, 2)}\n`);
+      writeFileSync(file, next);
     }
-    const quit = c.id === 'claude-desktop' ? ' Quit it completely (right-click its tray icon → Quit), start it again, then use Test to check the link.' : '';
-    return { ok: true, path: files[0], message: `Connected. Restart ${c.name} to load the FBRX OS tools.${quit}` };
+    return { ok: true, path: files[0], message: connected(c) };
   }
 
   async remove(appId: string): Promise<{ ok: boolean; message: string }> {
@@ -319,12 +361,7 @@ export class AiCoordination {
       if (cmd) await exec(cmd, ['mcp', 'remove', '--scope', 'user', 'fbrx'], { timeoutMs: 20_000 });
     }
     for (const file of configFiles(c)) {
-      if (!existsSync(file)) continue;
-      const j = readJson(file);
-      if (j[c.config.key]?.fbrx) {
-        delete j[c.config.key].fbrx;
-        writeFileSync(file, `${JSON.stringify(j, null, 2)}\n`);
-      }
+      if (existsSync(file) && readEntry(c, file)) writeFileSync(file, withEntry(c, file, null));
     }
     return { ok: true, message: `Disconnected from ${c.name}.` };
   }
@@ -335,10 +372,12 @@ export class AiCoordination {
    */
   async test(appId: string): Promise<{ ok: boolean; message: string; tools: number; durationMs: number }> {
     const c = CATALOG.find((x) => x.id === appId);
-    let entry: { command: string; args: string[]; env?: Record<string, string> } | null = null;
+    let entry: BridgeEntry | null = null;
     for (const f of c ? configFiles(c) : []) {
       try {
-        entry = readJson(f)[c!.config!.key]?.fbrx ?? entry;
+        // A hand-written YAML entry reads as {}: the test then starts the bridge FBRX would write.
+        const e = readEntry(c!, f);
+        if (e?.command) entry = e;
       } catch {
         /* unreadable config */
       }
@@ -386,7 +425,7 @@ export class AiCoordination {
             if (msg.error || tools <= 1) {
               return finish({ ok: false, message: `The bridge started but could not list FBRX tools${msg.error ? `: ${msg.error.message}` : ' (is FBRX OS running with the Local API on?)'}.`, tools });
             }
-            finish({ ok: true, message: `Working: the bridge answered with ${tools} FBRX tools.${c ? ` After restarting ${c.name}, ask it for example "Use FBRX to check my disk space" or "Ask Fabrix what is slowing my PC down".` : ''}`, tools });
+            finish({ ok: true, message: `Working: the bridge answered with ${tools} FBRX tools.${c ? ` ${reload(c)}, ask it for example "Use FBRX to check my disk space" or "Ask Fabrix what is slowing my PC down".` : ''}`, tools });
           }
         }
       });
