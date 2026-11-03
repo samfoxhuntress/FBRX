@@ -43,6 +43,21 @@ same rules:
 - **AI usage** (next to AI models): this month's tokens by day and by model, the budget, what the agent's model holds,
   and your FBRX account's FBRX Cloud AI. Only counts are kept, never what was said.
 
+## Skills: jobs it knows how to do
+
+A skill is how Fabrix does a job of several steps, written down so it does it the same good way next time.
+
+- **Starter skills** come with FBRX: *Slow or dropping Wi-Fi* (the channel planner, then ping and a speed test),
+  *Free up disk space* (the storage report and the space hogs, safe things first), *Computer feels slow*, *Security
+  check-up*, *What's on my network* and *Plan my day*.
+- **Learned skills**: after a job that took three or more tool steps and is likely to come up again, Fabrix saves how
+  it did it (`skills.save`). FBRX asks you first, like any change, so a skill is kept only when you approve it.
+- **Your own**: Settings → Skills → **Add a skill**: a name, when to use it and the steps, one per line.
+- The skills that fit what you ask (by the words of their name, when and keywords) go with your message, and the
+  tools their steps name join a small model's short list of tools, so even a small model follows steps that worked.
+  Settings → Skills shows each skill's steps and how often it was used, turns any of them off, and edits or deletes
+  yours and the learned ones.
+
 ## Attach files and pictures
 
 The paperclip next to the chat box (or drag files onto the chat, or paste a picture) attaches up to 10 files to a

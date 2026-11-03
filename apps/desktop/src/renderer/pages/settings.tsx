@@ -48,6 +48,7 @@ import { KeyRecorder, MacroSettings } from './settings-macros';
 import { SnippetSettings } from './settings-snippets';
 import { VoiceSettings } from './settings-voice';
 import { MemorySettings } from './settings-memory';
+import { SkillsSettings } from './settings-skills';
 import { AboutVersion, ReleasePanel } from '../release';
 import { AccountSettings, BuyButtons, useAccount } from '../account';
 import { EditionHint, trialLine, howToGet, useAtLeast, useChooseEdition, useEditionStatus, useLearner, useTier, useVertical } from '../edition';
@@ -60,7 +61,7 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'memory' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'browser' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'api' | 'logs';
+type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'memory' | 'skills' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'browser' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'api' | 'logs';
 /** FBRX Digger's settings: what applies to a network toolkit. */
 const DIGGER_TABS: readonly string[] = DIGGER_SETTINGS;
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean }> = [
@@ -70,6 +71,7 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: str
   { id: 'messages', label: 'Messages', icon: 'message', group: 'You', notEssentials: true },
   { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
   { id: 'memory', label: 'Memory', icon: 'brain', group: 'You' },
+  { id: 'skills', label: 'Skills', icon: 'toolbox', group: 'You' },
   { id: 'voice', label: 'Voice', icon: 'mic', group: 'You' },
   { id: 'snippets', label: 'Snippets', icon: 'code', group: 'You', notEssentials: true },
   { id: 'macros', label: 'Macros', icon: 'zap', group: 'You', notEssentials: true },
@@ -136,6 +138,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'messages' && <MessagesSettings />}
           {tab === 'agent' && <AgentSettings />}
           {tab === 'memory' && <MemorySettings />}
+          {tab === 'skills' && <SkillsSettings />}
           {tab === 'voice' && <VoiceSettings />}
           {tab === 'snippets' && <SnippetSettings />}
           {tab === 'macros' && <MacroSettings />}

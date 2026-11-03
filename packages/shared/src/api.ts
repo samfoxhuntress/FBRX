@@ -16,6 +16,7 @@ import type { CreatedFile } from './creations';
 import type { SupportStatus } from './support';
 import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './browser';
 import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
+import type { Skill } from './skills';
 import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
 import type { ThinkingBudget, ThinkingLevel } from './thinking';
 import type { ExtEvents, ExtMethods } from './ext';
@@ -799,6 +800,10 @@ export interface CoreMethods extends ExtMethods {
   'memory.update': (p: { id: string; content: string }) => MemoryEntry;
   'memory.forget': (p: { id: string }) => { ok: boolean };
   'memory.forgetAll': () => { forgotten: number };
+  'skills.list': () => Skill[];
+  'skills.save': (p: { id?: string; name: string; when: string; steps: string[] }) => Skill;
+  'skills.setEnabled': (p: { id: string; enabled: boolean }) => Skill;
+  'skills.remove': (p: { id: string }) => { removed: boolean };
   'governance.folders': () => FolderAccessStatus;
   /** Lets the AI use a folder (picked by the person). */
   'governance.addFolder': (p: { path: string }) => FolderAccessStatus;
@@ -939,6 +944,7 @@ export interface CoreEvents extends ExtEvents {
   'governance.folderRequest': FolderRequest & { state: 'open' | 'closed' };
   /** The AI's memory of the person changed (how many facts it holds now). */
   'memory.changed': { count: number };
+  'skills.changed': { count: number };
   'plugins.changed': PluginInfo[];
   'connectors.changed': ConnectorInfo[];
   'tools.changed': ToolInfo[];

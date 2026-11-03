@@ -53,6 +53,7 @@ import { PolicyEngine } from './governance/policy-engine';
 import { FolderAccess } from './governance/folder-access';
 import { KnowledgeBase } from './knowledge/knowledge-base';
 import { MemoryService } from './ai/memory';
+import { SkillStore } from './ai/skills';
 import { runDoctor, type DoctorFinding } from './knowledge/doctor';
 import { fbrx1Commands } from './cli/fbrx1';
 import { expandPathVars } from './governance/path-guard';
@@ -64,7 +65,7 @@ import { ToolGate } from './governance/tool-gate';
 import { checkUrl } from './governance/network-guard';
 import { LicenseService } from './license/license-service';
 import { ToolRegistry } from './tools/registry';
-import { fbrxTools, folderTools, fsTools, knowledgeTools, memoryTools, netTools, shellTools, systemTools, diskFreeGb } from './tools/builtin';
+import { fbrxTools, folderTools, fsTools, knowledgeTools, memoryTools, netTools, shellTools, skillTools, systemTools, diskFreeGb } from './tools/builtin';
 import { pcTools, workspaceTools } from './tools/builtin/command-center-tools';
 import { WorkspaceStore } from './workspace/workspace-store';
 import { SystemMonitor } from './system/system-monitor';
@@ -190,6 +191,8 @@ export class Kernel {
   readonly knowledge: KnowledgeBase;
   /** What the AI remembers about the person, on this computer only (Settings → Memory). */
   readonly memory: MemoryService;
+  /** Fabrix's skills: starter ones, learned ones (each approved by the person) and the person's own. */
+  readonly skills: SkillStore;
   readonly redactor = new Redactor();
   readonly limiter: RateLimiter;
   readonly license: LicenseService;
@@ -308,6 +311,7 @@ export class Kernel {
       notify: (title, body) => this.notify({ title, body, level: 'warning', source: 'governance', open: 'governance' }),
       timeoutSeconds: () => this.policy.policy.approvals.timeoutSeconds,
     });
+    this.skills = new SkillStore({ meta: this.meta, events: this.events });
     this.memory = new MemoryService({ db: this.db, settings: () => this.settings.get().memory, learner: () => this.edition().learner, events: this.events });
     this.guardian.setPrivateValues(() => this.memory.privateValues());
     this.knowledge = new KnowledgeBase({ file: join(this.paths.root, 'knowledge.db'), appVersion: this.platform.appVersion, commands: fbrx1Commands, log: L('knowledge') });
@@ -401,6 +405,7 @@ export class Kernel {
       },
       onConcern: (category) => this.reportConcern(category),
       memory: { context: (o) => this.memory.context(o), learn: (text) => this.memory.learn(text) },
+      skills: { context: (text) => this.skills.context(text) },
       assist: {
         canHandoff: (trigger) => this.assist.canHandoff(trigger),
         handoff: (h) => this.assist.handoff(h),
@@ -1128,6 +1133,7 @@ export class Kernel {
           ...netTools({ checkUrl: (u) => checkUrl(u, this.policy.policy.network) }),
           ...systemTools({ workspace: ws, notify: (title, body) => this.notify({ title, body, level: 'info', source: 'agent' }) }),
           ...memoryTools(this.memory),
+          ...skillTools(this.skills),
           ...passwordTools({ passwords: this.passwords, offerSave: (d) => this.events.emit('passwords.saveRequested', d) }),
           ...folderTools(this.folders),
           ...knowledgeTools({ kb: this.knowledge, doctor: () => this.doctor(), fix: (id) => this.applyFix(id) }),
@@ -1143,7 +1149,7 @@ export class Kernel {
             return a.agentMayConsult && a.request !== 'off' ? null : 'Mesh Assist does not let the agent consult other computers';
           }),
           ...helpdeskTools(this.helpdesk, () => (this.fleet.enrolled ? null : 'This computer is not part of an organization, so there is no help desk to send to')),
-          ...pcTools({ monitor: this.monitor, net: this.net, alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined) }),
+          ...pcTools({ monitor: this.monitor, net: this.net, networkTools: () => this.networkTools(), alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined) }),
           ...createTools({
             output: this.output,
             renderer: () => this.platform.renderer ?? null,

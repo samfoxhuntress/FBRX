@@ -676,7 +676,8 @@ Desktop app itself.
 | --- | --- |
 | `workspace.list_tasks`, `workspace.search_notes`, `workspace.list_projects`, `workspace.search_snippets` | read |
 | `workspace.add_task`, `workspace.update_task`, `workspace.create_note`, `workspace.append_note`, `workspace.save_snippet` | write (allowed by the built-in `builtin-workspace` rule: they only touch FBRX's own data) |
-| `pc.live_status`, `pc.storage_report`, `alerts.recent`; Windows: `pc.security_status`, `pc.event_errors`, `pc.pending_updates` | read |
+| `pc.live_status`, `pc.storage_report`, `pc.space_hogs`, `alerts.recent`, `net.wifi_channels`, `skills.list`; Windows: `pc.security_status`, `pc.event_errors`, `pc.pending_updates` | read |
+| `skills.save` | write (asks the person, so every learned skill is one they approved) |
 | `pc.clean_temp` | write |
 | `pc.run_fix` (Windows) | execute — asks by default |
 | `net.ping`, `net.traceroute`, `net.dns_lookup`, `net.port_check`, `net.scan_lan`, `net.check_link`, `net.speed_test` | network — offline chats ask to go online first |

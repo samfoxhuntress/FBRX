@@ -2,6 +2,7 @@ import { TASK_PRIORITIES, TASK_STATUSES } from '@fbrx/shared';
 import type { AlertEngine } from '../../alerts/alert-engine';
 import type { NetDiag } from '../../network/netdiag';
 import { checkLink } from '../../security/linkcheck';
+import { spaceHogs } from '../../system/space';
 import type { SystemMonitor } from '../../system/system-monitor';
 import { IS_WIN } from '../../windows/ps';
 import * as sec from '../../windows/security';
@@ -191,6 +192,8 @@ export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
 export interface PcToolDeps {
   monitor: SystemMonitor;
   net: NetDiag;
+  /** The network tools' Ultra parts (and always in FBRX Digger). */
+  networkTools: () => boolean;
   alerts: AlertEngine;
   virustotalKey: () => string | undefined;
 }
@@ -335,6 +338,39 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       async run() {
         const r = await d.net.speedTest(`tool-${Date.now()}`);
         return { output: `Download ${r.downloadMbps} Mbps, upload ${r.uploadMbps} Mbps, latency ${r.latencyMs ?? '—'} ms, jitter ${r.jitterMs ?? '—'} ms (${r.server})`, data: r };
+      },
+    }),
+    tool({
+      name: 'net.wifi_channels',
+      title: 'Wi-Fi channels',
+      description: "The Wi-Fi networks around, this network's signal and channel, how busy each channel is, and which channel it should use with the reason (the channel planner).",
+      risk: 'read',
+      inputSchema: { type: 'object', properties: {} },
+      async run() {
+        const r = await d.net.wifiChannels({ ultra: d.networkTools() });
+        const c = r.connected;
+        const lines = [
+          c ? `Connected to "${c.ssid}" on channel ${c.channel ?? '?'} (${c.band ?? '?'})${c.signalDbm !== null ? `, signal ${c.signalDbm} dBm` : ''}` : 'Not connected to Wi-Fi',
+          `${r.points.length} access points around`,
+          ...r.bands.flatMap((b) => [`${b.band}: ${b.mine !== null ? `yours on ${b.mine}` : 'not used by you'}; best ${b.best?.channel ?? '—'}${b.width ? `; width ${b.width.mhz} MHz` : ''}`, ...b.advice.map((a) => `  - ${a}`)]),
+          r.router ? `Router settings: http://${r.router}` : '',
+        ];
+        return { output: lines.filter(Boolean).join('\n'), data: { connected: r.connected, bands: r.bands.map(({ channels: _c, ...b }) => b), router: r.router } };
+      },
+    }),
+    tool({
+      name: 'pc.space_hogs',
+      title: 'Space hogs',
+      description: 'Caches, AI models, games and backups taking a lot of space on this computer, what each is, and which ones can be cleared because they come back by themselves (Storage → Space hogs).',
+      risk: 'read',
+      timeoutMs: 120_000,
+      inputSchema: { type: 'object', properties: {} },
+      async run() {
+        const hogs = await spaceHogs();
+        return {
+          output: hogs.length ? hogs.map((h) => `- ${h.label}: ${gb(h.size)} (${h.path}). ${h.what}${h.action === 'clear' ? ' Can be cleared in Storage → Space hogs.' : ''}`).join('\n') : 'None of the usual places holds more than 50 MB.',
+          data: hogs,
+        };
       },
     }),
     tool({

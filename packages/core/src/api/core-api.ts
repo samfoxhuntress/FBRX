@@ -58,6 +58,9 @@ const USER_ONLY = new Set<string>([
   'memory.update',
   'memory.forget',
   'memory.forgetAll',
+  'skills.save',
+  'skills.setEnabled',
+  'skills.remove',
   'governance.removeFolder',
   'governance.answerFolder',
   'license.activate',
@@ -421,6 +424,16 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     },
     'memory.forget': (p) => ({ ok: k.memory.forget(IdSchema.parse(p).id) }),
     'memory.forgetAll': () => ({ forgotten: k.memory.forgetAll() }),
+    'skills.list': () => k.skills.list(),
+    'skills.save': (p) => {
+      const q = z.object({ id: z.string().max(80).optional(), name: z.string().min(1).max(200), when: z.string().max(1000), steps: z.array(z.string().max(2000)).min(1).max(40) }).parse(p);
+      return k.skills.save({ ...q, source: 'yours' });
+    },
+    'skills.setEnabled': (p) => {
+      const q = z.object({ id: z.string().max(80), enabled: z.boolean() }).parse(p);
+      return k.skills.setEnabled(q.id, q.enabled);
+    },
+    'skills.remove': (p) => ({ removed: k.skills.remove(IdSchema.parse(p).id) }),
     'governance.folders': () => k.folders.status(),
     'governance.addFolder': (p, ctx) => k.folders.add(z.object({ path: z.string().min(1).max(4096) }).parse(p).path, ctx.actor),
     'governance.removeFolder': (p, ctx) => k.folders.remove(z.object({ entry: z.string().min(1).max(4096) }).parse(p).entry, ctx.actor),

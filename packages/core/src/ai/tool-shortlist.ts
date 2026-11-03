@@ -29,6 +29,7 @@ const GROUPS: Array<{ tools: RegExp; words: RegExp }> = [
   { tools: /^calendar\./, words: starts('calendar', 'meeting', 'event', 'schedule', 'appointment', 'free time', 'busy', 'tomorrow', 'today', 'tonight', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday', 'week', 'invite') },
   { tools: /^passwords\./, words: starts('password', 'sign-in', 'sign in', 'signin', 'login', 'log in', 'account', 'vault', '2fa', 'two-factor', 'credential', 'sign up', 'signup', 'register') },
   { tools: /^(mesh|helpdesk)\./, words: starts('mesh', 'other computer', 'another computer', 'help desk', 'helpdesk', 'ticket', 'it team', 'it support', 'admin') },
+  { tools: /^skills\./, words: starts('skill', 'save this', 'save that', 'next time', 'same way', 'procedure', 'routine', 'what can you do', 'how you did') },
   { tools: /^memory\./, words: starts('remember', 'forget', 'memory', 'earlier', 'last time', 'you said', 'we talked', 'told you') },
   { tools: /^fbrx\./, words: starts('fbrx', 'setting', 'edition', 'audit') },
 ];
@@ -42,9 +43,12 @@ function mentioned(t: ToolSpec, text: string): boolean {
   return words.some((w) => low.includes(w.replace(/_/g, ' ')) || low.includes(w));
 }
 
-/** The tools for a conversation, given what the person asked in it so far (oldest first). */
-export function shortlistTools(tools: ToolSpec[], asked: string[]): ToolSpec[] {
-  const picked: ToolSpec[] = tools.filter((t) => ALWAYS.has(t.name));
+/**
+ * The tools for a conversation, given what the person asked in it so far (oldest first), and the tools the skills that
+ * go with the request name (so a small model can follow their steps).
+ */
+export function shortlistTools(tools: ToolSpec[], asked: string[], wanted: string[] = []): ToolSpec[] {
+  const picked: ToolSpec[] = tools.filter((t) => ALWAYS.has(t.name) || wanted.includes(t.name));
   const add = (t: ToolSpec) => !picked.includes(t) && picked.push(t);
   const groupOf = (t: ToolSpec) => GROUPS.findIndex((g) => g.tools.test(t.name));
   const done = new Set<number>();

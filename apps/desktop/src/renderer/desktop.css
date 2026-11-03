@@ -7783,3 +7783,12 @@ body.popout .fx-page-header p {
 .wifi-history small {
   color: var(--text-muted);
 }
+
+/* Settings → Skills: a skill's steps, opened under it. */
+.skill-steps {
+  margin: 8px 0 2px;
+  padding-left: 20px;
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--text-secondary);
+}

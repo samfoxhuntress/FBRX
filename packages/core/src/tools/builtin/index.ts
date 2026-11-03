@@ -3,6 +3,7 @@ export * from './shell-tools';
 export * from './net-tools';
 export * from './system-tools';
 export * from './memory-tools';
+export * from './skill-tools';
 export * from './folder-tools';
 export * from './knowledge-tools';
 export * from './fbrx-tools';
