@@ -117,7 +117,9 @@ jobs:
 
   publish:
     needs: [meta, desktop]
-    if: inputs.release
+    # Publishes what was built even when a platform got no machine (GitHub's Mac runners are scarce); run the workflow
+    # again with that platform to add it to the same release.
+    if: ${{ !cancelled() && inputs.release && needs.meta.result == 'success' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/download-artifact@v4
