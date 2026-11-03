@@ -3,6 +3,7 @@ import type { DeepPartial, EditionStatus, EffectivePolicy, Settings, Texture } f
 import {
   AUDIENCE_NAMES,
   BROWSER_SEARCH_ENGINES,
+  DIGGER_SETTINGS,
   EDITION_PLANS,
   IMAGE_GENERATORS,
   IMAGE_SIZES,
@@ -38,7 +39,7 @@ import {
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
-import { navigate, routeArg } from '../app';
+import { DIGGER, navigate, routeArg } from '../app';
 import { PRESETS, TEXTURE_NAMES, playStartupSound, resolvedMode, resolvedTexture, textureImage, themeAccent } from '../theme';
 import { GoosePreview, seasonNow, summonGoose } from '../fun';
 import { TrophyBadge, TrophyCase } from '../trophies';
@@ -60,6 +61,8 @@ function Locked({ show }: { show: boolean }) {
 }
 
 type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'memory' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'browser' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'api' | 'logs';
+/** FBRX Digger's settings: what applies to a network toolkit. */
+const DIGGER_TABS: readonly string[] = DIGGER_SETTINGS;
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
@@ -92,7 +95,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   const funUnlocked = useCore('settings.get', undefined, ['settings.changed']).data?.settings.appearance.funUnlocked ?? false;
   const learner = useLearner();
   const vertical = useVertical();
-  const sections = SECTIONS.filter((x) => (learner ? LEARNER_SECTIONS.has(x.id) : (ultra || !x.ultra) && !(tier === 'essentials' && x.notEssentials)));
+  const sections = SECTIONS.filter((x) => (DIGGER ? DIGGER_TABS.includes(x.id) : learner ? LEARNER_SECTIONS.has(x.id) : (ultra || !x.ultra) && !(tier === 'essentials' && x.notEssentials)));
   const [picked, setTab] = useState<SectionId>(() => sectionFromRoute() ?? 'general');
   const tab = sections.some((x) => x.id === picked) ? picked : 'general';
   // A link to a section (such as "See it" on a trophy) while Settings is already open.

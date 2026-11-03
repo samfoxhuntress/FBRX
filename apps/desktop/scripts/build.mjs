@@ -68,6 +68,9 @@ const mobileSrc = join(root, 'packages/core/mobile');
 for (const f of readdirSync(mobileSrc)) copyFileSync(join(mobileSrc, f), join(mobileOut, f));
 copyFileSync(join(root, 'node_modules/tweetnacl/nacl-fast.min.js'), join(mobileOut, 'nacl.min.js'));
 copyFileSync(join(app, 'build', 'icon.png'), join(mobileOut, 'icon.png'));
+// FBRX Digger's window icon (the same build, packaged by electron-builder.digger.yml).
+mkdirSync(join(app, 'dist/assets'), { recursive: true });
+copyFileSync(join(app, 'build', 'digger-icon.png'), join(app, 'dist/assets/digger-icon.png'));
 
 // Voice input's speech engine (ONNX Runtime for WebAssembly), served to the app from fbrx-voice://ort/ so nothing
 // is fetched from a CDN. It must be the exact build the bundled transformers.js expects.

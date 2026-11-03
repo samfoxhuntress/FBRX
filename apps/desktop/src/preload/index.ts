@@ -89,6 +89,8 @@ const api = {
   micAccess: () => ipcRenderer.invoke('fbrx:mic-access') as Promise<{ granted: boolean; status: string }>,
   openVoiceSettings: () => ipcRenderer.invoke('fbrx:voice-settings') as Promise<boolean>,
   platform: process.platform,
+  /** FBRX OS, or FBRX Digger (the Network Center on its own). */
+  flavor: process.argv.includes('--fbrx-flavor=digger') ? 'digger' : 'os',
 };
 
 contextBridge.exposeInMainWorld('fbrx', api);

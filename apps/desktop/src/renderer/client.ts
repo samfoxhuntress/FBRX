@@ -12,6 +12,8 @@ export interface DialogOptions {
 interface Bridge {
   kind: 'electron' | 'http';
   platform: string;
+  /** FBRX OS, or FBRX Digger (the Network Center on its own). */
+  flavor?: 'os' | 'digger';
   call(method: string, params?: unknown): Promise<unknown>;
   on(cb: (event: string, payload: unknown) => void): () => void;
   onNavigate?(cb: (route: string) => void): () => void;

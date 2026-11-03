@@ -1,5 +1,6 @@
 // Builds the app and packages it with electron-builder. Extra arguments are passed through
-// (e.g. `node scripts/package.mjs --mac`, `--win`, `--linux --dir`). `--store` makes the Microsoft Store package
+// (e.g. `node scripts/package.mjs --mac`, `--win`, `--linux --dir`). `--digger` packages FBRX Digger instead (the
+// Network Center on its own, electron-builder.digger.yml) at its own version (DIGGER_VERSION in packages/shared). `--store` makes the Microsoft Store package
 // (MSIX) with the identity Partner Center gives the app (FBRX_STORE_IDENTITY_NAME, FBRX_STORE_PUBLISHER).
 //
 // macOS signing: with CSC_LINK/CSC_NAME set, or a "Developer ID Application" certificate in the keychain,
@@ -7,6 +8,7 @@
 // (an unsigned Apple silicon app does not start at all). Ad-hoc builds are for your own machines; distributing to
 // other Macs needs a Developer ID certificate and notarization (docs/DEPLOYMENT.md).
 import { execFileSync, spawnSync } from 'node:child_process';
+import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -14,6 +16,8 @@ import { fileURLToPath } from 'node:url';
 const app = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 let args = process.argv.slice(2);
+const digger = args.includes('--digger');
+args = args.filter((a) => a !== '--digger');
 
 if (args.includes('--store')) {
   const name = process.env.FBRX_STORE_IDENTITY_NAME;
@@ -26,6 +30,12 @@ if (args.includes('--store')) {
 }
 
 execFileSync(process.execPath, [join(app, 'scripts/build.mjs')], { stdio: 'inherit' });
+
+/** FBRX Digger's version, as packages/shared says it. */
+function diggerVersion() {
+  const src = readFileSync(join(app, '..', '..', 'packages', 'shared', 'src', 'digger.ts'), 'utf8');
+  return /DIGGER_VERSION = '([^']+)'/.exec(src)[1];
+}
 
 function hasDeveloperIdCertificate() {
   try {
@@ -43,5 +53,6 @@ if (buildsMac && process.platform === 'darwin' && !signingConfigured && !hasDeve
 }
 
 const cli = require.resolve('electron-builder/cli.js');
-const r = spawnSync(process.execPath, [cli, '--config', 'electron-builder.yml', '--publish', 'never', ...args], { cwd: app, stdio: 'inherit' });
+const config = digger ? ['--config', 'electron-builder.digger.yml', `-c.extraMetadata.version=${diggerVersion()}`] : ['--config', 'electron-builder.yml'];
+const r = spawnSync(process.execPath, [cli, ...config, '--publish', 'never', ...args], { cwd: app, stdio: 'inherit' });
 process.exit(r.status ?? 1);

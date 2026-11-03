@@ -716,6 +716,7 @@ export class Kernel {
       log: L('release'),
       internet: () => this.internetAllowed(),
       notify: (title, body, version) => this.alerts.fire('update_available', title, body, { key: version }),
+      flavor: this.platform.flavor,
       quiet: () => !this.presenterStatus().active && this.agent.activeCount === 0 && this.idleSeconds() >= 300,
       store: !!this.platform.store,
     });
@@ -1888,6 +1889,11 @@ export class Kernel {
     }
     if (feed) return feed.install({ restartNow: p.restartNow });
     throw new Error('This computer has no way to update itself: it was not installed from the repository and has no update feed');
+  }
+
+  /** Every network tool, whatever the edition: on Endpoint Ultra, and always in FBRX Digger. */
+  networkTools(): boolean {
+    return this.platform.flavor === 'digger' || !this.ultraOnly('Network tools');
   }
 
   /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Essentials or Standard), or null. */

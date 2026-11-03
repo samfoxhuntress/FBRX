@@ -17,6 +17,7 @@ export * from './devices';
 export * from './fun';
 export * from './text-tools';
 export * from './release';
+export * from './digger';
 export * from './netenv';
 export * from './helpdesk';
 export * from './messages';

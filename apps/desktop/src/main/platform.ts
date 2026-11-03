@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { FileKeychain, defaultSpecialDirs, openMacSafeStorage, type KeychainAdapter, type MovedKeychain, type PlatformAdapter, type UpdateController } from '@fbrx/core';
-import type { NotificationEvent } from '@fbrx/shared';
+import type { AppFlavor, NotificationEvent } from '@fbrx/shared';
 import { documentRenderer } from './document-renderer';
 
 declare const __FBRX_LICENSE_PUBKEYS__: string[];
@@ -74,6 +74,7 @@ export function createElectronPlatform(o: {
   /** Shows a notification: where and with what sound is the desktop app's choice (deliverNotification). */
   onNotify: (n: NotificationEvent) => void;
   requestRestart: (reason: string) => void;
+  flavor: AppFlavor;
 }): PlatformAdapter {
   const resources = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources');
   const workerDir = app.isPackaged ? join(app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked'), 'dist', 'main') : join(app.getAppPath(), 'dist', 'main');
@@ -81,6 +82,7 @@ export function createElectronPlatform(o: {
   if (process.env.FBRX_LICENSE_PUBLIC_KEY && !app.isPackaged) keys.push(process.env.FBRX_LICENSE_PUBLIC_KEY.replace(/\\n/g, '\n'));
   return {
     shell: 'desktop',
+    flavor: o.flavor,
     appVersion: app.getVersion(),
     devMode: !app.isPackaged || process.env.FBRX_DEV_MODE === '1',
     keychain: chooseKeychain(o.dataDir),

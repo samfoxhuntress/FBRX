@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { NotificationEvent, PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
-import { TIER_NAMES, TIER_SHORT, addressAs, atLeast, displayVersion, funEnabled } from '@fbrx/shared';
+import { DIGGER_PAGES, TIER_NAMES, TIER_SHORT, addressAs, atLeast, displayVersion, funEnabled } from '@fbrx/shared';
 import { Button, ErrorBoundary, FBRX_MARK, FbrxMark, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
 import { playChime } from './notify-sound';
@@ -163,6 +163,9 @@ function useRoute(): Route {
 }
 
 export const IS_WINDOWS = bridge.platform === 'win32';
+/** FBRX Digger: the Network Center on its own, every network tool included, nothing else. */
+export const DIGGER = bridge.flavor === 'digger';
+const DIGGER_ROUTES: readonly string[] = DIGGER_PAGES;
 
 /** Start-up animation: the logo's frame is stitched in like a thread, then the letters appear. */
 function Splash({ tier }: { tier: Tier | undefined }) {
@@ -374,7 +377,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   }
   const s = settings.settings;
   const showSplash = firstStart && s.appearance.splash;
-  if (!s.general.onboardingComplete || forceOnboarding) {
+  if (!DIGGER && (!s.general.onboardingComplete || forceOnboarding)) {
     return <Onboarding status={status} onDone={() => setForceOnboarding(false)} />;
   }
   const agentName = s.ai.agentName;
@@ -435,7 +438,14 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   // the agent. Ultra adds the expert ones, Black Hole the FBRX Server page. Student computers keep only LEARNER_PAGES.
   const essentials = tier === 'essentials' && !learner;
   const byId = new Map(all.map((i) => [i.id, i]));
-  const nav: NavItem[] = essentials
+  const nav: NavItem[] = DIGGER
+    ? DIGGER_PAGES.flatMap((id) => {
+        const item = byId.get(id);
+        if (!item) return [];
+        const { need: _n, ...rest } = item;
+        return [{ ...rest, section: 'Digger' }];
+      })
+    : essentials
     ? ESSENTIALS_NAV.flatMap(([id, section, label]) => {
         const item = byId.get(id);
         if (!item || (id === 'fleet' && !enrolled)) return [];
@@ -445,7 +455,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     : all
         .filter((i) => (learner ? LEARNER_PAGES.has(i.id) : !i.need || atLeast(tier, i.need)))
         .map(({ need: _n, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
-  const groups: NavGroup[] | undefined = essentials
+  const groups: NavGroup[] | undefined = essentials || DIGGER
     ? undefined
     : SECTIONS.map(({ basicHint, learnerHint, ...g }) => ({ ...g, hint: learner && learnerHint ? learnerHint : !ultra && basicHint ? basicHint : g.hint, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
   const ultraOnly = (title: string, what: string) => <UltraOnly title={title} what={what} />;
@@ -497,11 +507,13 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       ),
     },
   ];
-  const showTour = !POPOUT && essentials && !tourClosed && status.edition?.tourDone === false && tourReady;
+  const showTour = !POPOUT && !DIGGER && essentials && !tourClosed && status.edition?.tourDone === false && tourReady;
   // Terminal and chat in their own windows (Ultra has the Terminal; the chat is in every edition).
   ownWindows = POPOUT ? {} : { terminal: ultra && s.windows.terminal, agent: s.windows.agent };
 
   const page = (() => {
+    // FBRX Digger opens on the Network Center, with every network tool whatever the edition.
+    if (DIGGER && !DIGGER_ROUTES.includes(route)) return <NetworkPage advanced everything easterEggs={false} />;
     // Essentials Home: the split-flap board and a few notes from FBRX (no dashboard).
     if (essentials && route === 'home') return <EssentialsHome status={status} agentName={agentName} who={addressAs(s)} />;
     if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && !byId.get(route)?.need) {
@@ -547,7 +559,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'lab':
         return ultra ? <LabPage /> : ultraOnly('The virtual lab', 'Test machines in Hyper-V or Windows Sandbox, with capacity gauges and one-click starts.');
       case 'network':
-        return <NetworkPage advanced={ultra} everything={blackhole} easterEggs={fun} />;
+        return <NetworkPage advanced={ultra || DIGGER} everything={blackhole || DIGGER} easterEggs={fun && !DIGGER} />;
       case 'files':
         return <FilesPage />;
       case 'processes':
@@ -640,7 +652,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       {showSplash && <Splash tier={tier} />}
       <Shell
         brandName={
-          learner ? (
+          DIGGER ? (
+            'FBRX Digger'
+          ) : learner ? (
             <>
               FBRX OS <span className="tier-badge student">{vertical === 'home' ? 'Home' : 'Education'}</span>
             </>
@@ -662,7 +676,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} defaultProvider={s.ai.defaultProvider} defaultModel={s.ai.defaultModel} presenter={presenter} learner={learner} />}
         footer={
           <span>
-            <span title={TIER_NAMES[tier]}>{displayVersion(status.version)}</span>
+            <span title={DIGGER ? 'FBRX Digger' : TIER_NAMES[tier]}>{DIGGER ? `Version ${status.version}` : displayVersion(status.version)}</span>
             {status.devMode ? ' · dev' : ''}
             {fun && trophies && Object.keys(trophies.unlocked).length > 0 && (
               <>

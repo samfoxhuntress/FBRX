@@ -43,6 +43,16 @@ export function displayVersion(version: string): string {
  * release.json at the root of the repository, as FBRX OS and FBRX Command read it: what it leaves out gets its default,
  * and the stage follows the version (stageFor) unless it names one.
  */
+/** FBRX Digger's own entry in release.json: it has its own versions and installers. */
+const DiggerReleaseSchema = z.object({
+  version: z.string().refine(isValidSemver, 'not a version'),
+  released: z.string().max(40).default(''),
+  summary: z.string().max(600).default(''),
+  notes: z.array(z.string().max(400)).max(40).default([]),
+  download: z.string().url(),
+  page: z.string().url(),
+});
+
 export const ReleaseManifestSchema = z
   .object({
     version: z.string().refine(isValidSemver, 'not a version'),
@@ -56,6 +66,8 @@ export const ReleaseManifestSchema = z
     page: z.string().url(),
     /** What is new in FBRX Command itself, when the release says so. */
     command: z.object({ summary: z.string().max(600).default(''), notes: z.array(z.string().max(400)).max(40).default([]) }).optional(),
+    /** FBRX Digger, when it has a release. */
+    digger: DiggerReleaseSchema.optional(),
   })
   .transform((m) => ({ ...m, stage: m.stage ?? stageFor(m.version) }));
 

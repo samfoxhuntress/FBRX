@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { openBytes, sealString } from '@fbrx/shared/node';
-import type { NotificationEvent, UpdateStatus, UpdateChannel } from '@fbrx/shared';
+import type { AppFlavor, NotificationEvent, UpdateStatus, UpdateChannel } from '@fbrx/shared';
 
 /**
  * Protects the vault's data-encryption key with something bound to this machine/user:
@@ -97,6 +97,8 @@ export interface PlatformAdapter {
   renderer?: DocumentRenderer | null;
   /** Thumbnails of screen snapshots (without it the pictures themselves are shown). */
   images?: ImageTools | null;
+  /** Which app this is: FBRX OS, or FBRX Digger (the Network Center on its own, every network tool included). */
+  flavor?: AppFlavor;
   /** Moves a file or folder to the Trash (Recycle Bin); the desktop app has it, a headless core does not. */
   trash?(path: string): Promise<void>;
   specialDirs(): SpecialDirs;

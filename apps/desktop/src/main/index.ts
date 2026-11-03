@@ -5,7 +5,8 @@ import { basename, dirname, join } from 'node:path';
 import { Readable } from 'node:stream';
 import { hostname, userInfo } from 'node:os';
 import { Kernel, toCoreError } from '@fbrx/core';
-import { MANAGED_PREFERENCES_DOMAIN, PRODUCT_NAME, TIER_NAMES, expandMacro, funEnabled, notificationDelivery, notificationKind, provisioningFromPreferences, shouldNotify, type NotificationEvent } from '@fbrx/shared';
+import { MANAGED_PREFERENCES_DOMAIN, TIER_NAMES, expandMacro, funEnabled, notificationDelivery, notificationKind, provisioningFromPreferences, shouldNotify, type NotificationEvent } from '@fbrx/shared';
+import { APP_NAME, FLAVOR } from './flavor';
 import { createElectronPlatform, openExternalSafe, systemNotification } from './platform';
 import { ElectronUpdateController } from './updater';
 import { ClipHistory } from './clip-history';
@@ -216,15 +217,17 @@ function createWindow() {
     height: 880,
     minWidth: 960,
     minHeight: 620,
-    title: PRODUCT_NAME,
+    title: APP_NAME,
     show: false,
     backgroundColor: '#0d0d0d',
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     // The window buttons sit in the sidebar's top strip, above the FBRX logo (see data-platform="darwin" in the CSS).
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 18, y: 18 } } : {}),
-    icon: asset('icon.png'),
+    icon: asset(FLAVOR === 'digger' ? 'digger-icon.png' : 'icon.png'),
     webPreferences: {
       preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
+      // The renderer knows which app it is (FBRX OS or FBRX Digger) before it draws anything.
+      additionalArguments: [`--fbrx-flavor=${FLAVOR}`],
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -331,12 +334,14 @@ function popOut(route: string, o: { wide?: boolean } = {}) {
     height,
     minWidth: 420,
     minHeight: 360,
-    title: PRODUCT_NAME,
+    title: APP_NAME,
     show: false,
     backgroundColor: '#0d0d0d',
-    icon: asset('icon.png'),
+    icon: asset(FLAVOR === 'digger' ? 'digger-icon.png' : 'icon.png'),
     webPreferences: {
       preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
+      // The renderer knows which app it is (FBRX OS or FBRX Digger) before it draws anything.
+      additionalArguments: [`--fbrx-flavor=${FLAVOR}`],
       contextIsolation: true,
       sandbox: true,
       nodeIntegration: false,
@@ -446,8 +451,9 @@ function bindKey(current: string | null, next: string | null, run: () => void, w
   return null;
 }
 
-/** (Re)binds the macros from settings: Spotlight and the clipboard history. */
+/** (Re)binds the macros from settings: Spotlight and the clipboard history. FBRX Digger leaves the keyboard alone. */
 function bindMacroKeys() {
+  if (FLAVOR === 'digger') return;
   const s = kernel?.settings.get();
   spotlightKey = bindKey(spotlightKey, s?.spotlight.enabled ? s.spotlight.hotkey : null, showSpotlight, 'Spotlight');
   pickerKey = bindKey(pickerKey, s?.clipboard.hotkey || null, showClipPicker, 'Clipboard history');
@@ -681,7 +687,7 @@ function trayMenu() {
     { label: 'Quit', click: () => ((quitting = true), app.quit()) },
   ];
   tray.setContextMenu(Menu.buildFromTemplate(template));
-  const name = TIER_NAMES[kernel?.license.status().tier ?? 'basic'];
+  const name = FLAVOR === 'digger' ? APP_NAME : TIER_NAMES[kernel?.license.status().tier ?? 'basic'];
   tray.setToolTip(pending ? `${name} — ${pending} approval(s) waiting` : name);
 }
 
@@ -884,6 +890,7 @@ async function boot() {
       });
   const platform = createElectronPlatform({
     dataDir,
+    flavor: FLAVOR,
     updates,
     onNotify: (n) => deliverNotification(n),
     requestRestart: (reason) => {
@@ -961,7 +968,7 @@ app.whenReady().then(async () => {
   try {
     await boot();
   } catch (err) {
-    dialog.showErrorBox(`${PRODUCT_NAME} could not start`, `${(err as Error).message}\n\nData folder: ${dataDir}`);
+    dialog.showErrorBox(`${APP_NAME} could not start`, `${(err as Error).message}\n\nData folder: ${dataDir}`);
     app.exit(1);
     return;
   }

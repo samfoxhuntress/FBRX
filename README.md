@@ -35,6 +35,10 @@ Server**, powered by FBRX OS, and the products below for the computers you alrea
   hand or on a schedule (*Backup & restore → Whole computer*), and FBRX Command starts one on any computer
   ([docs/TIME.md](docs/TIME.md)). Server roles can be added or changed from the server's console.
 
+* **FBRX Digger** — the FBRX Network Center on its own, for anyone who looks after networks: scans and their
+  comparison, ping and trace route, the speed test, the Wi-Fi channel planner, DNS and port checks, device consoles
+  (SSH, Telnet) and network environments, on Windows, macOS and Linux ([docs/DIGGER.md](docs/DIGGER.md)).
+
 * **FBRX Endpoint** — a desktop super-tool for Windows (macOS next) with a **local-first AI agent, Fabrix,** that is
   governed end to end and an everyday **command center** (dashboard, tasks, notes, Spotlight, a Ctrl+Alt+Z clipboard
   history, the FBRX calendar with Outlook / Microsoft 365 and calendar links beside it, alerts, PC care, Network Center,
