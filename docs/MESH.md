@@ -19,11 +19,13 @@ Each device gets its own permissions on *this* computer, changeable at any time 
 | Borrow its AI (Mesh Assist, below) | — | ✔ |
 | Controller (Mesh Assist, below) | — | |
 | Network protection (a gate's FBRX MiniDome, below) | | |
+| Sync (FBRX Sync, below) | — | |
 
 Each device card offers one choice, **What it may do here**: *The usual* (the defaults above), *Full trust* (everything
 but the two special permissions), *Messages only* or *Paused* (stays paired, can do nothing). **Choose one by one**
 opens every permission, each with an (i) that explains it; **Network protection** and **Controller** are special and
-never part of a preset. *Message* (opens the conversation with it in **Messages**, see [MESSAGES.md](MESSAGES.md)),
+never part of a preset, and neither is **Sync**, which a computer's card also offers as *Turn on Sync*. *Message*
+(opens the conversation with it in **Messages**, see [MESSAGES.md](MESSAGES.md)),
 *Ask its agent* and *How is it doing?* are on the card; *Send a ping*, *Find my
 phone*, *Lock it*, *Put it to sleep* and *Remove* are under **More**.
 
@@ -41,6 +43,34 @@ board (a greeting, the date, whether the AI is ready) and a few notes from FBRX:
 dismissed), **AI models** (the models on the computer, and *Use* to switch to one, for a phone that may ask the AI)
 and what Standard and Ultra add. Its tabs are Home, Ask, AI (and Approve when something waits). The notes are the
 same ones as on the computer's Home (`packages/shared/src/essentials-home.ts`).
+
+## FBRX Sync: the same projects, tasks, notes and calendar on your computers
+
+FBRX Sync keeps your **projects, tasks, notes, snippets and FBRX calendar events** the same on two of your computers.
+It goes straight from one computer to the other over the mesh, every request and reply sealed for that one computer
+(below), so **no FBRX server ever holds or sees any of it**: FBRX only provides the way for your computers to do it.
+And it happens only when you ask: nothing syncs in the background.
+
+1. Pair the two computers (*Add a device*, below), on the same network or any network where they can reach each other.
+2. On **both** computers, the other one's card: **Turn on Sync** (or *Choose one by one → Sync*). Each computer decides
+   for itself; until both have, *Sync now* says which one still has to.
+3. **Sync now** on either computer's card. Both end up with everything either had; the card says when they last
+   synced and what moved (*3 here, 2 there*), on both computers.
+
+How it decides:
+
+* **Newer wins.** Every item carries the time it last changed, and the newer copy goes to the other computer (so both
+  computers' clocks should be right).
+* **Deleting** an item deletes it on the other computer at the next sync, unless it was changed there after you
+  deleted it: then it comes back. Deleting a project keeps what was in it, in no project, on both.
+* **Changed on both** since the two last synced: the newer one wins, and a note or snippet keeps the other version
+  beside it as *(copy from …)*, so no writing is lost.
+* With three computers, sync each pair you use; deletions and edits pass along through whichever computer has them.
+
+What does not sync (yet): chats, memory and skills, settings, Vault passwords, and calendars from other services
+(Outlook / Microsoft 365, calendar links), which every computer reads from the service itself. Sync is for your own
+computers: phones see the computer's tasks and notes instead, and a computer your organization introduced syncs only
+when the organization allows it.
 
 ## Mesh Assist: computers lending each other their AI
 

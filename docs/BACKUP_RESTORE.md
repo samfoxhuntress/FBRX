@@ -73,6 +73,9 @@ restores it as a clone before enrolling (see [DEPLOYMENT.md](DEPLOYMENT.md#4-rol
 
 ### Moving to a new computer, step by step
 
+To keep projects, tasks, notes, snippets and the FBRX calendar the same on two computers you go on using, rather than
+moving everything to a new one, use **FBRX Sync** instead ([MESH.md](MESH.md#fbrx-sync-the-same-projects-tasks-notes-and-calendar-on-your-computers)).
+
 1. Old machine: **Backup → Create snapshot** (tick *include models* to avoid re-downloading them), or take one
    remotely from the console.
 2. Copy the `.fbrxsnap` file over (USB, network share), or download it from the console (**Backups**).

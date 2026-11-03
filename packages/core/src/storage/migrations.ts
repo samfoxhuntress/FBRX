@@ -522,6 +522,41 @@ export const MIGRATIONS: Migration[] = [
         '{}', '2000-01-01T00:00:00.000Z');
     `,
   },
+  {
+    version: 18,
+    name: 'sync',
+    // FBRX Sync (computer to computer over FBRX Mesh): what was deleted, so a deletion reaches the other computers
+    // instead of the other copy coming back, and when each computer last synced with this one. Every way of deleting
+    // (a project's tasks with it, the agent, a sync) leaves its mark through the triggers.
+    up: `
+      CREATE TABLE sync_tombstones (
+        kind TEXT NOT NULL,
+        id TEXT NOT NULL,
+        deleted_at TEXT NOT NULL,
+        PRIMARY KEY (kind, id)
+      );
+      CREATE TABLE sync_peers (
+        device_id TEXT PRIMARY KEY,
+        last_sync_at TEXT,
+        last_result TEXT
+      );
+      CREATE TRIGGER sync_gone_projects AFTER DELETE ON projects BEGIN
+        INSERT OR REPLACE INTO sync_tombstones (kind, id, deleted_at) VALUES ('projects', OLD.id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+      END;
+      CREATE TRIGGER sync_gone_tasks AFTER DELETE ON tasks BEGIN
+        INSERT OR REPLACE INTO sync_tombstones (kind, id, deleted_at) VALUES ('tasks', OLD.id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+      END;
+      CREATE TRIGGER sync_gone_notes AFTER DELETE ON notes BEGIN
+        INSERT OR REPLACE INTO sync_tombstones (kind, id, deleted_at) VALUES ('notes', OLD.id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+      END;
+      CREATE TRIGGER sync_gone_snippets AFTER DELETE ON snippets BEGIN
+        INSERT OR REPLACE INTO sync_tombstones (kind, id, deleted_at) VALUES ('snippets', OLD.id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+      END;
+      CREATE TRIGGER sync_gone_events AFTER DELETE ON calendar_items BEGIN
+        INSERT OR REPLACE INTO sync_tombstones (kind, id, deleted_at) VALUES ('events', OLD.id, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'));
+      END;
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

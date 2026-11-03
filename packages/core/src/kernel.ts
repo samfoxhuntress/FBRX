@@ -97,6 +97,7 @@ import { HelpdeskAssistHost } from './fleet/helpdesk-assist';
 import { Messages } from './messages/messages';
 import { sleep } from './util/misc';
 import { MeshService } from './mesh/mesh-service';
+import { SyncService } from './sync/sync-service';
 import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
 import { MeshAssist, runsElevated } from './mesh/mesh-assist';
 import { ModelLender } from './mesh/model-lending';
@@ -248,6 +249,8 @@ export class Kernel {
   readonly release: ReleaseChecker;
   readonly cli: Fbrx1Cli;
   readonly mesh: MeshService;
+  /** FBRX Sync: projects, tasks, notes, snippets and calendar events between two paired computers, over the mesh. */
+  readonly sync: SyncService;
   readonly orgMesh: OrgMesh;
   readonly assist: MeshAssist;
   /** This computer's own AI, lent to the paired computers' agents that think with it. */
@@ -804,6 +807,7 @@ export class Kernel {
       audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
       assist: (device, method, params) => this.assist.handle(device, method, params),
       lend: (device, method, params) => this.lender.handle(device, method, params),
+      sync: (device, method, params) => this.sync.handle(device, method, params),
       // A gate's FBRX MiniDome saw something coming from this computer: an alert here (critical when it is serious).
       networkFinding: (device, f) =>
         void this.alerts
@@ -811,6 +815,16 @@ export class Kernel {
           .catch(() => undefined),
       protection: () => this.protection.summary(),
       acceptMessages: () => this.settings.get().messages.enabled,
+    });
+    this.sync = new SyncService({
+      db: this.db,
+      events: this.events,
+      log: L('sync'),
+      device: (id) => this.mesh.devices().find((x) => x.id === id),
+      devices: () => this.mesh.devices(),
+      call: (id, method, params, timeoutMs) => this.mesh.call(id, method, params, timeoutMs),
+      deviceName: () => this.deviceName(),
+      audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
     });
     this.messages = new Messages({
       db: this.db,

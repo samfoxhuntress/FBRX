@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MeshDevice, MeshJob, MeshPermissions } from '@fbrx/shared';
-import { funEnabled } from '@fbrx/shared';
+import type { MeshDevice, MeshJob, MeshPermissions, SyncPeer, SyncResult } from '@fbrx/shared';
+import { SYNC_KIND_NAMES, SYNC_KINDS, funEnabled } from '@fbrx/shared';
 import { useTier } from '../edition';
 import { Button, Callout, Card, ChoiceCards, Empty, Field, Grid, Icons, InfoTip, Input, KeyValue, MenuButton, Modal, More, Page, Select, Status, Tabs, TextArea, Toggle, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { navigate } from '../app';
@@ -24,6 +24,7 @@ const PERMS: Array<{ key: keyof MeshPermissions; label: string; help: string }> 
 const SPECIAL: Array<{ key: keyof MeshPermissions; label: string; help: string }> = [
   { key: 'network', label: 'Network protection', help: 'Only matters when the other device is an FBRX Server running as your network gate with FBRX MiniDome: it tells this computer about threats it sees coming from it, and sees how this computer is protected (antivirus on or off).' },
   { key: 'command', label: 'Controller', help: 'Lets the other computer hand out AI work that runs here without asking, may be urgent, and may stop less important help. Meant for one main computer you run as administrator. This computer’s policy still applies.' },
+  { key: 'sync', label: 'Sync', help: 'FBRX Sync: keep projects, tasks, notes, snippets and FBRX calendar events the same on both computers, whenever either of you chooses Sync now. It goes straight between the two computers, sealed so only they can read it; no FBRX server ever holds it. Turn it on for each other on both computers.' },
 ];
 const relevant = (d: MeshDevice) => PERMS.filter((p) => d.kind === 'desktop' || p.key !== 'assist');
 
@@ -219,7 +220,44 @@ function PeerStatus({ info, onClose }: { info: any; onClose: () => void }) {
   );
 }
 
-function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => void }) {
+/** What a sync did, in a few words. */
+function syncSummary(r: SyncResult): string {
+  const t = r.total;
+  const parts = [t.received && `${t.received} here`, t.sent && `${t.sent} there`, t.deleted && `${t.deleted} deleted`, t.conflicts && `${t.conflicts} changed on both`].filter(Boolean);
+  return parts.length ? `${parts.join(', ')}` : 'already the same';
+}
+
+/** FBRX Sync with a paired computer: when it last synced, and Sync now (only when both allow it). */
+function SyncLine({ d, peer }: { d: MeshDevice; peer?: SyncPeer }) {
+  const { run, busy } = useAction();
+  const toast = useToast();
+  const last = peer?.last ?? null;
+  return (
+    <div className="sync-line">
+      <Icons.repeat size={15} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div>{last ? `Synced ${timeAgo(last.at)}: ${syncSummary(last)}` : `Not synced with ${d.name} yet`}</div>
+        {last && (
+          <div className="fx-muted" style={{ fontSize: 11.5 }}>
+            {SYNC_KINDS.filter((k) => last.kinds[k].received + last.kinds[k].sent + last.kinds[k].deleted > 0).map((k) => SYNC_KIND_NAMES[k]).join(', ') || 'Projects, tasks, notes, snippets and calendar events'}
+          </div>
+        )}
+      </div>
+      <Button
+        size="sm"
+        icon="repeat"
+        loading={busy === 'sync'}
+        disabled={!d.online && !!d.lastSeen}
+        title={!d.online ? `${d.name} needs to be on and reachable` : 'Straight between the two computers, sealed for them alone'}
+        onClick={() => void run('sync', () => call('sync.now', { id: d.id }).then((r) => toast.success(`Synced with ${d.name}`, syncSummary(r))))}
+      >
+        Sync now
+      </Button>
+    </div>
+  );
+}
+
+function DeviceCard({ d, sync, onPing }: { d: MeshDevice; sync?: SyncPeer; onPing?: (d: MeshDevice) => void }) {
   const { run, busy } = useAction();
   const { confirm, dialog } = useConfirm();
   const [ask, setAsk] = useState(false);
@@ -289,6 +327,22 @@ function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => 
         </More>
         </>
         )}
+        {d.kind === 'desktop' &&
+          (d.permissions.sync ? (
+            <SyncLine d={d} peer={sync} />
+          ) : (
+            !org && (
+              <div className="sync-line">
+                <Icons.repeat size={15} />
+                <div className="fx-muted" style={{ flex: 1 }}>
+                  FBRX Sync keeps projects, tasks, notes, snippets and the calendar the same on both computers, straight between them.
+                </div>
+                <Button size="sm" loading={busy === 'perm'} onClick={() => setPerms({ sync: true })}>
+                  Turn on Sync
+                </Button>
+              </div>
+            )
+          ))}
         <div className="fx-actions">
           <Button size="sm" icon="message" onClick={() => navigate(`messages/mesh:${d.id}`)}>
             Message
@@ -377,6 +431,7 @@ export function MeshPage() {
   const { run, busy } = useAction();
   const toast = useToast();
   const agent = useAgentName();
+  const peers = useCore('sync.peers', undefined, ['sync.done', 'mesh.changed']);
   const s = status.data;
   const incoming = settings.data?.settings.mesh.incoming ?? 'ask';
   // Easter egg: three pings in a row to the same computer (or to yourself) and the two start pointing fingers.
@@ -500,7 +555,7 @@ export function MeshPage() {
           {s.devices.length > 0 ? (
             <Grid cols={2}>
               {s.devices.map((d) => (
-                <DeviceCard key={d.id} d={d} onPing={(x) => triple(x.id)} />
+                <DeviceCard key={d.id} d={d} sync={peers.data?.find((p) => p.deviceId === d.id)} onPing={(x) => triple(x.id)} />
               ))}
             </Grid>
           ) : (

@@ -10,6 +10,7 @@ import type { ImageBackupConfig, ImageBackupStatus } from './time';
 import type { AssistOffer, AssistPriority, AssistSession, AssistTools } from './mesh-assist';
 import type { MeshNetworkStatus, MeshPathTest } from './net';
 import type { MessagesOverview, MessageState, ThreadMessage } from './messages';
+import type { SyncPeer, SyncResult } from './sync';
 import type { NetEnvDeviceAction, NetEnvDeviceStats, NetEnvDevice, NetEnvInput, NetEnvironment, NetEnvOverview, NetEnvProbe, NetEnvVoucher } from './netenv';
 /**
  * Contracts for the FBRX OS command-center modules: workspace (notes, tasks, projects, snippets), live system
@@ -898,6 +899,11 @@ export interface MeshPermissions {
    * coming from it, and may see how this computer is protected (antivirus, threats found).
    */
   network: boolean;
+  /**
+   * FBRX Sync: keep projects, tasks, notes, snippets and FBRX calendar events the same on both computers, when either
+   * starts a sync. It needs this on both computers, and is never part of a preset.
+   */
+  sync: boolean;
 }
 
 /** What an FBRX MiniDome saw coming from this computer, sent to it over FBRX Mesh. */
@@ -1348,6 +1354,10 @@ export interface ExtMethods {
   'mesh.ask': (p: { id: string; prompt: string; reqId: string }) => MeshJob;
   /** To one paired device (`to`), or to every one allowed to chat. */
   'mesh.message': (p: { text: string; to?: string }) => { delivered: number; total: number; message: MeshMessage };
+  /** FBRX Sync: the paired computers and how each last synced. */
+  'sync.peers': () => SyncPeer[];
+  /** FBRX Sync: syncs now with one paired computer (both must allow it), straight between the two. */
+  'sync.now': (p: { id: string }) => SyncResult;
   'mesh.messages': (p?: { conversation?: string }) => MeshMessage[];
 
   /** Messages: your mesh and your organization in one list of conversations. */
@@ -1433,6 +1443,7 @@ export interface ExtEvents {
   'voice.download': { model: VoiceDownloadId; received: number; total: number; done: boolean; error: string | null };
   'winupdates.event': { reqId: string; line: string };
   'mesh.changed': MeshStatus;
+  'sync.done': SyncResult;
   'mesh.message': MeshMessage;
   'messages.changed': { threadId: string | null; message?: ThreadMessage; unread: number };
   'mesh.job': { reqId: string; job: MeshJob };
@@ -1558,6 +1569,8 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'mesh.setPermissions',
   'mesh.rename',
   'mesh.action',
+  // FBRX Sync runs only when the person at the computer starts it.
+  'sync.now',
   'aicoord.install',
   'aicoord.remove',
   'aicoord.launch',

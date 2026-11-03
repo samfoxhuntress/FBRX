@@ -38,6 +38,7 @@ export * from './profile-presets';
 export * from './plans';
 export * from './accounts';
 export * from './attachments';
+export * from './sync';
 export * from './automations';
 export * from './creations';
 export * from './snapshots';

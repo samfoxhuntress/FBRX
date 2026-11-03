@@ -43,9 +43,10 @@ import {
   type KeyPair,
 } from './mesh-crypto';
 
-export const MOBILE_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: true, approve: true, workspace: true, alerts: true, control: false, assist: false, command: false, network: false };
-// Computers may ask each other's AI for help (each computer's Mesh Assist settings still decide); controllers are chosen by hand.
-export const DESKTOP_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false, network: false };
+export const MOBILE_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: true, approve: true, workspace: true, alerts: true, control: false, assist: false, command: false, network: false, sync: false };
+// Computers may ask each other's AI for help (each computer's Mesh Assist settings still decide); controllers and FBRX
+// Sync are chosen by hand.
+export const DESKTOP_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false, network: false, sync: false };
 const PERMISSION_KEYS = Object.keys(MOBILE_PERMISSIONS) as Array<keyof MeshPermissions>;
 const NO_PERMISSIONS = Object.fromEntries(PERMISSION_KEYS.map((k) => [k, false])) as unknown as MeshPermissions;
 
@@ -124,6 +125,8 @@ export interface MeshHost {
   audit: (action: string, actor: string, outcome: 'success' | 'failure' | 'denied', details?: Record<string, unknown>) => void;
   /** Mesh Assist requests (assist.offer / start / status / cancel) from a paired computer. */
   assist?: (device: MeshDevice, method: string, params: any) => Promise<unknown>;
+  /** FBRX Sync requests (sync.manifest / get / put / finish) from a paired computer this one lets sync. */
+  sync?: (device: MeshDevice, method: string, params: any) => Promise<unknown>;
   /** A paired computer's agent thinking with this computer's AI (assist.model.offer / start / read / cancel). */
   lend?: (device: MeshDevice, method: string, params: any) => Promise<unknown>;
   /** A gate's FBRX MiniDome saw something coming from this computer (Network protection). */
@@ -1054,6 +1057,14 @@ export class MeshService {
       case 'shield.status':
         need('network');
         return { protection: this.host.protection?.() ?? null };
+      case 'sync.manifest':
+      case 'sync.get':
+      case 'sync.put':
+      case 'sync.finish':
+        // Only between computers, and only with a computer this one lets sync (its Sync permission here).
+        if (d.kind !== 'desktop' || !this.host.sync) throw new CoreError('NOT_FOUND', 'FBRX Sync is not available here');
+        need('sync');
+        return this.host.sync(d, method, p);
       case 'assist.offer':
       case 'assist.start':
       case 'assist.status':

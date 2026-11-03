@@ -824,6 +824,8 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return k.mesh.message(q.text, q.to);
     },
     'mesh.messages': (p) => k.mesh.messages(z.object({ conversation: z.string().max(80).optional() }).optional().parse(p)?.conversation),
+    'sync.peers': () => k.sync.peers(),
+    'sync.now': (p, ctx) => k.sync.syncWith(Id.parse(p).id, ctx.actor),
 
     // ---------------------------------------------------------------------------------------- messages
     'messages.overview': () => k.messages.overview(),
