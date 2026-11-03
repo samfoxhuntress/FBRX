@@ -60,6 +60,9 @@ interface Learned {
 }
 
 // Trailing filler that is not part of the fact ("I live in Springfield now").
+/** What an instruction about how to work starts with ("always answer…", "never use…"): not "always crashes". */
+const HOW_VERBS = 'answer|reply|respond|use|write|show|give|keep|explain|ask|check|include|put|start|end|format|be|make|tell|call|add|list|sum|summari[sz]e|translate|double-check|confirm|cite|round|sort';
+
 const clean = (s: string) =>
   s
     .trim()
@@ -91,6 +94,10 @@ const LEARN: Array<{ re: RegExp; make: (m: RegExpExecArray) => Learned | null }>
     make: (m) => ({ key: `family-${m[1].toLowerCase()}`, category: 'family', content: `Their ${m[1].toLowerCase()} is ${clean(m[2])}` }),
   },
   { re: /\bi (?:prefer|always want|'d rather) ([^.!?\n]{4,120})/i, make: (m) => ({ key: null, category: 'preference', content: `Prefers ${clean(m[1])}` }) },
+  // How they like things done: "Always answer in bullet points", "From now on, use metric", "Never use emojis".
+  { re: new RegExp(`^(?:please\\s+)?(?:always|from now on,?) ((?:${HOW_VERBS})\\b[^.!?\\n]{3,120})`, 'i'), make: (m) => ({ key: null, category: 'preference', content: `Wants you to always ${clean(m[1])}` }) },
+  { re: new RegExp(`^(?:please\\s+)?never ((?:${HOW_VERBS})\\b[^.!?\\n]{3,120})`, 'i'), make: (m) => ({ key: null, category: 'preference', content: `Wants you never to ${clean(m[1])}` }) },
+  { re: /\bi (?:really )?(like|love|don't like|do not like|hate) (?:it )?when you ([^.!?\n]{4,120})/i, make: (m) => ({ key: null, category: 'preference', content: `${/n't|not|hate/i.test(m[1]) ? 'Does not like' : 'Likes'} it when you ${clean(m[2])}` }) },
   {
     re: /\bmy (visa|mastercard|amex|american express|discover|debit card|credit card|card)\b[^\n]{0,30}?((?:\d[ -]?){12,18}\d)/i,
     make: (m) => {
@@ -104,6 +111,43 @@ const LEARN: Array<{ re: RegExp; make: (m: RegExpExecArray) => Learned | null }>
  * The sentences of a message, so one fact never runs into the next. A period after a street or unit abbreviation
  * ("12 Oak St. Springfield") does not end a sentence.
  */
+/**
+ * Words that mean the same thing to a person, so a memory is found by what it is about and not only by its wording
+ * ("my Synology" finds what they said about "the NAS"). Each group's words find each other.
+ */
+const RELATED: string[][] = [
+  ['nas', 'synology', 'qnap', 'storage', 'server', 'drive'],
+  ['wifi', 'wireless', 'router', 'internet', 'network', 'mesh'],
+  ['printer', 'print', 'printing', 'scanner'],
+  ['laptop', 'computer', 'notebook', 'macbook', 'desktop'],
+  ['phone', 'iphone', 'android', 'mobile', 'cell'],
+  ['mom', 'mother', 'mum', 'mama'],
+  ['dad', 'father', 'papa'],
+  ['wife', 'husband', 'spouse', 'partner'],
+  ['kid', 'kids', 'child', 'children', 'son', 'daughter'],
+  ['work', 'job', 'office', 'employer', 'company', 'boss'],
+  ['home', 'house', 'apartment', 'flat'],
+  ['car', 'vehicle', 'truck'],
+  ['email', 'mail', 'inbox', 'outlook', 'gmail'],
+  ['backup', 'backups', 'restore', 'copy'],
+  ['vacation', 'holiday', 'trip', 'travel', 'flight'],
+  ['doctor', 'dentist', 'appointment', 'clinic'],
+  ['diet', 'vegetarian', 'vegan', 'allergy', 'allergic', 'food'],
+  ['project', 'projects', 'task', 'tasks'],
+];
+
+/** Words too common to say what a question is about. */
+const COMMON = new Set(
+  'the and for are was were you your how what why who when where which can could would should will with from into this that these those have has had not but out about just keep keeps kept get got does did doing done make made any all some again still very really please thanks thank'.split(' '),
+);
+
+/** A question's words for searching memories and chats: its own (and their longer forms), then related words. */
+export function searchTerms(query: string, max = 12): string[] {
+  const own = [...new Set(query.toLowerCase().match(/[\p{L}\p{N}_]{3,}/gu) ?? [])].filter((w) => !COMMON.has(w));
+  const related = own.flatMap((w) => RELATED.find((g) => g.includes(w)) ?? []).filter((w) => !own.includes(w));
+  return [...own, ...new Set(related)].slice(0, max);
+}
+
 export function sentences(text: string): string[] {
   return text
     .split(/(?<!\b(?:St|Ave|Rd|Dr|Blvd|Ln|Ct|Apt|No|Mt|Ft|Mr|Mrs|Ms)\.)(?<=[.!?])\s+|\n+/)
@@ -218,20 +262,47 @@ export class MemoryService {
 
   /** Facts that best match a question, then the newest. */
   recall(query: string, limit = 8, o: { privateToo?: boolean } = {}): MemoryEntry[] {
-    const terms = query
-      .toLowerCase()
-      .match(/[\p{L}\p{N}_]{3,}/gu)
-      ?.slice(0, 12);
+    const terms = searchTerms(query);
     const priv = o.privateToo === false ? 'AND m.private = 0' : '';
-    let rows: Row[] = [];
-    if (terms?.length) {
-      rows = this.d.db.all<Row>(
-        `SELECT m.* FROM memories_fts f JOIN memories m ON m.rowid = f.rowid WHERE memories_fts MATCH ? ${priv} ORDER BY rank LIMIT ?`,
-        terms.map((t) => `"${t}"`).join(' OR '),
-        limit,
-      );
-    }
-    return rows.map(toEntry);
+    if (!terms.length) return [];
+    // Each word also finds its longer forms ("print" finds printer and printing).
+    const match = terms.map((t) => `"${t.replace(/"/g, '')}"*`).join(' OR ');
+    return this.d.db.all<Row>(`SELECT m.* FROM memories_fts f JOIN memories m ON m.rowid = f.rowid WHERE memories_fts MATCH ? ${priv} ORDER BY rank LIMIT ?`, match, limit).map(toEntry);
+  }
+
+  /**
+   * Earlier work that may relate to a request: conversations of the last 30 days (beyond the last 24 hours, which
+   * short-term memory has) whose messages share its words or related ones, the most matching first.
+   */
+  related(text: string, exclude: string | null, now = Date.now()): RecentChat[] {
+    if (!this.on() || !this.d.settings().shortTerm) return [];
+    const terms = searchTerms(text, 8);
+    if (!terms.length) return [];
+    const rows = this.d.db.all<{ id: string; title: string; updated_at: string; hits: number }>(
+      `SELECT c.id, c.title, c.updated_at, COUNT(*) AS hits FROM messages m JOIN conversations c ON c.id = m.conversation_id
+       WHERE c.origin = 'user' AND c.id != ? AND c.updated_at >= ? AND c.updated_at < ? AND m.role IN ('user', 'assistant')
+         AND (${terms.map(() => 'lower(m.content) LIKE ?').join(' OR ')})
+       GROUP BY c.id ORDER BY hits DESC, c.updated_at DESC LIMIT 3`,
+      exclude ?? '',
+      new Date(now - 30 * 86_400_000).toISOString(),
+      new Date(now - 24 * 3600_000).toISOString(),
+      ...terms.map((t) => `%${t.replace(/[%_]/g, '')}%`),
+    );
+    return rows.map((c) => ({ conversationId: c.id, title: c.title, at: c.updated_at, gist: this.gist(c.id) }));
+  }
+
+  /** A conversation in a line: what was asked first and last, and the last answer. */
+  private gist(conversationId: string): string {
+    const cut = (t: string, n: number) => {
+      const s = t.replace(/\s+/g, ' ').trim();
+      return s.length > n ? `${s.slice(0, n)}…` : s;
+    };
+    const first = this.d.db.get<{ content: string }>("SELECT content FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY seq LIMIT 1", conversationId)?.content ?? '';
+    const lastUser = this.d.db.get<{ content: string }>("SELECT content FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY seq DESC LIMIT 1", conversationId)?.content ?? '';
+    const lastReply = this.d.db.get<{ content: string }>("SELECT content FROM messages WHERE conversation_id = ? AND role = 'assistant' AND content != '' ORDER BY seq DESC LIMIT 1", conversationId)?.content ?? '';
+    return [`asked: ${cut(scrubSensitive(first).text, 220)}`, lastUser && lastUser !== first ? `last asked: ${cut(scrubSensitive(lastUser).text, 160)}` : '', lastReply ? `answer: ${cut(scrubSensitive(lastReply).text, 220)}` : '']
+      .filter(Boolean)
+      .join(' · ');
   }
 
   /** Short-term memory: the conversations of the last 24 hours (not the one going on now). */
@@ -243,19 +314,7 @@ export class MemoryService {
       since,
       exclude ?? '',
     );
-    const cut = (t: string, n: number) => {
-      const s = t.replace(/\s+/g, ' ').trim();
-      return s.length > n ? `${s.slice(0, n)}…` : s;
-    };
-    return convs.map((c) => {
-      const first = this.d.db.get<{ content: string }>("SELECT content FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY seq LIMIT 1", c.id)?.content ?? '';
-      const lastUser = this.d.db.get<{ content: string }>("SELECT content FROM messages WHERE conversation_id = ? AND role = 'user' ORDER BY seq DESC LIMIT 1", c.id)?.content ?? '';
-      const lastReply = this.d.db.get<{ content: string }>("SELECT content FROM messages WHERE conversation_id = ? AND role = 'assistant' AND content != '' ORDER BY seq DESC LIMIT 1", c.id)?.content ?? '';
-      const gist = [`asked: ${cut(scrubSensitive(first).text, 220)}`, lastUser && lastUser !== first ? `last asked: ${cut(scrubSensitive(lastUser).text, 160)}` : '', lastReply ? `answer: ${cut(scrubSensitive(lastReply).text, 220)}` : '']
-        .filter(Boolean)
-        .join(' · ');
-      return { conversationId: c.id, title: c.title, at: c.updated_at, gist };
-    });
+    return convs.map((c) => ({ conversationId: c.id, title: c.title, at: c.updated_at, gist: this.gist(c.id) }));
   }
 
   /** Long-term chat history: past messages that mention these words (newest first). */
@@ -290,18 +349,27 @@ export class MemoryService {
     if (o.cloud && s.cloud === 'none') return null;
     const lines: string[] = [];
     if (s.longTerm) {
-      const keyed = this.d.db.all<Row>(`SELECT * FROM memories WHERE key IS NOT NULL ${o.cloud ? 'AND private = 0' : ''} ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 20`);
+      // How they like things done comes every time: it is about every answer.
+      const how = this.d.db.all<Row>(`SELECT * FROM memories WHERE category = 'preference' ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 10`).map(toEntry);
+      if (how.length) lines.push('## How they like things done', ...how.map((m) => `- ${m.content}`), '');
+      const keyed = this.d.db.all<Row>(`SELECT * FROM memories WHERE key IS NOT NULL AND category != 'preference' ${o.cloud ? 'AND private = 0' : ''} ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 20`);
       const relevant = this.recall(o.text, 8, { privateToo: !o.cloud });
       const newest = this.d.db.all<Row>(`SELECT * FROM memories WHERE key IS NULL ${o.cloud ? 'AND private = 0' : ''} ORDER BY COALESCE(updated_at, created_at) DESC LIMIT 6`);
-      const seen = new Set<string>();
+      const seen = new Set<string>(how.map((m) => m.id));
       const facts = [...keyed.map(toEntry), ...relevant, ...newest.map(toEntry)].filter((m) => !seen.has(m.id) && seen.add(m.id));
       if (facts.length) lines.push('## What you remember about the person (long-term memory, kept on this computer)', ...facts.slice(0, 24).map((m) => `- ${m.content}`));
+      if (!facts.length && lines.at(-1) === '') lines.pop();
     }
     if (!o.cloud) {
       const recent = this.recent(o.conversationId);
       if (recent.length) {
         if (lines.length) lines.push('');
         lines.push('## Their last 24 hours (short-term memory)', ...recent.map((r) => `- "${r.title}" (${new Date(r.at).toLocaleString()}): ${r.gist}`));
+      }
+      const earlier = this.related(o.text, o.conversationId);
+      if (earlier.length) {
+        if (lines.length) lines.push('');
+        lines.push('## Earlier work that may relate (the last 30 days)', ...earlier.map((r) => `- "${r.title}" (${new Date(r.at).toLocaleDateString()}): ${r.gist}`));
       }
     }
     if (!lines.length) return null;

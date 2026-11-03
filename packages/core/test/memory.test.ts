@@ -98,6 +98,35 @@ describe("The AI's memory of the person", () => {
     }
   });
 
+  it('learns how they like things done, finds memories by related words, and brings back related earlier work', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      const m = kernel.memory;
+      m.learn('Always answer in bullet points. It always crashes when I print. Never use emojis. I like it when you keep it short.');
+      const how = m.list().filter((e) => e.category === 'preference').map((e) => e.content).sort();
+      expect(how).toEqual(['Likes it when you keep it short', 'Wants you never to use emojis', 'Wants you to always answer in bullet points']);
+      // How they like things done goes with every request, first.
+      expect(m.context({ conversationId: null, text: 'hello', cloud: true })).toMatch(/^## How they like things done\n- /);
+
+      // A memory is found by what it is about: their NAS by "Synology", their printer by "printing".
+      m.remember({ content: 'Backs up the photos to the NAS every Sunday', source: 'person' });
+      m.remember({ content: 'Has a Brother laser printer in the study', source: 'person' });
+      expect(m.recall('is my synology still backing up?').map((e) => e.content)).toContain('Backs up the photos to the NAS every Sunday');
+      expect(m.recall('printing is broken again').map((e) => e.content)).toContain('Has a Brother laser printer in the study');
+
+      // Earlier work that relates: a chat about the VPN, three days later, beyond short-term memory.
+      const vpn = kernel.conversations.create('VPN at the cabin', 'user');
+      kernel.conversations.append(vpn.id, { role: 'user', content: 'Set up FBRX VPN so I can reach the NAS from the cabin' });
+      kernel.conversations.append(vpn.id, { role: 'assistant', content: 'Done: the VPN is up and the NAS answers from outside.' });
+      const later = Date.now() + 3 * 86_400_000;
+      expect(m.recent(null, later)).toEqual([]);
+      expect(m.related('the vpn keeps disconnecting', null, later)).toMatchObject([{ title: 'VPN at the cabin', gist: expect.stringContaining('asked: Set up FBRX VPN') }]);
+      expect(m.related('what is the weather', null, later)).toEqual([]);
+    } finally {
+      await cleanup();
+    }
+  });
+
   it('reaches whichever AI is chosen, with the person’s message (the instructions stay the same)', async () => {
     const { kernel, cleanup } = await makeKernel();
     let system = '';

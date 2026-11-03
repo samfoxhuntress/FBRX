@@ -208,7 +208,13 @@ cloud one, or a different one tomorrow). **Settings → Memory** shows all of it
 * **Long-term memory** is lasting facts about you (your name, where you work, the town you live in, what you prefer)
   and your past chats, which it can search when you ask "what did we say about the printer last month?". It learns
   facts from what you say ("I live in…", "my email is…"), keeps what you or Fabrix choose to remember, and a newer fact
-  replaces an older one with the same meaning.
+  replaces an older one with the same meaning. A fact is found by what it is about, not only by its wording: word
+  forms ("print" finds printer and printing) and related words ("my Synology" finds what you said about the NAS).
+* **How you like things done** is learned from instructions: "Always answer in bullet points", "From now on, use
+  metric", "Never use emojis", "I like it when you keep it short". These go with every request, first.
+* **Earlier work** that relates to what you ask (chats of the last 30 days sharing its words or related ones, the
+  closest three) goes along too, so Fabrix picks up where you left off ("the VPN keeps dropping" brings back the chat
+  where you set it up). Like short-term memory, it goes only to a local AI.
 
 You can add a fact, change or forget any of them (right-click one), **Forget everything**, and turn each part off.
 Student and child computers keep no memory at all.
