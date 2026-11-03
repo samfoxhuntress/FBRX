@@ -29,6 +29,20 @@ extraResources:
   - from: resources/provisioning
     to: provisioning
     filter: ["*.json"]
+# Electron's fuses, switched in the app's own executable when it is packaged: what it refuses to do whoever starts it.
+electronFuses:
+  # Kept on: the plugin worker and the MCP bridge other AI apps start are this executable in Node mode.
+  runAsNode: true
+  # Cookies (FBRX Browser sign-ins) encrypted with the system keychain.
+  enableCookieEncryption: true
+  # NODE_OPTIONS, --inspect and the like cannot inject code into FBRX or attach a debugger to it.
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  # The app's code only loads from app.asar, and app.asar is checked against the hash built into the executable.
+  onlyLoadAppFromAsar: true
+  enableEmbeddedAsarIntegrityValidation: true
+  # Unsigned Mac builds: signed again ad hoc after the switch, as Apple silicon only runs signed code.
+  resetAdHocDarwinSignature: true
 protocols: []
 publish:
   # Updates are served per device by the FBRX control plane (generic provider). The feed URL is set

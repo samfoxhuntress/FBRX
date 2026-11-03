@@ -17,7 +17,7 @@
     "@modelcontextprotocol/sdk": "^1.31.0",
     "ical.js": "^2.2.1",
     "multicast-dns": "^7.2.5",
-    "nodemailer": "^7.0.13",
+    "nodemailer": "^10.3.1",
     "qrcode": "^1.5.4",
     "ssh2": "^1.17.0",
     "systeminformation": "^5.33.15",

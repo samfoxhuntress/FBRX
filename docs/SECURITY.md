@@ -31,7 +31,7 @@ Out of the box (`packages/shared/src/policy.ts`):
   resolution, so the agent cannot be used to probe the LAN or cloud metadata services.
 * Destructive shell patterns (`rm -rf /`, `mkfs`, `dd of=/dev/…`, fork bombs, `format C:`, `diskpart`,
   `curl … | sh`) are blocked outright.
-* Limits: 12 model steps and 40 tool calls per run, 60 tool calls per minute, approvals time out after 5 minutes.
+* Limits: 30 model steps and 80 tool calls per run, 60 tool calls per minute, approvals time out after 5 minutes.
 * New chats start **offline**: the first network tool in a chat asks the person to put that chat online.
 * Methods that change the computer (terminal, file writes, ending processes, Defender, firewall, repairs, Hyper-V,
   network adapters, mesh pairing, connecting AI apps) are reserved for the person at the workstation. Automation
@@ -300,6 +300,14 @@ tenant, and a deliberate *Disconnect* is respected.
   the SHA-512 in the authenticated feed, as before, and accepts the first signed update.
 * Update feeds are served per device by your control plane over authenticated HTTPS; files carry SHA-512 checksums
   verified by electron-updater.
+* **Electron's fuses** are switched when the app is packaged (`electronFuses` in `apps/desktop/electron-builder.yml`):
+  `NODE_OPTIONS` and `--inspect`-style arguments are ignored, so nothing can inject code into FBRX or attach a
+  debugger by starting it differently; the app's code loads only from `app.asar`, checked at start against the hash
+  built into the executable (Windows and macOS); cookies are encrypted with the system keychain. Node mode
+  (`ELECTRON_RUN_AS_NODE`) stays available because the plugin worker and the MCP bridge for other AI apps run that way.
+* **Dependencies** are checked with `npm audit` before each release; known issues in shipped packages are fixed by
+  updating them (2.2.0: the MCP SDK, nodemailer 10, systeminformation, zod, fastify and others). Electron follows its
+  newest patch release.
 * **FBRX Server updates itself only when asked.** `sudo fbrx-server update check` reads the same `release.json`
   (its `server` entry) and downloads the bundle only from a GitHub release (any host only when the server's
   administrator names another release list), refuses it unless it matches the SHA-256 in the list or the `.sha256`
