@@ -10,8 +10,14 @@
 # others later by running it again on the release's tag (Use workflow from: v<version>) with them picked: they join
 # the same release, same version.
 #
+# Repository variable (Settings → Secrets and variables → Actions → Variables):
+#   FBRX_ACCOUNT_SERVER          the FBRX account server built into the installers (https://account.<your domain>, see
+#                                docs/CLOUD.md): sign-in, purchases and FBRX Cloud AI go there. Without it the app's
+#                                sign-in asks people for the address.
+#
 # Repository secrets (all optional; unsigned builds are produced when signing secrets are missing):
-#   FBRX_LICENSE_PUBLIC_KEY      PEM from `npm run keys:generate` (embedded so installs verify licenses offline)
+#   FBRX_LICENSE_PUBLIC_KEY      the account server's license public key (FBRX Command → Licenses), or the PEM from
+#                                `npm run keys:generate`: embedded so installs verify licenses offline
 #   FBRX_MS_CLIENT_ID            (a variable or secret) Microsoft Entra app (client) ID built in for Outlook / Microsoft 365
 #                                calendar sign-in; see docs/CALENDAR.md. Without it, people or FBRX Command set their own
 #   MAC_CSC_LINK, MAC_CSC_KEY_PASSWORD           base64 .p12 "Developer ID Application" certificate + password
@@ -71,6 +77,9 @@ jobs:
       - uses: actions/checkout@v5
       - id: v
         shell: bash
+        env:
+          ACCOUNT_SERVER: ${{ vars.FBRX_ACCOUNT_SERVER }}
+          HAS_LICENSE_KEY: ${{ secrets.FBRX_LICENSE_PUBLIC_KEY != '' }}
         run: |
           if [[ "${GITHUB_REF_TYPE}" == "tag" ]]; then V="${GITHUB_REF_NAME#v}"; else V="${{ inputs.version }}"; fi
           [[ -z "$V" ]] && V=$(node -p "require('./apps/desktop/package.json').version")
@@ -82,6 +91,10 @@ jobs:
           if [[ -n "$P" && "$P" != "all" ]]; then D=$(jq -c --arg p "$P" 'map(select(.name == $p))' <<<"$D"); fi
           echo "desktop=$D" >> "$GITHUB_OUTPUT"
           echo "Building FBRX OS $V for the $C channel; installers: $(jq -r 'map(.name) | join(", ")' <<<"$D")"
+          # Official installers sign in to the FBRX account server; say plainly when this build has none.
+          if [[ -n "$ACCOUNT_SERVER" ]]; then echo "FBRX accounts: $ACCOUNT_SERVER"
+          else echo "::warning::No FBRX_ACCOUNT_SERVER repository variable: these installers ask for the account server's address at sign-in"; fi
+          if [[ "$HAS_LICENSE_KEY" != "true" ]]; then echo "::warning::No FBRX_LICENSE_PUBLIC_KEY secret: these installers trust no account server's licenses"; fi
 
   # FBRX Server travels inside FBRX Endpoint for now: the installer ISO, the server bundle and the guides are built
   # first and packed into the macOS, Windows and Linux installers (scripts/server/endpoint-resources.mjs).
@@ -122,6 +135,7 @@ jobs:
         include: ${{ fromJSON(needs.meta.outputs.desktop) }}
     env:
       FBRX_LICENSE_PUBLIC_KEY: ${{ secrets.FBRX_LICENSE_PUBLIC_KEY }}
+      FBRX_ACCOUNT_SERVER: ${{ vars.FBRX_ACCOUNT_SERVER }}
       FBRX_MS_CLIENT_ID: ${{ vars.FBRX_MS_CLIENT_ID || secrets.FBRX_MS_CLIENT_ID }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
     steps:

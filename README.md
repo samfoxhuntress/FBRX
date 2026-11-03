@@ -7,9 +7,9 @@
 
 # FBRX OS — Fabrics Operating System
 
-> **Alpha 1.9.9 "Bobbin".** FBRX is in alpha testing. **[Download FBRX-OS.zip](https://github.com/samfoxhuntress/FBRX/releases/latest/download/FBRX-OS.zip)**
-> (always the newest version; the link to share). Every version is on the
-> [Releases](https://github.com/samfoxhuntress/FBRX/releases) page; installed copies check this repository's
+> **Beta 2.2 "Weft".** FBRX is in beta. Ready-made installers for Windows, Mac and Linux, FBRX Digger and FBRX Server
+> are on the [Releases](https://github.com/samfoxhuntress/FBRX/releases) page; **[FBRX-OS.zip](https://github.com/samfoxhuntress/FBRX/releases/latest/download/FBRX-OS.zip)**
+> (always the newest version) builds your own copy with your own keys. Installed copies check this repository's
 > [`release.json`](release.json) and offer new versions in the app.
 
 FBRX OS is the platform behind the FBRX lineup ([docs/LINEUP.md](docs/LINEUP.md)): **FBRX Desktop** and **FBRX
@@ -133,9 +133,9 @@ Every version is on the **[Releases](https://github.com/samfoxhuntress/FBRX/rele
 
 | Download | What it is |
 | --- | --- |
-| **`FBRX-OS.zip`** | The whole project in a folder called `FBRX-OS`. Unzip it and run **Install FBRX OS** (below): it builds FBRX OS on your computer with your own license signing key. This is how you install your own copy. [This link](https://github.com/samfoxhuntress/FBRX/releases/latest/download/FBRX-OS.zip) always gives the newest release: share it. (GitHub's own *Source code (zip)*, `FBRX-1.9.9.zip`, is the same project with the version in its name.) |
-| `FBRX-OS-Setup-1.9.9.exe`, `FBRX-OS-1.9.9-arm64.dmg`, `FBRX-OS-1.9.9-x64.dmg` (and, from 2.0, `FBRX-OS-<version>-x86_64.AppImage` and `FBRX-OS-<version>-amd64.deb` for Linux) | Ready-made installers built by GitHub. They carry your license key and a publisher signature only when the repository's signing secrets are set ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); otherwise they open in Endpoint Essentials, go up to Standard, and reach Ultra when your FBRX Command allows it. |
-| `fbrx-server-1.0.0-amd64.iso`, `fbrx-server-1.0.0.tar.gz` | FBRX Server: the installer ISO, and the bundle for a Debian 13 server you already have ([docs/SERVER.md](docs/SERVER.md)). |
+| **`FBRX-OS.zip`** | The whole project in a folder called `FBRX-OS`. Unzip it and run **Install FBRX OS** (below): it builds FBRX OS on your computer with your own license signing key. This is how you install your own copy. [This link](https://github.com/samfoxhuntress/FBRX/releases/latest/download/FBRX-OS.zip) always gives the newest release: share it. (GitHub's own *Source code (zip)*, `FBRX-<version>.zip`, is the same project with the version in its name.) |
+| `FBRX-OS-Setup-<version>.exe`, `FBRX-OS-<version>-arm64.dmg`, `FBRX-OS-<version>-x64.dmg`, `FBRX-OS-<version>-x86_64.AppImage`, `FBRX-OS-<version>-amd64.deb` | Ready-made installers built by GitHub. They sign in to the FBRX account server and trust its licenses when the repository sets `FBRX_ACCOUNT_SERVER` and `FBRX_LICENSE_PUBLIC_KEY` ([docs/CLOUD.md](docs/CLOUD.md)), and carry a publisher signature when its signing secrets are set ([docs/DEPLOYMENT.md](docs/DEPLOYMENT.md)); otherwise they open in Endpoint Essentials, go up to Standard, and reach Ultra when your FBRX Command allows it. |
+| `fbrx-server-<version>-amd64.iso`, `fbrx-server-<version>.tar.gz` | FBRX Server: the installer ISO, and the bundle for a Debian 13 server you already have ([docs/SERVER.md](docs/SERVER.md)). |
 
 **Code → Download ZIP** on the main page gives the newest work, which can be ahead of the latest release; GitHub
 names that zip and its folder after the working branch, a long name, so share `FBRX-OS.zip` instead. Installed copies

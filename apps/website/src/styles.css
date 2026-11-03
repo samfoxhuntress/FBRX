@@ -45,6 +45,9 @@
 * {
   box-sizing: border-box;
 }
+[hidden] {
+  display: none !important;
+}
 html {
   -webkit-text-size-adjust: 100%;
 }
@@ -154,7 +157,7 @@ h3 {
   font-weight: 550;
   font-size: 15px;
 }
-.top nav a[aria-current='page'] {
+.top nav a[aria-current='page']:not(.btn) {
   color: var(--accent);
 }
 footer {
@@ -166,6 +169,81 @@ footer {
 }
 footer .foot-brand {
   font-size: 16px;
+}
+.foot-cols {
+  display: grid;
+  grid-template-columns: 2fr repeat(3, 1fr);
+  gap: 24px;
+  max-width: 1120px;
+  margin: 0 auto;
+  text-align: left;
+}
+.foot-cols h4 {
+  margin: 4px 0 8px;
+  color: var(--text);
+  font-size: 14px;
+}
+.foot-cols a {
+  display: block;
+  margin: 4px 0;
+  color: var(--muted);
+  text-decoration: none;
+}
+.foot-cols a:hover {
+  color: var(--text);
+}
+
+/* The lineup, the download page and step-by-step lists */
+.lineup,
+.downloads {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 16px;
+}
+.downloads {
+  grid-template-columns: repeat(3, 1fr);
+}
+.lineup .card {
+  color: var(--text);
+  text-decoration: none;
+}
+.lineup .card:hover {
+  border-color: color-mix(in srgb, var(--accent-strong) 55%, var(--line));
+}
+.lineup .card p {
+  color: var(--muted);
+  margin: 0;
+}
+.downloads .card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.downloads .card p {
+  margin: 0;
+}
+.downloads .card.mine {
+  border-color: var(--accent-strong);
+  box-shadow: var(--shadow), 0 0 0 1px var(--accent-strong) inset;
+}
+.band .card + .card {
+  margin-top: 0;
+}
+details summary {
+  cursor: pointer;
+  font-weight: 600;
+}
+details p {
+  color: var(--muted);
+}
+code {
+  font: 0.92em ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  padding: 1px 5px;
+  border-radius: 5px;
+  background: var(--surface-2);
+}
+.steps li {
+  margin: 12px 0;
 }
 
 /* Buttons */
@@ -444,16 +522,25 @@ input {
 }
 
 @media (max-width: 900px) {
-  .plans {
+  .plans,
+  .lineup {
     grid-template-columns: repeat(2, 1fr);
   }
   .two,
-  .features {
+  .features,
+  .downloads {
     grid-template-columns: 1fr;
+  }
+  .foot-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+  .top nav a.more {
+    display: none;
   }
 }
 @media (max-width: 560px) {
-  .plans {
+  .plans,
+  .lineup {
     grid-template-columns: 1fr;
   }
   .top nav a:not(.btn) {

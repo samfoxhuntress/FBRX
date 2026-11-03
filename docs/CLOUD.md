@@ -31,7 +31,9 @@ of accounts on it.
 2. `docker compose -f deploy/control-plane/docker-compose.yml --env-file deploy/control-plane/.env up -d`: FBRX Command
    behind Caddy, which gets and renews the HTTPS certificate by itself.
 3. Build the apps with `FBRX_ACCOUNT_SERVER=https://account.<your domain>` (the desktop app, the phone apps and the
-   website), so they sign in there.
+   website), so they sign in there. For the releases and the website, set it once as the repository variable
+   `FBRX_ACCOUNT_SERVER`, and the account server's license public key (FBRX Command → Licenses) as the secret
+   `FBRX_LICENSE_PUBLIC_KEY`: the Release workflow builds every installer with both, and warns when either is missing.
 
 **Keep it safe.**
 
@@ -47,10 +49,20 @@ of accounts on it.
 
 ## The website
 
-`npm run build -w @fbrx/website` with `FBRX_ACCOUNT_SERVER` set writes the whole site to `apps/website/dist`: HTML,
-one stylesheet and two small scripts, with a strict content security policy. Any static host serves it; one with a
-global network and automatic HTTPS, building from this repository on each push to the default branch, is the least to
-look after. Serve it on the bare domain (`<your domain>`), and set on the account server:
+`npm run build -w @fbrx/website` with `FBRX_ACCOUNT_SERVER` set writes the whole site to `apps/website/dist`: home,
+pricing and the account page, a page for each product (FBRX Endpoint, Digger, Server, Command), the download page
+(the installer for the visitor's computer first, every link taken from `release.json`, so it always offers the version
+FBRX itself offers), Self-host FBRX, support, and the terms and privacy pages (placeholders until the policies are
+written). Plain HTML, one stylesheet and a few small scripts, with a strict content security policy, security headers
+(`_headers`), `robots.txt` and, with `FBRX_SITE_URL`, a sitemap.
+
+The **Website** workflow (`.github/workflows/website.yml`) builds it on every change and publishes it from the default
+branch to Cloudflare Pages once these are set in the repository (Settings → Secrets and variables → Actions):
+`CLOUDFLARE_ACCOUNT_ID` and `CLOUDFLARE_PAGES_PROJECT` (variables) and `CLOUDFLARE_API_TOKEN` (a secret, with the
+*Cloudflare Pages: Edit* permission); the site's own settings are the variables `FBRX_ACCOUNT_SERVER`, `FBRX_SITE_URL`,
+`FBRX_SUPPORT_EMAIL`, `FBRX_STATUS_URL` and `FBRX_INSTALLERS_SIGNED` (`1` once the installers are code-signed). Without
+the Cloudflare settings each run keeps the built site as its artifact, for any other static host. Serve it on the bare
+domain (`<your domain>`), and set on the account server:
 
 - `FBRX_CP_WEBSITE_ORIGINS=https://<your domain>` (the website may call the account API from the browser)
 - `FBRX_CP_ACCOUNT_URL=https://<your domain>/account.html` (Checkout comes back to it, and the emailed links open on it)
