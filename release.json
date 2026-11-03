@@ -1,43 +1,33 @@
 {
   "product": "FBRX OS",
   "stage": "Beta",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "codename": "Weft",
   "released": "2026-11-03",
   "importance": "recommended",
-  "summary": "FBRX 2.2.0 Beta (Weft): Fabrix learns skills, remembers you better and keeps more in mind; a space map for your drives, a Wi-Fi channel planner, screenshots you drag into any app, and FBRX Digger, the Network Center on its own.",
+  "summary": "FBRX 2.2.1 Beta (Weft): on Windows the title bar and menus follow FBRX's Light and Dark modes, and the built-in model's context window fits the graphics card.",
   "notes": [
-    "Skills: Fabrix knows how to do everyday jobs step by step (slow Wi-Fi, free up disk space, a slow computer, a security check-up, what's on your network, plan my day). After a bigger job it offers to keep how it did it, saved only when you approve; write your own in Settings → Skills.",
-    "The built-in model keeps more in mind: on Auto (the new default) its context window fits your computer, up to 64K tokens, and takes half the memory it did (8-bit with flash attention).",
-    "Memory finds things by what they are about (your Synology finds what you said about the NAS), learns how you like things done (\"always answer in bullet points\") and brings back related work from the last 30 days.",
-    "Fabrix shows its plan for bigger jobs as a checklist and ticks it off, checks its work before saying it is done, and asks one short question when a request could mean two things.",
-    "Storage → Space map: any folder or the whole drive as a map colored by kind of file. Click into folders, delete node_modules and build folders, move big files to the Trash, and clear caches, AI models and other space hogs in one click. Ultra: deep scans, duplicate files and what grew since last time.",
-    "Network Center → Wi-Fi: the channel planner draws every network around, shows how busy each channel is and tells you the best one for yours and why, with Open router settings. Ultra adds the channel width, DFS channels, channel history and every access point.",
-    "FBRX Snapshot: Drag out a marked-up picture straight into a chat, an email, a document or a folder.",
-    "Clipboard history keeps the pictures you copy, shows text exactly as copied (a password ending in |> no longer turns into an arrow), and W and S type into the search like any letter.",
-    "Security: updated components (the MCP SDK, nodemailer, systeminformation, zod, fastify and more), Electron 44.10.1, and the app's executable now refuses injected code and debuggers and checks its own files.",
-    "New: FBRX Digger 1.0, the Network Center on its own for Windows, macOS and Linux, on its own release (FBRX Digger 1.0.0)."
+    "Windows: the title bar, menus and right-click menus follow FBRX's mode (Light, Dark or Match Windows) instead of always Windows' own, and change the moment you change it.",
+    "The File, Edit, View menu bar stays out of sight on Windows and Linux until you press Alt (FBRX has its own navigation; its shortcuts still work), and windows open in the color of your mode.",
+    "The built-in model's context window on Auto now fits the graphics card when the model runs there, so a long context no longer pushes part of the model off the card (slower); several graphics cards add up when judging what fits.",
+    "Downloading a model checks first that the disk has room for it, and says how much is needed."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.2.0.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.2.0",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.2.1.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.2.1",
   "server": {
-    "version": "1.3.0",
+    "version": "1.3.1",
     "released": "2026-11-03",
-    "summary": "FBRX Server 1.3.0: the server's Fabrix gets FBRX OS 2.2.0's skills, memory, bigger context window and plans, with updated components.",
+    "summary": "FBRX Server 1.3.1: a context window up to 128K tokens, bigger models made easy (gpt-oss 120B, Qwen3 235B and any GGUF model on Hugging Face), and new fbrx-server ai commands.",
     "notes": [
-      "Fabrix on the server (the ai role): skills, better memory, the Auto context window, plans and checked work, as in FBRX OS 2.2.0.",
-      "Updated components: nodemailer 10, fastify, the MCP SDK, systeminformation and zod.",
+      "The server's own AI keeps more in mind: on Auto its context window goes up to 128K tokens (as much as the memory, or the graphics cards, have room for). Administrators can set it in Mesh & AI → Models on this server, or with fbrx-server ai context.",
+      "New server models with long contexts: Qwen3 30B-A3B Instruct 2507 (the new pick for servers with 32 GB or more), gpt-oss 120B (quick on processors with 96 GB or more) and Qwen3 235B-A22B Instruct 2507 (192 GB or more).",
+      "Any GGUF model on Hugging Face by its name (owner/name, with a quantization after a colon): in the console's A model of your own, or sudo fbrx-server ai download owner/name --use. Big models in several files download as one, every file checked against Hugging Face's checksum.",
+      "fbrx-server ai recommend names the best model for this server; download --use downloads and switches in one go, with speed and time left; delete and context are new; a download checks the disk first (20 GB stays free).",
       "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
     ],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.2.0/fbrx-server-1.3.0.tar.gz",
-    "sha256": "ad254c332248abd5c0dca1fd3c310314fac49fa365dacffbae3308e3eab2eb7c",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.2.0"
-  },
-  "command": {
-    "summary": "FBRX Command 2.2.0: updated components for security.",
-    "notes": [
-      "Updated components: nodemailer 10 (email), fastify and the request parser, with fixes for the issues npm audit reported."
-    ]
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.2.1/fbrx-server-1.3.1.tar.gz",
+    "sha256": "9439c580297f40337eb74800691711f1b79b330e3b50c68fe79099a77a6ba935",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.2.1"
   },
   "digger": {
     "version": "1.0.0",
