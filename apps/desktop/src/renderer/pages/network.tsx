@@ -11,6 +11,7 @@ import { unlockTrophy } from '../fun';
 import { commandSearchUrl, matchDeviceProfile } from '@fbrx/shared';
 import { EditionHint } from '../edition';
 import { Environments } from './network-environments';
+import { WifiChannelPlanner } from './wifi-channels';
 
 type Tab = 'overview' | 'environments' | 'trace' | 'devices' | 'speed' | 'wifi' | 'bluetooth' | 'printers' | 'tools' | 'adapters';
 
@@ -576,7 +577,6 @@ function Speed({ easterEggs }: { easterEggs: boolean }) {
 function Wifi() {
   const wifi = useCore('net.wifi', undefined, [], 15_000);
   const c = wifi.data?.connection;
-  const channels = Object.entries(wifi.data?.channels ?? {}).sort((a, b) => Number(a[0]) - Number(b[0]));
   return (
     <>
       {c ? (
@@ -589,36 +589,20 @@ function Wifi() {
       ) : (
         <Callout tone="info">Not connected to Wi-Fi (or Wi-Fi details are unavailable).</Callout>
       )}
-      <Grid cols={2}>
-        <Card title="Nearby networks" flush>
-          <Table
-            columns={[
-              { key: 'ssid', header: 'Network', render: (n) => n.ssid },
-              { key: 'sig', header: 'Signal', render: (n) => <Meter value={n.signalPct} label={`${n.ssid} signal`} />, width: 120 },
-              { key: 'ch', header: 'Channel', render: (n) => `${n.channel ?? '—'} · ${n.band}`, width: 120 },
-              { key: 'sec', header: 'Security', render: (n) => <span className="fx-muted">{n.security}</span> },
-            ]}
-            rows={wifi.data?.networks ?? []}
-            rowKey={(n) => `${n.ssid}${n.channel}`}
-            empty={<Empty title="No networks found" />}
-          />
-        </Card>
-        <Card title="Channel congestion" subtitle="How many networks share each channel. Fewer is better.">
-          {channels.length ? (
-            <div className="fx-grid" style={{ gap: 6 }}>
-              {channels.map(([ch, n]) => (
-                <div key={ch} style={{ display: 'grid', gridTemplateColumns: '60px 1fr 30px', gap: 8, alignItems: 'center', fontSize: 13 }}>
-                  <span>Ch {ch}</span>
-                  <Meter value={n} max={Math.max(...channels.map(([, x]) => x))} label={`Channel ${ch}`} />
-                  <span className="fx-muted">{n}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty title="No data" />
-          )}
-        </Card>
-      </Grid>
+      <WifiChannelPlanner />
+      <Card title="Nearby networks" flush>
+        <Table
+          columns={[
+            { key: 'ssid', header: 'Network', render: (n) => n.ssid },
+            { key: 'sig', header: 'Signal', render: (n) => <Meter value={n.signalPct} label={`${n.ssid} signal`} />, width: 120 },
+            { key: 'ch', header: 'Channel', render: (n) => `${n.channel ?? '—'} · ${n.band}`, width: 120 },
+            { key: 'sec', header: 'Security', render: (n) => <span className="fx-muted">{n.security}</span> },
+          ]}
+          rows={wifi.data?.networks ?? []}
+          rowKey={(n) => `${n.ssid}${n.channel}`}
+          empty={<Empty title="No networks found" />}
+        />
+      </Card>
     </>
   );
 }

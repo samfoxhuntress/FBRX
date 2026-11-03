@@ -511,8 +511,12 @@ Overview (this PC, router, internet latency and loss, public address, plain-lang
 **trace route with hop identification** (your router, other local routers / double NAT, your provider, the
 internet, the destination; names, makers and locations), **device discovery** (ping sweep, ARP, mDNS/Bonjour,
 UPnP, port fingerprints and MAC vendors identify PCs, phones, printers, TVs, cameras, smart-home devices and NAS),
-saved scans with comparison and CSV export, a **speedometer** speed test (download, upload, latency and jitter, with history), Wi-Fi (signal, channel, band, congestion by
-channel), Bluetooth devices with battery, printers (test page, queue, default, clear, restart spooler), DNS
+saved scans with comparison and CSV export, a **speedometer** speed test (download, upload, latency and jitter, with history), Wi-Fi (signal, channel, band) with
+the **channel planner**: every network around drawn over the channels it covers (yours in the accent color), how busy
+each channel is (closer and louder neighbors count for more; at 2.4 GHz, overlapping channels count too), the best
+channel for your network with the reason (at 2.4 GHz only 1, 6 or 11), and **Open router settings** to change it
+(Ultra: the channel width to set, DFS channels with their catch, how busy each channel has been since FBRX started, and
+every access point with its signal), Bluetooth devices with battery, printers (test page, queue, default, clear, restart spooler), DNS
 comparison, port checks and device consoles (Ultra). Ultra: adapter configuration (DHCP, static, secondary addresses).
 
 Makers come from the **IEEE MAC address registry** that ships with FBRX OS (MA-L, MA-M and MA-S blocks, about 54,000

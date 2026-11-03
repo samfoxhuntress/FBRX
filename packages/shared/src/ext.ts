@@ -779,6 +779,53 @@ export interface WifiInfo {
   networks: Array<{ ssid: string; signalPct: number; channel: number | null; band: string; security: string }>;
   channels: Record<string, number>;
 }
+export type WifiBand = '2.4 GHz' | '5 GHz' | '6 GHz';
+/** One access point a Wi-Fi scan sees (a router with two radios, or mesh nodes, show as several). */
+export interface WifiAccessPoint {
+  ssid: string;
+  bssid: string;
+  channel: number;
+  band: WifiBand;
+  signalDbm: number;
+  signalPct: number;
+  security: string;
+  /** Part of the network this computer is on (same name): your router's other radios and mesh nodes. */
+  mine: boolean;
+  /** The very access point this computer is connected to. */
+  connected: boolean;
+}
+export interface WifiChannelLoad {
+  channel: number;
+  /** Networks on exactly this channel (yours left out). */
+  networks: number;
+  /** How much the networks on and around it disturb it, louder ones counting more (0 is clear). */
+  load: number;
+  /** 5 GHz channels 52–144: shared with radar. */
+  dfs: boolean;
+  mine: boolean;
+}
+export interface WifiBandReport {
+  band: WifiBand;
+  channels: WifiChannelLoad[];
+  /** The channel your network uses on this band. */
+  mine: number | null;
+  best: { channel: number; load: number; dfs: boolean } | null;
+  /** What to do, in plain sentences. */
+  advice: string[];
+  /** Endpoint Ultra: the channel width to set. */
+  width: { mhz: 20 | 40 | 80 | 160; why: string } | null;
+}
+export interface WifiChannelReport {
+  at: string;
+  connected: { ssid: string; channel: number | null; band: WifiBand | null; signalDbm: number | null } | null;
+  points: WifiAccessPoint[];
+  bands: WifiBandReport[];
+  /** The router's address, to open its settings. */
+  router: string | null;
+  ultra: boolean;
+  /** Endpoint Ultra: earlier scans since FBRX started, each band's channel loads in the order of its channels. */
+  history: Array<{ at: string; loads: Partial<Record<WifiBand, number[]>> }> | null;
+}
 export interface BluetoothDevice {
   name: string;
   connected: boolean;
@@ -1173,6 +1220,7 @@ export interface ExtMethods {
   'migrate.cancel': (p: { jobId: string }) => Ok;
   'migrate.jobs': () => MigrateJob[];
   'net.wifi': () => WifiInfo;
+  'net.wifiChannels': () => WifiChannelReport;
   'net.bluetooth': () => { adapters: string[]; devices: BluetoothDevice[] };
   'net.printers': () => PrinterInfo[];
   'net.printerAction': (p: { name: string; action: (typeof PRINTER_ACTIONS)[number] }) => Ok;

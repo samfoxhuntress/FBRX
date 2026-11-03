@@ -413,6 +413,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     'net.speedTest': (p) => k.net.speedTest(z.object({ reqId: ReqId }).parse(p).reqId),
     'net.speedHistory': () => k.net.speedHistory(),
     'net.wifi': () => k.net.wifi(),
+    'net.wifiChannels': () => k.net.wifiChannels({ ultra: !k.ultraOnly('Wi-Fi channel history') }),
     'net.bluetooth': () => k.net.bluetooth(),
     'net.printers': () => k.net.printers(),
     'net.printerAction': async (p) => {
