@@ -11,7 +11,7 @@ import type { ToolSpec } from '../tools/types';
  */
 
 /** Tools a local model always has: the time, its memory, and FBRX's own help and check-up. */
-const ALWAYS = new Set(['time.now', 'memory.remember', 'memory.recall', 'fbrx.help', 'fbrx.doctor', 'fbrx.fix']);
+const ALWAYS = new Set(['time.now', 'plan.update', 'memory.remember', 'memory.recall', 'fbrx.help', 'fbrx.doctor', 'fbrx.fix']);
 
 /** Matches a word that starts with one of these (case aside): "file" matches files and filename. */
 const starts = (...stems: string[]) => new RegExp(`(?:^|[^a-z0-9])(?:${stems.join('|')})`, 'i');

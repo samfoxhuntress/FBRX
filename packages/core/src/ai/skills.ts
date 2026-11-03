@@ -61,12 +61,13 @@ export const STARTER_SKILLS: Starter[] = [
     id: 'skill_security',
     name: 'Security check-up',
     when: 'The person wants to know whether the computer is safe, or thinks something is wrong.',
-    keywords: ['secure', 'security', 'safe', 'virus', 'malware', 'hacked', 'protect', 'antivirus', 'firewall', 'checkup'],
+    keywords: ['secure', 'security', 'safe', 'virus', 'malware', 'hacked', 'protect', 'antivirus', 'firewall', 'checkup', 'phishing', 'suspicious'],
     steps: [
       'pc.security_status: antivirus, firewall and updates.',
       "shield.status: FBRX Shield's findings and quarantine.",
       'pc.pending_updates: security updates waiting.',
       'alerts.recent: security alerts lately.',
+      'A link they clicked or were sent: net.check_link on it (where it really goes, look-alike names, how new the domain is).',
       'Say what is fine and what needs doing, the most important first; offer shield.scan when anything looks off.',
     ],
   },
@@ -86,7 +87,7 @@ export const STARTER_SKILLS: Starter[] = [
     id: 'skill_day',
     name: 'Plan my day',
     when: 'The person asks what is on today, or wants help planning the day.',
-    keywords: ['plan', 'day', 'today', 'schedule', 'agenda', 'priorities', 'morning', 'week'],
+    keywords: ['plan', 'day', 'today', 'schedule', 'agenda', 'priorities', 'morning'],
     steps: [
       'calendar.agenda: what is on today.',
       'workspace.list_tasks: open tasks, due ones first.',

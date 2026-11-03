@@ -7792,3 +7792,51 @@ body.popout .fx-page-header p {
   line-height: 1.55;
   color: var(--text-secondary);
 }
+
+/* The agent's plan for a bigger job (plan.update), as a checklist in the chat. */
+.plan-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 10px 12px;
+  margin: 8px 0;
+  background: var(--surface-1);
+}
+.plan-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+  font-size: 13px;
+  margin-bottom: 6px;
+}
+.plan-head .fx-muted {
+  font-weight: 400;
+}
+.plan-card ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+}
+.plan-card li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.plan-card li.done {
+  color: var(--text-secondary);
+}
+.plan-card li.done svg {
+  color: var(--good);
+  flex: none;
+}
+.plan-dot {
+  width: 10px;
+  height: 10px;
+  margin: 0 2px;
+  border-radius: 50%;
+  border: 1.5px solid var(--text-muted);
+  flex: none;
+}

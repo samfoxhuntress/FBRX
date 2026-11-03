@@ -88,6 +88,27 @@ function toolTone(s: ToolCallRecord['status']) {
   return s === 'succeeded' ? 'good' : s === 'failed' ? 'critical' : s === 'denied' ? 'serious' : s === 'awaiting-approval' ? 'warning' : s === 'running' ? 'busy' : 'neutral';
 }
 
+/** The agent's plan for a bigger job (plan.update), as a checklist: only its latest version shows in the chat. */
+function PlanCard({ c }: { c: ToolCallRecord }) {
+  const steps = (c.input as { steps?: Array<{ step: string; done?: boolean }> }).steps ?? [];
+  const done = steps.filter((s) => s.done).length;
+  return (
+    <div className="plan-card" role="group" aria-label={`Plan: ${done} of ${steps.length} done`}>
+      <div className="plan-head">
+        <Icons.list size={14} /> Plan <span className="fx-muted">{done === steps.length ? 'done' : `${done} of ${steps.length} done`}</span>
+      </div>
+      <ul>
+        {steps.map((s, i) => (
+          <li key={i} className={s.done ? 'done' : ''}>
+            {s.done ? <Icons.checkCircle size={14} /> : <span className="plan-dot" />}
+            {s.step}
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 function ToolCard({ c, approval }: { c: ToolCallRecord; approval: ApprovalRequest | undefined }) {
   const [open, setOpen] = useState(c.status === 'awaiting-approval' || c.status === 'failed' || c.status === 'denied');
   const { run, busy } = useAction();
@@ -479,6 +500,8 @@ export function AgentPage({ agentName }: { agentName: string }) {
 
   sendRef.current = (t: string) => void send(t);
   const visible = useMemo(() => chat.messages.filter((m) => m.role === 'user' || m.role === 'assistant'), [chat.messages]);
+  // Only the latest version of the agent's plan shows, where it was last updated.
+  const lastPlan = useMemo(() => visible.flatMap((m) => m.toolCalls ?? []).filter((c) => c.name === 'plan.update').at(-1)?.id ?? null, [visible]);
   // How long each answer took, from the question to the last message of the reply (to compare one AI with another).
   const took = useMemo(() => {
     const out = new Map<string, number>();
@@ -593,9 +616,13 @@ export function AgentPage({ agentName }: { agentName: string }) {
               <div key={m.id} className="msg">
                 {showThinking && m.thinking && <ThinkingNote text={m.thinking} agentName={agentName} />}
                 {m.content && <Markdown text={m.content} />}
-                {(m.toolCalls ?? []).map((c) => (
-                  <ToolCard key={c.id} c={c} approval={approvals.find((a) => a.runId === run?.runId && a.tool === c.name)} />
-                ))}
+                {(m.toolCalls ?? []).map((c) =>
+                  c.name === 'plan.update' ? (
+                    c.id === lastPlan && <PlanCard key={c.id} c={c} />
+                  ) : (
+                    <ToolCard key={c.id} c={c} approval={approvals.find((a) => a.runId === run?.runId && a.tool === c.name)} />
+                  ),
+                )}
                 <div className="msg-meta">
                   {m.model && <span>{m.model}</span>}
                   {took.has(m.id) && <span title="From your question to this answer">{answerTime(took.get(m.id)!)}</span>}

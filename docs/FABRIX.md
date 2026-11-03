@@ -18,6 +18,16 @@ same rules:
   weakens security, a nearly full disk) and lists them after the task under *Also noticed*, with the fix it recommends.
   It changes them only when you say yes.
 - **Only claim what a tool confirmed.** If a tool failed, or it has none for what you asked, it says so.
+- **Show the plan.** For a job of three or more steps it shows its plan as a checklist in the chat and ticks steps off
+  as it goes (`plan.update`; only the latest version of the plan shows).
+- **Check its work.** After a change it reads it back when it can (the file it wrote, the task it added, the event it
+  made) before it says it is done.
+- **Ask once, when it matters.** When a request could mean two quite different things, or needs something only you
+  know (which file, which day, which account), it asks one short question first; otherwise it takes the sensible
+  reading, says which, and goes.
+
+Thirteen everyday requests (packages/core/src/ai/eval/everyday-tasks.ts) are checked with every change: each must give
+even a small model the tools and the skill the job needs.
 
 ## Its room: the context window and the monthly budget
 
