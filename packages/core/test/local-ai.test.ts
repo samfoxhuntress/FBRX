@@ -70,7 +70,8 @@ describe('a local model reads less, so it answers sooner', () => {
       const toolNames = local.tools.map((t: { function: { name: string } }) => t.function.name);
       expect(toolNames).toContain('system__processes');
       expect(toolNames).not.toContain('web__search');
-      expect(toolNames.length).toBeLessThan(20);
+      // At most the short list's 24 (MAX_TOOLS), skills' tools included: on Windows the slow-computer skill adds its own.
+      expect(toolNames.length).toBeLessThanOrEqual(24);
       // What it remembers rides with the person's message; the instructions stay the same from one request to the next.
       expect(local.messages[0].content).not.toContain('Prefers short answers');
       // So do the skills that fit (here the starter "Computer feels slow").
