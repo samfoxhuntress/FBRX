@@ -16,7 +16,8 @@ The desktop app is **FBRX Endpoint**, in four editions (see COMMAND_CENTER.md fo
   may try it free for 7 days, once (`STANDARD_TRIAL_DAYS`).
 * **FBRX Endpoint Ultra** — expert tool sets (Terminal, FBRX/1, virtual lab, disks and partitions, Defender settings,
   adapters, device consoles, developer tools, the Local API), Mesh and AI coordination, connections, tools and
-  plugins, governance, and the theme studio with its gradients and textures.
+  plugins, governance, the theme studio with its gradients and textures, deep space maps with duplicate files and
+  what grew, and the Wi-Fi channel planner's history and band-by-band advice.
 * **FBRX Endpoint Black Hole** (`blackhole`) — everything: Ultra plus the whole Library (The Lab and the FBRX command
   library), network environments in Network Center and the FBRX Server page. For the people who run
   an organization's FBRX Command and its FBRX Servers, and only through FBRX Command.

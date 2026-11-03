@@ -97,6 +97,8 @@ export interface PlatformAdapter {
   renderer?: DocumentRenderer | null;
   /** Thumbnails of screen snapshots (without it the pictures themselves are shown). */
   images?: ImageTools | null;
+  /** Moves a file or folder to the Trash (Recycle Bin); the desktop app has it, a headless core does not. */
+  trash?(path: string): Promise<void>;
   specialDirs(): SpecialDirs;
   /** FBRX's own folders outside its data folder (where it is installed, its update cache): never scanned. */
   ownDirs?(): string[];

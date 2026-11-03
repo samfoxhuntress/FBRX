@@ -106,6 +106,7 @@ export function createElectronPlatform(o: {
         return image.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: 'good' }).toJPEG(82);
       },
     },
+    trash: (path: string) => shell.trashItem(path),
     specialDirs: () => {
       const d = defaultSpecialDirs();
       try {

@@ -38,6 +38,7 @@ import { eventLogs, queryEvents } from '../system/events';
 import { expandPath } from '../system/files';
 import * as lab from '../windows/lab';
 import * as sec from '../windows/security';
+import * as space from '../system/space';
 import * as storage from '../windows/storage';
 import * as fixes from '../windows/troubleshoot';
 import * as updates from '../windows/updates';
@@ -215,6 +216,46 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return { ok: true };
     },
     'storage.analyze': (p, ctx) => storage.analyzeFolder(guardPath(Path.parse(p).path, ctx)),
+    // The space map; Endpoint Ultra scans deeper and shows what grew or shrank since the folder was last mapped.
+    'storage.space': async (p, ctx) => {
+      const path = guardPath(Path.parse(p).path, ctx);
+      const ultra = !k.ultraOnly('Deep scans');
+      const map = await space.spaceMap(path, { deep: ultra });
+      const saved = k.meta.get<Record<string, { at: string; total: number; children: Record<string, number> }>>('storage.spaceMaps') ?? {};
+      const before = ultra ? saved[path] : undefined;
+      if (ultra && !map.partial) {
+        const kept = Object.entries({ ...saved, [path]: { at: new Date().toISOString(), ...space.spaceSummary(map) } })
+          .sort((a, b) => b[1].at.localeCompare(a[1].at))
+          .slice(0, 30);
+        k.meta.set('storage.spaceMaps', Object.fromEntries(kept));
+      }
+      return { ...map, ultra, changes: before ? space.spaceChanges(before, map) : null, since: before?.at ?? null };
+    },
+    'storage.hogs': () => space.spaceHogs(),
+    'storage.clearHog': async (p) => {
+      const q = z.object({ id: z.string().max(40), path: z.string().max(4096).optional() }).parse(p);
+      const r = await space.clearHog(q.id, q.path ? expandPath(q.path) : undefined);
+      k.audit.append({ category: 'system', action: 'storage.clear', actor: 'user', target: q.path ?? q.id, outcome: 'success', details: { freed: r.freed, skipped: r.skipped } });
+      return r;
+    },
+    'storage.duplicates': async (p, ctx) => {
+      const why = k.ultraOnly('Duplicate files');
+      if (why) throw new CoreError('FORBIDDEN', why);
+      return space.duplicates(guardPath(Path.parse(p).path, ctx));
+    },
+    'files.trash': async (p) => {
+      const q = z.object({ paths: z.array(z.string().min(1).max(4096)).min(1).max(200) }).parse(p);
+      if (!k.platform.trash) throw new CoreError('UNAVAILABLE', 'Moving to the Trash needs the FBRX desktop app');
+      const failed: string[] = [];
+      // FBRX's own data folder never goes to the Trash this way.
+      const own = (path: string) => path === k.paths.root || path.startsWith(join(k.paths.root, ''));
+      for (const path of q.paths.map((x) => expandPath(x))) {
+        if (own(path)) failed.push(path);
+        else await k.platform.trash(path).catch(() => failed.push(path));
+      }
+      k.audit.append({ category: 'system', action: 'files.trash', actor: 'user', target: q.paths.length === 1 ? q.paths[0] : `${q.paths.length} items`, outcome: failed.length ? 'failure' : 'success', details: { failed: failed.length } });
+      return { trashed: q.paths.length - failed.length, failed };
+    },
     'storage.maintenance': (p) =>
       storage.maintenance(z.object({ action: z.enum(STORAGE_ACTIONS), letter: z.string().max(3).optional(), value: z.string().max(64).optional(), disk: z.number().int().optional(), partition: z.number().int().optional() }).parse(p)),
 

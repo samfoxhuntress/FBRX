@@ -334,6 +334,67 @@ export interface FolderUsage {
 }
 export const STORAGE_ACTIONS = ['analyze', 'optimize', 'chkdsk', 'label', 'letter', 'extend'] as const;
 
+/** Kinds of files the space map sorts space into, in the order their colors are given. */
+export const SPACE_KINDS = ['videos', 'pictures', 'music', 'documents', 'archives', 'apps', 'code', 'other'] as const;
+export type SpaceKind = (typeof SPACE_KINDS)[number];
+
+/** A folder (or a big file) on the space map: its size by kind of file, and the biggest things inside it. */
+export interface SpaceNode {
+  name: string;
+  path: string;
+  size: number;
+  files: number;
+  dir: boolean;
+  /** Bytes per kind, in SPACE_KINDS order. */
+  kinds: number[];
+  children?: SpaceNode[];
+  /** Bytes in what is too small to show on its own. */
+  rest?: number;
+}
+
+/**
+ * Something known that takes a lot of space: a cache that comes back by itself (cleared in one click), or a library to
+ * look through (games, models, phone backups, a photo library).
+ */
+export interface SpaceHog {
+  id: string;
+  label: string;
+  /** What it is and what happens if it goes. */
+  what: string;
+  path: string;
+  size: number;
+  /** clear: emptied in one click (it comes back by itself); remove: the folder itself goes; review: open and decide. */
+  action: 'clear' | 'remove' | 'review';
+}
+
+export interface SpaceMap {
+  path: string;
+  total: number;
+  files: number;
+  tree: SpaceNode;
+  kinds: Array<{ kind: SpaceKind; size: number; files: number }>;
+  largest: Array<{ path: string; size: number; modified: string }>;
+  /** Space hogs found inside the folder (node_modules, Python environments, build folders, libraries). */
+  found: SpaceHog[];
+  /** Files not changed for two years. */
+  old: { size: number; files: number };
+  partial: boolean;
+  ms: number;
+  /** Endpoint Ultra: a deep scan, and what grew or shrank since this folder was last mapped. */
+  ultra: boolean;
+  changes: Array<{ name: string; path: string; before: number; after: number }> | null;
+  since: string | null;
+}
+
+export interface SpaceDuplicates {
+  /** Files with the same contents, the biggest waste first. */
+  groups: Array<{ size: number; paths: string[] }>;
+  /** Bytes that one copy of each would free. */
+  wasted: number;
+  checked: number;
+  partial: boolean;
+}
+
 export interface DefenderStatus {
   realtime: boolean;
   antivirus: boolean;
@@ -1005,6 +1066,11 @@ export interface ExtMethods {
   'storage.cleanTemp': () => { freed: number; skipped: number };
   'storage.emptyRecycleBin': () => Ok;
   'storage.analyze': (p: { path: string }) => FolderUsage;
+  'storage.space': (p: { path: string }) => SpaceMap;
+  'storage.hogs': () => SpaceHog[];
+  'storage.clearHog': (p: { id: string; path?: string }) => { freed: number; skipped: number };
+  'storage.duplicates': (p: { path: string }) => SpaceDuplicates;
+  'files.trash': (p: { paths: string[] }) => { trashed: number; failed: string[] };
   'storage.maintenance': (p: { action: (typeof STORAGE_ACTIONS)[number]; letter?: string; value?: string; disk?: number; partition?: number }) => ElevatedResult;
 
   'security.defender': () => DefenderStatus;
@@ -1352,6 +1418,8 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'terminal.kill',
   'spotlight.run',
   'storage.cleanTemp',
+  'storage.clearHog',
+  'files.trash',
   'storage.emptyRecycleBin',
   'storage.maintenance',
   'security.setDefenderPref',
