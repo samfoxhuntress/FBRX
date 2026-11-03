@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useRef, useState, type DragEvent as ReactDragEvent, type PointerEvent as ReactPointerEvent } from 'react';
 import { Button, Empty, Icons, Page, Spinner, formatDate, useAction, useConfirm, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { useAgentName, useCore } from '../hooks';
@@ -289,6 +289,16 @@ export function SnapshotEditor({ id }: { id: string }) {
     return toBlob(c);
   };
   const copy = () => run('copy', async () => navigator.clipboard.write([new ClipboardItem({ 'image/png': await render() })]), 'Copied: paste it anywhere');
+  // Dragging the picture into another app: the marked-up picture is made as the button is pressed, so it is ready when
+  // the drag starts; a snapshot with nothing changed since it was saved goes as its own file.
+  const dragData = useRef<Promise<Uint8Array> | null>(null);
+  const readyDrag = () => {
+    dragData.current = edit === saved ? null : render().then(async (b) => new Uint8Array(await b.arrayBuffer()));
+  };
+  const dragOut = (e: ReactDragEvent) => {
+    e.preventDefault();
+    void run('drag', async () => bridge.snapDrag!({ id, ...(dragData.current ? { data: await dragData.current } : {}) }));
+  };
   const save = () =>
     run(
       'save',
@@ -355,6 +365,12 @@ export function SnapshotEditor({ id }: { id: string }) {
           <Button icon="chevronLeft" variant="ghost" onClick={() => navigate('snapshots')}>
             All
           </Button>
+          {bridge.snapDrag && img && (
+            <span className="fx-btn snap-drag" draggable onPointerDown={readyDrag} onDragStart={dragOut} title="Drag the picture into another app: a chat, an email, a document or a folder">
+              <Icons.image size={15} />
+              Drag out
+            </span>
+          )}
           <Button icon="copy" loading={busy === 'copy'} disabled={!img} onClick={() => void copy()}>
             Copy
           </Button>

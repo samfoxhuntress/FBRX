@@ -80,6 +80,7 @@ const api = {
   stopCode: () => ipcRenderer.invoke('fbrx:code-stop') as Promise<unknown>,
   /** FBRX Snapshot: start one (a page's button), and the overlay's side (its still picture, the mode, windows, the pick). */
   snap: (action: 'start' | 'frame' | 'mode' | 'windows' | 'pick' | 'cancel', arg?: unknown) => ipcRenderer.invoke('fbrx:snap', action, arg) as Promise<unknown>,
+  snapDrag: (what: { id: string; data?: Uint8Array }) => ipcRenderer.invoke('fbrx:snap-drag', what) as Promise<boolean>,
   onSnapMode(cb: (mode: string) => void): () => void {
     const h = (_e: unknown, mode: string) => cb(mode);
     ipcRenderer.on('fbrx:snap-mode', h);

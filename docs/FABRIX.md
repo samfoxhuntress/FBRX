@@ -123,6 +123,8 @@ A picture of the screen (Workbench → **Snapshot**, or **Ctrl+Alt+S** from any 
    redo. Keys: P, H, A, R, T, B, C for the tools; Ctrl+Z / Ctrl+Y; Ctrl+C copies; Ctrl+S saves.
 4. Then **Copy**, **Save** (over the snapshot), **Save a copy**, **Show in folder**, **Delete**, or **Ask Fabrix**: a new
    chat with the picture attached, ready for your question ("what does this error mean?").
+5. Or press **Drag out** and drop the picture straight into another app (a chat, an email, a document, a folder), marks
+   and crop included, saved or not. Snapshots in the list drag out the same way.
 
 On a Mac, the first snapshot asks for **Screen Recording** permission (System Settings → Privacy & Security). On Linux
 with Wayland, the system may ask which screen to share. Snapshot is in Endpoint Standard and up.

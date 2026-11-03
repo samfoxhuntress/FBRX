@@ -6295,6 +6295,14 @@ html[data-presenting='blur'] .private::selection {
   color: var(--text-secondary);
   text-align: left;
 }
+/* The handle that drags the picture into another app: grabbed, not clicked. */
+.snap-drag {
+  cursor: grab;
+  user-select: none;
+}
+.snap-drag:active {
+  cursor: grabbing;
+}
 .snapedit-bar {
   display: flex;
   align-items: center;

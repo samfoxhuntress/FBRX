@@ -57,6 +57,8 @@ interface Bridge {
   onClipPicker?(cb: (what: string) => void): () => void;
   /** FBRX Snapshot (Electron only): start one from a page, or, in the overlay, its still picture, mode, windows and pick. */
   snap?(action: 'start' | 'frame' | 'mode' | 'windows' | 'pick' | 'cancel', arg?: unknown): Promise<unknown>;
+  /** Drags a snapshot into another app as a PNG file: a saved one, or (with its data) the picture being marked up. */
+  snapDrag?(what: { id: string; data?: Uint8Array }): Promise<boolean>;
   /** The overlay's mode changed on another screen. */
   onSnapMode?(cb: (mode: string) => void): () => void;
   /** Code lab: runs JavaScript in a hidden, network-blocked window (Electron only). */

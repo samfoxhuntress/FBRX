@@ -26,7 +26,7 @@ function Thumb({ shot }: { shot: ScreenSnapshot }) {
       })
       .catch(() => undefined);
   }, [key, src, shot.id]);
-  return src ? <img src={src} alt="" loading="lazy" /> : <Icons.image size={22} />;
+  return src ? <img src={src} alt="" loading="lazy" draggable={false} /> : <Icons.image size={22} />;
 }
 
 function useRouteArg(): string | null {
@@ -83,7 +83,17 @@ function SnapshotGallery() {
         ) : (
           <div className="snap-grid">
             {shots.data.map((shot) => (
-              <button key={shot.id} className="snap-card" onClick={() => navigate(`snapshots/${encodeURIComponent(shot.id)}`)}>
+              <button
+                key={shot.id}
+                className="snap-card"
+                draggable={!!bridge.snapDrag}
+                title="Open to mark up, or drag into another app"
+                onDragStart={(e) => {
+                  e.preventDefault();
+                  void bridge.snapDrag!({ id: shot.id });
+                }}
+                onClick={() => navigate(`snapshots/${encodeURIComponent(shot.id)}`)}
+              >
                 <span className="snap-thumb">
                   <Thumb shot={shot} />
                 </span>

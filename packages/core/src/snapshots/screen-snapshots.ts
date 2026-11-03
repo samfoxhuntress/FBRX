@@ -40,7 +40,7 @@ export class ScreenSnapshots {
   }
 
   /** The path of a snapshot in the folder; a name that reaches outside it, or is not a PNG, is refused. */
-  private file(id: string): string {
+  file(id: string): string {
     if (!id || basename(id) !== id || !/\.png$/i.test(id)) throw new CoreError('INVALID_ARGUMENT', 'That is not a snapshot');
     const file = join(this.folder(), id);
     if (!existsSync(file)) throw new CoreError('NOT_FOUND', 'That snapshot is gone');

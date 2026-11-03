@@ -1,4 +1,6 @@
-import { BrowserWindow, clipboard, ClipboardItem, desktopCapturer, ipcMain, nativeImage, screen, shell, systemPreferences, type DesktopCapturerSource, type Display, type IpcMainInvokeEvent, type NativeImage, type WebContents } from 'electron';
+import { mkdirSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
+import { basename, join } from 'node:path';
+import { app, BrowserWindow, clipboard, ClipboardItem, desktopCapturer, ipcMain, nativeImage, screen, shell, systemPreferences, type DesktopCapturerSource, type Display, type IpcMainInvokeEvent, type NativeImage, type WebContents } from 'electron';
 import type { Kernel } from '@fbrx/core';
 import { SNAPSHOT_MAX_BYTES, SNAPSHOT_MODES, type NotificationEvent, type SnapshotMode } from '@fbrx/shared';
 
@@ -209,8 +211,43 @@ export async function takeSnapshot(deps: SnapshotDeps, o: { mode: SnapshotMode; 
   }
 }
 
+/** Where a marked-up picture waits while it is dragged into another app; cleared of copies older than a day. */
+function dragFolder(): string {
+  const dir = join(app.getPath('temp'), 'FBRX Snapshot');
+  mkdirSync(dir, { recursive: true });
+  for (const n of readdirSync(dir)) {
+    const f = join(dir, n);
+    try {
+      if (Date.now() - statSync(f).mtimeMs > 86_400_000) rmSync(f, { force: true });
+    } catch {
+      /* in use or gone */
+    }
+  }
+  return dir;
+}
+
+/**
+ * Drags a snapshot out of FBRX into another app (a chat, an email, a document, a folder) as a PNG file: a saved one
+ * by its id, or the picture being marked up, written to a temporary file named like the snapshot.
+ */
+async function dragOut(deps: SnapshotDeps, e: IpcMainInvokeEvent, what: { id?: unknown; data?: unknown }): Promise<boolean> {
+  const kernel = deps.kernel();
+  if (!kernel || typeof what?.id !== 'string') return false;
+  let file = kernel.snapshots.file(what.id);
+  if (what.data instanceof Uint8Array) {
+    if (what.data.length > SNAPSHOT_MAX_BYTES) return false;
+    file = join(dragFolder(), basename(file));
+    writeFileSync(file, what.data);
+  }
+  const picture = nativeImage.createFromPath(file);
+  const icon = picture.isEmpty() ? picture : picture.resize(picture.getSize().width >= picture.getSize().height ? { width: 160 } : { height: 160 });
+  e.sender.startDrag({ file, icon });
+  return true;
+}
+
 /** The overlay's side of a snapshot: its still picture, the mode, the window list, and what was picked. */
 export function registerSnapshotIpc(deps: SnapshotDeps): void {
+  ipcMain.handle('fbrx:snap-drag', (e, what: unknown) => (deps.trusted(e) ? dragOut(deps, e, (what ?? {}) as { id?: unknown; data?: unknown }) : false));
   const mine = (e: IpcMainInvokeEvent) => (deps.trusted(e) && taking?.overlays.get(e.sender.id)) || null;
   ipcMain.handle('fbrx:snap', async (e, action: unknown, arg?: unknown) => {
     if (action === 'start') {
