@@ -38,5 +38,16 @@
     "notes": [
       "Updated components: nodemailer 10 (email), fastify and the request parser, with fixes for the issues npm audit reported."
     ]
+  },
+  "digger": {
+    "version": "1.0.0",
+    "released": "2026-11-03",
+    "summary": "FBRX Digger 1.0: the FBRX Network Center on its own, every network tool included.",
+    "notes": [
+      "Network scans and their comparison, ping and trace route, the speed test, the Wi-Fi channel planner, DNS and port checks, device consoles (SSH, Telnet) and network environments.",
+      "Runs next to FBRX OS without getting in its way: its own data folder, settings and no global shortcuts."
+    ],
+    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.0.0",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.0.0"
   }
 }
