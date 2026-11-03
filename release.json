@@ -30,14 +30,14 @@
     "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.2.1"
   },
   "digger": {
-    "version": "1.0.0",
+    "version": "1.0.1",
     "released": "2026-11-03",
-    "summary": "FBRX Digger 1.0: the FBRX Network Center on its own, every network tool included.",
+    "summary": "FBRX Digger 1.0.1: on Windows the title bar and menus follow Digger's Light and Dark modes.",
     "notes": [
-      "Network scans and their comparison, ping and trace route, the speed test, the Wi-Fi channel planner, DNS and port checks, device consoles (SSH, Telnet) and network environments.",
-      "Runs next to FBRX OS without getting in its way: its own data folder, settings and no global shortcuts."
+      "Windows: the title bar, menus and right-click menus follow Digger's mode instead of always Windows' own; the menu bar stays out of sight on Windows and Linux until you press Alt.",
+      "Everything from 1.0: network scans and their comparison, ping and trace route, the speed test, the Wi-Fi channel planner, DNS and port checks, device consoles (SSH, Telnet) and network environments."
     ],
-    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.0.0",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.0.0"
+    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.0.1",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.0.1"
   }
 }
