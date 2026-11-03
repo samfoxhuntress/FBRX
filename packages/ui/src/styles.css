@@ -138,6 +138,9 @@ body {
   font-size: 14px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  /* Text shows exactly as typed: fonts with ligatures (Cascadia Code, Inter) would draw a password ending in |> as an
+     arrow, or -> and != as one symbol. Unlike font-variant-ligatures, the font shorthand does not reset this. */
+  font-feature-settings: 'liga' 0, 'clig' 0, 'calt' 0;
 }
 a {
   color: var(--accent);

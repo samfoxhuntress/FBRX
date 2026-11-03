@@ -64,13 +64,13 @@ const api = {
     ipcRenderer.on('fbrx:goose', h);
     return () => ipcRenderer.removeListener('fbrx:goose', h);
   },
-  clip: (action: 'list' | 'read' | 'remove' | 'pin' | 'clear', id?: number, on?: boolean) => ipcRenderer.invoke('fbrx:clip', action, id, on) as Promise<unknown>,
+  clip: (action: 'list' | 'read' | 'copy' | 'remove' | 'pin' | 'clear', id?: number, on?: boolean) => ipcRenderer.invoke('fbrx:clip', action, id, on) as Promise<unknown>,
   onClips(cb: (entries: unknown) => void): () => void {
     const h = (_e: unknown, entries: unknown) => cb(entries);
     ipcRenderer.on('fbrx:clips', h);
     return () => ipcRenderer.removeListener('fbrx:clips', h);
   },
-  clipPicker: (action: 'show' | 'hide' | 'enable' | 'paste', text?: string) => ipcRenderer.invoke('fbrx:clip-picker', action, text) as Promise<unknown>,
+  clipPicker: (action: 'show' | 'hide' | 'enable' | 'paste', text?: string | number) => ipcRenderer.invoke('fbrx:clip-picker', action, text) as Promise<unknown>,
   onClipPicker(cb: (what: string) => void): () => void {
     const h = (_e: unknown, what: string) => cb(what);
     ipcRenderer.on('fbrx:clip-picker', h);

@@ -49,10 +49,10 @@ interface Bridge {
   /** The pointer's position (the click-through overlay can't see it), honks and shoos, for the goose. */
   onGoose?(cb: (e: { type: 'cursor'; x: number; y: number } | { type: 'honk' } | { type: 'shoo' }) => void): () => void;
   /** Clipboard history, kept in memory by the desktop app (Electron only). */
-  clip?(action: 'list' | 'read' | 'remove' | 'pin' | 'clear', id?: number, on?: boolean): Promise<unknown>;
+  clip?(action: 'list' | 'read' | 'copy' | 'remove' | 'pin' | 'clear', id?: number, on?: boolean): Promise<unknown>;
   onClips?(cb: (entries: unknown) => void): () => void;
   /** The clipboard history window (Ctrl+Alt+Z): open or close it, turn the history on, or paste a pick. */
-  clipPicker?(action: 'show' | 'hide' | 'enable' | 'paste', text?: string): Promise<unknown>;
+  clipPicker?(action: 'show' | 'hide' | 'enable' | 'paste', text?: string | number): Promise<unknown>;
   /** "shown" each time the clipboard history window opens. */
   onClipPicker?(cb: (what: string) => void): () => void;
   /** FBRX Snapshot (Electron only): start one from a page, or, in the overlay, its still picture, mode, windows and pick. */
@@ -66,7 +66,10 @@ interface Bridge {
 
 export interface ClipEntry {
   id: number;
+  /** The copied text; empty for a picture. */
   text: string;
+  /** A copied picture: a small preview and its size. */
+  image?: { thumb: string; width: number; height: number };
   at: string;
   pinned: boolean;
 }
@@ -93,6 +96,11 @@ export async function writeClipboard(text: string): Promise<void> {
 export async function copySecret(text: string): Promise<void> {
   if (bridge.copySecret) await bridge.copySecret(text);
   else await navigator.clipboard.writeText(text);
+}
+
+/** Puts a copy from the clipboard history back on the clipboard (a picture as a picture). */
+export async function copyClip(id: number): Promise<boolean> {
+  return !!(await bridge.clip?.('copy', id));
 }
 
 export async function clipHistory(action: 'list' | 'remove' | 'pin' | 'clear' = 'list', id?: number, on?: boolean): Promise<{ enabled: boolean; entries: ClipEntry[] } | null> {

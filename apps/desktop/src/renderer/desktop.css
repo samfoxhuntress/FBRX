@@ -1257,6 +1257,14 @@
   font-size: 12px;
   line-height: 1.45;
 }
+.cp-image {
+  display: block;
+  max-width: 100%;
+  max-height: 120px;
+  border-radius: 6px;
+  object-fit: contain;
+  object-position: left center;
+}
 .cp-meta {
   display: flex;
   align-items: center;
@@ -3458,6 +3466,14 @@ body.popout .srv-browser:not(.full) {
 }
 .clip-hist.pinned {
   border-color: var(--accent);
+}
+.clip-hist-image {
+  display: block;
+  max-width: calc(100% - 24px);
+  max-height: 160px;
+  margin: 10px 12px 0;
+  border-radius: 6px;
+  object-fit: contain;
 }
 .clip-hist-text {
   margin: 0;

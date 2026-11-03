@@ -105,7 +105,8 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   networking off, the code folder mapped **read-only**, and the file started inside it. Closing the sandbox discards
   everything. Each run is in the audit log. Other languages are not run by FBRX at all.
 * **Clipboard history** is off by default (an organization can lock `clipboard.history`). When on, the desktop app
-  checks the clipboard once a second and keeps the last 50 text copies **in memory only**: never written to disk,
+  checks the clipboard once a second and keeps the last 50 copies of text and pictures (up to 12 pictures) **in
+  memory only**: never written to disk,
   never synced or backed up, cleared when FBRX quits or the switch is turned off. Copies marked by password managers
   (`ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory`, `org.nspasteboard.ConcealedType`
   and similar) are skipped. The **Ctrl+Alt+Z** window shows the same in-memory list. Picking a copy puts it on the

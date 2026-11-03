@@ -330,14 +330,15 @@ side** (FBRX on the left, this window on the right), **Keep on top**, and a way 
 pages open in the main window. In **Settings → General → Windows** the Terminal (Ultra) and the chat can always open in
 their own window.
 
-**The clipboard history** shows what you copied while FBRX was running, newest first:
+**The clipboard history** shows what you copied while FBRX was running, text and pictures (with a preview), newest
+first. Text shows exactly as copied: a password ending in `|>` stays `|>`, never an arrow.
 
 | Key | Does |
 | --- | --- |
-| **W / S** or **↑ / ↓** | Move up and down the list |
-| **Tab** / **~** | Slide right and left through ways to paste the chosen copy: *As copied*, *Clean*, *One line*, *Comma list*, *UPPERCASE*, *lowercase*, *Title Case*, *Quoted string*, then your saved clipboard transforms (formats that would not change it are skipped; a preview shows the result) |
-| Type anything else | Search your copies (while searching, W and S type letters; the arrows still move) |
-| **Enter** | Paste it into the app you were in (Windows; on a Mac it goes on the clipboard and you press ⌘V). Double-click works too |
+| **↑ / ↓** | Move up and down the list |
+| **Tab** / **~** | Slide right and left through ways to paste the chosen text: *As copied*, *Clean*, *One line*, *Comma list*, *UPPERCASE*, *lowercase*, *Title Case*, *Quoted string*, then your saved clipboard transforms (formats that would not change it are skipped; a preview shows the result) |
+| Type anything | Search your copies, from the first letter (*picture* finds the pictures) |
+| **Enter** | Paste it into the app you were in (a picture pastes as a picture) (Windows; on a Mac it goes on the clipboard and you press ⌘V). Double-click works too |
 | **Delete** · **Ctrl+P** | Remove it · pin it (pinned copies stay when you clear the history) |
 | **Esc** | Clear the search, or close |
 

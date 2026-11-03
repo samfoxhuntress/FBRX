@@ -793,6 +793,7 @@ function registerIpc() {
   ipcMain.handle('fbrx:clip', async (e, action: string, id?: number, on?: boolean) => {
     if (!trusted(e)) return null;
     if (action === 'read') return (await clipboard.readText()).slice(0, 1_000_000);
+    if (action === 'copy' && typeof id === 'number') return await clips.restore(id);
     if (action === 'remove' && typeof id === 'number') clips.remove(id);
     else if (action === 'pin' && typeof id === 'number') clips.pin(id, !!on);
     else if (action === 'clear') clips.clear();
@@ -811,8 +812,11 @@ function registerIpc() {
         /* turned off by your organization */
       }
       return { enabled: clips.enabled, entries: clips.list() };
-    } else if (action === 'paste' && typeof text === 'string') {
-      clipboard.writeText(text.slice(0, 1_000_000));
+    } else if (action === 'paste' && (typeof text === 'string' || typeof text === 'number')) {
+      // Text (as copied, or in the format picked), or a copy from the history by its id (how a picture pastes).
+      if (typeof text === 'number') {
+        if (!(await clips.restore(text))) return { pasted: false };
+      } else clipboard.writeText(text.slice(0, 1_000_000));
       if (!picker || e.sender !== picker.webContents) return { pasted: false };
       // Without automatic pasting the window stays a moment to say "press Ctrl+V" and closes itself.
       if (!kernel?.settings.get().clipboard.autoPaste || !pasteKeys.supported()) return { pasted: false };
