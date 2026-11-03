@@ -24,9 +24,16 @@ same rules:
 - **The gauge under the chat** shows how much of the model's context window the conversation takes, such as
   *Context 9.8K / 16K tokens*: estimated when a chat opens, then as the provider counted each request. Amber past three
   quarters, red when full. Click it for AI usage.
-- **Fabrix knows it too.** With your message it gets a short note of its context window, how full it is, its longest
+- **Fabrix knows it too.** Once its room fills (past half of the context window or of the month's budget, or once
+  older requests are folded), a short note goes with your message: its context window, how full it is, its longest
   answer, its steps for the task and, with a monthly budget, the month. Near a limit it works in fewer, smaller steps
   and says so once; at a limit it stops cleanly, with what is done, what is left and how to go on.
+- **The built-in model's window fits the computer.** On **Auto** (the default from 2.2.0; Settings → Agent →
+  Thinking → Memory of the built-in model) FBRX reads from the model file how much memory each token of context takes
+  and gives it as much as the computer holds comfortably, after the model itself and 2 GB for everything else, up to
+  64K tokens and never more than the model was made for. The context's memory is kept in 8 bits with flash attention,
+  about half the size, so the same memory holds twice the conversation; a model or runtime that cannot do that is
+  loaded again with the full-size one.
 - **Long conversations are folded, not cut.** When the older requests no longer fit, they become a short digest: what
   was asked, what came of it, the tools used and the ids made (a project's, a note's), exactly. Nothing in the digest is
   made up, because no model is asked to summarize. The gauge says how many requests are folded.

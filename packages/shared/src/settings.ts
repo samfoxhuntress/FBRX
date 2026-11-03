@@ -426,7 +426,10 @@ export const SettingsSchema = z.object({
     binaryPath: z.string(),
     modelId: z.string(),
     port: z.number().int().min(1024).max(65535),
-    contextSize: z.number().int().min(512).max(262144),
+    /** The built-in model's context window in tokens; 0 is Auto (as much as this computer's memory holds, up to 64k). */
+    contextSize: z.number().int().refine((n) => n === 0 || (n >= 512 && n <= 262144), 'Auto (0), or 512 to 262,144 tokens'),
+    /** Keep the context's memory in 8 bits with flash attention: about twice the context in the same memory. */
+    compactContext: z.boolean(),
     gpuLayers: z.number().int().min(-1).max(999),
     threads: z.number().int().min(0).max(256),
     /** Stop the runtime after this many idle minutes to give the memory back (0 = keep it loaded); it starts again when needed. */
@@ -719,7 +722,8 @@ export const DEFAULT_SETTINGS: Settings = {
     binaryPath: '',
     modelId: '',
     port: DEFAULT_RUNTIME_PORT,
-    contextSize: 8192,
+    contextSize: 0,
+    compactContext: true,
     gpuLayers: -1,
     threads: 0,
     idleStopMinutes: 20,

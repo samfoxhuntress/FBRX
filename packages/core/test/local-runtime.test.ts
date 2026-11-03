@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { RuntimeStatus } from '@fbrx/shared';
 import { explainLoadFailure } from '../src/ai/runtime/load-failure';
+import { autoContextSize, kvBytesPerToken } from '../src/ai/runtime/context-size';
 import { parseGgufHeader, readGgufInfo } from '../src/ai/runtime/gguf';
 import { makeKernel, tempDir, USER } from './helpers';
 
@@ -53,6 +54,30 @@ describe('why a model does not load', () => {
     });
     expect(explainLoadFailure(['ggml_backend_cpu_buffer_type_alloc_buffer: failed to allocate buffer of size 9000000000', 'llama_model_load: error loading model: failed to allocate CPU buffer'], 'Qwen3 14B', false).kind).toBe('memory');
     expect(explainLoadFailure(['llama_model_load: error loading model: something new', 'main: exiting due to model loading error'], 'Qwen3 14B', false)).toMatchObject({ kind: 'other', message: 'Qwen3 14B could not be loaded: something new' });
+  });
+
+  it('sizes the context window to the model and the computer (Auto)', () => {
+    const info = parseGgufHeader(
+      gguf([
+        ['general.architecture', 'str', 'llama'],
+        ['llama.block_count', 'u32', 32],
+        ['llama.context_length', 'u32', 131072],
+        ['llama.embedding_length', 'u32', 4096],
+        ['llama.attention.head_count', 'u32', 32],
+        ['llama.attention.head_count_kv', 'u32', 8],
+      ]),
+    );
+    expect(info).toMatchObject({ contextLength: 131072, headCount: 32, headCountKv: 8, embeddingLength: 4096 });
+    // 32 layers × 8 key and value heads × (128 + 128) values: 128 KB a token in 16 bits, 68 KB in 8.
+    expect(kvBytesPerToken(info, false)).toBe(131072);
+    expect(kvBytesPerToken(info, true)).toBe(69632);
+    const GB = 1024 ** 3;
+    expect(autoContextSize({ info, modelBytes: 4.9 * GB, totalMem: 16 * GB, compact: true })).toBe(65536);
+    expect(autoContextSize({ info, modelBytes: 4.9 * GB, totalMem: 12 * GB, compact: false })).toBe(16384);
+    // Little memory left after the model: the minimum. Never more than the model was made for, or than is known.
+    expect(autoContextSize({ info, modelBytes: 4.9 * GB, totalMem: 8 * GB, compact: true })).toBe(8192);
+    expect(autoContextSize({ info: { ...info!, contextLength: 4096 }, modelBytes: GB, totalMem: 64 * GB, compact: true })).toBe(4096);
+    expect(autoContextSize({ info: null, modelBytes: GB, totalMem: 64 * GB, compact: true })).toBe(8192);
   });
 
   it('reads a GGUF header: architecture and layers, and tells a non-model apart', () => {

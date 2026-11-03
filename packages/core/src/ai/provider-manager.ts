@@ -68,8 +68,8 @@ export class ProviderManager {
   build(cfg: ProviderConfig): ChatProvider {
     switch (cfg.type) {
       case 'local-runtime': {
-        const ctx = this.d.settings.get().runtime.contextSize;
         const rt = this.d.runtime;
+        const ctx = rt.contextTokens();
         const inner = new OpenAICompatibleProvider({
           id: cfg.id,
           type: 'local-runtime',

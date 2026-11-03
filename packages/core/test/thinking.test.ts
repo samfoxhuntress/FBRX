@@ -9,7 +9,7 @@ describe('how much the agent does on one task (thinking levels)', () => {
       const level = () => thinkingLevelOf(thinkingBudget(kernel.policy.policy, kernel.settings.get()));
       expect(level()).toBe('everyday');
       // Thorough takes every step a task may have.
-      expect(await kernel.call('ai.setThinking', { level: 'thorough' }, USER)).toMatchObject({ steps: MAX_STEPS_PER_TASK, contextSize: 16384 });
+      expect(await kernel.call('ai.setThinking', { level: 'thorough' }, USER)).toMatchObject({ steps: MAX_STEPS_PER_TASK, contextSize: 0 });
       expect(level()).toBe('thorough');
       expect(kernel.policy.policy.ai.maxToolCallsPerRun).toBe(MAX_STEPS_PER_TASK * 3);
       // Fine-tuning one part (Ultra) makes it custom; a level puts all of it back.
@@ -34,8 +34,9 @@ describe('how much the agent does on one task (thinking levels)', () => {
       expect(before()).toEqual(was);
       kernel.settings.applyManaged({}, []);
       kernel.policy.applyManaged(structuredClone(DEFAULT_POLICY));
+      const managedPolicy = before();
       await expect(kernel.call('ai.setThinking', { level: 'thorough' }, USER)).rejects.toMatchObject({ code: 'MANAGED' });
-      expect(before()).toEqual(was);
+      expect(before()).toEqual(managedPolicy);
     } finally {
       await cleanup();
     }

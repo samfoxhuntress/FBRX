@@ -1385,8 +1385,8 @@ export class Kernel {
         return 'Unloaded the local AI model; its memory is free. It loads again the next time the AI is asked something.';
       case 'lower-context': {
         const ai = this.settings.get().ai;
-        await this.settings.update({ runtime: { contextSize: 8192 }, ...(ai.ollamaContext > 8192 ? { ai: { ollamaContext: 8192 } } : {}) });
-        return 'Set the local model’s context window to 8,192 tokens. It takes effect the next time the model loads.';
+        await this.settings.update({ runtime: { contextSize: 0 }, ...(ai.ollamaContext > 8192 ? { ai: { ollamaContext: 8192 } } : {}) });
+        return 'Set the local model’s context window to Auto: as much as this computer holds comfortably. It takes effect the next time the model loads.';
       }
       case 'compact-database': {
         const before = statSync(this.paths.db).size;

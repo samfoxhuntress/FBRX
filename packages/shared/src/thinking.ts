@@ -26,8 +26,8 @@ export interface ThinkingBudget {
 /** Everyday is where every computer starts (the default policy and settings); Thorough takes every step there is. */
 export const THINKING_BUDGETS: Record<ThinkingLevel, ThinkingBudget> = {
   quick: { steps: 10, contextSize: 8192, ollamaContext: 0, maxOutputTokens: 0, localThinking: false },
-  everyday: { steps: 30, contextSize: 8192, ollamaContext: 0, maxOutputTokens: 0, localThinking: false },
-  thorough: { steps: MAX_STEPS_PER_TASK, contextSize: 16384, ollamaContext: 16384, maxOutputTokens: 0, localThinking: true },
+  everyday: { steps: 30, contextSize: 0, ollamaContext: 0, maxOutputTokens: 0, localThinking: false },
+  thorough: { steps: MAX_STEPS_PER_TASK, contextSize: 0, ollamaContext: 16384, maxOutputTokens: 0, localThinking: true },
 };
 
 export const THINKING_NAMES: Record<ThinkingLevel, string> = { quick: 'Quick', everyday: 'Everyday', thorough: 'Thorough' };

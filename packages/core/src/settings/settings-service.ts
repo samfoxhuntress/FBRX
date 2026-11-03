@@ -68,11 +68,28 @@ export class SettingsService {
   private migrate(local: { data: Record<string, unknown>; locked: string[] }) {
     // Upgrades already applied are listed in the local layer (the schema ignores the key).
     const done = new Set(Array.isArray(local.data._migrated) ? (local.data._migrated as string[]) : []);
-    if (done.has('agent-name-1.4')) return local;
-    const ai = local.data.ai as { agentName?: string } | undefined;
-    // The agent was called Fabric before 1.4.0; a saved old default becomes the new one (once).
-    if (ai?.agentName === 'Fabric') ai.agentName = 'Fabrix';
-    local.data._migrated = [...done, 'agent-name-1.4'];
+    const steps: Array<[string, () => void]> = [
+      // The agent was called Fabric before 1.4.0; a saved old default becomes the new one.
+      [
+        'agent-name-1.4',
+        () => {
+          const ai = local.data.ai as { agentName?: string } | undefined;
+          if (ai?.agentName === 'Fabric') ai.agentName = 'Fabrix';
+        },
+      ],
+      // From 2.2.0 the built-in model's context window fits the computer (Auto); the old default of 8,192 moves to it.
+      [
+        'context-auto-2.2',
+        () => {
+          const runtime = local.data.runtime as { contextSize?: number } | undefined;
+          if (runtime?.contextSize === 8192) runtime.contextSize = 0;
+        },
+      ],
+    ];
+    const todo = steps.filter(([id]) => !done.has(id));
+    if (!todo.length) return local;
+    for (const [, run] of todo) run();
+    local.data._migrated = [...done, ...todo.map(([id]) => id)];
     this.writeLayer('local', local.data, local.locked);
     return local;
   }

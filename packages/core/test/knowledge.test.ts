@@ -64,7 +64,7 @@ describe('fbrx.doctor and fbrx.fix', () => {
         runtime: () => ({ state: 'running', binaryPath: 'x', modelId: 'big', modelFile: 'big.gguf', port: 1, pid: 1, endpoint: 'x', message: null }) as RuntimeStatus,
         modelBytes: () => 12 * 1024 ** 3,
         mem: () => ({ total: 16 * 1024 ** 3, free: 1 * 1024 ** 3 }),
-        settings: () => ({ ...DEFAULT_SETTINGS, runtime: { ...DEFAULT_SETTINGS.runtime, contextSize: 32768 } }),
+        settings: () => ({ ...DEFAULT_SETTINGS, runtime: { ...DEFAULT_SETTINGS.runtime, contextSize: 65536 } }),
         scanRunning: () => true,
         shieldWaiting: () => 2034,
         databaseBytes: () => 900 * 1024 ** 2,
@@ -95,8 +95,9 @@ describe('fbrx.doctor and fbrx.fix', () => {
       expect(kernel.registry.get('fbrx.fix')!.risk).toBe('write');
       expect(kernel.registry.get('fbrx.doctor')!.risk).toBe('read');
       expect(await kernel.applyFix('cancel-scan')).toBe('No scan is running.');
-      expect(await kernel.applyFix('lower-context')).toMatch(/8,192/);
-      expect(kernel.settings.get().runtime.contextSize).toBe(8192);
+      kernel.settings.update({ runtime: { contextSize: 131072 } });
+      expect(await kernel.applyFix('lower-context')).toMatch(/Auto/);
+      expect(kernel.settings.get().runtime.contextSize).toBe(0);
       expect(await kernel.applyFix('compact-database')).toMatch(/Tidied/);
       expect(await kernel.applyFix('recheck-shield')).toMatch(/Cleared 0/);
       await expect(kernel.applyFix('restart-service:nope')).rejects.toThrow(/no service/);

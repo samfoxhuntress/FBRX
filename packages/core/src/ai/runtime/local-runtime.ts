@@ -13,6 +13,7 @@ import { sleep } from '../../util/misc';
 import si from 'systeminformation';
 import { installLlamaRuntime } from './runtime-installer';
 import { resourcePlan } from '../resources';
+import { AUTO_CONTEXT_MIN, autoContextSize } from './context-size';
 import { readGgufInfo } from './gguf';
 import { explainLoadFailure, type LoadFailure } from './load-failure';
 
@@ -84,6 +85,10 @@ export class LocalRuntime {
   private readonly gpuFit = new Map<string, number>();
   /** What went wrong at the last start, for the AI models page to offer the right fix. */
   private problem: LoadFailure['kind'] | null = null;
+  /** The context window each model got on Auto, worked out from its file and this computer's memory. */
+  private autoContext = new Map<string, number>();
+  /** Models (or runtimes) that would not load with the compact 8-bit context: they get the full-size one. */
+  private fullContext = new Set<string>();
 
   constructor(
     private readonly d: {
@@ -147,7 +152,28 @@ export class LocalRuntime {
       endpoint: this.state === 'running' ? this.endpoint : null,
       message,
       problem: state === 'failed' ? this.problem : null,
+      contextSize: model ? this.contextTokens() : null,
+      contextAuto: s.contextSize === 0,
     };
+  }
+
+  /** The built-in model's context window in tokens: the setting, or on Auto what the current model gets here. */
+  contextTokens(): number {
+    const s = this.d.settings.get().runtime;
+    if (s.contextSize > 0) return s.contextSize;
+    const model = s.modelId ? this.d.models.get(s.modelId) : undefined;
+    if (!model) return AUTO_CONTEXT_MIN;
+    const known = this.autoContext.get(model.id);
+    if (known) return known;
+    let size = 0;
+    try {
+      size = statSync(model.file).size;
+    } catch {
+      /* not downloaded yet */
+    }
+    const auto = autoContextSize({ info: size ? readGgufInfo(model.file) : null, modelBytes: size, totalMem: totalmem(), compact: s.compactContext && !this.fullContext.has(model.id) });
+    this.autoContext.set(model.id, auto);
+    return auto;
   }
 
   private setState(state: RuntimeStatus['state'], message: string | null = null) {
@@ -214,6 +240,13 @@ export class LocalRuntime {
     if (size > 0 && !info) return this.fail({ kind: 'damaged', message: `The ${model.name} file is not a usable model (incomplete or damaged). Download it again (AI models → Download again).`, detail: 'not a GGUF file' });
     const plan = resourcePlan(this.d.settings.get().ai.resources);
     const threads = s.threads > 0 ? s.threads : plan.threads;
+    let compact = s.compactContext && !this.fullContext.has(model.id);
+    const context = () => {
+      if (s.contextSize > 0) return s.contextSize;
+      const auto = autoContextSize({ info, modelBytes: size, totalMem: totalmem(), compact });
+      this.autoContext.set(model.id, auto);
+      return auto;
+    };
 
     // All of the model on the graphics card when it fits. When it does not, try half of it there, then none, and keep
     // what worked for next time (a manual layer count in Settings is used as it is).
@@ -226,7 +259,14 @@ export class LocalRuntime {
     }
     for (const [i, layers] of tries.entries()) {
       this.setState('starting', i === 0 ? `Loading ${model.name}…` : `Loading ${model.name} with ${layers ? 'part of it' : 'none of it'} on the graphics card…`);
-      const r = await this.spawnOnce(binary, model, layers, threads, plan.priority);
+      let r = await this.spawnOnce(binary, model, layers, threads, plan.priority, { context: context(), compact });
+      // Some runtimes and models cannot keep the context in 8 bits: load again with the full-size one, and remember.
+      if (compact && typeof r === 'object' && r.kind === 'other') {
+        this.d.log.warn('The compact context did not load; trying the full-size one', { model: model.id, detail: r.detail });
+        compact = false;
+        this.fullContext.add(model.id);
+        r = await this.spawnOnce(binary, model, layers, threads, plan.priority, { context: context(), compact });
+      }
       if (r === 'ready') {
         if (auto) this.gpuFit.set(model.id, layers);
         const note =
@@ -259,14 +299,16 @@ export class LocalRuntime {
   }
 
   /** Starts llama-server once and waits until it answers, gives up, or exits (and why). */
-  private async spawnOnce(binary: string, model: { id: string; name: string; file: string }, gpuLayers: number, threads: number, priority: number): Promise<'ready' | 'timeout' | 'stopped' | LoadFailure> {
+  private async spawnOnce(binary: string, model: { id: string; name: string; file: string }, gpuLayers: number, threads: number, priority: number, ctx: { context: number; compact: boolean }): Promise<'ready' | 'timeout' | 'stopped' | LoadFailure> {
     const s = this.d.settings.get().runtime;
     this.apiKeyValue = randomBytes(24).toString('base64url');
     const args = [
       '--model', model.file,
       '--host', '127.0.0.1',
       '--port', String(s.port),
-      '--ctx-size', String(s.contextSize),
+      '--ctx-size', String(ctx.context),
+      // The context's memory in 8 bits (flash attention is what lets the values be kept that way): about half the size.
+      ...(ctx.compact ? ['--flash-attn', 'on', '--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0'] : []),
       '--n-gpu-layers', String(gpuLayers),
       '--jinja',
       '--alias', model.id,

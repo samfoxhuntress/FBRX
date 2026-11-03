@@ -337,6 +337,9 @@ export interface RuntimeStatus {
   message: string | null;
   /** Why the last start failed, so the right fix can be offered (download again, update the runtime…). */
   problem?: 'gpu-memory' | 'memory' | 'damaged' | 'unsupported' | 'other' | null;
+  /** The model's context window in tokens (on Auto, what this computer gives the current model). */
+  contextSize?: number | null;
+  contextAuto?: boolean;
 }
 
 /** The model a new computer starts with, ready before the first question (small and quick: about 1 GB). */

@@ -948,19 +948,21 @@ const ANSWER_LENGTHS = [
   { value: '32768', label: 'Very long (32,000 tokens)' },
   { value: '65536', label: 'Huge (64,000 tokens)' },
 ];
-const CONTEXTS = [4096, 8192, 16384, 32768, 65536, 131072];
+/** Context windows to choose from; 0 is Auto. */
+const CONTEXTS = [0, 4096, 8192, 16384, 32768, 65536, 131072];
 const MONTHLY_BUDGETS = [
   { value: '0', label: 'No limit' },
   ...[250_000, 500_000, 1_000_000, 2_000_000, 5_000_000, 10_000_000, 25_000_000].map((n) => ({ value: String(n), label: `${formatTokens(n)} tokens a month` })),
 ];
-const ctxLabel = (n: number) => `${n / 1024}K tokens${n === 8192 ? ' (default)' : ''}`;
-// Rough extra memory for the conversation itself (the KV cache of a typical 7–8B model).
-const ctxMemory = (n: number) => (n <= 8192 ? 'about 1 GB extra memory' : n <= 16384 ? 'about 2 GB' : n <= 32768 ? 'about 4 GB' : n <= 65536 ? 'about 8 GB' : 'about 16 GB');
+const ctxLabel = (n: number, auto: number | null) => (n === 0 ? `Auto: fits this computer${auto ? ` (${auto / 1024}K tokens now)` : ''}` : `${n / 1024}K tokens`);
+// Rough extra memory for the conversation itself (the 8-bit KV cache of a typical 7–8B model).
+const ctxMemory = (n: number) => (n <= 8192 ? 'about 0.5 GB extra memory' : n <= 16384 ? 'about 1 GB' : n <= 32768 ? 'about 2 GB' : n <= 65536 ? 'about 4 GB' : 'about 8 GB');
 
 /** Each part of the work budget on its own (Standard and up): steps, answer length, what a model keeps in mind. */
 function WorkBudget({ policy }: { policy: EffectivePolicy }) {
   const { s, locked, patch } = useSettings();
   const providers = useCore('ai.providers', undefined, ['settings.changed']);
+  const runtimeStatus = useCore('runtime.status', undefined, ['runtime.changed', 'settings.changed']);
   const [moving, setMoving] = useState<number | null>(null);
   const { run } = useAction();
   if (!s) return null;
@@ -1001,13 +1003,17 @@ function WorkBudget({ policy }: { policy: EffectivePolicy }) {
       </Field>
       <Field
         label={<>Memory of the built-in model <Locked show={L('runtime.contextSize')} /></>}
-        help={`How much of the conversation (including tool results) the built-in model keeps in mind. More lets it work on bigger tasks but uses ${ctxMemory(s.runtime.contextSize)}. The model reloads to apply it.`}
+        help={
+          s.runtime.contextSize === 0
+            ? 'How much of the conversation (including tool results) the built-in model keeps in mind. Auto gives it as much as this computer’s memory holds comfortably, up to 64K tokens, and never more than the model was made for.'
+            : `How much of the conversation (including tool results) the built-in model keeps in mind. More lets it work on bigger tasks but uses ${ctxMemory(s.runtime.contextSize)}. The model reloads to apply it.`
+        }
       >
         <Select
           value={String(s.runtime.contextSize)}
           disabled={L('runtime.contextSize')}
           onChange={(e) => void patch({ runtime: { contextSize: Number(e.target.value) } })}
-          options={[...new Set([...CONTEXTS, s.runtime.contextSize])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: ctxLabel(n) }))}
+          options={[...new Set([...CONTEXTS, s.runtime.contextSize])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: ctxLabel(n, runtimeStatus.data?.contextSize ?? null) }))}
         />
       </Field>
       <Toggle

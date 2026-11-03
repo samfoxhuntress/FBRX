@@ -68,7 +68,7 @@ export async function runDoctor(d: DoctorDeps): Promise<DoctorFinding[]> {
     else if (rt.state === 'running') add({ id: 'model-loaded', severity: 'info', title: `A local AI model is loaded (${gb(model)})`, detail: 'It holds that much memory while loaded. Unloading frees it until the AI is next asked something.', fix: 'unload-model' });
   }
   if (rt.state === 'failed') add({ id: 'runtime-failed', severity: 'problem', title: 'The local AI runtime did not start', detail: rt.message ?? 'No message.', fix: 'restart-service:runtime' });
-  if (rt.state !== 'disabled' && s.runtime.contextSize > 16384) add({ id: 'long-context', severity: 'warning', title: `The local model’s context window is long (${s.runtime.contextSize.toLocaleString()} tokens)`, detail: 'A long context window makes a local model slower and use more memory. 8,192 tokens is plenty for most chats.', fix: 'lower-context' });
+  if (rt.state !== 'disabled' && s.runtime.contextSize > 32768) add({ id: 'long-context', severity: 'warning', title: `The local model’s context window is long (${s.runtime.contextSize.toLocaleString()} tokens)`, detail: 'A long context window makes a local model slower and use more memory. Auto sizes it to this computer.', fix: 'lower-context' });
 
   // Background work.
   if (d.scanRunning()) add({ id: 'scan-running', severity: 'info', title: 'An antivirus scan is running', detail: 'It reads many files and can slow the computer until it finishes.', fix: 'cancel-scan' });
