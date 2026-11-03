@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs';
 import { availableParallelism, freemem, setPriority, totalmem } from 'node:os';
 import { delimiter, join } from 'node:path';
-import type { DownloadProgress, RuntimeHardware, RuntimeStatus } from '@fbrx/shared';
+import { graphicsMemory, type DownloadProgress, type RuntimeHardware, type RuntimeStatus } from '@fbrx/shared';
 import { CoreError } from '../../errors';
 import type { EventBus } from '../../events';
 import type { Logger } from '../../logger';
@@ -13,7 +13,7 @@ import { sleep } from '../../util/misc';
 import si from 'systeminformation';
 import { installLlamaRuntime } from './runtime-installer';
 import { resourcePlan } from '../resources';
-import { AUTO_CONTEXT_MIN, autoContextSize } from './context-size';
+import { AUTO_CONTEXT_MIN, autoContextSize, fitsOnCard } from './context-size';
 import { readGgufInfo } from './gguf';
 import { explainLoadFailure, type LoadFailure } from './load-failure';
 
@@ -89,6 +89,9 @@ export class LocalRuntime {
   private autoContext = new Map<string, number>();
   /** Models (or runtimes) that would not load with the compact 8-bit context: they get the full-size one. */
   private fullContext = new Set<string>();
+  /** The graphics memory the runtime can use, 0 without a usable card; null until looked up (learnCard). */
+  private cardBytes: number | null = null;
+  private cardProbe: Promise<number> | null = null;
 
   constructor(
     private readonly d: {
@@ -98,8 +101,23 @@ export class LocalRuntime {
       resourcesDir: string | null;
       log: Logger;
       events?: EventBus;
+      /** FBRX Server's core: a longer context window on Auto. */
+      server?: boolean;
     },
-  ) {}
+  ) {
+    // With a model chosen, the graphics card is looked up early: the first question's context window depends on it.
+    const s = d.settings.get().runtime;
+    if (s.enabled && s.modelId) setTimeout(() => void this.learnCard(), 3000).unref?.();
+  }
+
+  /** Looks up the graphics memory the runtime can use, once. */
+  private learnCard(): Promise<number> {
+    this.cardProbe ??= this.hardware().then(
+      (hw) => (this.cardBytes = graphicsMemory(hw)),
+      () => (this.cardBytes = 0),
+    );
+    return this.cardProbe;
+  }
 
   resolveBinary(): string | null {
     const cfg = this.d.settings.get().runtime.binaryPath;
@@ -171,9 +189,17 @@ export class LocalRuntime {
     } catch {
       /* not downloaded yet */
     }
-    const auto = autoContextSize({ info: size ? readGgufInfo(model.file) : null, modelBytes: size, totalMem: totalmem(), compact: s.compactContext && !this.fullContext.has(model.id) });
-    this.autoContext.set(model.id, auto);
+    if (this.cardBytes === null) void this.learnCard();
+    const auto = autoContextSize({ info: size ? readGgufInfo(model.file) : null, modelBytes: size, totalMem: totalmem(), compact: s.compactContext && !this.fullContext.has(model.id), server: this.d.server, cardBytes: this.card(size, s.gpuLayers < 0 ? (this.gpuFit.get(model.id) ?? ALL_LAYERS) : s.gpuLayers) });
+    // Kept once the graphics card is known: until then the memory alone decided.
+    if (this.cardBytes !== null) this.autoContext.set(model.id, auto);
     return auto;
+  }
+
+  /** The graphics memory the context can use: the card's when all of the model goes there with these layers, else null. */
+  private card(modelBytes: number, layers: number): number | null {
+    const card = this.cardBytes ?? 0;
+    return layers >= ALL_LAYERS && card > 0 && modelBytes > 0 && fitsOnCard(modelBytes, card) ? card : null;
   }
 
   private setState(state: RuntimeStatus['state'], message: string | null = null) {
@@ -241,9 +267,10 @@ export class LocalRuntime {
     const plan = resourcePlan(this.d.settings.get().ai.resources);
     const threads = s.threads > 0 ? s.threads : plan.threads;
     let compact = s.compactContext && !this.fullContext.has(model.id);
-    const context = () => {
+    await this.learnCard();
+    const context = (layers: number) => {
       if (s.contextSize > 0) return s.contextSize;
-      const auto = autoContextSize({ info, modelBytes: size, totalMem: totalmem(), compact });
+      const auto = autoContextSize({ info, modelBytes: size, totalMem: totalmem(), compact, server: this.d.server, cardBytes: this.card(size, layers) });
       this.autoContext.set(model.id, auto);
       return auto;
     };
@@ -259,13 +286,13 @@ export class LocalRuntime {
     }
     for (const [i, layers] of tries.entries()) {
       this.setState('starting', i === 0 ? `Loading ${model.name}…` : `Loading ${model.name} with ${layers ? 'part of it' : 'none of it'} on the graphics card…`);
-      let r = await this.spawnOnce(binary, model, layers, threads, plan.priority, { context: context(), compact });
+      let r = await this.spawnOnce(binary, model, layers, threads, plan.priority, { context: context(layers), compact });
       // Some runtimes and models cannot keep the context in 8 bits: load again with the full-size one, and remember.
       if (compact && typeof r === 'object' && r.kind === 'other') {
         this.d.log.warn('The compact context did not load; trying the full-size one', { model: model.id, detail: r.detail });
         compact = false;
         this.fullContext.add(model.id);
-        r = await this.spawnOnce(binary, model, layers, threads, plan.priority, { context: context(), compact });
+        r = await this.spawnOnce(binary, model, layers, threads, plan.priority, { context: context(layers), compact });
       }
       if (r === 'ready') {
         if (auto) this.gpuFit.set(model.id, layers);

@@ -756,7 +756,7 @@ and doing** turns the live activity panel and the thinking notes on or off.
 | --- | --- | --- |
 | Steps per task | 5 to 100. | 30 |
 | Longest answer | The most the model may write in one reply. A cut-off answer says so. | Automatic (64K tokens for Claude, the server's own limit for other models) |
-| Memory of the built-in model | The built-in runtime's context window: **Auto** (as much as this computer holds comfortably, up to 64K tokens, shown next to it) or 4K to 128K tokens, with the memory it needs. Kept in 8 bits with flash attention (`runtime.compactContext`), about half the memory. | Auto |
+| Memory of the built-in model | The built-in runtime's context window: **Auto** (as much as this computer holds comfortably, up to 64K tokens, shown next to it; when the model runs on the graphics card, as much as the card has left, so the model stays on it) or 4K to 128K tokens, with the memory it needs. Kept in 8 bits with flash attention (`runtime.compactContext`), about half the memory. FBRX Server goes up to 128K on Auto. | Auto |
 | Memory of Ollama models | Ollama's context window (`num_ctx`); Ollama's own setting is often 4K. | Ollama's setting |
 | A local model thinks before it answers | Lets a model that can reason first (Qwen3, DeepSeek R1 and the like) do so on this computer. Better on hard questions, much slower: it writes hundreds of words of reasoning before the answer. | Off (on for Thorough) |
 

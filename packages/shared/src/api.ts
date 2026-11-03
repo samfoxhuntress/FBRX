@@ -375,6 +375,13 @@ export interface CatalogModel {
   toolCalling: boolean;
   /** A mixture of experts: only a few billion of its parameters work at a time, so it answers quickly on processors. */
   moe?: boolean;
+  /**
+   * On Hugging Face: the repository and quantization whose files (one, or several parts for a big model) are looked up
+   * when it downloads, with their checksums. `url` is then the repository's page.
+   */
+  hf?: { repo: string; quant: string };
+  /** Added by someone from Hugging Face (not one of FBRX's own): it can be taken off the list again. */
+  added?: boolean;
 }
 
 /** What this computer offers a model: memory, and a graphics card the runtime can use. */
@@ -391,13 +398,21 @@ export interface RuntimeHardware {
 export type ModelFit = 'gpu' | 'memory' | 'tight' | 'too-big';
 
 /**
+ * The graphics memory a model can use: every card the runtime can run models on (2 GB or more) added up, since
+ * llama.cpp spreads a model over all of them. None without the graphics-card build.
+ */
+export function graphicsMemory(hw: Pick<RuntimeHardware, 'gpus' | 'variant'>): number {
+  if (hw.variant !== 'vulkan') return 0;
+  return hw.gpus.filter((g) => g.vramBytes >= 2 * 1024 ** 3).reduce((sum, g) => sum + g.vramBytes, 0);
+}
+
+/**
  * Whether a model runs well here: all of it on the graphics card, in memory on the processor (slower, fine for a
  * server doing background work), only just, or not at all. The model needs its file size plus room for its context.
  */
 export function modelFit(sizeBytes: number, hw: Pick<RuntimeHardware, 'memoryBytes' | 'gpus' | 'variant'>): ModelFit {
   const need = sizeBytes * 1.1 + 1.5e9;
-  const vram = Math.max(0, ...hw.gpus.map((g) => g.vramBytes));
-  if (hw.variant === 'metal' ? need <= hw.memoryBytes * 0.7 : hw.variant === 'vulkan' && need <= vram) return 'gpu';
+  if (hw.variant === 'metal' ? need <= hw.memoryBytes * 0.7 : need <= graphicsMemory(hw)) return 'gpu';
   // Leave the operating system (and, on a server, its virtual machines) a quarter.
   if (need <= hw.memoryBytes * 0.75) return 'memory';
   if (need <= hw.memoryBytes * 0.9) return 'tight';
@@ -764,6 +779,8 @@ export interface CoreMethods extends ExtMethods {
   'runtime.start': () => RuntimeStatus;
   'runtime.stop': () => RuntimeStatus;
   'runtime.catalog': () => CatalogModel[];
+  /** Adds a model from Hugging Face to the catalog ("owner/name" with an optional ":QUANT"), after checking its files. */
+  'runtime.addModel': (p: { source: string; name?: string }) => CatalogModel;
   /** Downloads the llama.cpp runtime for this OS/CPU; progress arrives as `runtime.download` with modelId "llama-runtime". */
   'runtime.installRuntime': () => { started: boolean };
   'runtime.installed': () => InstalledModel[];

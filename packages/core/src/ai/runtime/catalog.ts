@@ -4,7 +4,8 @@ const HF = 'https://huggingface.co';
 
 /**
  * Curated GGUF models known to work with the built-in llama.cpp runtime and its tool calling (`--jinja`).
- * Checksums are recorded on first download; administrators can pin them via managed settings.
+ * Checksums are recorded on first download; administrators can pin them via managed settings. The ones found on Hugging
+ * Face by repository (`hf`) are checked against the checksums Hugging Face publishes, and may come in several parts.
  */
 export const MODEL_CATALOG: CatalogModel[] = [
   {
@@ -100,6 +101,23 @@ export const MODEL_CATALOG: CatalogModel[] = [
   },
   // For FBRX Server (or a big workstation): the larger agent the other computers call on over FBRX Mesh.
   {
+    id: 'qwen3-30b-a3b-2507-q4km',
+    name: 'Qwen3 30B-A3B Instruct 2507',
+    family: 'Qwen3',
+    parameters: '30B (MoE, 3B active)',
+    quantization: 'Q4_K_M',
+    sizeBytes: 18_600_000_000,
+    contextLength: 262144,
+    url: `${HF}/bartowski/Qwen_Qwen3-30B-A3B-Instruct-2507-GGUF`,
+    sha256: null,
+    license: 'Apache-2.0',
+    description: 'The newer Qwen3 30B-A3B: answers straight away and reads long material (a 128K-token context on a server: long logs, whole folders of documents). Quick on processors alone; needs ~22 GB of memory.',
+    tier: 'server',
+    toolCalling: true,
+    moe: true,
+    hf: { repo: 'bartowski/Qwen_Qwen3-30B-A3B-Instruct-2507-GGUF', quant: 'Q4_K_M' },
+  },
+  {
     id: 'qwen3-30b-a3b-q4km',
     name: 'Qwen3 30B-A3B',
     family: 'Qwen3',
@@ -144,5 +162,39 @@ export const MODEL_CATALOG: CatalogModel[] = [
     description: 'A big general model for servers with 64 GB+ of memory or 48 GB of graphics memory. Thorough, and slow without graphics cards.',
     tier: 'server',
     toolCalling: true,
+  },
+  {
+    id: 'gpt-oss-120b-mxfp4',
+    name: 'gpt-oss 120B',
+    family: 'gpt-oss',
+    parameters: '117B (MoE, 5B active)',
+    quantization: 'MXFP4',
+    sizeBytes: 63_400_000_000,
+    contextLength: 131072,
+    url: `${HF}/ggml-org/gpt-oss-120b-GGUF`,
+    sha256: null,
+    license: 'Apache-2.0',
+    description: 'The most capable model that still answers quickly on processors: only 5B of its 117B parameters work at a time. Strong reasoning and tool use, a 128K-token context. For servers with 96 GB of memory or more (or 80 GB of graphics memory).',
+    tier: 'server',
+    toolCalling: true,
+    moe: true,
+    hf: { repo: 'ggml-org/gpt-oss-120b-GGUF', quant: 'MXFP4' },
+  },
+  {
+    id: 'qwen3-235b-a22b-2507-q4km',
+    name: 'Qwen3 235B-A22B Instruct 2507',
+    family: 'Qwen3',
+    parameters: '235B (MoE, 22B active)',
+    quantization: 'Q4_K_M',
+    sizeBytes: 142_650_000_000,
+    contextLength: 262144,
+    url: `${HF}/bartowski/Qwen_Qwen3-235B-A22B-Instruct-2507-GGUF`,
+    sha256: null,
+    license: 'Apache-2.0',
+    description: 'The largest here, close to the best open models: for servers with 192 GB of memory or more. 22B parameters work at a time, so it runs on processors (slowly) and well with graphics cards to help.',
+    tier: 'server',
+    toolCalling: true,
+    // A mixture of experts, but with 22B at work for each word it is not quick on processors (what `moe` stands for).
+    hf: { repo: 'bartowski/Qwen_Qwen3-235B-A22B-Instruct-2507-GGUF', quant: 'Q4_K_M' },
   },
 ];

@@ -168,12 +168,8 @@ export class StarterAi {
         if (err) reject(err);
         else resolve();
       };
-      try {
-        // Already on its way (someone started it on the AI models page): wait for that one.
-        if (!this.d.models.activeDownloads().some((x) => x.modelId === id)) this.d.models.download(id);
-      } catch (err) {
-        done(err as Error);
-      }
+      // Already on its way (someone started it on the AI models page): wait for that one.
+      if (!this.d.models.activeDownloads().some((x) => x.modelId === id)) this.d.models.download(id).catch((err: Error) => done(err));
     });
   }
 }

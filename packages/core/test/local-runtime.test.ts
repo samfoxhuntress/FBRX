@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import type { RuntimeStatus } from '@fbrx/shared';
 import { explainLoadFailure } from '../src/ai/runtime/load-failure';
-import { autoContextSize, kvBytesPerToken } from '../src/ai/runtime/context-size';
+import { autoContextSize, fitsOnCard, kvBytesPerToken } from '../src/ai/runtime/context-size';
 import { parseGgufHeader, readGgufInfo } from '../src/ai/runtime/gguf';
 import { makeKernel, tempDir, USER } from './helpers';
 
@@ -78,6 +78,16 @@ describe('why a model does not load', () => {
     expect(autoContextSize({ info, modelBytes: 4.9 * GB, totalMem: 8 * GB, compact: true })).toBe(8192);
     expect(autoContextSize({ info: { ...info!, contextLength: 4096 }, modelBytes: GB, totalMem: 64 * GB, compact: true })).toBe(4096);
     expect(autoContextSize({ info: null, modelBytes: GB, totalMem: 64 * GB, compact: true })).toBe(8192);
+
+    // FBRX Server goes to 128K tokens when it has the memory.
+    expect(autoContextSize({ info, modelBytes: 4.9 * GB, totalMem: 128 * GB, compact: true, server: true })).toBe(131072);
+    expect(autoContextSize({ info, modelBytes: 4.9 * GB, totalMem: 128 * GB, compact: true })).toBe(65536);
+    // All of the model on the graphics card: the context gets what the card has left, so the model stays on it.
+    expect(fitsOnCard(4.9 * GB, 8 * GB)).toBe(true);
+    expect(autoContextSize({ info, modelBytes: 4.9 * GB, totalMem: 64 * GB, compact: true, cardBytes: 8 * GB })).toBe(26624);
+    expect(autoContextSize({ info, modelBytes: 18 * GB, totalMem: 128 * GB, compact: true, server: true, cardBytes: 24 * GB })).toBe(61440);
+    // A big card on a server with less memory than the card: the card decides.
+    expect(autoContextSize({ info, modelBytes: 18 * GB, totalMem: 32 * GB, compact: true, server: true, cardBytes: 48 * GB })).toBe(131072);
   });
 
   it('reads a GGUF header: architecture and layers, and tells a non-model apart', () => {

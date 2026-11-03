@@ -66,6 +66,8 @@ const SettingsPatch = z
   .object({
     ai: z.object({ defaultProvider: z.string().max(64), defaultModel: z.string().max(200), agentName: z.string().min(1).max(40), providers: z.array(Provider).max(32) }).partial().strict(),
     mesh: z.object({ incoming: z.enum(['ask', 'allow', 'deny']), assist: AssistPatch, network: NetworkPatch }).partial().strict(),
+    // The built-in model's context window: 0 is Auto.
+    runtime: z.object({ contextSize: z.number().int().refine((n) => n === 0 || (n >= 2048 && n <= 262144), 'Auto (0), or 2,048 to 262,144 tokens') }).strict(),
   })
   .partial()
   .strict();
@@ -78,6 +80,7 @@ function settingsView(r: unknown) {
       general: { deviceName: s.general.deviceName },
       ai: { defaultProvider: s.ai.defaultProvider, defaultModel: s.ai.defaultModel, agentName: s.ai.agentName, providers: s.ai.providers },
       mesh: s.mesh,
+      runtime: { contextSize: s.runtime.contextSize },
     },
     locked: e.locked,
   };
@@ -173,6 +176,8 @@ const RULES: Record<string, Rule> = {
   'runtime.stop': { role: 'operator' },
   'runtime.installRuntime': { role: 'admin' },
   'runtime.download': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
+  // A model from Hugging Face joins the list (owner/name, optionally :QUANT, or its address).
+  'runtime.addModel': { role: 'admin', params: (p) => z.object({ source: z.string().min(3).max(300), name: z.string().min(1).max(80).optional() }).strict().parse(p) },
   'runtime.cancelDownload': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
   'runtime.redownload': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
   'runtime.deleteModel': { role: 'admin', params: (p) => z.object({ modelId: MODEL_ID }).strict().parse(p) },
@@ -218,6 +223,7 @@ function target(method: string, p: Record<string, unknown>): string | null {
   if (method === 'vault.set') return String(p.name);
   if (method === 'mesh.assist.send') return Array.isArray(p.peerIds) ? p.peerIds.join(', ') : 'best helper';
   if (method === 'settings.update') return Object.keys((p.patch as object) ?? {}).join(', ');
+  if (method === 'runtime.addModel') return String(p.source);
   if (method === 'ai.chat') return (p.conversationId as string | undefined) ?? 'new chat';
   for (const k of ['sessionId', 'id', 'runId', 'host', 'name', 'modelId']) if (typeof p[k] === 'string') return p[k] as string;
   return null;

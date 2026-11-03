@@ -208,9 +208,10 @@ before anything risky, like on any FBRX computer. It listens for FBRX Mesh on po
 ### The AI sets itself up
 
 On the first start of the ai role, the server gets its own AI ready without anyone choosing: it installs the runtime,
-picks the best model the hardware runs well, downloads it and makes it the server's AI. With a graphics card, the
-biggest model the card holds; on processors alone, a model that answers quickly there (Qwen3 30B-A3B with 32 GB of
-memory or more), otherwise the biggest everyday model that fits; always leaving 20 GB of the disk free. *Fabrix* in the
+picks the best model the hardware runs well, downloads it and makes it the server's AI. With graphics cards, the
+biggest model they hold (several cards add up); on processors alone, a model that answers quickly there (gpt-oss 120B
+with 96 GB of memory or more, Qwen3 30B-A3B Instruct 2507 with 32 GB or more), otherwise the biggest everyday model
+that fits; always leaving 20 GB of the disk free. *Fabrix* in the
 console shows the progress (and *Try again* to administrators when a download fails). It happens once, and only when
 nobody chose an AI for the server yet: a provider or model set by an administrator is never overruled, and after that
 the choice is theirs (below).
@@ -223,30 +224,61 @@ answering asks Mesh Assist, which hands the work to the server (*Mesh Assist* ta
 what priority).
 
 1. *Mesh & AI → Models on this server* shows the server's memory, threads and graphics cards, and for every model
-   whether it fits the graphics card, fits in memory (processors only: slower, fine for background work), only just
-   fits, or is too big. Leave room for the virtual machines.
+   whether it fits the graphics cards (llama.cpp spreads a model over all of them), fits in memory (processors only:
+   slower, fine for background work), only just fits, or is too big. Leave room for the virtual machines.
+   `sudo fbrx-server ai recommend` names the best one for this server.
 2. **Install the runtime** (a small download from the llama.cpp project's own releases; the graphics-card build when
    the server has a card it can use).
 3. **Download** a model. Besides the desktop ones there are models *for servers*:
-   * **Qwen3 30B-A3B** (~19 GB): only 3B of its 30B parameters work at a time, so it answers quickly without a
-     graphics card. The one to start with on a server with 32 GB or more.
+   * **Qwen3 30B-A3B Instruct 2507** (~19 GB): only 3B of its 30B parameters work at a time, so it answers quickly
+     without a graphics card, and it reads long material (a 128K-token context here). The one to start with on a
+     server with 32 GB or more. (The earlier **Qwen3 30B-A3B**, which thinks before it answers, is there too.)
    * **Qwen3 32B** (~20 GB): stronger and careful, at home on a 24 GB graphics card; slow on processors alone.
    * **Llama 3.3 70B Instruct** (~43 GB): for 64 GB+ of memory or 48 GB of graphics memory.
-4. **Use it**: the model becomes this server's AI (the built-in runtime turns on and becomes the default provider).
-   The runtime starts at the first question and stops after a while unused.
+   * **gpt-oss 120B** (~63 GB): the most capable model that still answers quickly on processors (5B of its 117B
+     parameters at a time), with a 128K-token context. For 96 GB+ of memory or 80 GB of graphics memory.
+   * **Qwen3 235B-A22B Instruct 2507** (~143 GB): the largest, close to the best open models. For 192 GB+ of memory;
+     22B parameters at a time make it slow on processors alone, quick with graphics cards to help.
 
-Any other GGUF model works too: copy the file to the server (not into a home folder: the core cannot see those), then
+   A download checks first that the disk has room for it and 20 GB to spare, resumes where it stopped when interrupted,
+   and is checked before use. The biggest models come in several files: they download as one.
+4. **Use it**: the model becomes this server's AI (the built-in runtime turns on and becomes the default provider).
+   The runtime starts at the first question and stops after a while unused. `sudo fbrx-server ai download <id> --use`
+   does both in one go.
+
+**Any GGUF model on Hugging Face.** *A model of your own → From Hugging Face* (or `sudo fbrx-server ai add`) takes the
+model's repository, `owner/name` or its address, with its quantization after a colon when it is not Q4_K_M
+(`bartowski/Qwen_Qwen3-14B-GGUF:Q6_K`). FBRX finds its files (every part of a model in several), adds it to the list
+and downloads it like the others, checking every file against the checksum Hugging Face publishes. Public models only:
+FBRX does not sign in to Hugging Face. Its tools work when the model's chat template supports tool calls. *Take off
+the list* (or `fbrx-server ai delete`) removes it again.
+
+A GGUF file of your own works too: copy it to the server (not into a home folder: the core cannot see those), then
 `sudo fbrx-server ai import /srv/model.gguf "Its name"`.
+
+**The context window** is how much the model keeps in mind at once: the conversation, a long log, several documents.
+On **Auto** (the default) the server gives it as much as it has room for, up to 128K tokens and never more than the
+model was made for: in memory, after the model and a quarter left for the system and the virtual machines; on the
+graphics cards, what they have left after the model, so the model stays on them. Kept in 8 bits with flash attention,
+it takes about half the memory it otherwise would. *Mesh & AI → Models on this server* shows it and lets
+administrators fix it (16K to 256K tokens; `sudo fbrx-server ai context 64k`, or `auto`); the runtime restarts with it
+at the next question. A long context window only helps models made for it: the 2507 Qwen3 models, gpt-oss and Llama 3.3
+read 128K tokens, the earlier Qwen3 models 32K.
 
 From the command line (as root):
 
 | | |
 | --- | --- |
-| `fbrx-server ai` | the runtime, the model in use, memory and graphics |
-| `fbrx-server ai models` | every model, what fits this server, which are downloaded |
+| `fbrx-server ai` | the runtime, the model in use, its context window, memory, graphics and disk |
+| `fbrx-server ai models` | every model, what fits this server, its context, which are downloaded |
+| `fbrx-server ai recommend` | the best model for this server, and the command that installs it |
 | `fbrx-server ai install-runtime` | install or update the runtime |
-| `fbrx-server ai download <id>` | download a model, with its progress (Ctrl+C stops watching; the download goes on) |
+| `fbrx-server ai download <id> [--use]` | download a model with its progress, speed and time left (Ctrl+C stops watching; the download goes on); `--use` then makes it this server's AI |
+| `fbrx-server ai download <owner/name[:QUANT]> [--use]` | the same for a GGUF model on Hugging Face |
+| `fbrx-server ai add <owner/name[:QUANT]> [name]` | put a Hugging Face model on the list |
 | `fbrx-server ai use <id>` | make it this server's AI |
+| `fbrx-server ai delete <id>` | delete a model (one added from Hugging Face also leaves the list) |
+| `fbrx-server ai context [auto\|64k\|128k\|<tokens>]` | the context window |
 | `fbrx-server ai import <file> [name]` | a GGUF file copied to the server |
 | `fbrx-server ai start`, `stop`, `logs` | the runtime itself |
 

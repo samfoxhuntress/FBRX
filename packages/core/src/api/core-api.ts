@@ -349,13 +349,17 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'runtime.start': () => k.runtime.start(),
     'runtime.stop': () => k.runtime.stop(),
     'runtime.catalog': () => k.models.catalog(),
+    'runtime.addModel': (p) => {
+      const q = z.object({ source: z.string().min(3).max(300), name: z.string().max(80).optional() }).parse(p);
+      return k.models.add(q.source, q.name);
+    },
     'runtime.installRuntime': () => {
       k.runtime.install();
       return { started: true };
     },
     'runtime.installed': () => k.models.installed(),
-    'runtime.download': (p) => {
-      k.models.download(z.object({ modelId: z.string() }).parse(p).modelId);
+    'runtime.download': async (p) => {
+      await k.models.download(z.object({ modelId: z.string() }).parse(p).modelId);
       return { started: true };
     },
     'runtime.cancelDownload': (p) => {

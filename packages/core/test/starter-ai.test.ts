@@ -56,7 +56,7 @@ describe('The AI ready before the first question', () => {
         runtimeInstalls++;
         setTimeout(() => kernel.events.emit('runtime.download', { modelId: 'llama-runtime', receivedBytes: 1, totalBytes: 1, state: 'completed' }), 10);
       };
-      kernel.models.download = (id: string) => {
+      kernel.models.download = async (id: string) => {
         modelDownloads++;
         setTimeout(async () => {
           kernel.events.emit('runtime.download', { modelId: id, receivedBytes: 500, totalBytes: 1000, state: 'downloading' });
@@ -88,7 +88,7 @@ describe('The AI ready before the first question', () => {
     try {
       kernel.settings.update({ general: { onboardingComplete: true } });
       let downloads = 0;
-      kernel.models.download = () => void downloads++;
+      kernel.models.download = async () => void downloads++;
       expect((await kernel.starter.prepare({ auto: true })).state).toBe('idle');
       expect(downloads).toBe(0);
     } finally {
@@ -101,7 +101,7 @@ describe('The AI ready before the first question', () => {
     try {
       kernel.settings.update({ ai: { defaultProvider: 'anthropic' } });
       let downloads = 0;
-      kernel.models.download = () => void downloads++;
+      kernel.models.download = async () => void downloads++;
       expect((await kernel.starter.prepare({ auto: true })).state).toBe('not-needed');
       expect(downloads).toBe(0);
       expect(kernel.settings.get().ai.defaultProvider).toBe('anthropic');
@@ -114,7 +114,7 @@ describe('The AI ready before the first question', () => {
     const { kernel, cleanup } = await makeKernel();
     try {
       (kernel.runtime as any).status = () => ({ state: 'stopped' });
-      kernel.models.download = (id: string) => void setTimeout(() => kernel.events.emit('runtime.download', { modelId: id, receivedBytes: 0, totalBytes: 0, state: 'failed', error: 'Download failed: HTTP 503' }), 10);
+      kernel.models.download = async (id: string) => void setTimeout(() => kernel.events.emit('runtime.download', { modelId: id, receivedBytes: 0, totalBytes: 0, state: 'failed', error: 'Download failed: HTTP 503' }), 10);
       expect(await kernel.starter.prepare({ auto: true })).toMatchObject({ state: 'failed', message: 'Download failed: HTTP 503' });
     } finally {
       await cleanup();
@@ -174,14 +174,19 @@ describe("A server's AI sets itself up", () => {
 
   it('picks the best model the hardware runs well, and leaves the disk room', () => {
     // Processors only: a mixture of experts answers quickly; without room for one, a dense model up to the 8B class.
-    expect(pick(machine(32))).toBe('qwen3-30b-a3b-q4km');
+    expect(pick(machine(32))).toBe('qwen3-30b-a3b-2507-q4km');
+    expect(pick(machine(96))).toBe('gpt-oss-120b-mxfp4');
+    // Not the 235B: with 22B parameters at work for each word it is slow on processors alone.
+    expect(pick(machine(512))).toBe('gpt-oss-120b-mxfp4');
     expect(pick(machine(16))).toBe('qwen3-8b-q4km');
     expect(pick(machine(8))).toBe('llama-3.2-3b-instruct-q4km');
     expect(pick(machine(1))).toBeNull();
     // A big graphics card takes the biggest model it holds; a small one loses to the processors.
     expect(pick(machine(64, 24))).toBe('qwen3-32b-q4km');
-    expect(pick(machine(128, 48))).toBe('llama-3.3-70b-instruct-q4km');
-    expect(pick(machine(64, 4))).toBe('qwen3-30b-a3b-q4km');
+    expect(pick(machine(64, 48))).toBe('llama-3.3-70b-instruct-q4km');
+    expect(pick(machine(64, 4))).toBe('qwen3-30b-a3b-2507-q4km');
+    // Graphics cards add up (llama.cpp spreads a model over them).
+    expect(pick({ ...machine(512), gpus: [1, 2, 3, 4].map((n) => ({ name: `Card ${n}`, vramBytes: 48 * GiB })), variant: 'vulkan' })).toBe('qwen3-235b-a22b-2507-q4km');
     // 20 GB stays free on the disk after the model.
     expect(pick(machine(64), 25e9)).toBe('qwen2.5-7b-instruct-q4km');
   });
@@ -196,12 +201,12 @@ describe("A server's AI sets itself up", () => {
       kernel.runtime.hardware = async () => machine(64);
       (kernel.starter as any).d.diskFree = async () => 500e9;
       const asked: string[] = [];
-      kernel.models.download = (id: string) => {
+      kernel.models.download = async (id: string) => {
         asked.push(id);
         setTimeout(() => kernel.events.emit('runtime.download', { modelId: id, receivedBytes: 0, totalBytes: 0, state: 'failed', error: 'Stopped by the test' }), 10);
       };
-      expect(await kernel.starter.prepare({ auto: true })).toMatchObject({ state: 'failed', modelId: 'qwen3-30b-a3b-q4km', modelName: 'Qwen3 30B-A3B' });
-      expect(asked).toEqual(['qwen3-30b-a3b-q4km']);
+      expect(await kernel.starter.prepare({ auto: true })).toMatchObject({ state: 'failed', modelId: 'qwen3-30b-a3b-2507-q4km', modelName: 'Qwen3 30B-A3B Instruct 2507' });
+      expect(asked).toEqual(['qwen3-30b-a3b-2507-q4km']);
       // Once: the next start leaves it to the administrators (Mesh & AI, or Fabrix's "Try again").
       await kernel.starter.prepare({ auto: true });
       expect(asked).toHaveLength(1);

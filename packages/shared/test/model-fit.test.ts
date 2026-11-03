@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { modelFit } from '../src/api';
+import { graphicsMemory, modelFit } from '../src/api';
 
 const GB = 1e9;
 
@@ -16,5 +16,13 @@ describe('which models fit', () => {
     expect(modelFit(19.8 * GB, { memoryBytes: 32 * GB, gpus: [{ name: 'card', vramBytes: 24 * GB }], variant: 'cpu' })).toBe('memory');
     // A Mac shares its memory with the graphics.
     expect(modelFit(9 * GB, { memoryBytes: 32 * GB, gpus: [], variant: 'metal' })).toBe('gpu');
+  });
+
+  it('adds graphics cards up, leaving out ones too small to hold a model', () => {
+    const cards = (...gb: number[]) => gb.map((n, i) => ({ name: `card ${i}`, vramBytes: n * 1024 ** 3 }));
+    expect(graphicsMemory({ gpus: cards(24, 24, 1), variant: 'vulkan' })).toBe(48 * 1024 ** 3);
+    expect(graphicsMemory({ gpus: cards(24), variant: 'cpu' })).toBe(0);
+    // Two 24 GB cards hold the 70B model.
+    expect(modelFit(42.5 * GB, { memoryBytes: 64 * GB, gpus: cards(24, 24), variant: 'vulkan' })).toBe('gpu');
   });
 });

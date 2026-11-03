@@ -345,7 +345,12 @@ export class Kernel {
     const dirs = () => ({ ...this.platform.specialDirs(), workspace: this.paths.workspace, data: this.paths.root });
     this.output = new OutputFolder({ settings: this.settings, policy: this.policy, workspace: this.paths.workspace, dirs });
     this.snapshots = new ScreenSnapshots({ folder: () => expandPathVars(this.settings.get().snapshot.folder, dirs()), events: this.events, log: L('snapshots'), images: () => this.platform.images });
-    this.models = new ModelManager(this.db, this.paths.models, () => this.settings.get().runtime.modelId, L('models'), this.events);
+    this.models = new ModelManager(this.db, this.paths.models, () => this.settings.get().runtime.modelId, L('models'), this.events, {
+      meta: this.meta,
+      diskFree: async () => ((await diskFreeGb(this.paths.root)) ?? Infinity) * 1024 ** 3,
+      // A server keeps room for its virtual machines, backups and updates.
+      spareBytes: this.server ? 20e9 : 2e9,
+    });
     this.runtime = new LocalRuntime({
       settings: this.settings,
       models: this.models,
@@ -353,6 +358,7 @@ export class Kernel {
       resourcesDir: this.platform.resourcesDir,
       log: L('runtime'),
       events: this.events,
+      server: this.server,
     });
     this.starter = new StarterAi({
       models: this.models,

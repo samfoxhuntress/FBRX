@@ -171,7 +171,7 @@ describe('FBRX Virtual and the server core', () => {
     expect(hw.memoryBytes).toBeGreaterThan(0);
     expect(['cpu', 'vulkan', 'metal']).toContain(hw.variant);
     const catalog = (await core(viewer, 'runtime.catalog')).body.result as Array<{ id: string; tier: string }>;
-    expect(catalog.filter((m) => m.tier === 'server').map((m) => m.id)).toEqual(['qwen3-30b-a3b-q4km', 'qwen3-32b-q4km', 'llama-3.3-70b-instruct-q4km']);
+    expect(catalog.filter((m) => m.tier === 'server').map((m) => m.id)).toEqual(['qwen3-30b-a3b-2507-q4km', 'qwen3-30b-a3b-q4km', 'qwen3-32b-q4km', 'llama-3.3-70b-instruct-q4km', 'gpt-oss-120b-mxfp4', 'qwen3-235b-a22b-2507-q4km']);
     expect((await core(viewer, 'runtime.downloads')).body.result).toEqual([]);
     // Filling the disk and choosing this server's AI are for administrators.
     expect((await core(viewer, 'runtime.download', { modelId: 'qwen3-30b-a3b-q4km' })).status).toBe(403);
@@ -179,6 +179,18 @@ describe('FBRX Virtual and the server core', () => {
     expect((await core(admin, 'runtime.download', { modelId: '../../etc/passwd' })).status).toBe(400);
     expect((await core(operator, 'runtime.logs')).status).toBe(200);
     expect((await core(viewer, 'runtime.logs')).status).toBe(403);
+    // Adding a model from Hugging Face fills the disk too; what is not a repository never reaches the core.
+    expect((await core(operator, 'runtime.addModel', { source: 'bartowski/Qwen_Qwen3-8B-GGUF' })).status).toBe(403);
+    expect((await core(admin, 'runtime.addModel', { source: 'not a model' })).status).toBe(400);
+    expect((await core(admin, 'runtime.addModel', { source: 'a/b', path: '/etc' })).status).toBe(400);
+    // The context window: everyone sees it, administrators set it (0 is Auto).
+    expect((await core(viewer, 'settings.get')).body.result.settings.runtime).toEqual({ contextSize: 0 });
+    expect((await core(operator, 'settings.update', { patch: { runtime: { contextSize: 131072 } } })).status).toBe(403);
+    expect((await core(admin, 'settings.update', { patch: { runtime: { contextSize: 100 } } })).status).toBe(400);
+    expect((await core(admin, 'settings.update', { patch: { runtime: { contextSize: 131072, port: 1 } } })).status).toBe(400);
+    expect((await core(admin, 'settings.update', { patch: { runtime: { contextSize: 131072 } } })).status).toBe(200);
+    expect(kernel.settings.get().runtime.contextSize).toBe(131072);
+    kernel.settings.update({ runtime: { contextSize: 0 } });
 
     // A model copied to the server and imported (fbrx-server ai import), then made this server's AI.
     const file = join(dir, 'My-Model-Q4.gguf');

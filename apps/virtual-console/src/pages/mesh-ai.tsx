@@ -36,7 +36,7 @@ import { coreCall, useCore, type CoreState } from '../core';
 import { useApp, usePoll, useRoute } from '../state';
 
 interface CoreSettings {
-  settings: { general: { deviceName: string }; ai: Pick<Settings['ai'], 'defaultProvider' | 'defaultModel' | 'agentName' | 'providers'>; mesh: Settings['mesh'] };
+  settings: { general: { deviceName: string }; ai: Pick<Settings['ai'], 'defaultProvider' | 'defaultModel' | 'agentName' | 'providers'>; mesh: Settings['mesh']; runtime?: { contextSize: number } };
   locked: string[];
 }
 type AssistSettings = Settings['mesh']['assist'];
@@ -587,6 +587,9 @@ const FIT: Record<ModelFit, { tone: StatusTone; words: string }> = {
   'too-big': { tone: 'critical', words: 'too big for this server' },
 };
 const TIER_ORDER: Record<CatalogModel['tier'], number> = { server: 0, large: 1, medium: 2, small: 3 };
+/** The context window: Auto, or a fixed length (the model's own limit still applies). */
+const CONTEXT_CHOICES = [{ value: '0', label: 'Auto: as much as this server has room for' }, ...[16, 32, 64, 128, 256].map((k) => ({ value: String(k * 1024), label: `${k}K tokens` }))];
+const tokens = (n: number) => (n >= 1024 && n % 1024 === 0 ? `${n / 1024}K` : n.toLocaleString());
 const RUNTIME_WORDS: Record<RuntimeStatus['state'], string> = { 'not-installed': 'not installed', 'no-model': 'no model chosen', stopped: 'stopped (starts at the first question)', starting: 'starting', running: 'running', failed: 'failed', disabled: 'off' };
 
 /**
@@ -665,8 +668,19 @@ function Models() {
                 ['Runtime', <Status key="r" tone={st.state === 'running' ? 'good' : st.state === 'failed' ? 'critical' : st.state === 'not-installed' || st.state === 'no-model' ? 'warning' : 'neutral'}>{RUNTIME_WORDS[st.state]}</Status>],
                 ['Model', active ? active.name : 'none yet'],
                 ['This server\'s AI uses', usesLocal ? 'this model' : ai ? (ai.providers.find((p) => p.id === ai.defaultProvider)?.name ?? ai.defaultProvider) : '…'],
+                ...(st.contextSize ? [['Context window', `${tokens(st.contextSize)} tokens${st.contextAuto ? ' (Auto)' : ''}`] as [string, string]] : []),
               ]}
             />
+            {admin && settings.data?.settings.runtime && (
+              <Field label="Context window" help="How much the model keeps in mind at once: a long chat, a big log, several documents. Auto gives as much as the memory (or the graphics card, when the model runs there) has room for, up to 128K tokens and never more than the model was made for. Longer takes more memory; the runtime restarts to change it.">
+                <Select
+                  value={String(settings.data.settings.runtime.contextSize)}
+                  disabled={busy === 'ctx' || settings.data.locked.includes('runtime.contextSize')}
+                  onChange={(e) => act('ctx', 'settings.update', { patch: { runtime: { contextSize: Number(e.target.value) } } }, 'Context window changed')}
+                  options={CONTEXT_CHOICES}
+                />
+              </Field>
+            )}
             {st.message && st.state !== 'not-installed' && <Callout tone={st.state === 'failed' ? 'critical' : 'info'}>{st.message}</Callout>}
             {runtimeDl && busyDl(runtimeDl) ? (
               progress(runtimeDl)
@@ -724,10 +738,10 @@ function Models() {
               <div key={m.id} className={`vt-model${mine?.active ? ' active' : ''}`}>
                 <div className="fx-row" style={{ justifyContent: 'space-between', gap: 8 }}>
                   <strong>{m.name}</strong>
-                  {m.tier === 'server' && <span className="vt-tag">for servers</span>}
+                  {m.added ? <span className="vt-tag">from Hugging Face</span> : m.tier === 'server' && <span className="vt-tag">for servers</span>}
                 </div>
                 <div className="fx-muted" style={{ fontSize: 12 }}>
-                  {m.parameters} · {formatBytes(m.sizeBytes)} · {m.license}
+                  {[m.parameters, formatBytes(m.sizeBytes), m.contextLength ? `${tokens(m.contextLength)} context` : '', m.license].filter(Boolean).join(' · ')}
                 </div>
                 <div className="fx-secondary" style={{ fontSize: 12.5 }}>
                   {m.description}
@@ -773,6 +787,11 @@ function Models() {
                       >
                         Download ({formatBytes(m.sizeBytes)})
                       </Button>
+                      {m.added && (
+                        <Button size="sm" variant="ghost" icon="trash" loading={busy === `d${m.id}`} onClick={() => act(`d${m.id}`, 'runtime.deleteModel', { modelId: m.id }, 'Taken off the list')}>
+                          Take off the list
+                        </Button>
+                      )}
                     </div>
                   )
                 )}
@@ -782,9 +801,10 @@ function Models() {
         </div>
       </Card>
 
-      <Card title="A model of your own" subtitle="Any GGUF model file (llama.cpp's format) works.">
+      <Card title="A model of your own" subtitle="Any GGUF model (llama.cpp's format) works: from Hugging Face, or a file of your own.">
         <div className="fx-form">
-          <div className="fx-secondary">Copy it to the server (to /srv, say), then on the server:</div>
+          {admin && <AddFromHuggingFace onAdded={() => void catalog.reload()} />}
+          <div className="fx-secondary">A file of your own: copy it to the server (to /srv, say), then on the server:</div>
           <CopyText value="sudo fbrx-server ai import /srv/my-model.gguf" />
           {installed.data.filter((m) => m.source === 'imported').map((m) => (
             <div key={m.id} className="fx-row" style={{ gap: 8 }}>
@@ -801,10 +821,37 @@ function Models() {
               )}
             </div>
           ))}
-          <div className="fx-help">From the command line too: sudo fbrx-server ai (status, models, download, use, import, start, stop).</div>
+          <div className="fx-help">From the command line too: sudo fbrx-server ai (status, models, recommend, add, download, use, context, import, start, stop).</div>
         </div>
       </Card>
     </>
+  );
+}
+
+/** Adds a model from Hugging Face to the list above, once its files are found there (it then downloads like the others). */
+function AddFromHuggingFace({ onAdded }: { onAdded: () => void }) {
+  const [source, setSource] = useState('');
+  const [name, setName] = useState('');
+  const { run, busy } = useAction();
+  const add = () =>
+    void run('add', () => coreCall<CatalogModel>('runtime.addModel', { source: source.trim(), ...(name.trim() ? { name: name.trim() } : {}) }), 'Added to the models above: download it there').then((m) => {
+      if (!m) return;
+      setSource('');
+      setName('');
+      onAdded();
+    });
+  return (
+    <div className="fx-form">
+      <Field label="From Hugging Face" help="The model's repository (owner/name, or its address), with its quantization after a colon when it is not Q4_K_M. A model in several files downloads as one, and every file is checked against the checksum Hugging Face publishes.">
+        <div className="fx-row" style={{ gap: 6 }}>
+          <Input style={{ flex: 2 }} value={source} placeholder="bartowski/Qwen_Qwen3-14B-GGUF:Q6_K" onChange={(e) => setSource(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && source.trim() && add()} />
+          <Input style={{ flex: 1 }} value={name} placeholder="Name (optional)" maxLength={80} onChange={(e) => setName(e.target.value)} />
+          <Button variant="primary" icon="plus" loading={busy === 'add'} disabled={source.trim().length < 3} onClick={add}>
+            Add
+          </Button>
+        </div>
+      </Field>
+    </div>
   );
 }
 
