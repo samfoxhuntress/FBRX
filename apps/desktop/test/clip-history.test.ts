@@ -81,7 +81,7 @@ describe('clipboard history', () => {
     await tick();
     const picture = history.list().find((e) => e.image)!;
     expect(await history.restore(picture.id)).toBe(true);
-    expect(board.png?.toString()).toBe('800x600 diagram');
+    expect((board.png as Buffer | null)?.toString()).toBe('800x600 diagram');
     await tick();
     await tick();
     expect(history.list().filter((e) => e.image)).toHaveLength(1); // putting it back does not add it again
