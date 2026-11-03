@@ -1,4 +1,4 @@
-import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, powerMonitor, protocol, screen, session, shell, systemPreferences, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
+import { app, BrowserWindow, clipboard, dialog, globalShortcut, ipcMain, Menu, nativeImage, nativeTheme, powerMonitor, protocol, screen, session, shell, systemPreferences, Tray, type IpcMainInvokeEvent, type MenuItemConstructorOptions } from 'electron';
 import { execFileSync } from 'node:child_process';
 import { createReadStream, existsSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
@@ -211,6 +211,17 @@ function showWindow(route?: string) {
   if (route) win!.webContents.send('fbrx:navigate', route);
 }
 
+/**
+ * The window's own parts (the title bar on Windows, menus, context menus) follow FBRX's Light, Dark or Match system
+ * setting instead of always the system's.
+ */
+function followTheme() {
+  nativeTheme.themeSource = kernel?.settings.get().general.theme ?? 'dark';
+}
+
+/** What a window shows before its page draws: the page color of the mode in use, so nothing flashes white or black. */
+const windowBackground = () => (nativeTheme.shouldUseDarkColors ? '#0d0d0d' : '#f4f4f1');
+
 function createWindow() {
   win = new BrowserWindow({
     width: 1360,
@@ -219,8 +230,10 @@ function createWindow() {
     minHeight: 620,
     title: APP_NAME,
     show: false,
-    backgroundColor: '#0d0d0d',
+    backgroundColor: windowBackground(),
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    // FBRX has its own navigation: the File, Edit, View menu bar stays out of sight on Windows and Linux until Alt.
+    autoHideMenuBar: true,
     // The window buttons sit in the sidebar's top strip, above the FBRX logo (see data-platform="darwin" in the CSS).
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 18, y: 18 } } : {}),
     icon: asset(FLAVOR === 'digger' ? 'digger-icon.png' : 'icon.png'),
@@ -336,7 +349,8 @@ function popOut(route: string, o: { wide?: boolean } = {}) {
     minHeight: 360,
     title: APP_NAME,
     show: false,
-    backgroundColor: '#0d0d0d',
+    backgroundColor: windowBackground(),
+    autoHideMenuBar: true,
     icon: asset(FLAVOR === 'digger' ? 'digger-icon.png' : 'icon.png'),
     webPreferences: {
       preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
@@ -902,6 +916,7 @@ async function boot() {
     },
   });
   kernel = await Kernel.create({ dataDir, platform, provisioningFiles: provisioningLocations() });
+  followTheme();
   // Automatic updates wait until nobody is using the computer.
   kernel.setIdleProbe(() => powerMonitor.getSystemIdleTime());
   kernel.events.onAny((name, payload) => {
@@ -909,6 +924,7 @@ async function boot() {
     for (const p of popouts.values()) if (!p.isDestroyed()) p.webContents.send('fbrx:event', name, payload);
     browserWebContents()?.send('fbrx:event', name, payload);
     if (name === 'settings.changed') {
+      followTheme();
       bindMacroKeys();
       clips.setEnabled(!!kernel?.settings.get().clipboard.history);
       if (!funAllowed()) goose?.close();

@@ -39,7 +39,7 @@ import {
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
-import { DIGGER, navigate, routeArg } from '../app';
+import { DIGGER, IS_WINDOWS, navigate, routeArg } from '../app';
 import { PRESETS, TEXTURE_NAMES, playStartupSound, resolvedMode, resolvedTexture, textureImage, themeAccent } from '../theme';
 import { GoosePreview, seasonNow, summonGoose } from '../fun';
 import { TrophyBadge, TrophyCase } from '../trophies';
@@ -491,7 +491,7 @@ function Appearance() {
       <Card title="Theme" subtitle={ultra ? 'Pick a look. Each theme has a light and a dark version.' : 'Light or dark, or follow your computer.'}>
         <div className="fx-form">
           <Field label={<>Mode <Locked show={L('general.theme')} /></>}>
-            {seg(s.general.theme, [{ value: 'system', label: 'Match Windows' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], (v) => void patch({ general: { theme: v } }), L('general.theme'))}
+            {seg(s.general.theme, [{ value: 'system', label: IS_WINDOWS ? 'Match Windows' : 'Match system' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], (v) => void patch({ general: { theme: v } }), L('general.theme'))}
           </Field>
           {!ultra && <EditionHint>More themes, accent colors, gradients and textures come with Endpoint Ultra.</EditionHint>}
           {ultra && <>
