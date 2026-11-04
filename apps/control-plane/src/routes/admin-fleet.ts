@@ -128,6 +128,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
     audience: g.audience ?? null,
     tier: g.tier ?? null,
     autoUpdate: g.auto_update ?? null,
+    mdm: !!g.mdm,
     deviceCount: Number(ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM devices WHERE group_id = ? AND status = 'active'", g.id)?.n ?? 0),
   });
   const GroupInput = z.object({
@@ -141,6 +142,8 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
     /** The most the group's computers may run (essentials, basic = Standard, ultra), or null for what the license allows. */
     tier: z.enum(TIERS).nullable().optional(),
     autoUpdate: z.enum(AUTO_UPDATE_MODES).nullable().optional(),
+    /** The group's computers are managed with the MDM add-on (counted for it while the operator sells it). */
+    mdm: z.boolean().optional(),
   });
   app.get('/v1/admin/groups', async (req) => {
     requirePerm(req, 'devices.read');
@@ -156,7 +159,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
       id = ids.group();
       if (ctx.db.get('SELECT 1 FROM groups WHERE tenant_id = ? AND name = ?', tenantId, body.name!)) throw conflict('A group with that name exists');
       ctx.db.run(
-        'INSERT INTO groups (id, tenant_id, name, description, profile_id, update_channel, pinned_version, audience, tier, auto_update, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)',
+        'INSERT INTO groups (id, tenant_id, name, description, profile_id, update_channel, pinned_version, audience, tier, auto_update, mdm, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)',
         id,
         tenantId,
         body.name!,
@@ -167,13 +170,14 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
         body.audience ?? null,
         body.tier ?? null,
         body.autoUpdate ?? null,
+        body.mdm ? 1 : 0,
         now,
         now,
       );
     } else {
       const g = own(req, 'groups', id);
       ctx.db.run(
-        'UPDATE groups SET name = ?, description = ?, profile_id = ?, update_channel = ?, pinned_version = ?, audience = ?, tier = ?, auto_update = ?, updated_at = ? WHERE id = ?',
+        'UPDATE groups SET name = ?, description = ?, profile_id = ?, update_channel = ?, pinned_version = ?, audience = ?, tier = ?, auto_update = ?, mdm = ?, updated_at = ? WHERE id = ?',
         body.name ?? g.name,
         body.description ?? g.description,
         body.profileId !== undefined ? body.profileId : g.profile_id,
@@ -182,6 +186,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
         body.audience !== undefined ? body.audience : g.audience,
         body.tier !== undefined ? body.tier : g.tier,
         body.autoUpdate !== undefined ? body.autoUpdate : g.auto_update,
+        body.mdm !== undefined ? (body.mdm ? 1 : 0) : g.mdm,
         now,
         id,
       );

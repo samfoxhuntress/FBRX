@@ -49,6 +49,7 @@ license with a kind also sets it. Unattended installs can pick the first tenant'
 | | **Tenants** | (superadmin) Create tenants (pick Work, School or Home first, then run its quick setup), see each one's kind, change it, suspend them |
 | | **FBRX accounts** | (superadmin) Everyone with an FBRX account here, the edition their purchases give them and their organizations; give one an edition (support, a promotion), disable one ([ACCOUNTS.md](ACCOUNTS.md)) |
 | | **Cloud AI** | (superadmin) FBRX Cloud AI: the month so far against the service's budget, each edition's tokens a month, every account's use (its own limit, extra tokens, the limit lifted for the month, turned off) and promo codes ([CLOUD_AI.md](CLOUD_AI.md)) |
+| | **Pricing** | (superadmin) The MDM add-on: on sale or not, its price per managed computer (the same whatever the computer's edition), whether Stripe's price under `fbrx_mdm_tenant_monthly` charges the same, and what it earns after card fees and the cost of a managed computer, with example organizations ([LICENSING.md](LICENSING.md#prices)). Organizations turn it on per group (**Profiles & groups → Device management**), and **Billing** shows its line |
 | Access | **Users & API keys** | Invite users with a role, reset access, create API keys for automation |
 | | **Webhooks** | Signed outgoing webhooks for fleet events |
 | | **Audit log** | Every admin action and device enrollment, hash-chained and verifiable |

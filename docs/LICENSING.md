@@ -45,7 +45,16 @@ month; the product ids are the Stripe price lookup keys and the App Store / Goog
 | **Ultra** | $11.99 | $9.59 per computer (20% off) | `fbrx_ultra_monthly`, `fbrx_ultra_tenant_monthly` |
 | **Black Hole** | — | $24.99 per computer (full price, an add-on) | `fbrx_blackhole_tenant_monthly` |
 | **FBRX Command tenant** | — | $54.99 | `fbrx_command_tenant_monthly` |
+| **MDM add-on** (not sold yet) | — | $4 per managed computer, whatever its edition (Essentials included); the operator sets it | `fbrx_mdm_tenant_monthly` |
 | **FBRX Server** (coming soon) | $100 once: the installer ISO stays on the account or tenant | The same | `fbrx_server_iso` |
+
+**The MDM add-on** (device management: patching, remote help, device security) is one price per managed computer a
+month, the same whatever edition the computer runs. FBRX Command's operator sets that price and puts it on sale
+(**Pricing**); until then nothing is charged for it. An organization turns it on for a group's computers (**Profiles &
+groups → a group → Device management**), and its bill gets a line for them: each computer in such a group at the
+add-on's price, on top of its edition. Stripe charges what its price under `fbrx_mdm_tenant_monthly` says; the Pricing
+page checks that it agrees with the price set there, and shows what the add-on earns after card fees and the cost of
+looking after a managed computer.
 
 A tenant's bill is the FBRX Command plan plus each computer at its edition's tenant price (`tenantMonthlyTotal`); in the cloud, FBRX Command counts the computers and keeps Stripe in step (ACCOUNTS.md).
 

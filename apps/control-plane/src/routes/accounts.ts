@@ -14,6 +14,7 @@ import { requireStripe, stripeOf, stripeStatus, subscriptionItems, type StripeEv
 import { appleStatus, appleTestPurchase, verifyAppleJws, type AppleNotification, type AppleRenewal, type AppleTransaction } from '../billing/apple';
 import { GooglePlay, playStatus, type PlaySubscription } from '../billing/google';
 import { scheduleSeatSync, syncTenantLicense } from '../billing/tenant-billing';
+import { mdmPricing } from '../billing/pricing';
 import { slugify } from './util';
 
 /**
@@ -203,6 +204,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     server: SERVER_OFFER,
     publicSignup: cloud.publicSignup,
     payments: { stripe: !!stripe, apple: !!cloud.apple, google: !!play },
+    mdm: mdmPricing(ctx.db),
   }));
 
   // ------------------------------------------------------------------------------------------- accounts

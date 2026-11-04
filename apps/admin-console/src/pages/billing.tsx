@@ -81,12 +81,12 @@ export function BillingPage() {
           {!b.payments && <Status tone="warning">Payments are not set up on this FBRX Command yet.</Status>}
           <Card title="What it comes to" subtitle="Counted from the editions you give computers and members (Members, Devices, Profiles & groups); student and child computers count as Standard. It follows by itself; changes are prorated." flush>
             <Table
-              rows={[{ tier: 'command' as const, n: 1, each: COMMAND_PLAN.monthly }, ...lines]}
+              rows={[{ tier: 'command' as const, n: 1, each: COMMAND_PLAN.monthly }, ...lines, ...(p.mdm.available ? [{ tier: 'mdm' as const, n: p.mdm.managed, each: p.mdm.perEndpoint }] : [])]}
               rowKey={(l) => l.tier}
               columns={[
-                { key: 'w', header: 'What', render: (l) => (l.tier === 'command' ? 'The FBRX Command plan' : <span className={`fx-badge${l.tier === 'blackhole' ? ' accent' : ''}`}>{TIER_NAMES[l.tier]}</span>) },
+                { key: 'w', header: 'What', render: (l) => (l.tier === 'command' ? 'The FBRX Command plan' : l.tier === 'mdm' ? 'The MDM add-on' : <span className={`fx-badge${l.tier === 'blackhole' ? ' accent' : ''}`}>{TIER_NAMES[l.tier]}</span>) },
                 { key: 'n', header: 'Computers', render: (l) => (l.tier === 'command' ? '—' : l.n) },
-                { key: 'e', header: 'Each, a month', render: (l) => formatPrice(l.each) + (l.tier === 'blackhole' ? ' (add-on)' : l.tier === 'command' ? '' : ` (${Math.round(TENANT_DISCOUNT * 100)}% off ${formatPrice(EDITION_PLANS[l.tier].monthly!)})`) },
+                { key: 'e', header: 'Each, a month', render: (l) => formatPrice(l.each) + (l.tier === 'blackhole' ? ' (add-on)' : l.tier === 'command' ? '' : l.tier === 'mdm' ? ' (any edition, in groups managed with it)' : ` (${Math.round(TENANT_DISCOUNT * 100)}% off ${formatPrice(EDITION_PLANS[l.tier].monthly!)})`) },
                 { key: 't', header: 'A month', render: (l) => <strong>{formatPrice(l.each * l.n)}</strong> },
               ]}
             />

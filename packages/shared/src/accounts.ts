@@ -1,5 +1,5 @@
 import type { Tier } from './license';
-import type { ProductInfo } from './plans';
+import type { MdmPricing, ProductInfo } from './plans';
 
 /**
  * FBRX accounts: one per person, held by FBRX Command in the cloud. An account keeps what its person bought (Standard
@@ -163,8 +163,10 @@ export interface TenantPlanView {
   status: EntitlementStatus | null;
   /** Computers at each edition (what the organization gives them). */
   computers: Record<Tier, number>;
-  /** What a month comes to, in cents: the plan and the computers. */
+  /** What a month comes to, in cents: the plan, the computers and the MDM add-on. */
   monthly: number;
+  /** The MDM add-on: whether it is sold, its price per computer (cents) and how many computers the groups manage. */
+  mdm: MdmPricing & { managed: number };
   /** Can open the Stripe billing portal. */
   portal: boolean;
 }
@@ -173,6 +175,8 @@ export interface TenantPlanView {
 export interface PlansInfo {
   publicSignup: boolean;
   payments: { stripe: boolean; apple: boolean; google: boolean };
+  /** The MDM add-on as the operator set it: sold or not, and its price per managed computer (cents). */
+  mdm: MdmPricing;
 }
 
 /** The FBRX account this computer is signed in to (Settings → Account). */

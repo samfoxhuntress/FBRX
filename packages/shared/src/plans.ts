@@ -10,6 +10,8 @@ import { TIERS, TIER_SHORT, type Tier } from './license';
  *   tenant's discount.
  * - Black Hole is only an add-on in a tenant, per endpoint, at its full price.
  * - An FBRX Command tenant is a monthly plan of its own.
+ * - The MDM add-on manages an organization's computers, per computer, at one price whatever the computer's edition;
+ *   FBRX Command's operator sets that price and when it is sold (FBRX Command → Pricing).
  * - FBRX Server is announced, not sold yet: a one-time purchase of the installer ISO, kept on the account for good.
  */
 export const CURRENCY = 'usd';
@@ -100,6 +102,28 @@ export const COMMAND_PLAN = {
   ],
 };
 
+/**
+ * The MDM add-on: device management for an organization's computers (patching, remote help, device security), per
+ * managed computer per month, the same price whatever edition the computer runs, Essentials included. An organization
+ * turns it on for a group's computers. FBRX Command's operator sets the price and when it goes on sale (Pricing); this
+ * is where both start. Stripe charges it under `productId`, as many as the organization manages.
+ */
+export const MDM_ADDON = {
+  productId: 'fbrx_mdm_tenant_monthly',
+  /** Per managed computer per month, in cents, until the operator sets another. */
+  perEndpoint: 400,
+  /** The most the operator may set, in cents (a typo of $400 a computer is caught). */
+  maxPerEndpoint: 5000,
+  summary: 'Device management for your organization’s computers, at one price per computer whatever its edition.',
+};
+
+/** What FBRX Command's operator set for the MDM add-on: whether it is sold, and its price per computer (cents). */
+export interface MdmPricing {
+  available: boolean;
+  perEndpoint: number;
+}
+export const DEFAULT_MDM_PRICING: MdmPricing = { available: false, perEndpoint: MDM_ADDON.perEndpoint };
+
 /** FBRX Server: announced, not for sale yet. */
 export const SERVER_OFFER = {
   available: false,
@@ -129,10 +153,14 @@ export function priceOf(tier: Tier, where: 'personal' | 'tenant'): number | null
   return where === 'tenant' ? p.tenantMonthly : p.monthly;
 }
 
-/** A tenant's monthly bill: the FBRX Command plan plus each computer at its edition's tenant price. */
-export function tenantMonthlyTotal(computers: Partial<Record<Tier, number>>): number {
+/**
+ * A tenant's monthly bill: the FBRX Command plan plus each computer at its edition's tenant price, and the MDM add-on
+ * for each computer it manages (when it is sold).
+ */
+export function tenantMonthlyTotal(computers: Partial<Record<Tier, number>>, mdm?: { managed: number; pricing: MdmPricing }): number {
   let total = COMMAND_PLAN.monthly;
   for (const [tier, n] of Object.entries(computers) as Array<[Tier, number]>) total += EDITION_PLANS[tier].tenantMonthly * Math.max(0, n);
+  if (mdm?.pricing.available) total += mdm.pricing.perEndpoint * Math.max(0, mdm.managed);
   return total;
 }
 
@@ -140,6 +168,7 @@ export function tenantMonthlyTotal(computers: Partial<Record<Tier, number>>): nu
 export type ProductInfo =
   | { kind: 'edition'; tier: Tier; tenant: boolean }
   | { kind: 'command' }
+  | { kind: 'mdm' }
   | { kind: 'server' };
 
 export function productById(id: string): ProductInfo | null {
@@ -148,6 +177,7 @@ export function productById(id: string): ProductInfo | null {
     if (p.tenantProductId === id) return { kind: 'edition', tier: p.tier, tenant: true };
   }
   if (id === COMMAND_PLAN.productId) return { kind: 'command' };
+  if (id === MDM_ADDON.productId) return { kind: 'mdm' };
   if (id === SERVER_OFFER.productId) return { kind: 'server' };
   return null;
 }

@@ -56,6 +56,13 @@ export class Stripe {
     return id;
   }
 
+  /** The active price under a lookup key, with what it charges (null when Stripe has none): for the Pricing page. */
+  async priceInfo(productId: string): Promise<{ id: string; unitAmount: number | null; interval: string | null } | null> {
+    const r = await this.request<{ data: Array<{ id: string; unit_amount?: number | null; recurring?: { interval?: string } | null }> }>('GET', '/v1/prices', { lookup_keys: [productId], active: true });
+    const p = r.data[0];
+    return p ? { id: p.id, unitAmount: p.unit_amount ?? null, interval: p.recurring?.interval ?? null } : null;
+  }
+
   createCustomer(p: { email: string; name: string; metadata: Record<string, string> }) {
     return this.request<{ id: string }>('POST', '/v1/customers', p);
   }

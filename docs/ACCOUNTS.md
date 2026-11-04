@@ -174,7 +174,8 @@ the operator issues. The operator sees every account under **FBRX accounts**.
 1. In the Stripe Dashboard, make one product per plan with a **monthly recurring price**, and give each price the
    **lookup key** from `packages/shared/src/plans.ts`: `fbrx_standard_monthly` ($4.99), `fbrx_ultra_monthly` ($11.99),
    and for tenants `fbrx_standard_tenant_monthly` ($3.99), `fbrx_ultra_tenant_monthly` ($9.59),
-   `fbrx_blackhole_tenant_monthly` ($24.99), `fbrx_command_tenant_monthly` ($54.99). FBRX finds prices by lookup key,
+   `fbrx_blackhole_tenant_monthly` ($24.99), `fbrx_command_tenant_monthly` ($54.99), and, once the MDM add-on is on
+   sale, `fbrx_mdm_tenant_monthly` (the price set in FBRX Command → Pricing, $4 to start). FBRX finds prices by lookup key,
    so a price change in Stripe needs no new FBRX version (move the lookup key to the new price).
 2. **Settings → Payment methods**: turn on cards, Apple Pay and Google Pay. For Apple Pay, verify the website's domain
    in Stripe.

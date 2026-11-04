@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AUDIENCE_NAMES, AUTO_UPDATE_MODES, isLearner, AUTO_UPDATE_NAMES, DEFAULT_POLICY, PROFILE_PRESETS, presetApplied, UPDATE_CHANNELS, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_NAMES, type Audience, type AutoUpdateMode, type Tier, type Vertical } from '@fbrx/shared';
+import { AUDIENCE_NAMES, AUTO_UPDATE_MODES, isLearner, AUTO_UPDATE_NAMES, DEFAULT_POLICY, PROFILE_PRESETS, presetApplied, UPDATE_CHANNELS, VERTICALS, VERTICAL_AUDIENCES, VERTICAL_NAMES, formatPrice, type Audience, type AutoUpdateMode, type MdmPricing, type Tier, type Vertical } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Input, JsonEditor, Modal, More, Page, Select, Status, Table, TextArea, Toggle, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
@@ -27,6 +27,8 @@ interface Group {
   audience: Audience | null;
   tier: Tier | null;
   autoUpdate: AutoUpdateMode | null;
+  /** Its computers are managed with the MDM add-on. */
+  mdm: boolean;
   deviceCount: number;
 }
 interface Tenant {
@@ -227,8 +229,11 @@ function ProfileEditor({ profile, onClose, onSaved, onDelete }: { profile: Parti
 }
 
 function GroupEditor({ group, vertical, profiles, versions, onClose, onSaved, onDelete }: { group: Partial<Group>; vertical: Vertical; profiles: Profile[]; versions: string[]; onClose: () => void; onSaved: () => void; onDelete: () => void }) {
-  const [f, setF] = useState({ name: group.name ?? '', description: group.description ?? '', profileId: group.profileId ?? '', updateChannel: group.updateChannel ?? '', pinnedVersion: group.pinnedVersion ?? '', audience: group.audience ?? '', tier: group.tier ?? '', autoUpdate: group.autoUpdate ?? '' });
+  const [f, setF] = useState({ name: group.name ?? '', description: group.description ?? '', profileId: group.profileId ?? '', updateChannel: group.updateChannel ?? '', pinnedVersion: group.pinnedVersion ?? '', audience: group.audience ?? '', tier: group.tier ?? '', autoUpdate: group.autoUpdate ?? '', mdm: !!group.mdm });
   const { busy, run } = useAction();
+  // The MDM add-on, as FBRX Command's operator sells it (its price is the same for every computer, whatever its edition).
+  const plans = useQuery<{ mdm: MdmPricing }>('/v1/plans');
+  const mdm = plans.data?.mdm;
   const save = () =>
     run(
       'save',
@@ -242,6 +247,7 @@ function GroupEditor({ group, vertical, profiles, versions, onClose, onSaved, on
           audience: f.audience || null,
           tier: f.tier || null,
           autoUpdate: f.autoUpdate || null,
+          mdm: f.mdm,
         }).then(onSaved),
       'Group saved',
     );
@@ -299,6 +305,14 @@ function GroupEditor({ group, vertical, profiles, versions, onClose, onSaved, on
             <Select value={f.pinnedVersion} onChange={(e) => setF({ ...f, pinnedVersion: e.target.value })} options={[{ value: '', label: 'Not pinned' }, ...versions.map((v) => ({ value: v, label: v }))]} />
           </Field>
         </div>
+        {(mdm?.available || f.mdm) && (
+          <Field
+            label="Device management"
+            help={mdm?.available ? `The MDM add-on: ${formatPrice(mdm.perEndpoint)} a computer a month, whatever its edition, for every computer in this group.` : 'The MDM add-on is not sold on this FBRX Command right now: nothing is charged for it.'}
+          >
+            <Toggle checked={f.mdm} onChange={(v) => setF({ ...f, mdm: v })} label={f.mdm ? 'Managed with the MDM add-on' : 'Not managed'} />
+          </Field>
+        )}
       </div>
     </Modal>
   );

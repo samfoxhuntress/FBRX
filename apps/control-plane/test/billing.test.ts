@@ -34,7 +34,8 @@ function fakeStripe() {
       res.end(JSON.stringify(o));
     };
     if (req.headers.authorization !== 'Bearer sk_test_123') return json({ error: { message: 'bad key' } }, 401);
-    if (url.pathname === '/v1/prices') return json({ data: [{ id: `price_${url.searchParams.get('lookup_keys[]')}` }] });
+    // Every price charges $4 a month here (only the Pricing page reads the amount).
+    if (url.pathname === '/v1/prices') return json({ data: [{ id: `price_${url.searchParams.get('lookup_keys[]')}`, unit_amount: 400, recurring: { interval: 'month' } }] });
     if (url.pathname === '/v1/customers') return json({ id: 'cus_1' });
     if (url.pathname === '/v1/checkout/sessions') return json({ id: 'cs_1', url: 'https://checkout.example/cs_1' });
     if (url.pathname === '/v1/billing_portal/sessions') return json({ url: 'https://billing.example/portal' });
@@ -377,5 +378,55 @@ describe('FBRX accounts and what they buy', () => {
     expect(await ok('DELETE', '/v1/accounts/me', { password: PASSWORD }, token)).toMatchObject({ ok: true, note: null });
     expect(stripe.calls.some((c) => c.method === 'DELETE' && c.path === '/v1/subscriptions/sub_2')).toBe(true);
     expect((await call('GET', '/v1/accounts/me', undefined, token)).status).toBe(401);
+  });
+
+  it('sells the MDM add-on at the price the operator sets, the same for every computer whatever its edition', async () => {
+    const { token: op } = await ok('POST', '/v1/auth/login', { email: 'op@fbrx.example', password: PASSWORD });
+    // Not sold until the operator says so; Stripe's price under the add-on's lookup key is checked against it.
+    expect(await ok('GET', '/v1/admin/pricing', undefined, op)).toMatchObject({ mdm: { available: false, perEndpoint: 400 }, productId: 'fbrx_mdm_tenant_monthly', stripe: { found: true, unitAmount: 400, interval: 'month' } });
+    expect((await ok('GET', '/v1/plans')).mdm).toEqual({ available: false, perEndpoint: 400 });
+    expect((await call('POST', '/v1/admin/pricing', { mdm: { perEndpoint: 40_000 } }, op)).status).toBe(400);
+
+    // An organization with two computers in a group managed with MDM: one runs Ultra, the other Essentials.
+    const email = 'owner@lake.example';
+    const owner = await ok('POST', '/v1/accounts/signup', { email, name: 'Lake', password: PASSWORD });
+    await ok('POST', '/v1/accounts/verify', { token: linkFor(email, 'verify') });
+    const t = await ok('POST', '/v1/accounts/tenants', { name: 'Lake Labs', kind: 'business' }, owner.token);
+    const { token: admin } = await ok('POST', '/v1/auth/login', { email, password: PASSWORD });
+    // Only the operator sets prices.
+    expect((await call('POST', '/v1/admin/pricing', { mdm: { available: true } }, admin)).status).toBe(403);
+    const group = await ok('POST', '/v1/admin/groups', { name: 'Managed', mdm: true }, admin);
+    expect(group.mdm).toBe(true);
+    const { token: enroll } = await ok('POST', '/v1/admin/enrollment-tokens', { label: 'Managed', groupId: group.id }, admin);
+    const pcs: Array<{ deviceId: string }> = [];
+    for (const n of [1, 2]) pcs.push(await ok('POST', '/v1/enroll', { token: enroll, protocolVersion: 1, device: { name: `lake-${n}`, hostname: `lake-${n}`, platform: 'win32', arch: 'x64', osVersion: '11', appVersion: '2.2.0', machineId: `lake-m-${n}` } }));
+    await ok('PATCH', `/v1/admin/devices/${pcs[0]!.deviceId}`, { tier: 'ultra' }, admin);
+    const end = Math.floor(Date.now() / 1000) + 30 * 86400;
+    stripe.subscriptions.set('sub_m', { id: 'sub_m', customer: 'cus_1', status: 'active', metadata: { fbrx_tenant: t.tenantId }, items: { data: [{ id: 'si_mcmd', quantity: 1, current_period_end: end, price: { id: 'p', lookup_key: 'fbrx_command_tenant_monthly' } }] } });
+    await stripeEvent({ id: 'evt_m1', type: 'checkout.session.completed', data: { object: { mode: 'subscription', subscription: 'sub_m' } } });
+    const items = () => stripe.subscriptions.get('sub_m').items.data.map((i: any) => `${i.price.lookup_key}=${i.quantity}`).sort();
+
+    // Not sold yet: the computers are counted, nothing is charged for them.
+    const before = (await ok('POST', '/v1/admin/billing/sync', {}, admin)).plan;
+    expect(before).toMatchObject({ monthly: 5499 + 959, mdm: { available: false, perEndpoint: 400, managed: 2 } });
+    expect(items()).not.toContain('fbrx_mdm_tenant_monthly=2');
+
+    // The operator sells it at $3.50: both computers, Ultra and Essentials alike, at $3.50 each.
+    await ok('POST', '/v1/admin/pricing', { mdm: { available: true, perEndpoint: 350 } }, op);
+    expect((await ok('GET', '/v1/plans')).mdm).toEqual({ available: true, perEndpoint: 350 });
+    expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).plan).toMatchObject({ monthly: 5499 + 959 + 2 * 350, mdm: { available: true, managed: 2 } });
+    expect(items()).toContain('fbrx_mdm_tenant_monthly=2');
+    // Stripe charges $4 while the operator asks $3.50: the Pricing page says so.
+    expect((await ok('GET', '/v1/admin/pricing', undefined, op)).stripe.unitAmount).toBe(400);
+
+    // A computer leaves the group: one fewer. The operator stops selling it: none.
+    await ok('PATCH', `/v1/admin/devices/${pcs[1]!.deviceId}`, { groupId: null }, admin);
+    expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).changed).toEqual(['fbrx_mdm_tenant_monthly=1']);
+    await ok('POST', '/v1/admin/pricing', { mdm: { available: false } }, op);
+    const after = await ok('POST', '/v1/admin/billing/sync', {}, admin);
+    expect(after.plan.monthly).toBe(5499 + 959);
+    expect(items()).toContain('fbrx_mdm_tenant_monthly=0');
+    // Every change of price is in the audit log.
+    expect(cp.ctx.db.all<{ action: string }>("SELECT action FROM audit_log WHERE action = 'pricing.mdm'")).toHaveLength(2);
   });
 });

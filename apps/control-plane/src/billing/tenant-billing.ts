@@ -1,10 +1,11 @@
-import { EDITION_PLANS, LEARNER_TIER, TIERS, isLearner, licenseEditionFor, tenantMonthlyTotal, type TenantPlanView, type Tier } from '@fbrx/shared';
+import { EDITION_PLANS, LEARNER_TIER, MDM_ADDON, TIERS, isLearner, licenseEditionFor, tenantMonthlyTotal, type TenantPlanView, type Tier } from '@fbrx/shared';
 import type { Db } from '@fbrx/shared/node';
 import { signLicense } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
 import { givenEdition } from '../services/device-config';
 import { LICENSE_SLACK_DAYS, isValid, planEntitlement } from './entitlements';
+import { mdmManaged, mdmPricing } from './pricing';
 import type { Stripe } from './stripe';
 
 /**
@@ -13,6 +14,9 @@ import type { Stripe } from './stripe';
  * off, Black Hole as a full-price add-on, Essentials free. With the plan active, FBRX Command holds a license for the
  * organization that allows everything (Black Hole); each computer runs what it is given, Essentials when nobody gave it
  * anything. Without the plan, its computers run Essentials.
+ *
+ * The MDM add-on, once the operator sells it, adds each computer the organization's groups manage with it, at one price
+ * whatever the computer's edition (pricing.ts).
  *
  * Organizations FBRX Command's operator set up by hand (`billing = 'manual'`) keep the licenses the operator issues.
  */
@@ -39,14 +43,17 @@ export function tenantPlanView(ctx: AppContext, tenantId: string): TenantPlanVie
   const t = ctx.db.get<{ billing: string | null; stripe_customer_id: string | null }>('SELECT billing, stripe_customer_id FROM tenants WHERE id = ?', tenantId);
   const e = planEntitlement(ctx.db, tenantId);
   const computers = computersByTier(ctx.db, tenantId);
+  const pricing = mdmPricing(ctx.db);
+  const managed = mdmManaged(ctx.db, tenantId);
   return {
     billing: t?.billing === 'cloud' ? 'cloud' : 'manual',
     active: !!e && isValid(e),
     periodEnd: e?.period_end ?? null,
     status: e?.status ?? null,
     computers,
-    monthly: tenantMonthlyTotal(computers),
+    monthly: tenantMonthlyTotal(computers, { managed, pricing }),
     portal: !!t?.stripe_customer_id && !!ctx.config.cloud.stripe,
+    mdm: { ...pricing, managed },
   };
 }
 
@@ -99,7 +106,8 @@ export function syncTenantLicense(ctx: AppContext, tenantId: string): void {
 
 /**
  * Brings the plan's per-computer items in Stripe to the organization's computers (each edition's tenant price, as many
- * as its computers run). Stripe prorates the change on the next invoice.
+ * as its computers run, and the MDM add-on for the computers its groups manage while the add-on is sold; none when it
+ * is not). Stripe prorates the change on the next invoice.
  */
 export async function syncSeats(ctx: AppContext, stripe: Stripe | null, tenantId: string): Promise<{ changed: string[] }> {
   const t = ctx.db.get<{ billing: string | null }>('SELECT billing FROM tenants WHERE id = ?', tenantId);
@@ -107,10 +115,13 @@ export async function syncSeats(ctx: AppContext, stripe: Stripe | null, tenantId
   if (!stripe || t?.billing !== 'cloud' || !e || e.source !== 'stripe' || !isValid(e)) return { changed: [] };
   const sub = await stripe.subscription(e.external_id);
   const computers = computersByTier(ctx.db, tenantId);
+  const pricing = mdmPricing(ctx.db);
+  const wanted: Array<[string, number]> = [
+    ...(['basic', 'ultra', 'blackhole'] as const).map((tier): [string, number] => [EDITION_PLANS[tier].tenantProductId!, computers[tier]]),
+    [MDM_ADDON.productId, pricing.available ? mdmManaged(ctx.db, tenantId) : 0],
+  ];
   const changed: string[] = [];
-  for (const tier of ['basic', 'ultra', 'blackhole'] as const) {
-    const productId = EDITION_PLANS[tier].tenantProductId!;
-    const want = computers[tier];
+  for (const [productId, want] of wanted) {
     const item = sub.items.data.find((i) => i.price.lookup_key === productId);
     if (item && (item.quantity ?? 0) !== want) {
       await stripe.updateItemQuantity(item.id, want);

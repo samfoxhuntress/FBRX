@@ -26,6 +26,7 @@ import { HelpdeskPage } from './pages/helpdesk';
 import { MessagesPage } from './pages/messages';
 import { AccountsPage, BillingPage, MembersPage } from './pages/billing';
 import { CloudAiPage } from './pages/cloud-ai';
+import { PricingPage } from './pages/pricing';
 
 export function App() {
   const [phase, setPhase] = useState<'loading' | 'setup' | 'login' | 'ready'>('loading');
@@ -111,6 +112,7 @@ function Console() {
     ...(superadmin ? [{ id: 'tenants', label: 'Tenants', icon: 'globe', section: 'Platform' } as NavItem] : []),
     ...(superadmin ? [{ id: 'accounts', label: 'FBRX accounts', icon: 'users', section: 'Platform' } as NavItem] : []),
     ...(superadmin ? [{ id: 'cloud-ai', label: 'Cloud AI', icon: 'sparkles', section: 'Platform' } as NavItem] : []),
+    ...(superadmin ? [{ id: 'pricing', label: 'Pricing', icon: 'tag', section: 'Platform' } as NavItem] : []),
     ...(app.can('users.manage') ? [{ id: 'members', label: 'Members', icon: 'users', section: 'Access' } as NavItem] : []),
     ...(app.can('billing.read') ? [{ id: 'billing', label: 'Billing', icon: 'tag', section: 'Access' } as NavItem] : []),
     ...(app.can('users.manage') ? [{ id: 'users', label: 'Users & API keys', icon: 'users', section: 'Access' } as NavItem] : []),
@@ -118,7 +120,7 @@ function Console() {
     ...(app.can('audit.read') ? [{ id: 'audit', label: 'Audit log', icon: 'history', section: 'Access' } as NavItem] : []),
   ];
   const activeNav = route.page === 'device' ? 'devices' : route.page;
-  const needsTenant = !app.tenantId && !['overview', 'tenants', 'releases', 'account', 'accounts', 'cloud-ai', 'audit', 'licenses', 'devices', 'events', 'helpdesk'].includes(route.page);
+  const needsTenant = !app.tenantId && !['overview', 'tenants', 'releases', 'account', 'accounts', 'cloud-ai', 'pricing', 'audit', 'licenses', 'devices', 'events', 'helpdesk'].includes(route.page);
 
   const page = (() => {
     if (needsTenant) return <div className="fx-page"><h1>Select a tenant</h1><p className="fx-secondary">Choose an organization in the top bar to manage its configuration.</p></div>;
@@ -167,6 +169,8 @@ function Console() {
         return <AccountsPage />;
       case 'cloud-ai':
         return <CloudAiPage />;
+      case 'pricing':
+        return <PricingPage />;
       default:
         return <OverviewPage />;
     }

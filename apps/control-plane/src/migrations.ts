@@ -599,4 +599,12 @@ export const CP_MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 14,
+    name: 'mdm-addon',
+    // The MDM add-on: a group's computers are managed with it (and counted for it, at the price the operator sets).
+    up: `
+      ALTER TABLE groups ADD COLUMN mdm INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ];
