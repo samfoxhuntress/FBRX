@@ -36,7 +36,9 @@ gate services in the runtime, the tier decides how far the product the user sees
 ## Prices
 
 One list, in `packages/shared/src/plans.ts`, used by the app, FBRX Command, the website and billing. US dollars per
-month; the product ids are the Stripe price lookup keys and the App Store / Google Play subscription ids.
+month; the product ids are the Stripe price lookup keys and the App Store / Google Play subscription ids. These are
+where the prices start: FBRX Command's operator can change them in **Pricing** (below), and organizations' bills and
+Stripe follow.
 
 | | On its own | Through an FBRX Command tenant | Product ids |
 | --- | --- | --- | --- |
@@ -56,7 +58,21 @@ add-on's price, on top of its edition. Stripe charges what its price under `fbrx
 page checks that it agrees with the price set there, and shows what the add-on earns after card fees and the cost of
 looking after a managed computer.
 
-A tenant's bill is the FBRX Command plan plus each computer at its edition's tenant price (`tenantMonthlyTotal`); in the cloud, FBRX Command counts the computers and keeps Stripe in step (ACCOUNTS.md).
+**The operator's price list** (FBRX Command → **Pricing**, the `PriceBook` in `plans.ts`) sets:
+
+* Standard and Ultra on their own (set the same in App Store Connect and the Google Play Console, which charge their own);
+* the **organization fee**, never discounted: one for Work and School organizations, and optionally another for larger
+  ones (from so many computers, Essentials included, `fbrx_command_large_monthly`) and for Home ones
+  (`fbrx_command_home_monthly`);
+* each **computer's price in an organization** (Standard, Ultra, Black Hole; Essentials is free, student and child
+  computers are billed as Standard);
+* the **volume discount**: up to five steps, each so much off every paid computer once an organization has so many
+  (the highest step reached counts). Stripe applies it as a coupon on the computers' prices, never on the fee or MDM.
+
+A tenant's bill is its organization fee plus each computer at its edition's price less the volume discount, and the
+MDM add-on (`organizationBill`); in the cloud, FBRX Command counts the computers and keeps Stripe in step
+(ACCOUNTS.md). Until the operator changes it, the list is the table above. The app and the website show the table
+above; `GET /v1/plans` gives the operator's prices.
 
 **The Standard trial.** A computer on its own with nothing bought may run Standard free for `STANDARD_TRIAL_DAYS` (7)
 days, once (`edition.startTrial`; Settings → Edition). Standard was free on a computer on its own until 2.0: a computer

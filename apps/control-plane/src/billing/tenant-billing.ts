@@ -1,22 +1,22 @@
-import { EDITION_PLANS, LEARNER_TIER, MDM_ADDON, TIERS, isLearner, licenseEditionFor, tenantMonthlyTotal, type TenantPlanView, type Tier } from '@fbrx/shared';
+import { COMMAND_FEE_PRODUCTS, LEARNER_TIER, MDM_ADDON, TIERS, VERTICALS, isLearner, licenseEditionFor, organizationBill, type OrganizationBill, type TenantPlanView, type Tier, type Vertical } from '@fbrx/shared';
 import type { Db } from '@fbrx/shared/node';
 import { signLicense } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
 import { givenEdition } from '../services/device-config';
 import { LICENSE_SLACK_DAYS, isValid, planEntitlement } from './entitlements';
-import { mdmManaged, mdmPricing } from './pricing';
-import type { Stripe } from './stripe';
+import { knownStripePrice, mdmManaged, mdmPricing, priceBook } from './pricing';
+import { VOLUME_COUPON_PREFIX, discountCoupon, itemProduct, type Stripe } from './stripe';
 
 /**
- * An organization's FBRX Command in the cloud (`billing = 'cloud'`): the FBRX Command plan ($54.99 a month) and each of
- * its computers at its edition's tenant price, counted from what the organization gives them: Standard and Ultra at 20%
- * off, Black Hole as a full-price add-on, Essentials free. With the plan active, FBRX Command holds a license for the
- * organization that allows everything (Black Hole); each computer runs what it is given, Essentials when nobody gave it
- * anything. Without the plan, its computers run Essentials.
+ * An organization's FBRX Command in the cloud (`billing = 'cloud'`): its organization fee (by its kind and size) and
+ * each of its computers at its edition's price, counted from what the organization gives them, less the volume
+ * discount; Essentials is free. The prices are the operator's price list (pricing.ts). With the plan active, FBRX
+ * Command holds a license for the organization that allows everything (Black Hole); each computer runs what it is
+ * given, Essentials when nobody gave it anything. Without the plan, its computers run Essentials.
  *
  * The MDM add-on, once the operator sells it, adds each computer the organization's groups manage with it, at one price
- * whatever the computer's edition (pricing.ts).
+ * whatever the computer's edition.
  *
  * Organizations FBRX Command's operator set up by hand (`billing = 'manual'`) keep the licenses the operator issues.
  */
@@ -39,21 +39,29 @@ export function computersByTier(db: Db, tenantId: string): Record<Tier, number> 
   return out;
 }
 
+/** The organization's monthly bill at the operator's prices, from its kind and what its computers run. */
+export function tenantBill(ctx: AppContext, tenantId: string): { bill: OrganizationBill; computers: Record<Tier, number>; managed: number } {
+  const vertical = ctx.db.get<{ vertical: string | null }>('SELECT vertical FROM tenants WHERE id = ?', tenantId)?.vertical ?? null;
+  const kind = (VERTICALS as readonly string[]).includes(vertical ?? '') ? (vertical as Vertical) : null;
+  const computers = computersByTier(ctx.db, tenantId);
+  const managed = mdmManaged(ctx.db, tenantId);
+  return { bill: organizationBill(priceBook(ctx.db), { kind, computers, mdm: { managed, pricing: mdmPricing(ctx.db) } }), computers, managed };
+}
+
 export function tenantPlanView(ctx: AppContext, tenantId: string): TenantPlanView {
   const t = ctx.db.get<{ billing: string | null; stripe_customer_id: string | null }>('SELECT billing, stripe_customer_id FROM tenants WHERE id = ?', tenantId);
   const e = planEntitlement(ctx.db, tenantId);
-  const computers = computersByTier(ctx.db, tenantId);
-  const pricing = mdmPricing(ctx.db);
-  const managed = mdmManaged(ctx.db, tenantId);
+  const { bill, computers, managed } = tenantBill(ctx, tenantId);
   return {
     billing: t?.billing === 'cloud' ? 'cloud' : 'manual',
     active: !!e && isValid(e),
     periodEnd: e?.period_end ?? null,
     status: e?.status ?? null,
     computers,
-    monthly: tenantMonthlyTotal(computers, { managed, pricing }),
+    monthly: bill.total,
+    bill,
     portal: !!t?.stripe_customer_id && !!ctx.config.cloud.stripe,
-    mdm: { ...pricing, managed },
+    mdm: { ...mdmPricing(ctx.db), managed },
   };
 }
 
@@ -105,31 +113,64 @@ export function syncTenantLicense(ctx: AppContext, tenantId: string): void {
 }
 
 /**
- * Brings the plan's per-computer items in Stripe to the organization's computers (each edition's tenant price, as many
- * as its computers run, and the MDM add-on for the computers its groups manage while the add-on is sold; none when it
- * is not). Stripe prorates the change on the next invoice.
+ * Brings the organization's Stripe subscription to its bill: the organization fee it pays now (the others at none),
+ * each edition's computers, the MDM add-on for the computers its groups manage while it is sold (none when it is not),
+ * and the volume discount as a coupon on the computers' prices. An item on an older price of its product moves to the
+ * current one. Stripe prorates the changes on the next invoice.
  */
-export async function syncSeats(ctx: AppContext, stripe: Stripe | null, tenantId: string): Promise<{ changed: string[] }> {
+export function syncSeats(ctx: AppContext, stripe: Stripe | null, tenantId: string): Promise<{ changed: string[] }> {
+  // One at a time per organization: two at once would both read the subscription, and both add the same item.
+  const next = (syncing.get(tenantId) ?? Promise.resolve()).catch(() => undefined).then(() => syncSeatsNow(ctx, stripe, tenantId));
+  syncing.set(tenantId, next);
+  void next.then(
+    () => syncing.get(tenantId) === next && syncing.delete(tenantId),
+    () => syncing.get(tenantId) === next && syncing.delete(tenantId),
+  );
+  return next;
+}
+
+const syncing = new Map<string, Promise<unknown>>();
+
+async function syncSeatsNow(ctx: AppContext, stripe: Stripe | null, tenantId: string): Promise<{ changed: string[] }> {
   const t = ctx.db.get<{ billing: string | null }>('SELECT billing FROM tenants WHERE id = ?', tenantId);
   const e = planEntitlement(ctx.db, tenantId);
   if (!stripe || t?.billing !== 'cloud' || !e || e.source !== 'stripe' || !isValid(e)) return { changed: [] };
   const sub = await stripe.subscription(e.external_id);
-  const computers = computersByTier(ctx.db, tenantId);
-  const pricing = mdmPricing(ctx.db);
+  const { bill } = tenantBill(ctx, tenantId);
+  const fee = COMMAND_FEE_PRODUCTS[bill.fee];
   const wanted: Array<[string, number]> = [
-    ...(['basic', 'ultra', 'blackhole'] as const).map((tier): [string, number] => [EDITION_PLANS[tier].tenantProductId!, computers[tier]]),
-    [MDM_ADDON.productId, pricing.available ? mdmManaged(ctx.db, tenantId) : 0],
+    // The fee it pays first: should adding it fail, the one it paid stays.
+    [fee, 1],
+    ...Object.values(COMMAND_FEE_PRODUCTS)
+      .filter((id) => id !== fee)
+      .map((id): [string, number] => [id, 0]),
+    ...bill.lines.filter((l) => l.item !== 'fee' && l.item !== 'mdm').map((l): [string, number] => [l.productId, l.quantity]),
+    [MDM_ADDON.productId, bill.lines.find((l) => l.item === 'mdm')?.quantity ?? 0],
   ];
+  const known = (priceId: string) => knownStripePrice(ctx.db, priceId);
   const changed: string[] = [];
   for (const [productId, want] of wanted) {
-    const item = sub.items.data.find((i) => i.price.lookup_key === productId);
-    if (item && (item.quantity ?? 0) !== want) {
-      await stripe.updateItemQuantity(item.id, want);
+    const item = sub.items.data.find((i) => itemProduct(i, known) === productId);
+    if (item) {
+      const current = want > 0 ? await stripe.priceFor(productId) : item.price.id;
+      if (item.price.id !== current) await stripe.updateItemPrice(item.id, current, want);
+      else if ((item.quantity ?? 0) !== want) await stripe.updateItemQuantity(item.id, want);
+      else continue;
       changed.push(`${productId}=${want}`);
-    } else if (!item && want > 0) {
+    } else if (want > 0) {
       await stripe.addItem(sub.id, productId, want);
       changed.push(`${productId}=${want}`);
     }
+  }
+  // The volume discount: FBRX's coupon for it on the computers' prices, beside any other discount (a promotion code).
+  const discounts = (sub.discounts ?? []).map((d) => (typeof d === 'string' ? { id: d } : d));
+  const ours = discounts.filter((d) => discountCoupon(d)?.startsWith(VOLUME_COUPON_PREFIX));
+  const seats = bill.lines.filter((l) => l.item !== 'fee' && l.item !== 'mdm' && l.quantity > 0);
+  const coupon = bill.percentOff ? await stripe.volumeCoupon(bill.percentOff, await Promise.all(seats.map(async (l) => (await stripe.price(l.productId)).product))) : null;
+  if (ours.length !== (coupon ? 1 : 0) || (coupon && discountCoupon(ours[0]!) !== coupon)) {
+    const others = discounts.filter((d) => !ours.includes(d)).map((d) => ({ discount: d.id }));
+    await stripe.setDiscounts(sub.id, [...(coupon ? [{ coupon }] : []), ...others]);
+    changed.push(`volume=${bill.percentOff}%`);
   }
   return { changed };
 }

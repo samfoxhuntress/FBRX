@@ -1,20 +1,21 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { COMMAND_PLAN, MDM_ADDON } from '@fbrx/shared';
+import { COMMAND_FEE_PRODUCTS, MDM_ADDON, priceBookProducts } from '@fbrx/shared';
 import type { AppContext } from '../context';
 import { adminAuth, requirePerm, requireTenant } from '../auth';
 import { badRequest } from '../errors';
 import { requireStripe, stripeOf } from '../billing/stripe';
-import { scheduleSeatSync, syncSeats, syncTenantLicense, tenantPlanView } from '../billing/tenant-billing';
-import { MdmPricingInput, mdmPricing, setMdmPricing } from '../billing/pricing';
+import { scheduleSeatSync, syncSeats, syncTenantLicense, tenantBill, tenantPlanView } from '../billing/tenant-billing';
+import { MdmPricingInput, PriceBookInput, mdmPricing, priceBook, rememberStripePrice, setMdmPricing, setPriceBook } from '../billing/pricing';
 
 /**
- * FBRX Command → Billing: the organization's plan in the cloud. Owners start it (Stripe Checkout for the FBRX Command
- * plan), manage it (the Stripe portal), and see what a month comes to; the per-computer items follow the computers by
+ * FBRX Command → Billing: the organization's plan in the cloud. Owners start it (Stripe Checkout for its organization
+ * fee), manage it (the Stripe portal), and see what a month comes to; the per-computer items follow the computers by
  * themselves.
  *
- * FBRX Command → Pricing (the platform operator): the MDM add-on, whether it is sold and its price per managed computer,
- * and whether Stripe's price under the add-on's lookup key charges the same.
+ * FBRX Command → Pricing (the platform operator): the price list (the editions on their own, the organization fees,
+ * each computer's price in an organization and the volume discount) and the MDM add-on; whether Stripe charges the
+ * same under each lookup key, and bringing Stripe in step.
  */
 export async function billingAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   app.addHook('preHandler', adminAuth(ctx));
@@ -42,7 +43,7 @@ export async function billingAdminRoutes(app: FastifyInstance, ctx: AppContext) 
     }
     const session = await s.checkout({
       customer,
-      items: [{ productId: COMMAND_PLAN.productId, quantity: 1 }],
+      items: [{ productId: COMMAND_FEE_PRODUCTS[tenantBill(ctx, tenantId).bill.fee], quantity: 1 }],
       successUrl: `${consoleUrl()}?checkout=done`,
       cancelUrl: `${consoleUrl()}?checkout=canceled`,
       reference: tenantId,
@@ -60,32 +61,74 @@ export async function billingAdminRoutes(app: FastifyInstance, ctx: AppContext) 
     return { url: (await requireStripe(ctx.config.cloud).portal({ customer: t.stripe_customer_id, returnUrl: consoleUrl() })).url };
   });
 
-  /** The MDM add-on as the operator set it, and what Stripe charges for it (null: Stripe is not set up). */
+  /** What Stripe charges under each lookup key the price list uses (null: Stripe is not set up here). */
+  async function stripePrices() {
+    if (!stripe) return null;
+    const out: Record<string, { found: boolean; unitAmount: number | null; interval: string | null; error?: string }> = {};
+    await Promise.all(
+      priceBookProducts(priceBook(ctx.db), mdmPricing(ctx.db)).map(async ({ productId }) => {
+        try {
+          const p = await stripe.priceInfo(productId);
+          out[productId] = p ? { found: true, unitAmount: p.unitAmount, interval: p.interval } : { found: false, unitAmount: null, interval: null };
+        } catch (err) {
+          out[productId] = { found: false, unitAmount: null, interval: null, error: (err as Error).message };
+        }
+      }),
+    );
+    return out;
+  }
+
+  /** The price list and the MDM add-on as the operator set them, and what Stripe charges for each. */
   app.get('/v1/admin/pricing', async (req) => {
     requirePerm(req, 'tenants.manage');
+    const book = priceBook(ctx.db);
     const mdm = mdmPricing(ctx.db);
-    let stripePrice: { found: boolean; unitAmount: number | null; interval: string | null; error?: string } | null = null;
-    if (stripe) {
-      try {
-        const p = await stripe.priceInfo(MDM_ADDON.productId);
-        stripePrice = p ? { found: true, unitAmount: p.unitAmount, interval: p.interval } : { found: false, unitAmount: null, interval: null };
-      } catch (err) {
-        stripePrice = { found: false, unitAmount: null, interval: null, error: (err as Error).message };
-      }
-    }
-    return { mdm, productId: MDM_ADDON.productId, maxPerEndpoint: MDM_ADDON.maxPerEndpoint, stripe: stripePrice };
+    return { book, mdm, products: priceBookProducts(book, mdm), maxPerEndpoint: MDM_ADDON.maxPerEndpoint, stripe: await stripePrices() };
   });
 
-  /** Sells the MDM add-on or stops, and sets its price; every organization's plan follows. */
+  /** Sets the price list or the MDM add-on (selling it or not, its price); every organization's plan follows. */
   app.post('/v1/admin/pricing', async (req) => {
     const p = requirePerm(req, 'tenants.manage');
-    const body = z.object({ mdm: MdmPricingInput }).strict().parse(req.body);
-    const before = mdmPricing(ctx.db);
-    const mdm = setMdmPricing(ctx, body.mdm);
-    ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId: null, ip: req.ip }, 'pricing.mdm', { type: 'pricing' }, { before, after: mdm });
-    // Selling it or not changes what each organization's plan carries.
-    if (before.available !== mdm.available) for (const t of ctx.db.all<{ id: string }>("SELECT id FROM tenants WHERE billing = 'cloud'")) scheduleSeatSync(ctx, stripe, t.id, 0);
-    return { mdm };
+    const body = z.object({ book: PriceBookInput.optional(), mdm: MdmPricingInput.optional() }).strict().parse(req.body);
+    const actor = { type: 'user' as const, id: p.id, label: p.label, tenantId: null, ip: req.ip };
+    let resync = false;
+    if (body.book) {
+      const before = priceBook(ctx.db);
+      setPriceBook(ctx, body.book);
+      ctx.audit.record(actor, 'pricing.book', { type: 'pricing' }, { before, after: body.book });
+      // The fees and the volume discount decide which items and coupon an organization's plan carries.
+      resync = JSON.stringify(before.fees) !== JSON.stringify(body.book.fees) || JSON.stringify(before.volume) !== JSON.stringify(body.book.volume);
+    }
+    if (body.mdm) {
+      const before = mdmPricing(ctx.db);
+      const after = setMdmPricing(ctx, body.mdm);
+      ctx.audit.record(actor, 'pricing.mdm', { type: 'pricing' }, { before, after });
+      resync ||= before.available !== after.available;
+    }
+    if (resync) for (const t of ctx.db.all<{ id: string }>("SELECT id FROM tenants WHERE billing = 'cloud'")) scheduleSeatSync(ctx, stripe, t.id, 0);
+    return { book: priceBook(ctx.db), mdm: mdmPricing(ctx.db) };
+  });
+
+  /**
+   * Brings Stripe to the price list: each price Stripe lacks or charges differently gets a new monthly price that takes
+   * its lookup key (on the product the old price was on, or a new one). People who already pay keep their price;
+   * organizations move to the new one at their next seat update.
+   */
+  app.post('/v1/admin/pricing/stripe', async (req) => {
+    const p = requirePerm(req, 'tenants.manage');
+    const s = requireStripe(ctx.config.cloud);
+    const created: string[] = [];
+    for (const want of priceBookProducts(priceBook(ctx.db), mdmPricing(ctx.db))) {
+      const now = await s.priceInfo(want.productId);
+      if (now && now.unitAmount === want.amount && now.interval === 'month') continue;
+      // The old price stays known as this product for whoever still pays it.
+      if (now) rememberStripePrice(ctx.db, now.id, want.productId);
+      await s.createPrice({ productId: want.productId, unitAmount: want.amount, product: now?.product ?? null, name: `FBRX: ${want.label}` });
+      created.push(want.productId);
+    }
+    ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId: null, ip: req.ip }, 'pricing.stripe', { type: 'pricing' }, { created });
+    if (created.length) for (const t of ctx.db.all<{ id: string }>("SELECT id FROM tenants WHERE billing = 'cloud'")) scheduleSeatSync(ctx, stripe, t.id, 0);
+    return { created, stripe: await stripePrices() };
   });
 
   /** Brings the plan (its license and its per-computer items) up to date now. */

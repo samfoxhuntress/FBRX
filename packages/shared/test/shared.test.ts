@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compareSemver, deepMerge, isPathLocked, satisfies, newId, decodeLicenseUnverified, parseVertical, productNameFor, resolveAudience, KIND_GROUPS, VERTICALS, VERTICAL_AUDIENCES, type LicensePayload } from '../src';
-import { COMMAND_PLAN, EDITION_PLANS, SERVER_OFFER, TIERS, atLeast, editionPoints, formatPrice, maxTier, parseTier, priceOf, tenantMonthlyTotal } from '../src';
+import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, SERVER_OFFER, TIERS, atLeast, editionPoints, formatPrice, maxTier, organizationBill, parseTier, priceOf, productById, tenantMonthlyTotal, type PriceBook } from '../src';
 import { DEFAULT_POLICY, DEFAULT_SETTINGS, THINKING_BUDGETS, thinkingBudget, thinkingLevelOf } from '../src';
 import { generateSigningKeyPair, hashPassword, licenseStatusFrom, openString, sealString, signLicense, verifyLicense, verifyPassword } from '../src/node';
 import { randomBytes } from 'node:crypto';
@@ -74,6 +74,39 @@ describe('editions and prices', () => {
     // Every paid edition has a product id for Stripe and the stores, and Black Hole is sold only in a tenant.
     for (const t of TIERS) expect(EDITION_PLANS[t].tenantProductId === null).toBe(t === 'essentials');
     expect(EDITION_PLANS.blackhole).toMatchObject({ sold: 'tenant', productId: null });
+  });
+
+  it('bills an organization from the operator’s price list: its fee by kind and size, the computers less the volume discount', () => {
+    // Until the operator changes it, the price list is the prices above.
+    expect(organizationBill(DEFAULT_PRICE_BOOK, { kind: 'education', computers: { basic: 10 } }).total).toBe(5499 + 3990);
+    const book: PriceBook = {
+      personal: { basic: 1200, ultra: 2900 },
+      seats: { basic: 1200, ultra: 2900, blackhole: 9900 },
+      volume: [
+        { from: 25, percentOff: 10 },
+        { from: 100, percentOff: 15 },
+        { from: 250, percentOff: 20 },
+      ],
+      fees: { base: 5000, large: { from: 100, monthly: 10000 }, home: 1499 },
+    };
+    // The examples on the price sheet: 20 Standard and 10 Ultra; 120 and 30; 300 and 100.
+    const bill = (kind: 'business' | 'education' | 'home', basic: number, ultra: number, essentials = 0) => organizationBill(book, { kind, computers: { basic, ultra, essentials } });
+    expect(bill('business', 20, 10)).toMatchObject({ total: 52700, fee: 'base', paid: 30, percentOff: 10 });
+    expect(bill('education', 120, 30)).toMatchObject({ total: 206350, fee: 'large', percentOff: 15 });
+    expect(bill('education', 300, 100)).toMatchObject({ total: 530000, fee: 'large', percentOff: 20 });
+    // Under 25 paid computers: list prices. Essentials computers count toward the fee's size, not the discount.
+    expect(bill('business', 20, 0, 90)).toMatchObject({ total: 10000 + 24000, fee: 'large', percentOff: 0 });
+    // Home organizations pay their own fee, at any size; MDM is charged per managed computer, never discounted.
+    const home = organizationBill(book, { kind: 'home', computers: { basic: 3 }, mdm: { managed: 3, pricing: { available: true, perEndpoint: 400 } } });
+    expect(home.lines.map((l) => [l.item, l.productId, l.total])).toEqual([
+      ['fee', 'fbrx_command_home_monthly', 1499],
+      ['basic', 'fbrx_standard_tenant_monthly', 3600],
+      ['ultra', 'fbrx_ultra_tenant_monthly', 0],
+      ['blackhole', 'fbrx_blackhole_tenant_monthly', 0],
+      ['mdm', 'fbrx_mdm_tenant_monthly', 1200],
+    ]);
+    // Each organization fee is an FBRX Command plan to Stripe.
+    expect(['fbrx_command_tenant_monthly', 'fbrx_command_large_monthly', 'fbrx_command_home_monthly'].map((id) => productById(id)?.kind)).toEqual(['command', 'command', 'command']);
   });
 });
 

@@ -14,7 +14,7 @@ import { requireStripe, stripeOf, stripeStatus, subscriptionItems, type StripeEv
 import { appleStatus, appleTestPurchase, verifyAppleJws, type AppleNotification, type AppleRenewal, type AppleTransaction } from '../billing/apple';
 import { GooglePlay, playStatus, type PlaySubscription } from '../billing/google';
 import { scheduleSeatSync, syncTenantLicense } from '../billing/tenant-billing';
-import { mdmPricing } from '../billing/pricing';
+import { knownStripePrice, mdmPricing, priceBook, rememberStripePrice } from '../billing/pricing';
 import { slugify } from './util';
 
 /**
@@ -198,14 +198,22 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
   const stripe = stripeOf(cloud);
   const play = cloud.google ? new GooglePlay(cloud.google) : null;
 
-  app.get('/v1/plans', async (): Promise<PlansInfo & { editions: typeof EDITION_PLANS; command: typeof COMMAND_PLAN; server: typeof SERVER_OFFER }> => ({
-    editions: EDITION_PLANS,
-    command: COMMAND_PLAN,
-    server: SERVER_OFFER,
-    publicSignup: cloud.publicSignup,
-    payments: { stripe: !!stripe, apple: !!cloud.apple, google: !!play },
-    mdm: mdmPricing(ctx.db),
-  }));
+  /** The price list as the operator set it: the editions and the FBRX Command plan carry its prices too. */
+  app.get('/v1/plans', async (): Promise<PlansInfo & { editions: typeof EDITION_PLANS; command: typeof COMMAND_PLAN; server: typeof SERVER_OFFER }> => {
+    const prices = priceBook(ctx.db);
+    const editions = Object.fromEntries(
+      TIERS.map((t) => [t, { ...EDITION_PLANS[t], monthly: t === 'basic' || t === 'ultra' ? prices.personal[t] : EDITION_PLANS[t].monthly, tenantMonthly: t === 'essentials' ? 0 : prices.seats[t] }]),
+    ) as typeof EDITION_PLANS;
+    return {
+      editions,
+      command: { ...COMMAND_PLAN, monthly: prices.fees.base },
+      server: SERVER_OFFER,
+      publicSignup: cloud.publicSignup,
+      payments: { stripe: !!stripe, apple: !!cloud.apple, google: !!play },
+      mdm: mdmPricing(ctx.db),
+      prices,
+    };
+  });
 
   // ------------------------------------------------------------------------------------------- accounts
   /** The website's account page opens the links; the token rides in the fragment, which never reaches a server. */
@@ -532,7 +540,9 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     const accountId = meta.fbrx_account ?? ctx.db.get<{ id: string }>('SELECT id FROM accounts WHERE stripe_customer_id = ?', sub.customer)?.id ?? null;
     const tenantId = meta.fbrx_tenant ?? ctx.db.get<{ id: string }>('SELECT id FROM tenants WHERE stripe_customer_id = ?', sub.customer)?.id ?? null;
     const status = stripeStatus(sub.status);
-    const items = subscriptionItems(sub);
+    // A price sold under one of FBRX's lookup keys stays that product after the key moves to a newer price.
+    for (const i of sub.items.data) if (i.price.lookup_key && productById(i.price.lookup_key)) rememberStripePrice(ctx.db, i.price.id, i.price.lookup_key);
+    const items = subscriptionItems(sub, (priceId) => knownStripePrice(ctx.db, priceId));
     for (const i of items) recordPurchase(ctx, { source: 'stripe', externalId: sub.id, productId: i.productId, status, periodEnd: i.periodEnd, quantity: i.quantity, accountId: tenantId ? null : accountId, tenantId });
     endPurchase(ctx, 'stripe', sub.id, items.map((i) => i.productId));
     // An organization's plan: its license follows, and (once it starts) its computers are counted in.

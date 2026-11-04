@@ -35,6 +35,7 @@ import { accountRoutes } from './routes/accounts';
 import { billingAdminRoutes } from './routes/billing-admin';
 import { cloudAiRoutes } from './routes/cloud-ai';
 import { stripeOf } from './billing/stripe';
+import { rememberStripePrice } from './billing/pricing';
 import { scheduleSeatSync, syncSeats, syncTenantLicense } from './billing/tenant-billing';
 import { tenantScope } from './auth';
 import { CommandUpdater } from './services/command-update';
@@ -154,6 +155,9 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     reply.header('access-control-max-age', '600');
     if (req.method === 'OPTIONS') return reply.status(204).send();
   });
+  // Each Stripe price found under one of FBRX's lookup keys is remembered: it stays that product once its key moves.
+  const stripe = stripeOf(config.cloud);
+  if (stripe) stripe.onPrice = (priceId, productId) => rememberStripePrice(ctx.db, priceId, productId);
   // An organization's computers changed (their editions, their groups, members): its plan's seats follow.
   app.addHook('onResponse', async (req, reply) => {
     if (req.method === 'GET' || reply.statusCode >= 400 || !req.principal || !/^\/v1\/admin\/(devices|groups|members)\b/.test(req.url)) return;

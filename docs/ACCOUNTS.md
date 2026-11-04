@@ -171,12 +171,17 @@ the operator issues. The operator sees every account under **FBRX accounts**.
 
 ### Stripe
 
-1. In the Stripe Dashboard, make one product per plan with a **monthly recurring price**, and give each price the
-   **lookup key** from `packages/shared/src/plans.ts`: `fbrx_standard_monthly` ($4.99), `fbrx_ultra_monthly` ($11.99),
-   and for tenants `fbrx_standard_tenant_monthly` ($3.99), `fbrx_ultra_tenant_monthly` ($9.59),
-   `fbrx_blackhole_tenant_monthly` ($24.99), `fbrx_command_tenant_monthly` ($54.99), and, once the MDM add-on is on
-   sale, `fbrx_mdm_tenant_monthly` (the price set in FBRX Command → Pricing, $4 to start). FBRX finds prices by lookup key,
-   so a price change in Stripe needs no new FBRX version (move the lookup key to the new price).
+1. The prices: set them in FBRX Command → **Pricing**, then press **Update Stripe** there. It makes a **monthly
+   recurring price** in Stripe for each one Stripe lacks or charges differently, under its **lookup key** from
+   `packages/shared/src/plans.ts`: `fbrx_standard_monthly` and `fbrx_ultra_monthly` (on their own); for organizations
+   `fbrx_standard_tenant_monthly`, `fbrx_ultra_tenant_monthly` and `fbrx_blackhole_tenant_monthly` (each computer),
+   `fbrx_command_tenant_monthly` (the organization fee), `fbrx_command_large_monthly` and `fbrx_command_home_monthly`
+   (only when larger or Home organizations pay another fee) and `fbrx_mdm_tenant_monthly` (the MDM add-on). You can
+   also make them by hand in the Stripe Dashboard, one product per price, with those lookup keys; the Pricing page says
+   which agree. A new price takes the lookup key from the old one, so a price change needs no new FBRX version. People
+   who already pay keep their price (FBRX remembers every price it saw under a key); organizations move to the new
+   one at their next seat update. The volume discount is a coupon FBRX Command makes by itself
+   (`fbrx_volume_<percent>_…`), on the computers' prices only.
 2. **Settings → Payment methods**: turn on cards, Apple Pay and Google Pay. For Apple Pay, verify the website's domain
    in Stripe.
 3. **Settings → Billing → Customer portal**: turn it on, allow switching between the Standard and Ultra prices, and
@@ -187,7 +192,7 @@ the operator issues. The operator sees every account under **FBRX accounts**.
 
 | Variable | |
 | --- | --- |
-| `FBRX_STRIPE_SECRET_KEY` | A restricted key with write access to Checkout Sessions, Customers, Customer portal and Subscriptions, and read access to Prices |
+| `FBRX_STRIPE_SECRET_KEY` | A restricted key with write access to Checkout Sessions, Customers, Customer portal, Subscriptions, Prices, Products and Coupons |
 | `FBRX_STRIPE_WEBHOOK_SECRET` | The webhook's signing secret (`whsec_…`) |
 
 A subscription that fails to renew keeps counting while Stripe retries (`past_due`), then ends.

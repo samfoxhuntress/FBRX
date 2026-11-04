@@ -21,42 +21,85 @@ const readBody = (req: IncomingMessage) => new Promise<string>((r) => {
 });
 const listen = (s: Server) => new Promise<string>((r) => s.listen(0, '127.0.0.1', () => r(`http://127.0.0.1:${(s.address() as AddressInfo).port}`)));
 
-/** Just enough of Stripe: prices by lookup key, customers, Checkout, subscriptions. */
+/**
+ * Just enough of Stripe: prices by lookup key (each $4 a month until a new one takes its key), products, customers,
+ * Checkout, subscriptions with their items and discounts, coupons.
+ */
 function fakeStripe() {
   const calls: Array<{ method: string; path: string; body: string }> = [];
   const subscriptions = new Map<string, any>();
+  const coupons = new Map<string, any>();
+  /** The price under each lookup key that has a new one. */
+  const prices = new Map<string, { id: string; unit_amount: number; product: string; recurring: { interval: string } }>();
+  const priceFor = (key: string) => prices.get(key) ?? { id: `price_${key}`, unit_amount: 400, product: `prod_${key}`, recurring: { interval: 'month' } };
+  /** The lookup key a price has (none once a newer price took it). */
+  const keyOf = (priceId: string) => {
+    for (const [key, p] of prices) if (p.id === priceId) return key;
+    const key = priceId.replace(/^price_/, '');
+    return !prices.has(key) && `price_${key}` === priceId ? key : null;
+  };
   const server = createServer(async (req, res) => {
     const body = await readBody(req);
     const url = new URL(req.url!, 'http://x');
+    const f = new URLSearchParams(body);
     calls.push({ method: req.method!, path: url.pathname, body: body || url.search });
     const json = (o: unknown, status = 200) => {
       res.writeHead(status, { 'content-type': 'application/json' });
       res.end(JSON.stringify(o));
     };
     if (req.headers.authorization !== 'Bearer sk_test_123') return json({ error: { message: 'bad key' } }, 401);
-    // Every price charges $4 a month here (only the Pricing page reads the amount).
-    if (url.pathname === '/v1/prices') return json({ data: [{ id: `price_${url.searchParams.get('lookup_keys[]')}`, unit_amount: 400, recurring: { interval: 'month' } }] });
+    if (url.pathname === '/v1/prices' && req.method === 'GET') {
+      const key = url.searchParams.get('lookup_keys[]')!;
+      return json({ data: [{ ...priceFor(key), lookup_key: key }] });
+    }
+    if (url.pathname === '/v1/prices' && req.method === 'POST') {
+      const key = f.get('lookup_key')!;
+      const price = { id: `price_${key}_${prices.size + 1}`, unit_amount: Number(f.get('unit_amount')), product: f.get('product')!, recurring: { interval: f.get('recurring[interval]')! } };
+      if (f.get('transfer_lookup_key') !== 'true') return json({ error: { message: 'lookup key in use' } }, 400);
+      prices.set(key, price);
+      return json(price);
+    }
+    if (url.pathname === '/v1/products') return json({ id: `prod_new_${f.get('metadata[fbrx_product]')}` });
+    if (url.pathname === '/v1/coupons') {
+      if (coupons.has(f.get('id')!)) return json({ error: { message: 'Coupon already exists.' } }, 400);
+      coupons.set(f.get('id')!, Object.fromEntries(f));
+      return json({ id: f.get('id') });
+    }
     if (url.pathname === '/v1/customers') return json({ id: 'cus_1' });
     if (url.pathname === '/v1/checkout/sessions') return json({ id: 'cs_1', url: 'https://checkout.example/cs_1' });
     if (url.pathname === '/v1/billing_portal/sessions') return json({ url: 'https://billing.example/portal' });
     if (url.pathname === '/v1/subscription_items' && req.method === 'POST') {
-      const f = new URLSearchParams(body);
       const sub = subscriptions.get(f.get('subscription')!);
-      const item = { id: `si_${sub.items.data.length + 1}`, quantity: Number(f.get('quantity')), price: { id: f.get('price'), lookup_key: f.get('price')!.replace(/^price_/, '') } };
+      const item = { id: `si_${sub.items.data.length + 1}`, quantity: Number(f.get('quantity')), price: { id: f.get('price'), lookup_key: keyOf(f.get('price')!) } };
       sub.items.data.push(item);
       return json(item);
     }
     const si = /^\/v1\/subscription_items\/(.+)$/.exec(url.pathname);
     if (si && req.method === 'POST') {
-      for (const sub of subscriptions.values()) for (const i of sub.items.data) if (i.id === si[1]) i.quantity = Number(new URLSearchParams(body).get('quantity'));
+      for (const sub of subscriptions.values())
+        for (const i of sub.items.data)
+          if (i.id === si[1]) {
+            i.quantity = Number(f.get('quantity'));
+            if (f.get('price')) i.price = { id: f.get('price'), lookup_key: keyOf(f.get('price')!) };
+          }
       return json({ id: si[1] });
     }
     const m = /^\/v1\/subscriptions\/(.+)$/.exec(url.pathname);
     if (m && req.method === 'GET') return json(subscriptions.get(m[1]!));
+    if (m && req.method === 'POST') {
+      const sub = subscriptions.get(m[1]!);
+      const before: any[] = sub.discounts ?? [];
+      sub.discounts = [];
+      for (let i = 0; f.has(`discounts[${i}][coupon]`) || f.has(`discounts[${i}][discount]`); i++) {
+        const coupon = f.get(`discounts[${i}][coupon]`);
+        sub.discounts.push(coupon ? { id: `di_${coupon}`, source: { coupon, type: 'coupon' } } : before.find((d) => d.id === f.get(`discounts[${i}][discount]`)));
+      }
+      return json(sub);
+    }
     if (m && req.method === 'DELETE') return json({ id: m[1], status: 'canceled' });
     json({ error: { message: `no route ${url.pathname}` } }, 404);
   });
-  return { server, calls, subscriptions };
+  return { server, calls, subscriptions, coupons, prices };
 }
 
 /** Just enough of Google: the OAuth token endpoint and purchases.subscriptionsv2. */
@@ -383,7 +426,7 @@ describe('FBRX accounts and what they buy', () => {
   it('sells the MDM add-on at the price the operator sets, the same for every computer whatever its edition', async () => {
     const { token: op } = await ok('POST', '/v1/auth/login', { email: 'op@fbrx.example', password: PASSWORD });
     // Not sold until the operator says so; Stripe's price under the add-on's lookup key is checked against it.
-    expect(await ok('GET', '/v1/admin/pricing', undefined, op)).toMatchObject({ mdm: { available: false, perEndpoint: 400 }, productId: 'fbrx_mdm_tenant_monthly', stripe: { found: true, unitAmount: 400, interval: 'month' } });
+    expect(await ok('GET', '/v1/admin/pricing', undefined, op)).toMatchObject({ mdm: { available: false, perEndpoint: 400 }, stripe: { fbrx_mdm_tenant_monthly: { found: true, unitAmount: 400, interval: 'month' } } });
     expect((await ok('GET', '/v1/plans')).mdm).toEqual({ available: false, perEndpoint: 400 });
     expect((await call('POST', '/v1/admin/pricing', { mdm: { perEndpoint: 40_000 } }, op)).status).toBe(400);
 
@@ -417,7 +460,7 @@ describe('FBRX accounts and what they buy', () => {
     expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).plan).toMatchObject({ monthly: 5499 + 959 + 2 * 350, mdm: { available: true, managed: 2 } });
     expect(items()).toContain('fbrx_mdm_tenant_monthly=2');
     // Stripe charges $4 while the operator asks $3.50: the Pricing page says so.
-    expect((await ok('GET', '/v1/admin/pricing', undefined, op)).stripe.unitAmount).toBe(400);
+    expect((await ok('GET', '/v1/admin/pricing', undefined, op)).stripe.fbrx_mdm_tenant_monthly.unitAmount).toBe(400);
 
     // A computer leaves the group: one fewer. The operator stops selling it: none.
     await ok('PATCH', `/v1/admin/devices/${pcs[1]!.deviceId}`, { groupId: null }, admin);
@@ -428,5 +471,82 @@ describe('FBRX accounts and what they buy', () => {
     expect(items()).toContain('fbrx_mdm_tenant_monthly=0');
     // Every change of price is in the audit log.
     expect(cp.ctx.db.all<{ action: string }>("SELECT action FROM audit_log WHERE action = 'pricing.mdm'")).toHaveLength(2);
+  });
+
+  it('bills organizations from the operator’s price list, and brings Stripe to it', async () => {
+    const { token: op } = await ok('POST', '/v1/auth/login', { email: 'op@fbrx.example', password: PASSWORD });
+    // Until the operator sets one, the price list is the one in plans.ts; Stripe charges $4 for everything here.
+    const first = await ok('GET', '/v1/admin/pricing', undefined, op);
+    expect(first.book).toMatchObject({ personal: { basic: 499, ultra: 1199 }, seats: { ultra: 959 }, volume: [], fees: { base: 5499, large: null, home: null } });
+    expect(first.stripe.fbrx_ultra_tenant_monthly).toMatchObject({ found: true, unitAmount: 400 });
+
+    const book = {
+      personal: { basic: 1200, ultra: 2900 },
+      seats: { basic: 1200, ultra: 2900, blackhole: 9900 },
+      volume: [{ from: 2, percentOff: 10 }],
+      fees: { base: 5000, large: { from: 3, monthly: 10000 }, home: 1499 },
+    };
+    // Volume steps go up; only the operator sets prices.
+    expect((await call('POST', '/v1/admin/pricing', { book: { ...book, volume: [{ from: 5, percentOff: 10 }, { from: 3, percentOff: 20 }] } }, op)).status).toBe(400);
+    await ok('POST', '/v1/admin/pricing', { book }, op);
+    const plans = await ok('GET', '/v1/plans');
+    expect(plans.prices).toEqual(book);
+    expect([plans.editions.ultra.monthly, plans.editions.ultra.tenantMonthly, plans.command.monthly]).toEqual([2900, 2900, 5000]);
+
+    // A Work organization with two Ultra computers: the fee, and both computers 10% off.
+    const email = 'owner@delta.example';
+    const owner = await ok('POST', '/v1/accounts/signup', { email, name: 'Delta', password: PASSWORD });
+    await ok('POST', '/v1/accounts/verify', { token: linkFor(email, 'verify') });
+    const t = await ok('POST', '/v1/accounts/tenants', { name: 'Delta Co', kind: 'business' }, owner.token);
+    const { token: admin } = await ok('POST', '/v1/auth/login', { email, password: PASSWORD });
+    expect((await call('POST', '/v1/admin/pricing', { book }, admin)).status).toBe(403);
+    const { token: enroll } = await ok('POST', '/v1/admin/enrollment-tokens', { label: 'All' }, admin);
+    const pc = (n: number) => ok('POST', '/v1/enroll', { token: enroll, protocolVersion: 1, device: { name: `delta-${n}`, hostname: `delta-${n}`, platform: 'win32', arch: 'x64', osVersion: '11', appVersion: '2.2.0', machineId: `delta-m-${n}` } });
+    for (const n of [1, 2]) await ok('PATCH', `/v1/admin/devices/${(await pc(n)).deviceId}`, { tier: 'ultra' }, admin);
+    const end = Math.floor(Date.now() / 1000) + 30 * 86400;
+    stripe.subscriptions.set('sub_r', { id: 'sub_r', customer: 'cus_1', status: 'active', metadata: { fbrx_tenant: t.tenantId }, items: { data: [{ id: 'si_rcmd', quantity: 1, current_period_end: end, price: { id: 'price_fbrx_command_tenant_monthly', lookup_key: 'fbrx_command_tenant_monthly' } }] } });
+    await stripeEvent({ id: 'evt_r1', type: 'checkout.session.completed', data: { object: { mode: 'subscription', subscription: 'sub_r' } } });
+    const items = () => stripe.subscriptions.get('sub_r').items.data.map((i: any) => `${i.price.lookup_key}=${i.quantity}`).sort();
+    const coupon = () => stripe.subscriptions.get('sub_r').discounts?.map((d: any) => d.source.coupon) ?? [];
+
+    let r = await ok('POST', '/v1/admin/billing/sync', {}, admin);
+    expect(r.plan).toMatchObject({ monthly: 5000 + 5220, bill: { fee: 'base', paid: 2, percentOff: 10 } });
+    expect(items()).toEqual(['fbrx_command_tenant_monthly=1', 'fbrx_ultra_tenant_monthly=2']);
+    // Stripe takes the discount off the computers' prices only, with a coupon of FBRX Command's.
+    expect(coupon()).toEqual([expect.stringMatching(/^fbrx_volume_10_/)]);
+    expect(stripe.coupons.get(coupon()[0])).toMatchObject({ percent_off: '10', duration: 'forever', 'applies_to[products][]': 'prod_fbrx_ultra_tenant_monthly' });
+
+    // A third computer (Essentials, free) makes it a larger organization: the larger fee takes the other's place.
+    await pc(3);
+    r = await ok('POST', '/v1/admin/billing/sync', {}, admin);
+    expect(r.plan).toMatchObject({ monthly: 10000 + 5220, bill: { fee: 'large' } });
+    expect(items()).toEqual(['fbrx_command_large_monthly=1', 'fbrx_command_tenant_monthly=0', 'fbrx_ultra_tenant_monthly=2']);
+    expect(r.changed).toEqual(['fbrx_command_large_monthly=1', 'fbrx_command_tenant_monthly=0']);
+
+    // Stripe charges $4 where the list says otherwise; Update Stripe gives each such price a new one under its key.
+    const updated = await ok('POST', '/v1/admin/pricing/stripe', {}, op);
+    expect(updated.created).toEqual(expect.arrayContaining(['fbrx_standard_monthly', 'fbrx_command_large_monthly', 'fbrx_ultra_tenant_monthly']));
+    // The MDM add-on too: it has been $3.50 since the operator set it so.
+    expect(updated.created).toContain('fbrx_mdm_tenant_monthly');
+    expect(Object.values(updated.stripe).every((p: any) => p.found && p.interval === 'month')).toBe(true);
+    expect(updated.stripe.fbrx_ultra_tenant_monthly.unitAmount).toBe(2900);
+    expect(stripe.prices.get('fbrx_ultra_tenant_monthly')!.product).toBe('prod_fbrx_ultra_tenant_monthly');
+    // The organization moves to the new prices at its next seat update: the same items, not new ones beside them.
+    r = await ok('POST', '/v1/admin/billing/sync', {}, admin);
+    expect(items()).toEqual(['fbrx_command_large_monthly=1', 'fbrx_command_tenant_monthly=0', 'fbrx_ultra_tenant_monthly=2']);
+    expect(stripe.subscriptions.get('sub_r').items.data.find((i: any) => i.price.lookup_key === 'fbrx_ultra_tenant_monthly').price.id).toBe(stripe.prices.get('fbrx_ultra_tenant_monthly')!.id);
+
+    // Someone who bought Standard at the old price keeps it: the price lost its lookup key, and is still Standard.
+    const me = await ok('GET', '/v1/accounts/me', undefined, owner.token);
+    const old = { id: 'sub_old', customer: 'cus_9', status: 'active', metadata: { fbrx_account: me.id }, items: { data: [{ id: 'si_old', quantity: 1, current_period_end: end, price: { id: 'price_fbrx_standard_monthly', lookup_key: null } }] } };
+    await stripeEvent({ id: 'evt_old', type: 'customer.subscription.updated', data: { object: old } });
+    expect((await ok('GET', '/v1/accounts/me', undefined, owner.token)).tier).toBe('basic');
+
+    // No volume discount any more: the coupon comes off.
+    await ok('POST', '/v1/admin/pricing', { book: { ...book, volume: [] } }, op);
+    r = await ok('POST', '/v1/admin/billing/sync', {}, admin);
+    expect(r.plan.bill.percentOff).toBe(0);
+    expect(coupon()).toEqual([]);
+    expect(cp.ctx.db.all<{ action: string }>("SELECT action FROM audit_log WHERE action IN ('pricing.book', 'pricing.stripe')")).toHaveLength(3);
   });
 });
