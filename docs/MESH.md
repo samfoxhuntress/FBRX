@@ -112,6 +112,27 @@ that should obey it. A controller's requests (when FBRX runs as administrator th
 console's administrators made it a controller) run without the helper's person being asked, may be urgent, and may
 stop lower-priority help that is running. Without the Controller permission a computer treats it like any other.
 
+**One server, many people: the work queue.** Point the computers of a school, business or home at one FBRX Server (on
+site, or in the cloud) and its agent takes their requests one after another: as many at once as its Mesh Assist
+settings allow, the rest waiting their turn, most important first, then first come. Each request carries the computer
+it came from (proven by the mesh pairing) and the person who asked, as that computer tells it: the name and email of
+the FBRX account signed in there, and the system user. A computer sees its place in line (*3rd in line*) and who
+stopped a request.
+
+On the server, *Mesh & AI*:
+
+* **Work queue:** what runs and what waits, with who asked and what. Operators run a request next, change its
+  priority, or cancel it (running or waiting, whoever asked); administrators pause the queue, so what runs finishes and
+  nothing new starts.
+* **Log** (administrators): every request, kept 180 days, with the computer, the person, the priority, how it ended, who
+  cancelled it and how long it took, tallied by person and by computer; filter by either, by status or by words, and
+  export it as CSV. What was asked is kept; the answer stays in the server's conversation, and the log notes only its
+  length. Each computer keeps the same log of what it asked (*Help asked from here*).
+
+The queue, the log and its controls are for the people who run the computer (its console, or someone at it), never for
+its agent, plugins or the Local API. A restart cuts off what was waiting or running: the log says so, and the computer
+that asked sees it failed.
+
 **What never changes:**
 
 * Help runs under the **helping** computer's policy and Guardian: every risky tool call there still needs its usual

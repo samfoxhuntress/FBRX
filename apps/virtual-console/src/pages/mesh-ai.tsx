@@ -34,6 +34,7 @@ import { Button, Callout, Card, CopyText, Empty, Field, Grid, Input, KeyValue, P
 import { api } from '../api';
 import { coreCall, useCore, type CoreState } from '../core';
 import { useApp, usePoll, useRoute } from '../state';
+import { RequestLog, WorkQueue } from './mesh-queue';
 
 interface CoreSettings {
   settings: { general: { deviceName: string }; ai: Pick<Settings['ai'], 'defaultProvider' | 'defaultModel' | 'agentName' | 'providers'>; mesh: Settings['mesh']; runtime?: { contextSize: number } };
@@ -62,7 +63,7 @@ const PERMS: Array<{ key: keyof MeshPermissions; label: string; help: string }> 
   { key: 'command', label: 'Controller', help: 'Its work runs here without asking, may be urgent, and may stop lower-priority help. Still follows this server’s policy.' },
 ];
 
-type Tab = 'assist' | 'computers' | 'network' | 'provider' | 'models';
+type Tab = 'assist' | 'queue' | 'log' | 'computers' | 'network' | 'provider' | 'models';
 
 /**
  * Mesh & AI: the FBRX core on this server lends its AI to the other computers on FBRX Mesh and borrows theirs (Mesh
@@ -72,7 +73,8 @@ type Tab = 'assist' | 'computers' | 'network' | 'provider' | 'models';
 export function MeshAiPage({ tab }: { tab?: string }) {
   const [, go] = useRoute();
   const state = usePoll<CoreState>('/v1/core', 15000);
-  const active = (['assist', 'computers', 'network', 'provider', 'models'].includes(tab ?? '') ? tab : 'assist') as Tab;
+  const app = useApp();
+  const active = (['assist', 'queue', 'log', 'computers', 'network', 'provider', 'models'].includes(tab ?? '') && (tab !== 'log' || app.can('admin')) ? tab : 'assist') as Tab;
   const s = state.data;
   return (
     <Page title="Mesh & AI" description="This server's AI, the computers it works with on FBRX Mesh, and Mesh Assist: lending AI to each other when one runs out of steps or credits, and handing out work.">
@@ -96,6 +98,8 @@ export function MeshAiPage({ tab }: { tab?: string }) {
             onChange={(t) => go('mesh', t)}
             tabs={[
               { id: 'assist', label: 'Mesh Assist' },
+              { id: 'queue', label: 'Work queue' },
+              ...(app.can('admin') ? [{ id: 'log' as const, label: 'Log' }] : []),
               { id: 'computers', label: 'Computers on the mesh' },
               { id: 'network', label: 'Prefer Mesh' },
               { id: 'models', label: 'Models on this server' },
@@ -103,6 +107,8 @@ export function MeshAiPage({ tab }: { tab?: string }) {
             ]}
           />
           {active === 'assist' && <Assist />}
+          {active === 'queue' && <WorkQueue />}
+          {active === 'log' && <RequestLog />}
           {active === 'computers' && <Computers />}
           {active === 'network' && <PreferMesh />}
           {active === 'provider' && <Provider />}

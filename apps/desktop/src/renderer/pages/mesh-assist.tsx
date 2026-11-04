@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { ASSIST_PRIORITIES, ASSIST_TERMINAL, type AssistMode, type AssistOffer, type AssistPriority, type AssistSession, type AssistTools, type MeshDevice, type Settings } from '@fbrx/shared';
+import { ASSIST_PRIORITIES, ASSIST_TERMINAL, requesterLabel, type AssistMode, type AssistOffer, type AssistPriority, type AssistSession, type AssistTools, type MeshDevice, type Settings } from '@fbrx/shared';
 import { Button, Callout, Card, Field, Grid, InfoTip, Input, More, Select, Status, TextArea, Toggle, timeAgo, useAction, type StatusTone } from '@fbrx/ui';
 import { call, onEvent } from '../client';
 import { useAgentName, useCore } from '../hooks';
@@ -14,6 +14,8 @@ const MODES = (what: string): Array<{ value: AssistMode; label: string }> => [
 const PRIORITY_WORDS: Record<AssistPriority, string> = { background: 'Background', normal: 'Normal', high: 'High', urgent: 'Urgent (controllers only)' };
 const TOOL_WORDS: Record<AssistTools, string> = { none: 'Only think and answer', read: 'Look things up (changes nothing)', all: 'Anything its policy allows' };
 const STATUS_TONE: Record<AssistSession['status'], StatusTone> = { 'waiting-approval': 'warning', queued: 'info', running: 'busy', done: 'good', denied: 'neutral', error: 'critical', cancelled: 'neutral' };
+/** "1st", "2nd", "3rd", "11th". */
+const ordinal = (n: number) => `${n}${n % 100 >= 11 && n % 100 <= 13 ? 'th' : (['th', 'st', 'nd', 'rd'][n % 10] ?? 'th')}`;
 const STATUS_WORDS: Record<AssistSession['status'], string> = { 'waiting-approval': 'waiting for a yes', queued: 'queued', running: 'working', done: 'done', denied: 'declined', error: 'failed', cancelled: 'stopped' };
 const TRIGGER_WORDS: Record<AssistSession['trigger'], string> = { agent: 'consulted by the agent', steps: 'ran out of steps', provider: 'AI provider stopped answering', person: 'sent by a person', controller: 'sent by a controller' };
 
@@ -205,14 +207,16 @@ function SessionList({ sessions }: { sessions: AssistSession[] }) {
               <strong>{s.peerName}</strong>
               <span className="assist-goal">{s.goal}</span>
               <span className="fx-badge">{s.priority}</span>
-              <Status tone={STATUS_TONE[s.status]}>{STATUS_WORDS[s.status]}</Status>
+              <Status tone={STATUS_TONE[s.status]}>{s.status === 'queued' && s.position ? `${ordinal(s.position)} in line` : STATUS_WORDS[s.status]}</Status>
               <span className="fx-muted" style={{ fontSize: 12 }}>{timeAgo(s.createdAt)}</span>
             </button>
             {open === s.id && (
               <div className="assist-body">
                 <div className="fx-muted" style={{ fontSize: 12 }}>
                   {s.direction === 'out' ? `Asked from here, ${TRIGGER_WORDS[s.trigger]}` : `Given here to ${s.peerName}, ${TRIGGER_WORDS[s.trigger]}`}
+                  {s.direction === 'in' && requesterLabel(s.requester) ? ` · asked by ${requesterLabel(s.requester)}` : ''}
                   {s.admin && s.trigger !== 'controller' ? ' · as a controller' : ''} · {s.steps} step{s.steps === 1 ? '' : 's'}
+                  {s.cancelledBy ? ` · stopped by ${s.cancelledBy}` : ''}
                   {s.tools.length ? ` · used ${[...new Set(s.tools)].join(', ')}` : ''}
                 </div>
                 {s.answer && <div className="md" style={{ whiteSpace: 'pre-wrap' }}>{s.answer}</div>}

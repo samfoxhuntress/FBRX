@@ -557,6 +557,39 @@ export const MIGRATIONS: Migration[] = [
       END;
     `,
   },
+  {
+    // Mesh Assist's log: each request this computer served (and asked for), with the computer and the person who
+    // asked, so administrators can look back by computer and by person.
+    version: 19,
+    name: 'assist-log',
+    up: `
+      CREATE TABLE assist_jobs (
+        id TEXT PRIMARY KEY,
+        direction TEXT NOT NULL,
+        peer_id TEXT NOT NULL,
+        peer_name TEXT NOT NULL,
+        person_name TEXT,
+        person_email TEXT,
+        person_user TEXT,
+        kind TEXT NOT NULL,
+        trigger TEXT NOT NULL,
+        priority TEXT NOT NULL,
+        status TEXT NOT NULL,
+        goal TEXT NOT NULL,
+        error TEXT,
+        steps INTEGER NOT NULL DEFAULT 0,
+        tools TEXT NOT NULL DEFAULT '[]',
+        answer_chars INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        started_at TEXT,
+        finished_at TEXT,
+        cancelled_by TEXT
+      );
+      CREATE INDEX assist_jobs_created ON assist_jobs (created_at);
+      CREATE INDEX assist_jobs_peer ON assist_jobs (peer_id, created_at);
+      CREATE INDEX assist_jobs_person ON assist_jobs (person_email, person_user, created_at);
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -6,10 +6,13 @@ import {
   ASSIST_TOOLS,
   assistRank,
   newId,
+  requesterLabel,
   type AssistKind,
   type AssistMode,
   type AssistOffer,
   type AssistPriority,
+  type AssistQueue,
+  type AssistRequester,
   type AssistSession,
   type AssistTools,
   type AssistTrigger,
@@ -55,6 +58,12 @@ export interface AssistDeps {
   approve: (p: { title: string; reason: string; input: unknown; signal?: AbortSignal }) => Promise<boolean>;
   audit: (action: string, actor: string, outcome: 'success' | 'failure' | 'denied' | 'info', details?: Record<string, unknown>) => void;
   emit: (s: AssistSession) => void;
+  /** Writes a request to the log as it is now (assist-log.ts). */
+  record?: (s: AssistSession) => void;
+  /** Who is asking from this computer: the signed-in person and the system user. */
+  whoAmI?: () => AssistRequester;
+  /** Whether the queue is paused, kept across restarts (in memory when absent). */
+  paused?: { get: () => boolean; set: (v: boolean) => void };
   log: Logger;
   /** Polling interval while waiting for a helper (tests use a short one). */
   pollMs?: number;
@@ -81,7 +90,17 @@ const StartParams = z.object({
   hops: z.number().int().min(0).max(10).default(0),
   /** A follow-up to an earlier session with this helper (its id on the helper). */
   followUp: z.string().max(64).optional(),
+  /** Who asked, as the asking computer tells it (older versions do not say). */
+  by: z
+    .object({ name: z.string().trim().max(200).nullable(), email: z.string().trim().max(320).nullable(), user: z.string().trim().max(200).nullable() })
+    .partial()
+    .optional(),
 });
+
+const person = (by: z.infer<typeof StartParams>['by']): AssistRequester | null => {
+  const r = { name: by?.name || null, email: by?.email || null, user: by?.user || null };
+  return r.name || r.email || r.user ? r : null;
+};
 
 const TOOL_ORDER: AssistTools[] = ['none', 'read', 'all'];
 const fewerTools = (a: AssistTools, b: AssistTools): AssistTools => (TOOL_ORDER.indexOf(a) <= TOOL_ORDER.indexOf(b) ? a : b);
@@ -103,6 +122,7 @@ export async function runsElevated(): Promise<boolean> {
 
 export class MeshAssist {
   private readonly sessions = new Map<string, Session>();
+  private pausedHere = false;
   private admin = false;
   private adminFixed = false;
   private pollMs: number;
@@ -136,11 +156,25 @@ export class MeshAssist {
 
   private view(s: Session): AssistSession {
     const { runId: _r, context: _c, limitTools: _l, maxSteps: _m, queuedAt: _q, ...pub } = s;
-    return { ...pub, tools: [...s.tools] };
+    const position = s.direction === 'in' && s.status === 'queued' ? this.line().indexOf(s) + 1 || null : s.position;
+    return { ...pub, tools: [...s.tools], position };
   }
 
   private changed(s: Session) {
-    this.d.emit(this.view(s));
+    const v = this.view(s);
+    this.d.emit(v);
+    try {
+      this.d.record?.(v);
+    } catch (err) {
+      this.d.log.warn(`Could not write the request to the Mesh Assist log: ${errorMessage(err)}`);
+    }
+  }
+
+  /** Help given here waiting its turn, in the order it will run: most important first, then first come. */
+  private line(): Session[] {
+    return [...this.sessions.values()]
+      .filter((x) => x.direction === 'in' && x.status === 'queued')
+      .sort((a, b) => assistRank(b.priority) - assistRank(a.priority) || a.queuedAt - b.queuedAt);
   }
 
   private keep(s: Session) {
@@ -204,7 +238,8 @@ export class MeshAssist {
         return this.view(this.mine(peer, p?.id));
       case 'assist.cancel': {
         const s = this.mine(peer, p?.id);
-        this.stop(s, `${peer.name} cancelled it`);
+        const who = requesterLabel(s.requester);
+        this.stop(s, `${peer.name} cancelled it`, who ? `${who} (${peer.name})` : peer.name);
         return this.view(s);
       }
       default:
@@ -229,7 +264,7 @@ export class MeshAssist {
     if (p.followUp) {
       const prev = this.mine(peer, p.followUp);
       if (!ASSIST_TERMINAL.includes(prev.status)) throw new CoreError('CONFLICT', 'That help session is still working');
-      Object.assign(prev, { goal: p.goal, answer: '', error: null, status: 'queued', priority, finishedAt: null, queuedAt: Date.now(), context: '' });
+      Object.assign(prev, { goal: p.goal, answer: '', error: null, status: 'queued', priority, finishedAt: null, startedAt: null, cancelledBy: null, queuedAt: Date.now(), context: '', requester: person(p.by) ?? prev.requester });
       this.d.audit('assist.followup', `mesh:${peer.name}`, 'info', { session: prev.id });
       this.changed(prev);
       this.enqueue(prev, controller);
@@ -260,9 +295,13 @@ export class MeshAssist {
       limitTools: fewerTools(p.tools, s.tools),
       maxSteps: Math.min(p.maxSteps, s.maxSteps),
       queuedAt: Date.now(),
+      requester: person(p.by),
+      position: null,
+      startedAt: null,
+      cancelledBy: null,
     };
     this.keep(session);
-    this.d.audit('assist.requested', `mesh:${peer.name}`, 'info', { session: session.id, kind: p.kind, priority, trigger: p.trigger, controller, goal: p.goal.slice(0, 200) });
+    this.d.audit('assist.requested', `mesh:${peer.name}`, 'info', { session: session.id, kind: p.kind, priority, trigger: p.trigger, controller, by: requesterLabel(session.requester), goal: p.goal.slice(0, 200) });
     this.changed(session);
 
     if (session.status === 'waiting-approval') {
@@ -302,11 +341,10 @@ export class MeshAssist {
   }
 
   private pump() {
+    if (this.isPaused()) return;
     const s = this.d.settings();
-    const inbound = [...this.sessions.values()].filter((x) => x.direction === 'in');
-    let running = inbound.filter((x) => x.status === 'running').length;
-    const queue = inbound.filter((x) => x.status === 'queued').sort((a, b) => assistRank(b.priority) - assistRank(a.priority) || a.queuedAt - b.queuedAt);
-    for (const next of queue) {
+    let running = [...this.sessions.values()].filter((x) => x.direction === 'in' && x.status === 'running').length;
+    for (const next of this.line()) {
       if (running >= s.maxConcurrent) break;
       running++;
       void this.run(next);
@@ -333,6 +371,7 @@ export class MeshAssist {
 
   private async run(s: Session) {
     s.status = 'running';
+    s.startedAt = new Date().toISOString();
     this.changed(s);
     try {
       const first = !s.conversationId;
@@ -361,9 +400,10 @@ export class MeshAssist {
     }
   }
 
-  private stop(s: Session, why: string) {
+  private stop(s: Session, why: string, by: string | null = null) {
     if (ASSIST_TERMINAL.includes(s.status)) return;
     const runId = s.runId;
+    s.cancelledBy = by;
     this.finish(s, 'cancelled', why);
     if (runId) this.d.cancelRun(runId);
   }
@@ -472,6 +512,10 @@ export class MeshAssist {
       limitTools: p.tools ?? 'read',
       maxSteps: settings.maxSteps,
       queuedAt: Date.now(),
+      requester: this.d.whoAmI?.() ?? null,
+      position: null,
+      startedAt: null,
+      cancelledBy: null,
     };
     this.keep(session);
     this.changed(session);
@@ -501,6 +545,7 @@ export class MeshAssist {
         trigger: session.trigger,
         admin: this.admin,
         hops: 0,
+        ...(session.requester ? { by: session.requester } : {}),
       });
       this.absorb(session, remote);
       this.d.audit('assist.sent', 'agent', 'info', { session: session.id, peer: offer.name, kind: session.kind, trigger: session.trigger, priority: session.priority });
@@ -518,6 +563,9 @@ export class MeshAssist {
     s.steps = remote.steps;
     s.tools = [...remote.tools];
     s.priority = remote.priority;
+    s.position = remote.position ?? null;
+    s.startedAt = remote.startedAt ?? s.startedAt;
+    s.cancelledBy = remote.cancelledBy ?? s.cancelledBy;
     if (ASSIST_TERMINAL.includes(remote.status)) s.finishedAt = remote.finishedAt ?? new Date().toISOString();
     this.changed(s);
   }
@@ -576,11 +624,69 @@ export class MeshAssist {
   }
 
   /** Stops help: asked from here (cancelled on the helper too) or given here. */
-  async cancel(id: string): Promise<AssistSession> {
+  async cancel(id: string, actor = 'this computer'): Promise<AssistSession> {
     const s = this.sessions.get(id);
     if (!s) throw new CoreError('NOT_FOUND', 'No such help session');
     if (s.direction === 'out' && s.remoteId && !ASSIST_TERMINAL.includes(s.status)) await this.d.call(s.peerId, 'assist.cancel', { id: s.remoteId }, 5000).catch(() => undefined);
-    this.stop(s, 'Stopped here');
+    this.stop(s, 'Stopped here', actor);
+    return this.view(s);
+  }
+
+  // ======================================================================================= the queue, for administrators
+
+  isPaused(): boolean {
+    return this.d.paused?.get() ?? this.pausedHere;
+  }
+
+  /** Help given here: what runs, and what waits (queued in the order it will run, then what waits to be allowed). */
+  queue(): AssistQueue {
+    const inbound = [...this.sessions.values()].filter((x) => x.direction === 'in');
+    const byAge = (a: Session, b: Session) => a.queuedAt - b.queuedAt;
+    return {
+      paused: this.isPaused(),
+      capacity: this.d.settings().maxConcurrent,
+      running: inbound.filter((x) => x.status === 'running').sort(byAge).map((x) => this.view(x)),
+      waiting: [...this.line(), ...inbound.filter((x) => x.status === 'waiting-approval').sort(byAge)].map((x) => this.view(x)),
+    };
+  }
+
+  /** Pauses the queue (what runs goes on; nothing new starts) or lets it go on. */
+  setPaused(paused: boolean, actor: string): AssistQueue {
+    if (paused !== this.isPaused()) {
+      if (this.d.paused) this.d.paused.set(paused);
+      else this.pausedHere = paused;
+      this.d.audit(paused ? 'assist.paused' : 'assist.resumed', actor, 'info', {});
+      if (!paused) this.pump();
+    }
+    return this.queue();
+  }
+
+  /**
+   * An administrator's hand on help given here: stop it (waiting or running, whoever asked), run it next, or change
+   * how important it is.
+   */
+  manage(id: string, action: 'cancel' | 'front' | 'priority', actor: string, priority?: AssistPriority): AssistSession {
+    const s = this.sessions.get(id);
+    if (!s || s.direction !== 'in') throw new CoreError('NOT_FOUND', 'No such request on this computer');
+    if (ASSIST_TERMINAL.includes(s.status)) throw new CoreError('CONFLICT', 'That request has already finished');
+    if (action === 'cancel') {
+      this.stop(s, `Cancelled by ${actor}`, actor);
+      this.d.audit('assist.adminCancel', actor, 'info', { session: s.id, peer: s.peerName, by: requesterLabel(s.requester) });
+      return this.view(s);
+    }
+    if (s.status === 'running') throw new CoreError('CONFLICT', 'That request is already running');
+    if (action === 'front') {
+      const line = this.line().filter((x) => x !== s);
+      const top = line.reduce<AssistPriority>((p, x) => (assistRank(x.priority) > assistRank(p) ? x.priority : p), s.priority);
+      s.priority = top;
+      s.queuedAt = Math.min(s.queuedAt, ...line.map((x) => x.queuedAt)) - 1;
+    } else {
+      if (!priority) throw new CoreError('INVALID_ARGUMENT', 'Choose a priority');
+      s.priority = priority;
+    }
+    this.d.audit('assist.reordered', actor, 'info', { session: s.id, action, priority: s.priority });
+    this.changed(s);
+    this.pump();
     return this.view(s);
   }
 
@@ -599,6 +705,7 @@ export class MeshAssist {
             id: newId('assist'), direction: 'out', peerId: peerId ?? '', peerName: name, kind: 'task', trigger, priority: p.priority ?? this.d.settings().priority, admin: this.admin,
             status: 'error', goal: p.goal.slice(0, 16_000), answer: '', error: errorMessage(err), steps: 0, tools: [], createdAt: new Date().toISOString(), finishedAt: new Date().toISOString(),
             conversationId: null, remoteId: null, runId: null, context: '', limitTools: p.tools ?? 'read', maxSteps: 0, queuedAt: Date.now(),
+            requester: this.d.whoAmI?.() ?? null, position: null, startedAt: null, cancelledBy: null,
           };
           this.keep(failed);
           this.changed(failed);

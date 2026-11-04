@@ -7,7 +7,7 @@ import type { Tier } from './license';
 import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarEventPatch, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
 import type { ProtectionState, ProtectionStatus, ScanJob, ScanType, ShieldDetection, ShieldVerdict } from './protection';
 import type { ImageBackupConfig, ImageBackupStatus } from './time';
-import type { AssistOffer, AssistPriority, AssistSession, AssistTools } from './mesh-assist';
+import type { AssistLogEntry, AssistLogQuery, AssistOffer, AssistPriority, AssistQueue, AssistSession, AssistTally, AssistTools } from './mesh-assist';
 import type { MeshNetworkStatus, MeshPathTest } from './net';
 import type { MessagesOverview, MessageState, ThreadMessage } from './messages';
 import type { SyncPeer, SyncResult } from './sync';
@@ -1381,6 +1381,16 @@ export interface ExtMethods {
   /** Asks the same helper a follow-up in the same conversation. */
   'mesh.assist.followUp': (p: { sessionId: string; text: string }) => AssistSession;
   'mesh.assist.cancel': (p: { sessionId: string }) => AssistSession;
+  /** Help given here: what runs and what waits, for its administrators. */
+  'mesh.assist.queue': () => AssistQueue;
+  /** An administrator stops a request (whoever asked), runs it next, or changes its priority. */
+  'mesh.assist.manage': (p: { sessionId: string; action: 'cancel' | 'front' | 'priority'; priority?: AssistPriority }) => AssistSession;
+  /** Pauses the queue (what runs goes on) or lets it go on. */
+  'mesh.assist.pause': (p: { paused: boolean }) => AssistQueue;
+  /** The log of requests, newest first, by computer, person, status, words and time. */
+  'mesh.assist.log': (p: AssistLogQuery) => AssistLogEntry[];
+  /** What each computer, or each person, asked for. */
+  'mesh.assist.tally': (p: { by: 'device' | 'person'; direction?: 'in' | 'out'; since?: string }) => AssistTally[];
   /** The FBRX Server installer ISO, bundle and guides carried by this copy of FBRX. */
   'server.resources': () => ServerResourcesInfo;
   /** Recomputes a resource's SHA-256 and compares it with the one recorded at build time. */
@@ -1469,6 +1479,12 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'server.trust',
   'server.opened',
   'helpdesk.assist',
+  // Who asked what, and stopping or reordering it: for the people who run this computer, not its agent or plugins.
+  'mesh.assist.queue',
+  'mesh.assist.manage',
+  'mesh.assist.pause',
+  'mesh.assist.log',
+  'mesh.assist.tally',
   'mesh.network.applyQos',
   'processes.kill',
   'files.write',

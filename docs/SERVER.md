@@ -195,6 +195,11 @@ before anything risky, like on any FBRX computer. It listens for FBRX Mesh on po
   may stop lower-priority help there). *Who can help?* lists the paired computers with their AI, load and roles;
   *Hand out work* sends a task to the best helper, every computer, or one; requests waiting for a yes, and all help
   asked and given (with the answers and follow-up questions), are on the same tab. See [MESH.md](MESH.md).
+* **Work queue:** the requests of every computer that asks this server's AI, as they run and wait their turn, with the
+  person and the computer that asked. Operators run one next, change its priority or cancel it; administrators pause
+  the queue.
+* **Log** (administrators): every request for 180 days, by person and by computer, with how it ended and who cancelled
+  it; filter it and export it as CSV.
 * **Computers on the mesh:** turn FBRX Mesh on or off, show a pairing code for another computer (on that computer:
   *Mesh & phone → Add a device → Enter a code*), join another computer's code, and set what each paired computer may do here,
   including **Help with AI** and **Controller**.

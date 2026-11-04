@@ -99,6 +99,7 @@ import { sleep } from './util/misc';
 import { MeshService } from './mesh/mesh-service';
 import { SyncService } from './sync/sync-service';
 import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
+import { AssistLog } from './mesh/assist-log';
 import { MeshAssist, runsElevated } from './mesh/mesh-assist';
 import { ModelLender } from './mesh/model-lending';
 import { MeshNetwork } from './mesh/mesh-network';
@@ -156,6 +157,17 @@ export interface KernelOptions {
 const LOCAL_API_TOKEN = 'fbrx.localapi.token';
 const LOCAL_API_AGENT_TOKEN = 'fbrx.localapi.agentToken';
 const MESH_KEY = 'fbrx.mesh.key';
+/** Mesh Assist's queue is paused (kept across restarts). */
+const ASSIST_PAUSED = 'fbrx.assist.paused';
+
+/** The system user FBRX runs as (null when the system will not say). */
+function systemUser(): string | null {
+  try {
+    return userInfo().username || null;
+  } catch {
+    return null;
+  }
+}
 /** Where the MCP bridge finds the Local API address and agent token (readable by this user only). */
 const AGENT_TOKEN_FILE = 'localapi-agent.json';
 
@@ -253,6 +265,8 @@ export class Kernel {
   readonly sync: SyncService;
   readonly orgMesh: OrgMesh;
   readonly assist: MeshAssist;
+  /** What Mesh Assist served and asked, by computer and by person. */
+  readonly assistLog: AssistLog;
   /** This computer's own AI, lent to the paired computers' agents that think with it. */
   readonly lender: ModelLender;
   /** Prefer Mesh: mesh networks, priority marking and path tests. */
@@ -875,6 +889,9 @@ export class Kernel {
       hello: (id) => this.mesh.hello(id),
       elevated: () => runsElevated(),
     });
+    this.assistLog = new AssistLog(this.db);
+    // Requests the last run left unfinished are written down as such.
+    this.assistLog.interrupted();
     this.assist = new MeshAssist({
       settings: () => this.settings.get().mesh.assist,
       meshRunning: () => this.mesh.running,
@@ -910,6 +927,12 @@ export class Kernel {
       },
       audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
       emit: (session) => this.events.emit('mesh.assist', session),
+      record: (session) => this.assistLog.record(session),
+      whoAmI: () => {
+        const a = this.account.status();
+        return { name: a.signedIn ? a.name : null, email: a.signedIn ? a.email : null, user: systemUser() };
+      },
+      paused: { get: () => this.meta.get<boolean>(ASSIST_PAUSED) ?? false, set: (v) => this.meta.set(ASSIST_PAUSED, v) },
       log: L('mesh'),
     });
     this.lender = new ModelLender({

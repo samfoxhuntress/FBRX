@@ -870,7 +870,32 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       const q = z.object({ sessionId: z.string().max(64), text: z.string().trim().min(1).max(16_000) }).parse(p);
       return k.assist.followUp(q.sessionId, q.text);
     },
-    'mesh.assist.cancel': (p) => k.assist.cancel(z.object({ sessionId: z.string().max(64) }).parse(p).sessionId),
+    'mesh.assist.cancel': (p, ctx) => k.assist.cancel(z.object({ sessionId: z.string().max(64) }).parse(p).sessionId, ctx.actor),
+    'mesh.assist.queue': () => k.assist.queue(),
+    'mesh.assist.manage': (p, ctx) => {
+      const q = z.object({ sessionId: z.string().max(64), action: z.enum(['cancel', 'front', 'priority']), priority: z.enum(ASSIST_PRIORITIES).optional() }).parse(p);
+      return k.assist.manage(q.sessionId, q.action, ctx.actor, q.priority);
+    },
+    'mesh.assist.pause': (p, ctx) => k.assist.setPaused(z.object({ paused: z.boolean() }).parse(p).paused, ctx.actor),
+    'mesh.assist.log': (p) =>
+      k.assistLog.list(
+        z
+          .object({
+            direction: z.enum(['in', 'out']).optional(),
+            status: z.enum(['waiting-approval', 'queued', 'running', 'done', 'denied', 'error', 'cancelled']).optional(),
+            peerId: z.string().max(128).optional(),
+            person: z.string().max(400).optional(),
+            text: z.string().max(200).optional(),
+            since: z.string().max(40).optional(),
+            before: z.string().max(40).optional(),
+            limit: z.number().int().min(1).max(500).optional(),
+          })
+          .parse(p ?? {}),
+      ),
+    'mesh.assist.tally': (p) => {
+      const q = z.object({ by: z.enum(['device', 'person']), direction: z.enum(['in', 'out']).optional(), since: z.string().max(40).optional() }).parse(p);
+      return k.assistLog.tally(q.by, q);
+    },
     'server.resources': () => k.serverResources.info(),
     'server.verify': (p) => k.serverResources.verify(z.object({ name: z.string().max(200) }).parse(p).name),
     'server.copy': (p) => k.serverResources.copy(z.object({ name: z.string().max(200) }).parse(p).name),

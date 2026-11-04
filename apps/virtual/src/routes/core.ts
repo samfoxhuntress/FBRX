@@ -112,6 +112,30 @@ const RULES: Record<string, Rule> = {
   },
   'mesh.assist.followUp': { role: 'operator', params: (p) => z.object({ sessionId: z.string().max(80), text: z.string().min(1).max(20000) }).strict().parse(p) },
   'mesh.assist.cancel': { role: 'operator', params: (p) => z.object({ sessionId: z.string().max(80) }).strict().parse(p) },
+  // The work queue: everyone sees it; operators run a request next, change its priority or cancel it; administrators
+  // pause it and read the log of who asked what.
+  'mesh.assist.queue': { role: 'viewer' },
+  'mesh.assist.manage': {
+    role: 'operator',
+    params: (p) => z.object({ sessionId: z.string().max(80), action: z.enum(['cancel', 'front', 'priority']), priority: z.enum(ASSIST_PRIORITIES).optional() }).strict().parse(p),
+  },
+  'mesh.assist.pause': { role: 'admin', params: (p) => z.object({ paused: z.boolean() }).strict().parse(p) },
+  'mesh.assist.log': {
+    role: 'admin',
+    params: (p) =>
+      z
+        .object({
+          direction: z.enum(['in', 'out']).optional(),
+          status: z.enum(['waiting-approval', 'queued', 'running', 'done', 'denied', 'error', 'cancelled']).optional(),
+          peerId: z.string().max(128).optional(),
+          person: z.string().max(400).optional(),
+          text: z.string().max(200).optional(),
+          limit: z.number().int().min(1).max(500).optional(),
+        })
+        .strict()
+        .parse(p),
+  },
+  'mesh.assist.tally': { role: 'admin', params: (p) => z.object({ by: z.enum(['device', 'person']), direction: z.enum(['in', 'out']).optional() }).strict().parse(p) },
   // Operators answer Mesh Assist's own questions ("Help <computer>?"); everything else waits for an administrator.
   'approvals.resolve': {
     role: 'operator',
@@ -201,6 +225,9 @@ const READS = new Set([
   'mesh.status',
   'mesh.assist.helpers',
   'mesh.assist.sessions',
+  'mesh.assist.queue',
+  'mesh.assist.log',
+  'mesh.assist.tally',
   'approvals.list',
   'ai.conversations.list',
   'ai.conversations.get',
