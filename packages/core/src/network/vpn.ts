@@ -39,6 +39,19 @@ export interface VpnDriver {
 /** The last lines of what a command said, for a message. */
 const said = (r: CommandResult) => (r.err || r.out).trim().split('\n').slice(-3).join(' ').slice(0, 300);
 
+/**
+ * wg-quick on Linux, by the tunnel's name: the settings go to /etc/wireguard first, readable by root alone, because
+ * Ubuntu 26.04's AppArmor profile for wg-quick lets it read them nowhere else. They stay there while the tunnel runs, and
+ * go when it is taken down or does not come up. Arguments: the settings file, wg-quick, the tunnel's name, up or down.
+ */
+const WG_QUICK_SCRIPT = [
+  'install -d -m 700 /etc/wireguard && install -m 600 "$1" "/etc/wireguard/$3.conf" || exit',
+  '"$2" "$4" "$3"',
+  'rc=$?',
+  'if [ "$4" = down ] || [ "$rc" -ne 0 ]; then rm -f "/etc/wireguard/$3.conf"; fi',
+  'exit "$rc"',
+].join('\n');
+
 /** Linux: wg-quick, through pkexec (the system's administrator prompt) unless FBRX already runs as root. */
 export class LinuxVpnDriver implements VpnDriver {
   readonly keepsFile = false;
@@ -78,13 +91,18 @@ export class LinuxVpnDriver implements VpnDriver {
     return !!(await this.which('resolvconf'));
   }
 
+  /** Runs wg-quick on the tunnel from /etc/wireguard (WG_QUICK_SCRIPT), as administrator. */
+  private async wgQuick(file: string, action: 'up' | 'down'): Promise<CommandResult> {
+    return this.admin('/bin/sh', ['-c', WG_QUICK_SCRIPT, 'sh', file, (await this.which('wg-quick')) ?? 'wg-quick', VPN_INTERFACE, action]);
+  }
+
   async up(file: string): Promise<void> {
-    const r = await this.admin((await this.which('wg-quick')) ?? 'wg-quick', ['up', file]);
+    const r = await this.wgQuick(file, 'up');
     if (r.code !== 0) throw new CoreError('UNAVAILABLE', `The tunnel did not start: ${said(r)}`);
   }
 
   async down(file: string): Promise<void> {
-    const r = await this.admin((await this.which('wg-quick')) ?? 'wg-quick', ['down', file]);
+    const r = await this.wgQuick(file, 'down');
     if (r.code !== 0 && !/is not a WireGuard interface|does not exist/i.test(r.err)) throw new CoreError('UNAVAILABLE', `The tunnel did not stop: ${said(r)}`);
   }
 

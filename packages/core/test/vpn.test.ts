@@ -142,7 +142,11 @@ describe('FBRX VPN’s drivers', () => {
     const d = new LinuxVpnDriver({ run: sys.run, root: false });
     expect(await d.ready()).toEqual({ ready: true, why: null, canInstall: false });
     await d.up('/data/tmp/vpn/fbrxvpn.conf');
-    expect(sys.calls.find((c) => c[0] === 'pkexec')).toEqual(['pkexec', '/usr/bin/wg-quick', 'up', '/data/tmp/vpn/fbrxvpn.conf']);
+    // By the tunnel's name, from /etc/wireguard: Ubuntu 26.04 lets wg-quick read its settings nowhere else.
+    const up = sys.calls.find((c) => c[0] === 'pkexec')!;
+    expect(up).toEqual(['pkexec', '/bin/sh', '-c', expect.stringContaining('/etc/wireguard/$3.conf'), 'sh', '/data/tmp/vpn/fbrxvpn.conf', '/usr/bin/wg-quick', 'fbrxvpn', 'up']);
+    await d.down('/data/tmp/vpn/fbrxvpn.conf');
+    expect(sys.calls.filter((c) => c[0] === 'pkexec').at(-1)!.slice(-2)).toEqual(['fbrxvpn', 'down']);
     expect(await d.state()).toEqual({ up: true, received: 5000, sent: 700 });
     expect(await d.dns()).toBe(true);
 

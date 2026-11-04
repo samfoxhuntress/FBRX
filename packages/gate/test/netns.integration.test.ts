@@ -339,6 +339,8 @@ describe.runIf(can)('FBRX Gate on a real (namespaced) network', () => {
     c.vpn.peers.push({ name: 'laptop', publicKey: keys.publicKey, address: '10.99.0.2', keepalive: 25 });
     engine.setCandidate(c, 'test');
     expect((await engine.commit({ by: 'test', comment: 'VPN for the laptop' })).status).toBe('confirmed');
+    // The gate's own side of the VPN came up (a fallback would be a note).
+    expect(engine.lastNotes().filter((n) => n.startsWith('VPN:'))).toEqual([]);
     const text = peerConfig({ config: c, peer: c.vpn.peers.at(-1)!, privateKey: keys.privateKey, gatePublicKey: (await applier.vpnKey()).publicKey, endpoint: '203.0.113.2', fullTunnel: false });
     const file = join(dir, 'fbrxvpn.conf');
     writeFileSync(file, renderVpnSettings(parseVpnSettings(text), { dns: false }), { mode: 0o600 });

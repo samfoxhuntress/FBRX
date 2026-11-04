@@ -37,13 +37,18 @@ server at home first (*Mesh & phone*); they find each other by the addresses the
 On Linux the gate's name server is used only when the system has `resolvconf`; without it, names at home are not
 looked up through the tunnel, but every address works.
 
+On Linux the tunnel runs by its name, `fbrxvpn`, from `/etc/wireguard/fbrxvpn.conf` (readable by root alone): Ubuntu
+26.04 confines `wg-quick` to that folder. The file is there while the tunnel runs, and goes when it stops or does not
+start.
+
 ## How it stays safe
 
 * The settings are read strictly: only what a tunnel needs. A file that runs commands (`PreUp`, `PostUp`, `PreDown`,
   `PostDown`) or carries other settings is refused, since the tunnel starts with administrator rights; the file the
   tunnel runs from is rebuilt from what was read.
 * The keys stay sealed with the vault key. The settings file the system needs exists only while a tunnel starts or
-  stops (on Windows, while it runs), in FBRX's machine-local folder, readable by you alone, and never in a backup.
+  stops, in FBRX's machine-local folder, readable by you alone, and never in a backup; while it runs, Windows keeps it
+  for its tunnel service and Linux in `/etc/wireguard`, readable by root alone.
 * Only you, at this computer, can add, connect, disconnect or remove a tunnel (not the agent, the Local API or FBRX
   Command).
 * On the gate, a device reaches what its *access* allows (your networks, or the internet only); with full access it
