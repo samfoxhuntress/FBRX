@@ -139,6 +139,9 @@ export class SimulatedApplier implements GateApplier {
 
 // ------------------------------------------------------------------------------------------------ Linux
 
+/** Where wg may read a key on Ubuntu 26.04 (its AppArmor profile allows nowhere else). */
+const WG_KEY_DIR = '/etc/wireguard';
+
 export interface LinuxApplierOptions {
   paths: GatePaths;
   /** "networkd" (FBRX Server: kept across restarts) or "iproute" (applied directly; tests and systems without it). */
@@ -327,10 +330,14 @@ export class LinuxApplier implements GateApplier {
   private async wireguardIproute(c: GateConfig): Promise<string[]> {
     const add = await this.run('ip', ['link', 'add', 'dev', WG_IFACE, 'type', 'wireguard']);
     if (add.code !== 0 && !/File exists/.test(add.err)) return [`VPN: this kernel has no WireGuard (${add.err.trim()})`];
-    const key = join(this.o.paths.etcDir, 'wg-fbrx.key');
+    // wg reads the private key from a file, and Ubuntu 26.04's AppArmor lets it read only below /etc/wireguard: the key
+    // is there, readable by root alone, for just as long as wg takes to read it.
+    mkdirSync(WG_KEY_DIR, { recursive: true, mode: 0o700 });
+    const key = join(WG_KEY_DIR, `${WG_IFACE}.key`);
+    this.write(key, readFileSync(join(this.o.paths.etcDir, 'wg-fbrx.key'), 'utf8'), 0o600);
     const args = ['set', WG_IFACE, 'private-key', key, 'listen-port', String(c.vpn.port)];
     for (const p of c.vpn.peers) args.push('peer', p.publicKey, 'allowed-ips', `${p.address}/32`, ...(p.keepalive ? ['persistent-keepalive', String(p.keepalive)] : []));
-    const wg = await this.run('wg', args);
+    const wg = await this.run('wg', args).finally(() => rmSync(key, { force: true }));
     if (wg.code !== 0) return [`VPN: ${wg.err.trim() || 'wg failed'} (install wireguard-tools)`];
     await this.run('ip', ['addr', 'replace', c.vpn.address, 'dev', WG_IFACE]);
     await this.run('ip', ['link', 'set', 'dev', WG_IFACE, 'up']);
