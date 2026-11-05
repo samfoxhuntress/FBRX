@@ -2,8 +2,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { DEVICE_PROFILES, commandSearchUrl, deviceProfile, matchDeviceProfile, type ConsoleProtocol, type ConsoleSession, type DeviceProfile } from '@fbrx/shared';
-import { Button, Callout, Empty, Field, Input, Modal, Select, Status, Toggle, useConfirm, useToast } from '@fbrx/ui';
+import { DEVICE_PROFILES, commandSearchUrl, deviceProfile, matchDeviceProfile, type ConsoleBookmark, type ConsoleProtocol, type ConsoleSession, type DeviceProfile } from '@fbrx/shared';
+import { Button, Callout, Empty, Field, Icons, InfoTip, Input, Modal, Select, Status, TextArea, Toggle, timeAgo, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
 import { useAgentName, useConsoleSessions, useCore } from './hooks';
 import { askAgent } from './widgets';
@@ -31,6 +31,12 @@ export interface ConnectTarget {
   model?: string | null;
   ports?: number[];
   protocol?: ConsoleProtocol;
+  /** From Saved connections: its port, user, guide and name. */
+  port?: number;
+  username?: string | null;
+  profileId?: string | null;
+  /** Connect straight away (a saved connection with its password saved). */
+  auto?: boolean;
 }
 
 /** Log in to a device over SSH or Telnet, confirming its identity (host key) the first time. */
@@ -39,12 +45,13 @@ export function ConnectDialog({ target, onClose, onConnected }: { target?: Conne
   const logins = useCore('console.logins');
   const [host, setHost] = useState(target?.host ?? '');
   const [protocol, setProtocol] = useState<ConsoleProtocol>(target?.protocol ?? (target?.ports && !target.ports.includes(22) && target.ports.includes(23) ? 'telnet' : 'ssh'));
-  const [profileId, setProfileId] = useState(matched?.id ?? '');
+  const [profileId, setProfileId] = useState(target?.profileId ?? matched?.id ?? '');
   const profile = deviceProfile(profileId);
   const defaultPort = protocol === 'telnet' ? 23 : (profile?.sshPort ?? 22);
-  const [port, setPort] = useState('');
+  const [port, setPort] = useState(target?.port && target.port !== (protocol === 'telnet' ? 23 : 22) ? String(target.port) : '');
   const saved = (logins.data ?? []).filter((l) => l.host === host.trim() && l.protocol === protocol);
-  const [username, setUsername] = useState<string | null>(null);
+  const [username, setUsername] = useState<string | null>(target?.username ?? null);
+  const [keep, setKeep] = useState(true);
   const user = username ?? saved[0]?.username ?? profile?.defaultUser ?? '';
   const hasSaved = saved.some((l) => l.username === user && l.port === (Number(port) || defaultPort));
   const [password, setPassword] = useState('');
@@ -70,7 +77,8 @@ export function ConnectDialog({ target, onClose, onConnected }: { target?: Conne
         trustFingerprint: trust,
         profileId: profileId || undefined,
         vendor: target?.vendor ?? undefined,
-        label: target?.name ? `${target.name} (${host.trim()})` : undefined,
+        label: target?.name ? (target.username !== undefined ? target.name : `${target.name} (${host.trim()})`) : undefined,
+        save: keep,
         cols: 120,
         rows: 32,
       });
@@ -82,6 +90,15 @@ export function ConnectDialog({ target, onClose, onConnected }: { target?: Conne
       setBusy(false);
     }
   };
+
+  // A saved connection whose password is saved goes straight in (the dialog stays for a key question or an error).
+  const autoTried = useRef(false);
+  useEffect(() => {
+    if (!target?.auto || autoTried.current || !logins.data) return;
+    autoTried.current = true;
+    if (hasSaved || protocol === 'telnet') void connect();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [logins.data]);
 
   const title = target?.name || target?.vendor ? `Connect to ${target.name ?? target.vendor}` : 'Connect to a device';
   return (
@@ -164,8 +181,9 @@ export function ConnectDialog({ target, onClose, onConnected }: { target?: Conne
               <Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder={hasSaved ? '•••••••• (saved)' : ''} onKeyDown={(e) => e.key === 'Enter' && host.trim() && void connect()} />
             </Field>
           </div>
-          <div className="fx-row" style={{ alignItems: 'center' }}>
+          <div className="fx-row" style={{ alignItems: 'center', flexWrap: 'wrap' }}>
             <Toggle checked={remember} onChange={setRemember} disabled={!password} label="Remember the password on this computer (encrypted)" />
+            <Toggle checked={keep} onChange={setKeep} label="Keep in Saved connections" info="The device, its user and its guide go in Saved connections for one-click connecting next time. The password is kept only if you choose to remember it." />
           </div>
           <Field label="Device guide" help="Commands and documentation shown next to the console">
             <Select value={profileId} onChange={(e) => setProfileId(e.target.value)} options={[{ value: '', label: matched ? `Automatic (${matched.name})` : 'None' }, ...DEVICE_PROFILES.map((p) => ({ value: p.id, label: p.name }))]} />
@@ -200,7 +218,7 @@ function cssVar(name: string, fallback: string) {
 }
 
 /** The terminal screen of one session (xterm.js), sized to its box. */
-function Screen({ session }: { session: ConsoleSession }) {
+export function ConsoleScreen({ session }: { session: ConsoleSession }) {
   const box = useRef<HTMLDivElement>(null);
   const term = useRef<Terminal | null>(null);
   const closed = session.state === 'closed';
@@ -213,7 +231,7 @@ function Screen({ session }: { session: ConsoleSession }) {
       cursorBlink: true,
       scrollback: 5000,
       convertEol: false,
-      theme: { background: '#0c0e11', foreground: '#e3e6ea', cursor: cssVar('--accent', '#f0a530'), selectionBackground: 'rgba(240,165,48,0.35)' },
+      theme: { background: '#0c0e11', foreground: '#e3e6ea', cursor: cssVar('--accent', '#f4b942'), selectionBackground: 'rgba(244,185,66,0.35)' },
     });
     const fit = new FitAddon();
     t.loadAddon(fit);
@@ -342,7 +360,11 @@ function Guide({ session, profile }: { session: ConsoleSession; profile: DeviceP
 /** The device consoles tab of the Terminal page: open sessions on the left, the selected one with its guide. */
 export function DeviceConsolesPanel({ selected, onSelect }: { selected: string | null; onSelect: (id: string | null) => void }) {
   const sessions = useConsoleSessions();
+  const bookmarks = useCore('console.bookmarks');
   const [connect, setConnect] = useState<ConnectTarget | null>(null);
+  const [editing, setEditing] = useState<ConsoleBookmark | 'new' | null>(null);
+  const [showSaved, setShowSaved] = useState(false);
+  const fromBookmark = (b: ConsoleBookmark): ConnectTarget => ({ host: b.host, port: b.port, protocol: b.protocol, username: b.username, profileId: b.profileId, name: b.label, vendor: b.vendor, auto: true });
   const [showGuide, setShowGuide] = useState(true);
   const toast = useToast();
   const list = sessions.data ?? [];
@@ -358,7 +380,7 @@ export function DeviceConsolesPanel({ selected, onSelect }: { selected: string |
           New connection
         </Button>
         {list.map((s) => (
-          <button key={s.id} className={`agent-conv${current?.id === s.id ? ' active' : ''}`} onClick={() => onSelect(s.id)}>
+          <button key={s.id} className={`agent-conv${current?.id === s.id && !showSaved ? ' active' : ''}`} onClick={() => (setShowSaved(false), onSelect(s.id))}>
             <div className="agent-conv-title">
               <span className={`dot ${s.state === 'open' ? 'ok' : s.state === 'connecting' ? 'busy' : 'bad'}`} aria-hidden /> {s.label}
             </div>
@@ -367,8 +389,33 @@ export function DeviceConsolesPanel({ selected, onSelect }: { selected: string |
             </div>
           </button>
         ))}
+        <div className="consoles-saved-head">
+          <button type="button" className={`linklike${showSaved ? ' on' : ''}`} onClick={() => setShowSaved((v) => !v)}>
+            Saved connections{bookmarks.data?.length ? ` (${bookmarks.data.length})` : ''}
+          </button>
+          <InfoTip>Devices you connected to before, with their user and guide. A key means the password is saved (encrypted in your vault): one click connects.</InfoTip>
+        </div>
+        {(bookmarks.data ?? []).slice(0, 8).map((b) => (
+          <button key={b.id} className="agent-conv saved" onClick={() => setConnect(fromBookmark(b))} title={`Connect to ${b.label}`}>
+            <div className="agent-conv-title">
+              {b.passwordSaved ? <Icons.key size={11} /> : <Icons.terminal size={11} />} {b.label}
+            </div>
+            <div className="agent-conv-sub">
+              {b.protocol.toUpperCase()} · {b.host}
+              {b.port !== (b.protocol === 'telnet' ? 23 : 22) ? `:${b.port}` : ''}
+            </div>
+          </button>
+        ))}
       </div>
-      {current ? (
+      {showSaved || (!current && (bookmarks.data?.length ?? 0) > 0) ? (
+        <SavedConnections
+          list={bookmarks.data ?? []}
+          onConnect={(b) => setConnect(fromBookmark(b))}
+          onEdit={(b) => setEditing(b)}
+          onAdd={() => setEditing('new')}
+          onChanged={() => bookmarks.reload()}
+        />
+      ) : current ? (
         <div className="console-main">
           <div className="console-head">
             <div style={{ minWidth: 0 }}>
@@ -413,7 +460,7 @@ export function DeviceConsolesPanel({ selected, onSelect }: { selected: string |
             </Button>
           </div>
           <div className={`console-body${showGuide ? ' with-guide' : ''}`}>
-            <Screen key={current.id} session={current} />
+            <ConsoleScreen key={current.id} session={current} />
             {showGuide && <Guide session={current} profile={profile} />}
           </div>
         </div>
@@ -428,12 +475,188 @@ export function DeviceConsolesPanel({ selected, onSelect }: { selected: string |
           onClose={() => setConnect(null)}
           onConnected={(s) => {
             setConnect(null);
+            setShowSaved(false);
             sessions.reload();
+            bookmarks.reload();
             onSelect(s.id);
             toast.success(`Connected to ${s.host}`);
           }}
         />
       )}
+      {editing && <BookmarkEditor bookmark={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onSaved={() => (setEditing(null), bookmarks.reload())} />}
     </div>
+  );
+}
+
+/** Saved connections: every device you connect to, with its user, guide and (if you chose) its password. */
+function SavedConnections({ list, onConnect, onEdit, onAdd, onChanged }: { list: ConsoleBookmark[]; onConnect: (b: ConsoleBookmark) => void; onEdit: (b: ConsoleBookmark) => void; onAdd: () => void; onChanged: () => void }) {
+  const [q, setQ] = useState('');
+  const { confirm, dialog } = useConfirm();
+  const forgetRef = useRef(true);
+  const s = q.trim().toLowerCase();
+  const shown = s ? list.filter((b) => `${b.label} ${b.host} ${b.username ?? ''} ${b.notes} ${deviceProfile(b.profileId)?.name ?? ''}`.toLowerCase().includes(s)) : list;
+  return (
+    <div className="console-main saved-connections">
+      <div className="console-head">
+        <div>
+          <div className="console-title">Saved connections</div>
+          <div className="fx-muted" style={{ fontSize: 12.5 }}>
+            Your switches, firewalls, access points and servers. Passwords you chose to remember stay encrypted in your vault (Credentials).
+          </div>
+        </div>
+        <span className="fx-spacer" />
+        <div style={{ width: 220 }}>
+          <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search saved connections" aria-label="Search saved connections" />
+        </div>
+        <Button size="sm" icon="plus" onClick={onAdd}>
+          Add
+        </Button>
+      </div>
+      {list.length === 0 ? (
+        <Empty title="Nothing saved yet">Connect to a device and it is kept here, or add one by hand.</Empty>
+      ) : (
+        <div className="saved-grid">
+          {shown.map((b) => {
+            // No guide picked: the one Connect would pick from its name.
+            const guide = deviceProfile(b.profileId) ?? matchDeviceProfile({ vendor: b.vendor, name: b.label });
+            return (
+              <div key={b.id} className="saved-card">
+                <div className="saved-card-head">
+                  <b>{b.label}</b>
+                  {b.passwordSaved && (
+                    <span className="saved-key" title="Password saved (encrypted)">
+                      <Icons.key size={12} /> saved
+                    </span>
+                  )}
+                </div>
+                <div className="mono fx-muted" style={{ fontSize: 12 }}>
+                  {b.protocol.toUpperCase()} {b.username ? `${b.username}@` : ''}
+                  {b.host}:{b.port}
+                </div>
+                <div className="fx-muted" style={{ fontSize: 12 }}>
+                  {guide ? guide.name : 'No guide'} · {b.lastConnectedAt ? `used ${timeAgo(b.lastConnectedAt)}` : 'not used yet'}
+                </div>
+                {b.notes && <div className="saved-notes">{b.notes}</div>}
+                <div className="fx-actions">
+                  <Button size="sm" variant="primary" icon="terminal" onClick={() => onConnect(b)}>
+                    Connect
+                  </Button>
+                  <Button size="sm" variant="ghost" icon="edit" onClick={() => onEdit(b)}>
+                    Edit
+                  </Button>
+                  <span className="fx-spacer" />
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    icon="trash"
+                    aria-label={`Remove ${b.label}`}
+                    onClick={async () => {
+                      forgetRef.current = true;
+                      if (
+                        await confirm({
+                          title: `Remove ${b.label}?`,
+                          body: b.passwordSaved ? (
+                            <ForgetToggle value={forgetRef} />
+                          ) : (
+                            'It leaves Saved connections. You can connect to it again any time.'
+                          ),
+                          confirmLabel: 'Remove',
+                          danger: true,
+                        })
+                      )
+                        await call('console.removeBookmark', { id: b.id, forgetPassword: b.passwordSaved && forgetRef.current }).then(onChanged);
+                    }}
+                  />
+                </div>
+              </div>
+            );
+          })}
+          {!shown.length && <div className="fx-muted">Nothing matches “{q}”.</div>}
+        </div>
+      )}
+      {dialog}
+    </div>
+  );
+}
+
+/** Lives inside the confirmation, so it keeps its own state and reports it through the ref. */
+function ForgetToggle({ value }: { value: { current: boolean } }) {
+  const [on, setOn] = useState(value.current);
+  return <Toggle checked={on} onChange={(v) => ((value.current = v), setOn(v))} label="Also forget its saved password" />;
+}
+
+function BookmarkEditor({ bookmark, onClose, onSaved }: { bookmark: ConsoleBookmark | null; onClose: () => void; onSaved: () => void }) {
+  const [label, setLabel] = useState(bookmark?.label ?? '');
+  const [host, setHost] = useState(bookmark?.host ?? '');
+  const [protocol, setProtocol] = useState<ConsoleProtocol>(bookmark?.protocol ?? 'ssh');
+  const [port, setPort] = useState(bookmark ? String(bookmark.port) : '');
+  const [username, setUsername] = useState(bookmark?.username ?? '');
+  const [profileId, setProfileId] = useState(bookmark?.profileId ?? '');
+  const [notes, setNotes] = useState(bookmark?.notes ?? '');
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const save = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await call('console.saveBookmark', { id: bookmark?.id, label, host, protocol, port: Number(port) || undefined, username: username || null, profileId: profileId || null, notes });
+      onSaved();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Modal
+      title={bookmark ? `Edit ${bookmark.label}` : 'Add a saved connection'}
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={busy} disabled={!host.trim()} onClick={() => void save()}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <div className="fx-form">
+        <Field label="Name">
+          <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Core switch" autoFocus />
+        </Field>
+        <div className="fx-row">
+          <Field label="Address">
+            <Input value={host} onChange={(e) => setHost(e.target.value)} placeholder="192.168.1.2" disabled={!!bookmark} />
+          </Field>
+          <Field label="Connect with">
+            <div className="seg" role="group">
+              {(['ssh', 'telnet'] as const).map((p) => (
+                <button key={p} className={protocol === p ? 'on' : ''} disabled={!!bookmark} onClick={() => setProtocol(p)}>
+                  {p === 'ssh' ? 'SSH' : 'Telnet'}
+                </button>
+              ))}
+            </div>
+          </Field>
+          <Field label="Port">
+            <Input type="number" value={port} placeholder={protocol === 'telnet' ? '23' : '22'} onChange={(e) => setPort(e.target.value)} disabled={!!bookmark} style={{ width: 90 }} />
+          </Field>
+        </div>
+        <div className="fx-row">
+          <Field label="User name">
+            <Input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="admin" disabled={!!bookmark} />
+          </Field>
+          <Field label="Device guide">
+            <Select value={profileId} onChange={(e) => setProfileId(e.target.value)} options={[{ value: '', label: 'None' }, ...DEVICE_PROFILES.map((p) => ({ value: p.id, label: p.name }))]} />
+          </Field>
+        </div>
+        <Field label="Notes" help="Where it is, what it does, who to call">
+          <TextArea rows={3} value={notes} onChange={(e) => setNotes(e.target.value)} />
+        </Field>
+        {bookmark && <div className="fx-muted" style={{ fontSize: 12 }}>The address, protocol and user identify the connection (and its saved password); to change them, add a new one.</div>}
+        {error && <Callout tone="critical">{error}</Callout>}
+      </div>
+    </Modal>
   );
 }

@@ -31,7 +31,7 @@ await build({
   format: 'esm',
   // ssh2's optional native speed-ups: without them it uses its pure-JavaScript code.
   external: ['electron', 'bufferutil', 'utf-8-validate', 'cpu-features', '*.node'],
-  define: { __FBRX_LICENSE_PUBKEYS__: JSON.stringify(keys), __FBRX_MS_CLIENT_ID__: JSON.stringify(process.env.FBRX_MS_CLIENT_ID ?? ''), 'process.env.FBRX_APP_VERSION': JSON.stringify(pkg.version) },
+  define: { __FBRX_LICENSE_PUBKEYS__: JSON.stringify(keys), __FBRX_MS_CLIENT_ID__: JSON.stringify(process.env.FBRX_MS_CLIENT_ID ?? ''), __FBRX_ACCOUNT_SERVER__: JSON.stringify(process.env.FBRX_ACCOUNT_SERVER ?? ''), 'process.env.FBRX_APP_VERSION': JSON.stringify(pkg.version) },
   // CommonJS dependencies (ssh2 among them) expect require, __filename and __dirname.
   banner: { js: ESM_BANNER },
 });
@@ -40,6 +40,15 @@ await build({
   entryPoints: [join(app, 'src/preload/index.ts')],
   outfile: join(app, 'dist/preload/index.cjs'),
   format: 'cjs',
+  external: ['electron'],
+});
+// FBRX Browser's sign-in helper, in each web page's own isolated world (the Vault's browser extension).
+await build({
+  ...common,
+  entryPoints: [join(app, 'src/preload/autofill.ts')],
+  outfile: join(app, 'dist/preload/autofill.cjs'),
+  format: 'cjs',
+  platform: 'browser',
   external: ['electron'],
 });
 copyFileSync(join(root, 'packages/core/src/plugins/plugin-worker.mjs'), join(app, 'dist/main/plugin-worker.mjs'));
@@ -59,6 +68,9 @@ const mobileSrc = join(root, 'packages/core/mobile');
 for (const f of readdirSync(mobileSrc)) copyFileSync(join(mobileSrc, f), join(mobileOut, f));
 copyFileSync(join(root, 'node_modules/tweetnacl/nacl-fast.min.js'), join(mobileOut, 'nacl.min.js'));
 copyFileSync(join(app, 'build', 'icon.png'), join(mobileOut, 'icon.png'));
+// FBRX Digger's window icon (the same build, packaged by electron-builder.digger.yml).
+mkdirSync(join(app, 'dist/assets'), { recursive: true });
+copyFileSync(join(app, 'build', 'digger-icon.png'), join(app, 'dist/assets/digger-icon.png'));
 
 // Voice input's speech engine (ONNX Runtime for WebAssembly), served to the app from fbrx-voice://ort/ so nothing
 // is fetched from a CDN. It must be the exact build the bundled transformers.js expects.

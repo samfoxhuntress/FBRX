@@ -1,0 +1,12 @@
+{
+  "name": "fbrx-purchases",
+  "version": "1.0.0",
+  "private": true,
+  "description": "In-app purchases for FBRX Mobile: StoreKit 2 on iPhone and iPad, Play Billing on Android. The FBRX account checks every purchase with the store.",
+  "license": "UNLICENSED",
+  "files": ["android/src/main/", "android/build.gradle", "ios/Sources", "FbrxPurchases.podspec", "Package.swift"],
+  "capacitor": {
+    "ios": { "src": "ios" },
+    "android": { "src": "android" }
+  }
+}

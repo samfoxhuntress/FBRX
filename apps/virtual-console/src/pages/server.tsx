@@ -7,8 +7,8 @@ import { useApp, usePoll, useRoute } from '../state';
 type Tab = 'overview' | 'bios' | 'log' | 'connection';
 
 /**
- * The server itself, through its management controller (iDRAC on a Dell PowerEdge): health, sensors, power, the event
- * log, and BIOS settings changed from here instead of at the boot screen.
+ * The server itself, through its management controller (any Redfish one): health, sensors, power, the event log, and
+ * BIOS settings changed from here instead of at the boot screen.
  */
 export function ServerPage({ tab }: { tab?: string }) {
   const [, go] = useRoute();
@@ -19,7 +19,7 @@ export function ServerPage({ tab }: { tab?: string }) {
   return (
     <Page
       title="Server & BIOS"
-      description={c ? `Through ${c.kind ?? 'the management controller'} at ${c.host}` : 'Connect the server’s management controller (iDRAC, iLO, XClarity or any Redfish one) to see its health and change BIOS settings from here.'}
+      description={c ? `Through ${c.kind ?? 'the management controller'} at ${c.host}` : 'Connect the server’s management controller (any that speaks Redfish) to see its health and change BIOS settings from here.'}
     >
       {!c ? (
         <Connect onDone={() => void cfg.reload()} />
@@ -57,9 +57,9 @@ function Connect({ onDone }: { onDone: () => void }) {
   if (!app.can('admin')) return <Empty title="Not connected">An administrator connects the management controller.</Empty>;
   return (
     <Grid cols={2}>
-      <Card title="Connect the management controller" subtitle="The small computer inside the server that runs even when it is off (iDRAC on Dell PowerEdge).">
+      <Card title="Connect the management controller" subtitle="The small computer inside the server that runs even when it is off, with its own network port.">
         <div className="fx-form">
-          <Field label="Its address" help="The iDRAC's IP address or name (shown at boot, on the server's LCD, or in your router).">
+          <Field label="Its address" help="The controller's IP address or name (shown at boot, on the server's front panel, or in your router).">
             <Input value={host} onChange={(e) => { setHost(e.target.value); setProbe(null); setTrust(false); }} placeholder="192.168.1.20" />
           </Field>
           {!probe ? (
@@ -74,7 +74,7 @@ function Connect({ onDone }: { onDone: () => void }) {
                     It says it is <b>{probe.subject}</b>, issued by <b>{probe.issuer}</b>.
                   </div>
                   <div className="mono" style={{ fontSize: 12, wordBreak: 'break-all' }}>{probe.fingerprint}</div>
-                  {!probe.trusted && <div className="fx-secondary">Controllers come with their own certificate. Compare this fingerprint with the one in the iDRAC web page (Settings → SSL) and trust it once: FBRX Virtual then talks only to this exact controller.</div>}
+                  {!probe.trusted && <div className="fx-secondary">Controllers come with their own certificate. Compare this fingerprint with the one on the controller's own web page (its network or SSL settings) and trust it once: FBRX Virtual then talks only to this exact controller.</div>}
                 </div>
               </Callout>
               {!probe.trusted && <Toggle checked={trust} onChange={setTrust} label="This is my server’s controller: trust this certificate" />}
@@ -102,10 +102,10 @@ function Connect({ onDone }: { onDone: () => void }) {
         <ul className="vt-list">
           <li>Temperatures, fans and power use, and the server's own health.</li>
           <li>Turn the server on and off, or restart it, even when the operating system is stuck.</li>
-          <li>BIOS settings from this page: turn on virtualization (VT-x, VT-d), SR-IOV and the performance profile without a keyboard on the server.</li>
+          <li>BIOS settings from this page: turn on hardware virtualization and the IOMMU, SR-IOV and the performance profile without a keyboard on the server.</li>
           <li>The hardware event log (memory errors, power supply problems, fan failures).</li>
         </ul>
-        <div className="fx-help">Use a separate iDRAC account for FBRX Virtual (Administrator role) so you can revoke it any time. The password is kept encrypted on this server.</div>
+        <div className="fx-help">Use a separate controller account for FBRX Virtual (administrator role) so you can revoke it any time. The password is kept encrypted on this server.</div>
       </Card>
     </Grid>
   );
@@ -201,12 +201,16 @@ function Overview() {
   );
 }
 
-/** Settings FBRX Virtual wants, by their Dell names (other makers' are matched when their names are the same). */
-const RECOMMENDED: Array<{ name: string; value: string; why: string }> = [
-  { name: 'ProcVirtualization', value: 'Enabled', why: 'Hardware virtualization (VT-x and VT-d): virtual machines at full speed, and PCI devices for them.' },
-  { name: 'SriovGlobalEnable', value: 'Enabled', why: 'Lets network cards split into many virtual ones for virtual machines.' },
-  { name: 'SysProfile', value: 'PerfOptimized', why: 'Keeps processors at full speed instead of saving power (snappier virtual machines).' },
-  { name: 'BootMode', value: 'Uefi', why: 'Modern boot, needed for Secure Boot and disks over 2 TB.' },
+/**
+ * Settings FBRX Virtual wants. Makers name them differently, so each lists the Redfish attribute names and values in use;
+ * the first one this server has (with that choice) is the one shown.
+ */
+const RECOMMENDED: Array<{ options: Array<[name: string, value: string]>; why: string }> = [
+  { options: [['ProcVirtualization', 'Enabled']], why: 'Hardware virtualization: virtual machines at full speed (on some servers this also covers the IOMMU).' },
+  { options: [['IntelProcVtd', 'Enabled']], why: 'The IOMMU: giving PCI devices (network cards, GPUs) to virtual machines.' },
+  { options: [['SriovGlobalEnable', 'Enabled'], ['Sriov', 'Enabled']], why: 'Lets network cards split into many virtual ones for virtual machines.' },
+  { options: [['SysProfile', 'PerfOptimized'], ['WorkloadProfile', 'Virtualization-MaxPerformance']], why: 'Keeps processors at full speed instead of saving power (snappier virtual machines).' },
+  { options: [['BootMode', 'Uefi']], why: 'Modern boot, needed for Secure Boot and disks over 2 TB.' },
 ];
 
 function Bios() {
@@ -228,7 +232,13 @@ function Bios() {
     }
     return [...m.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [attrs, q]);
-  const recommended = RECOMMENDED.map((r) => ({ ...r, attr: attrs.find((a) => a.name === r.name) })).filter((r) => r.attr && r.attr.options.some((o) => o.value === r.value));
+  const recommended = RECOMMENDED.flatMap((r) => {
+    for (const [name, value] of r.options) {
+      const attr = attrs.find((a) => a.name === name);
+      if (attr && attr.options.some((o) => o.value === value)) return [{ name, value, why: r.why, attr }];
+    }
+    return [];
+  });
   const missing = recommended.filter((r) => (r.attr!.pending ?? r.attr!.value) !== r.value && edits[r.name] !== r.value);
   const count = Object.keys(edits).length;
   const apply = async (restart: boolean) => {

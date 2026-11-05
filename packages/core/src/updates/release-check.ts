@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
-import { RELEASE_MANIFEST_URL, compareSemver, isValidSemver, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
+import { DIGGER_NAME, RELEASE_MANIFEST_URL, ReleaseManifestSchema, compareSemver, type AppFlavor, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
@@ -19,18 +19,6 @@ import { unzip } from '../util/unzip';
  * newer version, and, when asked, downloads the new version into the same folder and starts the installer there,
  * exactly what the person would otherwise do by hand. The installer closes FBRX, updates it and reopens it.
  */
-
-const ManifestSchema = z.object({
-  version: z.string().refine(isValidSemver, 'not a version'),
-  stage: z.string().max(40).default('Alpha'),
-  codename: z.string().max(60).default(''),
-  released: z.string().max(40).default(''),
-  importance: z.enum(['optional', 'recommended', 'important']).default('recommended'),
-  summary: z.string().max(600).default(''),
-  notes: z.array(z.string().max(400)).max(40).default([]),
-  download: z.string().url(),
-  page: z.string().url(),
-});
 
 /** Written by the setup wizard into the data folder: where FBRX was installed from. */
 export const INSTALL_SOURCE_FILE = 'install-source.json';
@@ -54,6 +42,8 @@ export interface ReleaseCheckerDeps {
   launchInstaller?: (root: string) => string;
   /** A good moment to install by itself (nobody presenting, the agent idle, the computer not in use). */
   quiet?: () => boolean;
+  /** FBRX Digger follows its own entry in release.json, and is downloaded from its release page. */
+  flavor?: AppFlavor;
 }
 
 export class ReleaseChecker {
@@ -111,15 +101,18 @@ export class ReleaseChecker {
     try {
       const res = await fetch(this.manifestUrl, { headers: { 'user-agent': `FBRX-OS/${this.d.appVersion}`, 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(20_000) });
       if (!res.ok) throw new Error(`The release list answered ${res.status}`);
-      const latest: ReleaseInfo = ManifestSchema.parse(await res.json());
-      const newer = compareSemver(latest.version, this.d.appVersion) > 0;
+      // What is new in FBRX Command is for FBRX Command; FBRX Digger reads its own entry.
+      const { command: _command, digger, ...os } = ReleaseManifestSchema.parse(await res.json());
+      const latest: ReleaseInfo | null = this.d.flavor === 'digger' ? (digger ? { ...digger, stage: '', codename: '', importance: 'recommended' } : null) : os;
+      const newer = !!latest && compareSemver(latest.version, this.d.appVersion) > 0;
       this.set({ state: newer ? 'available' : 'current', latest, checkedAt: new Date().toISOString(), message: null });
+      if (!latest) return this.status();
       this.d.log.info('Checked for a new version', { current: this.d.appVersion, latest: latest.version });
       if (newer) this.maybeAutoInstall();
       if (newer && !this.d.settings().updates.autoInstall && this.d.settings().updates.skipVersion !== latest.version && this.readState().notified !== latest.version) {
         this.writeState({ notified: latest.version });
         await this.d.notify(
-          `FBRX OS ${latest.stage} ${latest.version} is available`,
+          this.d.flavor === 'digger' ? `${DIGGER_NAME} ${latest.version} is available` : `FBRX OS ${latest.stage} ${latest.version} is available`,
           `${latest.summary || 'A new version is ready.'} Open Settings → Updates to install it when it suits you.`,
           latest.version,
         );
@@ -171,6 +164,8 @@ export class ReleaseChecker {
 
   /** The folder the setup wizard installed from, when it is still there. */
   installRoot(): string | null {
+    // Digger is installed from its own installers: a new version is downloaded from its release page.
+    if (this.d.flavor === 'digger') return null;
     try {
       const { root } = JSON.parse(readFileSync(join(this.d.dataRoot, INSTALL_SOURCE_FILE), 'utf8')) as { root?: string };
       return root && existsSync(join(root, 'package-lock.json')) && existsSync(join(root, 'apps', 'desktop')) ? root : null;

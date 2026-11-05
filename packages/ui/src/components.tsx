@@ -35,11 +35,11 @@ export function AdvancedTag({ label = 'Ultra', title = 'Part of FBRX Endpoint Ul
   );
 }
 
-/** A tab label with the Ultra tag. */
-export function advancedLabel(label: ReactNode): ReactNode {
+/** A tab label with the Ultra tag (or the Black Hole one). */
+export function advancedLabel(label: ReactNode, blackHole = false): ReactNode {
   return (
     <>
-      {label} <AdvancedTag />
+      {label} {blackHole ? <AdvancedTag label="Black Hole" title="Part of FBRX Endpoint Black Hole" /> : <AdvancedTag />}
     </>
   );
 }
@@ -47,6 +47,8 @@ export function advancedLabel(label: ReactNode): ReactNode {
 export function Shell(props: {
   /** The product name beside the logo (FBRX OS unless told otherwise). */
   brandName?: ReactNode;
+  /** Another app's own logo in place of FBRX's (FBRX Digger's mole). */
+  brandMark?: ReactNode;
   brandSub?: string;
   /** Clicks on the logo (the desktop app counts them for an easter egg). */
   onBrandClick?: () => void;
@@ -69,11 +71,11 @@ export function Shell(props: {
     <div className={cx('fx-shell', props.groups && 'grouped', collapsed && 'collapsed')}>
       <aside className="fx-sidebar">
         <div className="fx-brand">
-          <FbrxMark className={cx('fx-brand-mark', props.brandClassName)} onClick={props.onBrandClick} />
+          {props.brandMark ?? <FbrxMark className={cx('fx-brand-mark', props.brandClassName)} onClick={props.onBrandClick} />}
           {!collapsed && (
             <div>
               <div className="fx-brand-name">{props.brandName ?? 'FBRX OS'}</div>
-              <div className="fx-brand-sub">{props.brandSub ?? 'Fabrics Operating System'}</div>
+              <div className="fx-brand-sub">{props.brandSub ?? 'FBRX OS'}</div>
             </div>
           )}
         </div>
@@ -112,7 +114,7 @@ export function Shell(props: {
 function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
   const Ico = Icons[item.icon];
   return (
-    <button className={cx('fx-nav-item', active && 'active')} onClick={onClick} aria-current={active ? 'page' : undefined}>
+    <button className={cx('fx-nav-item', active && 'active')} onClick={onClick} aria-current={active ? 'page' : undefined} data-nav={item.id} data-section={item.section}>
       <Ico />
       <span>{item.label}</span>
       {item.tag && <span className="fx-adv-tag">{item.tag}</span>}
@@ -157,7 +159,7 @@ function GroupedNav({ groups, active, onNavigate, collapsed }: { groups: NavGrou
         const count = g.items.reduce((n, i) => n + (i.count ?? 0), 0);
         const flying = collapsed && flyout?.id === g.id;
         return (
-          <div key={g.id} className={cx('fx-group', isOpen && 'open', current === g.id && 'here')}>
+          <div key={g.id} className={cx('fx-group', isOpen && 'open', current === g.id && 'here')} data-group={g.id}>
             <button
               className="fx-group-head"
               aria-expanded={collapsed ? flying : isOpen}
@@ -536,7 +538,9 @@ export function JsonEditor({ value, onChange, rows = 12, onValidity }: { value: 
   } catch (e) {
     error = (e as Error).message;
   }
-  useEffect(() => onValidity?.(!error), [error, onValidity]);
+  useEffect(() => {
+    onValidity?.(!error);
+  }, [error, onValidity]);
   return (
     <div className="fx-field">
       <TextArea code rows={rows} value={value} onChange={(e) => onChange(e.target.value)} />

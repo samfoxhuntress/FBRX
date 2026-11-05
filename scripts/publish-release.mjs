@@ -48,7 +48,7 @@ function classify(fileName) {
   if (/^(latest.*\.yml|builder-(debug|effective-config)\.ya?ml)$/.test(f)) return null; // the control plane generates feeds
   let platform = null;
   if (/\.(dmg|pkg|zip)(\.blockmap)?$/.test(f)) platform = 'darwin';
-  if (/\.(exe|msi|appx)(\.blockmap)?$/.test(f)) platform = 'win32';
+  if (/\.(exe|msi)(\.blockmap)?$/.test(f)) platform = 'win32';
   if (/\.(appimage|deb|rpm)(\.blockmap)?$/.test(f)) platform = 'linux';
   if (!platform) return null;
   const arch = /arm64|aarch64/.test(f) ? 'arm64' : /universal/.test(f) ? 'universal' : /x64|x86_64|amd64/.test(f) ? 'x64' : platform === 'win32' ? 'universal' : 'x64';

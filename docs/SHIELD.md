@@ -11,7 +11,7 @@
 * **Automatic** (the default): an antivirus you installed that is on; otherwise Microsoft Defender when it is protecting
   Windows; otherwise an installed antivirus even if it is off (so you hear that it is off); otherwise FBRX Shield.
 
-FBRX then shows that antivirus's status everywhere (FBRX Shield, Security, FBRX Glass, the agent, FBRX Command), runs
+FBRX then shows that antivirus's status everywhere (FBRX Shield, Security, Dash, the agent, FBRX Command), runs
 its scans where it can, and raises an **Antivirus needs attention** alert when it is off, out of date or gone.
 
 ## What FBRX can see and do with each
@@ -59,6 +59,17 @@ What happens to a finding:
 * Each finding raises a **FBRX Shield found a threat** alert (desktop, phone, e-mail, webhooks and FBRX Command, as
   set in Alerts). Deciding on the finding (Trust, Quarantine or Delete) takes its alert out of Alerts too.
 
+**FBRX's own files are never flagged**: its program folder, its data folder, its update downloads, `ProgramData\FBRX`
+on Windows, and any FBRX folder unpacked from the zip and built (for example in Downloads, with its `node_modules`)
+are left out of scans and download checks. Packages inside `node_modules` folders do not count as "from the
+internet". After FBRX Shield's rules change (an update), it checks its suspicious list once more by itself and clears
+findings that no longer apply; **Check the list again** does the same on demand.
+
+**One alert per scan**: a scan raises one summary alert ("FBRX Shield found 3 suspicious files"), not one per file,
+and download checks raise at most three alerts a minute, then one summary for the rest. **Trust all suspicious (N)**
+trusts every suspicious finding at once (never malware), and right-clicking a finding trusts everything in its
+folder.
+
 **Download checks** look at new files in Downloads and on the desktop as soon as they stop growing (unfinished browser
 downloads are skipped). **Quick scan**: Downloads, the desktop, the temp folder and the startup folders. **Full scan**:
 your home folder, the temp folder and the startup folders. Photos, music and video are listed but not fingerprinted,
@@ -70,9 +81,12 @@ running too.
 
 ### Editions
 
-Endpoint Basic and Ultra both have FBRX Shield's download checks, scans, threat database, rules and quarantine, and
-the choice of antivirus. **Endpoint Ultra** adds scheduled scans (a quick scan every day or week) and the second
-engines (ClamAV, VirusTotal). Student and child computers (FBRX OS Education and Home) run the download checks in the
+Every edition (Essentials, Standard and Ultra) has FBRX Shield's download checks, scans, threat database, rules and
+quarantine, the choice of antivirus, and a **scheduled scan** (Settings on the FBRX Shield page: a quick scan every
+day or every week, at noon). **Endpoint Ultra** chooses when: picking a schedule shows *At what time?* (and *On which
+day?* for a weekly scan). A computer that is off at that time scans when it is next on, and a new or changed schedule
+waits for its next time. Ultra also adds the second engines (ClamAV, VirusTotal). FBRX Command sets
+`protection.shield.schedule`, `scheduleTime` ("21:30") and `scheduleDay` (0 = Sunday) for a group like any setting. Student and child computers (FBRX OS Education and Home) run the download checks in the
 background without the page; the school or family chooses their antivirus from FBRX Command.
 
 ## The agent
@@ -82,6 +96,9 @@ background without the page; the school or family chooses their antivirus from F
 | `shield.status` | read | Which antivirus protects the computer, its state and problems, and FBRX Shield's recent findings |
 | `shield.scan` | read | Scans a file or folder with FBRX Shield and reports (moves nothing) |
 | `shield.quarantine` | write | Quarantines a finding (with approval) |
+
+Trusting many findings at once (`shield.allowMany`) and **Check the list again** (`shield.recheck`) are for the person
+at the computer only.
 
 ## Organizations (FBRX Command)
 

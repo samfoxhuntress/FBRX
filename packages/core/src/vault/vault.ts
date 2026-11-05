@@ -132,6 +132,7 @@ export class Vault {
     const counts = this.db.get<{ n: number; m: number }>(
       'SELECT COUNT(*) AS n, COALESCE(SUM(managed), 0) AS m FROM secrets WHERE internal = 0',
     );
+    const logins = this.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM vault_logins');
     const lockReason = !row || this.dek ? null : (this.lockReason ?? 'keychain');
     return {
       state: !row ? 'uninitialized' : this.dek ? 'unlocked' : 'locked',
@@ -139,6 +140,7 @@ export class Vault {
       keychainKind: this.keychain.kind,
       secretCount: Number(counts?.n ?? 0),
       managedCount: Number(counts?.m ?? 0),
+      loginCount: Number(logins?.n ?? 0),
       hasRecovery: !!row?.dek_recovery,
       lockReason,
       passwordOnStart: !!row?.password_on_start,
@@ -240,11 +242,12 @@ export class Vault {
     this.changed();
   }
 
-  /** Deletes every credential (FBRX's own included) and starts a new, empty vault. */
+  /** Deletes every credential (FBRX's own included) and every sign-in, and starts a new, empty vault. */
   async reset(): Promise<void> {
     this.dek?.fill(0);
     this.dek = null;
     this.db.run('DELETE FROM secrets');
+    this.db.run('DELETE FROM vault_logins');
     this.db.run('DELETE FROM vault_keys');
     this.lockReason = null;
     this.log.warn('Vault reset: every saved credential was deleted');
@@ -276,6 +279,20 @@ export class Vault {
     this.dek?.fill(0);
     this.dek = null;
     this.lockReason = this.keyRow()?.password_on_start ? 'password' : 'manual';
+    this.changed();
+  }
+
+  /** Encrypts something kept beside the credentials (a sign-in in the password keeper), bound to its label. */
+  seal(label: string, value: string): string {
+    return sealString(this.requireKey(), value, label);
+  }
+
+  unseal(label: string, sealed: string): string {
+    return openString(this.requireKey(), sealed, label);
+  }
+
+  /** Tells listeners something kept with the vault changed (the password keeper's sign-ins). */
+  touched(): void {
     this.changed();
   }
 

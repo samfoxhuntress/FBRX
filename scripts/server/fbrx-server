@@ -21,8 +21,289 @@ helper() {
 }
 has_ai() { [ -f /etc/systemd/system/fbrx-core.service ]; }
 has_gate() { [ -f /etc/systemd/system/fbrx-gate-firewall.service ]; }
+has_command() { [ -f /etc/systemd/system/fbrx-command.service ]; }
+CMD_DATA=/var/lib/fbrx-command
+CMD_ENV=/etc/fbrx-command/fbrx-command.env
+cmd_value() { (grep -hE "^$1=" "$CMD_ENV" /etc/fbrx-command/secrets.env 2>/dev/null || true) | tail -1 | cut -d= -f2-; }
+cmd_fingerprint() {
+  if [ -f "$CMD_DATA/tls/command.crt" ]; then openssl x509 -in "$CMD_DATA/tls/command.crt" -noout -fingerprint -sha256 | cut -d= -f2; else echo "made at its first start"; fi
+}
+# FBRX Command's own word on whether it waits to be set up (on its local-only port): true, false, or nothing.
+cmd_needs_setup() { curl -fs --max-time 3 "http://127.0.0.1:$(cmd_value FBRX_CP_LOCAL_PORT)/v1/setup/status" 2>/dev/null | grep -oE '"needsSetup":(true|false)' | cut -d: -f2; }
 roles() { (grep -E '^ROLES=' /etc/fbrx-server-release 2>/dev/null || echo 'ROLES="virtual"') | cut -d'"' -f2; }
 need_root() { [ "$(id -u)" -eq 0 ] || { echo "Run this as root (sudo fbrx-server $1)." >&2; exit 1; }; }
+has_role() { case ",$(roles)," in *",$1,"*) return 0 ;; *) return 1 ;; esac; }
+
+# ------------------------------------------------------------------------------------------------- update
+# sudo fbrx-server update check     a newer FBRX Server: downloaded, its checksum compared, unpacked (nothing changes yet)
+# sudo fbrx-server update commit    installs it; the previous version is kept, and comes back by itself if the new one
+#                                   does not answer
+# sudo fbrx-server update rollback  back to the previous version
+UPD=/var/lib/fbrx-server-update
+LOG=/var/log/fbrx-server-update.log
+staged_value() { sed -n "s/^$1=//p" "$UPD/staged.env" 2>/dev/null | head -1; }
+version_now() { (sed -n 's/^VERSION="\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' /etc/fbrx-server-release 2>/dev/null || true) | head -1; }
+healthy() {
+  for _ in $(seq 1 "${1:-60}"); do
+    if curl -fsk "https://127.0.0.1:$(port)/healthz" >/dev/null 2>&1 || curl -fs "http://127.0.0.1:$(port)/healthz" >/dev/null 2>&1; then return 0; fi
+    sleep 1
+  done
+  return 1
+}
+# The parts of FBRX Server an update replaces, copied aside (programs, settings, service files and the databases;
+# virtual disks, ISOs and AI models are not touched by an update and stay where they are).
+save_previous() {
+  local to="$UPD/previous.new"
+  rm -rf "$to"
+  mkdir -p "$to/sbin" "$to/units" "$to/data" "$to/core-data" "$to/command-data"
+  cp -a "$APP" "$to/app"
+  cp -a /etc/fbrx-server-release "$to/" 2>/dev/null || true
+  cp -a /etc/fbrx-virtual "$to/etc-fbrx-virtual"
+  if [ -d /etc/fbrx-core ]; then cp -a /etc/fbrx-core "$to/etc-fbrx-core"; fi
+  if [ -d /etc/fbrx-command ]; then cp -a /etc/fbrx-command "$to/etc-fbrx-command"; fi
+  for f in /usr/local/sbin/fbrx-server /usr/local/sbin/fbrx-gate; do if [ -f "$f" ]; then cp -a "$f" "$to/sbin/"; fi; done
+  for f in /etc/systemd/system/fbrx-*.service; do if [ -f "$f" ]; then cp -a "$f" "$to/units/"; fi; done
+  find "$DATA" -maxdepth 1 -type f \( -name '*.db' -o -name '*.db-wal' -o -name '*.db-shm' \) -exec cp -a {} "$to/data/" \;
+  if [ -d /var/lib/fbrx-core ]; then find /var/lib/fbrx-core -maxdepth 1 -type f \( -name '*.db' -o -name '*.db-wal' -o -name '*.db-shm' \) -exec cp -a {} "$to/core-data/" \;; fi
+  if [ -d "$CMD_DATA" ]; then find "$CMD_DATA" -maxdepth 1 -type f \( -name '*.db' -o -name '*.db-wal' -o -name '*.db-shm' \) -exec cp -a {} "$to/command-data/" \;; fi
+  version_now >"$to/VERSION"
+  rm -rf "$UPD/previous"
+  mv "$to" "$UPD/previous"
+}
+restore_previous() {
+  local from="$UPD/previous"
+  systemctl stop fbrx-virtual.service 2>/dev/null || true
+  systemctl stop fbrx-core.service 2>/dev/null || true
+  systemctl stop fbrx-command.service 2>/dev/null || true
+  rm -rf "$APP.rollback"
+  cp -a "$from/app" "$APP.rollback"
+  rm -rf "$APP"
+  mv "$APP.rollback" "$APP"
+  if [ -f "$from/fbrx-server-release" ]; then cp -a "$from/fbrx-server-release" /etc/fbrx-server-release; fi
+  rm -rf /etc/fbrx-virtual && cp -a "$from/etc-fbrx-virtual" /etc/fbrx-virtual
+  if [ -d "$from/etc-fbrx-core" ]; then rm -rf /etc/fbrx-core && cp -a "$from/etc-fbrx-core" /etc/fbrx-core; fi
+  if [ -d "$from/etc-fbrx-command" ]; then rm -rf /etc/fbrx-command && cp -a "$from/etc-fbrx-command" /etc/fbrx-command; fi
+  cp -a "$from/sbin/." /usr/local/sbin/
+  cp -a "$from/units/." /etc/systemd/system/
+  find "$DATA" -maxdepth 1 -type f \( -name '*.db-wal' -o -name '*.db-shm' \) -delete
+  cp -a "$from/data/." "$DATA/"
+  if [ -d /var/lib/fbrx-core ]; then
+    find /var/lib/fbrx-core -maxdepth 1 -type f \( -name '*.db-wal' -o -name '*.db-shm' \) -delete
+    cp -a "$from/core-data/." /var/lib/fbrx-core/
+  fi
+  if [ -d "$CMD_DATA" ] && [ -d "$from/command-data" ]; then
+    find "$CMD_DATA" -maxdepth 1 -type f \( -name '*.db-wal' -o -name '*.db-shm' \) -delete
+    cp -a "$from/command-data/." "$CMD_DATA/"
+  fi
+  systemctl daemon-reload
+  if [ -f /etc/systemd/system/fbrx-core.service ] && systemctl is-enabled --quiet fbrx-core.service 2>/dev/null; then systemctl start fbrx-core.service || true; fi
+  if has_command && systemctl is-enabled --quiet fbrx-command.service 2>/dev/null; then systemctl start fbrx-command.service || true; fi
+  systemctl start fbrx-virtual.service || true
+}
+update() {
+  local sub="${1:-status}"
+  [ $# -eq 0 ] || shift
+  case "$sub" in
+    status)
+      echo "Installed:  FBRX Server $(version_now)"
+      if [ -s "$UPD/staged.env" ]; then echo "Ready:      $(staged_value VERSION) (sudo fbrx-server update commit installs it)"; else echo "Ready:      nothing (sudo fbrx-server update check looks for a newer version)"; fi
+      if [ -f "$UPD/previous/VERSION" ]; then echo "Previous:   $(cat "$UPD/previous/VERSION") (sudo fbrx-server update rollback goes back to it)"; fi
+      ;;
+    check)
+      need_root "update check"
+      mkdir -p "$UPD" && chmod 0700 "$UPD"
+      helper update-check "$@"
+      ;;
+    commit)
+      need_root "update commit"
+      local bundle next now
+      bundle="$(staged_value BUNDLE)"
+      next="$(staged_value VERSION)"
+      now="$(version_now)"
+      if [ -z "$bundle" ] || [ ! -f "$bundle/install.sh" ]; then echo "Nothing is ready to install: sudo fbrx-server update check first." >&2; exit 1; fi
+      echo "Installing FBRX Server $next (this server runs $now). Virtual machines keep running; the console restarts."
+      [ "${1:-}" = "--yes" ] || [ ! -t 0 ] || { read -r -p "Go ahead? [y/N] " answer; [[ "$answer" =~ ^[Yy] ]] || exit 1; }
+      echo "Keeping $now aside (programs, settings and databases) so it can come back"
+      systemctl stop fbrx-virtual.service 2>/dev/null || true
+      systemctl stop fbrx-core.service 2>/dev/null || true
+      systemctl stop fbrx-command.service 2>/dev/null || true
+      save_previous
+      { echo; echo "---- $(date -Is) update $now -> $next"; } >>"$LOG"
+      # The new version's own installer, with this server's roles; it keeps the port, the settings and the gate's ports.
+      if bash "$bundle/install.sh" --bundle "$bundle" --yes --roles "$(roles)" 2>&1 | tee -a "$LOG" && healthy 90; then
+        rm -rf "$UPD/staged" "$UPD/staged.env" "$UPD/staged-notes.json"
+        echo
+        echo "FBRX Server $next is installed (it was $now). sudo fbrx-server update rollback goes back."
+        exit 0
+      fi
+      echo >&2
+      echo "FBRX Server $next did not start properly: going back to $now (what happened is in $LOG)." >&2
+      restore_previous
+      if healthy 60; then echo "Back on FBRX Server $now. $next is still ready (sudo fbrx-server update commit tries again)." >&2; else echo "FBRX Server $now did not answer either: fbrx-server logs and fbrx-server doctor say why." >&2; fi
+      exit 1
+      ;;
+    rollback)
+      need_root "update rollback"
+      [ -d "$UPD/previous/app" ] || { echo "There is no previous version to go back to (it is kept after an update commit)." >&2; exit 1; }
+      local prev
+      prev="$(cat "$UPD/previous/VERSION" 2>/dev/null || echo 'the previous version')"
+      echo "Going back from FBRX Server $(version_now) to $prev. Changes made in the console since the update (users, settings,"
+      echo "gate commits) go back with it; virtual machines keep running."
+      [ "${1:-}" = "--yes" ] || [ ! -t 0 ] || { read -r -p "Go back? [y/N] " answer; [[ "$answer" =~ ^[Yy] ]] || exit 1; }
+      { echo; echo "---- $(date -Is) rollback $(version_now) -> $prev"; } >>"$LOG"
+      restore_previous
+      if healthy 60; then echo "Back on FBRX Server $prev."; else echo "FBRX Server $prev did not answer yet: fbrx-server logs and fbrx-server doctor say why." >&2; exit 1; fi
+      ;;
+    *) echo "fbrx-server update [check [--file <bundle.tar.gz>] [--force] | commit | rollback]" >&2; exit 2 ;;
+  esac
+}
+
+# ------------------------------------------------------------------------------------------------- roles
+# fbrx-server roles                       this server's roles, and how the last change went
+# sudo fbrx-server roles add <role> …     adds a role (time, ai, gate, minidome, virtual, command)
+# sudo fbrx-server roles remove <role>    turns one off (its data stays)
+# sudo fbrx-server roles set <list> …     exactly these roles
+# Runs the copy of the installer the server keeps ($APP/bundle) with the new roles; the console's Roles page does the
+# same. Extra options go to the installer (--gate-wan/--gate-lan for the gate role, --force to turn the gate off).
+BUNDLE_KEEP="$APP/bundle"
+ROLES_STATE="$UPD/roles.env"
+ROLES_LOG=/var/log/fbrx-server-roles.log
+roles_state() {
+  mkdir -p "$UPD"
+  printf 'STATE=%s\nROLES=%s\nSTARTED=%s\nFINISHED=%s\n' "$1" "$2" "$3" "${4:-}" >"$ROLES_STATE"
+}
+roles_apply() {
+  local list=$1 started
+  shift
+  [ -f "$BUNDLE_KEEP/install.sh" ] || { echo "This server keeps no copy of its installer yet: update it once (sudo fbrx-server update check, then update commit), or run install.sh --roles $list from a bundle." >&2; exit 1; }
+  started="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  roles_state running "$list" "$started"
+  echo "== $(date -u +%Y-%m-%dT%H:%M:%SZ) roles $(roles) -> $list" >>"$ROLES_LOG"
+  if bash "$BUNDLE_KEEP/install.sh" --bundle "$BUNDLE_KEEP" --roles "$list" "$@" 2>&1 | tee -a "$ROLES_LOG"; then
+    roles_state "done" "$list" "$started" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "Roles now: $(roles | sed 's/,/, /g')"
+  else
+    roles_state failed "$list" "$started" "$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    echo "The change did not finish: the end of $ROLES_LOG says why. The roles are still $(roles | sed 's/,/, /g')." >&2
+    exit 1
+  fi
+}
+roles_cmd() {
+  local sub=${1:-show} r list
+  shift || true
+  case "$sub" in
+    show)
+      echo "Roles: $(roles | sed 's/,/, /g')"
+      if [ -s "$ROLES_STATE" ]; then echo "Last change: $(sed -n 's/^ROLES=//p' "$ROLES_STATE") ($(sed -n 's/^STATE=//p' "$ROLES_STATE"), $(sed -n 's/^STARTED=//p' "$ROLES_STATE"))"; fi
+      [ -f "$BUNDLE_KEEP/install.sh" ] || echo "To change them from here, update once first (sudo fbrx-server update check, then update commit)."
+      ;;
+    add)
+      need_root "roles add"
+      r=${1:?Which role? (fbrx-server roles add time)}
+      shift
+      if has_role "$r"; then echo "This server already has the $r role."; exit 0; fi
+      roles_apply "$(roles),$r" "$@"
+      ;;
+    remove)
+      need_root "roles remove"
+      r=${1:?Which role? (fbrx-server roles remove time)}
+      shift
+      has_role "$r" || { echo "This server does not have the $r role."; exit 0; }
+      list="$(echo ",$(roles)," | sed "s/,$r,/,/; s/^,//; s/,\$//")"
+      [ -n "$list" ] || { echo "That is its last role: keep at least one." >&2; exit 1; }
+      roles_apply "$list" "$@"
+      ;;
+    set)
+      need_root "roles set"
+      list=${1:?Which roles? (fbrx-server roles set virtual,ai,time)}
+      shift
+      roles_apply "$list" "$@"
+      ;;
+    *) echo "Unknown roles command $sub (fbrx-server roles [add|remove|set] …)" >&2; exit 1 ;;
+  esac
+}
+
+# fbrx-server doctor [--fix] [--quiet]: every service the server's roles need, switched on for the next start and
+# running now; with --fix, the ones that are not are switched on and started.
+doctor() {
+  local fix=0 quiet=0 bad=0 fixed=0
+  for a in "$@"; do
+    case "$a" in --fix) fix=1 ;; --quiet) quiet=1 ;; *) echo "Unknown option $a (fbrx-server doctor [--fix])" >&2; return 2 ;; esac
+  done
+  [ "$fix" -eq 0 ] || need_root "doctor --fix"
+  line() { if [ "$quiet" -eq 0 ] || [ "$1" != ok ]; then printf '%-5s %-26s %s\n' "$1" "$2" "$3"; fi; }
+  # unit, what it is, and "boot" for a one-shot that only has to be switched on (it runs at start-up).
+  unit() {
+    local u=$1 what=$2 kind=${3:-} en act
+    en="$(systemctl is-enabled "$u" 2>/dev/null || true)"
+    act="$(systemctl is-active "$u" 2>/dev/null || true)"
+    if [ "$en" = "not-found" ] || [ -z "$en" ] && [ "$act" = "inactive" ] && ! systemctl cat "$u" >/dev/null 2>&1; then
+      line '!!' "$u" "$what: not installed (run install.sh again with this role)"; bad=$((bad + 1)); return
+    fi
+    local want_active=1
+    [ "$kind" = boot ] && want_active=0
+    if [ "$en" = enabled ] || [ "$en" = static ] || [ "$en" = alias ]; then
+      if [ "$want_active" -eq 0 ] || [ "$act" = active ]; then line ok "$u" "$what"; return; fi
+    fi
+    if [ "$fix" -eq 1 ]; then
+      [ "$en" = enabled ] || [ "$en" = static ] || systemctl enable "$u" >/dev/null 2>&1 || true
+      if [ "$want_active" -eq 1 ] && [ "$act" != active ]; then systemctl restart "$u" >/dev/null 2>&1 || true; fi
+      act="$(systemctl is-active "$u" 2>/dev/null || true)"
+      en="$(systemctl is-enabled "$u" 2>/dev/null || true)"
+      if [ "$en" = enabled ] && { [ "$want_active" -eq 0 ] || [ "$act" = active ]; }; then line fixed "$u" "$what: switched on and running"; fixed=$((fixed + 1)); return; fi
+      line '!!' "$u" "$what: still $act (journalctl -u $u says why)"; bad=$((bad + 1)); return
+    fi
+    local state="$act"
+    [ "$want_active" -eq 0 ] && state="loads at start-up"
+    [ "$en" = enabled ] || state="$state, off at the next start"
+    line '!!' "$u" "$what: $state"; bad=$((bad + 1))
+  }
+
+  unit fbrx-virtual.service "the console"
+  if has_role virtual; then unit libvirtd.service "the hypervisor (libvirt)"; fi
+  if has_role ai; then unit fbrx-core.service "the FBRX core (AI, FBRX Mesh)"; fi
+  if has_role command; then
+    unit fbrx-command.service "FBRX Command"
+    if [ "$(systemctl is-active fbrx-command 2>/dev/null || true)" = active ] && [ -z "$(cmd_needs_setup)" ]; then line '!!' "FBRX Command" "running but not answering on its local port (fbrx-server logs command says why)"; bad=$((bad + 1)); fi
+  fi
+  if has_role time; then
+    unit smbd.service "FBRX Time's backup folder for computers (SMB)"
+    if [ -f /etc/fbrx-time/share.env ]; then line ok "backup folder" "\\\\$(address || hostname)\\fbrx-time"
+    else line '!!' "backup folder" "no account for computers yet (run install.sh again with the time role)"; bad=$((bad + 1)); fi
+    if command -v qemu-img >/dev/null 2>&1; then line ok "qemu-img" "copies and checks images"
+    else line '!!' "qemu-img" "missing: FBRX Time cannot copy or check images (apt install qemu-utils)"; bad=$((bad + 1)); fi
+  fi
+  if has_gate; then
+    unit systemd-networkd.service "the gate's ports and VLANs"
+    unit dnsmasq.service "DHCP and DNS"
+    if [ -f /etc/fbrx-gate/gate.nft ]; then
+      unit fbrx-gate-firewall.service "the firewall at start-up" boot
+      if nft list table inet fbrx_gate >/dev/null 2>&1; then line ok "firewall" "loaded"
+      elif [ "$fix" -eq 1 ] && nft -f /etc/fbrx-gate/gate.nft 2>/dev/null; then line fixed "firewall" "loaded again"; fixed=$((fixed + 1))
+      else line '!!' "firewall" "not loaded (sudo fbrx-server doctor --fix)"; bad=$((bad + 1)); fi
+    else
+      line '!!' "gate" "nothing committed yet: fbrx-server logs says why the first commit waits (then sudo fbrx-gate commit)"; bad=$((bad + 1))
+    fi
+    if [ "$(cat /proc/sys/net/ipv4/ip_forward 2>/dev/null || echo 0)" = 1 ]; then line ok "routing" "on (net.ipv4.ip_forward)"
+    elif [ "$fix" -eq 1 ]; then sysctl -qw net.ipv4.ip_forward=1 && line fixed "routing" "switched on"; fixed=$((fixed + 1))
+    else line '!!' "routing" "off in the kernel (net.ipv4.ip_forward)"; bad=$((bad + 1)); fi
+  fi
+  if [ "$(systemctl is-active fbrx-server-firstboot.service 2>/dev/null || true)" = failed ]; then
+    line '!!' "first-start setup" "did not finish: the end of /var/log/fbrx-server-install.log says why (sudo bash /opt/fbrx-installer/firstboot.sh)"; bad=$((bad + 1))
+  fi
+  if has_gate && [ "$(systemctl is-active fbrx-virtual 2>/dev/null || true)" = active ] && [ "$(id -u)" -eq 0 ]; then
+    # The gate's own view: the internet side, overlaps with the router in front, settings that fight over the ports.
+    local problems
+    problems="$(/usr/local/sbin/fbrx-gate status 2>/dev/null | sed -n 's/^problem *//p' || true)"
+    while IFS= read -r p; do if [ -n "$p" ]; then line '!!' gate "$p"; bad=$((bad + 1)); fi; done <<<"$problems"
+  fi
+  if [ "$bad" -eq 0 ]; then
+    [ "$quiet" -eq 1 ] && [ "$fixed" -eq 0 ] || echo "Everything FBRX Server needs is on and running."
+    return 0
+  fi
+  [ "$fix" -eq 1 ] || echo "sudo fbrx-server doctor --fix switches on and starts what is off."
+  return 1
+}
 
 case "${1:-status}" in
   status)
@@ -32,7 +313,9 @@ case "${1:-status}" in
     echo "Roles:        $(roles | sed 's/,/, /g')"
     echo "Service:      $(systemctl is-active fbrx-virtual 2>/dev/null || true)"
     if has_ai; then echo "AI role:      $(systemctl is-active fbrx-core 2>/dev/null || true) (FBRX core: FBRX Mesh on port 47800; Mesh & AI in the console)"; fi
+    if has_command; then echo "FBRX Command: $(systemctl is-active fbrx-command 2>/dev/null || true) · $(cmd_value FBRX_CP_PUBLIC_URL)$([ "$(cmd_needs_setup)" = true ] && echo ' · waiting to be set up (sudo fbrx-server command)')"; fi
     case ",$(roles)," in *,minidome,*) echo "MiniDome:     watching (findings in the console's MiniDome page)" ;; esac
+    case ",$(roles)," in *,time,*) printf 'FBRX Time:    backups in /var/lib/fbrx-time · computers back up to \\\\%s\\fbrx-time (FBRX Time in the console)\n' "$(address || hostname)" ;; esac
     if has_gate; then echo "Gate:         firewall $(nft list table inet fbrx_gate >/dev/null 2>&1 && echo loaded || echo 'not loaded yet') · DNS and DHCP $(systemctl is-active dnsmasq 2>/dev/null || true) (fbrx-gate status for more)"; fi
     case ",$(roles)," in
       *,virtual,*)
@@ -41,8 +324,12 @@ case "${1:-status}" in
         ;;
     esac
     echo "Certificate:  $(fingerprint)"
+    if [ -s "$UPD/staged.env" ]; then echo "Update:       FBRX Server $(staged_value VERSION) is ready (sudo fbrx-server update commit)"; fi
     if [ -s "$DATA/setup-code" ]; then echo "Setup code:   $(cat "$DATA/setup-code")"; fi
     ;;
+  doctor) shift; doctor "$@" ;;
+  roles) shift; roles_cmd "$@" ;;
+  update) shift; update "$@" ;;
   url) url ;;
   fingerprint) fingerprint ;;
   setup-code)
@@ -52,28 +339,62 @@ case "${1:-status}" in
   logs)
     shift
     if [ "${1:-}" = "ai" ]; then shift; exec journalctl -u fbrx-core "${@:--n 100}"; fi
+    if [ "${1:-}" = "command" ]; then shift; exec journalctl -u fbrx-command "${@:--n 100}"; fi
     exec journalctl -u fbrx-virtual "${@:--n 100}"
     ;;
   restart)
     need_root restart
     if [ "${2:-}" = "ai" ]; then systemctl restart fbrx-core && echo "The FBRX core restarted"; exit 0; fi
+    if [ "${2:-}" = "command" ]; then systemctl restart fbrx-command && echo "FBRX Command restarted: $(cmd_value FBRX_CP_PUBLIC_URL)"; exit 0; fi
     systemctl restart fbrx-virtual && echo "FBRX Virtual restarted: $(url)"
+    ;;
+  command)
+    has_command || { echo "The command role is not installed (sudo fbrx-server roles add command)." >&2; exit 1; }
+    echo "FBRX Command: $(cmd_value FBRX_CP_PUBLIC_URL) ($(systemctl is-active fbrx-command 2>/dev/null || true))"
+    echo "Certificate:  $(cmd_fingerprint)"
+    case "$(cmd_needs_setup)" in
+      true)
+        if [ "$(id -u)" -eq 0 ]; then echo "Setup token:  $(cmd_value FBRX_CP_SETUP_TOKEN) (the first sign-in asks for it)"
+        else echo "Setup token:  waiting to be set up (sudo fbrx-server command shows the token)"; fi
+        ;;
+      false) echo "Set up:       yes (computers join it from Deploy & enroll in FBRX Command)" ;;
+      *) echo "Not answering: fbrx-server logs command says why (sudo fbrx-server doctor --fix starts it)" ;;
+    esac
     ;;
   users) need_root users; helper users ;;
   reset-password) need_root reset-password; shift; helper reset-password "$@" ;;
   create-admin) need_root create-admin; shift; helper create-admin "$@" ;;
+  ai)
+    need_root ai
+    has_ai || { echo "The ai role is not installed (sudo bash install.sh --roles <your roles>,ai)." >&2; exit 1; }
+    shift
+    helper ai "$@"
+    ;;
   help | -h | --help)
     cat <<USAGE
 fbrx-server status          what runs, where to open the console, the certificate fingerprint
+fbrx-server doctor [--fix]  checks every service this server needs; --fix switches on and starts what is off
+fbrx-server update          the version installed, one ready to install, the previous one
+fbrx-server update check    looks for a newer FBRX Server and gets it ready (downloaded and checked; --file <bundle>
+                            uses one you brought along)
+fbrx-server update commit   installs it; if it does not come up, the server goes back by itself
+fbrx-server update rollback back to the version before the last update
+fbrx-server roles           this server's roles (virtual, ai, gate, minidome, time, command)
+fbrx-server roles add <role>      adds one (sudo; the gate also needs --gate-wan <port> --gate-lan <port>)
+fbrx-server roles remove <role>   turns one off; its data stays (the gate also needs --force)
 fbrx-server url             the console's address
 fbrx-server setup-code      the first-time setup code (until someone sets the server up)
 fbrx-server logs [-f]       FBRX Virtual's log
 fbrx-server logs ai [-f]    the FBRX core's log (the ai role: agent, FBRX Mesh, Mesh Assist)
+fbrx-server logs command [-f]  FBRX Command's log (the command role)
 fbrx-server restart         restart FBRX Virtual (virtual machines keep running)
 fbrx-server restart ai      restart the FBRX core (help it was giving or asking for stops)
+fbrx-server restart command restart FBRX Command (computers reconnect by themselves)
+fbrx-server command         FBRX Command: its address, certificate fingerprint and, until it is set up, the setup token
 fbrx-server users           who can sign in
 fbrx-server reset-password <user>   a new password for someone locked out
 fbrx-server create-admin [name]     another administrator
+fbrx-server ai [help]       the AI models on this server: what fits, download, use (ai role)
 USAGE
     if has_gate; then echo "fbrx-gate help              FBRX Gate's own commands (networks, firewall, commit, roll back)"; fi
     ;;

@@ -1,6 +1,6 @@
 # Messages
 
-**Messages** (in the sidebar, under Bridge, in every edition) is chat between computers, for two kinds of
+**Messages** (in the sidebar, under Glass, in every edition) is chat between computers, for two kinds of
 neighbors:
 
 * **My devices**: your other computers and your phone on FBRX Mesh. Messages go straight from one device to the
@@ -63,11 +63,3 @@ In FBRX Command:
 * The **Messages** page shows the *Everyone* conversation: post to it (operators and up) and remove what does not
   belong. Messages between two computers are not shown in the console; FBRX Command keeps them for 180 days, then
   drops them.
-
-## For developers
-
-Thread ids are `mesh:all`, `mesh:<device fingerprint>`, `org:all` and `org:<device id>`. The core methods are
-`messages.overview`, `messages.thread`, `messages.send`, `messages.read`, `messages.focus`, `messages.resend`,
-`messages.directory` and `messages.unread`; `messages.changed` fires on every new message, delivery change and read.
-FBRX Command's device routes live under `/v1/device/chat` and its console routes under `/v1/admin/chat/messages`;
-new messages reach computers as `chat.message` over the device WebSocket.

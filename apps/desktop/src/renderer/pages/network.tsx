@@ -1,16 +1,17 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { LanDevice, LanScan, LanScanCompare, NetAdapter, PingResult, SpeedTestResult, TraceHop } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Icons, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
 import { bridge, call, onEvent, pickFile } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
-import { IS_WINDOWS, navigate, routeArg } from '../app';
-import { AskButton, askAgent } from '../widgets';
+import { DIGGER, IS_WINDOWS, navigate, routeArg } from '../app';
+import { AiContext, AskButton, askAgent } from '../widgets';
 import { ConnectDialog, type ConnectTarget } from '../consoles';
 import { Speedometer, speedFraction } from '../speedometer';
 import { unlockTrophy } from '../fun';
 import { commandSearchUrl, matchDeviceProfile } from '@fbrx/shared';
-import { UltraHint } from '../edition';
+import { EditionHint } from '../edition';
 import { Environments } from './network-environments';
+import { WifiChannelPlanner } from './wifi-channels';
 
 type Tab = 'overview' | 'environments' | 'trace' | 'devices' | 'speed' | 'wifi' | 'bluetooth' | 'printers' | 'tools' | 'adapters';
 
@@ -34,6 +35,7 @@ function Overview() {
   const [gw, setGw] = useState<PingResult | null>(null);
   const [web, setWeb] = useState<PingResult | null>(null);
   const agent = useAgentName();
+  const ai = useContext(AiContext);
   useEffect(() => {
     if (ctx.data?.gateway) void call('net.ping', { host: ctx.data.gateway, count: 4 }).then(setGw).catch(() => undefined);
     void call('net.ping', { host: '1.1.1.1', count: 4 }).then(setWeb).catch(() => undefined);
@@ -48,7 +50,7 @@ function Overview() {
         <StatTile label="Public address" value={pub.data?.ip ?? '—'} foot={pub.data?.isp ?? pub.error ?? ''} />
       </Grid>
       {verdict && (
-        <Callout tone={web?.received ? 'good' : 'warning'} actions={<Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent('Diagnose my network connection step by step and explain any problem in plain language.')}`)}>Diagnose with {agent}</Button>}>
+        <Callout tone={web?.received ? 'good' : 'warning'} actions={ai && <Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent('Diagnose my network connection step by step and explain any problem in plain language.')}`)}>Diagnose with {agent}</Button>}>
           {verdict}
         </Callout>
       )}
@@ -576,7 +578,6 @@ function Speed({ easterEggs }: { easterEggs: boolean }) {
 function Wifi() {
   const wifi = useCore('net.wifi', undefined, [], 15_000);
   const c = wifi.data?.connection;
-  const channels = Object.entries(wifi.data?.channels ?? {}).sort((a, b) => Number(a[0]) - Number(b[0]));
   return (
     <>
       {c ? (
@@ -589,36 +590,20 @@ function Wifi() {
       ) : (
         <Callout tone="info">Not connected to Wi-Fi (or Wi-Fi details are unavailable).</Callout>
       )}
-      <Grid cols={2}>
-        <Card title="Nearby networks" flush>
-          <Table
-            columns={[
-              { key: 'ssid', header: 'Network', render: (n) => n.ssid },
-              { key: 'sig', header: 'Signal', render: (n) => <Meter value={n.signalPct} label={`${n.ssid} signal`} />, width: 120 },
-              { key: 'ch', header: 'Channel', render: (n) => `${n.channel ?? '—'} · ${n.band}`, width: 120 },
-              { key: 'sec', header: 'Security', render: (n) => <span className="fx-muted">{n.security}</span> },
-            ]}
-            rows={wifi.data?.networks ?? []}
-            rowKey={(n) => `${n.ssid}${n.channel}`}
-            empty={<Empty title="No networks found" />}
-          />
-        </Card>
-        <Card title="Channel congestion" subtitle="How many networks share each channel. Fewer is better.">
-          {channels.length ? (
-            <div className="fx-grid" style={{ gap: 6 }}>
-              {channels.map(([ch, n]) => (
-                <div key={ch} style={{ display: 'grid', gridTemplateColumns: '60px 1fr 30px', gap: 8, alignItems: 'center', fontSize: 13 }}>
-                  <span>Ch {ch}</span>
-                  <Meter value={n} max={Math.max(...channels.map(([, x]) => x))} label={`Channel ${ch}`} />
-                  <span className="fx-muted">{n}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty title="No data" />
-          )}
-        </Card>
-      </Grid>
+      <WifiChannelPlanner />
+      <Card title="Nearby networks" flush>
+        <Table
+          columns={[
+            { key: 'ssid', header: 'Network', render: (n) => n.ssid },
+            { key: 'sig', header: 'Signal', render: (n) => <Meter value={n.signalPct} label={`${n.ssid} signal`} />, width: 120 },
+            { key: 'ch', header: 'Channel', render: (n) => `${n.channel ?? '—'} · ${n.band}`, width: 120 },
+            { key: 'sec', header: 'Security', render: (n) => <span className="fx-muted">{n.security}</span> },
+          ]}
+          rows={wifi.data?.networks ?? []}
+          rowKey={(n) => `${n.ssid}${n.channel}`}
+          empty={<Empty title="No networks found" />}
+        />
+      </Card>
     </>
   );
 }
@@ -843,28 +828,31 @@ function Adapters() {
 
 const NET_TABS: Tab[] = ['overview', 'environments', 'trace', 'devices', 'speed', 'wifi', 'bluetooth', 'printers', 'tools', 'adapters'];
 
-export function NetworkPage({ advanced, easterEggs }: { advanced: boolean; easterEggs: boolean }) {
+export function NetworkPage({ advanced, everything, easterEggs }: { advanced: boolean; everything: boolean; easterEggs: boolean }) {
   // network/speed, network/printers… open that tab directly.
   const [tab, setTab] = useState<Tab>(() => (NET_TABS.includes(routeArg() as Tab) ? (routeArg() as Tab) : 'overview'));
-  // Endpoint Basic keeps the everyday tabs; Ultra adds the IT ones and the network environments.
-  const all: Array<{ id: Tab; label: ReactNode; ultra?: boolean }> = [
+  // Endpoint Essentials and Standard keep the everyday tabs; Ultra adds the IT ones, Black Hole the network
+  // environments (network controllers).
+  const all: Array<{ id: Tab; label: ReactNode; need?: 'ultra' | 'blackhole' }> = [
     { id: 'overview', label: 'Overview' },
-    { id: 'environments', label: advancedLabel('Environments'), ultra: true },
-    { id: 'trace', label: 'Ping & trace', ultra: true },
-    { id: 'devices', label: 'Devices', ultra: true },
+    // FBRX Digger has every tab, so it marks none of them with an edition.
+    { id: 'environments', label: DIGGER ? 'Environments' : advancedLabel('Environments', true), need: 'blackhole' },
+    { id: 'trace', label: 'Ping & trace', need: 'ultra' },
+    { id: 'devices', label: 'Devices', need: 'ultra' },
     { id: 'speed', label: 'Speed' },
     { id: 'wifi', label: 'Wi-Fi' },
     { id: 'bluetooth', label: 'Bluetooth' },
     { id: 'printers', label: 'Printers' },
-    { id: 'tools', label: 'Tools', ultra: true },
-    ...(IS_WINDOWS ? [{ id: 'adapters' as const, label: advancedLabel('Adapters'), ultra: true }] : []),
+    { id: 'tools', label: 'Tools', need: 'ultra' },
+    ...(IS_WINDOWS ? [{ id: 'adapters' as const, label: DIGGER ? 'Adapters' : advancedLabel('Adapters'), need: 'ultra' as const }] : []),
   ];
-  const tabs = all.filter((t) => advanced || !t.ultra);
+  const tabs = all.filter((t) => !t.need || (t.need === 'ultra' ? advanced : everything)).map(({ need: _n, ...t }) => t);
   const shown = tabs.some((t) => t.id === tab) ? tab : 'overview';
   return (
     <Page title="Network Center" description={advanced ? 'See how this PC connects, what else is on your network, and what is slowing things down.' : 'See how this computer connects and what is slowing things down.'}>
       <Tabs tabs={tabs} active={shown} onChange={setTab} />
-      {!advanced && shown === 'overview' && <UltraHint>Network scans, device consoles and attaching your school or office network (UniFi) come with Endpoint Ultra.</UltraHint>}
+      {!advanced && shown === 'overview' && <EditionHint>Network scans and device consoles come with Endpoint Ultra.</EditionHint>}
+      {advanced && !everything && shown === 'overview' && <EditionHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole, through your organization’s FBRX Command.</EditionHint>}
       {shown === 'overview' && <Overview />}
       {shown === 'environments' && <Environments />}
       {shown === 'trace' && <Trace />}

@@ -1,10 +1,12 @@
 import { randomBytes } from 'node:crypto';
 import {
   CALENDAR_COLORS,
+  FBRX_CALENDAR,
   isPathLocked,
   newId,
   type CalendarAccount,
   type CalendarEvent,
+  type CalendarEventPatch,
   type CalendarFreeSlot,
   type CalendarKind,
   type CalendarShowAs,
@@ -19,12 +21,15 @@ import type { EventBus } from '../events';
 import type { Logger } from '../logger';
 import type { Db } from '../storage/db';
 import type { Vault } from '../vault/vault';
+import { FbrxCalendar, type FbrxCalendarSources } from './fbrx-calendar';
 import { parseIcs } from './ics';
 import { authorizeUrl, GraphClient, loopbackListener, msEndpoints, msScopes, msToken, pkcePair, type GraphOccurrence, type MsEndpoints, type MsTokens } from './microsoft';
 
 /**
- * Calendar (Workspace → Calendar, FBRX Glass, reminders and the agent's calendar tools).
+ * Calendar (Workspace → Calendar, Dash, reminders and the agent's calendar tools).
  *
+ * - The FBRX calendar (fbrx-calendar.ts): kept on this computer, always there; the shared calendars below are
+ *   add-ons beside it.
  * - Outlook / Microsoft 365: the person signs in in the browser; the refresh token is an internal vault secret and
  *   access tokens stay in memory. Microsoft expands repeating meetings; FBRX keeps the last week and the next two
  *   months on the computer and refreshes them every few minutes.
@@ -93,6 +98,8 @@ export interface CalendarDeps {
   builtInClientId: string | null;
   internet: () => boolean;
   notify: (title: string, body: string) => void;
+  /** Projects, tasks, notes and automations, for the FBRX calendar. */
+  sources: FbrxCalendarSources;
   endpoints?: MsEndpoints;
 }
 
@@ -168,9 +175,11 @@ export class CalendarService {
   private readonly reminded = new Set<string>();
   private pending: PendingSignIn | null = null;
   private readonly ep: MsEndpoints;
+  private readonly fbrx: FbrxCalendar;
 
   constructor(private readonly d: CalendarDeps) {
     this.ep = d.endpoints ?? msEndpoints();
+    this.fbrx = new FbrxCalendar(d.db, d.sources);
   }
 
   // ------------------------------------------------------------------------------------------ lifecycle
@@ -223,7 +232,7 @@ export class CalendarService {
   }
 
   private view(r: AccountRow): CalendarAccount {
-    const n = this.d.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM calendar_events WHERE account_id = ?', r.id)?.n ?? 0;
+    const n = r.kind === 'fbrx' ? this.fbrx.count() : (this.d.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM calendar_events WHERE account_id = ?', r.id)?.n ?? 0);
     return {
       id: r.id,
       kind: r.kind,
@@ -268,9 +277,11 @@ export class CalendarService {
     };
   }
 
-  /** Events that overlap [from, to) in the accounts and calendars that are turned on. */
+  /** Events that overlap [from, to) in the accounts and calendars that are turned on, by start. */
   events(from: Date, to: Date, accountId?: string): CalendarEvent[] {
     const accounts = new Map(this.d.db.all<AccountRow>('SELECT * FROM calendar_accounts WHERE enabled = 1').map((r) => [r.id, { r, cals: new Map((JSON.parse(r.calendars) as CalendarSource[]).map((c) => [c.id, c])) }]));
+    const own = accounts.get(FBRX_CALENDAR);
+    const mine = own && (!accountId || accountId === FBRX_CALENDAR) ? this.fbrx.events(from, to, { name: own.r.name, color: own.r.color, shown: (id) => own.cals.get(id)?.enabled !== false }) : [];
     const rows = this.d.db.all<EventRow>(
       `SELECT * FROM calendar_events WHERE start < ? AND (end > ? OR start >= ?)${accountId ? ' AND account_id = ?' : ''} ORDER BY start, title`,
       to.toISOString(),
@@ -302,9 +313,18 @@ export class CalendarService {
         accountName: a.r.name,
         calendarName: cal?.name ?? a.r.name,
         canDelete: a.r.kind === 'microsoft' && !!a.r.can_write && (cal?.canWrite ?? false),
+        series: null,
+        seriesStart: null,
+        notes: null,
+        repeat: 'none',
+        repeatUntil: null,
+        link: null,
+        ownColor: null,
+        madeBy: null,
+        canEdit: false,
       });
     }
-    return out;
+    return mine.length ? [...mine, ...out].sort((a, b) => a.start.localeCompare(b.start) || a.title.localeCompare(b.title)) : out;
   }
 
   /** Open stretches of at least `minMinutes` within the working hours of each day. */
@@ -399,7 +419,7 @@ export class CalendarService {
   }
 
   remove(id: string): { deleted: boolean } {
-    this.row(id);
+    if (this.row(id).kind === 'fbrx') throw new CoreError('FORBIDDEN', 'The FBRX calendar is always there. Hide it instead, or delete its events.');
     this.d.db.tx(() => {
       this.d.db.run('DELETE FROM calendar_events WHERE account_id = ?', id);
       this.d.db.run('DELETE FROM calendar_accounts WHERE id = ?', id);
@@ -538,7 +558,7 @@ export class CalendarService {
 
   async syncAll(): Promise<void> {
     this.schedule();
-    const ids = this.d.db.all<{ id: string }>('SELECT id FROM calendar_accounts WHERE enabled = 1').map((r) => r.id);
+    const ids = this.d.db.all<{ id: string }>("SELECT id FROM calendar_accounts WHERE enabled = 1 AND kind != 'fbrx'").map((r) => r.id);
     await Promise.all(ids.map((id) => this.sync(id)));
   }
 
@@ -559,6 +579,7 @@ export class CalendarService {
     } catch {
       return;
     }
+    if (r.kind === 'fbrx') return;
     try {
       this.requireReady();
       const { from, to } = window();
@@ -617,12 +638,33 @@ export class CalendarService {
 
   // ------------------------------------------------------------------------------------- adding events
 
-  async create(p: NewCalendarEvent): Promise<CalendarEvent> {
+  /** An FBRX calendar event as shown (its first time), just after it changed, hidden calendar or not. */
+  private shown(id: string): CalendarEvent {
+    const own = this.row(FBRX_CALENDAR);
+    const row = this.d.db.get<{ start: string; end: string }>('SELECT start, end FROM calendar_items WHERE id = ?', id);
+    if (!row) throw new CoreError('NOT_FOUND', 'That event is not in the FBRX calendar any more.');
+    const start = new Date(row.start).getTime();
+    const span = { from: new Date(start - 1), to: new Date(Math.max(new Date(row.end).getTime(), start + 1) + 1) };
+    const ev = this.fbrx.events(span.from, span.to, { name: own.name, color: own.color, shown: (c) => c === 'events' }).find((e) => e.series === id);
+    if (!ev) throw new CoreError('INTERNAL', 'The event was saved but could not be read back.');
+    return ev;
+  }
+
+  /**
+   * Adds an event: to the FBRX calendar unless another calendar is named (an Outlook calendar that can take events).
+   * `by` says whether the person or Fabrix added it (Fabrix's take its color unless they are about something).
+   */
+  async create(p: NewCalendarEvent, by: 'person' | 'fabrix' = 'person'): Promise<CalendarEvent> {
     const title = p.title.trim();
     if (!title) throw new CoreError('INVALID_ARGUMENT', 'An event needs a title.');
+    if (!p.accountId || p.accountId === FBRX_CALENDAR) {
+      const id = this.fbrx.create(p, by, parseWhen);
+      this.changed('synced');
+      return this.shown(id);
+    }
     const writable = this.d.db.all<AccountRow>("SELECT * FROM calendar_accounts WHERE kind = 'microsoft' AND can_write = 1 AND enabled = 1 ORDER BY created_at");
-    const r = p.accountId ? writable.find((a) => a.id === p.accountId) : writable[0];
-    if (!r) throw new CoreError('UNAVAILABLE', p.accountId ? 'That calendar cannot take new events (it is a link, or read-only).' : 'No connected calendar can take new events. Sign in to Outlook / Microsoft 365 with write access first.');
+    const r = writable.find((a) => a.id === p.accountId);
+    if (!r) throw new CoreError('UNAVAILABLE', 'That calendar cannot take new events (it is a link, or read-only).');
     const cals = JSON.parse(r.calendars) as CalendarSource[];
     const cal = p.calendarId ? cals.find((c) => c.id === p.calendarId) : (cals.find((c) => c.isDefault && c.canWrite) ?? cals.find((c) => c.canWrite));
     if (!cal?.canWrite) throw new CoreError('UNAVAILABLE', 'That calendar cannot take new events.');
@@ -653,7 +695,19 @@ export class CalendarService {
     return ev;
   }
 
+  /** Changes an FBRX calendar event (all of it, when it repeats). Shared calendars are changed where they come from. */
+  edit(p: CalendarEventPatch): CalendarEvent {
+    const id = this.fbrx.update(p, parseWhen);
+    this.changed('synced');
+    return this.shown(id);
+  }
+
   async delete(accountId: string, id: string): Promise<{ deleted: boolean }> {
+    if (accountId === FBRX_CALENDAR) {
+      this.fbrx.delete(id);
+      this.changed('synced');
+      return { deleted: true };
+    }
     const r = this.row(accountId);
     const e = this.d.db.get<EventRow>('SELECT * FROM calendar_events WHERE account_id = ? AND id = ?', accountId, id);
     if (!e) throw new CoreError('NOT_FOUND', 'That event is not in the calendar any more.');

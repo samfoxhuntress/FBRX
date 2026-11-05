@@ -5,7 +5,7 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { Client, type ClientChannel, type ConnectConfig } from 'ssh2';
-import { deviceProfile, newId, type ConsoleConnectInput, type ConsoleConnectResult, type ConsoleLogin, type ConsoleSession } from '@fbrx/shared';
+import { deviceProfile, newId, type ConsoleBookmark, type ConsoleConnectInput, type ConsoleConnectResult, type ConsoleLogin, type ConsoleProtocol, type ConsoleSession } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { MetaStore } from '../storage/meta';
@@ -13,6 +13,8 @@ import type { Vault } from '../vault/vault';
 
 const KNOWN_HOSTS = 'console.knownHosts';
 const LOGINS = 'console.logins';
+const BOOKMARKS = 'console.bookmarks';
+const MAX_BOOKMARKS = 300;
 const TRANSCRIPT_MAX = 120_000;
 const MAX_SESSIONS = 12;
 
@@ -235,6 +237,54 @@ export class DeviceConsoles {
     this.d.meta.set(LOGINS, [l, ...rest].slice(0, 200));
   }
 
+  // ------------------------------------------------------------------------------- saved connections
+
+  bookmarks(): ConsoleBookmark[] {
+    const saved = this.logins();
+    return (this.d.meta.get<Array<Omit<ConsoleBookmark, 'passwordSaved'>>>(BOOKMARKS) ?? [])
+      .map((b) => ({ ...b, passwordSaved: !!b.username && saved.some((l) => l.host === b.host && l.port === b.port && l.protocol === b.protocol && l.username === b.username) }))
+      .sort((a, b) => (b.lastConnectedAt ?? b.createdAt).localeCompare(a.lastConnectedAt ?? a.createdAt));
+  }
+
+  saveBookmark(input: { id?: string; label?: string; host: string; port?: number; protocol: ConsoleProtocol; username?: string | null; profileId?: string | null; vendor?: string | null; notes?: string; connected?: boolean }): ConsoleBookmark {
+    const host = input.host.trim();
+    if (!/^[A-Za-z0-9.:_-]{1,253}$/.test(host)) throw new CoreError('INVALID_ARGUMENT', 'Enter an IP address or host name');
+    const port = input.port ?? (input.protocol === 'telnet' ? 23 : 22);
+    if (!Number.isInteger(port) || port < 1 || port > 65535) throw new CoreError('INVALID_ARGUMENT', 'Port must be 1-65535');
+    const username = input.username?.trim() || null;
+    if (username && !/^[^\s:@]{1,64}$/.test(username)) throw new CoreError('INVALID_ARGUMENT', 'Invalid user name');
+    const all = this.d.meta.get<Array<Omit<ConsoleBookmark, 'passwordSaved'>>>(BOOKMARKS) ?? [];
+    // The same device and user is one entry, whether it is changed by id or found again by a connection.
+    const same = (b: Omit<ConsoleBookmark, 'passwordSaved'>) => b.host === host && b.port === port && b.protocol === input.protocol && b.username === username;
+    const prev = (input.id ? all.find((b) => b.id === input.id) : undefined) ?? all.find(same);
+    if (input.id && !prev) throw new CoreError('NOT_FOUND', 'That saved connection is gone');
+    const now = new Date().toISOString();
+    const next: Omit<ConsoleBookmark, 'passwordSaved'> = {
+      id: prev?.id ?? newId('cbm'),
+      label: (input.label?.trim() || prev?.label || `${username ? `${username}@` : ''}${host}`).slice(0, 120),
+      host,
+      port,
+      protocol: input.protocol,
+      username,
+      profileId: input.profileId !== undefined ? (deviceProfile(input.profileId)?.id ?? null) : (prev?.profileId ?? null),
+      vendor: input.vendor !== undefined ? (input.vendor?.slice(0, 120) ?? null) : (prev?.vendor ?? null),
+      notes: (input.notes ?? prev?.notes ?? '').slice(0, 2000),
+      createdAt: prev?.createdAt ?? now,
+      lastConnectedAt: input.connected ? now : (prev?.lastConnectedAt ?? null),
+    };
+    this.d.meta.set(BOOKMARKS, [next, ...all.filter((b) => b.id !== next.id && !same(b))].slice(0, MAX_BOOKMARKS));
+    return this.bookmarks().find((b) => b.id === next.id)!;
+  }
+
+  removeBookmark(id: string, forgetPassword = false): void {
+    const all = this.d.meta.get<Array<Omit<ConsoleBookmark, 'passwordSaved'>>>(BOOKMARKS) ?? [];
+    const b = all.find((x) => x.id === id);
+    if (!b) return;
+    if (forgetPassword && b.username) this.forgetLogin(b.host, b.port, b.username);
+    this.d.meta.set(BOOKMARKS, all.filter((x) => x.id !== id));
+    this.d.audit('bookmark.removed', 'info', { host: b.host, port: b.port, forgetPassword });
+  }
+
   forgetLogin(host: string, port: number, username: string): void {
     for (const l of this.logins().filter((x) => x.host === host && x.port === port && x.username === username)) {
       this.d.vault.delete(this.secretName(l.protocol, l.host, l.port, l.username), { internal: true });
@@ -298,6 +348,9 @@ export class DeviceConsoles {
       this.d.audit('connect', 'success', { host, port, protocol: input.protocol, username, fingerprint: info.fingerprint });
       if (input.remember && username && password && this.d.vault.isUnlocked) {
         this.saveLogin({ host, port, protocol: input.protocol, username, savedAt: new Date().toISOString() }, password);
+      }
+      if (input.save !== false) {
+        this.saveBookmark({ host, port, protocol: input.protocol, username, profileId: profile?.id ?? null, vendor: info.vendor, label: input.label, connected: true });
       }
     }
     return result;

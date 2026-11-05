@@ -163,7 +163,8 @@ describe('Calendar on a computer', () => {
   it('adds a calendar link, shows its events, answers the agent and reminds before a meeting', async () => {
     const { kernel, cleanup } = await makeKernel();
     try {
-      expect(kernel.registry.get('calendar.agenda')!.unavailable!()).toMatch(/No calendar is connected/);
+      // The FBRX calendar is always there; shared calendars come beside it.
+      expect(kernel.registry.get('calendar.agenda')!.unavailable!()).toBeNull();
       await expect(kernel.call('calendar.addLink', { name: '', url: feedUrl }, LOCAL_API)).rejects.toThrow();
       await expect(kernel.call('calendar.addLink', { name: 'x', url: 'not a link' }, USER)).rejects.toThrow(/not a web address/);
 
@@ -182,7 +183,9 @@ describe('Calendar on a computer', () => {
       const free = await kernel.registry.get('calendar.free_time')!.run({ dayStart: '00:00', dayEnd: '23:59', minMinutes: 5 }, {} as any);
       expect(free.output).toMatch(/Free stretches/);
       expect(kernel.registry.get('calendar.create_event')!.risk).toBe('write');
-      await expect(kernel.registry.get('calendar.create_event')!.run({ title: 'Lunch', start: '2026-10-07T12:00' }, {} as any)).rejects.toThrow(/No connected calendar can take new events/);
+      // A link is read-only: what Fabrix adds goes to the FBRX calendar.
+      await expect(kernel.registry.get('calendar.create_event')!.run({ title: 'Lunch', start: '2026-10-07T12:00', account: 'Rivera family' }, {} as any)).rejects.toThrow(/cannot take new events/);
+      expect((await kernel.registry.get('calendar.create_event')!.run({ title: 'Lunch', start: '2026-10-07T12:00' }, {} as any)).output).toMatch(/^Added "Lunch" to FBRX \(Events\)/);
 
       // A reminder once, ten minutes before (the default).
       const notes: NotificationEvent[] = [];
@@ -196,7 +199,7 @@ describe('Calendar on a computer', () => {
       feedStatus = 404;
       await kernel.call('calendar.sync', { id: account.id }, USER);
       const st = (await kernel.call('calendar.status', undefined, USER)) as CalendarStatus;
-      expect(st.accounts[0]).toMatchObject({ events: 2, lastError: expect.stringMatching(/no longer works/) });
+      expect(st.accounts.find((a) => a.id === account.id)).toMatchObject({ events: 2, lastError: expect.stringMatching(/no longer works/) });
       feedStatus = 200;
 
       // Turned off: hidden; removed: gone, with its secret.
@@ -204,7 +207,8 @@ describe('Calendar on a computer', () => {
       expect(kernel.calendar.events(now, new Date(now.getTime() + 86400_000))).toEqual([]);
       await kernel.call('calendar.remove', { id: account.id }, USER);
       expect(kernel.vault.has(`fbrx.calendar.${account.id}`)).toBe(false);
-      expect(((await kernel.call('calendar.status', undefined, USER)) as CalendarStatus).accounts).toEqual([]);
+      expect(((await kernel.call('calendar.status', undefined, USER)) as CalendarStatus).accounts.map((a) => a.kind)).toEqual(['fbrx']);
+      await expect(kernel.call('calendar.remove', { id: 'fbrx' }, USER)).rejects.toThrow(/always there/);
     } finally {
       await cleanup();
     }
@@ -362,8 +366,9 @@ describe('Outlook / Microsoft 365', () => {
 
       const st = (await kernel.call('calendar.status', undefined, USER)) as CalendarStatus;
       expect(st.signIn).toBeNull();
-      expect(st.accounts).toHaveLength(1);
-      const acct = st.accounts[0];
+      const shared = (s: CalendarStatus) => s.accounts.filter((a) => a.kind !== 'fbrx');
+      expect(shared(st)).toHaveLength(1);
+      const acct = shared(st)[0];
       expect(acct).toMatchObject({ kind: 'microsoft', name: 'Jordan Rivera', address: 'jordan@harborlane.example', canWrite: true, events: 2, lastError: null });
       expect(acct.calendars.map((c) => [c.name, c.canWrite, c.isDefault])).toEqual([['Calendar', true, true], ['Holidays', false, false]]);
       expect(kernel.vault.list().some((s) => s.name.includes('calendar'))).toBe(false);
@@ -380,12 +385,12 @@ describe('Outlook / Microsoft 365', () => {
 
       // The agent adds an event (a change, so it is a write tool); access tokens are refreshed and rotated as needed.
       const refreshesBefore = ms.state.refreshes;
-      const made = await kernel.registry.get('calendar.create_event')!.run({ title: 'Focus time', start: '2026-10-07T13:00', durationMinutes: 90, location: 'Desk' }, {} as any);
+      const made = await kernel.registry.get('calendar.create_event')!.run({ title: 'Focus time', start: '2026-10-07T13:00', durationMinutes: 90, location: 'Desk', account: 'jordan@harborlane.example' }, {} as any);
       expect(made.output).toMatch(/Added "Focus time" to Jordan Rivera \(Calendar\)/);
       expect(ms.state.posted[0]).toMatchObject({ subject: 'Focus time', start: { timeZone: 'UTC', dateTime: new Date('2026-10-07T13:00').toISOString().slice(0, 19) }, location: { displayName: 'Desk' } });
       expect(new Date(`${ms.state.posted[0].end.dateTime}Z`).getTime() - new Date(`${ms.state.posted[0].start.dateTime}Z`).getTime()).toBe(90 * 60_000);
       expect(ms.state.refreshes).toBeGreaterThan(refreshesBefore);
-      const allDay = (await kernel.call('calendar.create', { title: 'Offsite', start: '2026-10-09' }, USER)) as CalendarEvent;
+      const allDay = (await kernel.call('calendar.create', { accountId: acct.id, title: 'Offsite', start: '2026-10-09' }, USER)) as CalendarEvent;
       expect(allDay.allDay).toBe(true);
       expect(ms.state.posted[1]).toMatchObject({ isAllDay: true, start: { dateTime: '2026-10-09T00:00:00' }, end: { dateTime: '2026-10-10T00:00:00' } });
       await kernel.call('calendar.delete', { accountId: acct.id, id: allDay.id }, USER);
@@ -400,12 +405,12 @@ describe('Outlook / Microsoft 365', () => {
       const again = (await kernel.call('calendar.signIn', undefined, USER)) as { url: string };
       await (await fetch(again.url)).text();
       await waitFor(() => changes.filter((c) => c.signIn?.ok).length === 2);
-      expect(((await kernel.call('calendar.status', undefined, USER)) as CalendarStatus).accounts).toHaveLength(1);
+      expect(shared((await kernel.call('calendar.status', undefined, USER)) as CalendarStatus)).toHaveLength(1);
 
       // Microsoft ends the sign-in: the account says so instead of failing quietly.
       ms.state.revoked = true;
       await kernel.call('calendar.sync', { id: acct.id }, USER);
-      const after = ((await kernel.call('calendar.status', undefined, USER)) as CalendarStatus).accounts[0];
+      const after = shared((await kernel.call('calendar.status', undefined, USER)) as CalendarStatus)[0];
       expect(after.lastError).toMatch(/Sign in again/);
       expect(after.events).toBeGreaterThan(0);
 

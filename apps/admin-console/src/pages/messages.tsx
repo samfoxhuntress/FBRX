@@ -19,7 +19,11 @@ export function MessagesPage() {
   const end = useRef<HTMLDivElement>(null);
   const manage = app.can('messages.manage');
   const rows = q.data?.messages ?? [];
-  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [rows.length]);
+  // A block, not an expression: scrollIntoView returns a promise in newer browsers, which React would take for the
+  // effect's cleanup and call.
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end' });
+  }, [rows.length]);
   const send = () =>
     void run('send', () => api('POST', '/v1/admin/chat/messages', { text: text.trim() }).then(() => (setText(''), q.reload()))).catch(() => undefined);
   return (

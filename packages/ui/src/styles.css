@@ -4,24 +4,38 @@
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
 
-  --page: #f4f4f1;
-  --surface-1: #fcfcfb;
-  --surface-2: #f3f3f0;
-  --surface-3: #e9e8e3;
-  --sidebar: #fbfbf9;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #898781;
-  --border: rgba(11, 11, 11, 0.1);
-  --border-strong: rgba(11, 11, 11, 0.18);
-  --grid: #e1e0d9;
-  --axis: #c3c2b7;
+  --page: #f5f5f3;
+  --surface-1: #ffffff;
+  --surface-2: #f2f2ef;
+  --surface-3: #e7e6e2;
+  --sidebar: #fafaf8;
+  --text-primary: #1c1b19;
+  --text-secondary: #5c5954;
+  --text-muted: #8b8882;
+  --border: rgba(28, 27, 25, 0.09);
+  --border-strong: rgba(28, 27, 25, 0.16);
+  --grid: #e4e3de;
+  --axis: #c6c4bc;
 
-  --accent: #2a78d6;
-  --accent-hover: #256abf;
+  /*
+   * FBRX's Tropical: honey running into red. Filled things (primary buttons, the current page, switches) wear the
+   * gradient with dark ink, which reads at 5.5:1 or better across it; text and icons wear --accent, a deep mango on
+   * light pages (4.7:1) and a bright one on dark ones.
+   */
+  --brand-honey: #ffb547;
+  --brand-mango: #ff8a3d;
+  --brand-red: #ff4d5e;
+  --accent-gradient: linear-gradient(135deg, var(--brand-honey) 0%, var(--brand-mango) 50%, var(--brand-red) 100%);
+  --accent-fill: var(--accent-gradient);
+  /* The fill's two ends, for strokes drawn in it (rings, lines). */
+  --accent-from: var(--brand-honey);
+  --accent-to: var(--brand-red);
+  --accent-fill-ink: #2b1000;
+  --accent: #c8410e;
+  --accent-hover: #a93509;
   --accent-ink: #ffffff;
-  --accent-wash: rgba(42, 120, 214, 0.1);
-  --focus: rgba(42, 120, 214, 0.45);
+  --accent-wash: rgba(255, 122, 61, 0.12);
+  --focus: rgba(255, 122, 61, 0.45);
 
   /* status: fixed, always paired with an icon + label */
   --good: #0ca30c;
@@ -43,32 +57,35 @@
   --series-7: #4a3aa7;
   --series-8: #e34948;
 
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 16px rgba(0, 0, 0, 0.05);
-  --shadow-pop: 0 10px 40px rgba(0, 0, 0, 0.18);
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  /* Buttons are capsules. */
+  --radius-btn: 999px;
+  --shadow: 0 1px 2px rgba(28, 27, 25, 0.04), 0 8px 24px -14px rgba(28, 27, 25, 0.16);
+  --shadow-pop: 0 18px 48px -12px rgba(0, 0, 0, 0.22);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme='light'])) {
     color-scheme: dark;
-    --page: #0d0d0d;
-    --surface-1: #1a1a19;
-    --surface-2: #222220;
-    --surface-3: #2c2c2a;
-    --sidebar: #141413;
-    --text-primary: #ffffff;
-    --text-secondary: #c3c2b7;
-    --text-muted: #898781;
-    --border: rgba(255, 255, 255, 0.1);
-    --border-strong: rgba(255, 255, 255, 0.18);
-    --grid: #2c2c2a;
-    --axis: #383835;
-    --accent: #3987e5;
-    --accent-hover: #5598e7;
-    --accent-wash: rgba(57, 135, 229, 0.16);
-    --focus: rgba(57, 135, 229, 0.55);
+    --page: #0f1013;
+    --surface-1: #17191c;
+    --surface-2: #1e2024;
+    --surface-3: #282a2f;
+    --sidebar: #121316;
+    --text-primary: #f5f5f7;
+    --text-secondary: #c3c5cb;
+    --text-muted: #8a8d95;
+    --border: rgba(225, 230, 240, 0.09);
+    --border-strong: rgba(225, 230, 240, 0.16);
+    --grid: #282a2f;
+    --axis: #363940;
+    --accent: #ffa23a;
+    --accent-hover: #ffb862;
+    --accent-ink: #2b1000;
+    --accent-wash: rgba(255, 162, 58, 0.15);
+    --focus: rgba(255, 162, 58, 0.5);
     --good-text: #0ca30c;
     --warning-text: #fab219;
     --critical-text: #e66767;
@@ -80,28 +97,29 @@
     --series-6: #008300;
     --series-7: #9085e9;
     --series-8: #e66767;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-pop: 0 10px 40px rgba(0, 0, 0, 0.6);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -18px rgba(0, 0, 0, 0.7);
+    --shadow-pop: 0 18px 48px -12px rgba(0, 0, 0, 0.65);
   }
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --page: #0d0d0d;
-  --surface-1: #1a1a19;
-  --surface-2: #222220;
-  --surface-3: #2c2c2a;
-  --sidebar: #141413;
-  --text-primary: #ffffff;
-  --text-secondary: #c3c2b7;
-  --text-muted: #898781;
-  --border: rgba(255, 255, 255, 0.1);
-  --border-strong: rgba(255, 255, 255, 0.18);
-  --grid: #2c2c2a;
-  --axis: #383835;
-  --accent: #3987e5;
-  --accent-hover: #5598e7;
-  --accent-wash: rgba(57, 135, 229, 0.16);
-  --focus: rgba(57, 135, 229, 0.55);
+  --page: #0f1013;
+  --surface-1: #17191c;
+  --surface-2: #1e2024;
+  --surface-3: #282a2f;
+  --sidebar: #121316;
+  --text-primary: #f5f5f7;
+  --text-secondary: #c3c5cb;
+  --text-muted: #8a8d95;
+  --border: rgba(225, 230, 240, 0.09);
+  --border-strong: rgba(225, 230, 240, 0.16);
+  --grid: #282a2f;
+  --axis: #363940;
+  --accent: #ffa23a;
+  --accent-hover: #ffb862;
+  --accent-ink: #2b1000;
+  --accent-wash: rgba(255, 162, 58, 0.15);
+  --focus: rgba(255, 162, 58, 0.5);
   --good-text: #0ca30c;
   --warning-text: #fab219;
   --critical-text: #e66767;
@@ -113,8 +131,8 @@
   --series-6: #008300;
   --series-7: #9085e9;
   --series-8: #e66767;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-pop: 0 10px 40px rgba(0, 0, 0, 0.6);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -18px rgba(0, 0, 0, 0.7);
+  --shadow-pop: 0 18px 48px -12px rgba(0, 0, 0, 0.65);
 }
 
 * {
@@ -127,12 +145,17 @@ body,
   margin: 0;
 }
 body {
+  /* Sliders, checkboxes and radio buttons in the theme's color. */
+  accent-color: var(--accent);
   background: var(--page);
   color: var(--text-primary);
   font-family: var(--font);
   font-size: 14px;
   line-height: 1.45;
   -webkit-font-smoothing: antialiased;
+  /* Text shows exactly as typed: fonts with ligatures (Cascadia Code, Inter) would draw a password ending in |> as an
+     arrow, or -> and != as one symbol. Unlike font-variant-ligatures, the font shorthand does not reset this. */
+  font-feature-settings: 'liga' 0, 'clig' 0, 'calt' 0;
 }
 a {
   color: var(--accent);
@@ -149,11 +172,16 @@ h4 {
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+/* Big, tight page titles. */
 h1 {
-  font-size: 22px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
 }
 h2 {
   font-size: 17px;
+  letter-spacing: -0.015em;
 }
 h3 {
   font-size: 14px;
@@ -240,9 +268,22 @@ pre,
   text-decoration: none;
 }
 .fx-nav-item.active {
+  position: relative;
   background: var(--accent-wash);
   color: var(--text-primary);
   font-weight: 550;
+}
+/* The current page: a short pill on the left in the brand fill. */
+.fx-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 3px;
+  background: var(--accent-fill);
 }
 .fx-nav-item svg {
   flex: none;
@@ -329,9 +370,9 @@ pre,
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .fx-group.here .fx-group-icon {
-  background: var(--accent-wash);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  color: var(--accent);
+  background: var(--accent-fill);
+  border-color: transparent;
+  color: var(--accent-fill-ink);
 }
 .fx-group-text {
   display: flex;
@@ -733,8 +774,8 @@ pre,
   justify-content: center;
   gap: 6px;
   height: 32px;
-  padding: 0 12px;
-  border-radius: var(--radius-sm);
+  padding: 0 14px;
+  border-radius: var(--radius-btn);
   border: 1px solid var(--border-strong);
   background: var(--surface-1);
   color: var(--text-primary);
@@ -743,22 +784,39 @@ pre,
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    transform 0.12s ease,
+    filter 0.12s;
 }
 .fx-btn:hover:not(:disabled) {
   background: var(--surface-2);
+}
+/* A little give when pressed. */
+.fx-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 .fx-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .fx-btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--accent-fill);
+  border-color: transparent;
+  color: var(--accent-fill-ink);
+  font-weight: 650;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 6px 16px -8px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 .fx-btn.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--accent-fill);
+  filter: brightness(1.06) saturate(1.05);
+  transform: translateY(-1px);
+}
+.fx-btn.primary:active:not(:disabled) {
+  transform: scale(0.97);
 }
 .fx-btn.danger {
   color: var(--critical-text);
@@ -777,7 +835,7 @@ pre,
 }
 .fx-btn.sm {
   height: 26px;
-  padding: 0 9px;
+  padding: 0 11px;
   font-size: 12px;
 }
 .fx-btn.icon {
@@ -883,14 +941,23 @@ pre,
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  transition: transform 0.15s;
+  transition:
+    transform 0.18s cubic-bezier(0.3, 1.4, 0.5, 1),
+    width 0.15s ease;
 }
 .fx-toggle input:checked {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  border-color: transparent;
 }
 .fx-toggle input:checked::after {
   transform: translateX(14px);
+}
+/* The knob squishes while it is held, like a fingertip on it. */
+.fx-toggle input:active:not(:disabled)::after {
+  width: 18px;
+}
+.fx-toggle input:checked:active:not(:disabled)::after {
+  transform: translateX(10px);
 }
 .fx-toggle input:disabled {
   opacity: 0.5;
@@ -1008,7 +1075,8 @@ pre,
 }
 .fx-tab.active {
   color: var(--text-primary);
-  border-bottom-color: var(--accent);
+  border-bottom-color: transparent;
+  background: var(--accent-fill) bottom / 100% 2px no-repeat;
 }
 .fx-callout {
   display: flex;
@@ -1052,6 +1120,18 @@ pre,
 .fx-empty h3 {
   color: var(--text-primary);
   margin-bottom: 6px;
+}
+.fx-error-detail {
+  max-width: 640px;
+  margin: 12px auto 16px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text-secondary);
+  font: 12px/1.5 var(--mono);
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 .fx-kv {
   display: grid;
@@ -1246,7 +1326,7 @@ pre,
 }
 .fx-progress > div {
   height: 100%;
-  background: var(--accent);
+  background: var(--accent-fill);
   border-radius: 999px;
   transition: width 0.3s;
 }
@@ -1760,8 +1840,8 @@ pre,
   border-left: 0;
 }
 .sb-seg button.on {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--accent-fill);
+  color: var(--accent-fill-ink);
 }
 .sb-seg button:first-child.on {
   background: var(--surface-3);
@@ -1802,4 +1882,248 @@ pre,
     grid-column: 1 / -1;
     grid-row: 2;
   }
+}
+
+/* FBRX Command → Governance: profiles on the left, the selected profile's policy on the right. */
+.gov-layout {
+  display: grid;
+  grid-template-columns: minmax(240px, 320px) 1fr;
+  gap: 16px;
+  align-items: start;
+}
+@media (max-width: 900px) {
+  .gov-layout {
+    grid-template-columns: 1fr;
+  }
+}
+button.gov-profile {
+  width: 100%;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+button.gov-profile:hover {
+  background: var(--hover, rgba(127, 127, 127, 0.08));
+}
+button.gov-profile.active {
+  background: var(--accent-soft, rgba(127, 127, 127, 0.14));
+}
+
+/* Markdown (the Markdown component): chat answers and notes */
+.md {
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+.md p {
+  margin: 0 0 10px;
+  white-space: pre-wrap;
+}
+.md p:last-child {
+  margin-bottom: 0;
+}
+.md ul,
+.md ol {
+  margin: 0 0 10px;
+  padding-left: 22px;
+}
+.md code {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0 4px;
+}
+.md-code {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px 12px;
+  overflow-x: auto;
+  margin: 0 0 10px;
+}
+.md-code code {
+  border: 0;
+  background: none;
+  padding: 0;
+}
+.md-h {
+  margin: 6px 0 8px;
+}
+.md li > ul,
+.md li > ol {
+  margin: 4px 0 4px;
+}
+.md li > p {
+  margin: 4px 0 0;
+}
+.md li + li {
+  margin-top: 3px;
+}
+.md-hr {
+  border: 0;
+  border-top: 1px solid var(--border);
+  margin: 12px 0;
+}
+.md-quote {
+  margin: 0 0 10px;
+  padding: 2px 0 2px 12px;
+  border-left: 3px solid var(--border-strong, var(--border));
+  color: var(--text-secondary);
+  white-space: pre-wrap;
+}
+.md-table-wrap {
+  overflow-x: auto;
+  margin: 0 0 10px;
+}
+.md-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  min-width: 50%;
+}
+.md-table th,
+.md-table td {
+  border: 1px solid var(--border);
+  padding: 5px 9px;
+  text-align: left;
+  vertical-align: top;
+}
+.md-table th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+/* Files in a chat with Fabrix (attachments.tsx): attached ones, and the ones a step made. */
+.attach-tray,
+.msg-attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.msg-attachments {
+  align-self: flex-end;
+  justify-content: flex-end;
+  max-width: 80%;
+}
+.attach-chip {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  grid-template-rows: auto auto;
+  column-gap: 8px;
+  align-items: center;
+  max-width: 240px;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font: inherit;
+  font-size: 12.5px;
+  text-align: left;
+}
+.attach-chip > img,
+.attach-chip > svg {
+  grid-row: span 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  object-fit: cover;
+  color: var(--accent);
+}
+.attach-chip > svg {
+  width: 18px;
+  height: 18px;
+  margin: 0 5px;
+}
+.attach-chip > button {
+  grid-row: span 2;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px;
+}
+.attach-chip > button:hover {
+  color: var(--text-primary);
+}
+.attach-chip.sent {
+  cursor: pointer;
+}
+.attach-chip.sent:hover {
+  border-color: var(--border-strong);
+}
+.attach-chip.failed {
+  border-color: var(--critical);
+}
+.attach-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+}
+.attach-sub {
+  grid-column: 2;
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+.attach-thumb {
+  width: 120px;
+  height: 90px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--surface-2);
+  display: grid;
+  place-items: center;
+  color: var(--text-muted);
+  cursor: zoom-in;
+}
+.attach-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+/* Files a step made, under its card in the chat. */
+.made-files {
+  display: flex;
+  gap: 10px;
+  align-items: flex-start;
+  padding: 8px 10px 10px;
+  border-top: 1px solid var(--border);
+}
+.made-files .attach-thumb {
+  width: 160px;
+  height: 120px;
+  flex-shrink: 0;
+}
+.made-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  flex: 1;
+}
+.made-file {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-size: 12.5px;
+}
+.made-file > svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.made-file .attach-name {
+  min-width: 0;
+}
+.attach-warn {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--text-secondary);
+  font-size: 12px;
 }

@@ -1,4 +1,4 @@
-import type { CliResult, DeepPartial, EffectiveSettings, Settings } from '@fbrx/shared';
+import type { CliResult, DeepPartial, EffectiveSettings, Settings, Tier } from '@fbrx/shared';
 import { DEFAULT_SETTINGS, SettingsSchema, TIER_NAMES, deepMerge, funEnabled, isPathLocked, leafPaths, newId } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 
@@ -109,8 +109,18 @@ const OPERATIONAL: Record<string, Node> = {
       version: {
         help: 'Product, version and license',
         run: async (_a, c) => {
-          const s = await c.call('system.status');
-          return [`Product:      ${s.product}`, `Version:      ${s.version}`, `Platform:     ${s.platform} ${s.arch}`, `Device name:  ${s.deviceName}`, `Edition:      ${s.license.tier === 'ultra' ? TIER_NAMES.ultra : TIER_NAMES.basic}`, `License:      ${s.license.edition}${s.license.customer ? ` (${s.license.customer})` : ''}`, `Build:        ${s.devMode ? 'development' : 'release'}`].join('\n');
+          const [s, sup] = await Promise.all([c.call('system.status'), c.call('support.status')]);
+          return [
+            `Product:      ${s.product}`,
+            `Version:      ${s.version}`,
+            `Platform:     ${s.platform} ${s.arch}`,
+            `Device name:  ${s.deviceName}`,
+            `Install id:   ${sup.installId}`,
+            `Edition:      ${TIER_NAMES[s.license.tier as Tier] ?? s.license.tier}`,
+            `License:      ${s.license.edition}${s.license.customer ? ` (${s.license.customer})` : ''}`,
+            `Support mode: ${sup.active ? `on until ${sup.until}` : 'off'}`,
+            `Build:        ${s.devMode ? 'development' : 'release'}`,
+          ].join('\n');
         },
       },
       system: {
@@ -334,6 +344,21 @@ function applyPipes(text: string, pipes: string[][]): string {
     else throw new CoreError('INVALID_ARGUMENT', `Unknown pipe "${cmd}" (match, except, count, last, display json, display set)`);
   }
   return lines.join('\n');
+}
+
+/** Every FBRX/1 command with its help, flattened ("show version", "request backup create <label>"). */
+export function fbrx1Commands(): Array<{ command: string; help: string; mode: 'operational' | 'configure' }> {
+  const out: Array<{ command: string; help: string; mode: 'operational' | 'configure' }> = [];
+  const walk = (nodes: Record<string, Node>, prefix: string[], mode: 'operational' | 'configure') => {
+    for (const [word, n] of Object.entries(nodes)) {
+      const path = [...prefix, word];
+      if (n.run || !n.children) out.push({ command: [...path, ...(n.arg ? [`<${n.arg}>`] : [])].join(' '), help: n.help, mode });
+      if (n.children) walk(n.children, path, mode);
+    }
+  };
+  walk(OPERATIONAL, [], 'operational');
+  walk(CONFIG, [], 'configure');
+  return out;
 }
 
 export class Fbrx1Cli {

@@ -1,19 +1,45 @@
 {
   "product": "FBRX OS",
-  "stage": "Alpha",
-  "version": "1.9.5",
-  "codename": "Bobbin",
-  "released": "2026-10-06",
+  "stage": "Beta",
+  "version": "2.3.0",
+  "codename": "Weft",
+  "released": "2026-11-05",
   "importance": "recommended",
-  "summary": "FBRX Shield, FBRX's own antivirus, and the choice of what protects your computer: FBRX Shield, Microsoft Defender, or the antivirus you already have.",
+  "summary": "FBRX 2.3.0 Beta (Weft): a new look with Tropical by default, the AI on your computer answering in a fraction of the time and saying how far it has read, and editions that follow a member to any computer.",
   "notes": [
-    "FBRX Shield is now FBRX's antivirus: it checks new downloads as they arrive, scans (quick, full or a folder), keeps a threat database of known malware up to date every day, and spots disguised programs, scripts that delete backups or turn off antivirus, risky files from the internet and documents with macros.",
-    "Malware goes into an encrypted quarantine straight away; suspicious files wait for you (quarantine, trust or delete), and Fabrix can explain any finding.",
-    "Choose what protects this computer: FBRX Shield, Microsoft Defender, or an antivirus already installed (Sophos, CrowdStrike, SentinelOne, ESET and more). FBRX shows its status everywhere and warns you when it is off or out of date.",
-    "The sidebar's Shield section is now Stronghold: FBRX Shield, approvals, credentials, governance and backups.",
-    "FBRX Command shows each computer's antivirus and can choose it for a group.",
-    "Endpoint Ultra adds scheduled scans and second engines (ClamAV, VirusTotal)."
+    "A new look: Tropical, FBRX's honey running into red, is the default on calm, neutral pages, with capsule buttons, a raised segmented control and a few small bounces. Textures are off unless you pick one, and the Fabrics theme is now called Honey.",
+    "The AI on this computer reads about a quarter of what it did with each request (only the tools the chat is about), so a simple question no longer waits minutes. While it reads, the chat says how far (\"Reading your request: 4,100 of 9,800 tokens\"), and a second chat says it is waiting for the first.",
+    "A computer in an organization runs the edition FBRX Command gave the member signed in on it, however it joined. Settings → Edition says plainly when this copy of FBRX OS was built for another license signing key, and Install FBRX OS --signing-key fixes it.",
+    "Linux: FBRX OS installed from the FBRX folder appears in your apps with its icon, and the installers open a terminal window when started from the file manager.",
+    "FBRX Command: giving an FBRX account an edition replaces the last one instead of adding another."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v1.9.5.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v1.9.5"
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.3.0.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.0",
+  "server": {
+    "version": "1.4.0",
+    "released": "2026-11-05",
+    "summary": "FBRX Server 1.4.0: Paste text from your computer into a machine's screen, the console's AI chat fixed, a faster AI on the server and the new look.",
+    "notes": [
+      "Paste on a machine's screen: it shows your clipboard (or a box to paste into), then types the text into the machine as on a US keyboard, so it works anywhere, even on a login prompt or a BIOS screen.",
+      "Asking the server's AI a question in the console no longer ends in \"is not a function\".",
+      "The server's own AI sees only the tools a chat is about and says how far it has read a long request, so answers start sooner.",
+      "The console has the new look: honey running into red on calm pages.",
+      "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
+    ],
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.3.0/fbrx-server-1.4.0.tar.gz",
+    "sha256": "90ebf7e4bbdbbf7d9683d4482dbf2874a44a9f8e4e6520fdad16a8d00cbec0f9",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.0"
+  },
+  "digger": {
+    "version": "1.1.0",
+    "released": "2026-11-05",
+    "summary": "FBRX Digger 1.1.0: it runs entirely on its own, thinks with FBRX Endpoint's AI while Endpoint runs, and has a new mole icon.",
+    "notes": [
+      "On its own: every network tool with no edition or FBRX account, and none of FBRX Endpoint's background work, so nothing fails and it never gets in the way.",
+      "While FBRX Endpoint runs on the same computer, Ask Fabrix and Diagnose with Fabrix appear and think with Endpoint's AI; nothing leaves the computer.",
+      "A new icon: a mole in a miner's helmet, drawn in honey and red on black."
+    ],
+    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.0",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.0"
+  }
 }

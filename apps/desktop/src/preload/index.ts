@@ -12,6 +12,18 @@ const api = {
     ipcRenderer.on('fbrx:event', h);
     return () => ipcRenderer.removeListener('fbrx:event', h);
   },
+  /** A notification to show inside this window (the main process picked this window for it). */
+  onToast(cb: (n: { title: string; body: string; level: 'info' | 'success' | 'warning' | 'error'; source: string; open?: string }) => void): () => void {
+    const h = (_e: unknown, n: Parameters<typeof cb>[0]) => cb(n);
+    ipcRenderer.on('fbrx:toast', h);
+    return () => ipcRenderer.removeListener('fbrx:toast', h);
+  },
+  /** Play FBRX's notification sound (once per notification, in one window). */
+  onChime(cb: (c: { level: 'info' | 'success' | 'warning' | 'error'; volume: number }) => void): () => void {
+    const h = (_e: unknown, c: Parameters<typeof cb>[0]) => cb(c);
+    ipcRenderer.on('fbrx:chime', h);
+    return () => ipcRenderer.removeListener('fbrx:chime', h);
+  },
   onNavigate(cb: (route: string) => void): () => void {
     const h = (_e: unknown, route: string) => cb(route);
     ipcRenderer.on('fbrx:navigate', h);
@@ -19,25 +31,46 @@ const api = {
   },
   dialog: (opts: { kind: 'file' | 'folder' | 'save'; title?: string; filters?: Array<{ name: string; extensions: string[] }>; defaultPath?: string }) => ipcRenderer.invoke('fbrx:dialog', opts) as Promise<string | null>,
   reveal: (path: string) => ipcRenderer.invoke('fbrx:reveal', path),
+  openFile: (path: string) => ipcRenderer.invoke('fbrx:openFile', path),
   openExternal: (url: string) => ipcRenderer.invoke('fbrx:openExternal', url),
   appInfo: () => ipcRenderer.invoke('fbrx:app'),
   showSpotlight: () => void ipcRenderer.invoke('fbrx:spotlight', 'show'),
   spotlightHide: () => void ipcRenderer.invoke('fbrx:spotlight', 'hide'),
   openMain: (route: string) => void ipcRenderer.invoke('fbrx:spotlight', 'open', route),
   copyText: async (text: string) => void (await ipcRenderer.invoke('fbrx:copy', text)),
+  copySecret: async (text: string) => void (await ipcRenderer.invoke('fbrx:copySecret', text)),
+  popOut: (route: string) => ipcRenderer.invoke('fbrx:popout', route) as Promise<boolean>,
+  popOutWindow: (action: 'pin' | 'tile' | 'main', on?: boolean) => ipcRenderer.invoke('fbrx:window', action, on) as Promise<boolean>,
+  edit: (action: 'cut' | 'copy' | 'paste' | 'pasteAsText' | 'selectAll' | 'undo' | 'redo') => ipcRenderer.invoke('fbrx:edit', action) as Promise<boolean>,
   goose: (action: string, on?: boolean) => ipcRenderer.invoke('fbrx:goose', action, on) as Promise<unknown>,
+  /** Open or focus the FBRX Browser window (optionally at a URL). */
+  openBrowser: (url?: string) => void ipcRenderer.invoke('fbrx:browser', 'open', url),
+  /** A URL to open as a new tab in the browser window (a link asked for a new window, or Spotlight sent one). */
+  onBrowserOpen(cb: (url: string) => void): () => void {
+    const h = (_e: unknown, url: string) => cb(url);
+    ipcRenderer.on('fbrx:browser-open', h);
+    return () => ipcRenderer.removeListener('fbrx:browser-open', h);
+  },
+  /** A tab's page has a certificate no authority vouches for (BrowserCertificateProblem). */
+  onBrowserCertificate(cb: (problem: unknown) => void): () => void {
+    const h = (_e: unknown, problem: unknown) => cb(problem);
+    ipcRenderer.on('fbrx:browser-certificate', h);
+    return () => ipcRenderer.removeListener('fbrx:browser-certificate', h);
+  },
+  /** Goes on with that certificate for its address, until FBRX quits. */
+  trustBrowserCertificate: (host: string, fingerprint: string) => ipcRenderer.invoke('fbrx:browser-certificate', host, fingerprint) as Promise<boolean>,
   onGoose(cb: (e: unknown) => void): () => void {
     const h = (_e: unknown, payload: unknown) => cb(payload);
     ipcRenderer.on('fbrx:goose', h);
     return () => ipcRenderer.removeListener('fbrx:goose', h);
   },
-  clip: (action: 'list' | 'read' | 'remove' | 'pin' | 'clear', id?: number, on?: boolean) => ipcRenderer.invoke('fbrx:clip', action, id, on) as Promise<unknown>,
+  clip: (action: 'list' | 'read' | 'copy' | 'remove' | 'pin' | 'clear', id?: number, on?: boolean) => ipcRenderer.invoke('fbrx:clip', action, id, on) as Promise<unknown>,
   onClips(cb: (entries: unknown) => void): () => void {
     const h = (_e: unknown, entries: unknown) => cb(entries);
     ipcRenderer.on('fbrx:clips', h);
     return () => ipcRenderer.removeListener('fbrx:clips', h);
   },
-  clipPicker: (action: 'show' | 'hide' | 'enable' | 'paste', text?: string) => ipcRenderer.invoke('fbrx:clip-picker', action, text) as Promise<unknown>,
+  clipPicker: (action: 'show' | 'hide' | 'enable' | 'paste', text?: string | number) => ipcRenderer.invoke('fbrx:clip-picker', action, text) as Promise<unknown>,
   onClipPicker(cb: (what: string) => void): () => void {
     const h = (_e: unknown, what: string) => cb(what);
     ipcRenderer.on('fbrx:clip-picker', h);
@@ -45,9 +78,19 @@ const api = {
   },
   runCode: (code: string, inputs: string[]) => ipcRenderer.invoke('fbrx:code-run', code, inputs) as Promise<unknown>,
   stopCode: () => ipcRenderer.invoke('fbrx:code-stop') as Promise<unknown>,
+  /** FBRX Snapshot: start one (a page's button), and the overlay's side (its still picture, the mode, windows, the pick). */
+  snap: (action: 'start' | 'frame' | 'mode' | 'windows' | 'pick' | 'cancel', arg?: unknown) => ipcRenderer.invoke('fbrx:snap', action, arg) as Promise<unknown>,
+  snapDrag: (what: { id: string; data?: Uint8Array }) => ipcRenderer.invoke('fbrx:snap-drag', what) as Promise<boolean>,
+  onSnapMode(cb: (mode: string) => void): () => void {
+    const h = (_e: unknown, mode: string) => cb(mode);
+    ipcRenderer.on('fbrx:snap-mode', h);
+    return () => ipcRenderer.removeListener('fbrx:snap-mode', h);
+  },
   micAccess: () => ipcRenderer.invoke('fbrx:mic-access') as Promise<{ granted: boolean; status: string }>,
   openVoiceSettings: () => ipcRenderer.invoke('fbrx:voice-settings') as Promise<boolean>,
   platform: process.platform,
+  /** FBRX OS, or FBRX Digger (the Network Center on its own). */
+  flavor: process.argv.includes('--fbrx-flavor=digger') ? 'digger' : 'os',
 };
 
 contextBridge.exposeInMainWorld('fbrx', api);

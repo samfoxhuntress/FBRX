@@ -1,9 +1,9 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
 import { accessSync, constants, existsSync, readdirSync, statSync } from 'node:fs';
-import { freemem, setPriority, totalmem } from 'node:os';
+import { availableParallelism, freemem, setPriority, totalmem } from 'node:os';
 import { delimiter, join } from 'node:path';
-import type { RuntimeStatus } from '@fbrx/shared';
+import { graphicsMemory, type DownloadProgress, type RuntimeHardware, type RuntimeStatus } from '@fbrx/shared';
 import { CoreError } from '../../errors';
 import type { EventBus } from '../../events';
 import type { Logger } from '../../logger';
@@ -13,6 +13,7 @@ import { sleep } from '../../util/misc';
 import si from 'systeminformation';
 import { installLlamaRuntime } from './runtime-installer';
 import { resourcePlan } from '../resources';
+import { AUTO_CONTEXT_MIN, autoContextSize, fitsOnCard } from './context-size';
 import { readGgufInfo } from './gguf';
 import { explainLoadFailure, type LoadFailure } from './load-failure';
 
@@ -84,6 +85,13 @@ export class LocalRuntime {
   private readonly gpuFit = new Map<string, number>();
   /** What went wrong at the last start, for the AI models page to offer the right fix. */
   private problem: LoadFailure['kind'] | null = null;
+  /** The context window each model got on Auto, worked out from its file and this computer's memory. */
+  private autoContext = new Map<string, number>();
+  /** Models (or runtimes) that would not load with the compact 8-bit context: they get the full-size one. */
+  private fullContext = new Set<string>();
+  /** The graphics memory the runtime can use, 0 without a usable card; null until looked up (learnCard). */
+  private cardBytes: number | null = null;
+  private cardProbe: Promise<number> | null = null;
 
   constructor(
     private readonly d: {
@@ -93,8 +101,23 @@ export class LocalRuntime {
       resourcesDir: string | null;
       log: Logger;
       events?: EventBus;
+      /** FBRX Server's core: a longer context window on Auto. */
+      server?: boolean;
     },
-  ) {}
+  ) {
+    // With a model chosen, the graphics card is looked up early: the first question's context window depends on it.
+    const s = d.settings.get().runtime;
+    if (s.enabled && s.modelId) setTimeout(() => void this.learnCard(), 3000).unref?.();
+  }
+
+  /** Looks up the graphics memory the runtime can use, once. */
+  private learnCard(): Promise<number> {
+    this.cardProbe ??= this.hardware().then(
+      (hw) => (this.cardBytes = graphicsMemory(hw)),
+      () => (this.cardBytes = 0),
+    );
+    return this.cardProbe;
+  }
 
   resolveBinary(): string | null {
     const cfg = this.d.settings.get().runtime.binaryPath;
@@ -147,7 +170,36 @@ export class LocalRuntime {
       endpoint: this.state === 'running' ? this.endpoint : null,
       message,
       problem: state === 'failed' ? this.problem : null,
+      contextSize: model ? this.contextTokens() : null,
+      contextAuto: s.contextSize === 0,
     };
+  }
+
+  /** The built-in model's context window in tokens: the setting, or on Auto what the current model gets here. */
+  contextTokens(): number {
+    const s = this.d.settings.get().runtime;
+    if (s.contextSize > 0) return s.contextSize;
+    const model = s.modelId ? this.d.models.get(s.modelId) : undefined;
+    if (!model) return AUTO_CONTEXT_MIN;
+    const known = this.autoContext.get(model.id);
+    if (known) return known;
+    let size = 0;
+    try {
+      size = statSync(model.file).size;
+    } catch {
+      /* not downloaded yet */
+    }
+    if (this.cardBytes === null) void this.learnCard();
+    const auto = autoContextSize({ info: size ? readGgufInfo(model.file) : null, modelBytes: size, totalMem: totalmem(), compact: s.compactContext && !this.fullContext.has(model.id), server: this.d.server, cardBytes: this.card(size, s.gpuLayers < 0 ? (this.gpuFit.get(model.id) ?? ALL_LAYERS) : s.gpuLayers) });
+    // Kept once the graphics card is known: until then the memory alone decided.
+    if (this.cardBytes !== null) this.autoContext.set(model.id, auto);
+    return auto;
+  }
+
+  /** The graphics memory the context can use: the card's when all of the model goes there with these layers, else null. */
+  private card(modelBytes: number, layers: number): number | null {
+    const card = this.cardBytes ?? 0;
+    return layers >= ALL_LAYERS && card > 0 && modelBytes > 0 && fitsOnCard(modelBytes, card) ? card : null;
   }
 
   private setState(state: RuntimeStatus['state'], message: string | null = null) {
@@ -174,6 +226,11 @@ export class LocalRuntime {
       this.active = Math.max(0, this.active - 1);
       throw err;
     }
+  }
+
+  /** A chat is using the model now (the next one waits its turn). */
+  get busy(): boolean {
+    return this.active > 0;
   }
 
   release(): void {
@@ -214,6 +271,14 @@ export class LocalRuntime {
     if (size > 0 && !info) return this.fail({ kind: 'damaged', message: `The ${model.name} file is not a usable model (incomplete or damaged). Download it again (AI models → Download again).`, detail: 'not a GGUF file' });
     const plan = resourcePlan(this.d.settings.get().ai.resources);
     const threads = s.threads > 0 ? s.threads : plan.threads;
+    let compact = s.compactContext && !this.fullContext.has(model.id);
+    await this.learnCard();
+    const context = (layers: number) => {
+      if (s.contextSize > 0) return s.contextSize;
+      const auto = autoContextSize({ info, modelBytes: size, totalMem: totalmem(), compact, server: this.d.server, cardBytes: this.card(size, layers) });
+      this.autoContext.set(model.id, auto);
+      return auto;
+    };
 
     // All of the model on the graphics card when it fits. When it does not, try half of it there, then none, and keep
     // what worked for next time (a manual layer count in Settings is used as it is).
@@ -226,7 +291,14 @@ export class LocalRuntime {
     }
     for (const [i, layers] of tries.entries()) {
       this.setState('starting', i === 0 ? `Loading ${model.name}…` : `Loading ${model.name} with ${layers ? 'part of it' : 'none of it'} on the graphics card…`);
-      const r = await this.spawnOnce(binary, model, layers, threads, plan.priority);
+      let r = await this.spawnOnce(binary, model, layers, threads, plan.priority, { context: context(layers), compact });
+      // Some runtimes and models cannot keep the context in 8 bits: load again with the full-size one, and remember.
+      if (compact && typeof r === 'object' && r.kind === 'other') {
+        this.d.log.warn('The compact context did not load; trying the full-size one', { model: model.id, detail: r.detail });
+        compact = false;
+        this.fullContext.add(model.id);
+        r = await this.spawnOnce(binary, model, layers, threads, plan.priority, { context: context(layers), compact });
+      }
       if (r === 'ready') {
         if (auto) this.gpuFit.set(model.id, layers);
         const note =
@@ -259,14 +331,16 @@ export class LocalRuntime {
   }
 
   /** Starts llama-server once and waits until it answers, gives up, or exits (and why). */
-  private async spawnOnce(binary: string, model: { id: string; name: string; file: string }, gpuLayers: number, threads: number, priority: number): Promise<'ready' | 'timeout' | 'stopped' | LoadFailure> {
+  private async spawnOnce(binary: string, model: { id: string; name: string; file: string }, gpuLayers: number, threads: number, priority: number, ctx: { context: number; compact: boolean }): Promise<'ready' | 'timeout' | 'stopped' | LoadFailure> {
     const s = this.d.settings.get().runtime;
     this.apiKeyValue = randomBytes(24).toString('base64url');
     const args = [
       '--model', model.file,
       '--host', '127.0.0.1',
       '--port', String(s.port),
-      '--ctx-size', String(s.contextSize),
+      '--ctx-size', String(ctx.context),
+      // The context's memory in 8 bits (flash attention is what lets the values be kept that way): about half the size.
+      ...(ctx.compact ? ['--flash-attn', 'on', '--cache-type-k', 'q8_0', '--cache-type-v', 'q8_0'] : []),
       '--n-gpu-layers', String(gpuLayers),
       '--jinja',
       '--alias', model.id,
@@ -274,6 +348,8 @@ export class LocalRuntime {
       '--threads', String(threads),
       // One conversation at a time: the whole context goes to it and the memory for extra slots is not reserved.
       '--parallel', '1',
+      // When the oldest messages drop out of a long chat, what follows them is moved up instead of read again.
+      '--cache-reuse', '256',
     ];
     this.stopping = false;
     this.recentOutput = [];
@@ -376,14 +452,34 @@ export class LocalRuntime {
   }
 
   private installing: AbortController | null = null;
+  /** The runtime's own download, as the model downloads report theirs (kept a few minutes after it ends). */
+  private installProgress: { progress: DownloadProgress; at: number } | null = null;
+
+  installState(): DownloadProgress | null {
+    const p = this.installProgress;
+    if (!p) return null;
+    const ended = p.progress.state !== 'downloading' && p.progress.state !== 'verifying';
+    return ended && p.at < Date.now() - 10 * 60_000 ? null : p.progress;
+  }
+
+  /** Memory and graphics cards, for picking a model that fits. */
+  async hardware(): Promise<RuntimeHardware> {
+    const gpus = await si
+      .graphics()
+      .then((g) => g.controllers.filter((c) => (c.vram ?? 0) > 0 || /nvidia|radeon|amd|intel/i.test(`${c.vendor} ${c.model}`)).map((c) => ({ name: [c.vendor, c.model].filter(Boolean).join(' ').trim() || 'Graphics', vramBytes: (c.vram ?? 0) * 1024 * 1024 })))
+      .catch(() => []);
+    return { memoryBytes: totalmem(), freeMemoryBytes: freemem(), cpus: availableParallelism(), gpus, variant: process.platform === 'darwin' ? 'metal' : await gpuVariant() };
+  }
 
   /** Downloads the official llama.cpp runtime into the data folder (for builds that did not bundle it). */
   install(): void {
     if (this.installing) throw new CoreError('CONFLICT', 'The runtime is already being installed');
     const controller = new AbortController();
     this.installing = controller;
-    const emit = (p: { receivedBytes: number; totalBytes: number; state: 'downloading' | 'verifying' | 'completed' | 'failed' | 'cancelled'; error?: string }) =>
+    const emit = (p: { receivedBytes: number; totalBytes: number; state: 'downloading' | 'verifying' | 'completed' | 'failed' | 'cancelled'; error?: string }) => {
+      this.installProgress = { progress: { modelId: 'llama-runtime', ...p }, at: Date.now() };
       this.d.events?.emit('runtime.download', { modelId: 'llama-runtime', ...p });
+    };
     emit({ receivedBytes: 0, totalBytes: 0, state: 'downloading' });
     void gpuVariant()
       .then((variant) => {

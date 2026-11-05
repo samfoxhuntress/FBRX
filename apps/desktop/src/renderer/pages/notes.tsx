@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Note } from '@fbrx/shared';
-import { Button, Card, Empty, Icons, Input, Select, Status, TextArea, timeAgo, useAction, useConfirm } from '@fbrx/ui';
+import { Button, Card, Empty, Icons, Input, Markdown, Select, Status, TextArea, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { call } from '../client';
 import { useAgentName, useCore } from '../hooks';
-import { Markdown } from '../markdown';
 import { navigate, routeArg } from '../app';
 
 /** Notes with Markdown preview, tags, pinning and autosave. */

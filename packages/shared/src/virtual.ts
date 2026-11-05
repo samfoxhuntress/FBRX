@@ -338,3 +338,85 @@ export interface VirtualAuditEntry {
   outcome: 'success' | 'failure';
   details: string | null;
 }
+
+// ------------------------------------------------------------------------------------------ server roles
+
+/** A role FBRX Server can have (install.sh --roles, fbrx-server roles, or Roles in the console). */
+export interface ServerRoleInfo {
+  id: string;
+  name: string;
+  what: string;
+  /** Roles it works through. */
+  needs?: string[];
+  /** It takes two network ports (internet, your network). */
+  ports?: boolean;
+}
+
+export const SERVER_ROLE_CATALOG: ServerRoleInfo[] = [
+  { id: 'virtual', name: 'FBRX Virtual', what: 'Virtual machines on this server (KVM), with their networks, storage and ISOs.' },
+  { id: 'ai', name: 'AI', what: 'An AI agent on FBRX Mesh, and bigger AI models that every computer on the mesh can use.' },
+  { id: 'gate', name: 'FBRX Gate', what: 'The router and firewall for your network, on two of this server’s network ports.', ports: true },
+  { id: 'minidome', name: 'FBRX MiniDome', what: 'Watches the network through FBRX Gate for threats and tells the computer they are about.', needs: ['gate'] },
+  { id: 'time', name: 'FBRX Time', what: 'Image backups of virtual machines and computers, each checked by starting it as a throwaway machine.', needs: ['virtual'] },
+  { id: 'command', name: 'FBRX Command', what: 'Your organization’s FBRX Command on this server: its computers, their settings and policy, licenses and updates, with its own console.' },
+];
+
+/** FBRX Command on this server (the command role), as the server console shows it. */
+export interface ServerCommandStatus {
+  /** The command role is on. */
+  enabled: boolean;
+  /** Its service answers. */
+  running: boolean;
+  version: string | null;
+  /** Nobody has set it up yet: its first sign-in asks for the setup token. Null while it does not answer. */
+  needsSetup: boolean | null;
+  /** Where people and computers reach it (https://<this server>:8787). */
+  url: string | null;
+  /** Its certificate's SHA-256 fingerprint, which a computer compares once when it joins. */
+  fingerprint: string | null;
+  /** The one-time setup token, shown to administrators until FBRX Command is set up. */
+  setupToken: string | null;
+  /** Why it does not answer, in words. */
+  error: string | null;
+  /** On a gate: the gate's firewall lets your networks reach it (null without the gate role). */
+  gateOpen: boolean | null;
+  /** This server's FBRX core (the ai role) in an FBRX Command: null when it has not joined one (or has no ai role). */
+  joined: { server: string; organization: string | null; state: string } | null;
+  /** This server has the ai role, which is what joins an FBRX Command. */
+  canJoin: boolean;
+}
+
+/** A change of roles: running, or how the last one ended (fbrx-server roles writes it). */
+export interface RoleChange {
+  state: 'running' | 'done' | 'failed';
+  roles: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  /** The end of the installer's output. */
+  log: string;
+}
+
+export interface ServerRolesStatus {
+  roles: string[];
+  catalog: ServerRoleInfo[];
+  /** Roles can be changed from here (the server keeps a copy of its installer). */
+  canChange: boolean;
+  /** Why not, in words. */
+  why: string | null;
+  change: RoleChange | null;
+  /** Network ports, for the gate role. */
+  ports: string[];
+  gate: { wan: string; lan: string };
+}
+
+/** What is wrong with a set of roles, in words (null: fine). */
+export function rolesProblem(roles: string[]): string | null {
+  if (!roles.length) return 'Pick at least one role';
+  for (const r of roles) {
+    const info = SERVER_ROLE_CATALOG.find((x) => x.id === r);
+    if (!info) return `There is no ${r} role`;
+    const missing = (info.needs ?? []).filter((n) => !roles.includes(n));
+    if (missing.length) return `${info.name} works through ${missing.map((m) => SERVER_ROLE_CATALOG.find((x) => x.id === m)?.name ?? m).join(' and ')}: add it too`;
+  }
+  return null;
+}

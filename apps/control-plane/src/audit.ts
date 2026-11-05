@@ -3,7 +3,7 @@ import { canonicalJson } from '@fbrx/shared';
 import type { Db } from '@fbrx/shared/node';
 
 export interface Actor {
-  type: 'user' | 'apikey' | 'device' | 'system';
+  type: 'user' | 'apikey' | 'device' | 'system' | 'account';
   id: string | null;
   label: string;
   tenantId: string | null;

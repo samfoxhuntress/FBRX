@@ -31,6 +31,8 @@ describe('domain XML', () => {
     expect(xml).not.toContain('host-passthrough');
     expect(xml).toContain("<os firmware='efi'>");
     expect(xml).toContain("<feature enabled='yes' name='secure-boot'/>");
+    // Flash firmware with the machine's own settings, never a stateless build (AMD SEV, Intel TDX).
+    expect(xml).toContain("<loader type='pflash'/>");
     expect(xml).toContain("<smm state='on'/>");
     expect(xml).toContain("<model type='e1000e'/>");
     expect(xml).toContain("<source bridge='br0'/>");

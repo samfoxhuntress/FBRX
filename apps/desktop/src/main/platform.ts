@@ -1,12 +1,16 @@
-import { app, Notification, safeStorage, shell } from 'electron';
+import { app, nativeImage, Notification, safeStorage, shell } from 'electron';
 import { execFile } from 'node:child_process';
-import { join } from 'node:path';
+import { existsSync, readFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { FileKeychain, defaultSpecialDirs, openMacSafeStorage, type KeychainAdapter, type MovedKeychain, type PlatformAdapter, type UpdateController } from '@fbrx/core';
-import type { NotificationEvent } from '@fbrx/shared';
+import { PRODUCT_NAME, type AppFlavor, type NotificationEvent } from '@fbrx/shared';
+import { documentRenderer } from './document-renderer';
 
 declare const __FBRX_LICENSE_PUBKEYS__: string[];
 /** Microsoft app (client) ID for Outlook / Microsoft 365 calendars, from FBRX_MS_CLIENT_ID at build time. */
 declare const __FBRX_MS_CLIENT_ID__: string;
+/** The FBRX Command FBRX accounts live on (FBRX's cloud), embedded at build time. */
+declare const __FBRX_ACCOUNT_SERVER__: string;
 
 /** Vault key protection via the OS keychain (macOS Keychain, Windows DPAPI, libsecret on Linux). */
 export class ElectronKeychain implements KeychainAdapter {
@@ -55,13 +59,22 @@ export function macMovedKeychain(): MovedKeychain | null {
   };
 }
 
+/** A notification in the system's notification center (Windows' Action Center, macOS Notification Center). */
+export function systemNotification(n: NotificationEvent, o: { silent: boolean; onClick: () => void }): boolean {
+  if (!Notification.isSupported()) return false;
+  const note = new Notification({ title: n.title, body: n.body, silent: o.silent });
+  note.on('click', o.onClick);
+  note.show();
+  return true;
+}
+
 export function createElectronPlatform(o: {
   dataDir: string;
   updates: UpdateController | null;
+  /** Shows a notification: where and with what sound is the desktop app's choice (deliverNotification). */
   onNotify: (n: NotificationEvent) => void;
-  /** Shows the window on a page (a notification was clicked). */
-  onOpen?: (route: string) => void;
   requestRestart: (reason: string) => void;
+  flavor: AppFlavor;
 }): PlatformAdapter {
   const resources = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources');
   const workerDir = app.isPackaged ? join(app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked'), 'dist', 'main') : join(app.getAppPath(), 'dist', 'main');
@@ -69,6 +82,9 @@ export function createElectronPlatform(o: {
   if (process.env.FBRX_LICENSE_PUBLIC_KEY && !app.isPackaged) keys.push(process.env.FBRX_LICENSE_PUBLIC_KEY.replace(/\\n/g, '\n'));
   return {
     shell: 'desktop',
+    flavor: o.flavor,
+    // FBRX Digger finds FBRX Endpoint's AI through Endpoint's data folder (FBRX_ENDPOINT_HOME in development).
+    endpointDataDir: o.flavor === 'digger' ? (process.env.FBRX_ENDPOINT_HOME ?? join(app.getPath('appData'), PRODUCT_NAME)) : null,
     appVersion: app.getVersion(),
     devMode: !app.isPackaged || process.env.FBRX_DEV_MODE === '1',
     keychain: chooseKeychain(o.dataDir),
@@ -77,32 +93,50 @@ export function createElectronPlatform(o: {
     pluginWorkerPath: join(workerDir, 'plugin-worker.mjs'),
     licensePublicKeys: keys,
     microsoftClientId: (typeof __FBRX_MS_CLIENT_ID__ !== 'undefined' && __FBRX_MS_CLIENT_ID__) || process.env.FBRX_MS_CLIENT_ID || null,
+    accountServer: (typeof __FBRX_ACCOUNT_SERVER__ !== 'undefined' && __FBRX_ACCOUNT_SERVER__) || process.env.FBRX_ACCOUNT_SERVER || null,
     sandboxPlugins: process.env.FBRX_PLUGIN_SANDBOX !== '0',
     updates: o.updates,
     meshMobileDir: join(workerDir, 'mobile'),
     vendorDbFile: join(workerDir, 'oui-vendors.tsv.gz'),
     mcpShim: { command: process.execPath, args: [join(workerDir, 'fbrx-mcp.mjs')], env: { ELECTRON_RUN_AS_NODE: '1' } },
+    renderer: documentRenderer,
+    images: {
+      thumbnail: (data, side) => {
+        const image = nativeImage.createFromBuffer(data);
+        const { width, height } = image.getSize();
+        const scale = Math.min(1, side / Math.max(width, height, 1));
+        return image.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: 'good' }).toJPEG(82);
+      },
+    },
+    trash: (path: string) => shell.trashItem(path),
     specialDirs: () => {
       const d = defaultSpecialDirs();
       try {
         const home = app.getPath('home');
         // Without XDG user folders, Linux reports the home folder itself; use the usual folder inside it instead.
-        const pick = (name: 'documents' | 'desktop' | 'downloads') => {
+        const pick = (name: 'documents' | 'desktop' | 'downloads' | 'pictures') => {
           const p = app.getPath(name);
           return p && p !== home ? p : d[name];
         };
-        return { home, documents: pick('documents'), desktop: pick('desktop'), downloads: pick('downloads') };
+        return { home, documents: pick('documents'), desktop: pick('desktop'), downloads: pick('downloads'), pictures: pick('pictures') };
       } catch {
         return d;
       }
     },
-    notify: (n) => {
-      o.onNotify(n);
-      if (!Notification.isSupported()) return;
-      const note = new Notification({ title: n.title, body: n.body, silent: n.level === 'info' });
-      if (n.open && o.onOpen) note.on('click', () => o.onOpen!(n.open!));
-      note.show();
+    ownDirs: () => {
+      const dirs = [dirname(process.execPath), resources, app.getPath('userData')];
+      // The update cache (electron-updater names it in app-update.yml), under the local app data folder.
+      try {
+        const yml = join(resources, 'app-update.yml');
+        const name = existsSync(yml) ? /^updaterCacheDirName:\s*(\S+)/m.exec(readFileSync(yml, 'utf8'))?.[1] : null;
+        const base = process.platform === 'win32' ? process.env.LOCALAPPDATA : process.platform === 'darwin' ? join(app.getPath('home'), 'Library', 'Caches') : process.env.XDG_CACHE_HOME || join(app.getPath('home'), '.cache');
+        if (name && base) dirs.push(join(base, name.replace(/^["']|["']$/g, '')));
+      } catch {
+        /* no update cache */
+      }
+      return dirs;
     },
+    notify: (n) => o.onNotify(n),
     requestRestart: o.requestRestart,
   };
 }

@@ -86,6 +86,33 @@ export function systemTools(d: SystemDeps): ToolSpec[] {
       },
     },
     {
+      name: 'plan.update',
+      title: 'Plan',
+      description:
+        'Show the person your plan for a job of three or more steps, as a checklist in the chat: set it before you start (each step a few words), and send it again with steps marked done as you finish them.',
+      risk: 'read',
+      source: 'builtin',
+      sourceId: null,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          steps: {
+            type: 'array',
+            minItems: 1,
+            maxItems: 10,
+            items: { type: 'object', properties: { step: { type: 'string', minLength: 1, maxLength: 160 }, done: { type: 'boolean' } }, required: ['step'] },
+          },
+        },
+        required: ['steps'],
+      },
+      async run(i) {
+        const steps = (i.steps as Array<{ step: string; done?: boolean }>).map((s) => ({ step: s.step, done: !!s.done }));
+        const done = steps.filter((s) => s.done).length;
+        const next = steps.find((s) => !s.done);
+        return { output: done === steps.length ? `All ${steps.length} steps done.` : `${done} of ${steps.length} done. Next: ${next!.step}`, data: { steps } };
+      },
+    },
+    {
       name: 'time.now',
       title: 'Current time',
       description: 'Current date, time and time zone of this workstation.',

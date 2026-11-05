@@ -13,6 +13,7 @@ import type { CoreLink } from './core-link';
 import type { HostMeshMark } from './mesh-mark';
 import type { GateEngine, GateApplier } from '@fbrx/gate/node';
 import type { DomeEngine } from '@fbrx/dome/node';
+import type { TimeService } from './time/service';
 import { allows } from './auth';
 import { forbidden, unauthorized } from './errors';
 
@@ -35,6 +36,8 @@ export interface VirtualContext {
   gate: { engine: GateEngine; applier: GateApplier } | null;
   /** FBRX MiniDome (the minidome role, on a gate). */
   dome: DomeEngine | null;
+  /** FBRX Time (the time role): image backups and boot checks. */
+  time: TimeService | null;
   /** The command line's token (fbrx-gate, run as root on the server; accepted from this computer only). */
   cliToken: string;
   log: FastifyBaseLogger;

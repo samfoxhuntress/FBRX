@@ -100,7 +100,12 @@ async function step(title, fn) {
 
 // ------------------------------------------------------------------------------------------------ processes
 const nodeDir = dirname(process.execPath);
-const childEnv = { ...process.env, PATH: `${nodeDir}${delimiter}${process.env.PATH ?? process.env.Path ?? ''}`, npm_config_update_notifier: 'false', npm_config_fund: 'false', npm_config_audit: 'false' };
+/**
+ * Never "production" for the builds: FBRX Command runs with NODE_ENV=production and starts this setup when it updates
+ * itself, and npm would then leave out the tools the build needs (Vite, esbuild).
+ */
+const buildEnv = Object.fromEntries(Object.entries(process.env).filter(([k]) => !/^(node_env|npm_config_(production|omit))$/i.test(k)));
+const childEnv = { ...buildEnv, PATH: `${nodeDir}${delimiter}${process.env.PATH ?? process.env.Path ?? ''}`, npm_config_update_notifier: 'false', npm_config_fund: 'false', npm_config_audit: 'false' };
 if (win) childEnv.Path = childEnv.PATH;
 
 function run(cmd, args, { cwd = ROOT, env = childEnv, onLine, label } = {}) {
@@ -211,12 +216,13 @@ async function installDependencies(ui) {
   const digest = createHash('sha256').update(readFileSync(join(ROOT, 'package-lock.json'))).update(process.version).digest('hex');
   const full = join(STATE, 'dependencies.sha256'); // "Install FBRX OS" (everything, Electron included)
   const mine = join(STATE, 'command-dependencies.sha256');
-  const installed = existsSync(join(ROOT, 'node_modules', '.package-lock.json'));
+  // With the build tools: an install that left them out is done again.
+  const installed = existsSync(join(ROOT, 'node_modules', '.package-lock.json')) && existsSync(join(ROOT, 'node_modules', 'vite', 'package.json'));
   const same = (f) => existsSync(f) && readFileSync(f, 'utf8') === digest;
   if (installed && (same(full) || same(mine))) return { note: 'already up to date' };
   let downloads = 0;
   // FBRX Command needs no Electron: skip its download (about 100 MB).
-  await npm(['ci', '--no-audit', '--no-fund', '--loglevel=http'], { env: { ...childEnv, ELECTRON_SKIP_BINARY_DOWNLOAD: '1' }, onLine: (l) => /GET 200|fetch GET/.test(l) && ui.setDetail(`${++downloads} downloads`) });
+  await npm(['ci', '--include=dev', '--no-audit', '--no-fund', '--loglevel=http'], { env: { ...childEnv, ELECTRON_SKIP_BINARY_DOWNLOAD: '1' }, onLine: (l) => /GET 200|fetch GET/.test(l) && ui.setDetail(`${++downloads} downloads`) });
   writeFileSync(mine, digest);
   // Without Electron the dependencies are not enough for "Install FBRX OS", which then installs them again.
   rmSync(full, { force: true });
@@ -557,6 +563,8 @@ async function main() {
   console.log(`  ${bold('On this computer')}  ${local}  ${dim(`(the "${PRODUCT}" icon opens it)`)}`);
   // The token first, and plainly: the certificate fingerprint below is long and looks like one, but is not it.
   if (status?.needsSetup !== false) console.log(`  ${bold('Setup token')}       ${cyan(bold(config.setupToken))}\n                    ${dim('The first sign-in asks for it once. Opening FBRX Command from its icon fills it in.')}`);
+  // Set up before (an update keeps the data): there is no token to give, so say how to get in instead of nothing.
+  else console.log(`  ${bold('Sign in')}           with the account made when ${PRODUCT} was first set up\n                    ${dim(`It is already set up, so no setup token is needed. To start over instead, run the installer with\n                    --uninstall --delete-data (this erases ${PRODUCT}'s data), then install it again.`)}`);
   if (mode === 'network') {
     console.log(`  ${bold('Other computers')}   join at ${config.publicUrl}`);
     if (fp) console.log(`  ${bold('Certificate')}       ${fp}\n                    ${dim('Not the setup token: computers show this when they join, and it must match. Deploy & enroll shows it too.')}`);
@@ -571,7 +579,9 @@ async function main() {
     if (win) console.log(`  ${yellow('!')} If Windows asks whether Node.js may use private networks, choose Allow: that is FBRX Command.`);
     if (mac) console.log(`  ${yellow('!')} If macOS asks whether "node" may accept incoming connections, choose Allow: that is FBRX Command.`);
   }
-  console.log(`\n  ${dim(`Your license signing key is backed up in ${join(homedir(), '.fbrx-keys')}. Keep a copy somewhere safe.`)}\n`);
+  console.log(`\n  ${dim(`Your license signing key is backed up in ${join(homedir(), '.fbrx-keys')}. Keep a copy somewhere safe.`)}`);
+  console.log(`  ${dim('FBRX OS built on another computer accepts the editions FBRX Command gives only with this key: copy')}`);
+  console.log(`  ${dim(`license-signing.pem there and run "Install FBRX OS" with --signing-key <that file>.`)}\n`);
   return 0;
 }
 

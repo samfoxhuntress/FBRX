@@ -1,6 +1,7 @@
 import { BarList, Button, Card, Grid, Meter, Page, StatTile, Status, formatNumber, timeAgo, Empty } from '@fbrx/ui';
 import { useApp, useQuery } from '../state';
 import { PLATFORM_LABEL, SeverityStatus } from './common';
+import { ServerComingSoon } from './billing';
 
 interface Overview {
   devices: { total: number; online: number; offline: number; retired: number; disabled: number; critical: number; warning: number; outdated: number };
@@ -112,6 +113,7 @@ export function OverviewPage() {
           </div>
         </Card>
       </Grid>
+      <ServerComingSoon />
     </Page>
   );
 }

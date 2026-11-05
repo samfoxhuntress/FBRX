@@ -22,9 +22,13 @@ import {
   type PrinterInfo,
   type SpeedTestResult,
   type TraceHop,
+  type WifiAccessPoint,
+  type WifiBand,
+  type WifiChannelReport,
   type WifiInfo,
 } from '@fbrx/shared';
 import type { VendorDb } from './vendors';
+import { bandOf, bandReport } from './wifi-channels';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { Db } from '../storage/db';
@@ -691,6 +695,40 @@ export class NetDiag {
         .slice(0, 60)
         .map((n) => ({ ssid: n.ssid, signalPct: n.quality ?? 0, channel: n.channel ?? null, band: band(n.frequency), security: arr(n.security).join(', ') })),
       channels,
+    };
+  }
+
+  /** Wi-Fi scans kept for the channel history (Endpoint Ultra): one every two minutes at most, the last 12 hours. */
+  private wifiScans: Array<{ at: string; loads: Partial<Record<WifiBand, number[]>> }> = [];
+
+  /** The access points around and how busy each channel is, with the channel to move to and why. */
+  async wifiChannels(o: { ultra: boolean }): Promise<WifiChannelReport> {
+    const [conns, nets, ctx] = await Promise.all([si.wifiConnections().catch(() => []), si.wifiNetworks().catch(() => []), this.context().catch(() => null)]);
+    const c = conns[0];
+    const dbm = (n: { signalLevel?: number | null; quality?: number | null }) => (n.signalLevel && n.signalLevel < 0 ? n.signalLevel : Math.round((n.quality ?? 0) / 2 - 100));
+    const points: WifiAccessPoint[] = nets.flatMap((n) => {
+      const band = bandOf(n.frequency, n.channel);
+      if (!band || !n.channel) return [];
+      const mine = !!c?.ssid && n.ssid === c.ssid;
+      const connected = mine && (c.bssid ? c.bssid.toLowerCase() === (n.bssid ?? '').toLowerCase() : n.channel === c.channel);
+      return [{ ssid: n.ssid || '(hidden)', bssid: n.bssid ?? '', channel: n.channel, band, signalDbm: dbm(n), signalPct: n.quality ?? 0, security: arr(n.security).join(', '), mine, connected }];
+    });
+    const bands = (['2.4 GHz', '5 GHz', '6 GHz'] as const).filter((b) => b !== '6 GHz' || points.some((p) => p.band === b)).map((b) => bandReport(b, points, o));
+    const at = new Date().toISOString();
+    const last = this.wifiScans[this.wifiScans.length - 1];
+    if (!last || Date.parse(at) - Date.parse(last.at) >= 120_000) {
+      this.wifiScans.push({ at, loads: Object.fromEntries(bands.map((b) => [b.band, b.channels.map((x) => x.load)])) });
+      this.wifiScans = this.wifiScans.slice(-360);
+    }
+    const linked = points.find((p) => p.connected);
+    return {
+      at,
+      connected: c ? { ssid: c.ssid, channel: c.channel ?? null, band: bandOf(c.frequency, c.channel), signalDbm: linked?.signalDbm ?? (c.signalLevel && c.signalLevel < 0 ? c.signalLevel : null) } : null,
+      points: points.sort((a, b) => b.signalDbm - a.signalDbm),
+      bands,
+      router: ctx?.gateway ?? null,
+      ultra: o.ultra,
+      history: o.ultra ? this.wifiScans : null,
     };
   }
 

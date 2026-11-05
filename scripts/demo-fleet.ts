@@ -32,7 +32,7 @@ mkdirSync(root, { recursive: true });
 
 const server = await buildServer(
   loadConfig(
-    { ...process.env, FBRX_CP_ADMIN_EMAIL: ADMIN.email, FBRX_CP_ADMIN_PASSWORD: ADMIN.password, FBRX_CP_ORGANIZATION: 'Fabrics Demo Co', FBRX_CP_ADMIN_NAME: 'Demo Admin' },
+    { ...process.env, FBRX_CP_ADMIN_EMAIL: ADMIN.email, FBRX_CP_ADMIN_PASSWORD: ADMIN.password, FBRX_CP_ORGANIZATION: 'FBRX Demo Co', FBRX_CP_ADMIN_NAME: 'Demo Admin' },
     { dataDir: join(root, 'control-plane'), port, host: '127.0.0.1', publicUrl: `http://localhost:${port}`, logLevel: 'warn', heartbeatSeconds: 15 },
   ),
 );

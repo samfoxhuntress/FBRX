@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { CalendarEvent, ProtectionState, SystemLive, SystemStatus } from '@fbrx/shared';
-import { TIER_NAMES, TROPHIES, displayVersion } from '@fbrx/shared';
+import { TIER_NAMES, TROPHIES, atLeast, displayVersion } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Grid, Icons, KeyValue, LineChart, Meter, StatTile, Status, formatBytes, formatDuration, timeAgo, useAction, type IconName } from '@fbrx/ui';
 import { call, onEvent, openExternal } from '../client';
-import { useCore } from '../hooks';
+import { useCore, useStarterAi } from '../hooks';
 import { navigate } from '../app';
 import { dashboardQuip, unlockTrophy } from '../fun';
 import { AskButton, NamePrompt } from '../widgets';
@@ -51,13 +51,15 @@ const HOME_LEARNER_TIPS = [
 const ULTRA_TIPS = [
   'Terminal → FBRX/1 manages FBRX like a switch: try "show system status".',
   'Library → The Lab has power-user how-tos. Goggles recommended.',
+  'Snippets save commands you reuse; the Terminal lists them on the right.',
 ];
+/** Standard and Ultra (pages Essentials leaves out). */
+const STANDARD_TIPS = ['Press Ctrl+Alt+Z for your clipboard history: W and S move, type to search, Enter pastes.'];
+const ESSENTIALS_TIPS = ['Want more tools? Settings → Edition switches to Standard, and back, any time.'];
 const ALL_TIPS = [
   'Press Ctrl+K anywhere for Spotlight: apps, files, settings and quick answers.',
-  'Press Ctrl+Alt+Z for your clipboard history: W and S move, type to search, Enter pastes.',
   'The big red Emergency stop in Settings → Agent halts every AI action at once.',
   'Network Center → Speed is a real speedometer. Patience is rewarded. Impatience more so.',
-  'Snippets save commands you reuse; the Terminal lists them on the right.',
   'Backups are encrypted .fbrxsnap files: restore one on a new PC and carry on.',
   'Ask Fabrix "is this good?" next to most results to get them explained.',
 ];
@@ -88,7 +90,7 @@ function healthScore(o: { status: SystemStatus; critical: number; unread: number
   return { score, label: score >= 90 ? 'Excellent' : score >= 75 ? 'Good' : score >= 55 ? 'Needs a look' : 'Needs attention', reasons };
 }
 
-/** FBRX Glass: the meetings left today, with a Join button when one is about to start. */
+/** Dash: the meetings left today, with a Join button when one is about to start. */
 function TodayStrip({ events }: { events: CalendarEvent[] }) {
   const now = Date.now();
   return (
@@ -119,10 +121,18 @@ function TodayStrip({ events }: { events: CalendarEvent[] }) {
 function HealthRing({ score, label }: { score: number; label: string }) {
   const r = 46;
   const c = 2 * Math.PI * r;
-  const tone = score >= 90 ? 'var(--good)' : score >= 75 ? 'var(--accent)' : score >= 55 ? 'var(--warning)' : 'var(--critical)';
+  const fill = `ring-${useId().replace(/:/g, '')}`;
+  // Good enough wears the theme's own fill (FBRX's honey into red); great, so-so and poor their status colors.
+  const tone = score >= 90 ? 'var(--good)' : score >= 75 ? `url(#${fill})` : score >= 55 ? 'var(--warning)' : 'var(--critical)';
   return (
     <div className="glass-ring" title={`Health ${score} of 100`}>
       <svg viewBox="0 0 120 120" width="120" height="120" aria-hidden>
+        <defs>
+          <linearGradient id={fill} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" style={{ stopColor: 'var(--accent-from)' }} />
+            <stop offset="1" style={{ stopColor: 'var(--accent-to)' }} />
+          </linearGradient>
+        </defs>
         <circle cx="60" cy="60" r={r} fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth="10" />
         <circle cx="60" cy="60" r={r} fill="none" stroke={tone} strokeWidth="10" strokeLinecap="round" strokeDasharray={`${(c * score) / 100} ${c}`} transform="rotate(-90 60 60)" style={{ transition: 'stroke-dasharray 0.8s ease' }} />
       </svg>
@@ -158,7 +168,15 @@ function LooseTip({ fun }: { fun: boolean }) {
   const learner = useLearner();
   const tier = useTier();
   const vertical = useVertical();
-  const TIPS = learner ? (vertical === 'home' ? HOME_LEARNER_TIPS : LEARNER_TIPS) : tier === 'ultra' ? [...ALL_TIPS, ...ULTRA_TIPS] : ALL_TIPS;
+  const TIPS = learner
+    ? vertical === 'home'
+      ? HOME_LEARNER_TIPS
+      : LEARNER_TIPS
+    : atLeast(tier, 'ultra')
+      ? [...ALL_TIPS, ...STANDARD_TIPS, ...ULTRA_TIPS]
+      : tier === 'basic'
+        ? [...ALL_TIPS, ...STANDARD_TIPS]
+        : [...ALL_TIPS, ...ESSENTIALS_TIPS];
   const [tip, setTip] = useState(() => Math.floor(Math.random() * TIPS.length));
   const [clicks, setClicks] = useState(0);
   const [rattle, setRattle] = useState(0);
@@ -237,6 +255,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
   const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed']);
   const updates = useCore('updates.status', undefined, ['updates.changed']);
   const aiReady = providers.data?.some((p) => p.available);
+  const starter = useStarterAi();
   const hour = new Date().getHours();
   const greeting = hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
   const quip = easterEggs ? dashboardQuip({ uptimeSeconds: cur?.uptime ?? status.uptimeSeconds, battery: cur?.battery ?? null }) : null;
@@ -275,7 +294,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
     m.push([status.aiHalt ? 'AI ON EMERGENCY STOP' : aiReady ? `${agentName} READY` : `${agentName} NEEDS A MODEL`, `HEALTH ${health.score} · ${health.label}`]);
     m.push([now.toLocaleDateString(undefined, { weekday: 'long' }), now.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })]);
     m.push(['UPTIME', formatDuration(cur?.uptime ?? status.uptimeSeconds)]);
-    if (easterEggs) m.push(Math.random() < 0.5 ? ['FBRX GLASS', 'NOW 40% MORE SHINY'] : ['HONK', 'THE GOOSE SAYS HI']);
+    if (easterEggs) m.push(Math.random() < 0.5 ? ['FBRX DASH', 'NOW 40% MORE SHINY'] : ['HONK', 'THE GOOSE SAYS HI']);
     return m;
     // Rebuilt every half minute (and when the big things change) so the board isn't restarted on every sample.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -291,7 +310,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
         <span className="screw s-br" aria-hidden />
         <div className="glass-hero-main">
           <div className="glass-eyebrow">
-            FBRX <b>Glass</b>
+            FBRX <b>Dash</b>
           </div>
           <SplitFlapBoard
             messages={messages}
@@ -361,10 +380,17 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
               : 'Enter your vault passphrase to use them.'}
         </Callout>
       )}
-      {providers.data && !aiReady && (
-        <Callout tone="info" title={`Give ${agentName} a brain`} actions={<Button size="sm" onClick={() => navigate('runtime')}>Choose a model</Button>}>
-          Download a local model to run fully offline, connect Ollama, or add a Claude API key.
+      {starter?.state === 'preparing' ? (
+        <Callout tone="info" title={`Getting ${agentName} ready`} actions={<Button size="sm" onClick={() => navigate('agent')}>Open the chat</Button>}>
+          Downloading {starter.modelName}, a small AI that runs on this computer (about 1 GB, only once){starter.step === 'model' && starter.totalBytes ? `: ${Math.round((starter.receivedBytes / starter.totalBytes) * 100)}%` : ''}.
         </Callout>
+      ) : (
+        providers.data &&
+        !aiReady && (
+          <Callout tone="info" title={`Give ${agentName} a brain`} actions={<Button size="sm" onClick={() => navigate('runtime')}>Choose a model</Button>}>
+            Download a local model to run fully offline, connect Ollama, or add a Claude API key.
+          </Callout>
+        )
       )}
       {status.pendingApprovals > 0 && (
         <Callout tone="warning" title={`${status.pendingApprovals} action(s) need your approval`} actions={<Button size="sm" variant="primary" onClick={() => navigate('approvals')}>Review</Button>}>

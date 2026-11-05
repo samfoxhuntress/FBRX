@@ -1,0 +1,40 @@
+# The FBRX folder as one simply named download: FBRX-OS.zip, which unzips to a folder called FBRX-OS (GitHub's own
+# zips are named after the tag or the branch). Attached to every release by the Release workflow, so
+# https://github.com/<owner>/<repo>/releases/latest/download/FBRX-OS.zip always gives the newest version.
+# Run it by hand to add the file to a release that was published before this workflow existed.
+name: FBRX-OS download
+
+on:
+  workflow_call:
+    inputs:
+      tag:
+        type: string
+        required: true
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to attach FBRX-OS.zip to (e.g. v1.9.8)
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  zip:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+      - name: Make FBRX-OS.zip
+        run: |
+          git archive --format=zip --prefix=FBRX-OS/ -o FBRX-OS.zip HEAD
+          sha256sum FBRX-OS.zip > FBRX-OS.zip.sha256
+          unzip -l FBRX-OS.zip | tail -1
+          cat FBRX-OS.zip.sha256
+      # Only the two files change; the release's name, notes and "latest" mark stay as they are.
+      - name: Attach to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        run: gh release upload "$TAG" FBRX-OS.zip FBRX-OS.zip.sha256 --clobber --repo "$GITHUB_REPOSITORY"

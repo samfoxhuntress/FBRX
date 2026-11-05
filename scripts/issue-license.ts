@@ -1,7 +1,7 @@
 /**
  * Signs an offline FBRX license key with the private key from `npm run keys:generate`, no FBRX Command needed.
  * Paste the printed key into FBRX Endpoint under Settings → License: Community runs Endpoint Basic, Pro and
- * Enterprise run Endpoint Ultra (or pick one with --tier).
+ * Enterprise allow Endpoint Ultra (or pick one with --tier; basic is Endpoint Standard).
  *
  *   npm run license:issue -- --customer "Acme Ltd" [--edition enterprise|pro|community] [--seats 25]
  *                            [--tier basic|ultra] [--vertical education|home] [--expires 2027-12-31] [--max-major 2]
@@ -18,7 +18,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { ALL_FEATURES, EDITIONS, TIERS, TIER_NAMES, featuresFor, newId, tierFor, type Edition, type LicensePayload, type Tier } from '../packages/shared/src';
+import { ALL_FEATURES, EDITIONS, LICENSE_TIERS, TIER_NAMES, featuresFor, newId, tierFor, type Edition, type LicensePayload, type Tier } from '../packages/shared/src';
 import { publicKeyFromPrivate, signLicense, verifyLicense } from '../packages/shared/src/node';
 
 const argv = process.argv.slice(2);
@@ -41,8 +41,8 @@ const expires = opt('--expires');
 const expiresAt = expires ? new Date(`${expires}T23:59:59Z`) : null;
 if (expiresAt && Number.isNaN(expiresAt.getTime())) fail('--expires must be a date like 2027-12-31');
 const maxMajor = opt('--max-major');
-const tier = opt('--tier') as Tier | undefined;
-if (tier && !TIERS.includes(tier)) fail(`--tier must be one of ${TIERS.join(', ')}`);
+const tier = opt('--tier') as (typeof LICENSE_TIERS)[number] | undefined;
+if (tier && !LICENSE_TIERS.includes(tier)) fail(`--tier must be one of ${LICENSE_TIERS.join(', ')} (basic is Endpoint Standard)`);
 const vertical = opt('--vertical') as 'education' | 'home' | undefined;
 if (vertical && !['education', 'home'].includes(vertical)) fail('--vertical must be education or home');
 const commandUrl = opt('--command-url');

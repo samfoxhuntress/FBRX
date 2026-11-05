@@ -55,6 +55,7 @@ let restarting = false;
 async function boot(): Promise<Kernel> {
   const k = await Kernel.create({
     dataDir,
+    server: serverMode && command === 'run',
     logToConsole: command === 'run' || command === 'enroll',
     platform: createNodePlatform({
       dataDir,

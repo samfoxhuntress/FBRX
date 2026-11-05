@@ -21,6 +21,9 @@ export const PolicyRuleSchema = z.object({
 });
 export type PolicyRule = z.infer<typeof PolicyRuleSchema>;
 
+/** The most steps one task may take (the policy's limit, and the Thorough thinking level). */
+export const MAX_STEPS_PER_TASK = 100;
+
 export const PolicySchema = z.object({
   version: z.literal(1),
   /** `enforce` blocks violations; `audit` records violations but lets the call proceed. */
@@ -36,7 +39,7 @@ export const PolicySchema = z.object({
   /** First matching rule wins. Rules are evaluated before risk defaults. */
   rules: z.array(PolicyRuleSchema),
   filesystem: z.object({
-    /** Roots the agent may touch. Supports `~`, `${HOME}`, `${DOCUMENTS}`, `${DESKTOP}`, `${DOWNLOADS}`, `${WORKSPACE}`. */
+    /** Roots the agent may touch. Supports `~`, `${HOME}`, `${DOCUMENTS}`, `${DESKTOP}`, `${DOWNLOADS}`, `${PICTURES}`, `${WORKSPACE}`. */
     allowedRoots: z.array(z.string()),
     /** Globs that are never readable or writable (matched against absolute paths). */
     denyPatterns: z.array(z.string()),
@@ -59,7 +62,7 @@ export const PolicySchema = z.object({
     allowCloudProviders: z.boolean(),
     /** Provider ids allowed; empty means all configured providers. */
     allowedProviders: z.array(z.string()),
-    maxStepsPerRun: z.number().int().min(1).max(100),
+    maxStepsPerRun: z.number().int().min(1).max(MAX_STEPS_PER_TASK),
     maxToolCallsPerRun: z.number().int().min(0).max(500),
     /** Run the guardian's model-based review in addition to its deterministic checks. */
     guardianModelReview: z.boolean(),
@@ -101,6 +104,18 @@ export const DEFAULT_POLICY: Policy = {
       id: 'builtin-workspace',
       description: 'Notes, tasks, projects and snippets stay inside FBRX OS, so the agent may manage them without approval',
       match: { tool: 'workspace.*', source: 'builtin' },
+      action: 'allow',
+    },
+    {
+      id: 'builtin-documents',
+      description: 'Documents the agent writes only ever go into a new file in the FBRX folder, never over an existing one',
+      match: { tool: 'docs.*', source: 'builtin' },
+      action: 'allow',
+    },
+    {
+      id: 'builtin-pictures',
+      description: 'Pictures the agent makes only ever go into a new file in the FBRX folder, never over an existing one',
+      match: { tool: 'image.*', source: 'builtin' },
       action: 'allow',
     },
   ],

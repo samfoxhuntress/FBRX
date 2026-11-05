@@ -78,7 +78,7 @@ export interface NetEnvDeps {
   vault: Vault;
   events: EventBus;
   log: Logger;
-  /** Why environments cannot be used right now (Endpoint Basic), or null. */
+  /** Why environments cannot be used right now (below Endpoint Ultra), or null. */
   unavailable: () => string | null;
 }
 

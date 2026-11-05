@@ -1,7 +1,8 @@
 import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
-import { DEFAULT_POLICY, DEFAULT_PROVIDERS, type AssistSession, type Policy } from '@fbrx/shared';
+import { userInfo } from 'node:os';
+import { DEFAULT_POLICY, DEFAULT_PROVIDERS, type AssistLogEntry, type AssistQueue, type AssistSession, type AssistTally, type Policy } from '@fbrx/shared';
 import { makeKernel, waitFor, USER } from './helpers';
 import { isCapacityError } from '../src/mesh/mesh-assist';
 import type { Kernel } from '../src/kernel';
@@ -252,4 +253,70 @@ describe('Mesh Assist', () => {
   it('never passes help along a second time', async () => {
     await expect(ka.mesh.call(bOnA, 'assist.start', { kind: 'task', goal: 'loop', hops: 1 })).rejects.toMatchObject({ code: 'FORBIDDEN' });
   });
+
+  it('queues work from many requests for its administrators: who asked, cancel, run next, pause, and the log', async () => {
+    assist(kb, { offer: 'auto', maxConcurrent: 1, allowPreempt: false });
+    scriptB = (b) => (lastUser(b).includes('LONG') ? { text: 'long done', delayMs: 1500 } : { text: `done: ${lastUser(b).match(/Q \w+/)?.[0] ?? ''}` });
+    const ADMIN = { origin: 'user' as const, actor: 'console:pat' };
+    const me = userInfo().username;
+    const send = async (goal: string) => ((await ka.call('mesh.assist.send', { peerIds: [bOnA], goal }, USER)) as AssistSession[])[0]!;
+    const queue = () => kb.call('mesh.assist.queue', undefined, ADMIN) as Promise<AssistQueue>;
+    const onB = (goal: string) => kb.assist.list().find((x) => x.direction === 'in' && x.goal === goal)!;
+
+    const long = await send('LONG job');
+    await waitFor(() => onB('LONG job')?.status === 'running');
+    const one = await send('Q one');
+    await send('Q two');
+    const three = await send('Q three');
+
+    // What runs and what waits, in order, each with who asked: the person on server-a (its system user here).
+    let q = await queue();
+    expect(q.running.map((x) => x.goal)).toEqual(['LONG job']);
+    expect(q.waiting.map((x) => [x.goal, x.position])).toEqual([['Q one', 1], ['Q two', 2], ['Q three', 3]]);
+    expect(q.running[0]!.requester).toMatchObject({ user: me });
+    expect(q.running[0]!.peerName).toBe('server-a');
+    // The computer that asked sees its place in line.
+    await waitFor(() => ka.assist.list().find((x) => x.id === three.id)?.position === 3);
+
+    // An administrator runs "Q three" next and cancels "Q one".
+    await kb.call('mesh.assist.manage', { sessionId: onB('Q three').id, action: 'front' }, ADMIN);
+    await kb.call('mesh.assist.manage', { sessionId: onB('Q one').id, action: 'cancel' }, ADMIN);
+    q = await queue();
+    expect(q.waiting.map((x) => [x.goal, x.position])).toEqual([['Q three', 1], ['Q two', 2]]);
+    expect(onB('Q one')).toMatchObject({ status: 'cancelled', cancelledBy: 'console:pat' });
+
+    // Paused: what runs finishes, and nothing new starts until it goes on.
+    expect((await kb.call('mesh.assist.pause', { paused: true }, ADMIN)) as AssistQueue).toMatchObject({ paused: true });
+    await waitFor(() => onB('LONG job')?.status === 'done');
+    await new Promise((r) => setTimeout(r, 300));
+    q = await queue();
+    expect([q.running.length, q.waiting.length]).toEqual([0, 2]);
+    await kb.call('mesh.assist.pause', { paused: false }, ADMIN);
+    await waitFor(() => onB('Q two')?.status === 'done' && onB('Q three')?.status === 'done');
+    expect(Date.parse(onB('Q three').finishedAt!)).toBeLessThan(Date.parse(onB('Q two').finishedAt!));
+
+    // The computer that asked learns who stopped its request.
+    await waitFor(() => ka.assist.list().find((x) => x.id === one.id)?.status === 'cancelled');
+    expect(ka.assist.list().find((x) => x.id === one.id)).toMatchObject({ cancelledBy: 'console:pat', requester: { user: me } });
+    await waitFor(() => ka.assist.list().find((x) => x.id === long.id)?.status === 'done');
+
+    // The log, by computer and by person.
+    const log = (await kb.call('mesh.assist.log', { peerId: aOnB, text: 'Q ' }, ADMIN)) as AssistLogEntry[];
+    expect(log.map((x) => [x.goal, x.status])).toEqual([['Q three', 'done'], ['Q two', 'done'], ['Q one', 'cancelled']]);
+    expect(log[2]).toMatchObject({ peerName: 'server-a', requester: { user: me }, cancelledBy: 'console:pat' });
+    expect(log[0]!.startedAt).not.toBeNull();
+    const devices = (await kb.call('mesh.assist.tally', { by: 'device' }, ADMIN)) as AssistTally[];
+    expect(devices.find((t) => t.key === aOnB)).toMatchObject({ label: 'server-a', detail: null });
+    expect(devices.find((t) => t.key === aOnB)!.cancelled).toBeGreaterThanOrEqual(1);
+    const people = (await kb.call('mesh.assist.tally', { by: 'person' }, ADMIN)) as AssistTally[];
+    const person = people.find((t) => t.key === `${me}@server-a`)!;
+    expect(person).toMatchObject({ label: me, detail: `${me} on server-a` });
+    expect((await kb.call('mesh.assist.log', { person: person.key, text: 'Q three' }, ADMIN)) as AssistLogEntry[]).toHaveLength(1);
+    // server-a keeps its own log of what it asked, and who on it asked.
+    expect(((await ka.call('mesh.assist.log', { direction: 'out', text: 'Q one' }, USER)) as AssistLogEntry[])[0]).toMatchObject({ peerName: 'server-b', requester: { user: me } });
+
+    // For the people who run the computer only, not its agent.
+    await expect(kb.call('mesh.assist.queue', undefined, { origin: 'agent', actor: 'agent' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+    await expect(kb.call('mesh.assist.log', {}, { origin: 'agent', actor: 'agent' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+  }, 60_000);
 });

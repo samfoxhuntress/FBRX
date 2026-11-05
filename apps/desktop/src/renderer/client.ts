@@ -1,4 +1,4 @@
-import type { CoreEventName, CoreEvents, CoreMethod, CoreMethods } from '@fbrx/shared';
+import type { BrowserCertificateProblem, CoreEventName, CoreEvents, CoreMethod, CoreMethods, NotificationEvent } from '@fbrx/shared';
 
 type Result<M extends CoreMethod> = Awaited<ReturnType<CoreMethods[M]>>;
 
@@ -12,11 +12,19 @@ export interface DialogOptions {
 interface Bridge {
   kind: 'electron' | 'http';
   platform: string;
+  /** FBRX OS, or FBRX Digger (the Network Center on its own). */
+  flavor?: 'os' | 'digger';
   call(method: string, params?: unknown): Promise<unknown>;
   on(cb: (event: string, payload: unknown) => void): () => void;
   onNavigate?(cb: (route: string) => void): () => void;
+  /** A notification for this window to show as a toast (the desktop app picks one place for each). */
+  onToast?(cb: (n: NotificationEvent) => void): () => void;
+  /** Play FBRX's notification sound. */
+  onChime?(cb: (c: { level: NotificationEvent['level']; volume: number }) => void): () => void;
   dialog?(opts: DialogOptions): Promise<string | null>;
   reveal?(path: string): Promise<unknown>;
+  /** Opens a file the agent made in its app (only ones in the FBRX folder or the workspace). */
+  openFile?(path: string): Promise<boolean>;
   openExternal?(url: string): Promise<unknown>;
   appInfo?(): Promise<{ version: string; platform: string; arch: string; dataDir: string; packaged: boolean } | null>;
   /** Spotlight window helpers (Electron only). */
@@ -24,17 +32,37 @@ interface Bridge {
   spotlightHide?(): void;
   openMain?(route: string): void;
   copyText?(text: string): Promise<void>;
+  /** Copies a password or code: kept out of the clipboard history and cleared after a while. */
+  copySecret?(text: string): Promise<void>;
+  /** Opens a page of FBRX in a window of its own, beside the main one (a terminal, the chat…). */
+  popOut?(route: string): Promise<boolean>;
+  /** In a popped-out window: keep it on top, put it beside the main window, or bring the main window forward. */
+  popOutWindow?(action: 'pin' | 'tile' | 'main', on?: boolean): Promise<boolean>;
+  /** Edit commands on what has the focus (the right-click menu). */
+  edit?(action: 'cut' | 'copy' | 'paste' | 'pasteAsText' | 'selectAll' | 'undo' | 'redo'): Promise<boolean>;
   /** The Silly Goose overlay window (Electron only). */
   goose?(action: 'summon' | 'leave' | 'interactive', on?: boolean): Promise<unknown> | void;
+  /** Open or focus the FBRX Browser window (Electron only). */
+  openBrowser?(url?: string): void;
+  /** A URL to open as a new tab in the browser window. */
+  onBrowserOpen?(cb: (url: string) => void): () => void;
+  onBrowserCertificate?(cb: (problem: BrowserCertificateProblem) => void): () => void;
+  trustBrowserCertificate?(host: string, fingerprint: string): Promise<boolean>;
   /** The pointer's position (the click-through overlay can't see it), honks and shoos, for the goose. */
   onGoose?(cb: (e: { type: 'cursor'; x: number; y: number } | { type: 'honk' } | { type: 'shoo' }) => void): () => void;
   /** Clipboard history, kept in memory by the desktop app (Electron only). */
-  clip?(action: 'list' | 'read' | 'remove' | 'pin' | 'clear', id?: number, on?: boolean): Promise<unknown>;
+  clip?(action: 'list' | 'read' | 'copy' | 'remove' | 'pin' | 'clear', id?: number, on?: boolean): Promise<unknown>;
   onClips?(cb: (entries: unknown) => void): () => void;
   /** The clipboard history window (Ctrl+Alt+Z): open or close it, turn the history on, or paste a pick. */
-  clipPicker?(action: 'show' | 'hide' | 'enable' | 'paste', text?: string): Promise<unknown>;
+  clipPicker?(action: 'show' | 'hide' | 'enable' | 'paste', text?: string | number): Promise<unknown>;
   /** "shown" each time the clipboard history window opens. */
   onClipPicker?(cb: (what: string) => void): () => void;
+  /** FBRX Snapshot (Electron only): start one from a page, or, in the overlay, its still picture, mode, windows and pick. */
+  snap?(action: 'start' | 'frame' | 'mode' | 'windows' | 'pick' | 'cancel', arg?: unknown): Promise<unknown>;
+  /** Drags a snapshot into another app as a PNG file: a saved one, or (with its data) the picture being marked up. */
+  snapDrag?(what: { id: string; data?: Uint8Array }): Promise<boolean>;
+  /** The overlay's mode changed on another screen. */
+  onSnapMode?(cb: (mode: string) => void): () => void;
   /** Code lab: runs JavaScript in a hidden, network-blocked window (Electron only). */
   runCode?(code: string, inputs: string[]): Promise<unknown>;
   stopCode?(): Promise<unknown>;
@@ -42,7 +70,10 @@ interface Bridge {
 
 export interface ClipEntry {
   id: number;
+  /** The copied text; empty for a picture. */
   text: string;
+  /** A copied picture: a small preview and its size. */
+  image?: { thumb: string; width: number; height: number };
   at: string;
   pinned: boolean;
 }
@@ -63,6 +94,17 @@ export async function readClipboard(): Promise<string> {
 export async function writeClipboard(text: string): Promise<void> {
   if (bridge.copyText) await bridge.copyText(text);
   else await navigator.clipboard.writeText(text);
+}
+
+/** Puts a password or 2-step code on the clipboard, out of the clipboard history, for a short while. */
+export async function copySecret(text: string): Promise<void> {
+  if (bridge.copySecret) await bridge.copySecret(text);
+  else await navigator.clipboard.writeText(text);
+}
+
+/** Puts a copy from the clipboard history back on the clipboard (a picture as a picture). */
+export async function copyClip(id: number): Promise<boolean> {
+  return !!(await bridge.clip?.('copy', id));
 }
 
 export async function clipHistory(action: 'list' | 'remove' | 'pin' | 'clear' = 'list', id?: number, on?: boolean): Promise<{ enabled: boolean; entries: ClipEntry[] } | null> {
@@ -95,7 +137,7 @@ function httpBridge(): Bridge {
     },
     on(cb) {
       const es = new EventSource(`${base}/v1/events?token=${encodeURIComponent(token)}`);
-      const names: CoreEventName[] = ['agent', 'approval.requested', 'approval.resolved', 'service.changed', 'vault.changed', 'audit.appended', 'runtime.changed', 'runtime.download', 'settings.changed', 'policy.changed', 'plugins.changed', 'connectors.changed', 'tools.changed', 'fleet.changed', 'license.changed', 'updates.changed', 'notification', 'workspace.changed', 'alerts.new', 'alerts.changed', 'mesh.changed', 'mesh.message', 'messages.changed', 'mesh.job', 'mesh.assist', 'fun.trophy', 'ai.halted', 'migrate.event', 'ai.quick', 'voice.download'];
+      const names: CoreEventName[] = ['agent', 'agent.runs', 'approval.requested', 'approval.resolved', 'service.changed', 'vault.changed', 'audit.appended', 'runtime.changed', 'runtime.download', 'settings.changed', 'policy.changed', 'plugins.changed', 'connectors.changed', 'tools.changed', 'fleet.changed', 'license.changed', 'updates.changed', 'notification', 'workspace.changed', 'alerts.new', 'alerts.changed', 'mesh.changed', 'mesh.message', 'messages.changed', 'mesh.job', 'mesh.assist', 'fun.trophy', 'ai.halted', 'migrate.event', 'ai.quick', 'voice.download', 'governance.folderRequest', 'memory.changed', 'ai.starter'];
       for (const n of names) es.addEventListener(n, (e) => cb(n, JSON.parse((e as MessageEvent).data)));
       return () => es.close();
     },

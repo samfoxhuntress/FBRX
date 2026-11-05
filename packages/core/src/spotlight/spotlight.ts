@@ -216,7 +216,7 @@ const SYSTEM: Array<[string, SystemCommand, string, boolean]> = [
 
 /** FBRX pages (route, title, keywords). */
 export const PAGES: Array<[string, string, string]> = [
-  ['dashboard', 'FBRX Glass', 'dashboard home overview system health glass'],
+  ['dashboard', 'Dash', 'dash dashboard home overview system health glass'],
   ['agent', 'Fabrix agent', 'ai chat assistant ask'],
   ['tasks', 'Tasks', 'todo board kanban'],
   ['notes', 'Notes', 'notes notebook'],

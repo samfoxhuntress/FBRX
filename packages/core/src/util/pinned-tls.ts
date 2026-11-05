@@ -4,7 +4,7 @@ import { CoreError } from '../errors';
 
 /** Certificate pinning (see @fbrx/shared/node pinned-tls), throwing FBRX Endpoint's own errors. */
 
-export { formatFingerprint, normalizeFingerprint, sameFingerprint, type PresentedCertificate } from '@fbrx/shared/node';
+export { formatFingerprint, normalizeFingerprint, sameFingerprint, untrustedCertificate, type PresentedCertificate } from '@fbrx/shared/node';
 
 const err: pin.PinErrorFactory = (code, message) => new CoreError(code, message);
 

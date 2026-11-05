@@ -88,7 +88,9 @@ describe('backup and restore', () => {
     k.vault.set({ name: 'fbrx.fleet.deviceToken', value: 'tok' }, { internal: true });
     k.vault.applyManaged([{ name: 'ORG_ONLY', value: 'org', version: 1, description: null }]);
     k.settings.applyManaged({ general: { telemetry: true } }, ['general.telemetry']);
-    const snap = (await k.call('backup.create', { passphrase: PASS }, USER)) as any;
+    k.memory.remember({ content: 'Prefers short answers', source: 'person' });
+    // As FBRX Command asks for one to upload: the AI's memory of the person stays behind.
+    const snap = await k.backup.create({ passphrase: PASS, actor: 'control-plane', withoutMemory: true });
     const usb = carry(snap.file);
     await a.cleanup();
 
@@ -105,6 +107,7 @@ describe('backup and restore', () => {
       expect(c.vault.has('fbrx.fleet.deviceToken')).toBe(false);
       expect(c.meta.get('fleet.deviceId')).toBeNull();
       expect(c.settings.effective().locked).toEqual([]);
+      expect(c.memory.list()).toEqual([]);
     } finally {
       await c.stop();
     }

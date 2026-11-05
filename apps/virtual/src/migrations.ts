@@ -37,4 +37,54 @@ export const VIRTUAL_MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 2,
+    name: 'FBRX Time: backup jobs, images, tasks',
+    up: `
+      CREATE TABLE time_jobs (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        vm_id TEXT NOT NULL,
+        vm_name TEXT NOT NULL,
+        schedule TEXT NOT NULL,
+        time TEXT NOT NULL,
+        day INTEGER NOT NULL,
+        verify INTEGER NOT NULL,
+        keep INTEGER NOT NULL,
+        enabled INTEGER NOT NULL,
+        last_run_at TEXT,
+        last_ok INTEGER,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE time_images (
+        id TEXT PRIMARY KEY,
+        source TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        job_id TEXT,
+        created_at TEXT NOT NULL,
+        dir TEXT NOT NULL,
+        bytes INTEGER NOT NULL,
+        disks TEXT NOT NULL,
+        os TEXT NOT NULL,
+        firmware TEXT NOT NULL,
+        consistency TEXT NOT NULL,
+        check_json TEXT NOT NULL,
+        note TEXT NOT NULL DEFAULT '',
+        facts TEXT NOT NULL DEFAULT '{}'
+      );
+      CREATE INDEX time_images_subject ON time_images(subject, created_at);
+      CREATE TABLE time_tasks (
+        id TEXT PRIMARY KEY,
+        kind TEXT NOT NULL,
+        subject TEXT NOT NULL,
+        state TEXT NOT NULL,
+        queued_at TEXT NOT NULL,
+        started_at TEXT,
+        finished_at TEXT,
+        progress REAL,
+        detail TEXT NOT NULL DEFAULT '',
+        image_id TEXT
+      );
+    `,
+  },
 ];

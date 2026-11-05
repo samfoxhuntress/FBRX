@@ -38,6 +38,7 @@ export const TROPHIES: TrophyInfo[] = [
   { id: 'synergy', name: 'Synergy Achieved', hint: 'Once the manager starts talking, let him keep going.', how: 'Sat through five answers of pure corporate jargon. That would be great.' },
   { id: 'wingman', name: 'Back-Seat Radar', hint: 'Ask the goose to talk to you, the way a hotshot pilot asks his radar officer.', how: 'Said "Talk to me, Goose" and your wingman got on the radio.' },
   { id: 'topwing', name: 'Wingman for Life', hint: 'Keep your wingman on the radio.', how: 'Kept the radio chatter going for five messages.' },
+  { id: 'operator', name: 'Operator Mode', hint: 'The Library has been to networking school. Talk to its search like a switch.', how: 'Typed a router command into the Library search ("show commands", "enable", "configure terminal") and found the FBRX command library.' },
 ];
 
 /** Unlocked by itself once every other trophy is found. */

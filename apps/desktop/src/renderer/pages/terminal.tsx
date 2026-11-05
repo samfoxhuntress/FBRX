@@ -2,10 +2,12 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { Note, ProjectSummary, Snippet, TerminalShell } from '@fbrx/shared';
 import { Button, Card, Empty, Input, Page, Select, Status, Tabs, TextArea, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
-import { navigate, routeArg } from '../app';
+import { POPOUT, navigate, routeArg } from '../app';
 import { useConsoleSessions, useCore } from '../hooks';
 import { AskButton, askAgent } from '../widgets';
 import { COMMAND_GROUPS, type LibraryCommand } from '../command-library';
+import { addToMacros } from '../macro-add';
+import { menuFor } from '../context-menu';
 import { DeviceConsolesPanel } from '../consoles';
 import { summonGoose, unlockTrophy } from '../fun';
 import { Fbrx1Panel } from '../fbrx1';
@@ -98,7 +100,16 @@ function Reference({ onInsert, onRun, lastCommand }: { onInsert: (cmd: string) =
   const noteList = (notes.data ?? []).filter((n: Note) => (!project || n.projectId === project) && match(n.title, n.content));
 
   const row = (key: string, title: string, sub: string, cmd: string, extra?: { admin?: boolean; changes?: boolean }) => (
-    <div key={key} className="ref-item">
+    <div
+      key={key}
+      className="ref-item"
+      onContextMenu={menuFor([
+        { label: extra?.changes ? 'Run (asks first)' : 'Run', icon: 'play', onSelect: () => onRun(cmd, extra?.changes) },
+        { label: 'Put it in the command box', icon: 'terminal', onSelect: () => onInsert(cmd) },
+        { label: 'Add to macros…', icon: 'zap', onSelect: () => addToMacros({ name: title, text: cmd, slash: true }) },
+        { label: 'Explain it', icon: 'sparkles', onSelect: () => askAgent(`Explain this ${IS_WIN ? 'PowerShell' : 'shell'} command line by line in plain language: what it does, whether it changes anything, and anything to watch out for.\n\n${cmd}`) },
+      ])}
+    >
       <button className="ref-text" onClick={() => onInsert(cmd)} title="Put it in the command box">
         <span className="ref-title">
           {title}
@@ -109,6 +120,7 @@ function Reference({ onInsert, onRun, lastCommand }: { onInsert: (cmd: string) =
       </button>
       <div className="ref-actions">
         <Button size="sm" variant="ghost" icon="play" aria-label="Run" title={extra?.changes ? 'Run (asks first)' : 'Run'} onClick={() => onRun(cmd, extra?.changes)} />
+        <Button size="sm" variant="ghost" icon="zap" aria-label={`Add ${title} to macros`} title="Add to macros" onClick={() => addToMacros({ name: title, text: cmd, slash: true })} />
         <AskButton iconOnly label="Explain this command" prompt={`Explain this ${IS_WIN ? 'PowerShell' : 'shell'} command line by line in plain language: what it does, whether it changes anything, and anything to watch out for.\n\n${cmd}`} />
       </div>
     </div>
@@ -335,6 +347,13 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
               ? 'Write code with Fabrix beside you. Sandboxed: JavaScript runs with no network or file access, PowerShell and batch only in Windows Sandbox, everything else is explained, not run.'
             : 'Command lines of switches, firewalls, access points and servers, over SSH or Telnet, with the maker\'s guide alongside.'
       }
+      actions={
+        bridge.popOut && !POPOUT ? (
+          <Button size="sm" variant="ghost" icon="external" title="Open the Terminal in its own window, to keep it beside FBRX" onClick={() => void bridge.popOut?.(location.hash.replace(/^#\/?/, '') || 'terminal')}>
+            Pop out
+          </Button>
+        ) : undefined
+      }
     >
       <Tabs
         active={tab}
@@ -350,7 +369,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
         ]}
       />
       {tab === 'fbrx1' ? (
-        <Fbrx1Panel />
+        <Fbrx1Panel prefill={arg.startsWith('fbrx1/') ? decodeURIComponent(arg.slice(6)) : undefined} />
       ) : tab === 'code' ? (
         <Suspense fallback={<div className="fx-muted" style={{ padding: 24 }}>Loading the code lab…</div>}>
           <CodeLabPanel />

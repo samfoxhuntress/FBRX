@@ -101,7 +101,7 @@ describe('FBRX Command for a school', () => {
   let student: Kernel;
   let staffToken: string;
 
-  it('runs teachers on Basic in classroom mode, IT on Ultra, and students on FBRX OS Education', async () => {
+  it('runs teachers up to Standard in classroom mode, IT up to Ultra, and students on FBRX OS Education', async () => {
     const teachers = await api('POST', '/v1/admin/groups', { name: 'Teachers', audience: 'staff', tier: 'basic' });
     const itGroup = await api('POST', '/v1/admin/groups', { name: 'IT', audience: 'staff' });
     const students = await api('POST', '/v1/admin/groups', { name: 'Students', audience: 'student' });
@@ -116,9 +116,28 @@ describe('FBRX Command for a school', () => {
 
     const ed = async (k: Kernel) => ((await k.call('system.status', undefined, USER)) as SystemStatus).edition;
     await waitFor(async () => (await ed(staff)).vertical === 'education');
-    expect(await ed(staff)).toMatchObject({ tier: 'basic', audience: 'staff', learner: false, productName: 'FBRX Endpoint Basic' });
-    expect(await ed(it_)).toMatchObject({ tier: 'ultra', audience: 'staff', productName: 'FBRX Endpoint Ultra' });
-    expect(await ed(student)).toMatchObject({ tier: 'basic', audience: 'student', learner: true, productName: 'FBRX OS Education' });
+    // Every new computer opens in Essentials. Teachers may go up to Standard (their group holds them there), IT to Ultra.
+    expect(await ed(staff)).toMatchObject({ tier: 'essentials', ceiling: 'basic', ceilingReason: 'organization', audience: 'staff', learner: false, productName: 'FBRX Endpoint Essentials' });
+    await expect(staff.call('edition.choose', { tier: 'ultra' }, USER)).rejects.toThrow(/holds this computer to FBRX Endpoint Standard/);
+    expect(await staff.call('edition.choose', { tier: 'basic' }, USER)).toMatchObject({ tier: 'basic', productName: 'FBRX Endpoint Standard' });
+    expect(await ed(it_)).toMatchObject({ tier: 'essentials', ceiling: 'ultra', audience: 'staff' });
+    expect(await it_.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra', productName: 'FBRX Endpoint Ultra' });
+    expect(await ed(student)).toMatchObject({ tier: 'basic', ceilingReason: 'learner', audience: 'student', learner: true, productName: 'FBRX OS Education' });
+    await expect(student.call('edition.choose', { tier: 'ultra' }, USER)).rejects.toThrow(/learner edition/);
+
+    // Device configuration in FBRX Command: one teacher's computer may go up to Ultra (over the group), then is held
+    // to Essentials; what it runs is reported back.
+    const lee = ((await api('GET', '/v1/admin/devices')) as Array<{ id: string; name: string }>).find((d) => d.name === 'Ms Lee')!;
+    expect(await api('PATCH', `/v1/admin/devices/${lee.id}`, { tier: 'ultra' })).toMatchObject({ tier: 'ultra' });
+    await waitFor(async () => (await ed(staff)).ceiling === 'ultra');
+    expect(await staff.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra' });
+    await api('PATCH', `/v1/admin/devices/${lee.id}`, { tier: 'essentials' });
+    await waitFor(async () => (await ed(staff)).tier === 'essentials');
+    expect(await ed(staff)).toMatchObject({ chosen: 'ultra', ceiling: 'essentials', ceilingReason: 'organization' });
+    await (staff.fleet as unknown as { sendHeartbeat(): Promise<void> }).sendHeartbeat();
+    await waitFor(async () => (await api('GET', `/v1/admin/devices/${lee.id}`)).editionTier === 'essentials');
+    await api('PATCH', `/v1/admin/devices/${lee.id}`, { tier: null });
+    await waitFor(async () => (await ed(staff)).ceiling === 'basic');
 
     // Classroom defaults: presenter-safe mode turns on with a projector; fun extras stay off.
     expect(staff.settings.get().presenter.auto).toBe(true);

@@ -7,7 +7,7 @@ import { createServer } from 'node:net';
 import { DEFAULT_POLICY, type Policy } from '@fbrx/shared';
 import { Kernel } from '../src/kernel';
 import { createNodePlatform } from '../src/node-platform';
-import { StaticKeyKeychain, type KeychainAdapter } from '../src/platform';
+import { StaticKeyKeychain, type KeychainAdapter, type PlatformAdapter } from '../src/platform';
 
 export const USER = { origin: 'user' as const, actor: 'test-user' };
 
@@ -39,6 +39,10 @@ export interface TestKernelOptions {
   start?: boolean;
   localApiPort?: number;
   onRestart?: (reason: string) => void;
+  /** FBRX Server's own core. */
+  server?: boolean;
+  /** Changes to the platform (FBRX Digger's flavor, say). */
+  platform?: Partial<PlatformAdapter>;
 }
 
 /** Boots an isolated kernel in a temp folder with tools confined to a sandbox directory. */
@@ -48,13 +52,17 @@ export async function makeKernel(o: TestKernelOptions = {}): Promise<{ kernel: K
   const keychain = o.keychain ?? memoryKeychain();
   const kernel = await Kernel.create({
     dataDir,
-    platform: createNodePlatform({
-      dataDir,
-      devMode: o.devMode ?? true,
-      keychain,
-      licensePublicKeys: o.licensePublicKeys,
-      requestRestart: o.onRestart,
-    }),
+    server: o.server,
+    platform: {
+      ...createNodePlatform({
+        dataDir,
+        devMode: o.devMode ?? true,
+        keychain,
+        licensePublicKeys: o.licensePublicKeys,
+        requestRestart: o.onRestart,
+      }),
+      ...o.platform,
+    },
   });
   kernel.settings.update({
     localApi: { enabled: o.localApiPort !== undefined, port: o.localApiPort ?? 47999 },
@@ -79,7 +87,8 @@ export async function makeKernel(o: TestKernelOptions = {}): Promise<{ kernel: K
   };
 }
 
-export async function waitFor<T>(fn: () => T | Promise<T>, timeoutMs = 10_000, intervalMs = 50): Promise<T> {
+/** Waits until `fn` gives something (not null, undefined or false), and gives that. */
+export async function waitFor<T>(fn: () => T | null | undefined | false | Promise<T | null | undefined | false>, timeoutMs = 10_000, intervalMs = 50): Promise<T> {
   const deadline = Date.now() + timeoutMs;
   let last: unknown;
   while (Date.now() < deadline) {

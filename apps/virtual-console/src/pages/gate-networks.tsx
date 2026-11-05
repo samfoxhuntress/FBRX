@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { cidrsOverlap, hostRange, intToIPv4, ipv4ToInt, isCidr, JUMBO_MTU, networkOf, parseCidr } from '@fbrx/shared';
-import { bridgeName, NETWORK_PRESETS, PURPOSES, type GateConfig, type GateInterface, type GateNetwork, type NetworkPurpose } from '@fbrx/gate';
+import { cidrsOverlap, isCidr, JUMBO_MTU, networkOf } from '@fbrx/shared';
+import { bridgeName, dhcpRange, NETWORK_PRESETS, PURPOSES, type GateConfig, type GateInterface, type GateNetwork, type NetworkPurpose } from '@fbrx/gate';
 import { Button, Card, ChoiceCards, Empty, Field, Grid, Input, KeyValue, Modal, Select, Status, Table, Toggle, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { draftIssues, inItem, useGate } from '../gate-state';
@@ -29,16 +29,7 @@ function useSystemInterfaces() {
 const VLAN_FOR: Record<NetworkPurpose, number> = { lan: 10, guest: 20, mesh: 30, servers: 40, iot: 50, management: 99, other: 60 };
 
 /** Addresses handed out in a network: .100 to .199 in a /24, a fair share of anything else. */
-function autoRange(cidr: string): { start: string; end: string } {
-  const c = parseCidr(cidr);
-  if (!c || c.family !== 4 || c.prefix > 30) return { start: '', end: '' };
-  const r = hostRange(networkOf(cidr));
-  const base = cidr.split('/')[0].split('.').slice(0, 3).join('.');
-  if (c.prefix === 24) return { start: `${base}.100`, end: `${base}.199` };
-  const first = ipv4ToInt(r.first);
-  const last = ipv4ToInt(r.last);
-  return { start: intToIPv4(first + Math.max(1, Math.floor((last - first + 1) / 4))), end: intToIPv4(last - 1) };
-}
+const autoRange = dhcpRange;
 
 /** A name, VLAN tag and addresses for a new network that do not clash with what is there. */
 function suggest(c: GateConfig, purpose: NetworkPurpose, parent: string): { name: string; vlanId: number; address: string } {

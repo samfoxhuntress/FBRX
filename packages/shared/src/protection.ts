@@ -4,6 +4,8 @@
  * runs its scans where it can, and warns when it is off or out of date.
  */
 
+import type { Schedule } from './schedule';
+
 export type ProtectionKind = 'shield' | 'defender' | 'product';
 export type ProtectionState = 'protected' | 'attention' | 'at-risk' | 'unknown';
 
@@ -42,7 +44,7 @@ export interface ShieldStatus {
   /** Detections still waiting for a decision. */
   open: number;
   lastScan: { at: string; type: ScanType; files: number; found: number } | null;
-  /** Endpoint Ultra: scheduled scans, extra engines (ClamAV, VirusTotal). */
+  /** Endpoint Ultra: the scheduled scan's time and day, extra engines (ClamAV, VirusTotal). */
   full: boolean;
   engines: { clamav: boolean; virustotal: boolean };
 }
@@ -120,3 +122,8 @@ export interface ScanJob {
 }
 
 export const PROTECTION_DEFAULT_FEED = 'https://bazaar.abuse.ch/export/txt/sha256/recent/';
+
+// ------------------------------------------------------------------------------------- scheduled scans
+
+export type ScanSchedule = Schedule;
+export { SCHEDULE_TIME_PATTERN as SCAN_TIME_PATTERN, lastDue as lastScanDue, nextDue as nextScanDue, isDue as scheduledScanDue } from './schedule';

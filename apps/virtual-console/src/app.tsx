@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Button, Icons, Shell, Spinner, type NavItem } from '@fbrx/ui';
+import { Button, ErrorBoundary, Icons, Shell, Spinner, type NavItem } from '@fbrx/ui';
 import { api, session, setUnauthorizedHandler } from './api';
 import { AppStateProvider, useApp, useRoute, type Me } from './state';
 import { LoginPage, SetupPage } from './pages/login';
@@ -12,6 +12,7 @@ import { HardwarePage } from './pages/hardware';
 import { ServerPage } from './pages/server';
 import { AccessPage } from './pages/access';
 import { MeshAiPage } from './pages/mesh-ai';
+import { FabrixPage } from './pages/fabrix';
 import { GateBanner, GateProvider, useGate } from './gate-state';
 import { GateDashboardPage } from './pages/gate-dashboard';
 import { GateNetworksPage } from './pages/gate-networks';
@@ -20,6 +21,9 @@ import { GateServicesPage } from './pages/gate-services';
 import { GateTrafficPage } from './pages/gate-traffic';
 import { GateChangesPage } from './pages/gate-changes';
 import { DomePage } from './pages/dome';
+import { TimePage } from './pages/time';
+import { RolesPage } from './pages/roles';
+import { CommandPage } from './pages/command';
 
 export function App() {
   const [phase, setPhase] = useState<'loading' | 'setup' | 'login' | 'ready'>('loading');
@@ -112,9 +116,13 @@ function Console() {
         ] satisfies NavItem[])
       : []),
     ...(app.has('minidome') ? ([{ id: 'dome', label: 'MiniDome', icon: 'eye', section: 'Gate' }] satisfies NavItem[]) : []),
+    ...(app.has('time') ? ([{ id: 'time', label: 'FBRX Time', icon: 'history', section: 'Server' }] satisfies NavItem[]) : []),
     { id: 'hardware', label: 'Hardware map', icon: 'cpu', section: 'Server' },
     { id: 'server', label: 'Server & BIOS', icon: 'server', section: 'Server' },
+    ...(app.has('ai') ? ([{ id: 'fabrix', label: 'Fabrix', icon: 'agent', section: 'Server' }] satisfies NavItem[]) : []),
     { id: 'mesh', label: 'Mesh & AI', icon: 'sparkles', section: 'Server' },
+    { id: 'command', label: 'FBRX Command', icon: 'globe', section: 'Server' },
+    { id: 'roles', label: 'Roles', icon: 'layers', section: 'Server' },
     ...(app.can('admin') ? [{ id: 'access', label: 'Users & audit', icon: 'users', section: 'Access' } as NavItem] : []),
   ];
   // Without virtual machines, the console opens on the gate (or the hardware map).
@@ -149,8 +157,16 @@ function Console() {
         return <HardwarePage />;
       case 'server':
         return <ServerPage tab={route.id} />;
+      case 'fabrix':
+        return <FabrixPage id={route.id} />;
       case 'mesh':
         return <MeshAiPage tab={route.id} />;
+      case 'time':
+        return <TimePage tab={route.id} />;
+      case 'roles':
+        return <RolesPage />;
+      case 'command':
+        return <CommandPage />;
       case 'access':
         return <AccessPage />;
       default:
@@ -183,8 +199,10 @@ function Console() {
         </>
       }
     >
-      {app.has('gate') && <GateBanner />}
-      {page}
+      <ErrorBoundary resetKey={`${route.page}/${route.id ?? ''}/${route.tab ?? ''}`}>
+        {app.has('gate') && <GateBanner />}
+        {page}
+      </ErrorBoundary>
     </Shell>
   );
 }

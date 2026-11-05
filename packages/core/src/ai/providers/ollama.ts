@@ -67,6 +67,7 @@ export class OllamaProvider implements ChatProvider {
         };
       }
       if (m.role === 'tool') return { role: 'tool', content: m.content, tool_name: m.name };
+      if (m.role === 'user' && m.images?.length) return { role: 'user', content: m.content, images: m.images.map((i) => i.data) };
       return { role: m.role, content: m.content };
     });
   }
@@ -90,6 +91,8 @@ export class OllamaProvider implements ChatProvider {
           ...(this.limits.numCtx ? { num_ctx: this.limits.numCtx } : {}),
         },
         ...(this.limits.keepAlive ? { keep_alive: this.limits.keepAlive } : {}),
+        // Only models that can think take the switch (others refuse a request that sets it).
+        ...(req.reasoning !== undefined && THINKING_MODELS.test(model) ? { think: req.reasoning } : {}),
       }),
       signal: req.signal,
     });
@@ -124,6 +127,9 @@ export class OllamaProvider implements ChatProvider {
     yield { type: 'done', finishReason: sawTools ? 'tool_calls' : reason === 'length' ? 'length' : 'stop' };
   }
 }
+
+/** Models that think before answering and take Ollama's switch for it. */
+const THINKING_MODELS = /^(qwen3|deepseek-r1|qwq|gpt-oss|magistral|phi4-reasoning)/i;
 
 /** Families known to handle tool calling well come first; embedding-only models last; then by name. */
 const TOOL_FAMILIES = [/^qwen3/, /^qwen2\.5/, /^llama3\.[1-9]|^llama4/, /^gemma4|^gemma3/, /^mistral/, /^granite/, /^phi4/, /^deepseek/, /^command-r/];

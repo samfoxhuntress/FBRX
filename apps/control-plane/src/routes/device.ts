@@ -12,6 +12,8 @@ import { resolveDeviceConfig } from '../services/device-config';
 import { parseJson } from './util';
 import { commandView, processCommandResult, processHeartbeat, recordDeviceEvent, takePendingCommands } from '../services/devices';
 import { storeStream } from '../services/storage';
+import { stripeOf } from '../billing/stripe';
+import { scheduleSeatSync } from '../billing/tenant-billing';
 
 /** Reads the plaintext, authenticated header of a .fbrxsnap without decrypting it. */
 export function snapshotHeader(file: string): Record<string, unknown> | null {
@@ -76,8 +78,8 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
     const receiver = vertical === 'home' && audience === 'parent' ? 1 : 0;
     ctx.db.tx(() => {
       ctx.db.run(
-        `INSERT INTO devices (id, tenant_id, group_id, name, hostname, platform, arch, os_version, app_version, machine_id, token_hash, enrolled_at, enrolled_via, last_seen_at, last_ip, updated_at, audience, helpdesk_receiver)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        `INSERT INTO devices (id, tenant_id, group_id, name, hostname, platform, arch, os_version, app_version, machine_id, token_hash, enrolled_at, enrolled_via, last_seen_at, last_ip, updated_at, audience, helpdesk_receiver, tier, account_id)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         deviceId,
         t.tenant_id,
         t.group_id,
@@ -96,6 +98,9 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
         now,
         storeAudience,
         receiver,
+        // A member's sign-in: the edition the organization gave them, and whose computer it is.
+        t.tier ?? null,
+        t.account_id ?? null,
       );
       ctx.db.run('UPDATE enrollment_tokens SET uses = uses + 1 WHERE id = ?', t.id);
     });
@@ -106,6 +111,7 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
       { type: 'device', id: deviceId },
       { hostname: f.hostname, platform: f.platform, appVersion: f.appVersion, token: t.label, group: group?.name, audience, previousDeviceId: body.previousDeviceId },
     );
+    scheduleSeatSync(ctx, stripeOf(ctx.config.cloud), t.tenant_id);
     ctx.webhooks.emit(t.tenant_id, 'device.enrolled', { deviceId, name: f.name, hostname: f.hostname, platform: f.platform, appVersion: f.appVersion });
     ctx.realtime.emitAdmin({ type: 'device.online', deviceId, tenantId: t.tenant_id });
     const res: EnrollResponse = {

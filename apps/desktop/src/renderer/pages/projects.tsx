@@ -5,7 +5,7 @@ import { call } from '../client';
 import { useCore } from '../hooks';
 import { navigate } from '../app';
 
-const COLORS = ['#f0a530', '#3987e5', '#1baf7a', '#e87ba4', '#9085e9', '#eb6834', '#2cc4c4', '#898781'];
+const COLORS = ['#f4b942', '#3987e5', '#1baf7a', '#e87ba4', '#9085e9', '#eb6834', '#2cc4c4', '#898781'];
 
 function ProjectEditor({ project, onClose }: { project: Partial<Project>; onClose: () => void }) {
   const [p, setP] = useState<Partial<Project>>({ milestones: [], color: COLORS[0], status: 'active', ...project });
