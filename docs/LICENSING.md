@@ -1,8 +1,9 @@
-# Selling FBRX: products, tenants, editions and licenses
+# Editions, prices and licenses
 
-FBRX is built to be resold. You (the vendor) run **FBRX Command** (the control plane and its console) as
-**superadmin**; each customer is a **tenant** with its own devices, users, configuration, credentials, plugins,
-backups, webhooks and audit trail. What a customer's computers may do is decided by a license you sign.
+What each FBRX edition includes, what it costs, and how licenses decide what a computer may run. An **FBRX Command**
+(FBRX's in the cloud, or one an organization runs for itself) keeps each organization as a **tenant** with its own
+devices, users, configuration, credentials, plugins, backups, webhooks and audit trail, and signs the licenses its
+computers run under.
 
 ## Products: FBRX Endpoint Essentials, Standard, Ultra and Black Hole
 
@@ -38,7 +39,7 @@ gate services in the runtime, the tier decides how far the product the user sees
 
 ## Prices
 
-One list, in `packages/shared/src/plans.ts`, used by the app, FBRX Command, the website and billing. US dollars per
+One list, used by the app, FBRX Command, the website and billing. US dollars per
 month; the product ids are the Stripe price lookup keys and the App Store / Google Play subscription ids. These are
 where the prices start: FBRX Command's operator can change them in **Pricing** (below), and organizations' bills and
 Stripe follow.
@@ -61,7 +62,7 @@ add-on's price, on top of its edition. Stripe charges what its price under `fbrx
 page checks that it agrees with the price set there, and shows what the add-on earns after card fees and the cost of
 looking after a managed computer.
 
-**The operator's price list** (FBRX Command → **Pricing**, the `PriceBook` in `plans.ts`) sets:
+**The operator's price list** (FBRX Command → **Pricing**) sets:
 
 * Standard and Ultra on their own (set the same in App Store Connect and the Google Play Console, which charge their own);
 * the **computers each edition includes** (2 for Standard, 5 for Ultra, 15 for Black Hole to start) and the price of
@@ -92,7 +93,7 @@ and in FBRX (`fbrx_standard_yearly`, `fbrx_ultra_yearly`), with their extra comp
 apps sell them monthly.
 
 A tenant's bill is its organization fee, each person and shared computer at its edition's price less the volume
-discount, each extra computer, and the MDM add-on, for a month or a year as it pays (`organizationBill`); in the cloud,
+discount, each extra computer, and the MDM add-on, for a month or a year as it pays; in the cloud,
 FBRX Command counts the people and their computers (a computer a member joined is theirs) and keeps Stripe in step
 (ACCOUNTS.md). Until the operator changes it, the list is the table above. The app and the website show the table
 above; `GET /v1/plans` gives the operator's prices.
@@ -132,11 +133,8 @@ product and settings the tenant chose for it (see *Joining FBRX Command* below).
 | Model-assisted guardian review (`guardian.model`) | | | ✔ |
 | **The most the computers may run, unless the license names it** | Standard | Ultra | Ultra |
 
-Editions and feature names live in `packages/shared/src/license.ts`; a license can also grant individual extra
-features on top of its edition (for example Pro + `fleet`). Workstations without a license run as Community
-(Essentials on their own; in an organization, up to Endpoint Standard). Development builds (`npm run dev:desktop`,
-`--dev`) unlock everything and run as Black Hole; set `FBRX_EDITION=essentials`, `standard` or `ultra` to try a
-lighter edition in one.
+A license can also grant individual extra features on top of its edition (for example Pro + `fleet`). Workstations
+without a license run as Community (Essentials on their own; in an organization, up to Endpoint Standard).
 
 ## License keys
 
@@ -204,17 +202,3 @@ the key, and adds `fleet` to its features. On a computer:
 It joins once per license: if the vault is locked it waits until it is unlocked, if the server cannot be reached it
 tries again at the next start, and if someone later leaves the tenant on purpose (Organization → Disconnect) the key does
 not join again by itself. The tenant then decides how far each license goes (up to Standard, Ultra or Black Hole).
-
-## Ways to sell
-
-| Model | How |
-| --- | --- |
-| **Hosted (SaaS-style)** | You run one control plane; each customer is a tenant; customer admins get `owner`/`admin` users and manage their own fleet. You publish releases once for everyone. |
-| **Customer-hosted** | Ship the control-plane image to the customer. Issue their licenses from *your* control plane (so the key stays with you) and deliver them offline or by importing into theirs. |
-| **Standalone desktop** | Sell installers plus an offline key per customer or seat pack; no control plane needed on their side. |
-| **White-label builds** | Change `productName`/`appId` in `apps/desktop/electron-builder.yml` and the `build/` icons, bake a provisioning file into `resources/provisioning/`, and ship a customer-specific installer that enrolls itself into the right tenant. |
-
-## Webhooks for billing
-
-The control plane emits `license.issued`, `device.enrolled` and `device.retired` webhooks (HMAC-signed), so a
-billing or CRM system can track seats and renewals.

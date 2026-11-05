@@ -3,7 +3,7 @@
 FBRX Command is the team tenant controller: the console served by the control plane at its public URL. It is the place
 to watch, configure, update and support every FBRX Endpoint computer in real time, with RMM-style tooling (remote
 commands, packages, credentials, updates, backups and audit). A license issued here can enroll computers by itself:
-paste the key into FBRX Endpoint and it joins the tenant (see [LICENSING.md](LICENSING.md#joining-fbrx-command)). Development: `npm run dev:console` (proxies the API on :8787).
+paste the key into FBRX Endpoint and it joins the tenant (see [LICENSING.md](LICENSING.md#joining-fbrx-command)).
 
 To run it on a computer of your own (a family, a school, a small office), double-click **Install FBRX Command** in
 the FBRX folder; it opens the first-run page when it is done. It looks for new versions of itself and shows them on

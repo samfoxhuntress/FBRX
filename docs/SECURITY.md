@@ -7,7 +7,7 @@ design assumes the model can be wrong or manipulated and puts every action behin
 
 | Boundary | Control |
 | --- | --- |
-| Model → workstation | Every tool call passes the [governance pipeline](ARCHITECTURE.md#governance-pipeline): license, schema validation, rate limit, policy (hard constraints → rules → risk defaults), guardian, human approval, redaction, audit |
+| Model → workstation | Every tool call passes the governance pipeline: license, schema validation, rate limit, policy (hard constraints → rules → risk defaults), guardian, human approval, redaction, audit |
 | Untrusted content → model | Tool output (files, web pages, API responses) is scanned for prompt-injection language and handed to the model explicitly marked as untrusted data; any tool call whose input carries such language, or any other guardian warning, requires human approval with the finding shown |
 | Plugin → workstation | Separate process, Node permission model (files, processes, addons), network and process-control modules removed, all capabilities brokered and permission-checked ([details](PLUGINS.md#sandbox)) |
 | Renderer → core | Sandboxed, context-isolated renderer with a strict CSP; only the `window.fbrx` bridge, which routes through the same API and origin checks as everything else |
@@ -22,7 +22,7 @@ design assumes the model can be wrong or manipulated and puts every action behin
 
 ## Policy defaults
 
-Out of the box (`packages/shared/src/policy.ts`):
+Out of the box:
 
 * Reads and network requests run; writes, command execution and sensitive actions ask a human.
 * Files are reachable only under the user's home folder and the FBRX workspace; SSH/GPG keys, cloud credentials,
@@ -46,7 +46,7 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
 
 * Vault secrets are AES-256-GCM encrypted under a data key that is protected on this computer (Windows DPAPI; the
   Linux secret service; on macOS a key file only the user can read, see below) and optionally by a recovery
-  passphrase (scrypt). See [ARCHITECTURE.md](ARCHITECTURE.md#vault-credentials).
+  passphrase (scrypt).
 * **macOS does not use the Keychain.** Electron's safeStorage keeps its key in the login Keychain, and macOS asks for
   the Mac password whenever an updated, re-signed app opens that item, which for an app that is not notarized is
   every update. Since 1.8.1 FBRX keeps the vault key in `keychain.key` (mode 0600) in the data folder and starts
@@ -153,14 +153,14 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
 
 ## The AI's memory and personal details
 
-The agent's memory (`packages/core/src/ai/memory.ts`, Settings → Memory) lives in FBRX's database on the computer and
+The agent's memory (Settings → Memory) lives in FBRX's database on the computer and
 is never synced or sent anywhere. A backup made for FBRX Command leaves it out (and vacuums the copy so nothing of it
 remains in free pages); a backup the person makes, encrypted with their passphrase, keeps it, so moving to a new
 computer keeps it too.
 
 * **Never stored**: national ID / Social Security, driver's license, passport and tax ID numbers, bank account,
   routing and IBAN numbers, full payment card numbers (13–19 digits passing the Luhn check) and security codes, and
-  passwords, PINs and security answers (`packages/shared/src/privacy.ts`). They are found by shape and nearby words and
+  passwords, PINs and security answers. They are found by shape and nearby words and
   removed before a fact is saved, whether the person, the agent or the learning step wrote it; the short-term summary
   of recent chats is scrubbed the same way.
 * **Private kinds** (addresses, location, email and phone, birthday, cards by last four digits) are stored only when
@@ -294,13 +294,13 @@ tenant, and a deliberate *Disconnect* is respected.
 
 ## Supply chain and updates
 
-* Desktop builds are code-signed (and notarized on macOS) in CI, on Windows with Azure Trusted Signing or a certificate
-  (DEPLOYMENT.md → Signing). A **signed** Windows copy installs an update only when Windows reports a valid
+* Desktop builds are code-signed (and notarized on macOS) when they are released, on Windows with a trusted signing
+  service or a certificate. A **signed** Windows copy installs an update only when Windows reports a valid
   Authenticode signature from the same publisher (subject CN) as itself; an unsigned copy (built from source) relies on
   the SHA-512 in the authenticated feed, as before, and accepts the first signed update.
 * Update feeds are served per device by your control plane over authenticated HTTPS; files carry SHA-512 checksums
   verified by electron-updater.
-* **Electron's fuses** are switched when the app is packaged (`electronFuses` in `apps/desktop/electron-builder.yml`):
+* **Electron's fuses** are switched when the app is packaged:
   `NODE_OPTIONS` and `--inspect`-style arguments are ignored, so nothing can inject code into FBRX or attach a
   debugger by starting it differently; the app's code loads only from `app.asar`, checked at start against the hash
   built into the executable (Windows and macOS); cookies are encrypted with the system keychain. Node mode

@@ -95,14 +95,3 @@ Under `/v1` on the console's port:
 | `POST /dome/findings/:id/block` | Block its domain on the gate (administrators; into the candidate) |
 | `GET /dome/devices` | Devices seen, with FBRX computers' protection |
 | `PUT /dome/settings` `{ settings }`, `POST /dome/feeds/refresh` | Settings and threat lists (administrators) |
-
-## Development
-
-```bash
-FBRX_V_ROLES=gate,minidome FBRX_V_GATE=simulated npm run dev:virtual   # a pretend household with a few things to find
-npx vitest run packages/dome apps/virtual/test/dome.test.ts packages/core/test/mesh-dome.test.ts
-```
-
-The code is in `packages/dome` (what it hears, the detectors, threat lists; the sensors, findings store and engine in
-`src/node`), `apps/virtual/src/routes/dome.ts` and the console's `pages/dome.tsx`. The real-network check is in
-`packages/gate/test/netns.integration.test.ts`.

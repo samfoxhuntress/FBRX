@@ -57,7 +57,7 @@ what the license gives) and *New versions* (see below).
   token on its **Organization** page. Tick **This computer is for a student or a child** on student laptops: a computer can always
   make itself a student computer when it joins, but only IT (in FBRX Command) can make a student computer a staff one.
 
-Installers from a published release are signed and notarized (DEPLOYMENT.md → Signing); installers pushed by a device
+Installers from a published release are signed and notarized; installers pushed by a device
 manager also skip the browser download warnings.
 
 ## 4. Staff sign-in to FBRX Command

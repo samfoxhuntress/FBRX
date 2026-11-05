@@ -38,7 +38,7 @@ const products = ['basic', 'ultra'].map((tier) => {
   const { productId, monthly, summary } = EDITION_PLANS[tier];
   return { tier, productId, price: formatPrice(monthly), summary, points: editionPoints(tier) };
 });
-// The App Store wants the terms of use and the privacy policy one tap away from the subscriptions (docs/STORES.md).
+// The App Store wants the terms of use and the privacy policy one tap away from the subscriptions (internal/STORES.md).
 const terms = process.env.FBRX_TERMS_URL ?? '';
 const privacy = process.env.FBRX_PRIVACY_URL ?? '';
 writeFileSync(join(www, 'config.js'), `window.FBRX_STORE_CONFIG = ${JSON.stringify({ version, accountServer, products, editions: TIER_SHORT, sources: PURCHASE_SOURCE_NAMES, terms, privacy })};\n`);

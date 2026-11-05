@@ -4,7 +4,7 @@
 | --- | --- | --- | --- |
 | **FBRX** for iPhone and iPad | App Store | `store/mobile`: FBRX Mobile (`packages/core/mobile`) in a native shell, with in-app purchases | The App Store |
 | **FBRX** for Android | Google Play | `store/mobile`, the same app | Google Play |
-| **FBRX OS** for Windows, Mac and Linux | The FBRX website only | `apps/desktop`, signed (and notarized on Mac, [DEPLOYMENT.md](DEPLOYMENT.md)) | FBRX itself |
+| **FBRX OS** for Windows, Mac and Linux | The FBRX website only | `apps/desktop`, signed (and notarized on Mac, [RELEASING.md](RELEASING.md#signing-becoming-a-verified-publisher)) | FBRX itself |
 
 **FBRX OS is never in an app store**: it is downloaded from the FBRX website, and updates itself. A store would hold it
 to a sandbox that does not allow what it does on a computer (the terminal, other apps' settings, the local AI runtime,
@@ -22,7 +22,7 @@ Each store has a way to hand a build to testers before everyone:
 | Google Play | **Internal testing**, then **Closed testing** | Made by license testers (Play Console → Setup → License testing): nothing is charged |
 
 A purchase that charged nothing turns nothing on, so a test build cannot unlock a real account. A test FBRX Command
-(never the real one) takes them with `FBRX_APPLE_SANDBOX=1` and `FBRX_GOOGLE_TEST_PURCHASES=1` ([ACCOUNTS.md](ACCOUNTS.md)).
+(never the real one) takes them with `FBRX_APPLE_SANDBOX=1` and `FBRX_GOOGLE_TEST_PURCHASES=1` ([ACCOUNTS.md](../docs/ACCOUNTS.md)).
 
 ## The phone app (`store/mobile`)
 
@@ -30,10 +30,10 @@ The same FBRX Mobile a computer serves to phones in a browser, plus what only an
 
 - **Pairing by camera**: *Scan the code* reads the QR code under **Mesh & phone → Add a device → Show a code on this
   computer** (the computer's address, the one-time code and its key fingerprint). *Type it instead* takes the address
-  and the code. Pairing is the same as from the browser ([MESH.md](MESH.md#pairing)); the app keeps the address.
+  and the code. Pairing is the same as from the browser ([MESH.md](../docs/MESH.md#pairing)); the app keeps the address.
 - **The FBRX account**: sign in or make an account, buy Standard or Ultra through the store, **Restore purchases**,
   **Manage subscription** (the store's own page), sign out, delete the account. What is bought turns on in every
-  computer signed in to the same account ([ACCOUNTS.md](ACCOUNTS.md)).
+  computer signed in to the same account ([ACCOUNTS.md](../docs/ACCOUNTS.md)).
 - On a computer running Essentials, *See the editions* on Home opens the account here instead of pointing at the
   computer.
 
@@ -74,10 +74,10 @@ The product ids come from the price list (`packages/shared/src/plans.ts`) and ar
 **App Store Connect**: one auto-renewable subscription group with `fbrx_standard_monthly` ($4.99) and
 `fbrx_ultra_monthly` ($11.99), Ultra ranked above Standard so a change between them is an upgrade or a downgrade. Turn
 on the **In-App Purchase** capability for the app id (Xcode → Signing & Capabilities). Set up the server side as in
-[ACCOUNTS.md → App Store](ACCOUNTS.md#app-store).
+[ACCOUNTS.md → App Store](PAYMENTS.md#app-store).
 
 **Play Console**: subscriptions `fbrx_standard_monthly` and `fbrx_ultra_monthly`, each with one monthly base plan at
-the same prices. Server side: [ACCOUNTS.md → Google Play](ACCOUNTS.md#google-play).
+the same prices. Server side: [ACCOUNTS.md → Google Play](PAYMENTS.md#google-play).
 
 Let each store convert the prices for other countries; the app shows the store's price for the phone's country.
 
@@ -101,7 +101,7 @@ How a purchase reaches the account:
 - The camera is used only to scan the pairing code; the local network only to reach the person's FBRX computer
   (`NSCameraUsageDescription`, `NSLocalNetworkUsageDescription` say so).
 - The phone talks to the computer over plain http on the local network (the computer has no certificate a phone would
-  trust), so every request and reply is sealed end to end by FBRX Mobile itself ([MESH.md](MESH.md#every-request)).
+  trust), so every request and reply is sealed end to end by FBRX Mobile itself ([MESH.md](../docs/MESH.md#every-request)).
   iOS allows it with `NSAllowsLocalNetworking`; Android with the network security config in
   `android/app/src/main/res/xml`. FBRX accounts are always reached over https.
 

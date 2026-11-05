@@ -26,8 +26,8 @@ FBRX Command (its own or another) and takes its settings and policy from there (
 
 Roles can be added and turned off later, from the console's *Roles* page or `fbrx-server roles` (below).
 
-> FBRX Server 1.0. It runs real virtual machines and backs them up, and both are tested against a real hypervisor in
-> CI. FBRX Command runs on the server, and servers join it; clusters come later (see [LINEUP.md](LINEUP.md)).
+> FBRX Server 1.0. It runs real virtual machines and backs them up, and both are tested against a real hypervisor.
+> FBRX Command runs on the server, and servers join it; clusters come later (see [LINEUP.md](LINEUP.md)).
 
 ## Install
 
@@ -58,7 +58,7 @@ finishes). Everything it did is in `/var/log/fbrx-server-install.log`.
 ### B. On a Debian 13 server you already have
 
 ```bash
-tar -xzf fbrx-server-1.0.0.tar.gz          # from FBRX Endpoint (Lab → FBRX Server), the CI artifact, or bundle.sh
+tar -xzf fbrx-server-1.0.0.tar.gz          # from the FBRX website, or FBRX Endpoint (Lab → FBRX Server)
 sudo bash fbrx-server-1.0.0/install.sh
 ```
 
@@ -520,27 +520,7 @@ All under `/v1`, with `Authorization: Bearer <token>` from `POST /v1/auth/login`
 | `/dome/…` | FBRX MiniDome (minidome role): see [MINIDOME.md](MINIDOME.md#api) |
 | `GET /core`, `POST /core/call` `{ method, params }` | The FBRX core (ai role): `system.status`, `settings.get`, `ai.providers`, `mesh.status`, `mesh.assist.helpers`, `mesh.assist.sessions`, `approvals.list` (viewers); `mesh.assist.send`, `mesh.assist.followUp`, `mesh.assist.cancel`, `approvals.resolve` for Mesh Assist (operators); `settings.update` (Mesh Assist and AI provider settings), `vault.set` (provider keys), `vault.list`, `ai.models`, `mesh.setEnabled`, `mesh.rename`, `mesh.startPairing`, `mesh.cancelPairing`, `mesh.pair`, `mesh.removeDevice`, `mesh.setPermissions` (administrators) |
 
-## Development
-
-```bash
-npm run dev:virtual            # FBRX Virtual on https://localhost:9443 (simulated; admin / fbrx-virtual-dev)
-npm run dev:virtual-console    # the console with hot reload on http://localhost:5175
-npx vitest run apps/virtual    # tests; FBRX_TEST_LIBVIRT=1 (as root, libvirt installed) adds the real-hypervisor test
-FBRX_V_ROLES=gate,minidome,ai FBRX_V_GATE=simulated npm run dev:virtual   # a pretend gate with MiniDome
-
-# Mesh & AI against a real core: the core in server mode, then FBRX Virtual pointed at its console token
-npm run headless -- run --server --data-dir .fbrx-core-dev --roles virtual,ai --console-token-file .fbrx-core-dev/console.token
-FBRX_V_CORE_TOKEN_FILE=$PWD/.fbrx-core-dev/console.token npm run dev:virtual
-
-scripts/server/bundle.sh && scripts/server/smoke.sh dist/fbrx-server-1.0.0   # the bundle, end to end
-```
-
-The code is in `apps/virtual` (service: `drivers/` for libvirt and the simulated hypervisor, `hardware/` for the map,
-`bmc/` for Redfish) and `apps/virtual-console` (React, the FBRX UI kit, noVNC). The installer, bundle and ISO scripts
-are in `scripts/server`. The FBRX core for the ai role is `packages/core/bin/fbrx-headless.ts`, bundled by
-`scripts/server/build-core.mjs`.
-
-### Your servers in FBRX Endpoint
+## Your servers in FBRX Endpoint
 
 *Lab → FBRX Server → Your servers* keeps the servers you manage: FBRX Server's console (port 9443) or any other web
 page a server or device has (a NAS, another hypervisor, a management controller). FBRX Servers paired on FBRX Mesh
@@ -564,17 +544,10 @@ shows *FBRX VPN* when the server is reached through your gate, and a server that
 When the server is the gate itself, its console, SSH and FBRX Mesh answer VPN devices while the gate's VPN has full
 access (the default). The server has no graphical desktop of its own yet; the console is its screen.
 
-### FBRX Server inside FBRX Endpoint (for now)
+## FBRX Server inside FBRX Endpoint (for now)
 
 Until FBRX Server has its own download page, the FBRX Endpoint installers carry it: the installer ISO, the bundle and
 the guides, under *Lab → FBRX Server* in the app (copy them to Downloads, check them against the fingerprints taken
-when the installer was made, read the guides). `scripts/server/endpoint-resources.mjs` gathers them into
-`apps/desktop/resources/server`; macOS and Linux packages carry them as app resources, and Windows Setup adds them once
-for both processor types (`apps/desktop/build/installer.nsh`), stored as they are.
-
-* **Release workflow:** builds the ISO and bundle first and packs them into the signed installers; the ISO and bundle
-  are also attached to the GitHub release.
-* **Install FBRX OS (the setup wizard):** builds the bundle and takes the ISO from the `fbrx-server-iso` download in
-  your Downloads folder (the zip as downloaded from GitHub Actions, or the .iso). Without one, the app carries the
-  bundle and guides only. `--no-server` leaves them all out.
-* `scripts/server/bundle.mjs` is the bundle builder (bundle.sh runs it); it works on Windows and macOS too.
+when the installer was made, read the guides). A copy you build with **Install FBRX OS** carries the bundle and guides,
+and the ISO too when the `fbrx-server-iso` download (the zip, or the .iso) is in your Downloads folder; `--no-server`
+leaves them all out.

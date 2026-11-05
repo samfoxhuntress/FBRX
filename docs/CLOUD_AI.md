@@ -1,7 +1,7 @@
 # FBRX Cloud AI
 
 FBRX's models in the cloud, for FBRX accounts. A computer signed in to an FBRX account chats with them through the
-account server (FBRX Command in the cloud, [CLOUD.md](CLOUD.md)): it checks the account, counts its tokens and passes
+account server (FBRX Command in the cloud): it checks the account, counts its tokens and passes
 the chat on to the model provider whose key only it holds. It is a cloud FBRX Server for the AI alone: the agent's
 tools, its memory, approvals and files stay on the computer, as with any AI it thinks with.
 
@@ -48,20 +48,6 @@ the models, the promo codes in use) and:
 
 Every change is in the audit log.
 
-## Setting it up
-
-On the account server (`deploy/control-plane/.env`):
-
-| Variable | |
-| --- | --- |
-| `FBRX_AI_UPSTREAM_URL` | The model provider's OpenAI-compatible address, such as `https://api.provider.example/v1` |
-| `FBRX_AI_UPSTREAM_KEY` | Its API key. It never leaves FBRX Command |
-| `FBRX_AI_MODELS` | The models offered, under FBRX's names: `name=provider-model`, comma-separated, the first one the default; `*3` after one counts each of its tokens three times. For example `fbrx-everyday=org/model-a,fbrx-thorough=org/model-b*3` |
-
-Choose a provider whose terms keep none of the API's traffic and never train on it, set a spending limit there as well
-as the service budget here, and check each model's license allows serving it to others. Without the three variables,
-FBRX Cloud AI stays off: accounts are told it is not set up, and allowances and promo codes can be prepared anyway.
-
 ## What a refused chat says
 
 | | |
@@ -73,17 +59,3 @@ FBRX Cloud AI stays off: accounts are told it is not set up, and allowances and 
 | `429` | Four chats going already, or sixty in the last minute |
 | `400` | What the provider said was wrong with the chat (too long for the model, say) |
 | `502 AI_UPSTREAM` | The provider could not be reached or did not answer |
-
-## The API
-
-| | |
-| --- | --- |
-| `GET /v1/ai/models` | The models, under FBRX's names, with their weight |
-| `POST /v1/ai/chat/completions` | OpenAI Chat Completions with the account token as the bearer key, streamed or whole; `model` is FBRX's name (empty: the first) |
-| `GET /v1/accounts/ai` | The account's month (`CloudAiUsage`): its state, why it takes no chat (`message`), the allowance, what it used, extra tokens, when it renews |
-| `POST /v1/accounts/promo` `{ code }` | Uses a promo code: answers with what it gave, the account and its month |
-
-The operator's: `GET /v1/admin/ai?q=` (the month, the settings and the accounts), `POST /v1/admin/ai/settings`
-`{ allowance, budget }`, `GET` and `POST /v1/admin/ai/accounts/:id` `{ monthlyLimit, off, lift, note, tokens }`,
-`GET` and `POST /v1/admin/promos` `{ code, tokens, tier, days, maxRedemptions, expiresAt, note }`,
-`POST /v1/admin/promos/:id` `{ disabled }` and `GET /v1/admin/promos/:id/redemptions`.

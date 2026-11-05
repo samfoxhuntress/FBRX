@@ -111,7 +111,7 @@ Policy can disable cloud providers entirely or restrict to an allow-list.
 
 ### Plugins and connectors
 
-See [PLUGINS.md](PLUGINS.md). Plugins run in separate Node processes started with Node's permission model
+See [PLUGINS.md](../docs/PLUGINS.md). Plugins run in separate Node processes started with Node's permission model
 (`--permission`, read access limited to the plugin folder, write access limited to its data folder); everything
 else (storage, secrets, HTTP, notifications) is brokered by the host and checked against the manifest and policy.
 Connectors (REST, MCP over stdio or HTTP, outgoing webhooks, FBRX peers) register tools in the same registry and
@@ -132,7 +132,7 @@ delivery channels), `NetDiag`, the Windows modules under `src/windows/` (storage
 Hyper-V lab) and `MeshService`. Windows modules run PowerShell through `windows/ps.ts`: scripts are passed as
 `-EncodedCommand`, values are single-quote escaped, and `elevated()` starts an elevated PowerShell through UAC with
 the script in the command line (never a temporary file). Each module also exposes governed agent tools
-(`workspace.*`, `pc.*`, `net.*`, `alerts.recent`). See [COMMAND_CENTER.md](COMMAND_CENTER.md) and [MESH.md](MESH.md).
+(`workspace.*`, `pc.*`, `net.*`, `alerts.recent`). See [COMMAND_CENTER.md](../docs/COMMAND_CENTER.md) and [MESH.md](../docs/MESH.md).
 
 The MCP bridge for other AI apps (`src/aicoord/mcp-shim.ts`, bundled to `fbrx-mcp.mjs`) is a stdio MCP server that
 forwards to the Local API with the agent-scoped token.

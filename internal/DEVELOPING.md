@@ -47,8 +47,15 @@ npm run verify                 # typecheck + the test suite, as CI runs them
 | `npm run dev:control-plane` + `npm run dev:console` | FBRX Command on :8787 and its console with hot reload on :5173. |
 | `npm run dev:virtual` + `npm run dev:virtual-console` | FBRX Virtual with a simulated hypervisor, and its console. |
 | `npm run headless -- --dev` | The core without a window (what FBRX Server's ai role runs). |
-| `npm run knowledge` | Rebuilds Fabrix's built-in knowledge from README.md and docs/ (run it after changing any guide). |
+| `npm run knowledge` | Rebuilds Fabrix's built-in knowledge from the user guides in `docs/` (run it after changing any). |
 | `npm run build` | Builds everything, as the release does. |
+| `npm run build -w @fbrx/admin-console` then `npm run demo` | The whole system on one machine: FBRX Command with its console and three enrolled headless computers (http://localhost:8787, `admin@fbrx.local` / `FbrxDemo-Admin-2026`). |
+| `npm run package:mac` / `npm run package:win` | Installers into `apps/desktop/release/<version>/` ([RELEASING.md](RELEASING.md)). |
+| `npm run runtime:fetch -- --arch arm64,x64` | Downloads the official llama.cpp server to bundle into installers. |
+| `npm run keys:generate` | Makes the license signing key pair (the public key is built into the app). |
+| `npm run license:issue -- --customer "Name"` | Signs an offline license key with that private key (no FBRX Command needed). |
+| `npm run release:publish -- --publish` | Uploads built installers to an FBRX Command's update feed. |
+| `npm run plugin:create -- my-tool` / `npm run plugin:pack -- plugins/my-tool` | Starts and packages a plugin. |
 
 The app keeps its data in one folder (`%APPDATA%\FBRX OS`, `~/Library/Application Support/FBRX OS`,
 `~/.config/fbrx-os`). Set `FBRX_HOME=/some/folder` to run against a throwaway copy while developing.
@@ -86,7 +93,7 @@ the clipboard history, FBRX Snapshot, the code lab's sandboxed runner, turning d
 object, `window.fbrx` (`call`, `on`, dialogs, copy, open a window…), through `contextBridge`. Pages run with
 `contextIsolation` and `sandbox` on: they cannot touch Node.js, the file system or Electron at all. Everything a page
 does goes through `window.fbrx`. (`src/preload/autofill.ts` is a second, separate preload: the Vault's sign-in helper
-in FBRX Browser's web pages, see [VAULT.md](VAULT.md).)
+in FBRX Browser's web pages, see [VAULT.md](../docs/VAULT.md).)
 
 **The renderer** (`src/renderer/`) is a React single-page app. `main.tsx` mounts `app.tsx`, which holds the sidebar
 (`all` nav items), the routes (`location.hash`, `#/vault/keys`) and lazily loaded pages (`pages/*.tsx`). Pages talk
@@ -195,6 +202,110 @@ ARCHITECTURE.md). Its web console is `apps/admin-console`, a React app that call
   updates, status); `bundle.sh` makes the tarball and `build-iso.sh` the installer ISO. Roles are listed in
   `SERVER_ROLE_CATALOG` (`packages/shared/src/virtual.ts`).
 
+## FBRX Server
+
+```bash
+npm run dev:virtual            # FBRX Virtual on https://localhost:9443 (simulated; admin / fbrx-virtual-dev)
+npm run dev:virtual-console    # the console with hot reload on http://localhost:5175
+npx vitest run apps/virtual    # tests; FBRX_TEST_LIBVIRT=1 (as root, libvirt installed) adds the real-hypervisor test
+FBRX_V_ROLES=gate,minidome,ai FBRX_V_GATE=simulated npm run dev:virtual   # a pretend gate with MiniDome
+
+# Mesh & AI against a real core: the core in server mode, then FBRX Virtual pointed at its console token
+npm run headless -- run --server --data-dir .fbrx-core-dev --roles virtual,ai --console-token-file .fbrx-core-dev/console.token
+FBRX_V_CORE_TOKEN_FILE=$PWD/.fbrx-core-dev/console.token npm run dev:virtual
+
+scripts/server/bundle.sh && scripts/server/smoke.sh dist/fbrx-server-1.0.0   # the bundle, end to end
+```
+
+The code is in `apps/virtual` (service: `drivers/` for libvirt and the simulated hypervisor, `hardware/` for the map,
+`bmc/` for Redfish) and `apps/virtual-console` (React, the FBRX UI kit, noVNC). The installer, bundle and ISO scripts
+are in `scripts/server`. The FBRX core for the ai role is `packages/core/bin/fbrx-headless.ts`, bundled by
+`scripts/server/build-core.mjs`.
+
+The FBRX Endpoint installers carry FBRX Server (*Lab → FBRX Server*): `scripts/server/endpoint-resources.mjs` gathers
+the ISO, the bundle and the guides into `apps/desktop/resources/server`; macOS and Linux packages carry them as app
+resources, and Windows Setup adds them once for both processor types (`apps/desktop/build/installer.nsh`), stored as
+they are.
+
+* **Release workflow:** builds the ISO and bundle first and packs them into the signed installers; the ISO and bundle
+  are also attached to the GitHub release.
+* `scripts/server/bundle.mjs` is the bundle builder (bundle.sh runs it); it works on Windows and macOS too.
+
+## FBRX Gate
+
+```bash
+FBRX_V_ROLES=gate,minidome FBRX_V_GATE=simulated npm run dev:virtual   # a pretend gate (nothing on this computer changes)
+npx vitest run packages/gate apps/virtual/test/gate.test.ts
+sudo -E env "PATH=$PATH" npx vitest run packages/gate/test/netns.integration.test.ts   # a real router in namespaces
+```
+
+The code is in `packages/gate` (the configuration, its checks, what it turns into; the engine and the Linux applier in
+`src/node`), `apps/virtual/src/routes/gate.ts` and `gate-cli.ts`, and the console's `pages/gate-*.tsx`.
+
+## FBRX MiniDome
+
+```bash
+FBRX_V_ROLES=gate,minidome FBRX_V_GATE=simulated npm run dev:virtual   # a pretend household with a few things to find
+npx vitest run packages/dome apps/virtual/test/dome.test.ts packages/core/test/mesh-dome.test.ts
+```
+
+The code is in `packages/dome` (what it hears, the detectors, threat lists; the sensors, findings store and engine in
+`src/node`), `apps/virtual/src/routes/dome.ts` and the console's `pages/dome.tsx`. The real-network check is in
+`packages/gate/test/netns.integration.test.ts`.
+
+## Messages
+
+Thread ids are `mesh:all`, `mesh:<device fingerprint>`, `org:all` and `org:<device id>`. The core methods are
+`messages.overview`, `messages.thread`, `messages.send`, `messages.read`, `messages.focus`, `messages.resend`,
+`messages.directory` and `messages.unread`; `messages.changed` fires on every new message, delivery change and read.
+FBRX Command's device routes live under `/v1/device/chat` and its console routes under `/v1/admin/chat/messages`;
+new messages reach computers as `chat.message` over the device WebSocket.
+
+## FBRX Digger
+
+Digger is not a copy of the Network Center: it is the same desktop app, built as its **digger flavor**, so every
+network tool FBRX OS gets, Digger gets in the same commit.
+
+* `packages/shared/src/digger.ts`: its name, its version (`DIGGER_VERSION`), the pages it shows (`DIGGER_PAGES`) and
+  its settings tabs.
+* `apps/desktop/electron-builder.digger.yml`: packaging. It adds `fbrxFlavor: digger` to the app's `package.json`,
+  its own app id, name and icon (`build/digger-icon.svg`), and leaves out the local AI runtime and the FBRX Server
+  bundle.
+* `apps/desktop/src/main/flavor.ts`: the app reads the flavor at start (`FBRX_FLAVOR=digger` does the same in
+  development) and takes Digger's name, data folder and single-instance lock.
+* The renderer (`DIGGER` in `app.tsx`) shows only Digger's pages and opens on the Network Center with every tab; the
+  core's `networkTools()` turns on the network tools' Ultra parts.
+
+Package it on your own computer with `npm run package:digger -w @fbrx/desktop -- --win` (or `--mac`, `--linux`).
+Releases come from the **FBRX Digger** workflow (`.github/workflows/digger.yml`): run it with *release* on, and it
+builds the three installers and publishes them as `digger-v<version>`, never marked as the repository's latest
+release. Then add the `digger` entry to `release.json`.
+
+### Keeping it in step with FBRX OS
+
+A change to the network tools is a change to Digger. When a network tool is added or changed:
+
+1. Make sure it works in Digger: no dependency on the AI, on the edition (in the core, gate Ultra parts with
+   `networkTools()`) or on pages Digger does not show.
+2. A new page or settings tab joins `DIGGER_PAGES` or `DIGGER_SETTINGS`.
+3. `docs/DIGGER.md` says what Digger does.
+4. `DIGGER_VERSION` goes up, and Digger is released with the FBRX OS release that carries the change.
+
+## Support passes, offline
+
+FBRX support can make a support pass ([SUPPORT.md](../docs/SUPPORT.md)) without FBRX Command.
+
+**Offline, with the signing key** (`npm run keys:generate`), no FBRX Command needed:
+
+```bash
+npm run support:pass -- --install-id <id> [--hours 4] [--tier blackhole|ultra|basic] [--note "Ticket 1234"] [--by you@fbrx]
+```
+
+The build must carry the matching public key (the same one that verifies license keys), so a pass made with the
+project's signing key works on the builds made from it. Release builds carry the key in the `FBRX_LICENSE_PUBLIC_KEY`
+repository secret; FBRX Command shows its own on the Licenses page. A build made on your own computer without a key
+(`npm run dev:desktop`) already runs as Black Hole, so it needs no pass.
+
 ## Recipes
 
 ### Change a page
@@ -292,7 +403,7 @@ Tests live next to each package (`packages/*/test`, `apps/*/test`) and run from 
 * **Releases** go through the *Release* workflow (`release.yml`, started by a version tag or by hand): it builds
   and signs the installers, the FBRX Server bundle and ISO and the FBRX Command image, and publishes them as a GitHub
   release. Then `release.json` at the root is updated: it is what every installed FBRX reads to learn that a new
-  version is out. The version numbers live in each app's `package.json`.
+  version is out. The version numbers live in each app's `package.json`. The steps: [RELEASING.md](RELEASING.md).
 
 ## Conventions
 
@@ -302,8 +413,10 @@ Tests live next to each package (`packages/*/test`, `apps/*/test`) and run from 
 * **Security.** Validate every input that crosses a boundary with Zod. Never give a page Node.js or Electron. Secrets
   stay in the core: tools refer to them by name, and the redactor scrubs their values from anything a model sees.
   Anything the agent can do goes through the gate.
-* **Docs.** A feature a person uses has a guide in `docs/`; after changing one, run `npm run knowledge` so Fabrix
-  knows it too.
+* **Docs.** `docs/` holds the **user guides**: how to use FBRX, and only that. They ship inside the app (Fabrix answers
+  from them) and are the website's help, so a feature a person uses has a guide there; after changing one, run
+  `npm run knowledge`. How FBRX is built, released, sold and run as a service goes in `internal/` (this folder), which
+  never ships.
 
 ## Where to look
 
@@ -321,3 +434,18 @@ Tests live next to each package (`packages/*/test`, `apps/*/test`) and run from 
 | The installer for people | `scripts/setup/` (the setup wizard), `apps/desktop/build/` (installer scripts) |
 | FBRX Server | `apps/virtual`, `apps/virtual-console`, `scripts/server` |
 | FBRX Command | `apps/control-plane`, `apps/admin-console` |
+
+## Status and limits
+
+* The packaged app has been exercised end to end on Linux (unpacked build: onboarding, plugin install, enrollment,
+  remote commands, encrypted backup upload). macOS and Windows installers are produced by the Release workflow on
+  GitHub-hosted runners; signing and notarization need the Apple Developer ID and Windows code-signing certificate.
+* The PC-care pages (Defender, firewall, updates, bug catcher, Hyper-V, printers, adapters) use Windows PowerShell
+  and are Windows-only; CI runs their read-only checks on a Windows runner. Actions that change Windows are
+  exercised by hand and always go through the UAC prompt.
+* The local runtime downloads models from Hugging Face and llama.cpp from GitHub; air-gapped sites can pre-seed
+  `models/` or point the catalog at an internal mirror.
+* FBRX Command uses SQLite (`node:sqlite`), fine for thousands of devices on one node. Put the data volume on durable
+  storage and back it up ([BACKUP_RESTORE.md](../docs/BACKUP_RESTORE.md#the-control-plane)).
+
+FBRX is licensed under its own terms (`UNLICENSED` in package.json); the plugin SDK is MIT so others can build on it.

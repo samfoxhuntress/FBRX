@@ -527,7 +527,7 @@ page({
     <li><b>Back up your signing key</b> (<code>~/.fbrx-keys</code>): it signs every license your FBRX Command issues.</li>
     <li><b>Run Install FBRX Command</b> on the computer that will run it for your company, school or family, with the same key, then enroll your computers from its Deploy page.</li>
   </ol>
-  <p class="muted">Everything about it is in the project’s <a href="${REPO}#readme">README</a> and <a href="${REPO}/tree/HEAD/docs">docs</a>.</p>
+  <p class="muted">The details, step by step: <a href="${REPO}/blob/HEAD/docs/INSTALL.md">Installing FBRX</a> and <a href="${REPO}/blob/HEAD/docs/DEPLOYMENT.md">running FBRX for an organization</a>.</p>
 </section>`,
 });
 

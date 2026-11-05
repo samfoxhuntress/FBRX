@@ -732,7 +732,7 @@ choice:
   asking, waiting until nobody is using the computer, nobody is presenting and the agent is idle. FBRX Command can also
   send **Update now** to every computer at once (see ADMIN_CONSOLE.md).
 
-Windows copies signed by a publisher only install updates signed by the same publisher (see DEPLOYMENT.md → Signing).
+Windows copies signed by a publisher only install updates signed by the same publisher.
 
 ## Thinking
 

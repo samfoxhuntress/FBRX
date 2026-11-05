@@ -80,8 +80,8 @@ export const DEVICE_PROFILES: DeviceProfile[] = [
       },
     ],
     docs: [
-      { label: 'FBRX Gate guide (GATE.md)', url: 'https://github.com/samfoxhuntress/FBRX/blob/main/docs/GATE.md' },
-      { label: 'FBRX MiniDome guide (MINIDOME.md)', url: 'https://github.com/samfoxhuntress/FBRX/blob/main/docs/MINIDOME.md' },
+      { label: 'FBRX Gate guide (GATE.md)', url: 'https://github.com/samfoxhuntress/FBRX/blob/HEAD/docs/GATE.md' },
+      { label: 'FBRX MiniDome guide (MINIDOME.md)', url: 'https://github.com/samfoxhuntress/FBRX/blob/HEAD/docs/MINIDOME.md' },
     ],
   },
   {
@@ -131,7 +131,7 @@ export const DEVICE_PROFILES: DeviceProfile[] = [
       },
     ],
     docs: [
-      { label: 'FBRX Server guide (SERVER.md)', url: 'https://github.com/samfoxhuntress/FBRX/blob/main/docs/SERVER.md' },
+      { label: 'FBRX Server guide (SERVER.md)', url: 'https://github.com/samfoxhuntress/FBRX/blob/HEAD/docs/SERVER.md' },
       { label: 'Releases (ISO and bundle)', url: 'https://github.com/samfoxhuntress/FBRX/releases' },
     ],
   },

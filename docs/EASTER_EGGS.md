@@ -163,7 +163,7 @@ single day*, *How to be a great wingman* (which tells you what to say to Fabrix)
   day off." Patience pays: by flip 150 it is guaranteed. The flip count shows under the result so you can tell you're
   getting closer.
 - **Roll a d20.** A 20 is announced as a natural 20 (critical success); a 1 gets a sympathetic "Oof."
-- **Ask the goose.** Type a yes-or-no question and the goose answers, Magic 8-Ball style: "Signs point to honk.",
+- **Ask the goose.** Type a yes-or-no question and the goose answers like a fortune-telling toy: "Signs point to honk.",
   "Outlook good, if you back up first.", "Yes, but wear safety goggles."…
 
 ## Elsewhere

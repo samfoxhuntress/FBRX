@@ -5,9 +5,9 @@ until someone with the accounts below sets it up.
 
 | Piece | What it is | Runs where |
 | --- | --- | --- |
-| **The account server** | FBRX Command in its cloud mode (`FBRX_CP_PUBLIC_SIGNUP=1`): FBRX accounts and their sign-ins, purchases, organizations' FBRX Command tenants, and the license keys computers are signed up to ([ACCOUNTS.md](ACCOUNTS.md)) | One Linux server you rent, in Docker (`deploy/control-plane`) |
+| **The account server** | FBRX Command in its cloud mode (`FBRX_CP_PUBLIC_SIGNUP=1`): FBRX accounts and their sign-ins, purchases, organizations' FBRX Command tenants, and the license keys computers are signed up to ([ACCOUNTS.md](../docs/ACCOUNTS.md)) | One Linux server you rent, in Docker (`deploy/control-plane`) |
 | **The website** | Home, pricing and the account page: plain files built from the price list (`apps/website`) | Any static host |
-| **FBRX Cloud AI** | FBRX's models for FBRX accounts: the account server counts each account's tokens and passes its chats on to a model provider ([CLOUD_AI.md](CLOUD_AI.md)) | The account server, and a model provider with an OpenAI-compatible API |
+| **FBRX Cloud AI** | FBRX's models for FBRX accounts: the account server counts each account's tokens and passes its chats on to a model provider ([CLOUD_AI.md](../docs/CLOUD_AI.md)) | The account server, and a model provider with an OpenAI-compatible API |
 | **Email** | Confirming an account's address and resetting its password | A transactional email service, over SMTP |
 | **Payments** | Cards and wallets on the website and computers; in-app purchases on phones | Stripe, the App Store and Google Play: no card number ever reaches FBRX |
 
@@ -15,7 +15,7 @@ until someone with the accounts below sets it up.
 
 The database of FBRX accounts is the account server's own: `control-plane.db` (SQLite, in WAL mode) in its data folder,
 next to its keys. What it keeps of an account, and how, is in
-[ACCOUNTS.md → Where accounts are kept](ACCOUNTS.md#where-accounts-are-kept): passwords only as salted scrypt hashes,
+[ACCOUNTS.md → Where accounts are kept](../docs/ACCOUNTS.md#where-accounts-are-kept): passwords only as salted scrypt hashes,
 sign-ins as rows a token names (so any can be ended), emailed links only as hashes.
 
 **A server.** One small Linux virtual machine is plenty for the Beta (2 vCPUs, 4 GB of memory, 40 GB of disk; a few
@@ -41,7 +41,7 @@ of accounts on it.
   keys (`keys/` in the data volume, or `FBRX_CP_JWT_SECRET`, `FBRX_CP_MASTER_KEY` and `FBRX_LICENSE_PRIVATE_KEY` from
   a secrets manager) sign every license and sign-in: losing them signs everyone out and stops licenses renewing.
 - Back up every day, off the server: the provider's disk snapshots, and a consistent copy of the database with the
-  keys, as in [BACKUP_RESTORE.md → The control plane](BACKUP_RESTORE.md#the-control-plane), to storage in another
+  keys, as in [BACKUP_RESTORE.md → The control plane](../docs/BACKUP_RESTORE.md#the-control-plane), to storage in another
   region, encrypted.
 - Only ports 80 and 443 open; sign in to the server with SSH keys only; turn on the operating system's automatic
   security updates; watch `https://account.<your domain>/healthz` with an uptime check.
@@ -82,7 +82,7 @@ address or reset a password, so set it up before opening sign-up.
 Give the account server a model provider's address and key and the models to offer (`FBRX_AI_UPSTREAM_URL`,
 `FBRX_AI_UPSTREAM_KEY`, `FBRX_AI_MODELS`), then set each edition's tokens a month and the service's monthly budget in
 its console (**Cloud AI**). Pick a provider that keeps none of the API's traffic, and set a spending limit there too.
-How it is counted, governed and sold is in [CLOUD_AI.md](CLOUD_AI.md).
+How it is counted, governed and sold is in [CLOUD_AI.md](../docs/CLOUD_AI.md).
 
 ## Going live, in order
 

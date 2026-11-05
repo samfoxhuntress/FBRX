@@ -5,7 +5,7 @@
 // macOS signing: with CSC_LINK/CSC_NAME set, or a "Developer ID Application" certificate in the keychain,
 // electron-builder signs normally. Otherwise the app is ad-hoc signed so it still launches on the Mac that built it
 // (an unsigned Apple silicon app does not start at all). Ad-hoc builds are for your own machines; distributing to
-// other Macs needs a Developer ID certificate and notarization (docs/DEPLOYMENT.md).
+// other Macs needs a Developer ID certificate and notarization (internal/RELEASING.md).
 import { execFileSync, spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';

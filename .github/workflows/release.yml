@@ -12,7 +12,7 @@
 #
 # Repository variable (Settings → Secrets and variables → Actions → Variables):
 #   FBRX_ACCOUNT_SERVER          the FBRX account server built into the installers (https://account.<your domain>, see
-#                                docs/CLOUD.md): sign-in, purchases and FBRX Cloud AI go there. Without it the app's
+#                                internal/CLOUD.md): sign-in, purchases and FBRX Cloud AI go there. Without it the app's
 #                                sign-in asks people for the address.
 #
 # Repository secrets (all optional; unsigned builds are produced when signing secrets are missing):

@@ -235,14 +235,3 @@ Under `/v1` on the console's port (see [SERVER.md](SERVER.md#api)):
 | `POST /gate/commit` `{ comment, confirmMinutes }`, `POST /gate/confirm`, `POST /gate/confirm/undo`, `POST /gate/rollback` `{ to, confirmMinutes }` | Commit, keep, undo the trial, go back |
 | `GET /gate/history`, `GET /gate/history/:id` | Commits |
 | `POST /gate/vpn/peers` `{ name, endpoint?, fullTunnel }` | A new VPN device: its settings and QR code, once |
-
-## Development
-
-```bash
-FBRX_V_ROLES=gate,minidome FBRX_V_GATE=simulated npm run dev:virtual   # a pretend gate (nothing on this computer changes)
-npx vitest run packages/gate apps/virtual/test/gate.test.ts
-sudo -E env "PATH=$PATH" npx vitest run packages/gate/test/netns.integration.test.ts   # a real router in namespaces
-```
-
-The code is in `packages/gate` (the configuration, its checks, what it turns into; the engine and the Linux applier in
-`src/node`), `apps/virtual/src/routes/gate.ts` and `gate-cli.ts`, and the console's `pages/gate-*.tsx`.

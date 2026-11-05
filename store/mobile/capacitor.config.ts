@@ -1,7 +1,7 @@
 import type { CapacitorConfig } from '@capacitor/cli';
 
 // FBRX Mobile in the app stores. The app id is fixed in the native projects (ios/, android/) once they exist: change it
-// there too (docs/STORES.md).
+// there too (internal/STORES.md).
 const config: CapacitorConfig = {
   appId: 'com.fbrx.mobile',
   appName: 'FBRX',

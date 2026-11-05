@@ -44,17 +44,6 @@ POST /v1/admin/support-passes
 
 It returns `{ pass, expiresAt, tier }`. Hand the pass to the computer.
 
-**Offline, with the signing key** (`npm run keys:generate`), no FBRX Command needed:
-
-```bash
-npm run support:pass -- --install-id <id> [--hours 4] [--tier blackhole|ultra|basic] [--note "Ticket 1234"] [--by you@fbrx]
-```
-
-The build must carry the matching public key (the same one that verifies license keys), so a pass made with the
-project's signing key works on the builds made from it. Release builds carry the key in the `FBRX_LICENSE_PUBLIC_KEY`
-repository secret; FBRX Command shows its own on the Licenses page. A build made on your own computer without a key
-(`npm run dev:desktop`) already runs as Black Hole, so it needs no pass.
-
 ## Why it is safe
 
 - **A pass cannot be forged.** It is Ed25519-signed by the control plane's license key; a build only trusts passes

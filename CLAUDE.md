@@ -7,10 +7,17 @@ admin-console, virtual, website), `plugins/*`. The desktop app (FBRX OS, `apps/d
 ## Checks before a commit
 
 * `npx tsc -p tsconfig.json --noEmit` and the tests that cover the change: `npx vitest run <paths>`.
-* After changing anything in `docs/` or `README.md`, run `npm run knowledge` (Fabrix answers from the generated
+* After changing anything in `docs/`, run `npm run knowledge` (Fabrix answers from the generated
   `packages/core/src/knowledge/docs.generated.ts`; never edit or search that file by hand).
 * Do not run prettier over whole files: the repository is not prettier-clean.
 * Comments wrap at 120 columns. Keep the code consistent with what is around it.
+
+## Docs: user guides only
+
+* `docs/` holds the **user guides**: how to use FBRX, and nothing else. They ship inside the app (Fabrix's knowledge)
+  and are the website's help. Building, releasing, selling and running the FBRX service go in `internal/`, which never
+  ships; user guides do not link into it.
+* There is no README: what FBRX is, and how to get it, is on the website (`apps/website`) and in `docs/INSTALL.md`.
 
 ## FBRX Digger follows the network tools
 

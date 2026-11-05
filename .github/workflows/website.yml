@@ -3,7 +3,7 @@
 # upload it to any static host.
 #
 # Repository variables (Settings → Secrets and variables → Actions → Variables):
-#   FBRX_ACCOUNT_SERVER          the FBRX account server (https://account.<your domain>, docs/CLOUD.md)
+#   FBRX_ACCOUNT_SERVER          the FBRX account server (https://account.<your domain>, internal/CLOUD.md)
 #   FBRX_SITE_URL                the website's own address (https://<your domain>): canonical links and the sitemap
 #   FBRX_SUPPORT_EMAIL, FBRX_STATUS_URL, FBRX_INSTALLERS_SIGNED   optional, see apps/website/build.mjs
 #   CLOUDFLARE_ACCOUNT_ID        the Cloudflare account the site is published in

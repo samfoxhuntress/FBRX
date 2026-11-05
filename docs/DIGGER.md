@@ -25,6 +25,8 @@ Everything is included, whatever FBRX edition you have: Digger is the network to
 on their own. It keeps its own data folder and settings, and leaves the keyboard alone (no global shortcuts), so it
 never gets in the way of FBRX OS on the same computer.
 
+Digger is FBRX OS's own Network Center, so every network tool FBRX OS gets, Digger gets too, in the same release.
+
 ## Install
 
 Download it from the repository's releases: the release named **FBRX Digger** (tagged `digger-v<version>`).
@@ -41,33 +43,3 @@ Privacy & Security → **Open Anyway** the first time. `SHA256SUMS.txt` in the r
 
 Digger tells you when a new version is out (Settings → Updates): it reads the `digger` entry of `release.json` and
 links to the new release.
-
-## How it is built
-
-Digger is not a copy of the Network Center: it is the same desktop app, built as its **digger flavor**, so every
-network tool FBRX OS gets, Digger gets in the same commit.
-
-* `packages/shared/src/digger.ts`: its name, its version (`DIGGER_VERSION`), the pages it shows (`DIGGER_PAGES`) and
-  its settings tabs.
-* `apps/desktop/electron-builder.digger.yml`: packaging. It adds `fbrxFlavor: digger` to the app's `package.json`,
-  its own app id, name and icon (`build/digger-icon.svg`), and leaves out the local AI runtime and the FBRX Server
-  bundle.
-* `apps/desktop/src/main/flavor.ts`: the app reads the flavor at start (`FBRX_FLAVOR=digger` does the same in
-  development) and takes Digger's name, data folder and single-instance lock.
-* The renderer (`DIGGER` in `app.tsx`) shows only Digger's pages and opens on the Network Center with every tab; the
-  core's `networkTools()` turns on the network tools' Ultra parts.
-
-Package it on your own computer with `npm run package:digger -w @fbrx/desktop -- --win` (or `--mac`, `--linux`).
-Releases come from the **FBRX Digger** workflow (`.github/workflows/digger.yml`): run it with *release* on, and it
-builds the three installers and publishes them as `digger-v<version>`, never marked as the repository's latest
-release. Then add the `digger` entry to `release.json`.
-
-## Keeping it in step with FBRX OS
-
-A change to the network tools is a change to Digger. When a network tool is added or changed:
-
-1. Make sure it works in Digger: no dependency on the AI, on the edition (in the core, gate Ultra parts with
-   `networkTools()`) or on pages Digger does not show.
-2. A new page or settings tab joins `DIGGER_PAGES` or `DIGGER_SETTINGS`.
-3. This page says what Digger does.
-4. `DIGGER_VERSION` goes up, and Digger is released with the FBRX OS release that carries the change.
