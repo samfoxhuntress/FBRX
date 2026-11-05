@@ -49,6 +49,10 @@ describe('licensing', () => {
     expect(expired.edition).toBe('community');
     const capped = licenseStatusFrom(signLicense(payload({ maxMajorVersion: 1 }), keys.privateKeyPem), [keys.publicKeyPem], 'local', 2);
     expect(capped.state).toBe('invalid');
+    // A key an FBRX account made for one of its computers counts on that one only.
+    const mine = signLicense(payload({ installId: 'inst_a' }), keys.privateKeyPem);
+    expect(licenseStatusFrom(mine, [keys.publicKeyPem], 'account', 1, 'inst_a').state).toBe('valid');
+    expect(licenseStatusFrom(mine, [keys.publicKeyPem], 'account', 1, 'inst_b')).toMatchObject({ state: 'invalid', message: 'This license is for another computer' });
   });
 });
 

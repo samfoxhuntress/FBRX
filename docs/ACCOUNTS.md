@@ -23,6 +23,16 @@ with an ordinary FBRX license key (Ed25519, verified offline like any other): up
 organization in it, running a few days past the period paid for and never more than 35 days, so computers fetch a fresh
 one as the subscription renews and a refund reaches them in time.
 
+**Each computer, up to those the edition covers.** An edition covers as many computers as it includes (2 for Standard,
+5 for Ultra; the operator's price list, LICENSING.md) and the extra ones bought on top. Each computer signed in to the
+account gets a key of its own, carrying its install id, which no other computer accepts. Computers count in the order
+they first signed in, so signing in again keeps a computer's place; one past them runs Essentials and says why
+(**Settings → FBRX account**), with **Add a computer** when the plan was bought on the website or in FBRX: it adds the
+edition's extra-computer item (`fbrx_standard_extra_computer_monthly`, `fbrx_ultra_extra_computer_monthly`) to the
+Stripe subscription, prorated. The App Store and Google Play sell no extra computers. Signing a computer out frees its
+place: that computer gives its key back the next time it renews (every six hours while FBRX runs). When a plan moves to
+the other edition in the Stripe portal, its extra computers move with it, at that edition's price.
+
 Black Hole is never sold to an account: it is an add-on in an FBRX Command tenant (LICENSING.md).
 
 The phone apps themselves (building them, the products in each store, the store rules they follow) are in
@@ -74,7 +84,8 @@ it works once, for an hour, and signs the account out everywhere. Both links ope
 
 Every sign-in says where it is: a **computer** (its name, system, FBRX version and install id), a **phone** (the
 app) or the **website**. Settings → FBRX account → **Signed in on** and the website list them, and sign any of the others
-out: its token stops working at once (a computer keeps the license it was given until it runs out, a few days at most).
+out: its token stops working at once, and the computer gives back the license it was given the next time it renews (a
+computer whose sign-in simply ended keeps it until it runs out).
 The same install signing in again takes the place of its last sign-in, so each computer is listed once.
 
 ### Where accounts are kept
@@ -257,12 +268,13 @@ downgrade ends the purchase it replaced.
 | `POST /v1/accounts/password/forgot` `{ email }` | Emails a link to choose a new password (the same answer whether the account exists or not) |
 | `POST /v1/accounts/password/reset` `{ token, password }` | Sets the new password from that link, and signs out everywhere |
 | `GET /v1/accounts/me` | The account: its edition and what it bought |
-| `GET /v1/accounts/license` | The license key the account signs a computer up to (`key: null` with nothing bought) |
+| `GET /v1/accounts/license` | The license key the account signs this computer up to, for its install only: `key: null` with nothing bought, or when the edition's computers are taken (`note` says why). `computers`: how many are signed in, how many the edition covers (`allowed` = `included` + `extra`), an extra computer's price, and whether one can be added. A computer signed out answers 401 `SIGNED_OUT` |
 | `POST /v1/accounts/password` `{ current, password }` | Changes the password and signs out everywhere else |
 | `DELETE /v1/accounts/me` `{ password }` | Deletes the account and ends its Stripe subscriptions (store subscriptions end in the store's settings) |
 | `GET /v1/accounts/ai` | The account's FBRX Cloud AI this month: its allowance, what it used, extra tokens, and whether it takes chats ([CLOUD_AI.md](CLOUD_AI.md)) |
 | `POST /v1/accounts/promo` `{ code }` | Uses a promo code: extra FBRX Cloud AI tokens, an edition for some days, or both (once per account) |
 | `POST /v1/billing/checkout` `{ productId }` | A Stripe Checkout page for Standard or Ultra |
+| `POST /v1/billing/computers` `{ extra }` | Sets how many extra computers (0 to 100) the account's Stripe plan carries, prorated; answers with this computer's license |
 | `POST /v1/billing/portal` | The Stripe customer portal: change plan or card, invoices, cancel |
 | `POST /v1/billing/apple/transactions` `{ signedTransaction }` | A purchase from the iPhone or iPad app |
 | `POST /v1/billing/google/purchases` `{ productId, purchaseToken }` | A purchase from the Android app |

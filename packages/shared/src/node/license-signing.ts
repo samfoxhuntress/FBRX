@@ -73,6 +73,8 @@ export function licenseStatusFrom(
   publicKeysPem: readonly string[],
   source: LicenseStatus['source'],
   appMajorVersion: number,
+  /** This computer's install id: a key made for another install does not count here. */
+  installId?: string | null,
 ): LicenseStatus {
   const base: LicenseStatus = {
     state: 'unlicensed',
@@ -104,6 +106,7 @@ export function licenseStatusFrom(
     vertical: p.vertical ?? null,
   };
   if (v.expired) return { ...base, ...info, state: 'expired', message: 'License has expired; running with Community features' };
+  if (p.installId && installId && p.installId !== installId) return { ...base, ...info, state: 'invalid', message: 'This license is for another computer' };
   if (p.maxMajorVersion !== null && appMajorVersion > p.maxMajorVersion) {
     return { ...base, ...info, state: 'invalid', message: `License covers versions up to ${p.maxMajorVersion}.x` };
   }

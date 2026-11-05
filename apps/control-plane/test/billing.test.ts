@@ -4,9 +4,10 @@ import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
-import { afterAll, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'vitest';
 import { licenseStatusFrom } from '@fbrx/shared/node';
 import { buildServer, type BuiltServer } from '../src/server';
+import { accountLicense } from '../src/billing/entitlements';
 import { loadConfig } from '../src/config';
 import { appleLikeChain, signJws } from './cert-chain';
 
@@ -130,6 +131,8 @@ describe('FBRX accounts and what they buy', () => {
   let cp: BuiltServer;
   let base: string;
   let dataDir: string;
+  /** Each test calls from an address of its own, so the routes' rate limits count each test on its own. */
+  let client = 0;
   const stripe = fakeStripe();
   const google = fakeGoogle();
   const chain = appleLikeChain();
@@ -137,7 +140,12 @@ describe('FBRX accounts and what they buy', () => {
   const call = async (method: string, path: string, body?: unknown, token?: string, headers: Record<string, string> = {}) => {
     const res = await fetch(`${base}${path}`, {
       method,
-      headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}), ...headers },
+      headers: {
+        'x-forwarded-for': `198.51.100.${client}`,
+        ...(token ? { authorization: `Bearer ${token}` } : {}),
+        ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+        ...headers,
+      },
       body: body === undefined ? undefined : typeof body === 'string' ? body : JSON.stringify(body),
     });
     return { status: res.status, json: (await res.json().catch(() => ({}))) as any };
@@ -171,6 +179,7 @@ describe('FBRX accounts and what they buy', () => {
           dataDir,
           port: 0,
           host: '127.0.0.1',
+          trustProxy: true,
           logLevel: 'silent',
           setupToken: 'setup-token-123',
           adminConsoleDir: null,
@@ -195,6 +204,9 @@ describe('FBRX accounts and what they buy', () => {
     );
     await cp.app.listen({ port: 0, host: '127.0.0.1' });
     base = `http://127.0.0.1:${(cp.app.server.address() as AddressInfo).port}`;
+  });
+  beforeEach(() => {
+    client++;
   });
 
   afterAll(async () => {
@@ -225,7 +237,7 @@ describe('FBRX accounts and what they buy', () => {
     expect((await call('POST', '/v1/accounts/signup', { email: 'SAM@example.com', name: 'Sam', password: PASSWORD })).status).toBe(409);
     expect((await call('POST', '/v1/accounts/login', { email: 'sam@example.com', password: 'nope-nope-nope' })).status).toBe(401);
     const { token } = await ok('POST', '/v1/accounts/login', { email: 'sam@example.com', password: PASSWORD, device: 'sam-phone' });
-    expect(await ok('GET', '/v1/accounts/license', undefined, token)).toEqual({ key: null, tier: 'essentials', expiresAt: null });
+    expect(await ok('GET', '/v1/accounts/license', undefined, token)).toEqual({ key: null, tier: 'essentials', expiresAt: null, computers: null, note: null });
     // An account token is not an FBRX Command console session.
     expect((await call('GET', '/v1/admin/devices', undefined, token)).status).toBe(401);
     expect((await call('GET', '/v1/accounts/me')).status).toBe(401);
@@ -471,6 +483,58 @@ describe('FBRX accounts and what they buy', () => {
     expect(items()).toContain('fbrx_mdm_tenant_monthly=0');
     // Every change of price is in the audit log.
     expect(cp.ctx.db.all<{ action: string }>("SELECT action FROM audit_log WHERE action = 'pricing.mdm'")).toHaveLength(2);
+  });
+
+  it('covers as many of a person’s computers as their edition includes, and the ones they add', async () => {
+    const email = 'three@computers.example';
+    const device = (n: number) => ({ name: `pc-${n}`, kind: 'computer', installId: `inst-${n}` });
+    const t1 = (await ok('POST', '/v1/accounts/signup', { email, name: 'Three', password: PASSWORD, device: device(1) })).token as string;
+    await ok('POST', '/v1/accounts/verify', { token: linkFor(email, 'verify') });
+    const signIn = async (n: number) => (await ok('POST', '/v1/accounts/login', { email, password: PASSWORD, device: device(n) })).token as string;
+    const [t2, t3] = [await signIn(2), await signIn(3)];
+    const me = await ok('GET', '/v1/accounts/me', undefined, t1);
+    // Standard, bought with Stripe.
+    const end = Math.floor(Date.now() / 1000) + 30 * 86400;
+    const sub = { id: 'sub_three', customer: 'cus_3', status: 'active', metadata: { fbrx_account: me.id }, items: { data: [{ id: 'si_three', quantity: 1, current_period_end: end, price: { id: 'price_three', lookup_key: 'fbrx_standard_monthly' } }] } };
+    stripe.subscriptions.set('sub_three', sub);
+    await stripeEvent({ id: 'evt_three', type: 'customer.subscription.created', data: { object: sub } });
+    const license = (token: string) => ok('GET', '/v1/accounts/license', undefined, token);
+
+    // Standard covers 2 computers: the first two to sign in get a key, each for its own computer only.
+    const first = await license(t1);
+    expect(first).toMatchObject({ tier: 'basic', note: null, computers: { used: 3, allowed: 2, included: 2, extra: 0, extraPrice: 199, canAdd: true } });
+    expect(licenseStatusFrom(first.key, [cp.ctx.keys.licensePublicPem], 'account', 2, 'inst-1').state).toBe('valid');
+    expect(licenseStatusFrom(first.key, [cp.ctx.keys.licensePublicPem], 'account', 2, 'inst-3').state).toBe('invalid');
+    expect((await license(t2)).key).toBeTruthy();
+    const third = await license(t3);
+    expect(third).toMatchObject({ key: null, tier: 'basic' });
+    expect(third.note).toBe('Your Standard covers 2 computers, and 3 are signed in: this one runs Essentials. Sign one of the others out, or add a computer for $1.99 a month.');
+    // Signing in again from the same computer keeps its place.
+    expect((await license(await signIn(1))).key).toBeTruthy();
+    expect((await license(t3)).key).toBeNull();
+
+    // A third computer, added to the Stripe plan: it gets its key.
+    const added = await ok('POST', '/v1/billing/computers', { extra: 1 }, t3);
+    expect(added).toMatchObject({ computers: { allowed: 3, extra: 1 }, note: null });
+    expect(licenseStatusFrom(added.key, [cp.ctx.keys.licensePublicPem], 'account', 2, 'inst-3').state).toBe('valid');
+    expect(stripe.subscriptions.get('sub_three').items.data.map((i: any) => `${i.price.lookup_key}=${i.quantity}`)).toContain('fbrx_standard_extra_computer_monthly=1');
+
+    // Back to none: signing a computer out frees its place for the third.
+    await ok('POST', '/v1/billing/computers', { extra: 0 }, t3);
+    expect((await license(t3)).key).toBeNull();
+    await ok('DELETE', `/v1/accounts/sessions/${(await ok('GET', '/v1/accounts/sessions', undefined, t3)).find((s: any) => s.name === 'pc-2').id}`, undefined, t3);
+    expect((await license(t3)).key).toBeTruthy();
+    // The computer signed out hears so, and gives its license back.
+    expect(await call('GET', '/v1/accounts/license', undefined, t2)).toMatchObject({ status: 401, json: { error: { code: 'SIGNED_OUT' } } });
+    // Without a computer's sign-in (the website, the phone app), no key: licenses go to computers.
+    expect(accountLicense(cp.ctx, me, null)).toMatchObject({ key: null, note: 'A license goes to a computer: sign in to your FBRX account in FBRX on it.' });
+
+    // A plan moved to Ultra in the Stripe portal takes its extra computer along, at Ultra's price.
+    await ok('POST', '/v1/billing/computers', { extra: 1 }, t3);
+    sub.items.data[0]!.price = { id: 'price_three_ultra', lookup_key: 'fbrx_ultra_monthly' };
+    await stripeEvent({ id: 'evt_three_ultra', type: 'customer.subscription.updated', data: { object: sub } });
+    expect(sub.items.data.map((i: any) => `${i.price.lookup_key}=${i.quantity}`)).toEqual(['fbrx_ultra_monthly=1', 'fbrx_ultra_extra_computer_monthly=1']);
+    expect(await license(t3)).toMatchObject({ tier: 'ultra', computers: { allowed: 6, included: 5, extra: 1, extraPrice: 299 } });
   });
 
   it('bills organizations from the operator’s price list, and brings Stripe to it', async () => {

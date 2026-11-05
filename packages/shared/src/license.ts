@@ -108,6 +108,8 @@ export const LicensePayloadSchema = z.object({
   command: LicenseCommandSchema.optional(),
   /** Optional: an Education (or Home) license; staff computers start in classroom mode (see editions.ts). */
   vertical: z.enum(['business', 'education', 'home']).optional(),
+  /** Optional: the one FBRX install this key works on (an FBRX account's key is for one of its computers). */
+  installId: z.string().max(128).optional(),
 });
 export type LicensePayload = z.infer<typeof LicensePayloadSchema>;
 

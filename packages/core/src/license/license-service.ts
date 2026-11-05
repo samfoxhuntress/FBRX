@@ -55,10 +55,12 @@ export class LicenseService {
     const managed = this.meta.get<string>('license.managed');
     const local = this.meta.get<string>('license.local');
     const account = this.meta.get<string>('license.account');
+    // A key an FBRX account made for one of its computers works on that one only.
+    const install = this.meta.get<string>('install.id');
     // The organization's license wins; otherwise the fuller of a key typed in and the FBRX account's.
-    let status = managed ? licenseStatusFrom(managed, this.publicKeys, 'managed', major) : licenseStatusFrom(local, this.publicKeys, 'local', major);
+    let status = managed ? licenseStatusFrom(managed, this.publicKeys, 'managed', major, install) : licenseStatusFrom(local, this.publicKeys, 'local', major, install);
     if (!managed && account) {
-      const fromAccount = licenseStatusFrom(account, this.publicKeys, 'account', major);
+      const fromAccount = licenseStatusFrom(account, this.publicKeys, 'account', major, install);
       if (fromAccount.state === 'valid' && (status.state !== 'valid' || tierRank(fromAccount.tier) > tierRank(status.tier))) status = fromAccount;
     }
     // Development builds may run Black Hole with everything on, unless FBRX_EDITION asks to try a lighter edition

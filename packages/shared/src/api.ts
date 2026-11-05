@@ -874,6 +874,8 @@ export interface CoreMethods extends ExtMethods {
   'account.checkout': (p: { productId: string }) => { url: string };
   /** The billing portal: change the plan or the card, invoices, cancel. */
   'account.portal': () => { url: string };
+  /** Extra computers past those the account's edition covers, on its Stripe plan (0 removes them). */
+  'account.setExtraComputers': (p: { extra: number }) => AccountStatus;
   /** Joins this computer to an organization the account belongs to, at the edition it gives the account. */
   'account.join': (p: { tenantId: string }) => AccountStatus;
   /** Where the account is signed in: computers, phones and browsers (`current` is this computer). */

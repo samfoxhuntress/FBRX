@@ -123,9 +123,28 @@ export function formatInviteCode(canonical: string): string {
 
 /** What an account signs a computer up to: a license key (null with nothing bought), until it is renewed. */
 export interface AccountLicense {
+  /** For this computer (null: nothing bought, not a computer, or past the computers the edition covers). */
   key: string | null;
+  /** The edition the account's purchases give. */
   tier: Tier;
   expiresAt: string | null;
+  /** The computers the edition covers, and how many are signed in (null with nothing bought). */
+  computers: AccountComputers | null;
+  /** Why this computer has no key although something was bought. */
+  note: string | null;
+}
+
+/** An account's computers: how many its edition covers, those bought on top, and how many are signed in. */
+export interface AccountComputers {
+  used: number;
+  /** What the edition includes plus the extra computers bought. */
+  allowed: number;
+  included: number;
+  extra: number;
+  /** Each further computer, a month (cents). */
+  extraPrice: number;
+  /** Extra computers can be added here (to a Stripe subscription; App Store and Google Play purchases cannot). */
+  canAdd: boolean;
 }
 
 /** Where an FBRX account is signed in: FBRX on a computer, the phone app, or the website. */
@@ -196,6 +215,10 @@ export interface AccountStatus {
   tier: Tier;
   /** Until when the account's license on this computer runs (it is renewed by itself well before). */
   licenseUntil: string | null;
+  /** The computers the account's edition covers, and how many are signed in. */
+  computers: AccountComputers | null;
+  /** Why this computer runs less than the account bought (past the computers it covers). */
+  licenseNote: string | null;
   memberships: AccountMembership[];
   /** Whether the account can buy and manage plans from this computer (the website's way: Stripe). */
   canBuy: boolean;

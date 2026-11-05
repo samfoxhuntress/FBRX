@@ -1,7 +1,8 @@
-import { licenseEditionFor, maxTier, productById, type AccountLicense, type EntitlementStatus, type EntitlementView, type PurchaseSource, type Tier } from '@fbrx/shared';
+import { TIER_SHORT, formatPrice, licenseEditionFor, maxTier, productById, type AccountComputers, type AccountLicense, type EntitlementStatus, type EntitlementView, type PaidTier, type PurchaseSource, type Tier } from '@fbrx/shared';
 import { signLicense, type Db } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
+import { priceBook } from './pricing';
 
 /**
  * What accounts and organizations bought, one row per subscription item or store purchase, kept up to date by the
@@ -59,7 +60,7 @@ export function recordPurchase(ctx: AppContext, u: PurchaseUpdate): EntitlementV
     return null;
   }
   const now = new Date().toISOString();
-  const tier = product.kind === 'edition' ? product.tier : null;
+  const tier = product.kind === 'edition' || product.kind === 'extra' ? product.tier : null;
   const existing = ctx.db.get<Row>('SELECT * FROM entitlements WHERE source = ? AND external_id = ? AND product_id = ?', u.source, u.externalId, u.productId);
   if (existing) {
     ctx.db.run(
@@ -128,13 +129,53 @@ export function accountTier(ctx: AppContext, accountId: string): { tier: Tier; u
 }
 
 /**
- * The license key an account signs its computers up to: Standard or Ultra (no FBRX Command tenant in it, so it works on
- * a computer on its own). It runs a few days past the period paid for, and never more than LICENSE_MAX_DAYS, so
- * computers fetch a fresh one as they renew.
+ * An account's computers: how many its edition covers (what it includes, and the extra computers bought on top with
+ * Stripe), and which place this sign-in's computer has. A computer's place is when it first signed in, so signing in
+ * again keeps it; a computer signed out frees its place.
  */
-export function accountLicense(ctx: AppContext, account: { id: string; email: string; name: string }): AccountLicense {
+export function accountComputers(ctx: AppContext, accountId: string, tier: PaidTier, sessionId: string | null): AccountComputers & { place: number | null; installId: string | null } {
+  const now = new Date().toISOString();
+  const sessions = ctx.db.all<{ id: string; install_id: string | null; created_at: string; revoked_at: string | null; expires_at: string }>(
+    "SELECT id, install_id, created_at, revoked_at, expires_at FROM account_sessions WHERE account_id = ? AND kind = 'computer'",
+    accountId,
+  );
+  const computer = (x: { id: string; install_id: string | null }) => x.install_id ?? x.id;
+  const first = new Map<string, string>();
+  for (const x of sessions) if (!first.has(computer(x)) || x.created_at < first.get(computer(x))!) first.set(computer(x), x.created_at);
+  const here = [...new Set(sessions.filter((x) => !x.revoked_at && x.expires_at > now).map(computer))].sort((a, b) => first.get(a)!.localeCompare(first.get(b)!) || a.localeCompare(b));
+  const book = priceBook(ctx.db);
+  const bought = accountEntitlements(ctx, accountId).filter((e) => e.kind === 'extra' && e.tier === tier && !e.tenant_id && isValid(e));
+  const extra = bought.reduce((n, e) => n + e.quantity, 0);
+  const included = book.computers.included[tier];
+  const mine = sessions.find((x) => x.id === sessionId);
+  const canAdd = accountEntitlements(ctx, accountId).some((e) => e.kind === 'edition' && e.source === 'stripe' && !e.tenant_id && e.tier === tier && isValid(e));
+  return {
+    used: here.length,
+    allowed: included + extra,
+    included,
+    extra,
+    extraPrice: book.computers.extra[tier],
+    canAdd,
+    place: mine ? here.indexOf(computer(mine)) : null,
+    installId: mine?.install_id ?? null,
+  };
+}
+
+/**
+ * The license key an account signs one of its computers up to: Standard or Ultra (no FBRX Command tenant in it, so it
+ * works on a computer on its own), for that computer's install only, while it is one of the computers the edition
+ * covers. It runs a few days past the period paid for, and never more than LICENSE_MAX_DAYS, so computers fetch a fresh
+ * one as they renew.
+ */
+export function accountLicense(ctx: AppContext, account: { id: string; email: string; name: string }, sessionId: string | null = null): AccountLicense {
   const { tier, until } = accountTier(ctx, account.id);
-  if (tier === 'essentials') return { key: null, tier, expiresAt: null };
+  if (tier === 'essentials') return { key: null, tier, expiresAt: null, computers: null, note: null };
+  const { place, installId, ...computers } = accountComputers(ctx, account.id, tier as PaidTier, sessionId);
+  if (place === null) return { key: null, tier, expiresAt: null, computers, note: 'A license goes to a computer: sign in to your FBRX account in FBRX on it.' };
+  if (place >= computers.allowed) {
+    const how = computers.canAdd ? `Sign one of the others out, or add a computer for ${formatPrice(computers.extraPrice)} a month.` : 'Sign one of the others out to use it here.';
+    return { key: null, tier, expiresAt: null, computers, note: `Your ${TIER_SHORT[tier]} covers ${computers.allowed} ${computers.allowed === 1 ? 'computer' : 'computers'}, and ${computers.used} are signed in: this one runs Essentials. ${how}` };
+  }
   const cap = Date.now() + LICENSE_MAX_DAYS * 86_400_000;
   const end = until ? Math.min(Date.parse(until) + LICENSE_SLACK_DAYS * 86_400_000, cap) : cap;
   const expiresAt = new Date(end).toISOString();
@@ -151,10 +192,11 @@ export function accountLicense(ctx: AppContext, account: { id: string; email: st
       expiresAt,
       maxMajorVersion: null,
       tier,
+      ...(installId ? { installId } : {}),
     },
     ctx.keys.licensePrivatePem,
   );
-  return { key, tier, expiresAt };
+  return { key, tier, expiresAt, computers, note: null };
 }
 
 /** An organization's FBRX Command plan: its latest purchase, if it has one. */

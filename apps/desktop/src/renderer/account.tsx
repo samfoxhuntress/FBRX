@@ -348,11 +348,34 @@ export function AccountSettings() {
           items={[
             ['Edition', <span className={`tier-badge ${account.tier}`}>{account.tier === 'essentials' ? 'Essentials (nothing bought yet)' : TIER_NAMES[account.tier]}</span>],
             ['Renews by itself', account.licenseUntil ? `Runs until ${formatDay(account.licenseUntil)}` : '—'],
+            ...(account.computers
+              ? [
+                  [
+                    'Computers',
+                    `${account.computers.used} of ${account.computers.allowed} signed in (${account.computers.included} included${account.computers.extra ? `, ${account.computers.extra} added` : ''}; each further one ${formatPrice(account.computers.extraPrice)} a month)`,
+                  ] as [string, string],
+                ]
+              : []),
             ...(cloudAi ? [['FBRX Cloud AI', cloudAiSummary(cloudAi)] as [string, string]] : []),
             ['Last checked', account.lastSyncAt ? formatDate(account.lastSyncAt) : '—'],
           ]}
         />
         {account.error && <Status tone="warning">{account.error}</Status>}
+        {account.licenseNote && (
+          <Callout
+            tone="warning"
+            title="This computer runs Essentials"
+            actions={
+              account.computers?.canAdd && (
+                <Button size="sm" variant="primary" loading={busy === 'extra'} onClick={() => void run('extra', () => call('account.setExtraComputers', { extra: account.computers!.extra + 1 }), 'Computer added')}>
+                  Add a computer, {formatPrice(account.computers.extraPrice)} a month
+                </Button>
+              )
+            }
+          >
+            {account.licenseNote} Your other computers are under Signed in on, below.
+          </Callout>
+        )}
         {!account.emailVerified && (
           <div className="fx-actions" style={{ marginTop: 10 }}>
             <Status tone="warning">Confirm your email: open the link FBRX sent to {account.email}.</Status>

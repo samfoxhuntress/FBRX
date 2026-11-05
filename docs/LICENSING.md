@@ -27,7 +27,10 @@ The easter eggs come with every edition, once their secret key unlocks them.
 The person chooses the edition; what may be chosen is decided above them. A license's **tier** is the most it allows:
 Community up to Standard, Pro and Enterprise up to Ultra, and a license can name it outright (`tier: "basic"`,
 `"ultra"` or `"blackhole"`). **On its own**, a computer runs Essentials unless something was bought: a license key
-(or a purchase on the person's FBRX account) goes up to its tier, at most Ultra. A license that names an FBRX Command
+(or a purchase on the person's FBRX account) goes up to its tier, at most Ultra. A purchase on an account covers as many
+of the person's computers as its edition includes, and the further ones they add (below): each signed-in computer gets
+a key of its own, for that install only, in the order they first signed in, and one past them runs Essentials until
+another signs out or the person adds a computer (ACCOUNTS.md). A license that names an FBRX Command
 tenant belongs to that organization and counts only there. **In an organization**, a computer goes up to its
 license's tier, Black Hole included, held lower by its group or by the computer itself in FBRX Command (*Essentials
 only*, *Up to Standard*, *Up to Ultra*, *Up to Black Hole*). The tier and the features below are separate: features
@@ -61,13 +64,16 @@ looking after a managed computer.
 **The operator's price list** (FBRX Command → **Pricing**, the `PriceBook` in `plans.ts`) sets:
 
 * Standard and Ultra on their own (set the same in App Store Connect and the Google Play Console, which charge their own);
+* the **computers each edition includes** (2 for Standard, 5 for Ultra, 15 for Black Hole to start) and the price of
+  each **further computer** a month, never discounted (`fbrx_standard_extra_computer_monthly`, `fbrx_ultra_…`,
+  `fbrx_blackhole_…`), for a person on their own and in an organization alike. On their own, people add computers to
+  a plan bought on the website or in FBRX; the App Store and Google Play sell none;
 * the **organization fee**, never discounted: one for Work and School organizations, and optionally another for larger
   ones (from so many computers, Essentials included, `fbrx_command_large_monthly`) and for Home ones
   (`fbrx_command_home_monthly`);
 * each **person's price in an organization** (Standard, Ultra, Black Hole; Essentials is free): a person pays once,
-  whatever number of the organization's computers they use, up to the **computers their edition includes** (2 for
-  Standard, 5 for Ultra, 15 for Black Hole to start); each **further computer** costs extra a month, never discounted
-  (`fbrx_standard_extra_computer_monthly`, `fbrx_ultra_…`, `fbrx_blackhole_…`). A paid computer nobody pays for (a
+  whatever number of the organization's computers they use, up to the computers their edition includes, and each
+  further computer on top. A paid computer nobody pays for (a
   shared, lab or student computer, given its edition in Devices or Profiles & groups) takes a seat of its own at the
   same price; student and child computers are billed as Standard;
 * the **volume discount**: up to five steps, each so much off every seat (people and shared computers) once an

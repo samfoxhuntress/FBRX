@@ -1,4 +1,4 @@
-import { CLOUD_AI_PATH, atLeast, tierRank, type AccountDevice, type AccountDeviceInfo, type AccountLicense, type AccountStatus, type AccountView, type CloudAiUsage, type InvitationPreview, type PromoRedeemed, type Tier, type Vertical } from '@fbrx/shared';
+import { CLOUD_AI_PATH, atLeast, tierRank, type AccountComputers, type AccountDevice, type AccountDeviceInfo, type AccountLicense, type AccountStatus, type AccountView, type CloudAiUsage, type InvitationPreview, type PromoRedeemed, type Tier, type Vertical } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
 import type { Vault } from '../vault/vault';
@@ -16,7 +16,7 @@ const REFRESH_MS = 6 * 3600_000;
  * What this computer keeps about the account, forgotten at sign-out (the FBRX Command address stays for next time, with
  * the fingerprint of its own certificate when it has one: account.server, account.fingerprint).
  */
-const ACCOUNT_META = ['account.id', 'account.view', 'account.tier', 'account.licenseUntil', 'account.lastSyncAt', 'account.error', 'account.canBuy'];
+const ACCOUNT_META = ['account.id', 'account.view', 'account.tier', 'account.licenseUntil', 'account.lastSyncAt', 'account.error', 'account.canBuy', 'account.computers', 'account.licenseNote'];
 
 export interface AccountDeps {
   meta: MetaStore;
@@ -70,6 +70,8 @@ export class AccountService {
       name: signedIn ? (view?.name ?? null) : null,
       tier: signedIn ? (view?.tier ?? 'essentials') : 'essentials',
       licenseUntil: this.d.meta.get<string>('account.licenseUntil') ?? null,
+      computers: signedIn ? (this.d.meta.get<AccountComputers>('account.computers') ?? null) : null,
+      licenseNote: signedIn ? (this.d.meta.get<string>('account.licenseNote') ?? null) : null,
       memberships: signedIn ? (view?.memberships ?? []) : [],
       canBuy: signedIn && !!this.d.meta.get<boolean>('account.canBuy'),
       billingPortal: signedIn && !!view?.billingPortal,
@@ -120,8 +122,8 @@ export class AccountService {
       if (url.protocol === 'https:' && untrustedCertificate(err)) throw new CoreError('FORBIDDEN', `FBRX Command at ${url.host} uses its own certificate: check its fingerprint and trust it to go on.`);
       throw new CoreError('UNAVAILABLE', `FBRX Command could not be reached at ${url.host}: ${(err as Error).message}`);
     }
-    const json = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    if (res.status === 401) throw new CoreError('UNAUTHENTICATED', json.error?.message ?? 'Sign in to your FBRX account again');
+    const json = (await res.json().catch(() => ({}))) as { error?: { code?: string; message?: string } };
+    if (res.status === 401) throw new CoreError('UNAUTHENTICATED', json.error?.message ?? 'Sign in to your FBRX account again', { signedOut: json.error?.code === 'SIGNED_OUT' });
     if (!res.ok) throw new CoreError(res.status === 403 ? 'FORBIDDEN' : res.status === 409 ? 'CONFLICT' : res.status === 400 ? 'INVALID_ARGUMENT' : 'UNAVAILABLE', json.error?.message ?? `FBRX Command answered ${res.status}`);
     return json as T;
   }
@@ -196,6 +198,29 @@ export class AccountService {
     return this.status();
   }
 
+  /** Keeps the license the account gave this computer, the computers its edition covers, and why it has none. */
+  private keepLicense(lic: AccountLicense) {
+    if (lic.expiresAt) this.d.meta.set('account.licenseUntil', lic.expiresAt);
+    else this.d.meta.delete('account.licenseUntil');
+    if (lic.computers) this.d.meta.set('account.computers', lic.computers);
+    else this.d.meta.delete('account.computers');
+    if (lic.note) this.d.meta.set('account.licenseNote', lic.note);
+    else this.d.meta.delete('account.licenseNote');
+    this.d.license.applyAccount(lic.key);
+  }
+
+  /** Extra computers past those the account's edition covers (on its Stripe plan), then this computer's license. */
+  async setExtraComputers(extra: number, actor: string): Promise<AccountStatus> {
+    const token = this.token();
+    if (!token) throw new CoreError('UNAUTHENTICATED', 'Sign in to your FBRX account first');
+    const lic = await this.request<AccountLicense>('POST', '/v1/billing/computers', { extra }, token);
+    this.keepLicense(lic);
+    if (lic.key && lic.tier !== 'essentials') this.adopt(lic.tier);
+    this.d.audit.append({ category: 'license', action: 'account.extraComputers', actor, outcome: 'success', details: { extra } });
+    this.emit();
+    return this.status();
+  }
+
   /**
    * Renews the account's license and what it knows about the account. `adopt`: turn the account's edition on (at
    * sign-in, and whenever the account gets more than it had); otherwise what the person chose stays.
@@ -215,16 +240,17 @@ export class AccountService {
       this.d.meta.set('account.canBuy', !!plans.payments?.stripe);
       this.d.meta.set('account.lastSyncAt', new Date().toISOString());
       this.d.meta.delete('account.error');
-      if (lic.expiresAt) this.d.meta.set('account.licenseUntil', lic.expiresAt);
-      else this.d.meta.delete('account.licenseUntil');
-      this.d.license.applyAccount(lic.key);
-      // "Whatever their credentials have access to": the account's edition comes on by itself.
-      if ((opts.adopt || tierRank(lic.tier) > tierRank(before)) && lic.tier !== 'essentials') this.adopt(lic.tier);
+      this.keepLicense(lic);
+      // "Whatever their credentials have access to": the account's edition comes on by itself (on a computer it covers).
+      if (lic.key && (opts.adopt || tierRank(lic.tier) > tierRank(before)) && lic.tier !== 'essentials') this.adopt(lic.tier);
     } catch (err) {
       const e = err as CoreError;
-      this.d.meta.set('account.error', e.code === 'UNAUTHENTICATED' ? 'Your FBRX account sign-in has ended: sign in again.' : e.message);
+      const signedOut = e.code === 'UNAUTHENTICATED' && (e.details as { signedOut?: boolean } | undefined)?.signedOut === true;
+      this.d.meta.set('account.error', signedOut ? 'This computer was signed out of your FBRX account: sign in again.' : e.code === 'UNAUTHENTICATED' ? 'Your FBRX account sign-in has ended: sign in again.' : e.message);
       if (e.code === 'UNAUTHENTICATED') {
-        // The license it gave stays until it runs out; nothing renews it now.
+        // An ended sign-in leaves the license it gave until that runs out, as nothing renews it now. A computer signed
+        // out from elsewhere gives it back at once, so its place goes to another of the person's computers.
+        if (signedOut) this.keepLicense({ key: null, tier: 'essentials', expiresAt: null, computers: null, note: null });
         this.d.meta.delete('account.id');
         try {
           this.d.vault.delete(TOKEN_SECRET, { internal: true });
