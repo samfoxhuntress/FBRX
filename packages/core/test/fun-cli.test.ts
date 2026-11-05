@@ -124,8 +124,8 @@ describe('FBRX/1', () => {
       expect((await run('sh ver')).output).toMatch(/Product: +FBRX OS/);
       expect((await run('show system status')).output).toMatch(/Emergency stop: +off/);
       expect((await run('show services | count')).output).toMatch(/^Count: \d+ lines$/);
-      expect((await run('show configuration appearance')).output).toMatch(/^appearance \{\n {4}preset fabrics;/);
-      expect((await run('show configuration appearance | display set | match preset')).output).toBe('set appearance preset fabrics');
+      expect((await run('show configuration appearance')).output).toMatch(/^appearance \{\n {4}preset tropical;/);
+      expect((await run('show configuration appearance | display set | match preset')).output).toBe('set appearance preset tropical');
       expect((await run('show bogus')).output).toMatch(/^error: syntax error/);
       expect((await run('show ?')).output).toMatch(/Possible completions:[\s\S]*version/);
 
