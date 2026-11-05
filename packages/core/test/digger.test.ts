@@ -74,6 +74,7 @@ describe('FBRX Digger and FBRX Endpoint on the same computer', () => {
   });
 
   it('draws its icon from the one mole', () => {
-    expect(readFileSync(join(__dirname, '../../../apps/desktop/build/digger-icon.svg'), 'utf8').trim()).toBe(DIGGER_ICON_SVG);
+    // Line ends as git checked the file out (CRLF on Windows) do not count.
+    expect(readFileSync(join(__dirname, '../../../apps/desktop/build/digger-icon.svg'), 'utf8').replace(/\r\n/g, '\n').trim()).toBe(DIGGER_ICON_SVG);
   });
 });
