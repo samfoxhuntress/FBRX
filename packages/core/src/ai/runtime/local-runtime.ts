@@ -228,6 +228,11 @@ export class LocalRuntime {
     }
   }
 
+  /** A chat is using the model now (the next one waits its turn). */
+  get busy(): boolean {
+    return this.active > 0;
+  }
+
   release(): void {
     this.active = Math.max(0, this.active - 1);
     this.lastUsed = Date.now();

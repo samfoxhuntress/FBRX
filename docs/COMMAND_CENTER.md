@@ -772,7 +772,8 @@ AI writes 50 to 100, and it reads a long request in a moment where a laptop take
 model less to read and write:
 
 * **A short list of tools.** An AI that holds a long conversation (about 32K tokens or more: a cloud AI, a big
-  model on a server) is shown every tool (about 6,500 tokens of descriptions). A smaller one gets a few it always has
+  model on a server) is shown every tool (about 13,000 tokens of descriptions). The AI on this computer, however much
+  it holds, and any smaller one get a few it always has
   (the time, its memory, FBRX's help and check-up) and the tools for what the chat is about, briefly described: the
   files, the web, the computer, the calendar… A new subject adds its tools at the end. It may still call any tool it
   is allowed to use. *Tools it is shown* on each provider (AI models → edit) chooses for yourself.
@@ -782,6 +783,10 @@ model less to read and write:
 * **Room for the chat.** What the model keeps in mind is shared out after the instructions and the tools, so a long
   chat is shortened from its start instead of overflowing.
 * **No thinking out loud first** (above), unless the level is Thorough or you turn it on.
+* **It says how far it has read.** On a processor a long request takes a while before the first word: the chat shows
+  how far the AI has read it (*Reading your request: 4,100 of 9,800 tokens*), with no time limit, so a slow computer
+  gets there instead of giving up. The AI on this computer answers one chat at a time: a second chat says it waits
+  for the other. Asking again after stopping does not add the question (and its files) a second time.
 
 On a computer with 16 GB of memory, a 4B or 8B model is the quick choice; with 32 GB, a mixture-of-experts model
 (Qwen3 30B-A3B, which uses about 3B of its parameters for each word) answers about as fast as a 4B one and better. A

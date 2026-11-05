@@ -586,7 +586,11 @@ export class AgentRuntime {
     // Tool calls whose results are not yet in history; closed out on cancel/failure so history stays well-formed.
     let unanswered: Array<{ id: string; name: string }> = [];
 
-    this.d.store.append(conversationId, { role: 'user', content: text, ...(files.length ? { attachments: files } : {}) });
+    // Asked again after a run that got no answer (stopped while the model was still reading, say): the question is
+    // there already, so it is not added twice (every copy, with its files, would be read again on every request).
+    const last = this.d.store.messages(conversationId).at(-1);
+    const again = last?.role === 'user' && last.content === text && sameFiles(last.attachments ?? [], files);
+    if (!again) this.d.store.append(conversationId, { role: 'user', content: text, ...(files.length ? { attachments: files } : {}) });
     const sees = modelSeesImages(config.type, model);
     // Memory: what the person just said may hold a lasting fact; what is remembered goes into this run's instructions
     // (with a cloud AI, only general facts, never private ones).
@@ -676,6 +680,7 @@ export class AgentRuntime {
           lastFlush = Date.now();
         };
         const calls: ProviderToolCall[] = [];
+        let lastReading = 0;
         let finish: { finishReason: string; providerData?: any; servedModel?: string; message?: string } = { finishReason: 'stop' };
         for await (const chunk of provider.chat({
           model,
@@ -699,7 +704,14 @@ export class AgentRuntime {
             pendingThinking += chunk.delta;
             if (Date.now() - lastFlush >= 66) flush();
           } else if (chunk.type === 'tool_call') calls.push(chunk.call);
-          else if (chunk.type === 'usage') {
+          else if (chunk.type === 'waiting') progress(steps === 1 ? 'model' : 'reading', `Waiting for your other chat: the AI on this computer answers one chat at a time`);
+          else if (chunk.type === 'reading') {
+            // How far the model has read the request: on a processor a long one takes a while before the first word.
+            if (chunk.read < chunk.of && Date.now() - lastReading >= 1000) {
+              lastReading = Date.now();
+              progress(steps === 1 ? 'model' : 'reading', `Reading ${steps === 1 ? 'your request' : 'the results'}: ${chunk.read.toLocaleString('en-US')} of ${chunk.of.toLocaleString('en-US')} tokens`);
+            }
+          } else if (chunk.type === 'usage') {
             usage.inputTokens += chunk.inputTokens;
             usage.outputTokens += chunk.outputTokens;
             request.inputTokens += chunk.inputTokens;
@@ -860,4 +872,9 @@ export class AgentRuntime {
       this.d.usage?.record({ providerId: config.id, model, cloud: !!config.cloud, usage });
     }
   }
+}
+
+/** The same files (by name, kind and size), as a question asked again carries them. */
+function sameFiles(a: AttachmentInfo[], b: AttachmentInfo[]): boolean {
+  return a.length === b.length && a.every((f, i) => f.name === b[i].name && f.kind === b[i].kind && f.size === b[i].size);
 }

@@ -3,6 +3,7 @@ import { DEFAULT_PROVIDERS, THINKING_BUDGETS } from '@fbrx/shared';
 import { briefDescription, shortlistTools } from '../src/ai/tool-shortlist';
 import { agentFit } from '../src/ai/agent-fit';
 import { OpenAICompatibleProvider } from '../src/ai/providers/openai-compatible';
+import { localFetch } from '../src/util/local-fetch';
 import type { ToolSpec } from '../src/tools/types';
 import { makeKernel, waitFor, USER } from './helpers';
 import { mockOpenAI } from './mock-llm';
@@ -46,8 +47,11 @@ describe('a local model reads less, so it answers sooner', () => {
   });
 
   it('fits what it shows to how much the agent holds, or to what the person chose', () => {
-    expect(agentFit({}, { historyBudgetChars: 20_480 })).toEqual({ tools: 'focused' }); // 8K tokens on this computer
-    expect(agentFit({}, { historyBudgetChars: 81_920 })).toEqual({ tools: 'all' }); // 32K tokens
+    expect(agentFit({}, { historyBudgetChars: 20_480 })).toEqual({ tools: 'focused' }); // 8K tokens
+    expect(agentFit({}, { historyBudgetChars: 81_920 })).toEqual({ tools: 'all' }); // 32K tokens on a server
+    // The model on this computer reads at the computer's pace: the short list, however much it holds.
+    expect(agentFit({ type: 'local-runtime' }, { historyBudgetChars: 81_920 })).toEqual({ tools: 'focused' });
+    expect(agentFit({ type: 'local-runtime', tools: 'all' }, { historyBudgetChars: 81_920 })).toEqual({ tools: 'all' });
     expect(agentFit({}, { historyBudgetChars: 2_500_000 })).toEqual({ tools: 'all' }); // a cloud AI
     expect(agentFit({ tools: 'all' }, { historyBudgetChars: 20_480 })).toEqual({ tools: 'all' });
     expect(agentFit({ tools: 'focused' }, { historyBudgetChars: 2_500_000 })).toEqual({ tools: 'focused' });
@@ -81,6 +85,41 @@ describe('a local model reads less, so it answers sooner', () => {
       // The same instructions for both, so a cloud AI's prompt cache holds across the conversation too.
       expect(cloud.messages[0].content).toBe(local.messages[0].content);
       expect(cloud.messages.at(-1).content).toContain('Prefers short answers');
+    } finally {
+      await cleanup();
+      await llm.close();
+    }
+  });
+
+  it('says how far a model on this computer has read a long request, and waits for no clock', async () => {
+    const llm = await mockOpenAI(() => ({ text: 'Your address is 192.168.10.195.', reading: 4000 }));
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      // The built-in runtime is asked for its reading progress; the chunks become "reading".
+      const local = new OpenAICompatibleProvider({ id: 'rt', type: 'local-runtime', baseUrl: `${llm.url}/v1`, apiKey: () => undefined, readingProgress: true, fetch: localFetch });
+      const chunks: any[] = [];
+      for await (const c of local.chat({ model: 'm', messages: [{ role: 'user', content: 'hi' }], tools: [], signal: AbortSignal.timeout(5000) })) chunks.push(c);
+      expect(llm.requests.at(-1).body.return_progress).toBe(true);
+      expect(chunks.filter((c) => c.type === 'reading')).toEqual([{ type: 'reading', read: 1000, of: 4000 }, { type: 'reading', read: 2000, of: 4000 }, { type: 'reading', read: 4000, of: 4000 }]);
+      expect(chunks.filter((c) => c.type === 'text').map((c) => c.delta).join('')).toBe('Your address is 192.168.10.195.');
+
+      // In a chat: "Reading your request: 1,000 of 4,000 tokens" while it reads.
+      kernel.settings.update({ ai: { defaultProvider: 'lan', defaultModel: 'mock-model', providers: [...DEFAULT_PROVIDERS, { id: 'lan', type: 'openai-compatible', name: 'lan', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } } as never);
+      const said: string[] = [];
+      const off = kernel.events.on('agent', (e: any) => e.type === 'run.progress' && said.push(e.detail));
+      const ask = async (message: string, conversationId?: string) => {
+        const r = (await kernel.call('ai.chat', { message, providerId: 'lan', model: 'mock-model', ...(conversationId ? { conversationId } : {}) }, USER)) as { runId: string; conversationId: string };
+        await waitFor(() => !kernel.agent.activities().some((a) => a.runId === r.runId));
+        return r.conversationId;
+      };
+      const id = await ask('What is my IP address?');
+      off();
+      expect(said).toContain('Reading your request: 1,000 of 4,000 tokens');
+
+      // Asked again after a run that got no answer: the question is not added twice.
+      kernel.conversations.append(id, { role: 'user', content: 'Set my static IP to 192.168.10.195' });
+      await ask('Set my static IP to 192.168.10.195', id);
+      expect(kernel.conversations.messages(id).filter((m) => m.role === 'user').map((m) => m.content)).toEqual(['What is my IP address?', 'Set my static IP to 192.168.10.195']);
     } finally {
       await cleanup();
       await llm.close();

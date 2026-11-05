@@ -54,6 +54,10 @@ export type ProviderChunk =
   | { type: 'thinking'; delta: string }
   | { type: 'tool_call'; call: ProviderToolCall }
   | { type: 'usage'; inputTokens: number; outputTokens: number }
+  /** How far the model has read the request before it answers (tokens), from runtimes that tell (llama.cpp). */
+  | { type: 'reading'; read: number; of: number }
+  /** The model is answering another chat first (the AI on this computer answers one at a time). */
+  | { type: 'waiting' }
   | { type: 'done'; finishReason: FinishReason; providerData?: ProviderData; servedModel?: string; message?: string };
 
 export interface ChatProvider {

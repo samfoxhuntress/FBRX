@@ -289,7 +289,7 @@ function ProviderEditor({ provider, all, onClose }: { provider: ProviderConfig; 
             value={p.tools ?? 'auto'}
             onChange={(e) => setP({ ...p, tools: e.target.value === 'auto' ? undefined : (e.target.value as 'all' | 'focused') })}
             options={[
-              { value: 'auto', label: 'Automatic: all of them when it holds a long conversation, else the ones the chat is about' },
+              { value: 'auto', label: 'Automatic: all of them for a big AI elsewhere, the ones the chat is about on this computer' },
               { value: 'all', label: 'All of them, fully described' },
               { value: 'focused', label: 'The ones the chat is about, briefly described' },
             ]}

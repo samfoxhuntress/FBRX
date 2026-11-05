@@ -22,6 +22,8 @@ export interface OpenAICompatibleOptions {
   includeUsage?: boolean;
   /** How requests go out, when not the plain fetch (FBRX Cloud AI on an FBRX Command trusted by its fingerprint). */
   fetch?: (url: string, init: RequestInit) => Promise<Response>;
+  /** Ask how far the model has read the request while it reads (llama.cpp's return_progress). */
+  readingProgress?: boolean;
 }
 
 /**
@@ -106,6 +108,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
       stream: true,
       ...(this.o.includeUsage !== false ? { stream_options: { include_usage: true } } : {}),
     };
+    if (this.o.readingProgress) body.return_progress = true;
     if (req.temperature !== undefined) body.temperature = req.temperature;
     if (req.maxTokens) body.max_tokens = req.maxTokens;
     // The built-in runtime (llama.cpp) hands this to the model's chat template: Qwen3 and the like skip their thinking.
@@ -134,6 +137,8 @@ export class OpenAICompatibleProvider implements ChatProvider {
         continue;
       }
       if (chunk.error) throw new Error(chunk.error.message ?? String(chunk.error));
+      const p = chunk.prompt_progress;
+      if (p && Number(p.total) > 0) yield { type: 'reading', read: Math.min(Number(p.processed) || 0, Number(p.total)), of: Number(p.total) };
       if (chunk.usage) {
         yield { type: 'usage', inputTokens: chunk.usage.prompt_tokens ?? 0, outputTokens: chunk.usage.completion_tokens ?? 0 };
       }

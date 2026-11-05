@@ -8,6 +8,7 @@ import type { LocalRuntime } from './runtime/local-runtime';
 import { AnthropicProvider } from './providers/anthropic';
 import { OllamaProvider, ollamaModelsOnDisk } from './providers/ollama';
 import { OpenAICompatibleProvider } from './providers/openai-compatible';
+import { localFetch } from '../util/local-fetch';
 import type { ChatProvider, ChatRequest, ProviderChunk } from './providers/types';
 import { resourcePlan } from './resources';
 import { MAX_LENT_HISTORY, MeshModelProvider } from '../mesh/model-lending';
@@ -81,6 +82,9 @@ export class ProviderManager {
           baseUrl: rt.endpoint,
           apiKey: () => rt.apiKey,
           historyBudgetChars: Math.max(4000, Math.floor(ctx * 2.5)),
+          // A long request on a processor may take longer than fetch's five minutes to read; the chat shows how far.
+          fetch: localFetch,
+          readingProgress: true,
         });
         // The runtime loads the model on the first question (and again after it was unloaded for being idle).
         return {
@@ -90,6 +94,8 @@ export class ProviderManager {
           listModels: (signal) => inner.listModels(signal),
           health: (signal) => inner.health(signal),
           async *chat(req: ChatRequest): AsyncIterable<ProviderChunk> {
+            // One chat at a time on this computer: the other one answers first.
+            if (rt.busy) yield { type: 'waiting' };
             await rt.acquire();
             try {
               yield* inner.chat(req);
