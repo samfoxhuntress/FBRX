@@ -12,8 +12,9 @@ export const RELEASE_REPO = 'samfoxhuntress/FBRX';
 export const RELEASE_MANIFEST_URL = `https://raw.githubusercontent.com/${RELEASE_REPO}/HEAD/release.json`;
 
 /**
- * Codenames, one per minor version, following cloth from fiber to fabric (like dessert names on phones). Shown in
- * Settings → About.
+ * Codenames, following cloth from fiber to fabric (like dessert names on phones). Shown in Settings → About. Up to 2.2
+ * each minor version had its own; from then on a codename changes only with a major version: 2.2 and every later 2.x
+ * are Weft, 3.0 is Selvedge, 4.0 Tapestry.
  */
 export const CODENAMES: Record<string, { name: string; meaning: string }> = {
   '1.8': { name: 'Spindle', meaning: 'where every thread begins: the spindle twists loose fiber into yarn' },
@@ -21,13 +22,19 @@ export const CODENAMES: Record<string, { name: string; meaning: string }> = {
   '2.0': { name: 'Loom', meaning: 'where all the threads come together as fabric' },
   '2.1': { name: 'Warp', meaning: 'the strong threads held tight along the loom' },
   '2.2': { name: 'Weft', meaning: 'the thread woven through the warp, row by row' },
-  '2.3': { name: 'Selvedge', meaning: 'the finished edge that keeps the cloth from fraying' },
-  '2.4': { name: 'Tapestry', meaning: 'a whole picture, woven in' },
+  '3.0': { name: 'Selvedge', meaning: 'the finished edge that keeps the cloth from fraying' },
+  '4.0': { name: 'Tapestry', meaning: 'a whole picture, woven in' },
 };
 
+/** A version's codename: its own minor's, else the latest earlier one of the same major (2.3 is still Weft). */
 export function codenameFor(version: string): { name: string; meaning: string } | null {
   const v = parseSemver(version);
-  return v ? (CODENAMES[`${v.major}.${v.minor}`] ?? null) : null;
+  if (!v) return null;
+  for (let minor = v.minor; minor >= 0; minor--) {
+    const c = CODENAMES[`${v.major}.${minor}`];
+    if (c) return c;
+  }
+  return null;
 }
 
 /** "Alpha 1.8.1", "Beta 2.0.0". */
