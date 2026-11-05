@@ -3,8 +3,8 @@ import { atLeast, type Settings, type Texture, type ThemePreset, type Tier } fro
 
 /** Swatch colors for the preset picker: [page, sidebar, accent, glow] for light and dark. */
 export const PRESETS: Array<{ id: ThemePreset; name: string; light: [string, string, string, string?]; dark: [string, string, string, string?]; texture: Exclude<Texture, 'theme'> }> = [
-  { id: 'fabrics', name: 'Fabrics', light: ['#f6f2ea', '#fbf7f0', '#946000', '#e6c06a'], dark: ['#0d1015', '#10141a', '#f4b942', '#a87614'], texture: 'weave' },
-  { id: 'tropical', name: 'Tropical', light: ['#fff6ec', '#fff3e4', '#e8590c', '#ff9f6b'], dark: ['#150b07', '#180d08', '#ffa23a', '#ff4f81'], texture: 'palms' },
+  { id: 'tropical', name: 'Tropical', light: ['#f5f5f3', '#fafaf8', '#c8410e', '#ffb547'], dark: ['#0f1013', '#121316', '#ffa23a', '#ff4d5e'], texture: 'palms' },
+  { id: 'fabrics', name: 'Honey', light: ['#f6f2ea', '#fbf7f0', '#946000', '#e6c06a'], dark: ['#0d1015', '#10141a', '#f4b942', '#a87614'], texture: 'weave' },
   { id: 'neon', name: 'Neon Grid', light: ['#eef6fa', '#f3f9fc', '#0090b8', '#5ccfff'], dark: ['#03060c', '#050a12', '#00e5ff', '#0066ff'], texture: 'grid' },
   { id: 'ember', name: 'Ember', light: ['#f7f1ee', '#fcf7f4', '#c2410c', '#ef9a7a'], dark: ['#110c0a', '#1b1412', '#ff6b3d', '#7c2410'], texture: 'grain' },
   { id: 'midnight', name: 'Midnight', light: ['#eef0f8', '#f6f7fd', '#4f46e5', '#a5b0f5'], dark: ['#0a0d1a', '#121730', '#8b93ff', '#2b2f8f'], texture: 'dots' },
@@ -126,14 +126,14 @@ export function textureImage(t: Exclude<Texture, 'theme'>, mode: 'light' | 'dark
 /** The accent in use (a custom one, or the theme's), for textures drawn in the accent color. */
 export function themeAccent(a: Pick<Settings['appearance'], 'accent' | 'preset'> | undefined, mode: 'light' | 'dark'): string {
   if (a?.accent && /^#[0-9a-f]{6}$/i.test(a.accent)) return a.accent;
-  const p = PRESETS.find((x) => x.id === (a?.preset ?? 'fabrics')) ?? PRESETS[0];
+  const p = PRESETS.find((x) => x.id === (a?.preset ?? 'tropical')) ?? PRESETS[0];
   return (mode === 'dark' ? p.dark : p.light)[2];
 }
 
 /** The texture in use: the theme's own unless one is picked. */
 export function resolvedTexture(a: Pick<Settings['appearance'], 'texture' | 'preset'> | undefined): Exclude<Texture, 'theme'> {
   const t = a?.texture ?? 'theme';
-  return t === 'theme' ? (PRESETS.find((p) => p.id === (a?.preset ?? 'fabrics'))?.texture ?? 'none') : t;
+  return t === 'theme' ? (PRESETS.find((p) => p.id === (a?.preset ?? 'tropical'))?.texture ?? 'none') : t;
 }
 
 function hexToRgb(hex: string): [number, number, number] {
@@ -191,7 +191,7 @@ export function useAppearance(settings: Settings | undefined, tier: Tier | undef
       root.dataset.theme = mode;
       root.dataset.edition = basic ? 'basic' : 'ultra';
       root.dataset.tier = tier;
-      root.dataset.preset = a?.preset ?? 'fabrics';
+      root.dataset.preset = a?.preset ?? 'tropical';
       root.dataset.density = a?.density ?? 'comfortable';
       root.dataset.radius = a?.radius ?? 'rounded';
       const texture = resolvedTexture(a);
@@ -227,8 +227,13 @@ export function useAppearance(settings: Settings | undefined, tier: Tier | undef
         root.style.setProperty('--accent-ink', light ? '#111111' : '#ffffff');
         root.style.setProperty('--accent-wash', `rgba(${rgb.join(',')}, ${mode === 'dark' ? 0.16 : 0.11})`);
         root.style.setProperty('--focus', `rgba(${rgb.join(',')}, 0.45)`);
+        // Filled things light the custom accent from above, as the themes do.
+        root.style.setProperty('--accent-from', shade(accent, 0.14));
+        root.style.setProperty('--accent-to', accent);
+        root.style.setProperty('--accent-fill', 'linear-gradient(180deg, var(--accent-from) 0%, var(--accent-to) 100%)');
+        root.style.setProperty('--accent-fill-ink', light ? '#111111' : '#ffffff');
       } else {
-        for (const p of ['--accent', '--accent-hover', '--accent-ink', '--accent-wash', '--focus']) root.style.removeProperty(p);
+        for (const p of ['--accent', '--accent-hover', '--accent-ink', '--accent-wash', '--focus', '--accent-from', '--accent-to', '--accent-fill', '--accent-fill-ink']) root.style.removeProperty(p);
       }
     };
     apply();

@@ -199,7 +199,7 @@ page({
   <div class="wrap two">
     <div>
       <span class="eyebrow">${esc(BETA)}</span>
-      <h1>Your own AI, on your computer.</h1>
+      <h1>Your own AI, <span class="glow">on your computer.</span></h1>
       <p class="lead">FBRX puts a private AI assistant right on your computer, and it does real work with you: your network, your storage, your security. Your chats stay there, and it asks before it uses the internet or changes anything. Free to start.</p>
       <div class="ctas">
         <a class="btn primary" href="download.html">Download FBRX, free</a>

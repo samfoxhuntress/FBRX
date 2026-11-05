@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { CalendarEvent, ProtectionState, SystemLive, SystemStatus } from '@fbrx/shared';
 import { TIER_NAMES, TROPHIES, atLeast, displayVersion } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Grid, Icons, KeyValue, LineChart, Meter, StatTile, Status, formatBytes, formatDuration, timeAgo, useAction, type IconName } from '@fbrx/ui';
@@ -121,10 +121,18 @@ function TodayStrip({ events }: { events: CalendarEvent[] }) {
 function HealthRing({ score, label }: { score: number; label: string }) {
   const r = 46;
   const c = 2 * Math.PI * r;
-  const tone = score >= 90 ? 'var(--good)' : score >= 75 ? 'var(--accent)' : score >= 55 ? 'var(--warning)' : 'var(--critical)';
+  const fill = `ring-${useId().replace(/:/g, '')}`;
+  // Good enough wears the theme's own fill (FBRX's honey into red); great, so-so and poor their status colors.
+  const tone = score >= 90 ? 'var(--good)' : score >= 75 ? `url(#${fill})` : score >= 55 ? 'var(--warning)' : 'var(--critical)';
   return (
     <div className="glass-ring" title={`Health ${score} of 100`}>
       <svg viewBox="0 0 120 120" width="120" height="120" aria-hidden>
+        <defs>
+          <linearGradient id={fill} x1="0" y1="0" x2="1" y2="1">
+            <stop offset="0" style={{ stopColor: 'var(--accent-from)' }} />
+            <stop offset="1" style={{ stopColor: 'var(--accent-to)' }} />
+          </linearGradient>
+        </defs>
         <circle cx="60" cy="60" r={r} fill="none" stroke="currentColor" strokeOpacity="0.12" strokeWidth="10" />
         <circle cx="60" cy="60" r={r} fill="none" stroke={tone} strokeWidth="10" strokeLinecap="round" strokeDasharray={`${(c * score) / 100} ${c}`} transform="rotate(-90 60 60)" style={{ transition: 'stroke-dasharray 0.8s ease' }} />
       </svg>

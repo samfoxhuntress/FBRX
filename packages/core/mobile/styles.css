@@ -1,13 +1,16 @@
 :root {
   color-scheme: dark;
-  --bg: #100e0b;
-  --card: #1a1714;
-  --card-2: #221e1a;
-  --line: rgba(246, 226, 196, 0.12);
-  --text: #f6f1e9;
-  --muted: #a39887;
-  --accent: #f4b942;
-  --accent-ink: #1a1408;
+  --bg: #0f1013;
+  --card: #17191c;
+  --card-2: #1e2024;
+  --line: rgba(225, 230, 240, 0.1);
+  --text: #f5f5f7;
+  --muted: #a3a6ad;
+  /* FBRX's Tropical: honey running into red on filled things (dark ink on it in both modes), mango for text. */
+  --accent-fill: linear-gradient(135deg, #ffb547 0%, #ff8a3d 50%, #ff4d5e 100%);
+  --accent-fill-ink: #2b1000;
+  --accent: #ffa23a;
+  --accent-ink: #2b1000;
   --good: #3fbf6f;
   --warn: #f2b33d;
   --bad: #e66767;
@@ -16,13 +19,13 @@
 @media (prefers-color-scheme: light) {
   :root {
     color-scheme: light;
-    --bg: #f6f2ea;
-    --card: #fffdf8;
-    --card-2: #f4eee3;
-    --line: rgba(27, 22, 16, 0.12);
-    --text: #1b1610;
-    --muted: #6f6556;
-    --accent: #946000;
+    --bg: #f5f5f3;
+    --card: #ffffff;
+    --card-2: #f2f2ef;
+    --line: rgba(28, 27, 25, 0.1);
+    --text: #1c1b19;
+    --muted: #5f5c57;
+    --accent: #c8410e;
     --accent-ink: #ffffff;
   }
 }
@@ -111,9 +114,9 @@ button,
   font-weight: 600;
 }
 button.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--accent-fill);
+  border-color: transparent;
+  color: var(--accent-fill-ink);
 }
 button.danger {
   color: var(--bad);
@@ -221,8 +224,8 @@ textarea {
   overflow-wrap: anywhere;
 }
 .bubble.me {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--accent-fill);
+  color: var(--accent-fill-ink);
   margin-left: 40px;
 }
 .banner {

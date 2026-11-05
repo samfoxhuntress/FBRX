@@ -8,24 +8,24 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 
 ## Look and feel
 
-**Settings → Appearance** is the theme studio in FBRX Endpoint Ultra (Essentials and Standard have the plain light and dark look in FBRX's golden honey, with the sidebar icon, layout and behavior options below):
+**Settings → Appearance** is the theme studio in FBRX Endpoint Ultra (Essentials and Standard have the plain light and dark look in FBRX's Tropical honey and red, with the sidebar icon, layout and behavior options below):
 
 | Option | Choices |
 | --- | --- |
-| Look | A calm finish in the spirit of Windows 11 and macOS: the system font (Segoe UI Variable on Windows 11), rounded corners, hairline borders, soft shadows, a pill marker for the current page, and a texture that only whispers behind the menu |
-| Theme | Fabrics (FBRX's golden honey, with a honey glow and a woven texture, the default; the FBRX logo stays white on black), Tropical (mango orange with a hibiscus-pink glow and a hint of lagoon teal), Neon Grid (deep night blue with cyan light lines, glowing cards and a grid floor that runs to the horizon), Ember, Midnight, Graphite, Ocean, Forest, Orchid, Paper, High contrast. Each has a light and a dark version; *Mode* follows Windows or is fixed. Every theme except High contrast tints the sidebar, top bar and page with its own gradient glow, and charts use gradient area fills |
+| Look | A calm finish in the spirit of Windows 11 and macOS, with a little bounce: the system font (Segoe UI Variable on Windows 11), big page titles, rounded corners, hairline borders, soft shadows, capsule buttons that give a little when pressed, switches whose knob squishes while held, and a pill marker for the current page |
+| Theme | Tropical (FBRX's own and the default: honey running into red on calm, neutral pages; buttons, the current page, switches and the health ring wear the honey-to-red gradient; the FBRX logo stays white on black), Honey (FBRX's golden honey, with a honey glow and a woven texture), Neon Grid (deep night blue with cyan light lines, glowing cards and a grid floor that runs to the horizon), Ember, Midnight, Graphite, Ocean, Forest, Orchid, Paper, High contrast. Each has a light and a dark version; *Mode* follows Windows or is fixed. Every theme except High contrast tints the sidebar, top bar and page with its own gradient glow, and charts use gradient area fills |
 | Accent color | Any color; text on buttons switches between dark and light ink automatically |
-| Sidebar icons | **Theme color** (every section's icon in the theme's accent, for a calm one-color look: honey with Fabrics, blue with Graphite…; the default), **A color for each section**, **One color you pick** (Ultra) or **Plain**, and a **Tint behind the icons** slider from none (just the colored icon) to a rich colored tile |
+| Sidebar icons | **Theme color** (every section's icon in the theme's accent, for a calm one-color look: mango with Tropical, honey with Honey, blue with Graphite…; the default), **A color for each section**, **One color you pick** (Ultra) or **Plain**, and a **Tint behind the icons** slider from none (just the colored icon) to a rich colored tile |
 | Density | Compact, comfortable, spacious |
 | Corners | Sharp, rounded, soft |
-| Texture | The theme's own (weave for Fabrics, palms for Tropical, a neon grid for Neon Grid, grain for Ember, dots for Midnight, carbon fiber for Graphite, waves for Ocean, linen for Forest…), or pick none, weave (a small basket weave), linen, grain, grid (glowing lines in the accent color), dots, carbon fiber, waves or palms. A **Strength** slider sets how much it shows, from 0 to 100% in steps of 5 (new installs start at a soft 50%; even 100% stays quieter than the old *bold*). Drawn as sharp SVG patterns in the theme's ink on the sidebar, the top bar and the page behind the cards (never behind text in cards) |
+| Texture | None (the default), the theme's own (palms for Tropical, weave for Honey, a neon grid for Neon Grid, grain for Ember, dots for Midnight, carbon fiber for Graphite, waves for Ocean, linen for Forest…), or pick weave (a small basket weave), linen, grain, grid (glowing lines in the accent color), dots, carbon fiber, waves or palms. A **Strength** slider sets how much it shows, from 0 to 100% in steps of 5 (new installs start at a soft 50%; even 100% stays quieter than the old *bold*). Drawn as sharp SVG patterns in the theme's ink on the sidebar, the top bar and the page behind the cards (never behind text in cards) |
 | Text and interface size | 85–130 % |
 | Motion and start-up | Reduce motion; start-up animation (the FBRX logo stitched in) and start-up sound (from the FBRX intro, on by default, with a Listen button) |
 | Effects | Auto, Full or Lite. Lite turns off frosted glass, glows and decorative animation; Auto picks Lite on computers with four or fewer processor threads or 4 GB of memory |
 | Fun extras | Every edition, once unlocked (see [EASTER_EGGS.md](EASTER_EGGS.md), spoilers): easter eggs and jokes, the Silly Goose's occasional visits, a *Release the goose* button and the **Trophy case**. An organization can lock fun extras off |
 
 **Dark mode: a cool page, color on the elements.** In dark mode every theme keeps the page itself cool and quiet
-(slate neutrals, also in the warm themes: Fabrics, Tropical, Ember and Paper keep their accent and glow but not a
+(slate neutrals, also in the warm themes: Tropical, Honey, Ember and Paper keep their accent and glow but not a
 brown page) and puts the color on what you use: the sidebar's icons and the current page's marker (in the theme's
 accent, or with *A color for each section*: Bridge blue, Studio violet, Pit Stop amber, Workbench teal, Orbit sky,
 Stronghold green, Lab pink, Control slate; in Essentials, Your AI blue, Help & settings slate),

@@ -5,7 +5,7 @@
  * stay on the validated design-system palette in every preset.
  */
 
-/* ------------------------------------------------------------------------------ Fabrics (golden honey) */
+/* ----------------------------------------------------------------- Honey (id fabrics: golden honey) */
 :root[data-preset='fabrics'] {
   --page: #f6f2ea;
   --surface-1: #fffdf8;
@@ -63,45 +63,44 @@
   --focus: rgba(57, 135, 229, 0.55);
 }
 
-/* ---------------------------------------------------------------------------------- Tropical (sunset) */
-/* Mango orange with a hibiscus-pink glow and a hint of lagoon teal. */
+/* -------------------------------------------------------------------------- Tropical (FBRX's own) */
+/*
+ * The default: honey running into red on calm, neutral pages. The page stays out of the way and the color is on the
+ * things you use: buttons, the current page, switches and section icons wear the honey-to-red gradient
+ * (--accent-fill, from the design system); text and icons wear the mango accent.
+ */
 :root[data-preset='tropical'] {
-  --page: #fff6ec;
-  --surface-1: #fffbf5;
-  --surface-2: #fff0e0;
-  --surface-3: #fde2c6;
-  --sidebar: #fff3e4;
-  --text-primary: #26140a;
-  --text-secondary: #6b4632;
-  --text-muted: #9c735a;
-  --border: rgba(38, 20, 10, 0.1);
-  --border-strong: rgba(38, 20, 10, 0.18);
-  --grid: #f6dcc2;
-  --axis: #e0bc98;
-  --accent: #e8590c;
-  --accent-hover: #c94a08;
+  --page: #f5f5f3;
+  --surface-1: #ffffff;
+  --surface-2: #f2f2ef;
+  --surface-3: #e7e6e2;
+  --sidebar: #fafaf8;
+  --text-primary: #1c1b19;
+  --text-secondary: #5c5954;
+  --text-muted: #8b8882;
+  --grid: #e4e3de;
+  --axis: #c6c4bc;
+  --accent: #c8410e;
+  --accent-hover: #a93509;
   --accent-ink: #ffffff;
-  --accent-wash: rgba(232, 89, 12, 0.12);
-  --focus: rgba(232, 89, 12, 0.4);
+  --accent-wash: rgba(255, 122, 61, 0.12);
+  --focus: rgba(255, 122, 61, 0.45);
 }
 :root[data-preset='tropical'][data-theme='dark'] {
-  /* A cool page; the theme's color is on the elements (accent, glow, section colors). */
-  --page: #0b1014;
-  --surface-1: #141b21;
-  --surface-2: #1b232a;
-  --surface-3: #252e36;
-  --sidebar: #0e1418;
-  --text-primary: #f6f7f9;
-  --text-secondary: #c4ccd3;
-  --text-muted: #84909b;
-  --border: rgba(180, 215, 225, 0.12);
-  --border-strong: rgba(180, 215, 225, 0.2);
-  --grid: #252e36;
-  --axis: #323c45;
+  --page: #0f1013;
+  --surface-1: #17191c;
+  --surface-2: #1e2024;
+  --surface-3: #282a2f;
+  --sidebar: #121316;
+  --text-primary: #f5f5f7;
+  --text-secondary: #c3c5cb;
+  --text-muted: #8a8d95;
+  --grid: #282a2f;
+  --axis: #363940;
   --accent: #ffa23a;
   --accent-hover: #ffb862;
-  --accent-ink: #2a1200;
-  --accent-wash: rgba(255, 162, 58, 0.16);
+  --accent-ink: #2b1000;
+  --accent-wash: rgba(255, 162, 58, 0.15);
   --focus: rgba(255, 162, 58, 0.5);
 }
 
@@ -423,11 +422,31 @@
   --focus: rgba(255, 212, 0, 0.75);
 }
 
+/* ------------------------------------------------------------------------------------- Accent fill */
+/*
+ * Filled things (primary buttons, the current page, switches, progress) wear --accent-fill. Tropical and the plain
+ * look of Essentials and Standard keep the design system's honey-to-red; the other themes light their own accent from
+ * above, high contrast stays flat, and a custom accent (theme.ts) does the same as the themes.
+ */
+:root[data-preset]:not([data-preset='tropical']):not([data-edition='basic']) {
+  --accent-from: color-mix(in srgb, var(--accent) 86%, #ffffff);
+  --accent-to: var(--accent);
+  --accent-fill: linear-gradient(180deg, var(--accent-from) 0%, var(--accent-to) 100%);
+  --accent-fill-ink: var(--accent-ink);
+}
+:root[data-preset='contrast'] {
+  --accent-from: var(--accent);
+  --accent-to: var(--accent);
+  --accent-fill: linear-gradient(var(--accent), var(--accent));
+  --radius-btn: 4px;
+}
+
 /* ------------------------------------------------------------------------------------------ Radius */
 :root[data-radius='sharp'] {
   --radius-sm: 2px;
   --radius: 3px;
   --radius-lg: 4px;
+  --radius-btn: 3px;
 }
 :root[data-radius='soft'] {
   --radius-sm: 10px;
@@ -478,7 +497,7 @@
 
 /* ----------------------------------------------------------------------------------------- Texture */
 /*
- * --texture is an SVG tile drawn by theme.ts in the theme's ink (each theme has its own: weave for Fabrics, palms for
+ * --texture is an SVG tile drawn by theme.ts in the theme's ink (each theme has its own: weave for Honey, palms for
  * Tropical…). It lies on the sidebar and top bar (with the gradients below) and on the page behind the cards.
  */
 :root {
@@ -510,8 +529,8 @@
   --glow-strength: 1;
 }
 :root[data-preset='fabrics'] { --glow: #e6c06a; }
-:root[data-preset='tropical'] { --glow: #ff9f6b; --glow-2: #5fd3c6; }
-:root[data-preset='tropical'][data-theme='dark'] { --glow: #ff4f81; --glow-2: #0f8f86; }
+:root[data-preset='tropical'] { --glow: #ffb547; --glow-2: #ff4d5e; }
+:root[data-preset='tropical'][data-theme='dark'] { --glow: #ff8a3d; --glow-2: #ff4d5e; }
 :root[data-preset='fabrics'][data-theme='dark'] { --glow: #a87614; }
 :root[data-preset='neon'] { --glow: #5ccfff; --glow-2: #ff9d4d; }
 :root[data-preset='neon'][data-theme='dark'] { --glow: #0066ff; --glow-2: #ff6a00; }
@@ -530,6 +549,9 @@
 :root[data-preset='paper'] { --glow: #d9b98c; }
 :root[data-preset='paper'][data-theme='dark'] { --glow: #5c3e1f; }
 :root[data-theme='light'] { --glow-strength: 0.55; }
+/* Tropical keeps its pages calm: a breath of honey and red, not a wash. */
+:root[data-preset='tropical'] { --glow-strength: 0.7; }
+:root[data-preset='tropical'][data-theme='light'] { --glow-strength: 0.35; }
 /* Endpoint Basic: plain light and dark, no glows (gradients and textures come with Ultra). */
 :root[data-edition='basic'][data-theme] { --glow-strength: 0; }
 
@@ -552,20 +574,13 @@
     radial-gradient(900px 520px at 100% 100%, color-mix(in srgb, var(--glow-2) calc(9% * var(--glow-strength)), transparent), transparent 70%),
     var(--page);
 }
-:root[data-preset='tropical'] .fx-btn.primary {
-  background: linear-gradient(135deg, #ffb347 0%, var(--accent) 55%, #ff4f81 130%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 4px 12px -6px color-mix(in srgb, var(--accent) 65%, transparent);
-}
-:root[data-preset='tropical'][data-theme='light'] .fx-btn.primary {
-  background: linear-gradient(135deg, #f7891f 0%, var(--accent) 55%, #d6336c 130%);
-}
 :root:not([data-preset='contrast']) .fx-btn.primary:hover:not(:disabled) {
   filter: brightness(1.06);
 }
 :root:not([data-preset='contrast']) .fx-tab.active {
-  background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--accent) 10%, transparent) 100%);
+  background:
+    var(--accent-fill) bottom / 100% 2px no-repeat,
+    linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--accent) 8%, transparent) 100%);
 }
 :root:not([data-preset='contrast']) .fx-brand-mark {
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--glow) calc(60% * var(--glow-strength)), transparent));
@@ -878,7 +893,7 @@
     0 1px 2px rgba(0, 0, 0, 0.05),
     0 18px 36px -26px rgba(0, 0, 0, 0.35);
 }
-/* The gloss: a bright upper half that stops at a soft line, like a pane of glass catching the light. */
+/* The sheen: light catching the top edge of the glass, fading out before the middle. */
 .glass-dash .fx-card,
 .glass-tile,
 .glass-hero {
@@ -892,7 +907,7 @@
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.045) 46%, transparent 47%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.025) 38%, transparent 60%);
 }
 .glass-hero {
   display: grid;
@@ -920,7 +935,10 @@
   color: var(--text-secondary);
 }
 .glass-eyebrow b {
-  color: var(--accent);
+  background: var(--accent-fill);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   font-weight: 800;
 }
 .glass-sub {
@@ -1313,7 +1331,7 @@
   height: 16px;
   margin-top: -8px;
   border-radius: 3px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, #ffffff), var(--accent));
+  background: var(--accent-fill);
 }
 :root:not([data-preset='contrast'])[data-theme='dark'] .fx-card {
   background: var(--surface-1);
@@ -1326,19 +1344,12 @@
   box-shadow: var(--shadow);
 }
 :root:not([data-preset='contrast']) .fx-btn {
-  border-radius: 8px;
+  border-radius: var(--radius-btn);
   transition:
     background 0.15s ease,
     border-color 0.15s ease,
     box-shadow 0.15s ease,
     filter 0.15s ease;
-}
-:root:not([data-preset='contrast']):not([data-preset='tropical']) .fx-btn.primary {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, #ffffff) 0%, var(--accent) 100%);
-  border-color: color-mix(in srgb, var(--accent) 85%, #000000);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.25),
-    0 4px 12px -6px color-mix(in srgb, var(--accent) 65%, transparent);
 }
 :root:not([data-preset='contrast']) .fx-input,
 :root:not([data-preset='contrast']) .fx-select,
@@ -1440,7 +1451,8 @@
  */
 :root[data-nav-icons='accent'] :is(.fx-group, [data-section]) {
   --hue: var(--accent);
-  --hue-ink: var(--accent-ink);
+  --hue-fill: var(--accent-fill);
+  --hue-ink: var(--accent-fill-ink);
 }
 :root[data-nav-icons='custom'] :is(.fx-group, [data-section]) {
   --hue: var(--nav-hue, var(--accent));
@@ -1458,7 +1470,7 @@
 }
 :root:not([data-preset='contrast']) .fx-group.here .fx-group-icon {
   color: var(--hue-ink, #ffffff);
-  background: linear-gradient(145deg, color-mix(in srgb, var(--hue, var(--accent)) 92%, #ffffff), var(--hue, var(--accent)));
+  background: var(--hue-fill, linear-gradient(145deg, color-mix(in srgb, var(--hue, var(--accent)) 92%, #ffffff), var(--hue, var(--accent))));
   border-color: transparent;
   box-shadow: 0 4px 14px -6px var(--hue, var(--accent));
 }
@@ -1469,7 +1481,7 @@
   background: color-mix(in srgb, var(--hue, var(--accent)) 14%, transparent);
 }
 :root:not([data-preset='contrast']) .fx-nav-item.active[data-section]::before {
-  background: var(--hue, var(--accent));
+  background: var(--hue-fill, var(--hue, var(--accent)));
 }
 :root:not([data-preset='contrast']) .fx-nav-item.active[data-section] svg {
   color: var(--hue, var(--accent));
@@ -1512,5 +1524,7 @@
 }
 :root:not([data-preset='contrast'])[data-theme='dark'] .fx-tab.active {
   color: var(--text-primary);
-  background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--accent) 16%, transparent) 100%);
+  background:
+    var(--accent-fill) bottom / 100% 2px no-repeat,
+    linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--accent) 13%, transparent) 100%);
 }

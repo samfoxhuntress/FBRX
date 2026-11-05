@@ -4,25 +4,38 @@
   --font: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --mono: ui-monospace, 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
 
-  --page: #f4f4f1;
-  --surface-1: #fcfcfb;
-  --surface-2: #f3f3f0;
-  --surface-3: #e9e8e3;
-  --sidebar: #fbfbf9;
-  --text-primary: #0b0b0b;
-  --text-secondary: #52514e;
-  --text-muted: #898781;
-  --border: rgba(11, 11, 11, 0.1);
-  --border-strong: rgba(11, 11, 11, 0.18);
-  --grid: #e1e0d9;
-  --axis: #c3c2b7;
+  --page: #f5f5f3;
+  --surface-1: #ffffff;
+  --surface-2: #f2f2ef;
+  --surface-3: #e7e6e2;
+  --sidebar: #fafaf8;
+  --text-primary: #1c1b19;
+  --text-secondary: #5c5954;
+  --text-muted: #8b8882;
+  --border: rgba(28, 27, 25, 0.09);
+  --border-strong: rgba(28, 27, 25, 0.16);
+  --grid: #e4e3de;
+  --axis: #c6c4bc;
 
-  /* FBRX's golden honey: deep enough on light pages for text (4.8:1), bright on dark ones. */
-  --accent: #946000;
-  --accent-hover: #7a4f00;
+  /*
+   * FBRX's Tropical: honey running into red. Filled things (primary buttons, the current page, switches) wear the
+   * gradient with dark ink, which reads at 5.5:1 or better across it; text and icons wear --accent, a deep mango on
+   * light pages (4.7:1) and a bright one on dark ones.
+   */
+  --brand-honey: #ffb547;
+  --brand-mango: #ff8a3d;
+  --brand-red: #ff4d5e;
+  --accent-gradient: linear-gradient(135deg, var(--brand-honey) 0%, var(--brand-mango) 50%, var(--brand-red) 100%);
+  --accent-fill: var(--accent-gradient);
+  /* The fill's two ends, for strokes drawn in it (rings, lines). */
+  --accent-from: var(--brand-honey);
+  --accent-to: var(--brand-red);
+  --accent-fill-ink: #2b1000;
+  --accent: #c8410e;
+  --accent-hover: #a93509;
   --accent-ink: #ffffff;
-  --accent-wash: rgba(214, 154, 32, 0.13);
-  --focus: rgba(214, 154, 32, 0.45);
+  --accent-wash: rgba(255, 122, 61, 0.12);
+  --focus: rgba(255, 122, 61, 0.45);
 
   /* status: fixed, always paired with an icon + label */
   --good: #0ca30c;
@@ -44,33 +57,35 @@
   --series-7: #4a3aa7;
   --series-8: #e34948;
 
-  --radius-sm: 6px;
-  --radius: 10px;
-  --radius-lg: 14px;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.05), 0 4px 16px rgba(0, 0, 0, 0.05);
-  --shadow-pop: 0 10px 40px rgba(0, 0, 0, 0.18);
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  /* Buttons are capsules. */
+  --radius-btn: 999px;
+  --shadow: 0 1px 2px rgba(28, 27, 25, 0.04), 0 8px 24px -14px rgba(28, 27, 25, 0.16);
+  --shadow-pop: 0 18px 48px -12px rgba(0, 0, 0, 0.22);
 }
 
 @media (prefers-color-scheme: dark) {
   :root:where(:not([data-theme='light'])) {
     color-scheme: dark;
-    --page: #0b0e13;
-    --surface-1: #151a21;
-    --surface-2: #1b212a;
-    --surface-3: #252c37;
-    --sidebar: #0f1318;
-    --text-primary: #ffffff;
-    --text-secondary: #bcc4d0;
-    --text-muted: #828b98;
-    --border: rgba(186, 204, 230, 0.11);
-    --border-strong: rgba(186, 204, 230, 0.2);
-    --grid: #252c37;
-    --axis: #323a47;
-    --accent: #f4b942;
-    --accent-hover: #f8ca6a;
-    --accent-ink: #1a1408;
-    --accent-wash: rgba(244, 185, 66, 0.16);
-    --focus: rgba(244, 185, 66, 0.5);
+    --page: #0f1013;
+    --surface-1: #17191c;
+    --surface-2: #1e2024;
+    --surface-3: #282a2f;
+    --sidebar: #121316;
+    --text-primary: #f5f5f7;
+    --text-secondary: #c3c5cb;
+    --text-muted: #8a8d95;
+    --border: rgba(225, 230, 240, 0.09);
+    --border-strong: rgba(225, 230, 240, 0.16);
+    --grid: #282a2f;
+    --axis: #363940;
+    --accent: #ffa23a;
+    --accent-hover: #ffb862;
+    --accent-ink: #2b1000;
+    --accent-wash: rgba(255, 162, 58, 0.15);
+    --focus: rgba(255, 162, 58, 0.5);
     --good-text: #0ca30c;
     --warning-text: #fab219;
     --critical-text: #e66767;
@@ -82,29 +97,29 @@
     --series-6: #008300;
     --series-7: #9085e9;
     --series-8: #e66767;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --shadow-pop: 0 10px 40px rgba(0, 0, 0, 0.6);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -18px rgba(0, 0, 0, 0.7);
+    --shadow-pop: 0 18px 48px -12px rgba(0, 0, 0, 0.65);
   }
 }
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --page: #0b0e13;
-  --surface-1: #151a21;
-  --surface-2: #1b212a;
-  --surface-3: #252c37;
-  --sidebar: #0f1318;
-  --text-primary: #ffffff;
-  --text-secondary: #bcc4d0;
-  --text-muted: #828b98;
-  --border: rgba(186, 204, 230, 0.11);
-  --border-strong: rgba(186, 204, 230, 0.2);
-  --grid: #252c37;
-  --axis: #323a47;
-  --accent: #f4b942;
-  --accent-hover: #f8ca6a;
-  --accent-ink: #1a1408;
-  --accent-wash: rgba(244, 185, 66, 0.16);
-  --focus: rgba(244, 185, 66, 0.5);
+  --page: #0f1013;
+  --surface-1: #17191c;
+  --surface-2: #1e2024;
+  --surface-3: #282a2f;
+  --sidebar: #121316;
+  --text-primary: #f5f5f7;
+  --text-secondary: #c3c5cb;
+  --text-muted: #8a8d95;
+  --border: rgba(225, 230, 240, 0.09);
+  --border-strong: rgba(225, 230, 240, 0.16);
+  --grid: #282a2f;
+  --axis: #363940;
+  --accent: #ffa23a;
+  --accent-hover: #ffb862;
+  --accent-ink: #2b1000;
+  --accent-wash: rgba(255, 162, 58, 0.15);
+  --focus: rgba(255, 162, 58, 0.5);
   --good-text: #0ca30c;
   --warning-text: #fab219;
   --critical-text: #e66767;
@@ -116,8 +131,8 @@
   --series-6: #008300;
   --series-7: #9085e9;
   --series-8: #e66767;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
-  --shadow-pop: 0 10px 40px rgba(0, 0, 0, 0.6);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 12px 30px -18px rgba(0, 0, 0, 0.7);
+  --shadow-pop: 0 18px 48px -12px rgba(0, 0, 0, 0.65);
 }
 
 * {
@@ -157,11 +172,16 @@ h4 {
   font-weight: 600;
   letter-spacing: -0.01em;
 }
+/* Big, tight page titles. */
 h1 {
-  font-size: 22px;
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  line-height: 1.15;
 }
 h2 {
   font-size: 17px;
+  letter-spacing: -0.015em;
 }
 h3 {
   font-size: 14px;
@@ -248,9 +268,22 @@ pre,
   text-decoration: none;
 }
 .fx-nav-item.active {
+  position: relative;
   background: var(--accent-wash);
   color: var(--text-primary);
   font-weight: 550;
+}
+/* The current page: a short pill on the left in the brand fill. */
+.fx-nav-item.active::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 50%;
+  width: 3px;
+  height: 16px;
+  margin-top: -8px;
+  border-radius: 3px;
+  background: var(--accent-fill);
 }
 .fx-nav-item svg {
   flex: none;
@@ -337,9 +370,9 @@ pre,
   transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 .fx-group.here .fx-group-icon {
-  background: var(--accent-wash);
-  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
-  color: var(--accent);
+  background: var(--accent-fill);
+  border-color: transparent;
+  color: var(--accent-fill-ink);
 }
 .fx-group-text {
   display: flex;
@@ -741,8 +774,8 @@ pre,
   justify-content: center;
   gap: 6px;
   height: 32px;
-  padding: 0 12px;
-  border-radius: var(--radius-sm);
+  padding: 0 14px;
+  border-radius: var(--radius-btn);
   border: 1px solid var(--border-strong);
   background: var(--surface-1);
   color: var(--text-primary);
@@ -751,22 +784,39 @@ pre,
   font-size: 13px;
   cursor: pointer;
   white-space: nowrap;
-  transition: background 0.12s, border-color 0.12s;
+  transition:
+    background 0.12s,
+    border-color 0.12s,
+    transform 0.12s ease,
+    filter 0.12s;
 }
 .fx-btn:hover:not(:disabled) {
   background: var(--surface-2);
+}
+/* A little give when pressed. */
+.fx-btn:active:not(:disabled) {
+  transform: scale(0.97);
 }
 .fx-btn:disabled {
   opacity: 0.5;
   cursor: not-allowed;
 }
 .fx-btn.primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-ink);
+  background: var(--accent-fill);
+  border-color: transparent;
+  color: var(--accent-fill-ink);
+  font-weight: 650;
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.3),
+    0 6px 16px -8px color-mix(in srgb, var(--accent) 70%, transparent);
 }
 .fx-btn.primary:hover:not(:disabled) {
-  background: var(--accent-hover);
+  background: var(--accent-fill);
+  filter: brightness(1.06) saturate(1.05);
+  transform: translateY(-1px);
+}
+.fx-btn.primary:active:not(:disabled) {
+  transform: scale(0.97);
 }
 .fx-btn.danger {
   color: var(--critical-text);
@@ -785,7 +835,7 @@ pre,
 }
 .fx-btn.sm {
   height: 26px;
-  padding: 0 9px;
+  padding: 0 11px;
   font-size: 12px;
 }
 .fx-btn.icon {
@@ -891,14 +941,23 @@ pre,
   border-radius: 50%;
   background: #fff;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
-  transition: transform 0.15s;
+  transition:
+    transform 0.18s cubic-bezier(0.3, 1.4, 0.5, 1),
+    width 0.15s ease;
 }
 .fx-toggle input:checked {
-  background: var(--accent);
-  border-color: var(--accent);
+  background: var(--accent-fill);
+  border-color: transparent;
 }
 .fx-toggle input:checked::after {
   transform: translateX(14px);
+}
+/* The knob squishes while it is held, like a fingertip on it. */
+.fx-toggle input:active:not(:disabled)::after {
+  width: 18px;
+}
+.fx-toggle input:checked:active:not(:disabled)::after {
+  transform: translateX(10px);
 }
 .fx-toggle input:disabled {
   opacity: 0.5;
@@ -1016,7 +1075,8 @@ pre,
 }
 .fx-tab.active {
   color: var(--text-primary);
-  border-bottom-color: var(--accent);
+  border-bottom-color: transparent;
+  background: var(--accent-fill) bottom / 100% 2px no-repeat;
 }
 .fx-callout {
   display: flex;
@@ -1266,7 +1326,7 @@ pre,
 }
 .fx-progress > div {
   height: 100%;
-  background: var(--accent);
+  background: var(--accent-fill);
   border-radius: 999px;
   transition: width 0.3s;
 }
@@ -1780,8 +1840,8 @@ pre,
   border-left: 0;
 }
 .sb-seg button.on {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--accent-fill);
+  color: var(--accent-fill-ink);
 }
 .sb-seg button:first-child.on {
   background: var(--surface-3);

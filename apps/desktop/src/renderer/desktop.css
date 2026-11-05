@@ -107,8 +107,8 @@
 }
 .msg-user {
   align-self: flex-end;
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--accent-fill);
+  color: var(--accent-fill-ink);
   padding: 9px 14px;
   border-radius: 14px 14px 4px 14px;
   max-width: 80%;
@@ -380,12 +380,13 @@
   color: var(--accent);
   cursor: pointer;
 }
+/* A segmented control: the choice sits raised on a sunken track. */
 .seg {
   display: inline-flex;
-  border: 1px solid var(--border-strong);
+  gap: 2px;
+  padding: 2px;
   border-radius: var(--radius-sm);
-  overflow: hidden;
-  background: var(--surface-1);
+  background: var(--surface-3);
 }
 .seg button {
   border: 0;
@@ -399,13 +400,29 @@
   gap: 5px;
   cursor: pointer;
 }
-.seg button + button {
-  border-left: 1px solid var(--border);
+.seg button {
+  border-radius: calc(var(--radius-sm) - 2px);
+  transition:
+    background 0.15s ease,
+    box-shadow 0.15s ease;
+}
+.seg button:hover:not(:disabled):not(.on) {
+  color: var(--text-primary);
 }
 .seg button.on {
-  background: var(--accent-wash);
+  background: var(--surface-1);
   color: var(--text-primary);
   font-weight: 600;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.12),
+    0 0 0 0.5px var(--border);
+}
+:root[data-theme='dark'] .seg {
+  background: var(--page);
+  box-shadow: inset 0 0 0 1px var(--border);
+}
+:root[data-theme='dark'] .seg button.on {
+  background: var(--surface-3);
 }
 .seg button:disabled {
   opacity: 0.5;
@@ -884,8 +901,8 @@
 }
 .hop-gateway .hop-n,
 .hop-target .hop-n {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--accent-fill);
+  color: var(--accent-fill-ink);
 }
 .hop-line {
   position: absolute;
@@ -1309,8 +1326,8 @@
 }
 .cp-chip.on {
   border-color: var(--accent);
-  background: var(--accent);
-  color: var(--accent-ink, #fff);
+  background: var(--accent-fill);
+  color: var(--accent-fill-ink);
 }
 .cp-preview {
   margin: 0;
@@ -1732,6 +1749,21 @@ body.spotlight-body {
 }
 .fx-btn.ask-btn svg {
   color: var(--accent);
+}
+/* The sparkle on the Ask buttons twinkles when you point at it. */
+.fx-btn.ask-btn:hover:not(:disabled) svg,
+.fx-topbar .fx-btn.primary:hover:not(:disabled) svg {
+  animation: ask-twinkle 0.6s cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+@keyframes ask-twinkle {
+  40% {
+    transform: rotate(-14deg) scale(1.25);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .fx-btn svg {
+    animation: none !important;
+  }
 }
 .ask-strip {
   display: flex;
@@ -4147,7 +4179,7 @@ body.popout .srv-browser:not(.full) {
 }
 .voice-dl-bar > div {
   height: 100%;
-  background: var(--accent);
+  background: var(--accent-fill);
   transition: width 0.25s ease;
 }
 .starter-ai {
@@ -5248,8 +5280,8 @@ html[data-presenting='blur'] .private::selection {
   font-weight: 600;
 }
 .cal-week-head .today b {
-  color: var(--accent-ink, #fff);
-  background: var(--accent);
+  color: var(--accent-fill-ink);
+  background: var(--accent-fill);
   border-radius: 999px;
   min-width: 30px;
   text-align: center;
@@ -5521,8 +5553,8 @@ html[data-presenting='blur'] .private::selection {
   cursor: pointer;
 }
 .cal-mday.today .cal-mday-num {
-  background: var(--accent);
-  color: var(--accent-ink, #fff);
+  background: var(--accent-fill);
+  color: var(--accent-fill-ink);
 }
 .cal-mchip {
   border: 0;
@@ -5758,7 +5790,7 @@ html[data-presenting='blur'] .private::selection {
   width: 35%;
   height: 100%;
   border-radius: 4px;
-  background: var(--accent);
+  background: var(--accent-fill);
   animation: shield-sweep 1.4s ease-in-out infinite;
 }
 @keyframes shield-sweep {
@@ -5993,7 +6025,7 @@ html[data-presenting='blur'] .private::selection {
   background: var(--accent-wash);
 }
 .tour-dots span.on {
-  background: var(--accent);
+  background: var(--accent-fill);
   width: 16px;
   border-radius: 3px;
 }
@@ -7277,8 +7309,8 @@ body.popout .fx-page-header p {
   font-weight: 700;
 }
 .br-fill-mark.accent {
-  background: var(--accent);
-  color: var(--accent-ink);
+  background: var(--accent-fill);
+  color: var(--accent-fill-ink);
 }
 .br-fill-text {
   display: flex;

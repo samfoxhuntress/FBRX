@@ -76,7 +76,7 @@ export const FBRX1_LIBRARY: Array<{ id: string; name: string; items: Fbrx1Recipe
     items: [
       { title: 'All settings as set commands', what: 'Copy them to another computer', lines: ['show configuration | display set'] },
       { title: 'Neon Grid look', what: 'Switch theme and texture, then commit', lines: ['configure', 'set appearance preset neon', 'set appearance texture theme', 'commit', 'exit'] },
-      { title: 'Back to Fabrics', what: 'The default look with its weave', lines: ['configure', 'set appearance preset fabrics', 'set appearance texture theme', 'commit', 'exit'] },
+      { title: 'Back to the default look', what: 'Tropical, without a texture', lines: ['configure', 'set appearance preset tropical', 'set appearance texture none', 'commit', 'exit'] },
       { title: 'Offline-first agent', what: 'New chats ask before using the internet', lines: ['configure', 'set ai newChatsOffline true', 'commit', 'exit'] },
       { title: 'Try before you commit', what: 'Make a change, compare, then throw it away', lines: ['configure', 'set appearance density compact', 'show | compare', 'rollback', 'exit'] },
       { title: 'No goose visits', what: 'The goose only comes when called', lines: ['configure', 'set appearance gooseVisits false', 'commit', 'exit'] },

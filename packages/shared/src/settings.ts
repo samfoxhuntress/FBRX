@@ -12,7 +12,7 @@ import { DEFAULT_SNAPSHOT_FOLDER, SNAPSHOT_AFTER } from './snapshots';
 /** Built-in color themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
 export const THEME_PRESETS = ['fabrics', 'tropical', 'neon', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
 export type ThemePreset = (typeof THEME_PRESETS)[number];
-/** Background textures. "theme" uses each theme's own (weave for Fabrics, palms for Tropical, …). */
+/** Background textures. "theme" uses each theme's own (palms for Tropical, weave for Honey, …). */
 export const TEXTURES = ['theme', 'none', 'weave', 'linen', 'grain', 'grid', 'dots', 'carbon', 'waves', 'palms'] as const;
 export type Texture = (typeof TEXTURES)[number];
 export const AI_RESOURCES = ['light', 'balanced', 'full'] as const;
@@ -614,11 +614,11 @@ export const DEFAULT_SETTINGS: Settings = {
     thinkingSound: true,
   },
   appearance: {
-    preset: 'fabrics',
+    preset: 'tropical',
     accent: '',
     density: 'comfortable',
     fontScale: 1,
-    texture: 'theme',
+    texture: 'none',
     textureStrength: 50,
     radius: 'rounded',
     navIcons: 'accent',

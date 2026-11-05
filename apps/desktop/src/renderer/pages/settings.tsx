@@ -515,12 +515,12 @@ function Appearance() {
                   <div className="swatch-preview">
                     <div style={{ background: [tex, glow ? `linear-gradient(170deg, color-mix(in srgb, ${glow} 45%, ${side}), ${side} 75%)` : side].filter(Boolean).join(', ') }} />
                     <div style={{ background: page }}>
-                      <div className="swatch-bar" style={{ background: accent, width: '70%' }} />
+                      <div className="swatch-bar" style={{ background: p.id === 'tropical' ? 'var(--accent-gradient)' : accent, width: '70%' }} />
                       <div className="swatch-bar" style={{ background: mode === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)', width: '90%' }} />
                       <div className="swatch-bar" style={{ background: mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)', width: '55%' }} />
                     </div>
                   </div>
-                  <div className="swatch-label">{p.name}{p.id === 'fabrics' ? ' (default)' : ''}</div>
+                  <div className="swatch-label">{p.name}{p.id === 'tropical' ? ' (default)' : ''}</div>
                 </button>
               );
             })}
