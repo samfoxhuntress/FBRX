@@ -158,7 +158,7 @@ export function AboutVersion({ version }: { version: string }) {
       <div className="about-version-name">
         {TIER_NAMES[useTier()]} <b>{displayVersion(version)}</b>
       </div>
-      <div className="fx-muted" style={{ fontSize: 12 }}>Built on FBRX OS, the Fabrics Operating System.</div>
+      <div className="fx-muted" style={{ fontSize: 12 }}>Built on FBRX OS.</div>
       {code && (
         <div className="about-codename">
           <span className="about-codename-chip">“{code.name}”</span>

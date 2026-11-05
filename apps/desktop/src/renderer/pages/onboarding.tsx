@@ -49,7 +49,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
           <FbrxMark className="fx-brand-mark" size={34} />
           <div>
             <div className="fx-brand-name">FBRX OS</div>
-            <div className="fx-brand-sub">Fabrics Operating System</div>
+            <div className="fx-brand-sub">Your own AI, on your computer</div>
           </div>
         </div>
         <Card>

@@ -563,6 +563,8 @@ async function main() {
   console.log(`  ${bold('On this computer')}  ${local}  ${dim(`(the "${PRODUCT}" icon opens it)`)}`);
   // The token first, and plainly: the certificate fingerprint below is long and looks like one, but is not it.
   if (status?.needsSetup !== false) console.log(`  ${bold('Setup token')}       ${cyan(bold(config.setupToken))}\n                    ${dim('The first sign-in asks for it once. Opening FBRX Command from its icon fills it in.')}`);
+  // Set up before (an update keeps the data): there is no token to give, so say how to get in instead of nothing.
+  else console.log(`  ${bold('Sign in')}           with the account made when ${PRODUCT} was first set up\n                    ${dim(`It is already set up, so no setup token is needed. To start over instead, run the installer with\n                    --uninstall --delete-data (this erases ${PRODUCT}'s data), then install it again.`)}`);
   if (mode === 'network') {
     console.log(`  ${bold('Other computers')}   join at ${config.publicUrl}`);
     if (fp) console.log(`  ${bold('Certificate')}       ${fp}\n                    ${dim('Not the setup token: computers show this when they join, and it must match. Deploy & enroll shows it too.')}`);

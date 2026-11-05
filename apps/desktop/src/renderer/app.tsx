@@ -195,7 +195,7 @@ function Splash({ tier }: { tier: Tier | undefined }) {
           <path className="splash-letters" d={FBRX_MARK.letters} fillRule="evenodd" />
         </svg>
         <div className="splash-word">FBRX Endpoint</div>
-        <div className="splash-sub">{tier ? TIER_SHORT[tier] : 'Fabrics Operating System'}</div>
+        <div className="splash-sub">{tier ? TIER_SHORT[tier] : 'FBRX OS'}</div>
       </div>
     </div>
   );

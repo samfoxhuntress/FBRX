@@ -430,7 +430,38 @@ async function installApp(artifact) {
     if (!exe) throw new SetupError('The installer finished but FBRX OS could not be found under %LOCALAPPDATA%\\Programs', 'Try running apps\\desktop\\release\\' + version + '\\FBRX-OS-Setup-' + version + '.exe yourself.');
     return { path: exe, note: dirname(exe), wasRunning };
   }
-  return { path: artifact, note: 'runs from the build folder on Linux', wasRunning };
+  linuxMenuEntry(artifact);
+  return { path: artifact, note: 'runs from the build folder, with an entry in your apps', wasRunning };
+}
+
+/**
+ * Linux: FBRX OS runs from the build folder, so it gets an entry in the apps (fbrx-os.desktop, the name the app gives
+ * its windows) with its icon. Without one, the dock and the window switcher show a blank icon.
+ */
+function linuxMenuEntry(bin) {
+  const share = process.env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share');
+  const icon = join(share, 'icons', 'fbrx-os.png');
+  const entry = join(share, 'applications', 'fbrx-os.desktop');
+  mkdirSync(dirname(icon), { recursive: true });
+  mkdirSync(dirname(entry), { recursive: true });
+  copyFileSync(join(DESKTOP, 'build', 'icon.png'), icon);
+  writeFileSync(
+    entry,
+    [
+      '[Desktop Entry]',
+      'Type=Application',
+      `Name=${PRODUCT}`,
+      'Comment=Your own AI, on your computer',
+      `Exec="${bin}" %U`,
+      `Icon=${icon}`,
+      'Terminal=false',
+      // X11 matches windows to the entry by this; Wayland by the entry's file name.
+      `StartupWMClass=${PRODUCT}`,
+      'Categories=Utility;System;',
+      '',
+    ].join('\n'),
+  );
+  chmodSync(entry, 0o755);
 }
 
 /**
@@ -567,7 +598,7 @@ function licenseName() {
 }
 
 async function main() {
-  console.log(`\n${bold(`${PRODUCT} setup`)}  ${dim(`· Fabrics Operating System ${version}`)}\n`);
+  console.log(`\n${bold(`${PRODUCT} setup`)}  ${dim(`· ${version}`)}\n`);
   if (!['darwin', 'win32', 'linux'].includes(process.platform)) throw new SetupError(`${process.platform} is not supported.`);
   const [major, minor] = process.versions.node.split('.').map(Number);
   if (major < 22 || (major === 22 && minor < 15)) throw new SetupError(`Node.js ${process.version} is too old; 22.15 or newer is needed.`, 'Start the setup with the "Install FBRX OS" launcher, which downloads a suitable Node.js automatically.');
@@ -617,7 +648,7 @@ async function main() {
     return openApp(installed.path) ? undefined : { note: 'open it from your Applications / Start menu' };
   });
 
-  const where = process.platform === 'darwin' ? 'Applications folder and Launchpad' : win ? 'Start menu and on your desktop' : installed.path;
+  const where = process.platform === 'darwin' ? 'Applications folder and Launchpad' : win ? 'Start menu and on your desktop' : `apps, as ${PRODUCT}`;
   console.log(`\n${green(bold(`${PRODUCT} is ready`))} ${dim(`in ${elapsed(started)}`)}\n`);
   console.log(`  ${bold('Find it')}        in your ${where}`);
   console.log(`  ${bold('Your AI')}        ${ai.state === 'done' ? `${STARTER_MODEL.name}, on this ${platformName}: say hello in the chat` : 'FBRX OS shows its progress in the chat'}`);

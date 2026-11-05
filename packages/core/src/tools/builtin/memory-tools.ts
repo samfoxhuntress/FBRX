@@ -19,7 +19,7 @@ export function memoryTools(memory: MemoryService): ToolSpec[] {
       inputSchema: {
         type: 'object',
         properties: {
-          content: { type: 'string', minLength: 3, maxLength: 1000, description: 'One fact, written about the person: "Prefers short answers", "Works at Fabrics Inc"' },
+          content: { type: 'string', minLength: 3, maxLength: 1000, description: 'One fact, written about the person: "Prefers short answers", "Works at Oak Street Dental"' },
           category: { type: 'string', enum: [...MEMORY_CATEGORIES] },
           tags: { type: 'array', items: { type: 'string' } },
         },

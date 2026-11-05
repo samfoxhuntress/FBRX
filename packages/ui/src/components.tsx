@@ -75,7 +75,7 @@ export function Shell(props: {
           {!collapsed && (
             <div>
               <div className="fx-brand-name">{props.brandName ?? 'FBRX OS'}</div>
-              <div className="fx-brand-sub">{props.brandSub ?? 'Fabrics Operating System'}</div>
+              <div className="fx-brand-sub">{props.brandSub ?? 'FBRX OS'}</div>
             </div>
           )}
         </div>
