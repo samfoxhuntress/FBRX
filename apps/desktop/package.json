@@ -18,8 +18,7 @@
     "package:mac": "node scripts/package.mjs --mac",
     "package:win": "node scripts/package.mjs --win",
     "package:linux": "node scripts/package.mjs --linux",
-    "package:digger": "node scripts/package.mjs --digger",
-    "package:store": "node scripts/package.mjs --store"
+    "package:digger": "node scripts/package.mjs --digger"
   },
   "dependencies": {
     "electron-updater": "^6.8.9"

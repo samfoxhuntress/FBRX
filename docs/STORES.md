@@ -1,15 +1,14 @@
 # FBRX in the app stores
 
-| App | Store | Built from | Kept up to date by |
+| App | Where | Built from | Kept up to date by |
 | --- | --- | --- | --- |
 | **FBRX** for iPhone and iPad | App Store | `store/mobile`: FBRX Mobile (`packages/core/mobile`) in a native shell, with in-app purchases | The App Store |
 | **FBRX** for Android | Google Play | `store/mobile`, the same app | Google Play |
-| **FBRX OS** for Windows | Microsoft Store | `apps/desktop`: `npm run package:store` (MSIX) | The Microsoft Store |
-| **FBRX OS** for Mac | Not in the Mac App Store | `apps/desktop`, signed and notarized ([DEPLOYMENT.md](DEPLOYMENT.md)) | FBRX itself |
+| **FBRX OS** for Windows, Mac and Linux | The FBRX website only | `apps/desktop`, signed (and notarized on Mac, [DEPLOYMENT.md](DEPLOYMENT.md)) | FBRX itself |
 
-The Mac App Store only takes sandboxed apps, and the sandbox does not allow what FBRX OS does on a computer (the
-terminal, other apps' settings, the local AI runtime, network scans, backups of the whole disk). FBRX OS for Mac stays
-a signed, notarized download.
+**FBRX OS is never in an app store**: it is downloaded from the FBRX website, and updates itself. A store would hold it
+to a sandbox that does not allow what it does on a computer (the terminal, other apps' settings, the local AI runtime,
+network scans, backups of the whole disk), and would take over its updates. Only the phone app is in the stores.
 
 Nothing here publishes anything: each store gets a build only when someone with its developer account uploads one.
 
@@ -21,7 +20,6 @@ Each store has a way to hand a build to testers before everyone:
 | --- | --- | --- |
 | App Store | **TestFlight**: internal testers right away, external testers (up to 10,000) after Beta App Review | Made in the sandbox: nothing is charged |
 | Google Play | **Internal testing**, then **Closed testing** | Made by license testers (Play Console → Setup → License testing): nothing is charged |
-| Microsoft Store | **Private audience** (Partner Center → Availability) or **Package flights** for a group of testers | The FBRX account and checkout, like the download |
 
 A purchase that charged nothing turns nothing on, so a test build cannot unlock a real account. A test FBRX Command
 (never the real one) takes them with `FBRX_APPLE_SANDBOX=1` and `FBRX_GOOGLE_TEST_PURCHASES=1` ([ACCOUNTS.md](ACCOUNTS.md)).
@@ -119,30 +117,3 @@ between the phone and the computer stays on the local network.
 - **iOS**: Xcode → Product → Archive → Distribute App → App Store Connect. The build appears in TestFlight.
 - **Android**: Android Studio → Build → Generate Signed App Bundle (with Play App Signing, keep the upload key out of
   the repository), then upload the `.aab` to the internal testing track.
-
-## Windows: the Microsoft Store
-
-```bash
-FBRX_STORE_IDENTITY_NAME=… FBRX_STORE_PUBLISHER="CN=…" npm run package:store
-```
-
-Both values come from Partner Center → the app → **Product identity** (`Package/Identity/Name` and
-`Package/Identity/Publisher`). It builds MSIX packages for x64 and arm64 into `apps/desktop/release/<version>/`
-(`FBRX-OS-Store-<version>-<arch>.appx`). Run it on Windows: packaging needs the Windows SDK. The Store signs the
-package, so no signing certificate is needed for it.
-
-A Store copy differs from the download in a few ways:
-
-- **Updates come from the Store.** FBRX's own update check stays off, **Settings → Updates** says the Store keeps
-  FBRX up to date, and **Update now** from FBRX Command leaves it to the Store.
-- **Its data is its own.** Windows keeps a packaged app's files apart, so a Store copy and a downloaded copy on the
-  same computer do not share settings or chats.
-- **Declared capabilities**: `runFullTrust` (a desktop app), `internetClient`, `internetClientServer` and
-  `privateNetworkClientServer` (phones and other FBRX computers reach it on the local network, [MESH.md](MESH.md)) and
-  `microphone` (voice).
-
-The Microsoft Store lets apps other than games take payment through their own checkout, so a Store copy sells editions
-the same way as the download: the FBRX account and checkout ([ACCOUNTS.md](ACCOUNTS.md)). Check the current Microsoft
-Store Policies before submitting.
-
-Tiles and the splash screen are in `apps/desktop/build/appx` (made by `apps/desktop/scripts/make-icons.mjs`).

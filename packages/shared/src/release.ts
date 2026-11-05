@@ -6,9 +6,6 @@ export function stageFor(version: string): string {
   return (parseSemver(version)?.major ?? 0) >= 2 ? 'Beta' : 'Alpha';
 }
 
-/** A copy installed from an app store is updated by that store, never by FBRX itself. */
-export const STORE_UPDATES = 'The store you installed FBRX from keeps it up to date';
-
 /** The public repository FBRX OS is downloaded from. */
 export const RELEASE_REPO = 'samfoxhuntress/FBRX';
 /** The release manifest on the repository's default branch, checked for new versions. */
@@ -97,7 +94,5 @@ export interface ReleaseCheck {
   skipped: boolean;
   /** FBRX knows the folder it was installed from, so it can update itself. */
   canInstall: boolean;
-  /** Installed from an app store, which keeps it up to date: FBRX does not look for new versions itself. */
-  store: boolean;
   installing: { phase: 'downloading' | 'unpacking' | 'starting' | 'started' | 'failed'; pct: number | null; message: string | null } | null;
 }

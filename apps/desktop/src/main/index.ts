@@ -895,13 +895,10 @@ function registerIpc() {
 }
 
 async function boot() {
-  // A copy from the Microsoft Store is updated by the Store, never by FBRX.
-  const updates = process.windowsStore
-    ? null
-    : new ElectronUpdateController(() => {
-        const u = kernel?.settings.get().updates;
-        return { autoDownload: u?.autoDownload ?? true, autoInstall: u?.autoInstall ?? false, channel: u?.channel ?? 'stable' };
-      });
+  const updates = new ElectronUpdateController(() => {
+    const u = kernel?.settings.get().updates;
+    return { autoDownload: u?.autoDownload ?? true, autoInstall: u?.autoInstall ?? false, channel: u?.channel ?? 'stable' };
+  });
   const platform = createElectronPlatform({
     dataDir,
     flavor: FLAVOR,

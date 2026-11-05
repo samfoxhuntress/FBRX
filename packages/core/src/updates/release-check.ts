@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
-import { DIGGER_NAME, RELEASE_MANIFEST_URL, ReleaseManifestSchema, STORE_UPDATES, compareSemver, type AppFlavor, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
+import { DIGGER_NAME, RELEASE_MANIFEST_URL, ReleaseManifestSchema, compareSemver, type AppFlavor, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
@@ -42,8 +42,6 @@ export interface ReleaseCheckerDeps {
   launchInstaller?: (root: string) => string;
   /** A good moment to install by itself (nobody presenting, the agent idle, the computer not in use). */
   quiet?: () => boolean;
-  /** Installed from an app store: the store updates FBRX, so it never looks for new versions itself. */
-  store?: boolean;
   /** FBRX Digger follows its own entry in release.json, and is downloaded from its release page. */
   flavor?: AppFlavor;
 }
@@ -54,7 +52,7 @@ export class ReleaseChecker {
   private busy: Promise<ReleaseCheck> | null = null;
 
   constructor(private readonly d: ReleaseCheckerDeps) {
-    this.state = { state: 'idle', currentVersion: d.appVersion, latest: null, checkedAt: null, message: null, skipped: false, canInstall: false, store: !!d.store, installing: null };
+    this.state = { state: 'idle', currentVersion: d.appVersion, latest: null, checkedAt: null, message: null, skipped: false, canInstall: false, installing: null };
   }
 
   private get manifestUrl(): string {
@@ -63,7 +61,6 @@ export class ReleaseChecker {
 
   start(): void {
     this.stop();
-    if (this.d.store) return;
     const tick = () => {
       if (this.d.settings().updates.checkRepo && this.d.internet()) void this.check().catch(() => undefined);
     };
@@ -83,7 +80,6 @@ export class ReleaseChecker {
   }
 
   status(): ReleaseCheck {
-    if (this.d.store) return { ...this.state, state: 'off', canInstall: false, message: STORE_UPDATES };
     const off = !this.d.settings().updates.checkRepo && this.state.state === 'idle';
     return { ...this.state, state: off ? 'off' : this.state.state, skipped: !!this.state.latest && this.d.settings().updates.skipVersion === this.state.latest.version, canInstall: !!this.installRoot() };
   }
@@ -95,7 +91,6 @@ export class ReleaseChecker {
 
   /** Looks at release.json in the repository. */
   check(): Promise<ReleaseCheck> {
-    if (this.d.store) return Promise.resolve(this.status());
     this.busy ??= this.run().finally(() => (this.busy = null));
     return this.busy;
   }

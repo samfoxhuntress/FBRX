@@ -1,7 +1,6 @@
 // Builds the app and packages it with electron-builder. Extra arguments are passed through
 // (e.g. `node scripts/package.mjs --mac`, `--win`, `--linux --dir`). `--digger` packages FBRX Digger instead (the
-// Network Center on its own, electron-builder.digger.yml) at its own version (DIGGER_VERSION in packages/shared). `--store` makes the Microsoft Store package
-// (MSIX) with the identity Partner Center gives the app (FBRX_STORE_IDENTITY_NAME, FBRX_STORE_PUBLISHER).
+// Network Center on its own, electron-builder.digger.yml) at its own version (DIGGER_VERSION in packages/shared).
 //
 // macOS signing: with CSC_LINK/CSC_NAME set, or a "Developer ID Application" certificate in the keychain,
 // electron-builder signs normally. Otherwise the app is ad-hoc signed so it still launches on the Mac that built it
@@ -18,16 +17,6 @@ const require = createRequire(import.meta.url);
 let args = process.argv.slice(2);
 const digger = args.includes('--digger');
 args = args.filter((a) => a !== '--digger');
-
-if (args.includes('--store')) {
-  const name = process.env.FBRX_STORE_IDENTITY_NAME;
-  const publisher = process.env.FBRX_STORE_PUBLISHER;
-  if (!name || !publisher) {
-    console.error('The Store package needs the identity from Partner Center (Product identity):\n  FBRX_STORE_IDENTITY_NAME (Package/Identity/Name) and FBRX_STORE_PUBLISHER (Package/Identity/Publisher, "CN=…").');
-    process.exit(1);
-  }
-  args = [...args.filter((a) => a !== '--store'), '--win', 'appx', '--x64', '--arm64', `-c.appx.identityName=${name}`, `-c.appx.publisher=${publisher}`];
-}
 
 execFileSync(process.execPath, [join(app, 'scripts/build.mjs')], { stdio: 'inherit' });
 

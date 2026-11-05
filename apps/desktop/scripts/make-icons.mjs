@@ -280,14 +280,6 @@ out(join(app, 'dist', 'assets', 'tray@2x.png'), icon(32));
 out(join(app, 'dist', 'assets', 'trayTemplate.png'), template(22));
 out(join(app, 'dist', 'assets', 'trayTemplate@2x.png'), template(44));
 out(join(app, 'src', 'renderer', 'public', 'icon.png'), icon(128));
-// Microsoft Store package tiles (electron-builder's appx target reads build/appx).
-out(join(app, 'build', 'appx', 'StoreLogo.png'), tile(50, 50, 40));
-out(join(app, 'build', 'appx', 'Square44x44Logo.png'), icon(44));
-out(join(app, 'build', 'appx', 'Square150x150Logo.png'), tile(150, 150, 96));
-out(join(app, 'build', 'appx', 'Wide310x150Logo.png'), tile(310, 150, 96));
-out(join(app, 'build', 'appx', 'LargeTile.png'), tile(310, 310, 196));
-out(join(app, 'build', 'appx', 'SmallTile.png'), tile(71, 71, 48));
-out(join(app, 'build', 'appx', 'SplashScreen.png'), tile(620, 300, 160));
 // The phone app's source images (store/mobile: the icon and splash generator reads them).
 const mobile = join(app, '..', '..', 'store', 'mobile', 'assets');
 out(join(mobile, 'icon-only.png'), tile(1024, 1024, 760));

@@ -172,15 +172,4 @@ describe('new versions', () => {
     expect(await c.check()).toMatchObject({ state: 'available', latest: { version: '2.0.0', stage: 'Beta' } });
     expect(notify.mock.calls[0][0]).toBe('FBRX OS Beta 2.0.0 is available');
   });
-
-  it('leaves updating to the app store a copy came from', async () => {
-    const srv = await serve({ '/release.json': manifest('https://github.com', '1.8.2') });
-    process.env.FBRX_RELEASE_MANIFEST = `${srv.base}/release.json`;
-    const { c, notify } = checker(tempDir(), { store: true });
-    c.start();
-    expect(await c.check()).toMatchObject({ state: 'off', store: true, canInstall: false, latest: null });
-    expect(srv.hits).toEqual([]);
-    expect(notify).not.toHaveBeenCalled();
-    c.stop();
-  });
 });
