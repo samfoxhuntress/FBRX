@@ -1,43 +1,45 @@
 {
   "product": "FBRX OS",
   "stage": "Beta",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "codename": "Weft",
-  "released": "2026-11-03",
+  "released": "2026-11-05",
   "importance": "recommended",
-  "summary": "FBRX 2.2.1 Beta (Weft): on Windows the title bar and menus follow FBRX's Light and Dark modes, and the built-in model's context window fits the graphics card.",
+  "summary": "FBRX 2.3.0 Beta (Weft): a new look with Tropical by default, the AI on your computer answering in a fraction of the time and saying how far it has read, and editions that follow a member to any computer.",
   "notes": [
-    "Windows: the title bar, menus and right-click menus follow FBRX's mode (Light, Dark or Match Windows) instead of always Windows' own, and change the moment you change it.",
-    "The File, Edit, View menu bar stays out of sight on Windows and Linux until you press Alt (FBRX has its own navigation; its shortcuts still work), and windows open in the color of your mode.",
-    "The built-in model's context window on Auto now fits the graphics card when the model runs there, so a long context no longer pushes part of the model off the card (slower); several graphics cards add up when judging what fits.",
-    "Downloading a model checks first that the disk has room for it, and says how much is needed."
+    "A new look: Tropical, FBRX's honey running into red, is the default on calm, neutral pages, with capsule buttons, a raised segmented control and a few small bounces. Textures are off unless you pick one, and the Fabrics theme is now called Honey.",
+    "The AI on this computer reads about a quarter of what it did with each request (only the tools the chat is about), so a simple question no longer waits minutes. While it reads, the chat says how far (\"Reading your request: 4,100 of 9,800 tokens\"), and a second chat says it is waiting for the first.",
+    "A computer in an organization runs the edition FBRX Command gave the member signed in on it, however it joined. Settings → Edition says plainly when this copy of FBRX OS was built for another license signing key, and Install FBRX OS --signing-key fixes it.",
+    "Linux: FBRX OS installed from the FBRX folder appears in your apps with its icon, and the installers open a terminal window when started from the file manager.",
+    "FBRX Command: giving an FBRX account an edition replaces the last one instead of adding another."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.2.1.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.2.1",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.3.0.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.0",
   "server": {
-    "version": "1.3.1",
-    "released": "2026-11-03",
-    "summary": "FBRX Server 1.3.1: a context window up to 128K tokens, bigger models made easy (gpt-oss 120B, Qwen3 235B and any GGUF model on Hugging Face), and new fbrx-server ai commands.",
+    "version": "1.4.0",
+    "released": "2026-11-05",
+    "summary": "FBRX Server 1.4.0: Paste text from your computer into a machine's screen, the console's AI chat fixed, a faster AI on the server and the new look.",
     "notes": [
-      "The server's own AI keeps more in mind: on Auto its context window goes up to 128K tokens (as much as the memory, or the graphics cards, have room for). Administrators can set it in Mesh & AI → Models on this server, or with fbrx-server ai context.",
-      "New server models with long contexts: Qwen3 30B-A3B Instruct 2507 (the new pick for servers with 32 GB or more), gpt-oss 120B (quick on processors with 96 GB or more) and Qwen3 235B-A22B Instruct 2507 (192 GB or more).",
-      "Any GGUF model on Hugging Face by its name (owner/name, with a quantization after a colon): in the console's A model of your own, or sudo fbrx-server ai download owner/name --use. Big models in several files download as one, every file checked against Hugging Face's checksum.",
-      "fbrx-server ai recommend names the best model for this server; download --use downloads and switches in one go, with speed and time left; delete and context are new; a download checks the disk first (20 GB stays free).",
+      "Paste on a machine's screen: it shows your clipboard (or a box to paste into), then types the text into the machine as on a US keyboard, so it works anywhere, even on a login prompt or a BIOS screen.",
+      "Asking the server's AI a question in the console no longer ends in \"is not a function\".",
+      "The server's own AI sees only the tools a chat is about and says how far it has read a long request, so answers start sooner.",
+      "The console has the new look: honey running into red on calm pages.",
       "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
     ],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.2.1/fbrx-server-1.3.1.tar.gz",
-    "sha256": "9439c580297f40337eb74800691711f1b79b330e3b50c68fe79099a77a6ba935",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.2.1"
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.3.0/fbrx-server-1.4.0.tar.gz",
+    "sha256": "90ebf7e4bbdbbf7d9683d4482dbf2874a44a9f8e4e6520fdad16a8d00cbec0f9",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.0"
   },
   "digger": {
-    "version": "1.0.1",
-    "released": "2026-11-03",
-    "summary": "FBRX Digger 1.0.1: on Windows the title bar and menus follow Digger's Light and Dark modes.",
+    "version": "1.1.0",
+    "released": "2026-11-05",
+    "summary": "FBRX Digger 1.1.0: it runs entirely on its own, thinks with FBRX Endpoint's AI while Endpoint runs, and has a new mole icon.",
     "notes": [
-      "Windows: the title bar, menus and right-click menus follow Digger's mode instead of always Windows' own; the menu bar stays out of sight on Windows and Linux until you press Alt.",
-      "Everything from 1.0: network scans and their comparison, ping and trace route, the speed test, the Wi-Fi channel planner, DNS and port checks, device consoles (SSH, Telnet) and network environments."
+      "On its own: every network tool with no edition or FBRX account, and none of FBRX Endpoint's background work, so nothing fails and it never gets in the way.",
+      "While FBRX Endpoint runs on the same computer, Ask Fabrix and Diagnose with Fabrix appear and think with Endpoint's AI; nothing leaves the computer.",
+      "A new icon: a mole in a miner's helmet, drawn in honey and red on black."
     ],
-    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.0.1",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.0.1"
+    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.0",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.0"
   }
 }
