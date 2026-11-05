@@ -36,7 +36,7 @@ on the network pages. Digger's Fabrix thinks with Endpoint's AI model, while its
 Digger; nothing leaves the computer. Close FBRX Endpoint and they go away until it is back. Endpoint lends only an AI it
 runs itself (not a cloud provider), and not while its AI is on emergency stop.
 
-Its icon is a mole in a miner's helmet, lamp lit.
+Its icon is a mole in a miner's helmet, lamp lit, drawn in honey and red on black.
 
 Digger is FBRX OS's own Network Center, so every network tool FBRX OS gets, Digger gets too, in the same release.
 

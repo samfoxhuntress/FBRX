@@ -28,40 +28,28 @@ export const DIGGER_AI_PROVIDER: ProviderConfig = { id: 'fbrx-endpoint', type: '
 export const DIGGER_SETTINGS = ['general', 'appearance', 'browser', 'updates', 'logs'] as const;
 
 /**
- * Digger's icon: a mole in a miner's helmet (its lamp lit, in FBRX's Tropical colors), peeking out of the ground. The
- * window and installer icons are drawn from it (apps/desktop/build/digger-icon.svg and .png), and the sidebar shows it.
+ * Digger's icon: a mole in a miner's helmet, its lamp lit, peeking out of the ground over a few specks of dirt, drawn
+ * in one line of FBRX's honey-to-red on black. The window and installer icons are drawn from it
+ * (apps/desktop/build/digger-icon.svg and .png), and the sidebar shows it.
  */
 export const DIGGER_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="dg-sky" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#2a1b14"/><stop offset="1" stop-color="#140b07"/></linearGradient>
-    <linearGradient id="dg-hat" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ffc24a"/><stop offset="1" stop-color="#ff4f6d"/></linearGradient>
-    <radialGradient id="dg-glow"><stop offset="0" stop-color="#fff3c4" stop-opacity="0.75"/><stop offset="1" stop-color="#fff3c4" stop-opacity="0"/></radialGradient>
+    <linearGradient id="dg-ink" gradientUnits="userSpaceOnUse" x1="260" y1="170" x2="764" y2="900"><stop offset="0" stop-color="#ffb547"/><stop offset="0.5" stop-color="#ff8a3d"/><stop offset="1" stop-color="#ff4d5e"/></linearGradient>
   </defs>
-  <rect x="64" y="64" width="896" height="896" rx="200" fill="url(#dg-sky)"/>
-  <ellipse cx="512" cy="610" rx="262" ry="250" fill="#7a5c4f"/>
-  <ellipse cx="512" cy="660" rx="168" ry="150" fill="#a8857a"/>
-  <path d="M296 420 C 300 300 400 238 512 238 C 624 238 724 300 728 420 Z" fill="url(#dg-hat)"/>
-  <rect x="262" y="404" width="500" height="44" rx="22" fill="url(#dg-hat)"/>
-  <circle cx="512" cy="322" r="120" fill="url(#dg-glow)"/>
-  <circle cx="512" cy="322" r="46" fill="#fff6d8" stroke="#3a2418" stroke-width="12"/>
-  <path d="M402 528 q 32 -34 64 0" fill="none" stroke="#1d110b" stroke-width="20" stroke-linecap="round"/>
-  <path d="M558 528 q 32 -34 64 0" fill="none" stroke="#1d110b" stroke-width="20" stroke-linecap="round"/>
-  <circle cx="392" cy="596" r="30" fill="#ff8fa3" opacity="0.55"/>
-  <circle cx="632" cy="596" r="30" fill="#ff8fa3" opacity="0.55"/>
-  <ellipse cx="512" cy="600" rx="56" ry="40" fill="#ff7f98"/>
-  <ellipse cx="496" cy="588" rx="14" ry="9" fill="#ffd0da"/>
-  <g stroke="#3a2418" stroke-width="8" stroke-linecap="round" opacity="0.7">
-    <path d="M444 616 L346 600"/><path d="M444 634 L350 650"/><path d="M580 616 L678 600"/><path d="M580 634 L674 650"/>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="#0b0b0c"/>
+  <g fill="none" stroke="url(#dg-ink)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M512 214V174M432 236L412 202M592 236L612 202"/>
+    <path d="M326 452C336 330 414 266 512 266C610 266 688 330 698 452"/>
+    <path d="M292 456H732"/>
+    <circle cx="512" cy="356" r="42"/>
+    <path d="M344 474C300 540 286 630 296 712M680 474C724 540 738 630 728 712"/>
+    <path d="M404 566q30 -28 60 0M560 566q30 -28 60 0"/>
+    <path d="M196 712H828"/>
+    <path d="M362 712a50 42 0 0 1 100 0M562 712a50 42 0 0 1 100 0"/>
   </g>
-  <path d="M480 652 q 32 26 64 0" fill="none" stroke="#1d110b" stroke-width="12" stroke-linecap="round"/>
-  <path d="M64 800 C 210 740 360 770 512 772 C 664 770 814 740 960 800 L960 760 L960 760 L960 760 C 960 870 870 960 760 960 L264 960 C 154 960 64 870 64 760 Z" fill="#4a2e1f"/>
-  <g fill="#f2c9b8">
-    <ellipse cx="370" cy="790" rx="78" ry="46"/>
-    <ellipse cx="654" cy="790" rx="78" ry="46"/>
+  <ellipse cx="512" cy="628" rx="38" ry="26" fill="url(#dg-ink)"/>
+  <g fill="url(#dg-ink)">
+    <circle cx="300" cy="790" r="18"/><circle cx="430" cy="812" r="12"/><circle cx="560" cy="792" r="16"/><circle cx="700" cy="818" r="14"/>
+    <circle cx="368" cy="868" r="10"/><circle cx="620" cy="872" r="11"/><circle cx="496" cy="880" r="8"/><circle cx="236" cy="850" r="9"/><circle cx="780" cy="858" r="9"/>
   </g>
-  <g stroke="#7a5c4f" stroke-width="10" stroke-linecap="round">
-    <path d="M330 770 L322 742"/><path d="M370 764 L370 734"/><path d="M410 770 L418 742"/>
-    <path d="M614 770 L606 742"/><path d="M654 764 L654 734"/><path d="M694 770 L702 742"/>
-  </g>
-  <g fill="#6b4430"><circle cx="210" cy="880" r="16"/><circle cx="820" cy="866" r="12"/><circle cx="560" cy="900" r="10"/><circle cx="320" cy="920" r="9"/></g>
 </svg>`;
