@@ -1,10 +1,10 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { LanDevice, LanScan, LanScanCompare, NetAdapter, PingResult, SpeedTestResult, TraceHop } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Icons, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
 import { bridge, call, onEvent, pickFile } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
-import { IS_WINDOWS, navigate, routeArg } from '../app';
-import { AskButton, askAgent } from '../widgets';
+import { DIGGER, IS_WINDOWS, navigate, routeArg } from '../app';
+import { AiContext, AskButton, askAgent } from '../widgets';
 import { ConnectDialog, type ConnectTarget } from '../consoles';
 import { Speedometer, speedFraction } from '../speedometer';
 import { unlockTrophy } from '../fun';
@@ -35,6 +35,7 @@ function Overview() {
   const [gw, setGw] = useState<PingResult | null>(null);
   const [web, setWeb] = useState<PingResult | null>(null);
   const agent = useAgentName();
+  const ai = useContext(AiContext);
   useEffect(() => {
     if (ctx.data?.gateway) void call('net.ping', { host: ctx.data.gateway, count: 4 }).then(setGw).catch(() => undefined);
     void call('net.ping', { host: '1.1.1.1', count: 4 }).then(setWeb).catch(() => undefined);
@@ -49,7 +50,7 @@ function Overview() {
         <StatTile label="Public address" value={pub.data?.ip ?? '—'} foot={pub.data?.isp ?? pub.error ?? ''} />
       </Grid>
       {verdict && (
-        <Callout tone={web?.received ? 'good' : 'warning'} actions={<Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent('Diagnose my network connection step by step and explain any problem in plain language.')}`)}>Diagnose with {agent}</Button>}>
+        <Callout tone={web?.received ? 'good' : 'warning'} actions={ai && <Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent('Diagnose my network connection step by step and explain any problem in plain language.')}`)}>Diagnose with {agent}</Button>}>
           {verdict}
         </Callout>
       )}
@@ -834,7 +835,8 @@ export function NetworkPage({ advanced, everything, easterEggs }: { advanced: bo
   // environments (network controllers).
   const all: Array<{ id: Tab; label: ReactNode; need?: 'ultra' | 'blackhole' }> = [
     { id: 'overview', label: 'Overview' },
-    { id: 'environments', label: advancedLabel('Environments', true), need: 'blackhole' },
+    // FBRX Digger has every tab, so it marks none of them with an edition.
+    { id: 'environments', label: DIGGER ? 'Environments' : advancedLabel('Environments', true), need: 'blackhole' },
     { id: 'trace', label: 'Ping & trace', need: 'ultra' },
     { id: 'devices', label: 'Devices', need: 'ultra' },
     { id: 'speed', label: 'Speed' },
@@ -842,7 +844,7 @@ export function NetworkPage({ advanced, everything, easterEggs }: { advanced: bo
     { id: 'bluetooth', label: 'Bluetooth' },
     { id: 'printers', label: 'Printers' },
     { id: 'tools', label: 'Tools', need: 'ultra' },
-    ...(IS_WINDOWS ? [{ id: 'adapters' as const, label: advancedLabel('Adapters'), need: 'ultra' as const }] : []),
+    ...(IS_WINDOWS ? [{ id: 'adapters' as const, label: DIGGER ? 'Adapters' : advancedLabel('Adapters'), need: 'ultra' as const }] : []),
   ];
   const tabs = all.filter((t) => !t.need || (t.need === 'ultra' ? advanced : everything)).map(({ need: _n, ...t }) => t);
   const shown = tabs.some((t) => t.id === tab) ? tab : 'overview';

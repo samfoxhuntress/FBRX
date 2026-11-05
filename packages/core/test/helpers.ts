@@ -7,7 +7,7 @@ import { createServer } from 'node:net';
 import { DEFAULT_POLICY, type Policy } from '@fbrx/shared';
 import { Kernel } from '../src/kernel';
 import { createNodePlatform } from '../src/node-platform';
-import { StaticKeyKeychain, type KeychainAdapter } from '../src/platform';
+import { StaticKeyKeychain, type KeychainAdapter, type PlatformAdapter } from '../src/platform';
 
 export const USER = { origin: 'user' as const, actor: 'test-user' };
 
@@ -41,6 +41,8 @@ export interface TestKernelOptions {
   onRestart?: (reason: string) => void;
   /** FBRX Server's own core. */
   server?: boolean;
+  /** Changes to the platform (FBRX Digger's flavor, say). */
+  platform?: Partial<PlatformAdapter>;
 }
 
 /** Boots an isolated kernel in a temp folder with tools confined to a sandbox directory. */
@@ -51,13 +53,16 @@ export async function makeKernel(o: TestKernelOptions = {}): Promise<{ kernel: K
   const kernel = await Kernel.create({
     dataDir,
     server: o.server,
-    platform: createNodePlatform({
-      dataDir,
-      devMode: o.devMode ?? true,
-      keychain,
-      licensePublicKeys: o.licensePublicKeys,
-      requestRestart: o.onRestart,
-    }),
+    platform: {
+      ...createNodePlatform({
+        dataDir,
+        devMode: o.devMode ?? true,
+        keychain,
+        licensePublicKeys: o.licensePublicKeys,
+        requestRestart: o.onRestart,
+      }),
+      ...o.platform,
+    },
   });
   kernel.settings.update({
     localApi: { enabled: o.localApiPort !== undefined, port: o.localApiPort ?? 47999 },

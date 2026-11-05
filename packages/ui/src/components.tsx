@@ -47,6 +47,8 @@ export function advancedLabel(label: ReactNode, blackHole = false): ReactNode {
 export function Shell(props: {
   /** The product name beside the logo (FBRX OS unless told otherwise). */
   brandName?: ReactNode;
+  /** Another app's own logo in place of FBRX's (FBRX Digger's mole). */
+  brandMark?: ReactNode;
   brandSub?: string;
   /** Clicks on the logo (the desktop app counts them for an easter egg). */
   onBrandClick?: () => void;
@@ -69,7 +71,7 @@ export function Shell(props: {
     <div className={cx('fx-shell', props.groups && 'grouped', collapsed && 'collapsed')}>
       <aside className="fx-sidebar">
         <div className="fx-brand">
-          <FbrxMark className={cx('fx-brand-mark', props.brandClassName)} onClick={props.onBrandClick} />
+          {props.brandMark ?? <FbrxMark className={cx('fx-brand-mark', props.brandClassName)} onClick={props.onBrandClick} />}
           {!collapsed && (
             <div>
               <div className="fx-brand-name">{props.brandName ?? 'FBRX OS'}</div>

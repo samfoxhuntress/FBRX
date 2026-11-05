@@ -1,12 +1,12 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { NotificationEvent, PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
-import { DIGGER_PAGES, TIER_NAMES, TIER_SHORT, addressAs, atLeast, displayVersion, funEnabled } from '@fbrx/shared';
+import { DIGGER_AI_PROVIDER, DIGGER_ICON_SVG, DIGGER_PAGES, TIER_NAMES, TIER_SHORT, addressAs, atLeast, displayVersion, funEnabled, type ProviderStatus } from '@fbrx/shared';
 import { Button, ErrorBoundary, FBRX_MARK, FbrxMark, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
 import { playChime } from './notify-sound';
 import { useConsoleSessions, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
-import { AgentNameContext, EmergencyStop } from './widgets';
+import { AgentNameContext, AiContext, EmergencyStop } from './widgets';
 import { LocalAccountLock } from './account';
 import { GooseOverlay, summonGoose, unlockTrophy, useKonami } from './fun';
 import { SnapOverlay } from './snap-overlay';
@@ -165,7 +165,11 @@ function useRoute(): Route {
 export const IS_WINDOWS = bridge.platform === 'win32';
 /** FBRX Digger: the Network Center on its own, every network tool included, nothing else. */
 export const DIGGER = bridge.flavor === 'digger';
-const DIGGER_ROUTES: readonly string[] = DIGGER_PAGES;
+
+/** FBRX Digger's mole, where FBRX OS shows its logo. */
+export function DiggerMark({ size = 30, className = 'fx-brand-mark' }: { size?: number; className?: string }) {
+  return <span className={`${className} digger-mark`} style={{ width: size, height: size }} role="img" aria-label="FBRX Digger" dangerouslySetInnerHTML={{ __html: DIGGER_ICON_SVG }} />;
+}
 
 /** Start-up animation: the logo's frame is stitched in like a thread, then the letters appear. */
 function Splash({ tier }: { tier: Tier | undefined }) {
@@ -230,6 +234,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const { data: status } = useCore('system.status', undefined, ['service.changed', 'vault.changed', 'fleet.changed', 'license.changed', 'approval.requested', 'approval.resolved', 'runtime.changed', 'ai.halted', 'agent.runs'], 15_000);
   const { data: trophies } = useCore('fun.trophies', undefined, ['fun.trophy']);
   const { data: alertCounts } = useCore('alerts.counts', undefined, ['alerts.changed'], 60_000);
+  // The AI providers (the top bar's model); in FBRX Digger, whether FBRX Endpoint's AI is there, looked for more often.
+  const { data: providers } = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed'], DIGGER ? 15_000 : 60_000);
+  const diggerAi = DIGGER && !!providers?.find((p) => p.id === DIGGER_AI_PROVIDER.id)?.available;
   // The Help desk tab's number: new tickets in the queue on a receiver, tickets waiting on you everywhere else.
   const hd = useCore('helpdesk.status', undefined, ['fleet.changed']).data;
   const hdList = useCore('helpdesk.tickets', { scope: hd?.receiver ? 'queue' : 'mine', state: 'open' }, ['helpdesk.changed', 'fleet.changed'], 300_000).data;
@@ -335,7 +342,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const blackhole = atLeast(tier, 'blackhole');
   const fun = funEnabled(settings?.settings, tier);
   useEffect(() => {
-    if (status) document.title = status.edition?.productName ?? TIER_NAMES[tier];
+    if (status) document.title = DIGGER ? 'FBRX Digger' : (status.edition?.productName ?? TIER_NAMES[tier]);
   }, [status, tier]);
   useKonami(
     fun,
@@ -441,7 +448,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const nav: NavItem[] = DIGGER
     ? DIGGER_PAGES.flatMap((id) => {
         const item = byId.get(id);
-        if (!item) return [];
+        // The chat opens from the top bar's Ask button, while FBRX Endpoint's AI is there.
+        if (!item || id === 'agent') return [];
         const { need: _n, ...rest } = item;
         return [{ ...rest, section: 'Digger' }];
       })
@@ -512,8 +520,14 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   ownWindows = POPOUT ? {} : { terminal: ultra && s.windows.terminal, agent: s.windows.agent };
 
   const page = (() => {
-    // FBRX Digger opens on the Network Center, with every network tool whatever the edition.
-    if (DIGGER && !DIGGER_ROUTES.includes(route)) return <NetworkPage advanced everything easterEggs={false} />;
+    // FBRX Digger: its own pages, every network tool whatever the edition, and the chat while FBRX Endpoint's AI is
+    // there to answer it; anything else opens the Network Center.
+    if (DIGGER) {
+      if (route === 'browser') return <BrowserApp agentName={agentName} />;
+      if (route === 'settings') return <SettingsPage onRerunSetup={() => setForceOnboarding(true)} />;
+      if (route === 'agent' && diggerAi) return <AgentPage agentName={agentName} />;
+      return <NetworkPage advanced everything easterEggs={false} />;
+    }
     // Essentials Home: the split-flap board and a few notes from FBRX (no dashboard).
     if (essentials && route === 'home') return <EssentialsHome status={status} agentName={agentName} who={addressAs(s)} />;
     if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && !byId.get(route)?.need) {
@@ -626,6 +640,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       <LearnerContext.Provider value={learner}>
       <VerticalContext.Provider value={vertical}>
       <AgentNameContext.Provider value={agentName}>
+      <AiContext.Provider value={!DIGGER || diggerAi}>
         <PopoutFrame title={byId.get(route)?.label ?? (route === 'agent' ? agentName : 'FBRX')}>
           <Suspense
             fallback={
@@ -638,6 +653,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
           </Suspense>
         </PopoutFrame>
         {hosts}
+      </AiContext.Provider>
       </AgentNameContext.Provider>
       </VerticalContext.Provider>
       </LearnerContext.Provider>
@@ -649,6 +665,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     <LearnerContext.Provider value={learner}>
     <VerticalContext.Provider value={vertical}>
     <AgentNameContext.Provider value={agentName}>
+    <AiContext.Provider value={!DIGGER || diggerAi}>
       {showSplash && <Splash tier={tier} />}
       <Shell
         brandName={
@@ -665,6 +682,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
           )
         }
         brandSub={status.deviceName}
+        brandMark={DIGGER ? <DiggerMark /> : undefined}
         onBrandClick={onBrandClick}
         brandClassName={weaving ? 'weaving' : undefined}
         nav={nav}
@@ -673,7 +691,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         onCollapsedChange={setCollapsed}
         active={route}
         onNavigate={(id) => navigate(id)}
-        topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} defaultProvider={s.ai.defaultProvider} defaultModel={s.ai.defaultModel} presenter={presenter} learner={learner} />}
+        topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} providers={providers} defaultProvider={DIGGER ? DIGGER_AI_PROVIDER.id : s.ai.defaultProvider} defaultModel={DIGGER ? '' : s.ai.defaultModel} presenter={presenter} learner={learner} />}
         footer={
           <span>
             <span title={DIGGER ? 'FBRX Digger' : TIER_NAMES[tier]}>{DIGGER ? `Version ${status.version}` : displayVersion(status.version)}</span>
@@ -710,6 +728,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
           }}
         />
       )}
+    </AiContext.Provider>
     </AgentNameContext.Provider>
     </VerticalContext.Provider>
     </LearnerContext.Provider>
@@ -784,6 +803,7 @@ function TopBar({
   agentName,
   critical,
   spotlightKey,
+  providers,
   defaultProvider,
   defaultModel,
   presenter,
@@ -794,24 +814,28 @@ function TopBar({
   agentName: string;
   critical: number;
   spotlightKey: string | null;
+  providers: ProviderStatus[] | null;
   defaultProvider: string;
   defaultModel: string;
   presenter: PresenterStatus | null;
   learner: boolean;
 }) {
   const failing = status.services.filter((s) => s.state === 'failed');
-  const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed'], 60_000);
   const consoles = useConsoleSessions();
   const openConsoles = (consoles.data ?? []).filter((c) => c.state === 'open').length;
-  const p = providers.data?.find((x) => x.id === defaultProvider);
+  const p = providers?.find((x) => x.id === defaultProvider);
   const model = defaultModel || p?.defaultModel || null;
+  // FBRX Digger has no Spotlight, and an AI only while FBRX Endpoint's is there.
+  const ai = !DIGGER || !!p?.available;
   return (
     <>
-      <button className="topbar-search" onClick={() => bridge.showSpotlight?.()} title="Spotlight: search apps, files, settings and more from anywhere">
-        <Icons.search size={15} />
-        <span>Search apps, files, settings, or ask {agentName}…</span>
-        {spotlightKey && <kbd className="kbd">{spotlightKey.replace('CommandOrControl', 'Ctrl')}</kbd>}
-      </button>
+      {!DIGGER && (
+        <button className="topbar-search" onClick={() => bridge.showSpotlight?.()} title="Spotlight: search apps, files, settings and more from anywhere">
+          <Icons.search size={15} />
+          <span>Search apps, files, settings, or ask {agentName}…</span>
+          {spotlightKey && <kbd className="kbd">{spotlightKey.replace('CommandOrControl', 'Ctrl')}</kbd>}
+        </button>
+      )}
       {status.vault.state === 'locked' ? (
         <button className="status-link" onClick={() => navigate('vault')} title="Open the vault to unlock">
           <Status tone={status.vault.lockReason === 'keychain' ? 'warning' : 'neutral'}>Vault locked</Status>
@@ -852,14 +876,23 @@ function TopBar({
           {status.pendingApprovals} approval{status.pendingApprovals > 1 ? 's' : ''} waiting
         </Button>
       )}
-      {!learner && (
-        <button className="model-pill" onClick={() => navigate('runtime')} title={p ? `${p.name}: ${p.available ? 'ready' : (p.message ?? 'not available')}. Click to choose a model.` : 'Choose a model'}>
-          <span className={`dot ${p?.available ? 'ok' : 'bad'}`} aria-hidden />
-          {model ? <span className="mono">{model}</span> : <span>{p?.name ?? 'Choose a model'}</span>}
-        </button>
+      {DIGGER ? (
+        ai && (
+          <span className="model-pill" title={`${agentName} thinks with FBRX Endpoint's AI on this computer while FBRX Endpoint runs`}>
+            <span className="dot ok" aria-hidden />
+            <span>FBRX Endpoint's AI</span>
+          </span>
+        )
+      ) : (
+        !learner && (
+          <button className="model-pill" onClick={() => navigate('runtime')} title={p ? `${p.name}: ${p.available ? 'ready' : (p.message ?? 'not available')}. Click to choose a model.` : 'Choose a model'}>
+            <span className={`dot ${p?.available ? 'ok' : 'bad'}`} aria-hidden />
+            {model ? <span className="mono">{model}</span> : <span>{p?.name ?? 'Choose a model'}</span>}
+          </button>
+        )
       )}
       {/* The one general "Ask" button in the app; pages only add buttons that ask about something specific. */}
-      {route !== 'agent' && (
+      {route !== 'agent' && ai && (
         <Button size="sm" variant="primary" icon="sparkles" onClick={() => navigate('agent')}>
           Ask {agentName}
         </Button>

@@ -22,8 +22,21 @@ network tool FBRX has and nothing else. It runs on Windows, macOS and Linux, nex
   certificates.
 
 Everything is included, whatever FBRX edition you have: Digger is the network tools of Endpoint Ultra and Black Hole,
-on their own. It keeps its own data folder and settings, and leaves the keyboard alone (no global shortcuts), so it
-never gets in the way of FBRX OS on the same computer.
+on their own.
+
+## On its own
+
+Digger needs nothing else: no FBRX account, no edition and no FBRX OS. It keeps its own data folder and settings, runs
+none of FBRX Endpoint's background work (no AI of its own, no backups, antivirus or organization), and leaves the
+keyboard alone (no global shortcuts), so it never gets in the way of FBRX OS on the same computer.
+
+**Fabrix, while FBRX Endpoint runs.** When FBRX Endpoint is running on the same computer, Digger finds its AI by
+itself: **FBRX Endpoint's AI** shows at the top, with **Ask Fabrix**, *Diagnose with Fabrix* and the other ask buttons
+on the network pages. Digger's Fabrix thinks with Endpoint's AI model, while its tools, chats and approvals stay in
+Digger; nothing leaves the computer. Close FBRX Endpoint and they go away until it is back. Endpoint lends only an AI it
+runs itself (not a cloud provider), and not while its AI is on emergency stop.
+
+Its icon is a mole in a miner's helmet, lamp lit.
 
 Digger is FBRX OS's own Network Center, so every network tool FBRX OS gets, Digger gets too, in the same release.
 

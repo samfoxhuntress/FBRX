@@ -1,4 +1,4 @@
-import type { CloudAiUsage, LentModel, ModelInfo, ProviderConfig, ProviderStatus } from '@fbrx/shared';
+import { DIGGER_AI_PROVIDER, type CloudAiUsage, type LentModel, type ModelInfo, type ProviderConfig, type ProviderStatus } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { SettingsService } from '../settings/settings-service';
 import type { Vault } from '../vault/vault';
@@ -26,6 +26,11 @@ export class ProviderManager {
       mesh?: { call: <T>(peerId: string, method: string, params: unknown, timeoutMs?: number) => Promise<T>; name: (peerId: string) => string | null };
       /** FBRX Cloud AI, through the signed-in FBRX account: where it is, and the account's month there. */
       cloud?: { access: () => CloudAiAccess | null; usage: (signal?: AbortSignal) => Promise<CloudAiUsage>; learner: () => boolean };
+      /**
+       * FBRX Digger: FBRX Endpoint on this computer, whose AI is Digger's only one (DIGGER_AI_PROVIDER): a request to
+       * it, and whether its link is there (Endpoint running).
+       */
+      endpoint?: { call: <T>(method: string, params: unknown, timeoutMs?: number) => Promise<T>; present: () => boolean };
     },
   ) {}
 
@@ -33,7 +38,7 @@ export class ProviderManager {
   private readonly lent = new Map<string, LentModel>();
 
   configs(): ProviderConfig[] {
-    return this.d.settings.get().ai.providers;
+    return this.d.endpoint ? [DIGGER_AI_PROVIDER] : this.d.settings.get().ai.providers;
   }
 
   config(id: string): ProviderConfig {
@@ -131,6 +136,18 @@ export class ProviderManager {
         if (!cloud) throw new CoreError('UNAVAILABLE', 'FBRX Cloud AI is not available here');
         return new FbrxCloudProvider({ id: cfg.id, access: cloud.access, usage: cloud.usage, defaultModel: cfg.defaultModel });
       }
+      case 'fbrx-endpoint': {
+        // The model lender's protocol, as with another computer's AI, over the link to FBRX Endpoint on this computer.
+        const endpoint = this.d.endpoint;
+        if (!endpoint) throw new CoreError('UNAVAILABLE', 'FBRX Endpoint’s AI is for FBRX Digger');
+        return new MeshModelProvider({
+          id: cfg.id,
+          peerName: cfg.name,
+          call: endpoint.call,
+          historyChars: Math.min(MAX_LENT_HISTORY, this.lent.get(cfg.id)?.historyChars || 60_000),
+          remember: (offer) => this.lent.set(cfg.id, offer),
+        });
+      }
     }
   }
 
@@ -149,6 +166,11 @@ export class ProviderManager {
   /** Picks the provider + model for a run, applying defaults and governance. */
   resolve(providerId?: string, model?: string): { provider: ChatProvider; config: ProviderConfig; model: string } {
     const ai = this.d.settings.get().ai;
+    // FBRX Digger has one AI, FBRX Endpoint's, with a model of Endpoint's (or the one Endpoint uses).
+    if (this.d.endpoint) {
+      const offered = this.lent.get(DIGGER_AI_PROVIDER.id)?.models ?? [];
+      return { provider: this.build(DIGGER_AI_PROVIDER), config: DIGGER_AI_PROVIDER, model: model && offered.some((m) => m.id === model) ? model : '' };
+    }
     const id = providerId || ai.defaultProvider;
     const cfg = this.config(id);
     const blocked = this.blockReason(cfg);
@@ -158,13 +180,13 @@ export class ProviderManager {
       throw new CoreError('UNAVAILABLE', 'The local AI runtime has no model to run. Download one in AI models, or pick another provider.');
     }
     // Ollama picks its best installed model when none is chosen (see OllamaProvider.pickModel), another computer's AI
-    // the one it runs, and FBRX Cloud AI its first.
+    // (and FBRX Endpoint's, for FBRX Digger) the one it runs, and FBRX Cloud AI its first.
     const chosen =
       model ||
       (id === ai.defaultProvider ? ai.defaultModel : '') ||
       cfg.defaultModel ||
       (cfg.type === 'local-runtime' ? (this.d.runtime.status().modelId ?? 'local') : cfg.type === 'ollama' ? (this.known.get(cfg.id)?.[0] ?? '') : '');
-    if (!chosen && cfg.type !== 'local-runtime' && cfg.type !== 'ollama' && cfg.type !== 'mesh' && cfg.type !== 'fbrx-cloud') throw new CoreError('INVALID_ARGUMENT', `Choose a model for ${cfg.name}`);
+    if (!chosen && cfg.type !== 'local-runtime' && cfg.type !== 'ollama' && cfg.type !== 'mesh' && cfg.type !== 'fbrx-endpoint' && cfg.type !== 'fbrx-cloud') throw new CoreError('INVALID_ARGUMENT', `Choose a model for ${cfg.name}`);
     return { provider: this.build(cfg), config: cfg, model: chosen };
   }
 
@@ -175,7 +197,8 @@ export class ProviderManager {
    * may be a network call (cloud APIs, Ollama), so answers are shared for 15 seconds unless the setup changed.
    */
   status(): Promise<ProviderStatus[]> {
-    const key = JSON.stringify([this.configs(), this.d.runtime.status().state, this.d.policy.policy.ai, this.d.settings.get().ai.defaultProvider]);
+    // FBRX Endpoint starting or closing (for FBRX Digger) is seen at once, not after the cache runs out.
+    const key = JSON.stringify([this.configs(), this.d.runtime.status().state, this.d.policy.policy.ai, this.d.settings.get().ai.defaultProvider, this.d.endpoint?.present()]);
     const c = this.statusCache;
     if (c && c.key === key && Date.now() - c.at < 15_000) return c.value;
     const value = this.checkAll();

@@ -97,6 +97,8 @@ export interface PlatformAdapter {
   images?: ImageTools | null;
   /** Which app this is: FBRX OS, or FBRX Digger (the Network Center on its own, every network tool included). */
   flavor?: AppFlavor;
+  /** FBRX Digger: FBRX Endpoint's data folder on this computer, where Digger finds Endpoint's AI. */
+  endpointDataDir?: string | null;
   /** Moves a file or folder to the Trash (Recycle Bin); the desktop app has it, a headless core does not. */
   trash?(path: string): Promise<void>;
   specialDirs(): SpecialDirs;

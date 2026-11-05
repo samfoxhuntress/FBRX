@@ -269,12 +269,21 @@ network tool FBRX OS gets, Digger gets in the same commit.
 * `packages/shared/src/digger.ts`: its name, its version (`DIGGER_VERSION`), the pages it shows (`DIGGER_PAGES`) and
   its settings tabs.
 * `apps/desktop/electron-builder.digger.yml`: packaging. It adds `fbrxFlavor: digger` to the app's `package.json`,
-  its own app id, name and icon (`build/digger-icon.svg`), and leaves out the local AI runtime and the FBRX Server
+  its own app id, name and icon (`build/digger-icon.png`), and leaves out the local AI runtime and the FBRX Server
   bundle.
 * `apps/desktop/src/main/flavor.ts`: the app reads the flavor at start (`FBRX_FLAVOR=digger` does the same in
   development) and takes Digger's name, data folder and single-instance lock.
 * The renderer (`DIGGER` in `app.tsx`) shows only Digger's pages and opens on the Network Center with every tab; the
   core's `networkTools()` turns on the network tools' Ultra parts.
+* Digger runs on its own: the kernel's `digger` flag leaves out FBRX Endpoint's services and start-up work (local AI,
+  backups, antivirus, fleet, calendar, mesh, Local API, account, messages, automations), and the renderer skips the
+  edition gates for Digger's pages.
+* Its AI is FBRX Endpoint's (`DIGGER_AI_PROVIDER`, provider type `fbrx-endpoint`): Endpoint on a desktop writes
+  `digger-link.json` (127.0.0.1, a port of the moment, a secret; mode 0600) in its data folder and answers the model
+  lender's `assist.model.*` requests on it (`packages/core/src/mesh/digger-link.ts`); Digger reads the file through
+  `endpointDataDir` (`FBRX_ENDPOINT_HOME` in development) and uses the same provider as another computer's AI.
+* Its icon is `DIGGER_ICON_SVG` in `packages/shared/src/digger.ts`; `apps/desktop/build/digger-icon.svg` is written
+  from it (a test checks they match) and `digger-icon.png` rendered from that (1024 px).
 
 Package it on your own computer with `npm run package:digger -w @fbrx/desktop -- --win` (or `--mac`, `--linux`).
 Releases come from the **FBRX Digger** workflow (`.github/workflows/digger.yml`): run it with *release* on, and it

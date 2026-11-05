@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process';
 import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { FileKeychain, defaultSpecialDirs, openMacSafeStorage, type KeychainAdapter, type MovedKeychain, type PlatformAdapter, type UpdateController } from '@fbrx/core';
-import type { AppFlavor, NotificationEvent } from '@fbrx/shared';
+import { PRODUCT_NAME, type AppFlavor, type NotificationEvent } from '@fbrx/shared';
 import { documentRenderer } from './document-renderer';
 
 declare const __FBRX_LICENSE_PUBKEYS__: string[];
@@ -83,6 +83,8 @@ export function createElectronPlatform(o: {
   return {
     shell: 'desktop',
     flavor: o.flavor,
+    // FBRX Digger finds FBRX Endpoint's AI through Endpoint's data folder (FBRX_ENDPOINT_HOME in development).
+    endpointDataDir: o.flavor === 'digger' ? (process.env.FBRX_ENDPOINT_HOME ?? join(app.getPath('appData'), PRODUCT_NAME)) : null,
     appVersion: app.getVersion(),
     devMode: !app.isPackaged || process.env.FBRX_DEV_MODE === '1',
     keychain: chooseKeychain(o.dataDir),

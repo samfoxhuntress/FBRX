@@ -4,7 +4,7 @@ import { NATURAL_PREFIX, addressAs, funEnabled, modelSeesImages } from '@fbrx/sh
 import { Button, Callout, Card, FbrxMark, Icons, Markdown, Modal, Select, Status, TextArea, useAction, useConfirm, type IconName } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
 import { useCore, useStarterAi } from '../hooks';
-import { POPOUT, navigate, routeArg } from '../app';
+import { DIGGER, DiggerMark, POPOUT, navigate, routeArg } from '../app';
 import { EmergencyStop, ModelPicker } from '../widgets';
 import { useSlashMenu } from '../slash-menu';
 import { ActivityPanel, ThinkingNote } from '../agent-activity';
@@ -27,6 +27,14 @@ const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'wifi', title: 'Why is my internet slow?', prompt: 'My internet feels slow. Check my connection step by step (router, DNS, latency to the internet) and explain what you find in plain language.' },
   { icon: 'shield', title: 'Is this link safe?', prompt: 'Check whether this link is safe to open: ' },
   { icon: 'bug', title: 'Explain recent crashes', prompt: 'Look at the errors and crashes Windows recorded in the last few days, explain the important ones and suggest fixes.' },
+];
+
+/** FBRX Digger's: the network, and nothing else. */
+const DIGGER_STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
+  { icon: 'wifi', title: 'Why is my internet slow?', prompt: 'My internet feels slow. Check my connection step by step (router, DNS, latency to the internet) and explain what you find in plain language.' },
+  { icon: 'network', title: 'What is on my network?', prompt: 'Scan my network and tell me what each device probably is. Flag anything unknown or with open ports that worry you.' },
+  { icon: 'activity', title: 'Is my Wi-Fi crowded?', prompt: 'Look at the Wi-Fi networks around me and tell me whether my channel is crowded, and which channel would be better.' },
+  { icon: 'globe', title: 'Check a website', prompt: 'Check this website from my network: does its name resolve, does it answer, and how far away is it? ' },
 ];
 
 /** Copy, edit and run-again under a message (shown on hover). */
@@ -571,7 +579,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
           {!!visible.length && <StarterAiCard st={starter} />}
           {!visible.length && !reply && (
             <div className="msg" style={{ marginTop: '8vh', alignItems: 'center', textAlign: 'center' }}>
-              <FbrxMark className="fx-brand-mark" size={48} />
+              {DIGGER ? <DiggerMark size={56} /> : <FbrxMark className="fx-brand-mark" size={48} />}
               <h2>
                 Hi{addressAs(settings.data?.settings) ? ` ${addressAs(settings.data?.settings)}` : ''}, I'm {agentName}. What should we do?
               </h2>
@@ -581,7 +589,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
                 {offline ? ' Chats start offline, I will ask before using the internet.' : ' This chat is online: I may use internet tools.'} Let’s start with something simple:
               </p>
               <div className="choice-grid" style={{ width: '100%', marginTop: 8 }}>
-                {STARTERS.map((st) => {
+                {(DIGGER ? DIGGER_STARTERS : STARTERS).map((st) => {
                   const Ico = Icons[st.icon];
                   return (
                     <button

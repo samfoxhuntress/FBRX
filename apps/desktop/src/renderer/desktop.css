@@ -7852,3 +7852,13 @@ body.popout .fx-page-header p {
   background: var(--surface-2);
   font-size: 13px;
 }
+
+/* FBRX Digger's mole in the sidebar, in place of FBRX's logo. */
+.digger-mark {
+  display: block;
+}
+.digger-mark svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}

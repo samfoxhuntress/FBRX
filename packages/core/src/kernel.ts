@@ -101,6 +101,7 @@ import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
 import { AssistLog } from './mesh/assist-log';
 import { MeshAssist, runsElevated } from './mesh/mesh-assist';
 import { ModelLender } from './mesh/model-lending';
+import { DIGGER_PEER, DiggerLinkServer, diggerLinkCall, diggerLinkPresent } from './mesh/digger-link';
 import { MeshNetwork } from './mesh/mesh-network';
 import { ServerResources } from './system/server-resources';
 import { SavedServers } from './system/saved-servers';
@@ -183,6 +184,13 @@ export class Kernel {
   readonly platform: PlatformAdapter;
   /** FBRX Server's own core (KernelOptions.server). */
   readonly server: boolean;
+  /**
+   * FBRX Digger: the Network Center on its own. None of FBRX Endpoint's background work runs (no local AI, backups,
+   * antivirus, organization, mesh or account); its AI is FBRX Endpoint's, while Endpoint runs on this computer.
+   */
+  readonly digger: boolean;
+  /** FBRX Endpoint on a desktop: the link FBRX Digger on this computer finds its AI by. */
+  private readonly diggerLink: DiggerLinkServer | null;
   readonly startedAt = new Date();
 
   readonly db: Db;
@@ -283,6 +291,7 @@ export class Kernel {
   constructor(opts: KernelOptions) {
     this.platform = opts.platform;
     this.server = !!opts.server;
+    this.digger = opts.platform.flavor === 'digger';
     this.paths = resolveDataPaths(opts.dataDir);
     ensureDataDirs(this.paths);
     this.logSink = new LogSink({ dir: this.paths.logs, console: opts.logToConsole, level: opts.logLevel ?? (opts.platform.devMode ? 'debug' : 'info') });
@@ -403,6 +412,7 @@ export class Kernel {
         usage: (signal) => this.account.cloudAi(signal),
         learner: () => this.license.status().ceilingReason === 'learner',
       },
+      ...(this.digger && this.platform.endpointDataDir ? { endpoint: { call: diggerLinkCall(this.platform.endpointDataDir), present: () => diggerLinkPresent(this.platform.endpointDataDir!) } } : {}),
     });
     this.agent = new AgentRuntime({
       store: this.conversations,
@@ -934,7 +944,8 @@ export class Kernel {
       log: L('mesh'),
     });
     this.lender = new ModelLender({
-      accepts: (peer) => this.assist.acceptance(peer, false),
+      // FBRX Digger on this computer is the person's own app: it thinks with this computer's AI without asking.
+      accepts: (peer) => (peer.id === DIGGER_PEER.id ? { mode: 'auto', reason: null } : this.assist.acceptance(peer, false)),
       resolve: (model) => this.providers.resolve(undefined, model),
       models: (providerId) => this.providers.models(providerId),
       reasoning: () => this.settings.get().ai.localThinking,
@@ -948,6 +959,17 @@ export class Kernel {
       agentName: () => this.settings.get().ai.agentName,
       audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
     });
+    this.diggerLink =
+      !this.digger && !this.server && this.platform.shell === 'desktop'
+        ? new DiggerLinkServer({
+            dir: this.paths.root,
+            handle: async (method, params) => {
+              if (this.aiHalt()) throw new CoreError('FORBIDDEN', 'The AI is stopped on FBRX Endpoint (emergency stop)');
+              return this.lender.handle(DIGGER_PEER, method, params);
+            },
+            log: L('digger-link'),
+          })
+        : null;
     this.alerts = new AlertEngine({
       db: this.db,
       events: this.events,
@@ -1232,7 +1254,7 @@ export class Kernel {
       title: 'Local AI runtime',
       description: 'Built-in llama.cpp model server (127.0.0.1 only)',
       dependsOn: ['storage'],
-      enabled: () => this.settings.get().runtime.enabled,
+      enabled: () => !this.digger && this.settings.get().runtime.enabled,
       start: async () => {
         const st = this.runtime.status();
         if (this.runtimeWanted() && st.state === 'stopped') {
@@ -1264,6 +1286,7 @@ export class Kernel {
       title: 'Backup',
       description: 'Encrypted snapshots, scheduled backups and restore',
       dependsOn: ['storage', 'vault'],
+      enabled: () => !this.digger,
       start: () => this.backup.start(),
       stop: () => this.backup.stop(),
     });
@@ -1272,6 +1295,7 @@ export class Kernel {
       title: 'Fleet agent',
       description: 'Real-time link to the FBRX control plane',
       dependsOn: ['vault', 'governance'],
+      enabled: () => !this.digger,
       start: () => this.fleet.start(),
       stop: () => this.fleet.stop(),
       health: async () => {
@@ -1300,6 +1324,7 @@ export class Kernel {
       title: 'Antivirus',
       description: 'FBRX Shield download checks, threat database updates, scheduled scans and the antivirus status',
       dependsOn: ['storage'],
+      enabled: () => !this.digger,
       start: () => this.protection.start(),
       stop: () => this.protection.stop(),
     });
@@ -1308,6 +1333,7 @@ export class Kernel {
       title: 'Calendar',
       description: 'Outlook / Microsoft 365 and calendar links: syncing and meeting reminders',
       dependsOn: ['storage'],
+      enabled: () => !this.digger,
       // An account that cannot be updated says so on the Calendar page; it is not a problem with this computer.
       start: () => this.calendar.start(),
       stop: () => this.calendar.stop(),
@@ -1317,7 +1343,7 @@ export class Kernel {
       title: 'Mesh',
       description: 'Encrypted link to your other FBRX computers and your phone',
       dependsOn: ['vault', 'tools'],
-      enabled: () => this.settings.get().mesh.enabled,
+      enabled: () => !this.digger && this.settings.get().mesh.enabled,
       start: async () => {
         if (!this.vault.isUnlocked) throw new CoreError('LOCKED', 'Vault is locked');
         await this.mesh.start();
@@ -1330,7 +1356,7 @@ export class Kernel {
       title: 'Local API',
       description: 'Authenticated automation API for scripts, apps and FBRX peers',
       dependsOn: ['vault'],
-      enabled: () => this.settings.get().localApi.enabled && this.license.has('localapi'),
+      enabled: () => !this.digger && this.settings.get().localApi.enabled && this.license.has('localapi'),
       start: async () => {
         if (!this.vault.isUnlocked) throw new CoreError('LOCKED', 'Vault is locked');
         this.ensureLocalApiTokens();
@@ -1362,9 +1388,19 @@ export class Kernel {
     this.applyLicenseFile();
     // Look for new versions in the FBRX repository (the desktop app only; servers and tests don't).
     if (this.platform.shell === 'desktop') this.release.start();
+    // FBRX Digger leaves out what is FBRX Endpoint's (its AI, messages, organization, account, support, automations).
+    if (!this.digger) this.startEndpoint();
+    this.audit.prune(365);
+    void this.attachments.sweep().catch((err) => this.log.warn('Could not tidy old attachments', { error: errorMessage(err) }));
+  }
+
+  /** What FBRX Endpoint (and FBRX Server) start besides the services; FBRX Digger runs none of it. */
+  private startEndpoint() {
     // A new computer's AI, ready before the first question (the starter model, picked up or downloaded once); a
     // server's, the best model it runs well.
     if (this.server || (this.platform.shell === 'desktop' && this.starterAiWanted())) void this.starter.prepare({ auto: true });
+    // FBRX Digger on this computer finds this AI through its link.
+    void this.diggerLink?.start().catch((err) => this.log.warn('The link for FBRX Digger did not start', { error: errorMessage(err) }));
     this.messages.start();
     this.orgMesh.start();
     // The FBRX account's license, renewed now and every few hours (when someone signed in).
@@ -1375,8 +1411,6 @@ export class Kernel {
     void this.applyProvisioning()
       .catch((err) => this.log.error('Provisioning failed', { error: errorMessage(err) }))
       .then(() => this.joinLicenseTenant('license'));
-    this.audit.prune(365);
-    void this.attachments.sweep().catch((err) => this.log.warn('Could not tidy old attachments', { error: errorMessage(err) }));
   }
 
   /** FBRX's check-up of itself (fbrx.doctor). */
@@ -1454,6 +1488,7 @@ export class Kernel {
       return;
     }
     this.started = false;
+    await this.diggerLink?.stop();
     this.release.stop();
     this.account.stop();
     this.support.stop();
