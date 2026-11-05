@@ -130,7 +130,11 @@ function Thread({ id, name, onSent }: { id: string | null; name: string; onSent:
   const end = useRef<HTMLDivElement>(null);
   const live = id && conv.data?.id === id ? conv.data.run : null;
   useEffect(() => setFast(!!live), [live]);
-  useEffect(() => end.current?.scrollIntoView({ block: 'end' }), [conv.data?.messages.length, live?.reply?.text.length]);
+  // A block, not an expression: scrollIntoView returns a promise in newer browsers, which React would take for the
+  // effect's cleanup and call.
+  useEffect(() => {
+    end.current?.scrollIntoView({ block: 'end' });
+  }, [conv.data?.messages.length, live?.reply?.text.length]);
 
   const send = () => {
     const message = text.trim();

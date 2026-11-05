@@ -536,7 +536,9 @@ export function JsonEditor({ value, onChange, rows = 12, onValidity }: { value: 
   } catch (e) {
     error = (e as Error).message;
   }
-  useEffect(() => onValidity?.(!error), [error, onValidity]);
+  useEffect(() => {
+    onValidity?.(!error);
+  }, [error, onValidity]);
   return (
     <div className="fx-field">
       <TextArea code rows={rows} value={value} onChange={(e) => onChange(e.target.value)} />
