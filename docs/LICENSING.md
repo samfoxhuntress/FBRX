@@ -87,7 +87,9 @@ subscription's items at one interval): its fee, its people, their extra computer
 each price is `yearlyMonths` months of the monthly one, under the same product id ending in `_yearly`
 (`fbrx_command_tenant_yearly`, `fbrx_ultra_tenant_yearly`, `fbrx_ultra_extra_computer_yearly`,
 `fbrx_mdm_tenant_yearly`, and so on). The volume discount comes off the same way; it is rounded on each line, so a year
-can differ from ten months by a few cents. Standard and Ultra on their own are monthly.
+can differ from ten months by a few cents. A person's own Standard or Ultra is monthly or yearly too, on the website
+and in FBRX (`fbrx_standard_yearly`, `fbrx_ultra_yearly`), with their extra computers at the same interval; the phone
+apps sell them monthly.
 
 A tenant's bill is its organization fee, each person and shared computer at its edition's price less the volume
 discount, each extra computer, and the MDM add-on, for a month or a year as it pays (`organizationBill`); in the cloud,

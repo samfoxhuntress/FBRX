@@ -1,4 +1,4 @@
-import { TIER_SHORT, formatPrice, licenseEditionFor, maxTier, productById, type AccountComputers, type AccountLicense, type EntitlementStatus, type EntitlementView, type PaidTier, type PurchaseSource, type Tier } from '@fbrx/shared';
+import { TIER_SHORT, formatPrice, intervalPrice, licenseEditionFor, maxTier, productById, productInterval, type AccountComputers, type AccountLicense, type EntitlementStatus, type EntitlementView, type PaidTier, type PurchaseSource, type Tier } from '@fbrx/shared';
 import { signLicense, type Db } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
@@ -144,18 +144,21 @@ export function accountComputers(ctx: AppContext, accountId: string, tier: PaidT
   for (const x of sessions) if (!first.has(computer(x)) || x.created_at < first.get(computer(x))!) first.set(computer(x), x.created_at);
   const here = [...new Set(sessions.filter((x) => !x.revoked_at && x.expires_at > now).map(computer))].sort((a, b) => first.get(a)!.localeCompare(first.get(b)!) || a.localeCompare(b));
   const book = priceBook(ctx.db);
-  const bought = accountEntitlements(ctx, accountId).filter((e) => e.kind === 'extra' && e.tier === tier && !e.tenant_id && isValid(e));
-  const extra = bought.reduce((n, e) => n + e.quantity, 0);
+  const owned = accountEntitlements(ctx, accountId).filter((e) => !e.tenant_id && e.tier === tier && isValid(e));
+  const extra = owned.filter((e) => e.kind === 'extra').reduce((n, e) => n + e.quantity, 0);
   const included = book.computers.included[tier];
   const mine = sessions.find((x) => x.id === sessionId);
-  const canAdd = accountEntitlements(ctx, accountId).some((e) => e.kind === 'edition' && e.source === 'stripe' && !e.tenant_id && e.tier === tier && isValid(e));
+  // Extra computers go on a plan bought with Stripe, at its interval.
+  const plan = owned.find((e) => e.kind === 'edition' && e.source === 'stripe');
+  const interval = plan ? productInterval(plan.product_id) : 'month';
   return {
     used: here.length,
     allowed: included + extra,
     included,
     extra,
-    extraPrice: book.computers.extra[tier],
-    canAdd,
+    interval,
+    extraPrice: intervalPrice(book, book.computers.extra[tier], interval),
+    canAdd: !!plan,
     place: mine ? here.indexOf(computer(mine)) : null,
     installId: mine?.install_id ?? null,
   };
@@ -173,7 +176,7 @@ export function accountLicense(ctx: AppContext, account: { id: string; email: st
   const { place, installId, ...computers } = accountComputers(ctx, account.id, tier as PaidTier, sessionId);
   if (place === null) return { key: null, tier, expiresAt: null, computers, note: 'A license goes to a computer: sign in to your FBRX account in FBRX on it.' };
   if (place >= computers.allowed) {
-    const how = computers.canAdd ? `Sign one of the others out, or add a computer for ${formatPrice(computers.extraPrice)} a month.` : 'Sign one of the others out to use it here.';
+    const how = computers.canAdd ? `Sign one of the others out, or add a computer for ${formatPrice(computers.extraPrice)} a ${computers.interval}.` : 'Sign one of the others out to use it here.';
     return { key: null, tier, expiresAt: null, computers, note: `Your ${TIER_SHORT[tier]} covers ${computers.allowed} ${computers.allowed === 1 ? 'computer' : 'computers'}, and ${computers.used} are signed in: this one runs Essentials. ${how}` };
   }
   const cap = Date.now() + LICENSE_MAX_DAYS * 86_400_000;

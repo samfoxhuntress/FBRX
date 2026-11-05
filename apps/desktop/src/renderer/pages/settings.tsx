@@ -3,6 +3,7 @@ import type { DeepPartial, EditionStatus, EffectivePolicy, Settings, Texture } f
 import {
   AUDIENCE_NAMES,
   BROWSER_SEARCH_ENGINES,
+  DEFAULT_PRICE_BOOK,
   DIGGER_SETTINGS,
   EDITION_PLANS,
   IMAGE_GENERATORS,
@@ -26,12 +27,14 @@ import {
   formatPrice,
   formatTokens,
   funEnabled,
+  personalPlan,
   thinkingBudget,
   thinkingLevelOf,
   tierRank,
   withSteps,
   type ImageGenerator,
   type ImageSize,
+  type PriceBook,
   type ThinkingLevel,
   type Tier,
   type WebSearchEngine,
@@ -200,12 +203,18 @@ function EditionCard() {
   );
 }
 
-/** "$4.99 a month", "Free", "$24.99 a month, through FBRX Command". */
-function priceLine(t: Tier): ReactNode {
-  const p = EDITION_PLANS[t];
-  if (p.monthly === 0) return 'Free';
-  if (p.monthly == null) return <>{formatPrice(p.tenantMonthly)} <small>a month per computer, through FBRX Command</small></>;
-  return <>{formatPrice(p.monthly)} <small>a month, or {formatPrice(p.tenantMonthly)} through FBRX Command</small></>;
+/** "$4.99 a month or $49.90 a year", "Free", "$24.99 a month a person, through FBRX Command", at the account's prices. */
+function priceLine(t: Tier, book: PriceBook): ReactNode {
+  if (t === 'essentials') return 'Free';
+  if (t === 'blackhole') return <>{formatPrice(book.seats.blackhole)} <small>a month a person, through FBRX Command</small></>;
+  return (
+    <>
+      {formatPrice(book.personal[t])}{' '}
+      <small>
+        a month or {formatPrice(personalPlan(book, t, 'year').amount)} a year, or {formatPrice(book.seats[t])} a person through FBRX Command
+      </small>
+    </>
+  );
 }
 
 /** Why this computer may run what it may, in a sentence (Settings → Edition). */
@@ -214,7 +223,7 @@ function ceilingLine(ed: EditionStatus): string {
     case 'development':
       return 'Development build: every edition can be turned on.';
     case 'trial':
-      return `${trialLine(ed)} Then Standard is ${formatPrice(EDITION_PLANS.basic.monthly!)} a month; Essentials stays free.`;
+      return `${trialLine(ed)} Then Standard is ${formatPrice(DEFAULT_PRICE_BOOK.personal.basic)} a month or ${formatPrice(personalPlan(DEFAULT_PRICE_BOOK, 'basic', 'year').amount)} a year; Essentials stays free.`;
     case 'standalone':
       return `On its own, this computer runs Essentials for free.${ed.trialAvailable ? ` Standard can be tried free for ${STANDARD_TRIAL_DAYS} days, once.` : ''} Standard and Ultra are bought on your FBRX account or with a license key (Settings → License), or come through your organization’s FBRX Command. Black Hole comes only through FBRX Command.`;
     case 'organization':
@@ -246,7 +255,7 @@ function EditionSettings() {
                 <h4>
                   {TIER_SHORT[t]} {locked && <Icons.lock size={13} />}
                 </h4>
-                <div className="ed-price">{priceLine(t)}</div>
+                <div className="ed-price">{priceLine(t, account?.prices ?? DEFAULT_PRICE_BOOK)}</div>
                 <ul>
                   {editionPoints(t).map((p) => (
                     <li key={p}>{p}</li>

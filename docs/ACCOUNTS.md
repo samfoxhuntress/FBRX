@@ -28,7 +28,8 @@ one as the subscription renews and a refund reaches them in time.
 account gets a key of its own, carrying its install id, which no other computer accepts. Computers count in the order
 they first signed in, so signing in again keeps a computer's place; one past them runs Essentials and says why
 (**Settings → FBRX account**), with **Add a computer** when the plan was bought on the website or in FBRX: it adds the
-edition's extra-computer item (`fbrx_standard_extra_computer_monthly`, `fbrx_ultra_extra_computer_monthly`) to the
+edition's extra-computer item (`fbrx_standard_extra_computer_monthly`, `fbrx_ultra_extra_computer_monthly`, or their
+`_yearly` prices on a yearly plan) to the
 Stripe subscription, prorated. The App Store and Google Play sell no extra computers. Signing a computer out frees its
 place: that computer gives its key back the next time it renews (every six hours while FBRX runs). When a plan moves to
 the other edition in the Stripe portal, its extra computers move with it, at that edition's price.
@@ -43,7 +44,8 @@ The phone apps themselves (building them, the products in each store, the store 
 **Settings → FBRX account** (or *I have an FBRX account* on the first screen) signs in, or makes a new account. The
 computer brings the account's license and turns that edition on by itself ("whatever the account has"); it renews the
 license every six hours while FBRX runs, and when the account's purchase ends, the computer goes back to what it had
-(Essentials on its own). Signed in, **Get Standard** and **Get Ultra** open the checkout in the browser, and **Manage
+(Essentials on its own). Signed in, **Get Standard** and **Get Ultra** open the checkout in the browser, monthly or
+yearly as chosen beside them (a year at the price list's months: ten to start), and **Manage
 billing** opens the Stripe portal; Settings → Edition offers the same on the locked editions. Signing out takes the
 account's license away again. The account token is kept in the vault, like the computer's FBRX Command credential.
 
@@ -190,14 +192,15 @@ the operator issues. The operator sees every account under **FBRX accounts**.
 
 1. The prices: set them in FBRX Command → **Pricing**, then press **Update Stripe** there. It makes a **monthly
    recurring price** in Stripe for each one Stripe lacks or charges differently, under its **lookup key** from
-   `packages/shared/src/plans.ts`: `fbrx_standard_monthly` and `fbrx_ultra_monthly` (on their own); for organizations
+   `packages/shared/src/plans.ts`: `fbrx_standard_monthly` and `fbrx_ultra_monthly` (on their own, and
+   `fbrx_standard_yearly` and `fbrx_ultra_yearly` paid yearly); for organizations
    `fbrx_standard_tenant_monthly`, `fbrx_ultra_tenant_monthly` and `fbrx_blackhole_tenant_monthly` (each computer),
    `fbrx_command_tenant_monthly` (the organization fee), `fbrx_command_large_monthly` and `fbrx_command_home_monthly`
    (only when larger or Home organizations pay another fee), `fbrx_standard_extra_computer_monthly`,
    `fbrx_ultra_extra_computer_monthly` and `fbrx_blackhole_extra_computer_monthly` (each computer past those an
-   edition includes) and `fbrx_mdm_tenant_monthly` (the MDM add-on); and for organizations paying yearly, a **yearly
-   price** of each organization price under the same key ending in `_yearly` (`fbrx_command_tenant_yearly`, …), on the
-   monthly price's product, so the volume discount's coupon covers both. You can
+   edition includes) and `fbrx_mdm_tenant_monthly` (the MDM add-on); and, for paying yearly, a **yearly price** of
+   each under the same key ending in `_yearly` (`fbrx_command_tenant_yearly`, …), on the monthly price's product, so
+   the volume discount's coupon covers both. You can
    also make them by hand in the Stripe Dashboard, one product per price, with those lookup keys; the Pricing page says
    which agree. A new price takes the lookup key from the old one, so a price change needs no new FBRX version. People
    who already pay keep their price (FBRX remembers every price it saw under a key); organizations move to the new
@@ -205,8 +208,8 @@ the operator issues. The operator sees every account under **FBRX accounts**.
    (`fbrx_volume_<percent>_…`), on the computers' prices only.
 2. **Settings → Payment methods**: turn on cards, Apple Pay and Google Pay. For Apple Pay, verify the website's domain
    in Stripe.
-3. **Settings → Billing → Customer portal**: turn it on, allow switching between the Standard and Ultra prices, and
-   cancelling.
+3. **Settings → Billing → Customer portal**: turn it on, allow switching between the Standard and Ultra prices,
+   monthly and yearly (all four), and cancelling.
 4. **Developers → Webhooks**: add `https://<FBRX Command>/v1/billing/stripe/webhook` with the events
    `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`,
    `customer.subscription.deleted`, `invoice.paid` and `invoice.payment_failed`.

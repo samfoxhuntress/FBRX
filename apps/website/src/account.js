@@ -100,10 +100,15 @@
     };
   }
 
+  /** Each edition above the account's, monthly or yearly. */
   function buyButtons(a) {
     var out = '';
-    if (a.tier === 'essentials') out += '<button class="btn primary" data-buy="' + esc(PLANS.basic.productId) + '">Get ' + esc(NAMES.basic) + ', ' + esc(PLANS.basic.price) + ' a month</button>';
-    if (a.tier !== 'ultra') out += '<button class="btn primary" data-buy="' + esc(PLANS.ultra.productId) + '">Get ' + esc(NAMES.ultra) + ', ' + esc(PLANS.ultra.price) + ' a month</button>';
+    ['basic', 'ultra'].forEach(function (t) {
+      if (t === 'basic' ? a.tier !== 'essentials' : a.tier === 'ultra') return;
+      var p = PLANS[t];
+      out += '<button class="btn primary" data-buy="' + esc(p.month.productId) + '">Get ' + esc(NAMES[t]) + ', ' + esc(p.month.price) + ' a month</button>';
+      out += '<button class="btn" data-buy="' + esc(p.year.productId) + '">or ' + esc(p.year.price) + ' a year</button>';
+    });
     return out;
   }
 

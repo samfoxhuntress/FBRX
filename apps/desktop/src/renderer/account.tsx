@@ -1,6 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { COMMAND_PLAN, EDITION_PLANS, TENANT_DISCOUNT, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, formatTokens, type AccountDevice, type AccountStatus, type CloudAiUsage, type InvitationPreview, type LocalAccountStatus, type Tier, type Vertical } from '@fbrx/shared';
-import { Button, Callout, Card, Field, Icons, Input, KeyValue, Status, Toggle, formatDate, formatDay, timeAgo, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
+import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, formatTokens, personalPlan, type AccountDevice, type AccountStatus, type BillingInterval, type CloudAiUsage, type InvitationPreview, type LocalAccountStatus, type PriceBook, type Tier, type Vertical } from '@fbrx/shared';
+import { Button, Callout, Card, Field, Icons, Input, KeyValue, Select, Status, Toggle, formatDate, formatDay, timeAgo, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { call, onEvent, openExternal } from './client';
 import { useCore } from './hooks';
 
@@ -237,23 +237,45 @@ export function LocalAccountLock() {
   );
 }
 
-/** "Get Ultra, $11.99 a month": opens the checkout in the browser. Only the editions above what the account has. */
+/** "Pay yearly (2 months free)": how the price list's yearly price compares. */
+export const yearlyLabel = (book: PriceBook) => (book.yearlyMonths < 12 ? `Pay yearly (${12 - book.yearlyMonths} ${12 - book.yearlyMonths === 1 ? 'month' : 'months'} free)` : 'Pay yearly');
+
+/**
+ * "Get Ultra, $11.99 a month" (or "$119.90 a year", as chosen beside them): opens the checkout in the browser. Only the
+ * editions above what the account has. `short`, on an edition's card: "Get Ultra" (monthly) and "or yearly".
+ */
 export function BuyButtons({ account, only, short }: { account: AccountStatus; only?: Tier[]; short?: boolean }) {
   const { run, busy } = useAction();
-  const tiers = (only ?? (['basic', 'ultra'] as Tier[])).filter((t) => EDITION_PLANS[t].sold === 'personal' && !atLeast(account.tier, t));
+  const [period, setPeriod] = useState<BillingInterval>('month');
+  const tiers = (only ?? (['basic', 'ultra'] as Tier[])).filter((t): t is 'basic' | 'ultra' => EDITION_PLANS[t].sold === 'personal' && !atLeast(account.tier, t));
   if (!account.canBuy || !tiers.length) return null;
+  const book = account.prices ?? DEFAULT_PRICE_BOOK;
+  const buy = (t: 'basic' | 'ultra', i: BillingInterval) => run(`${t}-${i}`, () => call('account.checkout', { productId: personalPlan(book, t, i).productId }).then((r) => openExternal(r.url)));
+  const price = (t: 'basic' | 'ultra', i: BillingInterval) => `${formatPrice(personalPlan(book, t, i).amount)} a ${i}`;
+  if (short) {
+    return (
+      <>
+        {tiers.map((t) => (
+          <span key={t} className="fx-actions">
+            <Button size="sm" variant="primary" icon="sparkles" loading={busy === `${t}-month`} title={price(t, 'month')} onClick={() => void buy(t, 'month')}>
+              Get {TIER_SHORT[t]}
+            </Button>
+            <Button size="sm" variant="ghost" loading={busy === `${t}-year`} title={`${price(t, 'year')}: ${book.yearlyMonths} months' price`} onClick={() => void buy(t, 'year')}>
+              or yearly
+            </Button>
+          </span>
+        ))}
+      </>
+    );
+  }
   return (
     <>
+      <div style={{ width: 210 }}>
+        <Select aria-label="How often to pay" value={period} options={[{ value: 'month', label: 'Pay monthly' }, { value: 'year', label: yearlyLabel(book) }]} onChange={(e) => setPeriod(e.target.value as BillingInterval)} />
+      </div>
       {tiers.map((t) => (
-        <Button
-          key={t}
-          size="sm"
-          variant={t === 'ultra' ? 'primary' : undefined}
-          icon="sparkles"
-          loading={busy === t}
-          onClick={() => void run(t, () => call('account.checkout', { productId: EDITION_PLANS[t].productId! }).then((r) => openExternal(r.url)))}
-        >
-          {short ? `Get ${TIER_SHORT[t]}` : `Get ${TIER_SHORT[t]}, ${formatPrice(EDITION_PLANS[t].monthly!)} a month`}
+        <Button key={t} size="sm" variant={t === 'ultra' ? 'primary' : undefined} icon="sparkles" loading={busy === `${t}-${period}`} onClick={() => void buy(t, period)}>
+          Get {TIER_SHORT[t]}, {price(t, period)}
         </Button>
       ))}
     </>
@@ -352,7 +374,7 @@ export function AccountSettings() {
               ? [
                   [
                     'Computers',
-                    `${account.computers.used} of ${account.computers.allowed} signed in (${account.computers.included} included${account.computers.extra ? `, ${account.computers.extra} added` : ''}; each further one ${formatPrice(account.computers.extraPrice)} a month)`,
+                    `${account.computers.used} of ${account.computers.allowed} signed in (${account.computers.included} included${account.computers.extra ? `, ${account.computers.extra} added` : ''}; each further one ${formatPrice(account.computers.extraPrice)} a ${account.computers.interval})`,
                   ] as [string, string],
                 ]
               : []),
@@ -368,7 +390,7 @@ export function AccountSettings() {
             actions={
               account.computers?.canAdd && (
                 <Button size="sm" variant="primary" loading={busy === 'extra'} onClick={() => void run('extra', () => call('account.setExtraComputers', { extra: account.computers!.extra + 1 }), 'Computer added')}>
-                  Add a computer, {formatPrice(account.computers.extraPrice)} a month
+                  Add a computer, {formatPrice(account.computers.extraPrice)} a {account.computers.interval}
                 </Button>
               )
             }
@@ -612,7 +634,7 @@ function StartOrganization() {
   const [f, setF] = useState<{ name: string; kind: Vertical }>({ name: '', kind: 'business' });
   const { run, busy } = useAction();
   return (
-    <Card title="Run FBRX for your organization" subtitle={`FBRX Command looks after your company’s, school’s or family’s computers: ${formatPrice(COMMAND_PLAN.monthly)} a month, each computer at its edition with ${Math.round(TENANT_DISCOUNT * 100)}% off, Essentials computers free.`}>
+    <Card title="Run FBRX for your organization" subtitle={`FBRX Command looks after your company’s, school’s or family’s computers: ${formatPrice(COMMAND_PLAN.monthly)} a month, each person at their edition on the computers it includes, Essentials free. Pay monthly or yearly.`}>
       {open ? (
         <form
           className="fx-form"

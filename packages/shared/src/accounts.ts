@@ -141,7 +141,9 @@ export interface AccountComputers {
   allowed: number;
   included: number;
   extra: number;
-  /** Each further computer, a month (cents). */
+  /** How often the account's plan is paid, and so its extra computers. */
+  interval: BillingInterval;
+  /** Each further computer, for that interval (cents). */
   extraPrice: number;
   /** Extra computers can be added here (to a Stripe subscription; App Store and Google Play purchases cannot). */
   canAdd: boolean;
@@ -226,6 +228,8 @@ export interface AccountStatus {
   memberships: AccountMembership[];
   /** Whether the account can buy and manage plans from this computer (the website's way: Stripe). */
   canBuy: boolean;
+  /** The price list of the account's FBRX Command (what Standard and Ultra cost, monthly and yearly); null until known. */
+  prices: PriceBook | null;
   billingPortal: boolean;
   lastSyncAt: string | null;
   /** Why the last renewal did not work (the internet, or the sign-in ended). */

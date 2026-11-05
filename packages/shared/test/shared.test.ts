@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compareSemver, deepMerge, isPathLocked, satisfies, newId, decodeLicenseUnverified, parseVertical, productNameFor, resolveAudience, KIND_GROUPS, VERTICALS, VERTICAL_AUDIENCES, type LicensePayload } from '../src';
-import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, SERVER_OFFER, TIERS, atLeast, editionPoints, formatPrice, maxTier, organizationBill, parseTier, priceBookProducts, priceOf, productById, productFor, productInterval, tenantMonthlyTotal, type PriceBook } from '../src';
+import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, SERVER_OFFER, TIERS, atLeast, editionPoints, formatPrice, maxTier, organizationBill, parseTier, personalPlan, priceBookProducts, priceOf, productById, productFor, productInterval, tenantMonthlyTotal, type PriceBook } from '../src';
 import { DEFAULT_POLICY, DEFAULT_SETTINGS, THINKING_BUDGETS, thinkingBudget, thinkingLevelOf } from '../src';
 import { generateSigningKeyPair, hashPassword, licenseStatusFrom, openString, sealString, signLicense, verifyLicense, verifyPassword } from '../src/node';
 import { randomBytes } from 'node:crypto';
@@ -148,11 +148,13 @@ describe('editions and prices', () => {
     expect(productById('fbrx_blackhole_tenant_yearly')).toEqual({ kind: 'edition', tier: 'blackhole', tenant: true });
     expect([productInterval('fbrx_mdm_tenant_yearly'), productInterval('fbrx_mdm_tenant_monthly')]).toEqual(['year', 'month']);
     expect([productFor('fbrx_mdm_tenant_yearly', 'month'), productFor(SERVER_OFFER.productId, 'year')]).toEqual(['fbrx_mdm_tenant_monthly', 'fbrx_server_iso']);
-    // Stripe gets a yearly price for each of an organization's prices; the editions on their own stay monthly.
+    // Stripe gets a yearly price for each price on the list, a person's own Standard and Ultra included.
     const products = priceBookProducts(book, { available: true, perEndpoint: 400 });
     expect(products.find((p) => p.productId === 'fbrx_command_home_yearly')).toMatchObject({ interval: 'year', amount: 14990 });
     expect(products.find((p) => p.productId === 'fbrx_mdm_tenant_yearly')).toMatchObject({ interval: 'year', amount: 4000 });
-    expect(products.filter((p) => p.interval === 'year').some((p) => productById(p.productId)?.kind === 'edition' && !(productById(p.productId) as { tenant: boolean }).tenant)).toBe(false);
+    expect(products.find((p) => p.productId === 'fbrx_ultra_yearly')).toMatchObject({ interval: 'year', amount: 29000, label: 'Ultra on its own, paid yearly' });
+    expect(personalPlan(book, 'basic', 'year')).toEqual({ productId: 'fbrx_standard_yearly', amount: 12000 });
+    expect(productById('fbrx_standard_yearly')).toEqual({ kind: 'edition', tier: 'basic', tenant: false });
   });
 });
 

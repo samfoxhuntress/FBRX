@@ -1,4 +1,4 @@
-import { CLOUD_AI_PATH, atLeast, tierRank, type AccountComputers, type AccountDevice, type AccountDeviceInfo, type AccountLicense, type AccountStatus, type AccountView, type CloudAiUsage, type InvitationPreview, type PromoRedeemed, type Tier, type Vertical } from '@fbrx/shared';
+import { CLOUD_AI_PATH, atLeast, tierRank, type AccountComputers, type AccountDevice, type AccountDeviceInfo, type AccountLicense, type AccountStatus, type AccountView, type CloudAiUsage, type InvitationPreview, type PriceBook, type PromoRedeemed, type Tier, type Vertical } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
 import type { Vault } from '../vault/vault';
@@ -16,7 +16,7 @@ const REFRESH_MS = 6 * 3600_000;
  * What this computer keeps about the account, forgotten at sign-out (the FBRX Command address stays for next time, with
  * the fingerprint of its own certificate when it has one: account.server, account.fingerprint).
  */
-const ACCOUNT_META = ['account.id', 'account.view', 'account.tier', 'account.licenseUntil', 'account.lastSyncAt', 'account.error', 'account.canBuy', 'account.computers', 'account.licenseNote'];
+const ACCOUNT_META = ['account.id', 'account.view', 'account.tier', 'account.licenseUntil', 'account.lastSyncAt', 'account.error', 'account.canBuy', 'account.prices', 'account.computers', 'account.licenseNote'];
 
 export interface AccountDeps {
   meta: MetaStore;
@@ -74,6 +74,7 @@ export class AccountService {
       licenseNote: signedIn ? (this.d.meta.get<string>('account.licenseNote') ?? null) : null,
       memberships: signedIn ? (view?.memberships ?? []) : [],
       canBuy: signedIn && !!this.d.meta.get<boolean>('account.canBuy'),
+      prices: signedIn ? (this.d.meta.get<PriceBook>('account.prices') ?? null) : null,
       billingPortal: signedIn && !!view?.billingPortal,
       lastSyncAt: this.d.meta.get<string>('account.lastSyncAt') ?? null,
       error: this.d.meta.get<string>('account.error') ?? null,
@@ -232,12 +233,13 @@ export class AccountService {
       const [view, lic, plans] = await Promise.all([
         this.request<AccountView>('GET', '/v1/accounts/me', undefined, token),
         this.request<AccountLicense>('GET', '/v1/accounts/license', undefined, token),
-        this.request<{ payments?: { stripe?: boolean } }>('GET', '/v1/plans').catch(() => ({ payments: undefined })),
+        this.request<{ payments?: { stripe?: boolean }; prices?: PriceBook }>('GET', '/v1/plans').catch(() => ({ payments: undefined, prices: undefined })),
       ]);
       const before = this.d.meta.get<Tier>('account.tier') ?? 'essentials';
       this.d.meta.set('account.view', view);
       this.d.meta.set('account.tier', lic.tier);
       this.d.meta.set('account.canBuy', !!plans.payments?.stripe);
+      if (plans.prices) this.d.meta.set('account.prices', plans.prices);
       this.d.meta.set('account.lastSyncAt', new Date().toISOString());
       this.d.meta.delete('account.error');
       this.keepLicense(lic);

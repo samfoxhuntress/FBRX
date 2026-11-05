@@ -703,4 +703,29 @@ describe('FBRX accounts and what they buy', () => {
     expect(r.changed).toEqual([]);
     expect(cp.ctx.db.get<{ details: string }>("SELECT details FROM audit_log WHERE action = 'billing.interval'")?.details).toContain('"after":"month"');
   });
+
+  it('sells a person Standard or Ultra yearly, and their extra computers yearly with it', async () => {
+    const { token: op } = await ok('POST', '/v1/auth/login', { email: 'op@fbrx.example', password: PASSWORD });
+    await ok('POST', '/v1/admin/pricing/stripe', {}, op);
+    const email = 'yearly@person.example';
+    const { token } = await ok('POST', '/v1/accounts/signup', { email, name: 'Yara', password: PASSWORD, device: { name: 'pc-y', kind: 'computer', installId: 'inst-y' } });
+    await ok('POST', '/v1/accounts/verify', { token: linkFor(email, 'verify') });
+    const me = await ok('GET', '/v1/accounts/me', undefined, token);
+
+    // Checkout charges Standard's yearly price; an organization's price is not for sale to a person.
+    expect((await call('POST', '/v1/billing/checkout', { productId: 'fbrx_standard_tenant_yearly' }, token)).status).toBe(400);
+    await ok('POST', '/v1/billing/checkout', { productId: 'fbrx_standard_yearly' }, token);
+    const yearly = stripe.prices.get('fbrx_standard_yearly')!;
+    expect(yearly).toMatchObject({ unit_amount: 4990, recurring: { interval: 'year' } });
+    expect(stripe.calls.filter((c) => c.path === '/v1/checkout/sessions').at(-1)!.body).toContain(encodeURIComponent(yearly.id));
+
+    // Paid: Standard for a year; a further computer costs a year of its price, on the same plan.
+    const end = Math.floor(Date.now() / 1000) + 365 * 86400;
+    const sub = { id: 'sub_y', customer: 'cus_y', status: 'active', metadata: { fbrx_account: me.id }, items: { data: [{ id: 'si_y', quantity: 1, current_period_end: end, price: { id: yearly.id, lookup_key: 'fbrx_standard_yearly' } }] } };
+    stripe.subscriptions.set('sub_y', sub);
+    await stripeEvent({ id: 'evt_y', type: 'customer.subscription.created', data: { object: sub } });
+    expect(await ok('GET', '/v1/accounts/license', undefined, token)).toMatchObject({ tier: 'basic', computers: { interval: 'year', extraPrice: 1990, canAdd: true } });
+    await ok('POST', '/v1/billing/computers', { extra: 1 }, token);
+    expect(sub.items.data.map((i: any) => `${i.price.lookup_key}=${i.quantity}`)).toEqual(['fbrx_standard_yearly=1', 'fbrx_standard_extra_computer_yearly=1']);
+  });
 });

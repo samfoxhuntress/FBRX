@@ -7,11 +7,12 @@ import { TIERS, TIER_SHORT, type Tier } from './license';
  * here (Stripe: the price's lookup key; the stores: the subscription's product id).
  *
  * - Essentials is free, and joins an FBRX Command tenant for free.
- * - Standard and Ultra are sold to anyone for their own computers (an FBRX account), and through a tenant with the
- *   tenant's discount.
+ * - Standard and Ultra are sold to anyone for their own computers (an FBRX account), monthly or yearly, and through a
+ *   tenant with the tenant's discount.
  * - Black Hole is only an add-on in a tenant, per endpoint, at its full price.
  * - An FBRX Command tenant is a plan of its own, paid monthly or yearly: one interval for everything on it. A year costs
- *   the price list's `yearlyMonths` months of each price, under the same product id ending in `_yearly`.
+ *   the price list's `yearlyMonths` months of each price, under the same product id ending in `_yearly`; the same goes
+ *   for a person's own Standard or Ultra.
  * - FBRX Command's operator may change the prices (Pricing, the PriceBook below): the organization fee by kind and
  *   size, each computer's price in an organization with discounts by how many it has, and the editions on their own.
  *   The prices here are where that price list starts.
@@ -101,7 +102,7 @@ export const COMMAND_PLAN = {
   summary: 'Your organization’s FBRX Command: computers, people, licenses and billing in one place.',
   highlights: [
     'Add and look after your organization’s computers',
-    `Standard and Ultra at ${Math.round(TENANT_DISCOUNT * 100)}% off for every computer`,
+    `Standard and Ultra at ${Math.round(TENANT_DISCOUNT * 100)}% off for each person`,
     'Essentials computers join for free',
     'Black Hole for your admins and server people',
   ],
@@ -194,6 +195,11 @@ export const productInterval = (productId: string): BillingInterval => (productI
 /** A price a month at an interval: itself, or a year of it at the price list's months. */
 export const intervalPrice = (book: PriceBook, monthly: number, interval: BillingInterval) => (interval === 'year' ? monthly * book.yearlyMonths : monthly);
 
+/** Standard or Ultra on one's own, paid monthly or yearly: its product id (Stripe lookup key) and price. */
+export function personalPlan(book: PriceBook, tier: 'basic' | 'ultra', interval: BillingInterval): { productId: string; amount: number } {
+  return { productId: productFor(EDITION_PLANS[tier].productId!, interval), amount: intervalPrice(book, book.personal[tier], interval) };
+}
+
 /** The editions people pay for. */
 export const PAID_TIERS = ['basic', 'ultra', 'blackhole'] as const;
 export type PaidTier = (typeof PAID_TIERS)[number];
@@ -236,8 +242,8 @@ export interface PriceBook {
    */
   fees: { base: number; large: { from: number; monthly: number } | null; home: number | null };
   /**
-   * An organization paying yearly pays this many months' price for a year, of every price above and the MDM add-on
-   * (10: two months free; 12: no saving).
+   * Paying yearly, a year costs this many months' price: a person's own edition, and in an organization every price
+   * above and the MDM add-on (10: two months free; 12: no saving).
    */
   yearlyMonths: number;
 }
@@ -371,7 +377,7 @@ export interface PriceBookProduct {
 
 /**
  * Every price a price list charges, with its Stripe lookup key and what it is: for checking Stripe against it. Each
- * month's price first, then the yearly prices of what organizations pay (the editions on their own are monthly).
+ * month's price first, then the yearly ones.
  */
 export function priceBookProducts(book: PriceBook, mdm: MdmPricing): PriceBookProduct[] {
   const organizations = [
@@ -382,11 +388,14 @@ export function priceBookProducts(book: PriceBook, mdm: MdmPricing): PriceBookPr
     ...PAID_TIERS.map((t) => ({ productId: EXTRA_COMPUTER_PRODUCTS[t], label: `${TIER_SHORT[t]}, each computer past ${book.computers.included[t]}`, amount: book.computers.extra[t] })),
     { productId: MDM_ADDON.productId, label: 'MDM add-on, each managed computer', amount: mdm.perEndpoint },
   ];
+  const all = [
+    { productId: EDITION_PLANS.basic.productId!, label: 'Standard on its own', amount: book.personal.basic },
+    { productId: EDITION_PLANS.ultra.productId!, label: 'Ultra on its own', amount: book.personal.ultra },
+    ...organizations,
+  ];
   return [
-    { productId: EDITION_PLANS.basic.productId!, label: 'Standard on its own', interval: 'month', amount: book.personal.basic },
-    { productId: EDITION_PLANS.ultra.productId!, label: 'Ultra on its own', interval: 'month', amount: book.personal.ultra },
-    ...organizations.map((p) => ({ ...p, interval: 'month' as const })),
-    ...organizations.map((p) => ({ productId: productFor(p.productId, 'year'), label: `${p.label}, paid yearly`, interval: 'year' as const, amount: intervalPrice(book, p.amount, 'year') })),
+    ...all.map((p) => ({ ...p, interval: 'month' as const })),
+    ...all.map((p) => ({ productId: productFor(p.productId, 'year'), label: `${p.label}, paid yearly`, interval: 'year' as const, amount: intervalPrice(book, p.amount, 'year') })),
   ];
 }
 

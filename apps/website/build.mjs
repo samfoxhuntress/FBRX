@@ -15,7 +15,7 @@
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { COMMAND_PLAN, EDITION_PLANS, ESSENTIALS_TIPS, PURCHASE_SOURCE_NAMES, STANDARD_TRIAL_DAYS, RELEASE_REPO, SERVER_OFFER, TENANT_DISCOUNT, TIERS, TIER_SHORT, VERTICAL_NAMES, editionPoints, formatPrice } from '@fbrx/shared';
+import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, ESSENTIALS_TIPS, PURCHASE_SOURCE_NAMES, STANDARD_TRIAL_DAYS, RELEASE_REPO, SERVER_OFFER, TENANT_DISCOUNT, TIERS, TIER_SHORT, VERTICAL_NAMES, editionPoints, formatPrice, personalPlan } from '@fbrx/shared';
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, '..', '..');
@@ -124,28 +124,34 @@ ${scripts.map((s) => `<script src="${s}"></script>`).join('\n')}
   built.push(file);
 }
 
+/** The price list the site shows: where FBRX Command's price list starts (plans.ts). */
+const book = DEFAULT_PRICE_BOOK;
+/** "2 months free", for paying yearly. */
+const yearlySaving = `${12 - book.yearlyMonths} ${12 - book.yearlyMonths === 1 ? 'month' : 'months'} free`;
+
 const editionCard = (t, cta) => {
   const p = EDITION_PLANS[t];
   const price =
     p.monthly === 0
       ? '<b>Free</b>'
       : p.monthly == null
-        ? `<b>${formatPrice(p.tenantMonthly)}</b><small> a month per computer, with FBRX Command</small>`
+        ? `<b>${formatPrice(p.tenantMonthly)}</b><small> a month a person, with FBRX Command</small>`
         : `<b>${formatPrice(p.monthly)}</b><small> a month</small>`;
+  const yearly = p.sold === 'personal' ? `<p class="muted small">or ${formatPrice(personalPlan(book, t, 'year').amount)} a year (${yearlySaving})</p>` : '';
   return `<article class="plan ${t}">
   <h3>${TIER_SHORT[t]}</h3>
-  <div class="price">${price}</div>
+  <div class="price">${price}</div>${yearly}
   <p>${esc(p.summary)}</p>
   <ul>${editionPoints(t).map((h) => `<li>${esc(h)}</li>`).join('')}</ul>
   ${cta}
 </article>`;
 };
 
-/** What a computer of an edition costs a month in FBRX Command. */
+/** What a person at an edition costs a month in FBRX Command, and the computers it covers. */
 const tenantRate = (t) => {
   const p = EDITION_PLANS[t];
   if (!p.tenantMonthly) return 'Free';
-  return `${formatPrice(p.tenantMonthly)} <span class="muted">(${p.monthly == null ? 'an add-on, for the people who run it' : `${off} off`})</span>`;
+  return `${formatPrice(p.tenantMonthly)} <span class="muted">(${p.monthly == null ? 'an add-on, for the people who run it' : `${off} off`}; ${book.computers.included[t]} computers, then ${formatPrice(book.computers.extra[t])} each)</span>`;
 };
 
 /** A grid of what something does: [title, text] pairs. */
@@ -238,7 +244,7 @@ page({
     </div>
     <div class="card offer">
       <div class="price"><b>${formatPrice(COMMAND_PLAN.monthly)}</b><small> a month</small></div>
-      <p>Plus each computer at its edition, ${off} off: Standard ${formatPrice(EDITION_PLANS.basic.tenantMonthly)}, Ultra ${formatPrice(EDITION_PLANS.ultra.tenantMonthly)}. Black Hole ${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} for your admins. Essentials computers free.</p>
+      <p>Plus each person at their edition, ${off} off: Standard ${formatPrice(EDITION_PLANS.basic.tenantMonthly)} (${book.computers.included.basic} computers), Ultra ${formatPrice(EDITION_PLANS.ultra.tenantMonthly)} (${book.computers.included.ultra}). Black Hole ${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} for your admins. Essentials free. Monthly or yearly.</p>
     </div>
   </div>
 </section>
@@ -405,7 +411,7 @@ ${serverSection}`,
 page({
   file: 'command.html',
   title: 'FBRX Command: for organizations',
-  description: `FBRX Command: your organization’s computers, people, licenses and billing in one place. ${formatPrice(COMMAND_PLAN.monthly)} a month, each computer ${off} off.`,
+  description: `FBRX Command: your organization’s computers, people, licenses and billing in one place. ${formatPrice(COMMAND_PLAN.monthly)} a month, each person ${off} off.`,
   body: `${hero({
     eyebrow: 'For businesses, schools and families',
     title: 'FBRX Command',
@@ -425,9 +431,9 @@ page({
 <section class="band">
   <div class="wrap two">
     <div>
-      <h2>${formatPrice(COMMAND_PLAN.monthly)} a month, plus each computer</h2>
+      <h2>${formatPrice(COMMAND_PLAN.monthly)} a month, plus each person</h2>
       <table class="rates">
-        <thead><tr><th>Each computer</th><th>A month</th></tr></thead>
+        <thead><tr><th>Each person</th><th>A month</th></tr></thead>
         <tbody>
           ${TIERS.map((t) => `<tr><td>${TIER_SHORT[t]}</td><td>${tenantRate(t)}</td></tr>`).join('\n          ')}
         </tbody>
@@ -439,7 +445,10 @@ page({
 });
 
 // ------------------------------------------------------------------------------------------------ Pricing
-const prices = { basic: EDITION_PLANS.basic.tenantMonthly, ultra: EDITION_PLANS.ultra.tenantMonthly, blackhole: EDITION_PLANS.blackhole.tenantMonthly, command: COMMAND_PLAN.monthly };
+/** "Get Ultra" (monthly) and "or yearly, $119.90": each opens its checkout from the account page. */
+const buyLinks = (t) =>
+  `<a class="btn primary" href="account.html?buy=${personalPlan(book, t, 'month').productId}">Get ${TIER_SHORT[t]}</a> <a class="btn" href="account.html?buy=${personalPlan(book, t, 'year').productId}">or yearly, ${formatPrice(personalPlan(book, t, 'year').amount)}</a>`;
+const prices = { basic: EDITION_PLANS.basic.tenantMonthly, ultra: EDITION_PLANS.ultra.tenantMonthly, blackhole: EDITION_PLANS.blackhole.tenantMonthly, command: COMMAND_PLAN.monthly, yearlyMonths: book.yearlyMonths };
 page({
   file: 'pricing.html',
   title: 'FBRX pricing',
@@ -447,11 +456,11 @@ page({
   scripts: ['pricing.js'],
   body: `<section class="wrap">
   <h1 class="center">Pricing</h1>
-  <p class="lead center">Start free. Pay monthly for more, and stop any time. Prices in US dollars.</p>
+  <p class="lead center">Start free. Pay monthly or yearly for more (yearly, ${yearlySaving}), and stop any time. Prices in US dollars.</p>
   <div class="plans">
     ${editionCard('essentials', `<a class="btn" href="download.html">Download</a>`)}
-    ${editionCard('basic', `<a class="btn primary" href="account.html?buy=${EDITION_PLANS.basic.productId}">Get Standard</a><p class="muted small">Or try it free for ${STANDARD_TRIAL_DAYS} days in FBRX, no card needed.</p>`)}
-    ${editionCard('ultra', `<a class="btn primary" href="account.html?buy=${EDITION_PLANS.ultra.productId}">Get Ultra</a>`)}
+    ${editionCard('basic', `${buyLinks('basic')}<p class="muted small">Or try it free for ${STANDARD_TRIAL_DAYS} days in FBRX, no card needed.</p>`)}
+    ${editionCard('ultra', buyLinks('ultra'))}
     ${editionCard('blackhole', `<a class="btn" href="account.html?start=organization">Start an FBRX Command</a>`)}
   </div>
 </section>
@@ -460,20 +469,21 @@ page({
     <div>
       <span class="eyebrow">For organizations</span>
       <h2>FBRX Command, ${formatPrice(COMMAND_PLAN.monthly)} a month</h2>
-      <p class="lead">${esc(COMMAND_PLAN.summary)} You give each computer, or each person, an edition; the bill follows by itself.</p>
+      <p class="lead">${esc(COMMAND_PLAN.summary)} You give each person an edition, on the computers it includes, and shared or lab computers one of their own; the bill follows by itself. Pay monthly or yearly (${yearlySaving}).</p>
       <table class="rates">
-        <thead><tr><th>Each computer</th><th>A month</th></tr></thead>
+        <thead><tr><th>Each person</th><th>A month</th></tr></thead>
         <tbody>
           ${TIERS.map((t) => `<tr><td>${TIER_SHORT[t]}</td><td>${tenantRate(t)}</td></tr>`).join('\n          ')}
         </tbody>
       </table>
-      <p class="muted small">Student and child computers count as Standard.</p>
+      <p class="muted small">A shared, lab or student computer nobody pays for costs the same as a person. Student and child computers count as Standard.</p>
     </div>
     <form class="card calc" id="calc" data-prices='${JSON.stringify(prices)}' aria-label="What a month comes to">
       <h3>What a month comes to</h3>
-      ${[['basic', 10], ['ultra', 2], ['blackhole', 1], ['essentials', 20]].map(([t, n]) => `<label>${TIER_SHORT[t]} computers <input type="number" min="0" value="${n}" name="${t}"></label>`).join('\n      ')}
+      ${[['basic', 10], ['ultra', 2], ['blackhole', 1]].map(([t, n]) => `<label>${TIER_SHORT[t]} people <input type="number" min="0" value="${n}" name="${t}"></label>`).join('\n      ')}
       <div class="total"><span>A month</span><b id="total">—</b></div>
-      <p class="muted small">The FBRX Command plan included. Changes in the month are prorated.</p>
+      <div class="total"><span>A year, paid yearly</span><b id="year">—</b></div>
+      <p class="muted small">The FBRX Command plan included; Essentials people and computers are free. Changes are prorated.</p>
     </form>
   </div>
 </section>
@@ -486,7 +496,7 @@ ${serverSection}
   <details><summary>Can I try Standard first?</summary><p>Yes: every computer can try Standard free for ${STANDARD_TRIAL_DAYS} days, once, from Settings → Edition in FBRX. No card needed; when it ends, the computer goes back to Essentials unless you buy Standard. Standard used to be free, so a computer that ran FBRX before 2.0 starts its trial by itself when it updates.</p></details>
   <details><summary>How do I pay?</summary><p>On this site and in FBRX on your computer: by card, or with the wallet on your phone or computer when checkout offers it. In the phone apps, through the app store, once they leave beta. It all goes to one FBRX account, so what you buy anywhere works everywhere you sign in.</p></details>
   <details><summary>What does beta mean?</summary><p>FBRX is finished enough to use every day, and still changing quickly: new versions arrive often and install by themselves. Tell us what breaks, right from the app. Prices are the ones above.</p></details>
-  <details><summary>What is Black Hole?</summary><p>${esc(EDITION_PLANS.blackhole.summary)} It is an add-on in FBRX Command, ${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} a month per computer, and comes on wherever its person signs in.</p></details>
+  <details><summary>What is Black Hole?</summary><p>${esc(EDITION_PLANS.blackhole.summary)} It is an add-on in FBRX Command, ${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} a month a person (on up to ${book.computers.included.blackhole} computers), and comes on wherever its person signs in.</p></details>
 </section>`,
 });
 
@@ -573,7 +583,7 @@ const site = {
   editions: TIER_SHORT,
   kinds: VERTICAL_NAMES,
   sources: PURCHASE_SOURCE_NAMES,
-  plans: Object.fromEntries(['basic', 'ultra'].map((t) => [t, { productId: EDITION_PLANS[t].productId, price: formatPrice(EDITION_PLANS[t].monthly) }])),
+  plans: Object.fromEntries(['basic', 'ultra'].map((t) => [t, Object.fromEntries(['month', 'year'].map((i) => [i, { productId: personalPlan(book, t, i).productId, price: formatPrice(personalPlan(book, t, i).amount) }]))])),
 };
 writeFileSync(join(out, 'config.js'), `window.FBRX_SITE = ${JSON.stringify(site)};\n`);
 for (const f of ['styles.css', 'account.js', 'pricing.js', 'download.js']) copyFileSync(join(here, 'src', f), join(out, f));
