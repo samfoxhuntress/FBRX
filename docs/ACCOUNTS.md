@@ -142,11 +142,13 @@ FBRX Command** in FBRX, or `POST /v1/accounts/tenants` `{ name, kind }`). They o
 the account's email and password, and are a member on Essentials. Nothing is charged until the owner starts the plan:
 
 * **Billing** (owners pay; admins see it): **Start the FBRX Command plan** opens Stripe Checkout for the
-  $54.99-a-month plan; **Manage billing** opens the Stripe portal. The page shows what a month comes to: the plan, and
-  each computer at its edition's tenant price, counted from the editions the organization gives (Members, Devices,
-  Profiles & groups): Standard $3.99 and Ultra $9.59 (20% off), Black Hole $24.99 (an add-on at full price),
-  Essentials free. Student and child computers (only ever in an FBRX Command) run the learner edition and count as
-  Standard, at its $3.99.
+  $54.99-a-month plan; **Manage billing** opens the Stripe portal. The page shows what a month comes to: the plan;
+  each member at the edition the organization gives them, once whatever number of its computers they join, up to
+  those their edition includes (2 Standard, 5 Ultra, 15 Black Hole), and each further computer of theirs at its extra
+  price; and each paid computer no paying member uses (shared, lab and student computers) at its edition's price.
+  The prices are the operator's price list (LICENSING.md); Essentials is free. Student and child computers (only ever
+  in an FBRX Command) run the learner edition and count as Standard. **Members** shows who uses more computers than
+  their edition includes.
 * The plan's per-computer items in Stripe follow the computers by themselves (a few seconds after a change, and every
   quarter of an hour), prorated by Stripe.
 * While the plan runs, FBRX Command holds one license for the organization that allows everything; each computer runs
@@ -176,7 +178,9 @@ the operator issues. The operator sees every account under **FBRX accounts**.
    `packages/shared/src/plans.ts`: `fbrx_standard_monthly` and `fbrx_ultra_monthly` (on their own); for organizations
    `fbrx_standard_tenant_monthly`, `fbrx_ultra_tenant_monthly` and `fbrx_blackhole_tenant_monthly` (each computer),
    `fbrx_command_tenant_monthly` (the organization fee), `fbrx_command_large_monthly` and `fbrx_command_home_monthly`
-   (only when larger or Home organizations pay another fee) and `fbrx_mdm_tenant_monthly` (the MDM add-on). You can
+   (only when larger or Home organizations pay another fee), `fbrx_standard_extra_computer_monthly`,
+   `fbrx_ultra_extra_computer_monthly` and `fbrx_blackhole_extra_computer_monthly` (each computer past those an
+   edition includes) and `fbrx_mdm_tenant_monthly` (the MDM add-on). You can
    also make them by hand in the Stripe Dashboard, one product per price, with those lookup keys; the Pricing page says
    which agree. A new price takes the lookup key from the old one, so a price change needs no new FBRX version. People
    who already pay keep their price (FBRX remembers every price it saw under a key); organizations move to the new

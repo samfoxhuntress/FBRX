@@ -34,6 +34,14 @@ export const PriceBookInput = z
   .object({
     personal: z.object({ basic: cents, ultra: cents }).strict(),
     seats: z.object({ basic: cents, ultra: cents, blackhole: cents }).strict(),
+    // A price list saved before computers were counted per person takes the prices in plans.ts for them.
+    computers: z
+      .object({
+        included: z.object({ basic: z.number().int().min(1).max(1000), ultra: z.number().int().min(1).max(1000), blackhole: z.number().int().min(1).max(1000) }).strict(),
+        extra: z.object({ basic: cents, ultra: cents, blackhole: cents }).strict(),
+      })
+      .strict()
+      .default(DEFAULT_PRICE_BOOK.computers),
     volume: z
       .array(z.object({ from: size, percentOff: z.number().int().min(1).max(90) }).strict())
       .max(MAX_VOLUME_STEPS)

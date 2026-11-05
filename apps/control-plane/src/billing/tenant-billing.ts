@@ -1,4 +1,4 @@
-import { COMMAND_FEE_PRODUCTS, LEARNER_TIER, MDM_ADDON, TIERS, VERTICALS, isLearner, licenseEditionFor, organizationBill, type OrganizationBill, type TenantPlanView, type Tier, type Vertical } from '@fbrx/shared';
+import { COMMAND_FEE_PRODUCTS, LEARNER_TIER, MDM_ADDON, PAID_TIERS, TIERS, VERTICALS, isLearner, licenseEditionFor, organizationBill, type BillCounts, type OrganizationBill, type PaidTier, type TenantPlanView, type Tier, type Vertical } from '@fbrx/shared';
 import type { Db } from '@fbrx/shared/node';
 import { signLicense } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
@@ -39,13 +39,42 @@ export function computersByTier(db: Db, tenantId: string): Record<Tier, number> 
   return out;
 }
 
-/** The organization's monthly bill at the operator's prices, from its kind and what its computers run. */
+/**
+ * What the organization is billed for: each member with a paid edition, with how many of its active computers they
+ * use (their seat covers as many as their edition includes), and the paid computers no paying member uses (shared,
+ * lab and student computers), by the edition they are given.
+ */
+export function billCounts(db: Db, tenantId: string): BillCounts {
+  const tenant = db.get<{ vertical: string | null }>('SELECT vertical FROM tenants WHERE id = ?', tenantId);
+  const paying = new Map<string, { tier: PaidTier; computers: number }>();
+  for (const m of db.all<{ account_id: string; tier: string }>('SELECT account_id, tier FROM tenant_members WHERE tenant_id = ?', tenantId)) {
+    if ((PAID_TIERS as readonly string[]).includes(m.tier)) paying.set(m.account_id, { tier: m.tier as PaidTier, computers: 0 });
+  }
+  const shared: Record<PaidTier, number> = { basic: 0, ultra: 0, blackhole: 0 };
+  const rows = db.all<{ account_id: string | null; tier: string | null; audience: string | null; gtier: string | null; gaudience: string | null }>(
+    "SELECT d.account_id, d.tier, d.audience, g.tier AS gtier, g.audience AS gaudience FROM devices d LEFT JOIN groups g ON g.id = d.group_id WHERE d.tenant_id = ? AND d.status = 'active'",
+    tenantId,
+  );
+  for (const r of rows) {
+    const person = r.account_id ? paying.get(r.account_id) : undefined;
+    if (person) {
+      person.computers += 1;
+      continue;
+    }
+    const { audience, tier } = givenEdition(tenant ?? {}, r, { tier: r.gtier, audience: r.gaudience });
+    const t = isLearner(audience) ? LEARNER_TIER : (tier ?? 'essentials');
+    if (t !== 'essentials') shared[t] += 1;
+  }
+  return { people: [...paying.values()], shared, computers: rows.length };
+}
+
+/** The organization's monthly bill at the operator's prices: its people, their computers and its shared computers. */
 export function tenantBill(ctx: AppContext, tenantId: string): { bill: OrganizationBill; computers: Record<Tier, number>; managed: number } {
   const vertical = ctx.db.get<{ vertical: string | null }>('SELECT vertical FROM tenants WHERE id = ?', tenantId)?.vertical ?? null;
   const kind = (VERTICALS as readonly string[]).includes(vertical ?? '') ? (vertical as Vertical) : null;
-  const computers = computersByTier(ctx.db, tenantId);
   const managed = mdmManaged(ctx.db, tenantId);
-  return { bill: organizationBill(priceBook(ctx.db), { kind, computers, mdm: { managed, pricing: mdmPricing(ctx.db) } }), computers, managed };
+  const bill = organizationBill(priceBook(ctx.db), { kind, counts: billCounts(ctx.db, tenantId), mdm: { managed, pricing: mdmPricing(ctx.db) } });
+  return { bill, computers: computersByTier(ctx.db, tenantId), managed };
 }
 
 export function tenantPlanView(ctx: AppContext, tenantId: string): TenantPlanView {
@@ -162,10 +191,11 @@ async function syncSeatsNow(ctx: AppContext, stripe: Stripe | null, tenantId: st
       changed.push(`${productId}=${want}`);
     }
   }
-  // The volume discount: FBRX's coupon for it on the computers' prices, beside any other discount (a promotion code).
+  // The volume discount: FBRX's coupon for it on the seats' prices (never extra computers), beside any other discount
+  // (a promotion code).
   const discounts = (sub.discounts ?? []).map((d) => (typeof d === 'string' ? { id: d } : d));
   const ours = discounts.filter((d) => discountCoupon(d)?.startsWith(VOLUME_COUPON_PREFIX));
-  const seats = bill.lines.filter((l) => l.item !== 'fee' && l.item !== 'mdm' && l.quantity > 0);
+  const seats = bill.lines.filter((l) => l.item === 'seats' && l.quantity > 0);
   const coupon = bill.percentOff ? await stripe.volumeCoupon(bill.percentOff, await Promise.all(seats.map(async (l) => (await stripe.price(l.productId)).product))) : null;
   if (ours.length !== (coupon ? 1 : 0) || (coupon && discountCoupon(ours[0]!) !== coupon)) {
     const others = discounts.filter((d) => !ours.includes(d)).map((d) => ({ discount: d.id }));

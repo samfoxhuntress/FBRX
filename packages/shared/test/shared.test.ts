@@ -76,12 +76,13 @@ describe('editions and prices', () => {
     expect(EDITION_PLANS.blackhole).toMatchObject({ sold: 'tenant', productId: null });
   });
 
-  it('bills an organization from the operator’s price list: its fee by kind and size, the computers less the volume discount', () => {
-    // Until the operator changes it, the price list is the prices above.
-    expect(organizationBill(DEFAULT_PRICE_BOOK, { kind: 'education', computers: { basic: 10 } }).total).toBe(5499 + 3990);
+  it('bills an organization per person: each covers its computers up to its edition, further ones cost extra', () => {
+    // Until the operator changes it, the price list is the prices above: 10 shared Standard computers in a school.
+    expect(organizationBill(DEFAULT_PRICE_BOOK, { kind: 'education', counts: { people: [], shared: { basic: 10 }, computers: 10 } }).total).toBe(5499 + 3990);
     const book: PriceBook = {
       personal: { basic: 1200, ultra: 2900 },
       seats: { basic: 1200, ultra: 2900, blackhole: 9900 },
+      computers: { included: { basic: 2, ultra: 5, blackhole: 15 }, extra: { basic: 199, ultra: 299, blackhole: 499 } },
       volume: [
         { from: 25, percentOff: 10 },
         { from: 100, percentOff: 15 },
@@ -89,24 +90,42 @@ describe('editions and prices', () => {
       ],
       fees: { base: 5000, large: { from: 100, monthly: 10000 }, home: 1499 },
     };
-    // The examples on the price sheet: 20 Standard and 10 Ultra; 120 and 30; 300 and 100.
-    const bill = (kind: 'business' | 'education' | 'home', basic: number, ultra: number, essentials = 0) => organizationBill(book, { kind, computers: { basic, ultra, essentials } });
-    expect(bill('business', 20, 10)).toMatchObject({ total: 52700, fee: 'base', paid: 30, percentOff: 10 });
-    expect(bill('education', 120, 30)).toMatchObject({ total: 206350, fee: 'large', percentOff: 15 });
-    expect(bill('education', 300, 100)).toMatchObject({ total: 530000, fee: 'large', percentOff: 20 });
-    // Under 25 paid computers: list prices. Essentials computers count toward the fee's size, not the discount.
-    expect(bill('business', 20, 0, 90)).toMatchObject({ total: 10000 + 24000, fee: 'large', percentOff: 0 });
+    const people = (n: number, tier: 'basic' | 'ultra' | 'blackhole', computers = 1) => Array.from({ length: n }, () => ({ tier, computers }));
+    const bill = (kind: 'business' | 'education' | 'home', counts: { people: ReturnType<typeof people>; shared?: Record<string, number>; computers: number }) => organizationBill(book, { kind, counts: { shared: {}, ...counts } });
+    // The examples on the price sheet, now people: 20 Standard and 10 Ultra; 120 and 30; 300 and 100.
+    expect(bill('business', { people: [...people(20, 'basic'), ...people(10, 'ultra')], computers: 30 })).toMatchObject({ total: 52700, fee: 'base', paid: 30, percentOff: 10 });
+    expect(bill('education', { people: [...people(120, 'basic'), ...people(30, 'ultra')], computers: 150 })).toMatchObject({ total: 206350, fee: 'large', percentOff: 15 });
+    expect(bill('education', { people: [...people(300, 'basic'), ...people(100, 'ultra')], computers: 400 })).toMatchObject({ total: 530000, fee: 'large', percentOff: 20 });
+
+    // A Standard person on 3 computers, an Ultra one on 7, a Black Hole one on 15, and one on none: each pays once; past
+    // what the edition includes, each computer costs extra, never discounted.
+    const team = bill('business', { people: [...people(1, 'basic', 3), ...people(1, 'ultra', 7), ...people(1, 'blackhole', 15), ...people(1, 'basic', 0)], computers: 25 });
+    expect(team.lines.filter((l) => l.item === 'extra').map((l) => [l.tier, l.quantity, l.total])).toEqual([
+      ['basic', 1, 199],
+      ['ultra', 2, 598],
+      ['blackhole', 0, 0],
+    ]);
+    expect(team.lines.find((l) => l.item === 'seats' && l.tier === 'basic')).toMatchObject({ quantity: 2, people: 2, shared: 0, total: 2400 });
+    expect(team.total).toBe(5000 + 2400 + 2900 + 9900 + 199 + 598);
+
+    // Shared computers nobody pays for take a seat each and count toward the discount; Essentials computers count toward
+    // the fee's size only.
+    expect(bill('business', { people: people(20, 'basic'), shared: { basic: 5 }, computers: 115 })).toMatchObject({ paid: 25, percentOff: 10, fee: 'large', total: 10000 + 25 * 1080 });
     // Home organizations pay their own fee, at any size; MDM is charged per managed computer, never discounted.
-    const home = organizationBill(book, { kind: 'home', computers: { basic: 3 }, mdm: { managed: 3, pricing: { available: true, perEndpoint: 400 } } });
+    const home = organizationBill(book, { kind: 'home', counts: { people: people(3, 'basic'), shared: {}, computers: 3 }, mdm: { managed: 3, pricing: { available: true, perEndpoint: 400 } } });
     expect(home.lines.map((l) => [l.item, l.productId, l.total])).toEqual([
       ['fee', 'fbrx_command_home_monthly', 1499],
-      ['basic', 'fbrx_standard_tenant_monthly', 3600],
-      ['ultra', 'fbrx_ultra_tenant_monthly', 0],
-      ['blackhole', 'fbrx_blackhole_tenant_monthly', 0],
+      ['seats', 'fbrx_standard_tenant_monthly', 3600],
+      ['seats', 'fbrx_ultra_tenant_monthly', 0],
+      ['seats', 'fbrx_blackhole_tenant_monthly', 0],
+      ['extra', 'fbrx_standard_extra_computer_monthly', 0],
+      ['extra', 'fbrx_ultra_extra_computer_monthly', 0],
+      ['extra', 'fbrx_blackhole_extra_computer_monthly', 0],
       ['mdm', 'fbrx_mdm_tenant_monthly', 1200],
     ]);
-    // Each organization fee is an FBRX Command plan to Stripe.
+    // Each organization fee is an FBRX Command plan to Stripe; extra computers are their own product.
     expect(['fbrx_command_tenant_monthly', 'fbrx_command_large_monthly', 'fbrx_command_home_monthly'].map((id) => productById(id)?.kind)).toEqual(['command', 'command', 'command']);
+    expect(productById('fbrx_ultra_extra_computer_monthly')).toEqual({ kind: 'extra', tier: 'ultra' });
   });
 });
 

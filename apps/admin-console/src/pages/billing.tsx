@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { EDITION_PLANS, SERVER_OFFER, TIERS, TIER_NAMES, TIER_SHORT, formatPrice, type AccountView, type AddMemberResult, type BillLine, type InvitationView, type MemberView, type PriceBook, type TenantPlanView, type Tier } from '@fbrx/shared';
+import { EDITION_PLANS, SERVER_OFFER, TIERS, TIER_NAMES, TIER_SHORT, extraComputers, formatPrice, type AccountView, type AddMemberResult, type BillLine, type InvitationView, type MemberView, type PriceBook, type TenantPlanView, type Tier } from '@fbrx/shared';
 import { Button, Callout, Card, CopyText, Empty, Field, Grid, Input, KeyValue, Modal, Page, Select, StatTile, Status, Table, formatDay, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
@@ -10,17 +10,39 @@ interface BillingInfo {
   payments: boolean;
 }
 
-/** The editions to give, each with its price per computer in an organization, as FBRX Command's operator set it. */
+/** The editions to give, each with its price per person and the computers it includes, as the operator set them. */
 function useTierOptions() {
   const prices = useQuery<{ prices: PriceBook }>('/v1/plans').data?.prices;
-  return TIERS.map((t) => {
+  const options = TIERS.map((t) => {
     const each = t === 'essentials' ? 0 : (prices?.seats[t] ?? EDITION_PLANS[t].tenantMonthly);
-    return { value: t, label: `${TIER_SHORT[t]} · ${each ? `${formatPrice(each)} a month` : 'free'}` };
+    const included = t === 'essentials' ? null : prices?.computers.included[t];
+    return { value: t, label: `${TIER_SHORT[t]} · ${each ? `${formatPrice(each)} a month${included ? `, ${included} computers` : ''}` : 'free'}` };
   });
+  return { options, prices };
+}
+
+/** A member's computers, and how many of them are past what their edition includes. */
+function memberComputers(m: MemberView, prices: PriceBook | undefined) {
+  if (m.tier === 'essentials' || !prices) return m.devices;
+  const extra = extraComputers(prices, m.tier, m.devices);
+  return extra ? `${m.devices} (${extra} extra, ${formatPrice(prices.computers.extra[m.tier] * extra)} a month)` : m.devices;
 }
 
 /** What a line of the bill is for. */
-const lineName = (l: BillLine) => (l.item === 'fee' ? 'The organization fee' : l.item === 'mdm' ? 'The MDM add-on' : <span className={`fx-badge${l.item === 'blackhole' ? ' accent' : ''}`}>{TIER_NAMES[l.item]}</span>);
+function lineName(l: BillLine) {
+  if (l.item === 'fee') return 'The organization fee';
+  if (l.item === 'mdm') return 'The MDM add-on';
+  const badge = <span className={`fx-badge${l.tier === 'blackhole' ? ' accent' : ''}`}>{TIER_NAMES[l.tier!]}</span>;
+  return l.item === 'extra' ? <>{badge} computers past those included</> : badge;
+}
+
+/** How many a line counts: people and shared computers, or computers. */
+function lineCount(l: BillLine) {
+  if (l.item === 'fee') return '—';
+  if (l.item !== 'seats') return `${l.quantity} ${l.quantity === 1 ? 'computer' : 'computers'}`;
+  const parts = [l.people ? `${l.people} ${l.people === 1 ? 'person' : 'people'}` : '', l.shared ? `${l.shared} shared ${l.shared === 1 ? 'computer' : 'computers'}` : ''];
+  return parts.filter(Boolean).join(', ');
+}
 
 /** FBRX Server: announced, not for sale yet. */
 export function ServerComingSoon() {
@@ -85,17 +107,21 @@ export function BillingPage() {
               value={p.active ? 'Running' : 'Not started'}
               foot={p.active ? (p.status === 'grace' ? <Status tone="warning">A payment failed: update your card in Manage billing</Status> : `Renews ${formatDay(p.periodEnd)}`) : 'Until it starts, every computer runs Essentials'}
             />
-            <StatTile label="A month comes to" value={formatPrice(p.monthly)} foot={`The organization fee, and ${paid} ${paid === 1 ? 'computer' : 'computers'} at a paid edition${p.bill.percentOff ? `, ${p.bill.percentOff}% off` : ''}`} />
+            <StatTile label="A month comes to" value={formatPrice(p.monthly)} foot={`The organization fee, and ${paid} ${paid === 1 ? 'seat' : 'seats'} at a paid edition${p.bill.percentOff ? `, ${p.bill.percentOff}% off` : ''}`} />
             <StatTile label="Essentials computers" value={p.computers.essentials} foot="Free, as many as you like" />
           </Grid>
           {!b.payments && <Status tone="warning">Payments are not set up on this FBRX Command yet.</Status>}
-          <Card title="What it comes to" subtitle="Counted from the editions you give computers and members (Members, Devices, Profiles & groups); student and child computers count as Standard. It follows by itself; changes are prorated." flush>
+          <Card
+            title="What it comes to"
+            subtitle="Each member at their edition, on as many computers as it includes; each further computer they use; and each shared, lab or student computer at the edition you give it (Members, Devices, Profiles & groups). Student and child computers count as Standard. It follows by itself; changes are prorated."
+            flush
+          >
             <Table
               rows={p.bill.lines.filter((l) => l.item === 'fee' || l.item === 'mdm' || l.quantity > 0)}
-              rowKey={(l) => l.item}
+              rowKey={(l) => `${l.item}${l.tier ?? ''}`}
               columns={[
                 { key: 'w', header: 'What', render: lineName },
-                { key: 'n', header: 'Computers', render: (l) => (l.item === 'fee' ? '—' : l.quantity) },
+                { key: 'n', header: 'For', render: lineCount },
                 { key: 'e', header: 'Each, a month', render: (l) => formatPrice(l.each) + (l.item === 'mdm' ? ' (any edition, in groups managed with it)' : l.percentOff ? ` (volume discount: ${l.percentOff}% off)` : '') },
                 { key: 't', header: 'A month', render: (l) => <strong>{formatPrice(l.total)}</strong> },
               ]}
@@ -127,7 +153,7 @@ export function BillingPage() {
  */
 export function MembersPage() {
   const q = useQuery<MemberView[]>('/v1/admin/members');
-  const tierOptions = useTierOptions();
+  const { options: tierOptions, prices } = useTierOptions();
   const invites = useQuery<InvitationView[]>('/v1/admin/invitations');
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<{ email: string; tier: Tier }>({ email: '', tier: 'essentials' });
@@ -170,7 +196,7 @@ export function MembersPage() {
                 </div>
               ),
             },
-            { key: 'd', header: 'Computers', render: (m) => m.devices },
+            { key: 'd', header: 'Computers', render: (m) => memberComputers(m, prices) },
             {
               key: 'x',
               header: '',

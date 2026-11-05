@@ -64,14 +64,19 @@ looking after a managed computer.
 * the **organization fee**, never discounted: one for Work and School organizations, and optionally another for larger
   ones (from so many computers, Essentials included, `fbrx_command_large_monthly`) and for Home ones
   (`fbrx_command_home_monthly`);
-* each **computer's price in an organization** (Standard, Ultra, Black Hole; Essentials is free, student and child
-  computers are billed as Standard);
-* the **volume discount**: up to five steps, each so much off every paid computer once an organization has so many
-  (the highest step reached counts). Stripe applies it as a coupon on the computers' prices, never on the fee or MDM.
+* each **person's price in an organization** (Standard, Ultra, Black Hole; Essentials is free): a person pays once,
+  whatever number of the organization's computers they use, up to the **computers their edition includes** (2 for
+  Standard, 5 for Ultra, 15 for Black Hole to start); each **further computer** costs extra a month, never discounted
+  (`fbrx_standard_extra_computer_monthly`, `fbrx_ultra_…`, `fbrx_blackhole_…`). A paid computer nobody pays for (a
+  shared, lab or student computer, given its edition in Devices or Profiles & groups) takes a seat of its own at the
+  same price; student and child computers are billed as Standard;
+* the **volume discount**: up to five steps, each so much off every seat (people and shared computers) once an
+  organization has so many (the highest step reached counts). Stripe applies it as a coupon on the seats' prices,
+  never on the fee, extra computers or MDM.
 
-A tenant's bill is its organization fee plus each computer at its edition's price less the volume discount, and the
-MDM add-on (`organizationBill`); in the cloud, FBRX Command counts the computers and keeps Stripe in step
-(ACCOUNTS.md). Until the operator changes it, the list is the table above. The app and the website show the table
+A tenant's bill is its organization fee, each person and shared computer at its edition's price less the volume
+discount, each extra computer, and the MDM add-on (`organizationBill`); in the cloud, FBRX Command counts the people
+and their computers (a computer a member joined is theirs) and keeps Stripe in step (ACCOUNTS.md). Until the operator changes it, the list is the table above. The app and the website show the table
 above; `GET /v1/plans` gives the operator's prices.
 
 **The Standard trial.** A computer on its own with nothing bought may run Standard free for `STANDARD_TRIAL_DAYS` (7)

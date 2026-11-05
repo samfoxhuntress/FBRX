@@ -25,11 +25,13 @@ interface PricingInfo {
 const CARD_FEE = 0.029;
 /** The example organizations the earnings are shown for. */
 const EXAMPLES = [30, 150, 400];
+/** People at an edition, each on so many computers. */
+const many = (n: number, tier: (typeof PAID_TIERS)[number], computers: number) => Array.from({ length: n }, () => ({ tier, computers }));
 /** The example bills: Work organizations of three sizes, mostly Standard. */
 const EXAMPLE_BILLS = [
-  { name: 'Business, 30 computers', basic: 20, ultra: 10 },
-  { name: 'School, 150 computers', basic: 120, ultra: 30 },
-  { name: 'District, 400 computers', basic: 300, ultra: 100 },
+  { name: 'Business', who: '20 Standard people, 10 Ultra (2 of them on 7 computers)', counts: { people: [...many(20, 'basic', 1), ...many(8, 'ultra', 2), ...many(2, 'ultra', 7)], shared: {}, computers: 50 } },
+  { name: 'School', who: '120 Standard people, 30 Ultra, 40 lab computers on Standard', counts: { people: [...many(120, 'basic', 1), ...many(30, 'ultra', 1)], shared: { basic: 40 }, computers: 190 } },
+  { name: 'District', who: '300 Standard people, 100 Ultra', counts: { people: [...many(300, 'basic', 1), ...many(100, 'ultra', 1)], shared: {}, computers: 400 } },
 ];
 
 const dollars = (cents: number) => (cents / 100).toFixed(2);
@@ -66,6 +68,8 @@ export function PricingPage() {
 interface Draft {
   personal: Record<'basic' | 'ultra', string>;
   seats: Record<(typeof PAID_TIERS)[number], string>;
+  included: Record<(typeof PAID_TIERS)[number], string>;
+  extra: Record<(typeof PAID_TIERS)[number], string>;
   volume: Array<{ from: string; percentOff: string }>;
   base: string;
   large: { on: boolean; from: string; monthly: string };
@@ -75,6 +79,8 @@ interface Draft {
 const draftOf = (b: PriceBook): Draft => ({
   personal: { basic: dollars(b.personal.basic), ultra: dollars(b.personal.ultra) },
   seats: { basic: dollars(b.seats.basic), ultra: dollars(b.seats.ultra), blackhole: dollars(b.seats.blackhole) },
+  included: { basic: String(b.computers.included.basic), ultra: String(b.computers.included.ultra), blackhole: String(b.computers.included.blackhole) },
+  extra: { basic: dollars(b.computers.extra.basic), ultra: dollars(b.computers.extra.ultra), blackhole: dollars(b.computers.extra.blackhole) },
   volume: b.volume.map((s) => ({ from: String(s.from), percentOff: String(s.percentOff) })),
   base: dollars(b.fees.base),
   large: { on: !!b.fees.large, from: String(b.fees.large?.from ?? 100), monthly: dollars(b.fees.large?.monthly ?? b.fees.base) },
@@ -88,6 +94,11 @@ function bookOf(d: Draft): PriceBook | string {
     if (c === null) throw new Error(`${what}: enter a price in dollars`);
     if (c > MAX_PRICE) throw new Error(`${what}: at most ${formatPrice(MAX_PRICE)}`);
     return c;
+  };
+  const count = (s: string, what: string) => {
+    const n = toCount(s);
+    if (n === null || n > 1000) throw new Error(`${what}: how many computers it includes, from 1 to 1000`);
+    return n;
   };
   try {
     const volume = d.volume.map((s, i) => {
@@ -103,6 +114,10 @@ function bookOf(d: Draft): PriceBook | string {
     return {
       personal: { basic: price(d.personal.basic, 'Standard on its own'), ultra: price(d.personal.ultra, 'Ultra on its own') },
       seats: { basic: price(d.seats.basic, 'Standard in an organization'), ultra: price(d.seats.ultra, 'Ultra in an organization'), blackhole: price(d.seats.blackhole, 'Black Hole in an organization') },
+      computers: {
+        included: { basic: count(d.included.basic, 'Standard'), ultra: count(d.included.ultra, 'Ultra'), blackhole: count(d.included.blackhole, 'Black Hole') },
+        extra: { basic: price(d.extra.basic, 'Each further Standard computer'), ultra: price(d.extra.ultra, 'Each further Ultra computer'), blackhole: price(d.extra.blackhole, 'Each further Black Hole computer') },
+      },
       volume,
       fees: {
         base: price(d.base, 'Organization fee'),
@@ -158,7 +173,10 @@ function PriceBookEditor({ book, onSaved }: { book: PriceBook; onSaved: () => vo
           </div>
         </Card>
       </Grid>
-      <Card title="Each computer in an organization" subtitle="A month, before the volume discount. Essentials computers are free; student and child computers are billed as Standard.">
+      <Card
+        title="Each person in an organization"
+        subtitle="A month, before the volume discount: a person at an edition, on as many of the organization's computers as it includes, or a shared, lab or student computer nobody pays for. Essentials is free; student and child computers are billed as Standard."
+      >
         <div className="fx-form">
           <div className="fx-row">
             {PAID_TIERS.map((t) => (
@@ -167,7 +185,20 @@ function PriceBookEditor({ book, onSaved }: { book: PriceBook; onSaved: () => vo
               </Field>
             ))}
           </div>
-          <Field label="Volume discount" help="Off every paid computer once the organization has this many of them (Standard, Ultra and Black Hole together). The highest step reached counts. Stripe shows it on the invoice as its own line.">
+          <Field label="Computers a person's edition includes, and each further one a month" help="In an organization and bought on one's own alike. Further computers are never discounted.">
+            <div className="fx-form">
+              {PAID_TIERS.map((t) => (
+                <div key={t} className="fx-row" style={{ alignItems: 'center' }}>
+                  <span style={{ minWidth: 90 }}>{TIER_SHORT[t]}</span>
+                  <Input value={d.included[t]} inputMode="numeric" aria-label={`Computers ${TIER_SHORT[t]} includes`} onChange={(e) => set({ included: { ...d.included, [t]: e.target.value } })} style={{ maxWidth: 80 }} />
+                  <span>computers, then</span>
+                  {money$(d.extra[t], (v) => set({ extra: { ...d.extra, [t]: v } }), `Each further ${TIER_SHORT[t]} computer`)}
+                  <span>each</span>
+                </div>
+              ))}
+            </div>
+          </Field>
+          <Field label="Volume discount" help="Off every seat once the organization has this many (people and shared computers at Standard, Ultra and Black Hole together; never extra computers). The highest step reached counts. Stripe shows it on the invoice as its own line.">
             <div className="fx-form">
               {d.volume.length === 0 && <div className="fx-muted">None: every organization pays the prices above.</div>}
               {d.volume.map((s, i) => (
@@ -212,11 +243,12 @@ function PriceBookEditor({ book, onSaved }: { book: PriceBook; onSaved: () => vo
           </div>
         ) : (
           <Table
-            rows={EXAMPLE_BILLS.map((x) => ({ ...x, bill: organizationBill(next, { kind: 'business', computers: { basic: x.basic, ultra: x.ultra } }) }))}
+            rows={EXAMPLE_BILLS.map((x) => ({ ...x, bill: organizationBill(next, { kind: 'business', counts: x.counts }) }))}
             rowKey={(r) => r.name}
             columns={[
               { key: 'n', header: 'Organization', render: (r) => r.name },
-              { key: 'm', header: 'Computers', render: (r) => `${r.basic} Standard, ${r.ultra} Ultra` },
+              { key: 'm', header: 'Who', render: (r) => r.who },
+              { key: 'x', header: 'Extra computers', render: (r) => r.bill.lines.filter((l) => l.item === 'extra').reduce((n, l) => n + l.quantity, 0) || '—' },
               { key: 'f', header: 'Fee', render: (r) => money(r.bill.lines[0]!.total) },
               { key: 'd', header: 'Volume discount', render: (r) => (r.bill.percentOff ? `${r.bill.percentOff}% off` : '—') },
               { key: 't', header: 'A month', render: (r) => <strong>{money(r.bill.total)}</strong> },

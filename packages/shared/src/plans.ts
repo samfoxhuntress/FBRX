@@ -170,9 +170,19 @@ export const MAX_PRICE = 100_000;
 /** At most this many volume discount steps. */
 export const MAX_VOLUME_STEPS = 5;
 
-/** The editions an organization pays for, per computer. */
+/** The editions people pay for. */
 export const PAID_TIERS = ['basic', 'ultra', 'blackhole'] as const;
 export type PaidTier = (typeof PAID_TIERS)[number];
+
+/**
+ * A computer past those a person's edition covers: one Stripe price per edition, for an organization's people and for
+ * a person's own purchase alike.
+ */
+export const EXTRA_COMPUTER_PRODUCTS: Record<PaidTier, string> = {
+  basic: 'fbrx_standard_extra_computer_monthly',
+  ultra: 'fbrx_ultra_extra_computer_monthly',
+  blackhole: 'fbrx_blackhole_extra_computer_monthly',
+};
 
 /**
  * The price list FBRX Command's operator sets (FBRX Command → Pricing), in cents a month. Until they do, it is
@@ -181,10 +191,18 @@ export type PaidTier = (typeof PAID_TIERS)[number];
 export interface PriceBook {
   /** Standard and Ultra on their own, for a person's own computers. */
   personal: { basic: number; ultra: number };
-  /** Each computer in an organization, before the volume discount. */
+  /**
+   * Each person in an organization at their edition (on as many of its computers as the edition covers), and each paid
+   * computer no paying person uses (a shared, lab or student computer), before the volume discount.
+   */
   seats: Record<PaidTier, number>;
   /**
-   * Off every paid computer in an organization once it has `from` of them (Standard, Ultra and Black Hole together; the
+   * How many computers a person's edition covers, in an organization and bought on their own, and each further
+   * computer's price a month (never discounted).
+   */
+  computers: { included: Record<PaidTier, number>; extra: Record<PaidTier, number> };
+  /**
+   * Off every seat in an organization once it has `from` of them (people and shared computers at a paid edition; the
    * highest step reached counts). Steps go up in `from`; none: no volume discount.
    */
   volume: Array<{ from: number; percentOff: number }>;
@@ -198,6 +216,7 @@ export interface PriceBook {
 export const DEFAULT_PRICE_BOOK: PriceBook = {
   personal: { basic: EDITION_PLANS.basic.monthly!, ultra: EDITION_PLANS.ultra.monthly! },
   seats: { basic: EDITION_PLANS.basic.tenantMonthly, ultra: EDITION_PLANS.ultra.tenantMonthly, blackhole: EDITION_PLANS.blackhole.tenantMonthly },
+  computers: { included: { basic: 2, ultra: 5, blackhole: 15 }, extra: { basic: 199, ultra: 299, blackhole: 499 } },
   volume: [],
   fees: { base: COMMAND_PLAN.monthly, large: null, home: null },
 };
@@ -213,23 +232,40 @@ export function feeAmount(book: PriceBook, fee: CommandFee): number {
   return fee === 'home' ? (book.fees.home ?? book.fees.base) : fee === 'large' ? (book.fees.large?.monthly ?? book.fees.base) : book.fees.base;
 }
 
-/** The volume discount (percent) on an organization's computers, by how many paid computers it has. */
+/** The volume discount (percent) on an organization's seats, by how many it has. */
 export function volumeDiscount(book: PriceBook, paid: number): number {
   let off = 0;
   for (const step of book.volume) if (paid >= step.from) off = step.percentOff;
   return off;
 }
 
+/** The computers past those a person's edition covers. */
+export const extraComputers = (book: PriceBook, tier: PaidTier, computers: number) => Math.max(0, computers - book.computers.included[tier]);
+
+/** What an organization is billed for: its people, the computers they use, and the computers nobody pays for. */
+export interface BillCounts {
+  /** Each person with a paid edition, and how many of the organization's computers they use. */
+  people: Array<{ tier: PaidTier; computers: number }>;
+  /** Paid computers no paying person uses (shared, lab and student computers), by edition. */
+  shared: Partial<Record<PaidTier, number>>;
+  /** All the organization's computers, Essentials included (what the fee's size counts). */
+  computers: number;
+}
+
 /** One line of an organization's monthly bill. */
 export interface BillLine {
-  /** The organization fee, an edition's computers, or the MDM add-on. */
-  item: 'fee' | PaidTier | 'mdm';
+  /** The organization fee, an edition's seats (people and shared computers), its extra computers, or the MDM add-on. */
+  item: 'fee' | 'seats' | 'extra' | 'mdm';
+  tier: PaidTier | null;
   /** The Stripe lookup key it is charged under. */
   productId: string;
   quantity: number;
+  /** Of an edition's seats: how many are people, and how many shared computers. */
+  people?: number;
+  shared?: number;
   /** Each, a month, before any discount (cents). */
   each: number;
-  /** Off this line, in percent: the volume discount, on computers only. */
+  /** Off this line, in percent: the volume discount, on seats only. */
   percentOff: number;
   /** The line, a month, after the discount (cents; Stripe rounds the discount on the line the same way). */
   total: number;
@@ -241,39 +277,54 @@ export interface OrganizationBill {
   total: number;
   /** The organization fee it pays. */
   fee: CommandFee;
-  /** Its computers at a paid edition (what the volume discount counts). */
+  /** Its seats at a paid edition: people and shared computers (what the volume discount counts). */
   paid: number;
   /** The volume discount on them, in percent. */
   percentOff: number;
 }
 
 /**
- * An organization's monthly bill: its fee, each paid computer at its edition's price less the volume discount, and the
- * MDM add-on for each computer it manages (when it is sold, the same price whatever the edition).
+ * An organization's monthly bill: its fee; each person at their edition's price, covering the computers it includes,
+ * and each paid computer nobody pays for, less the volume discount; each further computer a person uses; and the MDM
+ * add-on for each computer it manages (when it is sold, the same price whatever the edition).
  */
-export function organizationBill(
-  book: PriceBook,
-  o: { kind: Vertical | null; computers: Partial<Record<Tier, number>>; mdm?: { managed: number; pricing: MdmPricing } },
-): OrganizationBill {
-  const count = (t: Tier) => Math.max(0, o.computers[t] ?? 0);
-  const paid = PAID_TIERS.reduce((n, t) => n + count(t), 0);
-  const fee = organizationFee(book, o.kind, paid + count('essentials'));
+export function organizationBill(book: PriceBook, o: { kind: Vertical | null; counts: BillCounts; mdm?: { managed: number; pricing: MdmPricing } }): OrganizationBill {
+  const people = (t: PaidTier) => o.counts.people.filter((p) => p.tier === t);
+  const seats = (t: PaidTier) => people(t).length + Math.max(0, o.counts.shared[t] ?? 0);
+  const paid = PAID_TIERS.reduce((n, t) => n + seats(t), 0);
+  const fee = organizationFee(book, o.kind, o.counts.computers);
   const percentOff = volumeDiscount(book, paid);
-  const lines: BillLine[] = [{ item: 'fee', productId: COMMAND_FEE_PRODUCTS[fee], quantity: 1, each: feeAmount(book, fee), percentOff: 0, total: feeAmount(book, fee) }];
+  const lines: BillLine[] = [{ item: 'fee', tier: null, productId: COMMAND_FEE_PRODUCTS[fee], quantity: 1, each: feeAmount(book, fee), percentOff: 0, total: feeAmount(book, fee) }];
   for (const t of PAID_TIERS) {
-    const n = count(t);
-    lines.push({ item: t, productId: EDITION_PLANS[t].tenantProductId!, quantity: n, each: book.seats[t], percentOff, total: Math.round((book.seats[t] * n * (100 - percentOff)) / 100) });
+    const n = seats(t);
+    lines.push({
+      item: 'seats',
+      tier: t,
+      productId: EDITION_PLANS[t].tenantProductId!,
+      quantity: n,
+      people: people(t).length,
+      shared: n - people(t).length,
+      each: book.seats[t],
+      percentOff,
+      total: Math.round((book.seats[t] * n * (100 - percentOff)) / 100),
+    });
+  }
+  for (const t of PAID_TIERS) {
+    const n = people(t).reduce((sum, p) => sum + extraComputers(book, t, p.computers), 0);
+    lines.push({ item: 'extra', tier: t, productId: EXTRA_COMPUTER_PRODUCTS[t], quantity: n, each: book.computers.extra[t], percentOff: 0, total: book.computers.extra[t] * n });
   }
   if (o.mdm?.pricing.available) {
     const n = Math.max(0, o.mdm.managed);
-    lines.push({ item: 'mdm', productId: MDM_ADDON.productId, quantity: n, each: o.mdm.pricing.perEndpoint, percentOff: 0, total: o.mdm.pricing.perEndpoint * n });
+    lines.push({ item: 'mdm', tier: null, productId: MDM_ADDON.productId, quantity: n, each: o.mdm.pricing.perEndpoint, percentOff: 0, total: o.mdm.pricing.perEndpoint * n });
   }
   return { lines, total: lines.reduce((sum, l) => sum + l.total, 0), fee, paid, percentOff };
 }
 
-/** A Work organization's monthly bill at the prices above (organizationBill with DEFAULT_PRICE_BOOK). */
+/** A Work organization's monthly bill for computers nobody pays for, at the prices above. */
 export function tenantMonthlyTotal(computers: Partial<Record<Tier, number>>, mdm?: { managed: number; pricing: MdmPricing }): number {
-  return organizationBill(DEFAULT_PRICE_BOOK, { kind: null, computers, mdm }).total;
+  const shared = Object.fromEntries(PAID_TIERS.map((t) => [t, computers[t] ?? 0])) as Record<PaidTier, number>;
+  const all = Object.values(computers).reduce((n, c) => n + Math.max(0, c ?? 0), 0);
+  return organizationBill(DEFAULT_PRICE_BOOK, { kind: null, counts: { people: [], shared, computers: all }, mdm }).total;
 }
 
 /** Every price a price list charges, with its Stripe lookup key and what it is: for checking Stripe against it. */
@@ -284,7 +335,8 @@ export function priceBookProducts(book: PriceBook, mdm: MdmPricing): Array<{ pro
     { productId: COMMAND_FEE_PRODUCTS.base, label: book.fees.large || book.fees.home !== null ? 'Organization fee, Work and School' : 'Organization fee', amount: book.fees.base },
     ...(book.fees.large ? [{ productId: COMMAND_FEE_PRODUCTS.large, label: `Organization fee, ${book.fees.large.from} computers or more`, amount: book.fees.large.monthly }] : []),
     ...(book.fees.home !== null ? [{ productId: COMMAND_FEE_PRODUCTS.home, label: 'Organization fee, Home', amount: book.fees.home }] : []),
-    ...PAID_TIERS.map((t) => ({ productId: EDITION_PLANS[t].tenantProductId!, label: `${TIER_SHORT[t]} in an organization, each computer`, amount: book.seats[t] })),
+    ...PAID_TIERS.map((t) => ({ productId: EDITION_PLANS[t].tenantProductId!, label: `${TIER_SHORT[t]} in an organization, each person or shared computer`, amount: book.seats[t] })),
+    ...PAID_TIERS.map((t) => ({ productId: EXTRA_COMPUTER_PRODUCTS[t], label: `${TIER_SHORT[t]}, each computer past ${book.computers.included[t]}`, amount: book.computers.extra[t] })),
     { productId: MDM_ADDON.productId, label: 'MDM add-on, each managed computer', amount: mdm.perEndpoint },
   ];
 }
@@ -292,6 +344,7 @@ export function priceBookProducts(book: PriceBook, mdm: MdmPricing): Array<{ pro
 /** What a product id (Stripe lookup key, store product id) sells. */
 export type ProductInfo =
   | { kind: 'edition'; tier: Tier; tenant: boolean }
+  | { kind: 'extra'; tier: PaidTier }
   | { kind: 'command' }
   | { kind: 'mdm' }
   | { kind: 'server' };
@@ -301,6 +354,7 @@ export function productById(id: string): ProductInfo | null {
     if (p.productId === id) return { kind: 'edition', tier: p.tier, tenant: false };
     if (p.tenantProductId === id) return { kind: 'edition', tier: p.tier, tenant: true };
   }
+  for (const t of PAID_TIERS) if (EXTRA_COMPUTER_PRODUCTS[t] === id) return { kind: 'extra', tier: t };
   if ((Object.values(COMMAND_FEE_PRODUCTS) as string[]).includes(id)) return { kind: 'command' };
   if (id === MDM_ADDON.productId) return { kind: 'mdm' };
   if (id === SERVER_OFFER.productId) return { kind: 'server' };

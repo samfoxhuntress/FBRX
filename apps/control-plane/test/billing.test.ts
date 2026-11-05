@@ -490,7 +490,8 @@ describe('FBRX accounts and what they buy', () => {
     expect((await call('POST', '/v1/admin/pricing', { book: { ...book, volume: [{ from: 5, percentOff: 10 }, { from: 3, percentOff: 20 }] } }, op)).status).toBe(400);
     await ok('POST', '/v1/admin/pricing', { book }, op);
     const plans = await ok('GET', '/v1/plans');
-    expect(plans.prices).toEqual(book);
+    // A price list without computers takes the prices in plans.ts for them: 2, 5 and 15 included.
+    expect(plans.prices).toMatchObject({ ...book, computers: { included: { basic: 2, ultra: 5, blackhole: 15 } } });
     expect([plans.editions.ultra.monthly, plans.editions.ultra.tenantMonthly, plans.command.monthly]).toEqual([2900, 2900, 5000]);
 
     // A Work organization with two Ultra computers: the fee, and both computers 10% off.
@@ -536,8 +537,27 @@ describe('FBRX accounts and what they buy', () => {
     expect(items()).toEqual(['fbrx_command_large_monthly=1', 'fbrx_command_tenant_monthly=0', 'fbrx_ultra_tenant_monthly=2']);
     expect(stripe.subscriptions.get('sub_r').items.data.find((i: any) => i.price.lookup_key === 'fbrx_ultra_tenant_monthly').price.id).toBe(stripe.prices.get('fbrx_ultra_tenant_monthly')!.id);
 
-    // Someone who bought Standard at the old price keeps it: the price lost its lookup key, and is still Standard.
+    // Per person: the owner becomes an Ultra member and joins 7 computers of their own. Their seat covers 5; the other
+    // 2 are extra computers, never discounted.
     const me = await ok('GET', '/v1/accounts/me', undefined, owner.token);
+    await ok('PATCH', `/v1/admin/members/${me.id}`, { tier: 'ultra' }, admin);
+    for (const n of [1, 2, 3, 4, 5, 6, 7]) {
+      const e = await ok('POST', `/v1/accounts/memberships/${t.tenantId}/enroll`, {}, owner.token);
+      await ok('POST', '/v1/enroll', { token: e.token, protocolVersion: 1, device: { name: `own-${n}`, hostname: `own-${n}`, platform: 'win32', arch: 'x64', osVersion: '11', appVersion: '2.3.0', machineId: `delta-own-${n}` } });
+    }
+    r = await ok('POST', '/v1/admin/billing/sync', {}, admin);
+    const line = (item: string, tier: string) => r.plan.bill.lines.find((l: any) => l.item === item && l.tier === tier);
+    expect(line('seats', 'ultra')).toMatchObject({ quantity: 3, people: 1, shared: 2, percentOff: 10 });
+    expect(line('extra', 'ultra')).toMatchObject({ quantity: 2, each: 299, percentOff: 0, total: 598 });
+    expect(items()).toEqual(expect.arrayContaining(['fbrx_ultra_tenant_monthly=3', 'fbrx_ultra_extra_computer_monthly=2']));
+    // Leaving one computer: one extra fewer.
+    const own = cp.ctx.db.get<{ id: string }>("SELECT id FROM devices WHERE hostname = 'own-7'")!;
+    await ok('DELETE', `/v1/admin/devices/${own.id}`, undefined, admin);
+    r = await ok('POST', '/v1/admin/billing/sync', {}, admin);
+    expect(line('extra', 'ultra')).toMatchObject({ quantity: 1, total: 299 });
+    expect(items()).toContain('fbrx_ultra_extra_computer_monthly=1');
+
+    // Someone who bought Standard at the old price keeps it: the price lost its lookup key, and is still Standard.
     const old = { id: 'sub_old', customer: 'cus_9', status: 'active', metadata: { fbrx_account: me.id }, items: { data: [{ id: 'si_old', quantity: 1, current_period_end: end, price: { id: 'price_fbrx_standard_monthly', lookup_key: null } }] } };
     await stripeEvent({ id: 'evt_old', type: 'customer.subscription.updated', data: { object: old } });
     expect((await ok('GET', '/v1/accounts/me', undefined, owner.token)).tier).toBe('basic');
