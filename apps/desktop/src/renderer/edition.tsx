@@ -55,6 +55,7 @@ export function useAtLeast(min: Tier): boolean {
 export function howToGet(tier: Tier, ed: EditionStatus | null): string {
   const plan = EDITION_PLANS[tier];
   if (ed && atLeast(ed.ceiling, tier)) return `${TIER_SHORT[tier]} is allowed on this computer: turn it on and it is there.`;
+  if (ed?.licenseProblem) return ed.licenseProblem;
   if (ed?.ceilingReason === 'organization' || ed?.enrolled) return `Your organization keeps this computer on ${TIER_SHORT[ed.ceiling]} for now (in FBRX Command). Ask your IT team if you need ${TIER_SHORT[tier]}.`;
   if (plan.monthly == null) return `${TIER_SHORT[tier]} comes only through an organization's FBRX Command, for the people who run it and its FBRX Servers.`;
   if (tier === 'basic' && ed?.trialAvailable) return `Try ${TIER_SHORT[tier]} free for ${STANDARD_TRIAL_DAYS} days on this computer, no card needed; then it is ${formatPrice(plan.monthly)} a month on your FBRX account.`;

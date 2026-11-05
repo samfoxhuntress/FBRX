@@ -40,7 +40,13 @@ FBRX OS opens straight into a chat with your own AI, running on your computer:
 To update later, choose **Update now** when FBRX OS offers a new version (*Settings → Updates*), or download the new
 version into the same place and run the installer again; your data, settings and keys are kept, and a running FBRX OS
 is closed for you. Options: `--name "Acme Ltd"` (the name on your license), `--no-launch`, `--no-ai` (leave the model
-to the app), `--allow-downgrade`. The full log is in `.fbrx-setup/setup.log`.
+to the app), `--allow-downgrade`, `--signing-key <file>` (below). The full log is in `.fbrx-setup/setup.log`.
+
+**With FBRX Command on another computer.** FBRX OS accepts the editions FBRX Command gives (to the organization, or to
+FBRX accounts on it) only when it was built with FBRX Command's license signing key. On one computer the two installers
+share it by themselves. For FBRX OS on another computer, copy `~/.fbrx-keys/license-signing.pem` from the FBRX Command
+computer and run `Install FBRX OS` with `--signing-key <that file>`; the keys it replaces are kept beside it, dated.
+Until then that computer runs Standard, and *Settings → Edition* says why.
 
 ## Giving FBRX OS to someone else
 
@@ -71,7 +77,8 @@ Command.cmd`** (Windows). Double-click it on the computer that will run FBRX Com
 (one that stays on, with a fixed address in your router). In about five minutes it:
 
 1. builds FBRX Command and installs it with its own copy of Node.js,
-2. gives it the same license signing key as `Install FBRX OS`, so the licenses it issues work on your computers,
+2. gives it the same license signing key as `Install FBRX OS` on this computer, so the licenses it issues work on
+   your computers (FBRX OS built elsewhere needs `--signing-key`, above),
 3. starts it now and every time you log in, with an **FBRX Command** icon in the Start menu / Applications,
 4. opens the first-run page (Work, School or Home) with its one-time setup token already filled in.
 

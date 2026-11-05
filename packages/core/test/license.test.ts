@@ -74,6 +74,27 @@ describe('licensing', () => {
     }
   });
 
+  it('keeps the FBRX account’s edition when the organization’s license cannot count here, and says why', async () => {
+    const keys = generateSigningKeyPair();
+    const { kernel, cleanup } = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem] });
+    try {
+      const sign = (lid: string, key: string, tier: 'ultra' | 'blackhole') =>
+        signLicense({ v: 1, lid, tenantId: 't', customer: 'Sam', edition: tier === 'blackhole' ? 'enterprise' : 'pro', seats: 0, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null, tier }, key);
+      // The account's Ultra (signed with a key this build trusts), and an organization whose FBRX Command signs with
+      // another: the organization's license does not count here, so the account's still does.
+      kernel.license.applyAccount(sign('lic_account', keys.privateKeyPem, 'ultra'));
+      kernel.meta.set('fleet.deviceId', 'dev_1');
+      kernel.license.applyManaged(sign('lic_org', generateSigningKeyPair().privateKeyPem, 'blackhole'));
+      expect(kernel.license.status()).toMatchObject({ state: 'valid', source: 'account', ceiling: 'ultra' });
+      expect(kernel.edition().licenseProblem).toMatch(/^The editions your FBRX Command gives cannot reach this computer: this copy of FBRX OS was built to trust another license signing key/);
+      // A license this build trusts: no problem to tell.
+      kernel.license.applyManaged(sign('lic_org2', keys.privateKeyPem, 'blackhole'));
+      expect(kernel.license.status()).toMatchObject({ source: 'managed', ceiling: 'blackhole', problem: null });
+    } finally {
+      await cleanup();
+    }
+  });
+
   it('lets a computer on its own try Standard free for 7 days, once', async () => {
     const { kernel, cleanup } = await makeKernel({ devMode: false });
     try {

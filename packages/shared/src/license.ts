@@ -136,6 +136,11 @@ export interface LicenseStatus {
   trialUntil?: string | null;
   /** This computer may still start its Standard trial (on its own, nothing bought, never tried). */
   trialAvailable?: boolean;
+  /**
+   * Why the organization's or the FBRX account's license does not count here, in a sentence for Settings → Edition
+   * (built to trust another signing key, expired, another computer's); null when nothing is wrong.
+   */
+  problem?: string | null;
   customer: string | null;
   tenantId: string | null;
   licenseId: string | null;

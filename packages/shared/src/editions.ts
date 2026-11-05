@@ -170,6 +170,8 @@ export interface EditionStatus {
   learner: boolean;
   /** "FBRX Endpoint Essentials", "FBRX Endpoint Standard", "FBRX Endpoint Black Hole", "FBRX OS Education"… */
   productName: string;
+  /** Why the organization's or the FBRX account's license does not count here (LicenseStatus.problem). */
+  licenseProblem: string | null;
 }
 
 /**

@@ -105,9 +105,16 @@ An organization's FBRX Command gives editions to people, not just computers: a *
 organization added, with the edition it gives that person (`POST /v1/admin/members` `{ email, tier }`; Essentials
 members cost nothing). A member who signs in on any computer sees the organization under **Your organizations** and
 **Join this computer**: the computer enrolls with a one-time token (fifteen minutes) that carries the member's edition,
-and turns it on. When the organization changes a member's edition, the computers they joined follow it; removing a
-member leaves their computers in the organization on Essentials. This is how an admin signs in on any computer and gets
-Black Hole there.
+and turns it on. A computer that is in the organization already (it joined with a token from **Deploy & enroll** or a
+license key) becomes the member's as soon as they sign in on it: it runs their edition and counts as theirs under
+**Members** (another member's computer stays theirs). When the organization changes a member's edition, the computers
+they joined follow it; removing a member leaves their computers in the organization on Essentials. This is how an admin
+signs in on any computer and gets Black Hole there.
+
+FBRX OS accepts an edition only from a license signed with a key it was built to trust. FBRX OS you build yourself
+trusts your own key; when your FBRX Command runs on another computer, build FBRX OS with FBRX Command's key
+(`Install FBRX OS --signing-key`, see [INSTALL.md](INSTALL.md)). Until then the computer runs Standard, and
+*Settings → Edition* says why.
 
 ### Inviting someone without an FBRX account (no website or email needed)
 

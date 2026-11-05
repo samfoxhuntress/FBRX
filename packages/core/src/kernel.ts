@@ -550,6 +550,8 @@ export class Kernel {
       }),
       enroll: (serverUrl, token, fingerprint, actor) => this.fleet.enroll(serverUrl, token, undefined, actor, undefined, fingerprint ?? undefined),
       enrolled: () => this.fleet.enrolled,
+      fleetDevice: () => this.fleet.credentials(),
+      syncFleet: () => this.fleet.sync(),
     });
     this.localAccount = new LocalAccountService(this.meta, this.audit, this.events);
     // Support mode: a signed pass elevates this computer; the license and settings services read its state.
@@ -876,9 +878,11 @@ export class Kernel {
       },
       log: L('org-mesh'),
     });
-    // Joining or leaving an organization, or reconnecting to it: look at its mesh again.
+    // Joining or leaving an organization, or reconnecting to it: look at its mesh again, and when the signed-in FBRX
+    // account is a member there, make this computer theirs (it then runs the edition they were given).
     this.events.on('fleet.changed', (f) => {
       if (f.state === 'online' || f.state === 'unenrolled') void this.orgMesh.sync();
+      if (f.state === 'online') void this.account.claim().catch(() => undefined);
     });
     this.servers = new SavedServers({
       meta: this.meta,
@@ -1853,6 +1857,7 @@ export class Kernel {
       audience,
       learner: isLearner(audience),
       productName: productNameFor(lic.tier, vertical, audience),
+      licenseProblem: lic.problem ?? null,
     };
   }
 

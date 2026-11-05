@@ -411,6 +411,28 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   /**
+   * Makes a computer that is in the organization already (it joined with an enrollment token or a license key, not
+   * with this sign-in) this member's: it then runs the edition the organization gave them and counts as theirs. The
+   * computer proves it is that computer with its device token; another member's computer stays theirs.
+   */
+  app.post('/v1/accounts/memberships/:tenantId/device', { preHandler: auth, config: { rateLimit: { max: 20, timeWindow: '1 minute' } } }, async (req) => {
+    const a = req.account!;
+    const tenantId = (req.params as { tenantId: string }).tenantId;
+    const body = z.object({ deviceId: z.string().min(1).max(64), deviceToken: z.string().min(8).max(200) }).parse(req.body);
+    const m = ctx.db.get<{ tier: Tier }>("SELECT m.tier FROM tenant_members m JOIN tenants t ON t.id = m.tenant_id WHERE m.tenant_id = ? AND m.account_id = ? AND t.status = 'active'", tenantId, a.id);
+    if (!m) throw forbidden('Your FBRX account is not a member of that organization');
+    const d = ctx.db.get<{ token_hash: string; account_id: string | null; status: string }>('SELECT token_hash, account_id, status FROM devices WHERE id = ? AND tenant_id = ?', body.deviceId, tenantId);
+    if (!d || d.status !== 'active' || !safeEqual(sha256Hex(body.deviceToken), d.token_hash)) throw forbidden('That computer is not in this organization');
+    if (d.account_id && d.account_id !== a.id) throw conflict('That computer is another member’s');
+    if (d.account_id !== a.id) {
+      ctx.db.run('UPDATE devices SET account_id = ?, tier = ?, updated_at = ? WHERE id = ?', a.id, m.tier, new Date().toISOString(), body.deviceId);
+      ctx.bumpConfig(tenantId);
+      ctx.audit.record({ ...accountActor(a, req), tenantId }, 'account.deviceClaimed', { type: 'device', id: body.deviceId, tenantId }, { tier: m.tier });
+    }
+    return { tier: m.tier };
+  });
+
+  /**
    * Starts an organization's own FBRX Command (in the cloud): the account becomes its owner (signing in to the console
    * with the account's password) and a member on Essentials. Nothing is charged until the owner starts the plan in
    * Billing; until then its computers run Essentials.

@@ -128,6 +128,18 @@ export class FleetAgent {
     return t;
   }
 
+  /**
+   * This computer in its organization and the credential that proves it, for the FBRX account to make it the signed-in
+   * member's (AccountService); null when it is in none, or the vault is locked.
+   */
+  credentials(): { serverUrl: string; fingerprint: string | null; tenantId: string; deviceId: string; deviceToken: string } | null {
+    const m = this.d.meta;
+    const [serverUrl, tenantId, deviceId] = [this.serverUrl, m.get<string>('fleet.tenantId'), this.deviceId];
+    if (!serverUrl || !tenantId || !deviceId || !this.d.vault.isUnlocked) return null;
+    const deviceToken = this.d.vault.get(TOKEN_SECRET, { allowInternal: true });
+    return deviceToken ? { serverUrl, fingerprint: this.serverFingerprint, tenantId, deviceId, deviceToken } : null;
+  }
+
   authHeaders(): Record<string, string> {
     return { authorization: `Bearer ${this.token()}`, 'x-fbrx-device': this.deviceId ?? '', 'x-fbrx-protocol': String(PROTOCOL_VERSION) };
   }

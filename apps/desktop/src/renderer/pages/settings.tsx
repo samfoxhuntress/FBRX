@@ -219,6 +219,8 @@ function priceLine(t: Tier, book: PriceBook): ReactNode {
 
 /** Why this computer may run what it may, in a sentence (Settings → Edition). */
 function ceilingLine(ed: EditionStatus): string {
+  // A license that should count but cannot (built for another signing key, expired): that is the reason.
+  if (ed.licenseProblem) return ed.licenseProblem;
   switch (ed.ceilingReason) {
     case 'development':
       return 'Development build: every edition can be turned on.';

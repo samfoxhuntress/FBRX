@@ -579,7 +579,9 @@ async function main() {
     if (win) console.log(`  ${yellow('!')} If Windows asks whether Node.js may use private networks, choose Allow: that is FBRX Command.`);
     if (mac) console.log(`  ${yellow('!')} If macOS asks whether "node" may accept incoming connections, choose Allow: that is FBRX Command.`);
   }
-  console.log(`\n  ${dim(`Your license signing key is backed up in ${join(homedir(), '.fbrx-keys')}. Keep a copy somewhere safe.`)}\n`);
+  console.log(`\n  ${dim(`Your license signing key is backed up in ${join(homedir(), '.fbrx-keys')}. Keep a copy somewhere safe.`)}`);
+  console.log(`  ${dim('FBRX OS built on another computer accepts the editions FBRX Command gives only with this key: copy')}`);
+  console.log(`  ${dim(`license-signing.pem there and run "Install FBRX OS" with --signing-key <that file>.`)}\n`);
   return 0;
 }
 

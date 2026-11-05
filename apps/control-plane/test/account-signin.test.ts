@@ -1,5 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
+import { generateSigningKeyPair } from '@fbrx/shared/node';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -191,6 +192,66 @@ describe('signing in on a computer with an FBRX account', () => {
       expect(k.license.status()).toMatchObject({ tier: 'blackhole', source: 'support', support: true });
       expect((await k.call('support.end', {}, USER)) as any).toMatchObject({ active: false });
       expect(k.license.status().tier).toBe('essentials');
+    } finally {
+      await k.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('makes a member’s computer that joined another way theirs, so it runs their edition, after a Standard trial too', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fbrx-claim-'));
+    const k = await Kernel.create({ dataDir: dir, platform: createNodePlatform({ dataDir: dir, devMode: false, keychain: new StaticKeyKeychain(randomBytes(32), 'memory'), licensePublicKeys: [cp.ctx.keys.licensePublicPem] }) });
+    const t = { 'x-fbrx-tenant': tenantId };
+    try {
+      k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, protection: { shield: { updateSignatures: false } } });
+      await k.start();
+      // On its own first, with the free Standard trial.
+      expect(await k.call('edition.startTrial', {}, USER)).toMatchObject({ tier: 'basic', ceilingReason: 'trial' });
+      // Signed in to an account with Ultra, made a Black Hole member of the organization.
+      await k.call('account.signIn', { server: base, email: 'jo@harbor.example', password: PASSWORD, name: 'Jo', create: true }, USER);
+      const acct = (await api('GET', '/v1/admin/accounts?q=jo@')).at(0);
+      await api('POST', `/v1/admin/accounts/${acct.id}/grant`, { tier: 'ultra', days: 30 });
+      cp.ctx.db.run('UPDATE accounts SET email_verified_at = ? WHERE id = ?', new Date().toISOString(), acct.id);
+      await api('POST', '/v1/admin/members', { email: 'jo@harbor.example', tier: 'blackhole' }, admin, t);
+      expect(await k.call('account.refresh', {}, USER)).toMatchObject({ tier: 'ultra' });
+      expect(k.license.status()).toMatchObject({ tier: 'ultra', ceiling: 'ultra' });
+
+      // The computer joins with an enrollment token from Deploy & enroll, not through the sign-in: it becomes Jo's and
+      // runs Jo's Black Hole.
+      const { token } = await api('POST', '/v1/admin/enrollment-tokens', { label: 'Lab' }, admin, t);
+      await k.call('fleet.enroll', { serverUrl: base, token }, USER);
+      await waitFor(() => k.license.status().tier === 'blackhole');
+      expect(k.license.status()).toMatchObject({ source: 'managed', ceiling: 'blackhole', chosen: 'blackhole', problem: null });
+      expect(await api('GET', '/v1/admin/members', undefined, admin, t)).toEqual(expect.arrayContaining([expect.objectContaining({ email: 'jo@harbor.example', tier: 'blackhole', devices: 1 })]));
+
+      // Only with the computer's own credential, and another member's computer stays theirs.
+      const dev = k.fleet.credentials()!;
+      const other = (await api('POST', '/v1/accounts/signup', { email: 'max@harbor.example', name: 'Max', password: PASSWORD }, '')).token;
+      cp.ctx.db.run('UPDATE accounts SET email_verified_at = ? WHERE email = ?', new Date().toISOString(), 'max@harbor.example');
+      await api('POST', '/v1/admin/members', { email: 'max@harbor.example', tier: 'ultra' }, admin, t);
+      await expect(api('POST', `/v1/accounts/memberships/${tenantId}/device`, { deviceId: dev.deviceId, deviceToken: 'fbrx_dev_not-the-token' }, other)).rejects.toThrow(/403/);
+      await expect(api('POST', `/v1/accounts/memberships/${tenantId}/device`, { deviceId: dev.deviceId, deviceToken: dev.deviceToken }, other)).rejects.toThrow(/409/);
+    } finally {
+      await k.stop();
+      rmSync(dir, { recursive: true, force: true });
+    }
+  }, 60_000);
+
+  it('says when this copy of FBRX OS was built to trust another signing key, instead of blaming the organization', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fbrx-key-'));
+    const k = await Kernel.create({ dataDir: dir, platform: createNodePlatform({ dataDir: dir, devMode: false, keychain: new StaticKeyKeychain(randomBytes(32), 'memory'), licensePublicKeys: [generateSigningKeyPair().publicKeyPem] }) });
+    const t = { 'x-fbrx-tenant': tenantId };
+    try {
+      k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, protection: { shield: { updateSignatures: false } } });
+      await k.start();
+      await k.call('account.signIn', { server: base, email: 'ash@harbor.example', password: PASSWORD, name: 'Ash', create: true }, USER);
+      cp.ctx.db.run('UPDATE accounts SET email_verified_at = ? WHERE email = ?', new Date().toISOString(), 'ash@harbor.example');
+      await api('POST', '/v1/admin/members', { email: 'ash@harbor.example', tier: 'blackhole' }, admin, t);
+      await k.call('account.refresh', {}, USER);
+      await k.call('account.join', { tenantId }, USER);
+      await k.fleet.sync();
+      expect(k.license.status()).toMatchObject({ state: 'invalid', ceiling: 'basic' });
+      expect(k.edition().licenseProblem).toMatch(/built to trust another license signing key than your FBRX Command\. Install FBRX OS again with FBRX Command's key \(--signing-key\)/);
     } finally {
       await k.stop();
       rmSync(dir, { recursive: true, force: true });

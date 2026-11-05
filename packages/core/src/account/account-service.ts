@@ -16,7 +16,7 @@ const REFRESH_MS = 6 * 3600_000;
  * What this computer keeps about the account, forgotten at sign-out (the FBRX Command address stays for next time, with
  * the fingerprint of its own certificate when it has one: account.server, account.fingerprint).
  */
-const ACCOUNT_META = ['account.id', 'account.view', 'account.tier', 'account.licenseUntil', 'account.lastSyncAt', 'account.error', 'account.canBuy', 'account.prices', 'account.computers', 'account.licenseNote'];
+const ACCOUNT_META = ['account.id', 'account.view', 'account.tier', 'account.licenseUntil', 'account.lastSyncAt', 'account.error', 'account.canBuy', 'account.prices', 'account.computers', 'account.licenseNote', 'account.claimed'];
 
 export interface AccountDeps {
   meta: MetaStore;
@@ -33,6 +33,18 @@ export interface AccountDeps {
   enroll: (serverUrl: string, token: string, fingerprint: string | null, actor: string) => Promise<unknown>;
   /** This computer is in an organization already (it then joins another only when the person says so). */
   enrolled: () => boolean;
+  /** This computer in its organization, with the credential that proves it is this computer (FleetAgent.credentials). */
+  fleetDevice: () => FleetCredentials | null;
+  /** Fetches the organization's configuration again (after this computer becomes the member's). */
+  syncFleet: () => Promise<unknown>;
+}
+
+export interface FleetCredentials {
+  serverUrl: string;
+  fingerprint: string | null;
+  tenantId: string;
+  deviceId: string;
+  deviceToken: string;
 }
 
 /**
@@ -245,6 +257,7 @@ export class AccountService {
       this.keepLicense(lic);
       // "Whatever their credentials have access to": the account's edition comes on by itself (on a computer it covers).
       if (lic.key && (opts.adopt || tierRank(lic.tier) > tierRank(before)) && lic.tier !== 'essentials') this.adopt(lic.tier);
+      await this.claimComputer(view, token);
     } catch (err) {
       const e = err as CoreError;
       const signedOut = e.code === 'UNAUTHENTICATED' && (e.details as { signedOut?: boolean } | undefined)?.signedOut === true;
@@ -264,6 +277,39 @@ export class AccountService {
     }
     this.emit();
     return this.status();
+  }
+
+  /** Makes this computer the member's when it has just joined (or reconnected to) one of the account's organizations. */
+  async claim(): Promise<void> {
+    const view = this.d.meta.get<AccountView>('account.view');
+    const token = this.token();
+    if (view && token && this.d.meta.get<string>('account.id')) await this.claimComputer(view, token);
+    this.emit();
+  }
+
+  /**
+   * A computer in one of the account's organizations that joined it another way (an enrollment token, a license key)
+   * becomes the member's, so it runs the edition the organization gave them, once per account and computer. Only with
+   * the FBRX Command the account is on (the same address, or the same pinned certificate): the computer's credential
+   * goes nowhere else.
+   */
+  private async claimComputer(view: AccountView, token: string): Promise<void> {
+    const dev = this.d.fleetDevice();
+    if (!dev || !view.memberships.some((m) => m.tenantId === dev.tenantId)) return;
+    const done = `${view.id}:${dev.deviceId}`;
+    if (this.d.meta.get<string>('account.claimed') === done) return;
+    const pin = this.d.meta.get<string>('account.fingerprint');
+    if (!sameOrigin(this.server, dev.serverUrl) && !(pin && pin === dev.fingerprint)) return;
+    try {
+      const r = await this.request<{ tier: Tier }>('POST', `/v1/accounts/memberships/${encodeURIComponent(dev.tenantId)}/device`, { deviceId: dev.deviceId, deviceToken: dev.deviceToken }, token);
+      this.d.meta.set('account.claimed', done);
+      await this.d.syncFleet().catch(() => undefined);
+      this.adopt(r.tier);
+    } catch (err) {
+      // Another member's computer stays theirs: nothing to try again.
+      if ((err as CoreError).code === 'CONFLICT') this.d.meta.set('account.claimed', done);
+      this.d.log.warn('This computer could not be made the member’s', { error: (err as Error).message });
+    }
   }
 
   /** Turns an edition on if this computer may run it (an organization may hold it lower). */
@@ -370,3 +416,11 @@ export class AccountService {
     this.timer = null;
   }
 }
+
+const sameOrigin = (a: string, b: string) => {
+  try {
+    return new URL(a).origin === new URL(b).origin;
+  } catch {
+    return false;
+  }
+};

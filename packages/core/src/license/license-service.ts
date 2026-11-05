@@ -1,5 +1,5 @@
 import { ALL_FEATURES, EDITION_PLANS, FEATURES, LEARNER_TIER, STANDARD_TRIAL_DAYS, formatPrice, isLearner, licenseEditionFor, maxTier, minTier, narrowTier, parseSemver, parseTier, TIER_NAMES, TIER_SHORT, tierRank, type CeilingReason, type DeviceEdition, type Feature, type LicenseStatus, type Tier } from '@fbrx/shared';
-import { licenseStatusFrom, verifyLicense } from '@fbrx/shared/node';
+import { UNTRUSTED_LICENSE, licenseStatusFrom, verifyLicense } from '@fbrx/shared/node';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
 import type { EventBus } from '../events';
@@ -57,11 +57,14 @@ export class LicenseService {
     const account = this.meta.get<string>('license.account');
     // A key an FBRX account made for one of its computers works on that one only.
     const install = this.meta.get<string>('install.id');
-    // The organization's license wins; otherwise the fuller of a key typed in and the FBRX account's.
+    // The organization's license wins; otherwise (or when it does not count here) the fuller of a key typed in and the
+    // FBRX account's.
     let status = managed ? licenseStatusFrom(managed, this.publicKeys, 'managed', major, install) : licenseStatusFrom(local, this.publicKeys, 'local', major, install);
-    if (!managed && account) {
+    let problem = managed && status.state !== 'valid' ? unusable('organization', status) : null;
+    if (account && (!managed || status.state !== 'valid')) {
       const fromAccount = licenseStatusFrom(account, this.publicKeys, 'account', major, install);
       if (fromAccount.state === 'valid' && (status.state !== 'valid' || tierRank(fromAccount.tier) > tierRank(status.tier))) status = fromAccount;
+      else if (fromAccount.state !== 'valid') problem ??= unusable('account', fromAccount);
     }
     // Development builds may run Black Hole with everything on, unless FBRX_EDITION asks to try a lighter edition
     // (then they start there, like a computer on its own that may run it).
@@ -107,12 +110,12 @@ export class LicenseService {
       ceiling = narrowTier(ceiling, ed.tier);
       reason = 'organization';
     }
-    if (ed && isLearner(ed.audience)) return (this.cached = { ...status, tier: LEARNER_TIER, chosen: LEARNER_TIER, ceiling: LEARNER_TIER, ceilingReason: 'learner', trialUntil: null, trialAvailable: false });
+    if (ed && isLearner(ed.audience)) return (this.cached = { ...status, tier: LEARNER_TIER, chosen: LEARNER_TIER, ceiling: LEARNER_TIER, ceilingReason: 'learner', trialUntil: null, trialAvailable: false, problem });
     // What the person chose (Essentials on a new computer; see Kernel's first start), never above the ceiling.
     const chosen = this.meta.get<Tier>('edition.chosen') ?? (this.devMode ? (tryTier ?? 'blackhole') : 'essentials');
     // The trial is there for a computer on its own with nothing bought, until it has had it.
     const trialAvailable = reason === 'standalone' && !trial;
-    this.cached = { ...status, tier: minTier(chosen, ceiling), chosen, ceiling, ceilingReason: reason, trialUntil, trialAvailable };
+    this.cached = { ...status, tier: minTier(chosen, ceiling), chosen, ceiling, ceilingReason: reason, trialUntil, trialAvailable, problem: status.state === 'development' ? null : problem };
     return this.cached;
   }
 
@@ -219,4 +222,14 @@ export class LicenseService {
     this.events?.emit('license.changed', s);
     return s;
   }
+}
+
+/** Why the organization's (FBRX Command's) or the FBRX account's license does not count on this computer. */
+function unusable(whose: 'organization' | 'account', s: LicenseStatus): string {
+  const what = whose === 'organization' ? 'The editions your FBRX Command gives' : 'Your FBRX account’s edition';
+  if (s.message === UNTRUSTED_LICENSE) {
+    return `${what} cannot reach this computer: this copy of FBRX OS was built to trust another license signing key than ${whose === 'organization' ? 'your FBRX Command' : 'the FBRX Command your account is on'}. Install FBRX OS again with FBRX Command's key (--signing-key) and ${whose === 'organization' ? 'they' : 'it'} will.`;
+  }
+  if (s.state === 'expired') return whose === 'organization' ? 'Your organization’s license has expired: FBRX Command renews it with its plan.' : 'Your FBRX account’s license has expired: it renews when this computer signs in again.';
+  return `${what} cannot be used here: ${s.message ?? 'its license is not valid'}.`;
 }

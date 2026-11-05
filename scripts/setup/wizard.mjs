@@ -4,7 +4,7 @@
  * AI ready. Start it by double-clicking "Install FBRX OS.command" (macOS) or "Install FBRX OS.cmd" (Windows); those
  * launchers fetch a private copy of Node.js first when needed. Running it again updates the app and keeps all data.
  *
- *   node scripts/setup/wizard.mjs [--name "Your Name"] [--no-launch] [--no-ai] [--allow-downgrade]
+ *   node scripts/setup/wizard.mjs [--name "Your Name"] [--no-launch] [--no-ai] [--allow-downgrade] [--signing-key file]
  *   node scripts/setup/wizard.mjs --share [--for "Their Name"] [--days 30] [--yes]        (Windows)
  *
  * It asks no questions: the license goes to --name (or this computer's user). Steps: download what the app is
@@ -12,6 +12,10 @@
  * runtime, the app) → get the AI ready → install and license it → open it. On a computer without FBRX OS the starter
  * model (Qwen2.5 1.5B Instruct, about 1 GB) downloads into the app's models folder meanwhile, so the first thing the app
  * does is answer; --no-ai leaves that to the app. Dependency-free on purpose: it runs before `npm install`.
+ *
+ * --signing-key builds with another license signing key: the one of an FBRX Command on another computer (its
+ * ~/.fbrx-keys/license-signing.pem), so this FBRX OS accepts the editions that FBRX Command gives. The keys it replaces
+ * are kept beside it, dated.
  *
  * The FBRX Server resources (installer ISO, server bundle, guides) ride along inside the app for now; the ISO is taken
  * from the "fbrx-server-iso" download in Downloads when there is one. --no-server leaves them out.
@@ -250,6 +254,20 @@ const KEY_BACKUP = join(homedir(), '.fbrx-keys', 'license-signing.pem');
 async function createKeys() {
   const priv = join(ROOT, '.fbrx-keys', 'license-signing.pem');
   let note = 'using your existing keys';
+  const given = opt('--signing-key');
+  if (given) {
+    // FBRX Command's key from another computer: it replaces this folder's and the backup in ~/.fbrx-keys (the old ones
+    // stay beside them, dated), so this build accepts the licenses that FBRX Command signs.
+    const pem = existsSync(given) ? readFileSync(given, 'utf8') : '';
+    if (!/-----BEGIN PRIVATE KEY-----/.test(pem)) throw new SetupError(`${given} is not a license signing key.`, "Give FBRX Command's key: ~/.fbrx-keys/license-signing.pem on the computer that runs it.");
+    const stamp = new Date().toISOString().slice(0, 10);
+    for (const f of [priv, KEY_BACKUP]) {
+      mkdirSync(dirname(f), { recursive: true, mode: 0o700 });
+      if (existsSync(f) && readFileSync(f, 'utf8').trim() !== pem.trim()) copyFileSync(f, f.replace(/\.pem$/, `.${stamp}.pem`));
+      writeFileSync(f, pem, { mode: 0o600 });
+    }
+    note = `FBRX Command's key, from ${given}`;
+  }
   if (!existsSync(priv) && existsSync(KEY_BACKUP)) {
     mkdirSync(dirname(priv), { recursive: true, mode: 0o700 });
     copyFileSync(KEY_BACKUP, priv);
@@ -258,6 +276,7 @@ async function createKeys() {
   if (existsSync(priv)) {
     // Re-export the public half so the build embeds the key that matches your existing licenses.
     await node([join(ROOT, 'scripts', 'generate-license-keys.mjs'), '--from', priv], { label: 'Exporting your public key' });
+    if (given) return { note };
   } else {
     await node([join(ROOT, 'scripts', 'generate-license-keys.mjs')], { label: 'Generating keys' });
     note = 'saved in .fbrx-keys';
