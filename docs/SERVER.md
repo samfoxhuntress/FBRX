@@ -148,7 +148,9 @@ and sign-in is in the audit log.
   and an Intel network card (installs with no extra drivers), Secure Boot and a TPM for Windows 11; Linux gets the fast
   virtio devices. Disks are thin qcow2 files in `/var/lib/fbrx-virtual/images`.
 * **Screen.** Each running machine's screen opens in the browser (VNC relayed by FBRX Virtual; the VNC ports themselves
-  only listen on the server). Ctrl+Alt+Del and full screen are in the toolbar.
+  only listen on the server). Ctrl+Alt+Del and full screen are in the toolbar, and **Paste** sends text from your
+  computer: it shows your clipboard (or a box to paste into), then types it into the machine as on a US keyboard, so it
+  works anywhere, even on a login prompt or a BIOS screen. Click where the text should go first.
 * **Snapshots.** Machines with BIOS firmware are snapshotted live, memory included. UEFI machines keep their firmware
   settings outside the disk, which QEMU cannot put in a snapshot, so they are snapshotted (and restored) while off.
 * **Changes.** Processors and memory change at the machine's next start (the page says so); the CD drive, the disk size
