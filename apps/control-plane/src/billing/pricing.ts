@@ -1,12 +1,13 @@
 import { z } from 'zod';
-import { DEFAULT_MDM_PRICING, DEFAULT_PRICE_BOOK, MAX_PRICE, MAX_VOLUME_STEPS, MDM_ADDON, type MdmPricing, type PriceBook } from '@fbrx/shared';
+import { DEFAULT_MDM_PRICING, DEFAULT_PRICE_BOOK, MAX_PRICE, MAX_VOLUME_STEPS, MAX_YEARLY_MONTHS, MDM_ADDON, type MdmPricing, type PriceBook } from '@fbrx/shared';
 import type { Db } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 
 /**
  * What FBRX Command's operator sets about prices (FBRX Command → Pricing), kept in the meta table:
- * - the price list (PriceBook): the editions on their own, the organization fee by kind and size, each computer's
- *   price in an organization and the volume discount; until the operator sets it, the prices in plans.ts;
+ * - the price list (PriceBook): the editions on their own, the organization fee by kind and size, each person's price
+ *   in an organization and the computers it includes, the volume discount, and what a year costs paying yearly; until
+ *   the operator sets it, the prices in plans.ts;
  * - the MDM add-on: whether it is sold and its price per managed computer, the same whatever edition the computer runs;
  *   until the operator sets it, it is not sold and starts at MDM_ADDON's price.
  * Stripe charges what its prices under the lookup keys say: the Pricing page checks that they agree, and can bring
@@ -47,6 +48,8 @@ export const PriceBookInput = z
       .max(MAX_VOLUME_STEPS)
       .refine((steps) => steps.every((s, i) => i === 0 || s.from > steps[i - 1]!.from), 'Each volume step starts at more computers than the one before'),
     fees: z.object({ base: cents, large: z.object({ from: size, monthly: cents }).strict().nullable(), home: cents.nullable() }).strict(),
+    // A price list saved before organizations could pay yearly takes the months in plans.ts.
+    yearlyMonths: z.number().int().min(1).max(MAX_YEARLY_MONTHS).default(DEFAULT_PRICE_BOOK.yearlyMonths),
   })
   .strict();
 

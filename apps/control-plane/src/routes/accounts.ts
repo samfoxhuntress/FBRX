@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { SignJWT, jwtVerify } from 'jose';
 import { z } from 'zod';
-import { ACCOUNT_DEVICE_KINDS, COMMAND_PLAN, EDITION_PLANS, EXTRA_COMPUTER_PRODUCTS, SERVER_OFFER, TIERS, TIER_NAMES, TIER_SHORT, VERTICALS, atLeast, formatInviteCode, normalizeInviteCode, productById, type AccountDevice, type AccountDeviceInfo, type AccountView, type AddMemberResult, type InvitationPreview, type InvitationView, type MemberView, type PaidTier, type PlansInfo, type Tier } from '@fbrx/shared';
+import { ACCOUNT_DEVICE_KINDS, COMMAND_PLAN, EDITION_PLANS, EXTRA_COMPUTER_PRODUCTS, SERVER_OFFER, TIERS, TIER_NAMES, TIER_SHORT, VERTICALS, atLeast, formatInviteCode, normalizeInviteCode, productById, productFor, productInterval, type AccountDevice, type AccountDeviceInfo, type AccountView, type AddMemberResult, type InvitationPreview, type InvitationView, type MemberView, type PaidTier, type PlansInfo, type Tier } from '@fbrx/shared';
 import { hashPassword, randomInviteCode, randomToken, safeEqual, sha256Hex, verifyPassword } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
@@ -10,11 +10,11 @@ import { adminAuth, requirePerm, requireTenant } from '../auth';
 import { badRequest, conflict, forbidden, HttpError, notFound, unauthorized } from '../errors';
 import { PasswordSchema } from './auth';
 import { accountEntitlements, accountLicense, accountTier, endPurchase, entitlementView, handledBefore, isValid, markHandled, purchaseOwner, recordPurchase } from '../billing/entitlements';
-import { itemProduct, requireStripe, stripeOf, stripeStatus, subscriptionItems, type StripeEvent, type StripeSubscription } from '../billing/stripe';
+import { itemProduct, requireStripe, stripeOf, type StripeEvent, type StripeSubscription } from '../billing/stripe';
+import { syncStripeSubscription } from '../billing/stripe-sync';
 import { appleStatus, appleTestPurchase, verifyAppleJws, type AppleNotification, type AppleRenewal, type AppleTransaction } from '../billing/apple';
 import { GooglePlay, playStatus, type PlaySubscription } from '../billing/google';
-import { scheduleSeatSync, syncTenantLicense } from '../billing/tenant-billing';
-import { knownStripePrice, mdmPricing, priceBook, rememberStripePrice } from '../billing/pricing';
+import { knownStripePrice, mdmPricing, priceBook } from '../billing/pricing';
 import { slugify } from './util';
 
 /**
@@ -542,7 +542,8 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     const { tier } = accountTier(ctx, a.id);
     const plan = accountEntitlements(ctx, a.id).find((e) => e.kind === 'edition' && e.source === 'stripe' && !e.tenant_id && e.tier === tier && isValid(e));
     if (tier === 'essentials' || !plan) throw badRequest('Extra computers go on a Standard or Ultra plan bought here (on the website or in FBRX), not through the App Store or Google Play');
-    const productId = EXTRA_COMPUTER_PRODUCTS[tier as PaidTier];
+    // At the plan's interval: Stripe bills a subscription's items at one.
+    const productId = productFor(EXTRA_COMPUTER_PRODUCTS[tier as PaidTier], productInterval(plan.product_id));
     const sub = await s.subscription(plan.external_id);
     const item = sub.items.data.find((i) => itemProduct(i, (id) => knownStripePrice(ctx.db, id)) === productId);
     if (item) await s.updateItemQuantity(item.id, extra);
@@ -558,46 +559,6 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     const p = await requireStripe(cloud).portal({ customer: a.stripe_customer_id, returnUrl: cloud.returnUrl });
     return { url: p.url };
   });
-
-  /**
-   * A person's extra computers follow their plan: when it moves to another edition (in the Stripe portal), they move to
-   * that edition's price, as many as before. Answers with the subscription as it is now.
-   */
-  async function extraComputersFollow(sub: StripeSubscription): Promise<StripeSubscription> {
-    const productOf = (i: StripeSubscription['items']['data'][number]) => itemProduct(i, (id) => knownStripePrice(ctx.db, id));
-    const edition = sub.items.data.map((i) => productById(productOf(i) ?? '')).find((p) => p?.kind === 'edition');
-    if (!stripe || edition?.kind !== 'edition') return sub;
-    const want = EXTRA_COMPUTER_PRODUCTS[edition.tier as PaidTier];
-    const right = sub.items.data.find((i) => productOf(i) === want);
-    const stale = sub.items.data.filter((i) => productById(productOf(i) ?? '')?.kind === 'extra' && productOf(i) !== want && (i.quantity ?? 0) > 0);
-    if (!stale.length) return sub;
-    const count = stale.reduce((n, i) => n + (i.quantity ?? 0), right?.quantity ?? 0);
-    if (right) await stripe.updateItemQuantity(right.id, count);
-    for (const [n, i] of stale.entries()) {
-      if (!right && n === 0) await stripe.updateItemPrice(i.id, await stripe.priceFor(want), count);
-      else await stripe.updateItemQuantity(i.id, 0);
-    }
-    return stripe.subscription(sub.id);
-  }
-
-  /** Brings one Stripe subscription's items into the entitlements (an account's, or an organization's). */
-  async function syncStripeSubscription(sub: StripeSubscription) {
-    const meta = sub.metadata ?? {};
-    const accountId = meta.fbrx_account ?? ctx.db.get<{ id: string }>('SELECT id FROM accounts WHERE stripe_customer_id = ?', sub.customer)?.id ?? null;
-    const tenantId = meta.fbrx_tenant ?? ctx.db.get<{ id: string }>('SELECT id FROM tenants WHERE stripe_customer_id = ?', sub.customer)?.id ?? null;
-    const status = stripeStatus(sub.status);
-    // A price sold under one of FBRX's lookup keys stays that product after the key moves to a newer price.
-    for (const i of sub.items.data) if (i.price.lookup_key && productById(i.price.lookup_key)) rememberStripePrice(ctx.db, i.price.id, i.price.lookup_key);
-    if (!tenantId && status === 'active') sub = await extraComputersFollow(sub);
-    const items = subscriptionItems(sub, (priceId) => knownStripePrice(ctx.db, priceId));
-    for (const i of items) recordPurchase(ctx, { source: 'stripe', externalId: sub.id, productId: i.productId, status, periodEnd: i.periodEnd, quantity: i.quantity, accountId: tenantId ? null : accountId, tenantId });
-    endPurchase(ctx, 'stripe', sub.id, items.map((i) => i.productId));
-    // An organization's plan: its license follows, and (once it starts) its computers are counted in.
-    if (tenantId) {
-      syncTenantLicense(ctx, tenantId);
-      scheduleSeatSync(ctx, stripe, tenantId, 0);
-    }
-  }
 
   // The webhook is signed over the exact bytes Stripe sent, so this route keeps the raw body.
   await app.register(async (scoped) => {
@@ -620,12 +581,12 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
       }
       if (handledBefore(ctx, 'stripe', event.id)) return { received: true, duplicate: true };
       const o = event.data.object;
-      if (event.type.startsWith('customer.subscription.')) await syncStripeSubscription(o as StripeSubscription);
+      if (event.type.startsWith('customer.subscription.')) await syncStripeSubscription(ctx, stripe, o as StripeSubscription);
       else if (event.type === 'checkout.session.completed' && o.mode === 'subscription' && typeof o.subscription === 'string') {
-        await syncStripeSubscription(await s.subscription(o.subscription));
+        await syncStripeSubscription(ctx, stripe, await s.subscription(o.subscription));
       } else if (event.type.startsWith('invoice.')) {
         const subId = typeof o.subscription === 'string' ? o.subscription : o.parent?.subscription_details?.subscription;
-        if (typeof subId === 'string') await syncStripeSubscription(await s.subscription(subId));
+        if (typeof subId === 'string') await syncStripeSubscription(ctx, stripe, await s.subscription(subId));
       }
       markHandled(ctx, 'stripe', event.id, event.type);
       return { received: true };

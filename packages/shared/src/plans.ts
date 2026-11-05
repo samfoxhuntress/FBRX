@@ -10,7 +10,8 @@ import { TIERS, TIER_SHORT, type Tier } from './license';
  * - Standard and Ultra are sold to anyone for their own computers (an FBRX account), and through a tenant with the
  *   tenant's discount.
  * - Black Hole is only an add-on in a tenant, per endpoint, at its full price.
- * - An FBRX Command tenant is a monthly plan of its own.
+ * - An FBRX Command tenant is a plan of its own, paid monthly or yearly: one interval for everything on it. A year costs
+ *   the price list's `yearlyMonths` months of each price, under the same product id ending in `_yearly`.
  * - FBRX Command's operator may change the prices (Pricing, the PriceBook below): the organization fee by kind and
  *   size, each computer's price in an organization with discounts by how many it has, and the editions on their own.
  *   The prices here are where that price list starts.
@@ -170,6 +171,29 @@ export const MAX_PRICE = 100_000;
 /** At most this many volume discount steps. */
 export const MAX_VOLUME_STEPS = 5;
 
+/**
+ * How often an organization pays: every month, or once a year. One per organization: every item on its plan follows it
+ * (Stripe bills a subscription's items at one interval).
+ */
+export const BILLING_INTERVALS = ['month', 'year'] as const;
+export type BillingInterval = (typeof BILLING_INTERVALS)[number];
+
+const INTERVAL_SUFFIX = /_(monthly|yearly)$/;
+
+/**
+ * The product id (Stripe lookup key) a recurring product is sold under at an interval: `…_monthly` or `…_yearly`. Ids
+ * of what is not paid by the interval (FBRX Server) stay as they are.
+ */
+export function productFor(productId: string, interval: BillingInterval): string {
+  return INTERVAL_SUFFIX.test(productId) ? productId.replace(INTERVAL_SUFFIX, interval === 'year' ? '_yearly' : '_monthly') : productId;
+}
+
+/** The interval a product id is paid at. */
+export const productInterval = (productId: string): BillingInterval => (productId.endsWith('_yearly') ? 'year' : 'month');
+
+/** A price a month at an interval: itself, or a year of it at the price list's months. */
+export const intervalPrice = (book: PriceBook, monthly: number, interval: BillingInterval) => (interval === 'year' ? monthly * book.yearlyMonths : monthly);
+
 /** The editions people pay for. */
 export const PAID_TIERS = ['basic', 'ultra', 'blackhole'] as const;
 export type PaidTier = (typeof PAID_TIERS)[number];
@@ -211,7 +235,15 @@ export interface PriceBook {
    * they have `large.from` computers (null: one fee for every size); Home organizations pay `home` (null: `base`).
    */
   fees: { base: number; large: { from: number; monthly: number } | null; home: number | null };
+  /**
+   * An organization paying yearly pays this many months' price for a year, of every price above and the MDM add-on
+   * (10: two months free; 12: no saving).
+   */
+  yearlyMonths: number;
 }
+
+/** How many months' price a year may cost: from 1 to 12. */
+export const MAX_YEARLY_MONTHS = 12;
 
 export const DEFAULT_PRICE_BOOK: PriceBook = {
   personal: { basic: EDITION_PLANS.basic.monthly!, ultra: EDITION_PLANS.ultra.monthly! },
@@ -219,6 +251,7 @@ export const DEFAULT_PRICE_BOOK: PriceBook = {
   computers: { included: { basic: 2, ultra: 5, blackhole: 15 }, extra: { basic: 199, ultra: 299, blackhole: 499 } },
   volume: [],
   fees: { base: COMMAND_PLAN.monthly, large: null, home: null },
+  yearlyMonths: 10,
 };
 
 /** Which organization fee an organization pays: by its kind, and by how many computers it has (Essentials included). */
@@ -252,28 +285,30 @@ export interface BillCounts {
   computers: number;
 }
 
-/** One line of an organization's monthly bill. */
+/** One line of an organization's bill, for a month or a year as it pays. */
 export interface BillLine {
   /** The organization fee, an edition's seats (people and shared computers), its extra computers, or the MDM add-on. */
   item: 'fee' | 'seats' | 'extra' | 'mdm';
   tier: PaidTier | null;
-  /** The Stripe lookup key it is charged under. */
+  /** The Stripe lookup key it is charged under (at the bill's interval). */
   productId: string;
   quantity: number;
   /** Of an edition's seats: how many are people, and how many shared computers. */
   people?: number;
   shared?: number;
-  /** Each, a month, before any discount (cents). */
+  /** Each, for the bill's interval, before any discount (cents). */
   each: number;
   /** Off this line, in percent: the volume discount, on seats only. */
   percentOff: number;
-  /** The line, a month, after the discount (cents; Stripe rounds the discount on the line the same way). */
+  /** The line, for the bill's interval, after the discount (cents; Stripe rounds the discount on the line the same way). */
   total: number;
 }
 
 export interface OrganizationBill {
+  /** A month's bill, or a year's. */
+  interval: BillingInterval;
   lines: BillLine[];
-  /** A month, in cents. */
+  /** For the interval, in cents. */
   total: number;
   /** The organization fee it pays. */
   fee: CommandFee;
@@ -284,40 +319,39 @@ export interface OrganizationBill {
 }
 
 /**
- * An organization's monthly bill: its fee; each person at their edition's price, covering the computers it includes,
- * and each paid computer nobody pays for, less the volume discount; each further computer a person uses; and the MDM
- * add-on for each computer it manages (when it is sold, the same price whatever the edition).
+ * An organization's bill, for a month or (paying yearly) a year: its fee; each person at their edition's price,
+ * covering the computers it includes, and each paid computer nobody pays for, less the volume discount; each further
+ * computer a person uses; and the MDM add-on for each computer it manages (when it is sold, the same price whatever the
+ * edition).
  */
-export function organizationBill(book: PriceBook, o: { kind: Vertical | null; counts: BillCounts; mdm?: { managed: number; pricing: MdmPricing } }): OrganizationBill {
+export function organizationBill(
+  book: PriceBook,
+  o: { kind: Vertical | null; counts: BillCounts; mdm?: { managed: number; pricing: MdmPricing }; interval?: BillingInterval },
+): OrganizationBill {
+  const interval = o.interval ?? 'month';
+  const at = (monthly: number) => intervalPrice(book, monthly, interval);
+  const line = (l: Omit<BillLine, 'productId' | 'each' | 'total'> & { productId: string; monthly: number }): BillLine => {
+    const { monthly, ...rest } = l;
+    return { ...rest, productId: productFor(l.productId, interval), each: at(monthly), total: Math.round((at(monthly) * l.quantity * (100 - l.percentOff)) / 100) };
+  };
   const people = (t: PaidTier) => o.counts.people.filter((p) => p.tier === t);
   const seats = (t: PaidTier) => people(t).length + Math.max(0, o.counts.shared[t] ?? 0);
   const paid = PAID_TIERS.reduce((n, t) => n + seats(t), 0);
   const fee = organizationFee(book, o.kind, o.counts.computers);
   const percentOff = volumeDiscount(book, paid);
-  const lines: BillLine[] = [{ item: 'fee', tier: null, productId: COMMAND_FEE_PRODUCTS[fee], quantity: 1, each: feeAmount(book, fee), percentOff: 0, total: feeAmount(book, fee) }];
+  const lines: BillLine[] = [line({ item: 'fee', tier: null, productId: COMMAND_FEE_PRODUCTS[fee], quantity: 1, monthly: feeAmount(book, fee), percentOff: 0 })];
   for (const t of PAID_TIERS) {
     const n = seats(t);
-    lines.push({
-      item: 'seats',
-      tier: t,
-      productId: EDITION_PLANS[t].tenantProductId!,
-      quantity: n,
-      people: people(t).length,
-      shared: n - people(t).length,
-      each: book.seats[t],
-      percentOff,
-      total: Math.round((book.seats[t] * n * (100 - percentOff)) / 100),
-    });
+    lines.push(line({ item: 'seats', tier: t, productId: EDITION_PLANS[t].tenantProductId!, quantity: n, people: people(t).length, shared: n - people(t).length, monthly: book.seats[t], percentOff }));
   }
   for (const t of PAID_TIERS) {
     const n = people(t).reduce((sum, p) => sum + extraComputers(book, t, p.computers), 0);
-    lines.push({ item: 'extra', tier: t, productId: EXTRA_COMPUTER_PRODUCTS[t], quantity: n, each: book.computers.extra[t], percentOff: 0, total: book.computers.extra[t] * n });
+    lines.push(line({ item: 'extra', tier: t, productId: EXTRA_COMPUTER_PRODUCTS[t], quantity: n, monthly: book.computers.extra[t], percentOff: 0 }));
   }
   if (o.mdm?.pricing.available) {
-    const n = Math.max(0, o.mdm.managed);
-    lines.push({ item: 'mdm', tier: null, productId: MDM_ADDON.productId, quantity: n, each: o.mdm.pricing.perEndpoint, percentOff: 0, total: o.mdm.pricing.perEndpoint * n });
+    lines.push(line({ item: 'mdm', tier: null, productId: MDM_ADDON.productId, quantity: Math.max(0, o.mdm.managed), monthly: o.mdm.pricing.perEndpoint, percentOff: 0 }));
   }
-  return { lines, total: lines.reduce((sum, l) => sum + l.total, 0), fee, paid, percentOff };
+  return { interval, lines, total: lines.reduce((sum, l) => sum + l.total, 0), fee, paid, percentOff };
 }
 
 /** A Work organization's monthly bill for computers nobody pays for, at the prices above. */
@@ -327,17 +361,32 @@ export function tenantMonthlyTotal(computers: Partial<Record<Tier, number>>, mdm
   return organizationBill(DEFAULT_PRICE_BOOK, { kind: null, counts: { people: [], shared, computers: all }, mdm }).total;
 }
 
-/** Every price a price list charges, with its Stripe lookup key and what it is: for checking Stripe against it. */
-export function priceBookProducts(book: PriceBook, mdm: MdmPricing): Array<{ productId: string; label: string; amount: number }> {
-  return [
-    { productId: EDITION_PLANS.basic.productId!, label: 'Standard on its own', amount: book.personal.basic },
-    { productId: EDITION_PLANS.ultra.productId!, label: 'Ultra on its own', amount: book.personal.ultra },
+/** A price on the list, under its Stripe lookup key: what it is, and what it charges each month or year. */
+export interface PriceBookProduct {
+  productId: string;
+  label: string;
+  interval: BillingInterval;
+  amount: number;
+}
+
+/**
+ * Every price a price list charges, with its Stripe lookup key and what it is: for checking Stripe against it. Each
+ * month's price first, then the yearly prices of what organizations pay (the editions on their own are monthly).
+ */
+export function priceBookProducts(book: PriceBook, mdm: MdmPricing): PriceBookProduct[] {
+  const organizations = [
     { productId: COMMAND_FEE_PRODUCTS.base, label: book.fees.large || book.fees.home !== null ? 'Organization fee, Work and School' : 'Organization fee', amount: book.fees.base },
     ...(book.fees.large ? [{ productId: COMMAND_FEE_PRODUCTS.large, label: `Organization fee, ${book.fees.large.from} computers or more`, amount: book.fees.large.monthly }] : []),
     ...(book.fees.home !== null ? [{ productId: COMMAND_FEE_PRODUCTS.home, label: 'Organization fee, Home', amount: book.fees.home }] : []),
     ...PAID_TIERS.map((t) => ({ productId: EDITION_PLANS[t].tenantProductId!, label: `${TIER_SHORT[t]} in an organization, each person or shared computer`, amount: book.seats[t] })),
     ...PAID_TIERS.map((t) => ({ productId: EXTRA_COMPUTER_PRODUCTS[t], label: `${TIER_SHORT[t]}, each computer past ${book.computers.included[t]}`, amount: book.computers.extra[t] })),
     { productId: MDM_ADDON.productId, label: 'MDM add-on, each managed computer', amount: mdm.perEndpoint },
+  ];
+  return [
+    { productId: EDITION_PLANS.basic.productId!, label: 'Standard on its own', interval: 'month', amount: book.personal.basic },
+    { productId: EDITION_PLANS.ultra.productId!, label: 'Ultra on its own', interval: 'month', amount: book.personal.ultra },
+    ...organizations.map((p) => ({ ...p, interval: 'month' as const })),
+    ...organizations.map((p) => ({ productId: productFor(p.productId, 'year'), label: `${p.label}, paid yearly`, interval: 'year' as const, amount: intervalPrice(book, p.amount, 'year') })),
   ];
 }
 
@@ -350,6 +399,8 @@ export type ProductInfo =
   | { kind: 'server' };
 
 export function productById(id: string): ProductInfo | null {
+  // A yearly product sells what its monthly one does.
+  if (productInterval(id) === 'year') return productById(productFor(id, 'month'));
   for (const p of Object.values(EDITION_PLANS)) {
     if (p.productId === id) return { kind: 'edition', tier: p.tier, tenant: false };
     if (p.tenantProductId === id) return { kind: 'edition', tier: p.tier, tenant: true };

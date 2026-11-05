@@ -152,16 +152,20 @@ Anyone with an FBRX account can start an FBRX Command for their organization (Se
 FBRX Command** in FBRX, or `POST /v1/accounts/tenants` `{ name, kind }`). They own it, sign in to its console with
 the account's email and password, and are a member on Essentials. Nothing is charged until the owner starts the plan:
 
-* **Billing** (owners pay; admins see it): **Start the FBRX Command plan** opens Stripe Checkout for the
-  $54.99-a-month plan; **Manage billing** opens the Stripe portal. The page shows what a month comes to: the plan;
+* **Billing** (owners pay; admins see it): the owner chooses **Monthly** or **Yearly** (a year at the price list's
+  months, ten to start), and **Start the FBRX Command plan** opens Stripe Checkout for the organization fee at that
+  interval; **Manage billing** opens the Stripe portal. Everything on the plan is paid the same way. A running plan
+  moves to the other with **Pay yearly** or **Pay monthly**: every item goes to its price at the new interval in one
+  update, and Stripe starts the new period that day, crediting what is left of the old one. The page shows what a month
+  or a year comes to: the plan;
   each member at the edition the organization gives them, once whatever number of its computers they join, up to
   those their edition includes (2 Standard, 5 Ultra, 15 Black Hole), and each further computer of theirs at its extra
   price; and each paid computer no paying member uses (shared, lab and student computers) at its edition's price.
   The prices are the operator's price list (LICENSING.md); Essentials is free. Student and child computers (only ever
   in an FBRX Command) run the learner edition and count as Standard. **Members** shows who uses more computers than
   their edition includes.
-* The plan's per-computer items in Stripe follow the computers by themselves (a few seconds after a change, and every
-  quarter of an hour), prorated by Stripe.
+* The plan's per-person and per-computer items in Stripe follow by themselves (a few seconds after a change, and every
+  quarter of an hour), at the plan's interval, prorated by Stripe.
 * While the plan runs, FBRX Command holds one license for the organization that allows everything; each computer runs
   what it was given, and **Essentials when nobody gave it anything**. Without the plan (not started, or ended), every
   computer runs Essentials.
@@ -191,7 +195,9 @@ the operator issues. The operator sees every account under **FBRX accounts**.
    `fbrx_command_tenant_monthly` (the organization fee), `fbrx_command_large_monthly` and `fbrx_command_home_monthly`
    (only when larger or Home organizations pay another fee), `fbrx_standard_extra_computer_monthly`,
    `fbrx_ultra_extra_computer_monthly` and `fbrx_blackhole_extra_computer_monthly` (each computer past those an
-   edition includes) and `fbrx_mdm_tenant_monthly` (the MDM add-on). You can
+   edition includes) and `fbrx_mdm_tenant_monthly` (the MDM add-on); and for organizations paying yearly, a **yearly
+   price** of each organization price under the same key ending in `_yearly` (`fbrx_command_tenant_yearly`, …), on the
+   monthly price's product, so the volume discount's coupon covers both. You can
    also make them by hand in the Stripe Dashboard, one product per price, with those lookup keys; the Pricing page says
    which agree. A new price takes the lookup key from the old one, so a price change needs no new FBRX version. People
    who already pay keep their price (FBRX remembers every price it saw under a key); organizations move to the new
@@ -282,6 +288,11 @@ downgrade ends the purchase it replaced.
 The platform operator (superadmin) also has `GET /v1/admin/accounts?q=`, `POST /v1/admin/accounts/:id/grant`
 `{ tier, days }` (an edition for support or a promotion; `days: null` for no end) and `POST /v1/admin/accounts/:id/status`,
 and FBRX Cloud AI's allowances, per-account limits and promo codes ([CLOUD_AI.md → The API](CLOUD_AI.md#the-api)).
+
+An organization's console has its plan: `GET /v1/admin/billing?interval=month|year` (the plan and its bill; before it
+runs, the bill paying that way), `POST /v1/admin/billing/checkout` `{ interval }` (Stripe Checkout for the plan, monthly
+or yearly), `POST /v1/admin/billing/interval` `{ interval }` (moves a running plan to the other), `POST
+/v1/admin/billing/portal` and `POST /v1/admin/billing/sync` (brings its items up to date now).
 
 ## Before charging anyone
 

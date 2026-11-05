@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { EDITION_PLANS, SERVER_OFFER, TIERS, TIER_NAMES, TIER_SHORT, extraComputers, formatPrice, type AccountView, type AddMemberResult, type BillLine, type InvitationView, type MemberView, type PriceBook, type TenantPlanView, type Tier } from '@fbrx/shared';
-import { Button, Callout, Card, CopyText, Empty, Field, Grid, Input, KeyValue, Modal, Page, Select, StatTile, Status, Table, formatDay, useAction, useConfirm } from '@fbrx/ui';
+import { EDITION_PLANS, SERVER_OFFER, TIERS, TIER_NAMES, TIER_SHORT, extraComputers, formatPrice, type AccountView, type AddMemberResult, type BillLine, type BillingInterval, type InvitationView, type MemberView, type PriceBook, type TenantPlanView, type Tier } from '@fbrx/shared';
+import { Button, Callout, Card, ChoiceCards, CopyText, Empty, Field, Grid, Input, KeyValue, Modal, Page, Select, StatTile, Status, Table, formatDay, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
 
@@ -64,21 +64,40 @@ export function ServerComingSoon() {
   );
 }
 
-/** Billing: the organization's FBRX Command plan and what its computers come to. */
+/** "a month", "a year". */
+const per = (i: BillingInterval) => `a ${i}`;
+
+/** Billing: the organization's FBRX Command plan and what its people and computers come to. */
 export function BillingPage() {
   const app = useApp();
-  const q = useQuery<BillingInfo>('/v1/admin/billing');
+  /** How to pay, before the plan starts (the bill is shown that way). */
+  const [choice, setChoice] = useState<BillingInterval>('month');
+  const q = useQuery<BillingInfo>(`/v1/admin/billing?interval=${choice}`, [choice]);
   const { run, busy } = useAction();
+  const { confirm, dialog } = useConfirm();
   const b = q.data;
   const manage = app.can('billing.manage');
-  const open = (path: string, key: string) => run(key, () => api<{ url: string }>('POST', path).then((r) => void (location.href = r.url)));
+  const open = (path: string, key: string, body?: unknown) => run(key, () => api<{ url: string }>('POST', path, body).then((r) => void (location.href = r.url)));
   if (!b) return <Page title="Billing">{null}</Page>;
   const p = b.plan;
   const paid = p.bill.paid;
+  const other: BillingInterval = p.interval === 'year' ? 'month' : 'year';
+  /** Moves the running plan to the other interval, once the owner agrees to what Stripe does. */
+  const switchInterval = async () => {
+    const ok = await confirm({
+      title: other === 'year' ? 'Pay yearly?' : 'Pay monthly?',
+      body:
+        other === 'year'
+          ? `The plan is billed once a year from today: ${formatPrice(p.totals.year)} a year for today's people and computers (${p.yearlyMonths} months' price). Stripe charges the year now, less what is left of this month.`
+          : `The plan is billed each month from today: ${formatPrice(p.totals.month)} a month for today's people and computers. Stripe credits what is left of the year to the coming invoices.`,
+      confirmLabel: other === 'year' ? 'Pay yearly' : 'Pay monthly',
+    });
+    if (ok) await run('interval', () => api('POST', '/v1/admin/billing/interval', { interval: other }).then(q.reload), other === 'year' ? 'The plan is paid yearly' : 'The plan is paid monthly');
+  };
   return (
     <Page
       title="Billing"
-      description="Your organization fee covers your FBRX Command; each computer is billed at its edition, with a volume discount once you have more of them. Essentials computers are free."
+      description="Your organization fee covers your FBRX Command; each person is billed at their edition, on as many computers as it includes, with a volume discount once you have more of them. Pay monthly or yearly. Essentials is free."
       actions={
         manage && p.billing === 'cloud' ? (
           p.active || p.portal ? (
@@ -86,13 +105,14 @@ export function BillingPage() {
               Manage billing
             </Button>
           ) : (
-            <Button variant="primary" icon="sparkles" disabled={!b.payments} loading={busy === 'start'} onClick={() => void open('/v1/admin/billing/checkout', 'start')}>
-              Start the FBRX Command plan
+            <Button variant="primary" icon="sparkles" disabled={!b.payments} loading={busy === 'start'} onClick={() => void open('/v1/admin/billing/checkout', 'start', { interval: choice })}>
+              {choice === 'year' ? 'Start the FBRX Command plan, yearly' : 'Start the FBRX Command plan'}
             </Button>
           )
         ) : undefined
       }
     >
+      {dialog}
       {p.billing === 'manual' ? (
         <Card title="Licenses from your FBRX Command operator">
           <p className="fx-secondary" style={{ margin: 0 }}>
@@ -105,15 +125,49 @@ export function BillingPage() {
             <StatTile
               label="The FBRX Command plan"
               value={p.active ? 'Running' : 'Not started'}
-              foot={p.active ? (p.status === 'grace' ? <Status tone="warning">A payment failed: update your card in Manage billing</Status> : `Renews ${formatDay(p.periodEnd)}`) : 'Until it starts, every computer runs Essentials'}
+              foot={
+                p.active ? (
+                  p.status === 'grace' ? (
+                    <Status tone="warning">A payment failed: update your card in Manage billing</Status>
+                  ) : (
+                    `Paid ${p.interval === 'year' ? 'yearly' : 'monthly'}, renews ${formatDay(p.periodEnd)}`
+                  )
+                ) : (
+                  'Until it starts, every computer runs Essentials'
+                )
+              }
             />
-            <StatTile label="A month comes to" value={formatPrice(p.monthly)} foot={`The organization fee, and ${paid} ${paid === 1 ? 'seat' : 'seats'} at a paid edition${p.bill.percentOff ? `, ${p.bill.percentOff}% off` : ''}`} />
+            <StatTile
+              label={p.interval === 'year' ? 'A year comes to' : 'A month comes to'}
+              value={formatPrice(p.bill.total)}
+              foot={`The organization fee, and ${paid} ${paid === 1 ? 'seat' : 'seats'} at a paid edition${p.bill.percentOff ? `, ${p.bill.percentOff}% off` : ''}`}
+            />
             <StatTile label="Essentials computers" value={p.computers.essentials} foot="Free, as many as you like" />
           </Grid>
           {!b.payments && <Status tone="warning">Payments are not set up on this FBRX Command yet.</Status>}
+          {!p.active && manage && (
+            <Card title="How often to pay" subtitle="Everything on the plan is paid the same way. You can change it later.">
+              <ChoiceCards
+                label="How often to pay"
+                value={choice}
+                onChange={setChoice}
+                options={[
+                  { value: 'month', title: 'Monthly', description: `${formatPrice(p.totals.month)} a month for today's people and computers` },
+                  { value: 'year', title: 'Yearly', description: `${formatPrice(p.totals.year)} a year: ${p.yearlyMonths} months' price${p.yearlyMonths < 12 ? `, ${12 - p.yearlyMonths} free` : ''}` },
+                ]}
+              />
+            </Card>
+          )}
           <Card
             title="What it comes to"
             subtitle="Each member at their edition, on as many computers as it includes; each further computer they use; and each shared, lab or student computer at the edition you give it (Members, Devices, Profiles & groups). Student and child computers count as Standard. It follows by itself; changes are prorated."
+            actions={
+              manage && p.active ? (
+                <Button size="sm" loading={busy === 'interval'} onClick={() => void switchInterval()}>
+                  {other === 'year' ? `Pay yearly, ${formatPrice(p.totals.year)} a year` : 'Pay monthly'}
+                </Button>
+              ) : undefined
+            }
             flush
           >
             <Table
@@ -122,8 +176,8 @@ export function BillingPage() {
               columns={[
                 { key: 'w', header: 'What', render: lineName },
                 { key: 'n', header: 'For', render: lineCount },
-                { key: 'e', header: 'Each, a month', render: (l) => formatPrice(l.each) + (l.item === 'mdm' ? ' (any edition, in groups managed with it)' : l.percentOff ? ` (volume discount: ${l.percentOff}% off)` : '') },
-                { key: 't', header: 'A month', render: (l) => <strong>{formatPrice(l.total)}</strong> },
+                { key: 'e', header: `Each, ${per(p.interval)}`, render: (l) => formatPrice(l.each) + (l.item === 'mdm' ? ' (any edition, in groups managed with it)' : l.percentOff ? ` (volume discount: ${l.percentOff}% off)` : '') },
+                { key: 't', header: p.interval === 'year' ? 'A year' : 'A month', render: (l) => <strong>{formatPrice(l.total)}</strong> },
               ]}
             />
           </Card>

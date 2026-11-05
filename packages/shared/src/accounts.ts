@@ -1,5 +1,5 @@
 import type { Tier } from './license';
-import type { MdmPricing, OrganizationBill, PriceBook, ProductInfo } from './plans';
+import type { BillingInterval, MdmPricing, OrganizationBill, PriceBook, ProductInfo } from './plans';
 
 /**
  * FBRX accounts: one per person, held by FBRX Command in the cloud. An account keeps what its person bought (Standard
@@ -182,9 +182,13 @@ export interface TenantPlanView {
   status: EntitlementStatus | null;
   /** Computers at each edition (what the organization gives them). */
   computers: Record<Tier, number>;
-  /** What a month comes to, in cents: the organization fee, the computers and the MDM add-on. */
-  monthly: number;
-  /** The bill, line by line, at the prices FBRX Command's operator set. */
+  /** How often it pays (monthly until its plan starts): one interval for everything on the plan. */
+  interval: BillingInterval;
+  /** What the bill comes to paying monthly (a month) and paying yearly (a year), in cents. */
+  totals: Record<BillingInterval, number>;
+  /** Paying yearly, a year costs this many months' price. */
+  yearlyMonths: number;
+  /** The bill at its interval, line by line, at the prices FBRX Command's operator set. */
   bill: OrganizationBill;
   /** The MDM add-on: whether it is sold, its price per computer (cents) and how many computers the groups manage. */
   mdm: MdmPricing & { managed: number };

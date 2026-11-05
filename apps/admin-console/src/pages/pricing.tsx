@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { MAX_PRICE, MAX_VOLUME_STEPS, PAID_TIERS, TIER_SHORT, formatPrice, organizationBill, type MdmPricing, type PriceBook } from '@fbrx/shared';
+import { MAX_PRICE, MAX_VOLUME_STEPS, MAX_YEARLY_MONTHS, PAID_TIERS, TIER_SHORT, formatPrice, organizationBill, type MdmPricing, type PriceBook, type PriceBookProduct } from '@fbrx/shared';
 import { Button, Callout, Card, Field, Grid, Input, Page, StatTile, Status, Table, Toggle, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useQuery } from '../state';
@@ -15,7 +15,7 @@ interface PricingInfo {
   book: PriceBook;
   mdm: MdmPricing;
   /** Every price the list charges, under its Stripe lookup key. */
-  products: Array<{ productId: string; label: string; amount: number }>;
+  products: PriceBookProduct[];
   maxPerEndpoint: number;
   /** What Stripe charges under each lookup key (null: Stripe is not set up here). */
   stripe: Record<string, StripePrice> | null;
@@ -35,6 +35,9 @@ const EXAMPLE_BILLS = [
 ];
 
 const dollars = (cents: number) => (cents / 100).toFixed(2);
+/** What paying yearly saves, for the months a year costs: "months' price: 2 months free (17% off)". */
+const yearlySaving = (months: number | null) =>
+  months === null || months > MAX_YEARLY_MONTHS ? `months' price (from 1 to ${MAX_YEARLY_MONTHS})` : months === 12 ? "months' price: no saving" : `months' price: ${12 - months} free (${Math.round(((12 - months) / 12) * 100)}% off)`;
 /** "$1,260" or "$105.50": whole dollars when there are no cents. */
 const money = (cents: number) => `$${(cents / 100).toLocaleString('en-US', { minimumFractionDigits: cents % 100 ? 2 : 0, maximumFractionDigits: 2 })}`;
 const toCents = (s: string) => {
@@ -48,8 +51,8 @@ const toCount = (s: string) => {
 
 /**
  * Platform view: the prices FBRX Command's operator sets. The price list (the editions on their own, the organization
- * fees, each computer's price in an organization and the volume discount), the MDM add-on, and whether Stripe charges
- * the same under each lookup key.
+ * fees, each person's price in an organization and the computers it includes, the volume discount and what a year
+ * costs), the MDM add-on, and whether Stripe charges the same under each lookup key.
  */
 export function PricingPage() {
   const q = useQuery<PricingInfo>('/v1/admin/pricing');
@@ -74,6 +77,7 @@ interface Draft {
   base: string;
   large: { on: boolean; from: string; monthly: string };
   home: { on: boolean; monthly: string };
+  yearlyMonths: string;
 }
 
 const draftOf = (b: PriceBook): Draft => ({
@@ -85,6 +89,7 @@ const draftOf = (b: PriceBook): Draft => ({
   base: dollars(b.fees.base),
   large: { on: !!b.fees.large, from: String(b.fees.large?.from ?? 100), monthly: dollars(b.fees.large?.monthly ?? b.fees.base) },
   home: { on: b.fees.home !== null, monthly: dollars(b.fees.home ?? b.fees.base) },
+  yearlyMonths: String(b.yearlyMonths),
 });
 
 /** The price list the form describes, or what is wrong with it. */
@@ -111,6 +116,8 @@ function bookOf(d: Draft): PriceBook | string {
     if (volume.some((s, i) => i > 0 && s.from <= volume[i - 1]!.from)) throw new Error('Each volume step starts at more computers than the one before');
     const largeFrom = toCount(d.large.from);
     if (d.large.on && (largeFrom === null || largeFrom < 2)) throw new Error('Larger organizations: from 2 computers or more');
+    const yearlyMonths = toCount(d.yearlyMonths);
+    if (yearlyMonths === null || yearlyMonths > MAX_YEARLY_MONTHS) throw new Error(`Paying yearly: a year costs from 1 to ${MAX_YEARLY_MONTHS} months' price`);
     return {
       personal: { basic: price(d.personal.basic, 'Standard on its own'), ultra: price(d.personal.ultra, 'Ultra on its own') },
       seats: { basic: price(d.seats.basic, 'Standard in an organization'), ultra: price(d.seats.ultra, 'Ultra in an organization'), blackhole: price(d.seats.blackhole, 'Black Hole in an organization') },
@@ -124,6 +131,7 @@ function bookOf(d: Draft): PriceBook | string {
         large: d.large.on ? { from: largeFrom!, monthly: price(d.large.monthly, 'Fee for larger organizations') } : null,
         home: d.home.on ? price(d.home.monthly, 'Home organization fee') : null,
       },
+      yearlyMonths,
     };
   } catch (err) {
     return (err as Error).message;
@@ -222,6 +230,13 @@ function PriceBookEditor({ book, onSaved }: { book: PriceBook; onSaved: () => vo
           </Field>
         </div>
       </Card>
+      <Card title="Paying yearly" subtitle="An organization pays monthly or yearly, one way for everything on its plan. Paying yearly, each price above and the MDM add-on cost this many months' price for a year.">
+        <div className="fx-row" style={{ alignItems: 'center' }}>
+          <span>A year costs</span>
+          <Input value={d.yearlyMonths} inputMode="numeric" aria-label="Months' price a year costs" onChange={(e) => set({ yearlyMonths: e.target.value })} style={{ maxWidth: 70 }} />
+          <span className="fx-secondary">{yearlySaving(toCount(d.yearlyMonths))}</span>
+        </div>
+      </Card>
       <Card
         title="Example bills"
         subtitle="Work organizations at the prices above, before they are saved, without the MDM add-on."
@@ -252,6 +267,7 @@ function PriceBookEditor({ book, onSaved }: { book: PriceBook; onSaved: () => vo
               { key: 'f', header: 'Fee', render: (r) => money(r.bill.lines[0]!.total) },
               { key: 'd', header: 'Volume discount', render: (r) => (r.bill.percentOff ? `${r.bill.percentOff}% off` : '—') },
               { key: 't', header: 'A month', render: (r) => <strong>{money(r.bill.total)}</strong> },
+              { key: 'y', header: 'A year, paid yearly', render: (r) => money(organizationBill(next, { kind: 'business', counts: r.counts, interval: 'year' }).total) },
             ]}
           />
         )}
@@ -265,12 +281,12 @@ function StripeCard({ info, onSaved }: { info: PricingInfo; onSaved: () => void 
   const { busy, run } = useAction();
   const { confirm, dialog } = useConfirm();
   const s = info.stripe;
-  const state = (want: number, got: StripePrice | undefined) => (!got ? null : got.error ? 'error' : !got.found ? 'missing' : got.unitAmount === want && got.interval === 'month' ? 'same' : 'different');
-  const off = s ? info.products.filter((p) => state(p.amount, s[p.productId]) === 'missing' || state(p.amount, s[p.productId]) === 'different') : [];
+  const state = (want: PriceBookProduct, got: StripePrice | undefined) => (!got ? null : got.error ? 'error' : !got.found ? 'missing' : got.unitAmount === want.amount && got.interval === want.interval ? 'same' : 'different');
+  const off = s ? info.products.filter((p) => state(p, s[p.productId]) === 'missing' || state(p, s[p.productId]) === 'different') : [];
   const update = async () => {
     const ok = await confirm({
       title: `Update ${off.length === 1 ? 'one price' : `${off.length} prices`} in Stripe?`,
-      body: 'Each gets a new monthly price in Stripe that takes its lookup key. People who already pay on their own keep their price; organizations move to the new one at their next seat update, so tell them before you raise a price.',
+      body: 'Each gets a new price in Stripe, monthly or yearly, that takes its lookup key. People who already pay on their own keep their price; organizations move to the new one at their next seat update, so tell them before you raise a price.',
       confirmLabel: 'Update Stripe',
     });
     if (ok) await run('stripe', () => api('POST', '/v1/admin/pricing/stripe').then(onSaved), 'Stripe has the prices on this page');
@@ -300,13 +316,13 @@ function StripeCard({ info, onSaved }: { info: PricingInfo; onSaved: () => void 
           columns={[
             { key: 'w', header: 'Price', render: (p) => p.label },
             { key: 'k', header: 'Lookup key', render: (p) => <code>{p.productId}</code> },
-            { key: 'a', header: 'Here', render: (p) => formatPrice(p.amount) },
+            { key: 'a', header: 'Here', render: (p) => `${formatPrice(p.amount)} a ${p.interval}` },
             {
               key: 's',
               header: 'In Stripe',
               render: (p) => {
                 const got = s[p.productId];
-                switch (state(p.amount, got)) {
+                switch (state(p, got)) {
                   case 'same':
                     return <Status tone="good">The same</Status>;
                   case 'missing':

@@ -78,11 +78,21 @@ looking after a managed computer.
   same price; student and child computers are billed as Standard;
 * the **volume discount**: up to five steps, each so much off every seat (people and shared computers) once an
   organization has so many (the highest step reached counts). Stripe applies it as a coupon on the seats' prices,
-  never on the fee, extra computers or MDM.
+  never on the fee, extra computers or MDM;
+* **paying yearly**: what a year costs, in months' price (`yearlyMonths`: 10 to start, two months free; 12 for no
+  saving).
+
+**Monthly or yearly.** An organization pays monthly or yearly, one way for everything on its plan (Stripe bills a
+subscription's items at one interval): its fee, its people, their extra computers and the MDM add-on. Paying yearly,
+each price is `yearlyMonths` months of the monthly one, under the same product id ending in `_yearly`
+(`fbrx_command_tenant_yearly`, `fbrx_ultra_tenant_yearly`, `fbrx_ultra_extra_computer_yearly`,
+`fbrx_mdm_tenant_yearly`, and so on). The volume discount comes off the same way; it is rounded on each line, so a year
+can differ from ten months by a few cents. Standard and Ultra on their own are monthly.
 
 A tenant's bill is its organization fee, each person and shared computer at its edition's price less the volume
-discount, each extra computer, and the MDM add-on (`organizationBill`); in the cloud, FBRX Command counts the people
-and their computers (a computer a member joined is theirs) and keeps Stripe in step (ACCOUNTS.md). Until the operator changes it, the list is the table above. The app and the website show the table
+discount, each extra computer, and the MDM add-on, for a month or a year as it pays (`organizationBill`); in the cloud,
+FBRX Command counts the people and their computers (a computer a member joined is theirs) and keeps Stripe in step
+(ACCOUNTS.md). Until the operator changes it, the list is the table above. The app and the website show the table
 above; `GET /v1/plans` gives the operator's prices.
 
 **The Standard trial.** A computer on its own with nothing bought may run Standard free for `STANDARD_TRIAL_DAYS` (7)

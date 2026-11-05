@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { compareSemver, deepMerge, isPathLocked, satisfies, newId, decodeLicenseUnverified, parseVertical, productNameFor, resolveAudience, KIND_GROUPS, VERTICALS, VERTICAL_AUDIENCES, type LicensePayload } from '../src';
-import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, SERVER_OFFER, TIERS, atLeast, editionPoints, formatPrice, maxTier, organizationBill, parseTier, priceOf, productById, tenantMonthlyTotal, type PriceBook } from '../src';
+import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, SERVER_OFFER, TIERS, atLeast, editionPoints, formatPrice, maxTier, organizationBill, parseTier, priceBookProducts, priceOf, productById, productFor, productInterval, tenantMonthlyTotal, type PriceBook } from '../src';
 import { DEFAULT_POLICY, DEFAULT_SETTINGS, THINKING_BUDGETS, thinkingBudget, thinkingLevelOf } from '../src';
 import { generateSigningKeyPair, hashPassword, licenseStatusFrom, openString, sealString, signLicense, verifyLicense, verifyPassword } from '../src/node';
 import { randomBytes } from 'node:crypto';
@@ -93,6 +93,7 @@ describe('editions and prices', () => {
         { from: 250, percentOff: 20 },
       ],
       fees: { base: 5000, large: { from: 100, monthly: 10000 }, home: 1499 },
+      yearlyMonths: 10,
     };
     const people = (n: number, tier: 'basic' | 'ultra' | 'blackhole', computers = 1) => Array.from({ length: n }, () => ({ tier, computers }));
     const bill = (kind: 'business' | 'education' | 'home', counts: { people: ReturnType<typeof people>; shared?: Record<string, number>; computers: number }) => organizationBill(book, { kind, counts: { shared: {}, ...counts } });
@@ -130,6 +131,28 @@ describe('editions and prices', () => {
     // Each organization fee is an FBRX Command plan to Stripe; extra computers are their own product.
     expect(['fbrx_command_tenant_monthly', 'fbrx_command_large_monthly', 'fbrx_command_home_monthly'].map((id) => productById(id)?.kind)).toEqual(['command', 'command', 'command']);
     expect(productById('fbrx_ultra_extra_computer_monthly')).toEqual({ kind: 'extra', tier: 'ultra' });
+
+    // Paying yearly: every line at its yearly product, a year costing 10 months' price, the volume discount as before.
+    const monthly = bill('business', { people: [...people(20, 'basic'), ...people(9, 'ultra'), ...people(1, 'ultra', 7)], computers: 36 });
+    const yearly = organizationBill(book, { kind: 'business', counts: { people: [...people(20, 'basic'), ...people(9, 'ultra'), ...people(1, 'ultra', 7)], shared: {}, computers: 36 }, interval: 'year' });
+    expect(yearly).toMatchObject({ interval: 'year', fee: 'base', paid: 30, percentOff: 10 });
+    expect(yearly.lines.filter((l) => l.quantity > 0).map((l) => [l.productId, l.each, l.total])).toEqual([
+      ['fbrx_command_tenant_yearly', 50000, 50000],
+      ['fbrx_standard_tenant_yearly', 12000, 216000],
+      ['fbrx_ultra_tenant_yearly', 29000, 261000],
+      ['fbrx_ultra_extra_computer_yearly', 2990, 5980],
+    ]);
+    expect(yearly.total).toBe(monthly.total * 10);
+    // A yearly product sells what its monthly one does; FBRX Server is bought once, at no interval.
+    expect(productById('fbrx_command_large_yearly')).toEqual({ kind: 'command' });
+    expect(productById('fbrx_blackhole_tenant_yearly')).toEqual({ kind: 'edition', tier: 'blackhole', tenant: true });
+    expect([productInterval('fbrx_mdm_tenant_yearly'), productInterval('fbrx_mdm_tenant_monthly')]).toEqual(['year', 'month']);
+    expect([productFor('fbrx_mdm_tenant_yearly', 'month'), productFor(SERVER_OFFER.productId, 'year')]).toEqual(['fbrx_mdm_tenant_monthly', 'fbrx_server_iso']);
+    // Stripe gets a yearly price for each of an organization's prices; the editions on their own stay monthly.
+    const products = priceBookProducts(book, { available: true, perEndpoint: 400 });
+    expect(products.find((p) => p.productId === 'fbrx_command_home_yearly')).toMatchObject({ interval: 'year', amount: 14990 });
+    expect(products.find((p) => p.productId === 'fbrx_mdm_tenant_yearly')).toMatchObject({ interval: 'year', amount: 4000 });
+    expect(products.filter((p) => p.interval === 'year').some((p) => productById(p.productId)?.kind === 'edition' && !(productById(p.productId) as { tenant: boolean }).tenant)).toBe(false);
   });
 });
 

@@ -1,4 +1,4 @@
-import { COMMAND_FEE_PRODUCTS, LEARNER_TIER, MDM_ADDON, PAID_TIERS, TIERS, VERTICALS, isLearner, licenseEditionFor, organizationBill, type BillCounts, type OrganizationBill, type PaidTier, type TenantPlanView, type Tier, type Vertical } from '@fbrx/shared';
+import { BILLING_INTERVALS, COMMAND_FEE_PRODUCTS, LEARNER_TIER, MDM_ADDON, PAID_TIERS, TIERS, VERTICALS, isLearner, licenseEditionFor, organizationBill, productFor, productInterval, type BillCounts, type BillingInterval, type OrganizationBill, type PaidTier, type TenantPlanView, type Tier, type Vertical } from '@fbrx/shared';
 import type { Db } from '@fbrx/shared/node';
 import { signLicense } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
@@ -6,12 +6,13 @@ import { ids } from '../context';
 import { givenEdition } from '../services/device-config';
 import { LICENSE_SLACK_DAYS, isValid, planEntitlement } from './entitlements';
 import { knownStripePrice, mdmManaged, mdmPricing, priceBook } from './pricing';
-import { VOLUME_COUPON_PREFIX, discountCoupon, itemProduct, type Stripe } from './stripe';
+import { VOLUME_COUPON_PREFIX, discountCoupon, itemProduct, type Stripe, type StripeSubscription } from './stripe';
 
 /**
  * An organization's FBRX Command in the cloud (`billing = 'cloud'`): its organization fee (by its kind and size) and
  * each of its computers at its edition's price, counted from what the organization gives them, less the volume
- * discount; Essentials is free. The prices are the operator's price list (pricing.ts). With the plan active, FBRX
+ * discount; Essentials is free. The prices are the operator's price list (pricing.ts). It pays monthly or yearly, one
+ * interval for everything on its plan: the interval of the organization fee it pays. With the plan active, FBRX
  * Command holds a license for the organization that allows everything (Black Hole); each computer runs what it is
  * given, Essentials when nobody gave it anything. Without the plan, its computers run Essentials.
  *
@@ -68,26 +69,41 @@ export function billCounts(db: Db, tenantId: string): BillCounts {
   return { people: [...paying.values()], shared, computers: rows.length };
 }
 
-/** The organization's monthly bill at the operator's prices: its people, their computers and its shared computers. */
-export function tenantBill(ctx: AppContext, tenantId: string): { bill: OrganizationBill; computers: Record<Tier, number>; managed: number } {
+/** How often the organization pays: as its plan's organization fee is paid (monthly until it has a plan). */
+export function tenantInterval(db: Db, tenantId: string): BillingInterval {
+  const e = planEntitlement(db, tenantId);
+  return e ? productInterval(e.product_id) : 'month';
+}
+
+/**
+ * The organization's bill at the operator's prices, for a month or a year as it pays (or at `interval`): its people,
+ * their computers and its shared computers.
+ */
+export function tenantBill(ctx: AppContext, tenantId: string, interval = tenantInterval(ctx.db, tenantId)): { bill: OrganizationBill; computers: Record<Tier, number>; managed: number } {
   const vertical = ctx.db.get<{ vertical: string | null }>('SELECT vertical FROM tenants WHERE id = ?', tenantId)?.vertical ?? null;
   const kind = (VERTICALS as readonly string[]).includes(vertical ?? '') ? (vertical as Vertical) : null;
   const managed = mdmManaged(ctx.db, tenantId);
-  const bill = organizationBill(priceBook(ctx.db), { kind, counts: billCounts(ctx.db, tenantId), mdm: { managed, pricing: mdmPricing(ctx.db) } });
+  const bill = organizationBill(priceBook(ctx.db), { kind, counts: billCounts(ctx.db, tenantId), mdm: { managed, pricing: mdmPricing(ctx.db) }, interval });
   return { bill, computers: computersByTier(ctx.db, tenantId), managed };
 }
 
-export function tenantPlanView(ctx: AppContext, tenantId: string): TenantPlanView {
+/** The organization's plan and bill. Before the plan runs, the bill is shown at `preview` (how it would pay). */
+export function tenantPlanView(ctx: AppContext, tenantId: string, preview?: BillingInterval): TenantPlanView {
   const t = ctx.db.get<{ billing: string | null; stripe_customer_id: string | null }>('SELECT billing, stripe_customer_id FROM tenants WHERE id = ?', tenantId);
   const e = planEntitlement(ctx.db, tenantId);
-  const { bill, computers, managed } = tenantBill(ctx, tenantId);
+  const active = !!e && isValid(e);
+  const interval = active || !preview ? tenantInterval(ctx.db, tenantId) : preview;
+  const { bill, computers, managed } = tenantBill(ctx, tenantId, interval);
+  const totals = Object.fromEntries(BILLING_INTERVALS.map((i) => [i, i === interval ? bill.total : tenantBill(ctx, tenantId, i).bill.total])) as Record<BillingInterval, number>;
   return {
     billing: t?.billing === 'cloud' ? 'cloud' : 'manual',
-    active: !!e && isValid(e),
+    active,
     periodEnd: e?.period_end ?? null,
     status: e?.status ?? null,
     computers,
-    monthly: bill.total,
+    interval,
+    totals,
+    yearlyMonths: priceBook(ctx.db).yearlyMonths,
     bill,
     portal: !!t?.stripe_customer_id && !!ctx.config.cloud.stripe,
     mdm: { ...mdmPricing(ctx.db), managed },
@@ -148,8 +164,14 @@ export function syncTenantLicense(ctx: AppContext, tenantId: string): void {
  * current one. Stripe prorates the changes on the next invoice.
  */
 export function syncSeats(ctx: AppContext, stripe: Stripe | null, tenantId: string): Promise<{ changed: string[] }> {
-  // One at a time per organization: two at once would both read the subscription, and both add the same item.
-  const next = (syncing.get(tenantId) ?? Promise.resolve()).catch(() => undefined).then(() => syncSeatsNow(ctx, stripe, tenantId));
+  return oneAtATime(tenantId, () => syncSeatsNow(ctx, stripe, tenantId));
+}
+
+const syncing = new Map<string, Promise<unknown>>();
+
+/** One change to an organization's subscription at a time: two at once would both read it, and both add the same item. */
+function oneAtATime<T>(tenantId: string, change: () => Promise<T>): Promise<T> {
+  const next = (syncing.get(tenantId) ?? Promise.resolve()).catch(() => undefined).then(change);
   syncing.set(tenantId, next);
   void next.then(
     () => syncing.get(tenantId) === next && syncing.delete(tenantId),
@@ -158,23 +180,43 @@ export function syncSeats(ctx: AppContext, stripe: Stripe | null, tenantId: stri
   return next;
 }
 
-const syncing = new Map<string, Promise<unknown>>();
+/**
+ * Moves the organization's plan to paying monthly or yearly: every item of FBRX's on its Stripe subscription goes to
+ * its price at the new interval in one update (Stripe bills a subscription's items at one interval, starts the new
+ * period now and credits what is left of the old one). Answers with the subscription as it is now.
+ */
+export function changeInterval(ctx: AppContext, stripe: Stripe, tenantId: string, interval: BillingInterval): Promise<StripeSubscription> {
+  return oneAtATime(tenantId, async () => {
+    const e = planEntitlement(ctx.db, tenantId)!;
+    const sub = await stripe.subscription(e.external_id);
+    const known = (priceId: string) => knownStripePrice(ctx.db, priceId);
+    const moves: Array<{ id: string; price: string }> = [];
+    for (const i of sub.items.data) {
+      const productId = itemProduct(i, known);
+      if (productId && productInterval(productId) !== interval) moves.push({ id: i.id, price: await stripe.priceFor(productFor(productId, interval)) });
+    }
+    if (moves.length) await stripe.updateItems(sub.id, moves);
+    return stripe.subscription(sub.id);
+  });
+}
 
 async function syncSeatsNow(ctx: AppContext, stripe: Stripe | null, tenantId: string): Promise<{ changed: string[] }> {
   const t = ctx.db.get<{ billing: string | null }>('SELECT billing FROM tenants WHERE id = ?', tenantId);
   const e = planEntitlement(ctx.db, tenantId);
   if (!stripe || t?.billing !== 'cloud' || !e || e.source !== 'stripe' || !isValid(e)) return { changed: [] };
   const sub = await stripe.subscription(e.external_id);
-  const { bill } = tenantBill(ctx, tenantId);
-  const fee = COMMAND_FEE_PRODUCTS[bill.fee];
+  const interval = productInterval(e.product_id);
+  const { bill } = tenantBill(ctx, tenantId, interval);
+  const fee = bill.lines[0]!.productId;
   const wanted: Array<[string, number]> = [
     // The fee it pays first: should adding it fail, the one it paid stays.
     [fee, 1],
     ...Object.values(COMMAND_FEE_PRODUCTS)
+      .map((id) => productFor(id, interval))
       .filter((id) => id !== fee)
       .map((id): [string, number] => [id, 0]),
     ...bill.lines.filter((l) => l.item !== 'fee' && l.item !== 'mdm').map((l): [string, number] => [l.productId, l.quantity]),
-    [MDM_ADDON.productId, bill.lines.find((l) => l.item === 'mdm')?.quantity ?? 0],
+    [productFor(MDM_ADDON.productId, interval), bill.lines.find((l) => l.item === 'mdm')?.quantity ?? 0],
   ];
   const known = (priceId: string) => knownStripePrice(ctx.db, priceId);
   const changed: string[] = [];

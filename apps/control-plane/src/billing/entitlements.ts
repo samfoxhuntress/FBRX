@@ -199,10 +199,14 @@ export function accountLicense(ctx: AppContext, account: { id: string; email: st
   return { key, tier, expiresAt, computers, note: null };
 }
 
-/** An organization's FBRX Command plan: its latest purchase, if it has one. */
+/**
+ * An organization's FBRX Command plan: the organization fee it pays, if it has one. A fee still running comes before
+ * one that ended (moving to another fee or interval ends the old one), and the fee it is charged before those at none.
+ */
 export function planEntitlement(db: Db, tenantId: string) {
-  return db.get<{ external_id: string; source: PurchaseSource; status: EntitlementStatus; period_end: string | null }>(
-    "SELECT external_id, source, status, period_end FROM entitlements WHERE tenant_id = ? AND kind = 'command' ORDER BY updated_at DESC LIMIT 1",
+  return db.get<{ external_id: string; source: PurchaseSource; status: EntitlementStatus; period_end: string | null; product_id: string }>(
+    `SELECT external_id, source, status, period_end, product_id FROM entitlements WHERE tenant_id = ? AND kind = 'command'
+     ORDER BY status IN ('pending', 'expired'), quantity = 0, updated_at DESC LIMIT 1`,
     tenantId,
   );
 }

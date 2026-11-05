@@ -1,5 +1,5 @@
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
-import { CURRENCY, productById, type EntitlementStatus } from '@fbrx/shared';
+import { CURRENCY, productById, type BillingInterval, type EntitlementStatus } from '@fbrx/shared';
 import type { CloudConfig } from '../config';
 import { HttpError, PaymentProviderError } from '../errors';
 
@@ -78,16 +78,16 @@ export class Stripe {
   }
 
   /**
-   * A new monthly price under a lookup key, taking the key from the price that had it (Stripe prices never change). It
-   * goes on `product`, or on a new product named `name`.
+   * A new price, monthly or yearly, under a lookup key, taking the key from the price that had it (Stripe prices never
+   * change). It goes on `product`, or on a new product named `name`.
    */
-  async createPrice(p: { productId: string; unitAmount: number; product: string | null; name: string }): Promise<{ id: string; product: string }> {
+  async createPrice(p: { productId: string; unitAmount: number; interval: BillingInterval; product: string | null; name: string }): Promise<{ id: string; product: string }> {
     const product = p.product ?? (await this.request<{ id: string }>('POST', '/v1/products', { name: p.name, metadata: { fbrx_product: p.productId } })).id;
     const price = await this.request<{ id: string; product: string }>('POST', '/v1/prices', {
       product,
       currency: CURRENCY,
       unit_amount: p.unitAmount,
-      recurring: { interval: 'month' },
+      recurring: { interval: p.interval },
       lookup_key: p.productId,
       transfer_lookup_key: true,
       metadata: { fbrx_product: p.productId },
@@ -133,6 +133,14 @@ export class Stripe {
   /** Sets how many computers a tenant subscription item counts (FBRX Command, per edition). */
   updateItemQuantity(itemId: string, quantity: number) {
     return this.request('POST', `/v1/subscription_items/${encodeURIComponent(itemId)}`, { quantity, proration_behavior: 'create_prorations' });
+  }
+
+  /**
+   * Moves several of a subscription's items to other prices at once (an organization changing how often it pays: Stripe
+   * takes every item to the new interval together, and starts the new period now, less what is left of the old one).
+   */
+  updateItems(subscriptionId: string, items: Array<{ id: string; price: string }>) {
+    return this.request<StripeSubscription>('POST', `/v1/subscriptions/${encodeURIComponent(subscriptionId)}`, { items, proration_behavior: 'create_prorations' });
   }
 
   /** Moves a subscription item to another price (an organization's item, when its price changed). */
