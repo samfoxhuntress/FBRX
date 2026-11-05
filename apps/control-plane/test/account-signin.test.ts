@@ -257,4 +257,18 @@ describe('signing in on a computer with an FBRX account', () => {
       rmSync(dir, { recursive: true, force: true });
     }
   }, 60_000);
+
+  it('gives an account one edition at a time: giving again replaces it, and None takes it back', async () => {
+    await api('POST', '/v1/accounts/signup', { email: 'kit@harbor.example', name: 'Kit', password: PASSWORD }, '');
+    const acct = (await api('GET', '/v1/admin/accounts?q=kit@')).at(0);
+    const given = (a: any) => a.entitlements.filter((e: any) => e.source === 'grant' && e.valid).map((e: any) => e.tier);
+    await api('POST', `/v1/admin/accounts/${acct.id}/grant`, { tier: 'ultra', days: 30 });
+    expect(given(await api('POST', `/v1/admin/accounts/${acct.id}/grant`, { tier: 'ultra', days: 60 }))).toEqual(['ultra']);
+    const standard = await api('POST', `/v1/admin/accounts/${acct.id}/grant`, { tier: 'basic', days: null });
+    expect(standard).toMatchObject({ tier: 'basic' });
+    expect(given(standard)).toEqual(['basic']);
+    const none = await api('POST', `/v1/admin/accounts/${acct.id}/grant`, { tier: 'essentials' });
+    expect(none).toMatchObject({ tier: 'essentials' });
+    expect(given(none)).toEqual([]);
+  });
 });

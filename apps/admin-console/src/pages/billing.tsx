@@ -340,11 +340,17 @@ export function MembersPage() {
   );
 }
 
+/** The edition given to an account now ("Ultra until Dec 9, 2026"), or null. */
+function givenLine(entitlements: AccountView['entitlements']): string | null {
+  const g = entitlements.find((e) => e.source === 'grant' && e.valid && e.tier);
+  return g ? `${TIER_SHORT[g.tier!]}${g.periodEnd ? ` until ${formatDay(g.periodEnd)}` : ', no end'}` : null;
+}
+
 /** Platform view: FBRX accounts, what they bought, and giving one an edition (support, a promotion). */
 export function AccountsPage() {
   const [search, setSearch] = useState('');
   const q = useQuery<Array<AccountView & { status: string }>>(`/v1/admin/accounts${search ? `?q=${encodeURIComponent(search)}` : ''}`, [search]);
-  const [grant, setGrant] = useState<{ id: string; email: string; tier: 'basic' | 'ultra'; days: string } | null>(null);
+  const [grant, setGrant] = useState<{ id: string; email: string; tier: 'essentials' | 'basic' | 'ultra'; days: string; given: string | null } | null>(null);
   const { run, busy } = useAction();
   return (
     <Page title="FBRX accounts" description="Everyone with an FBRX account on this FBRX Command, and the edition their own purchases give them." actions={<div style={{ width: 280 }}><Input placeholder="Search by email or name" value={search} onChange={(e) => setSearch(e.target.value)} /></div>}>
@@ -364,7 +370,7 @@ export function AccountsPage() {
               header: '',
               render: (a) => (
                 <div className="fx-actions">
-                  <Button size="sm" onClick={() => setGrant({ id: a.id, email: a.email, tier: 'ultra', days: '30' })}>
+                  <Button size="sm" onClick={() => setGrant({ id: a.id, email: a.email, tier: 'ultra', days: '30', given: givenLine(a.entitlements) })}>
                     Give an edition
                   </Button>
                   <Button size="sm" variant="ghost" onClick={() => void run(`s-${a.id}`, () => api('POST', `/v1/admin/accounts/${a.id}/status`, { status: a.status === 'active' ? 'disabled' : 'active' }).then(q.reload))}>
@@ -381,18 +387,24 @@ export function AccountsPage() {
           title={`Give ${grant.email} an edition`}
           onClose={() => setGrant(null)}
           footer={
-            <Button variant="primary" loading={busy === 'grant'} onClick={() => void run('grant', () => api('POST', `/v1/admin/accounts/${grant.id}/grant`, { tier: grant.tier, days: grant.days ? Number(grant.days) : null }).then(() => (setGrant(null), q.reload())), 'Edition given')}>
-              Give
+            <Button variant="primary" loading={busy === 'grant'} onClick={() => void run('grant', () => api('POST', `/v1/admin/accounts/${grant.id}/grant`, { tier: grant.tier, days: grant.days ? Number(grant.days) : null }).then(() => (setGrant(null), q.reload())), grant.tier === 'essentials' ? 'Given edition taken back' : 'Edition given')}>
+              {grant.tier === 'essentials' ? 'Take it back' : 'Give'}
             </Button>
           }
         >
           <div className="fx-form">
-            <Field label="Edition">
-              <Select value={grant.tier} options={(['basic', 'ultra'] as const).map((t) => ({ value: t, label: TIER_SHORT[t] }))} onChange={(e) => setGrant({ ...grant, tier: e.target.value as 'basic' | 'ultra' })} />
+            <Field label="Edition" help={grant.given ? `Now given: ${grant.given}. Giving one replaces it.` : 'What they bought themselves is not touched.'}>
+              <Select
+                value={grant.tier}
+                options={[...(['basic', 'ultra'] as const).map((t) => ({ value: t, label: TIER_SHORT[t] })), ...(grant.given ? [{ value: 'essentials', label: 'None: take the given edition back' }] : [])]}
+                onChange={(e) => setGrant({ ...grant, tier: e.target.value as 'essentials' | 'basic' | 'ultra' })}
+              />
             </Field>
-            <Field label="For how many days" help="Empty: no end.">
-              <Input type="number" min={1} value={grant.days} onChange={(e) => setGrant({ ...grant, days: e.target.value })} />
-            </Field>
+            {grant.tier !== 'essentials' && (
+              <Field label="For how many days" help="Empty: no end.">
+                <Input type="number" min={1} value={grant.days} onChange={(e) => setGrant({ ...grant, days: e.target.value })} />
+              </Field>
+            )}
           </div>
         </Modal>
       )}

@@ -884,18 +884,27 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
       return rows.map((a) => ({ ...accountView(ctx, a), status: a.status }));
     });
     /** Gives an account an edition (support, a promotion), for a number of days or with no end. */
+    /**
+     * Gives an account an edition (support, a promotion): one at a time, so giving one again replaces the last (its
+     * edition and its end), and Essentials takes it back. What the account bought is not touched.
+     */
     admin.post('/v1/admin/accounts/:id/grant', async (req) => {
       const p = requirePerm(req, 'tenants.manage');
-      const body = z.object({ tier: z.enum(['basic', 'ultra']), days: z.number().int().min(1).max(3650).nullable().default(30) }).parse(req.body);
+      const body = z.object({ tier: z.enum(['essentials', 'basic', 'ultra']), days: z.number().int().min(1).max(3650).nullable().default(30) }).parse(req.body);
       const a = ctx.db.get<AccountRow>('SELECT * FROM accounts WHERE id = ?', (req.params as { id: string }).id);
       if (!a) throw notFound('No such account');
-      recordPurchase(ctx, {
-        source: 'grant',
-        externalId: `grant_${randomUUID()}`,
-        productId: EDITION_PLANS[body.tier].productId!,
-        status: 'active',
-        periodEnd: body.days ? new Date(Date.now() + body.days * 86_400_000).toISOString() : null,
-        accountId: a.id,
+      ctx.db.tx(() => {
+        ctx.db.run("UPDATE entitlements SET status = 'expired', updated_at = ? WHERE account_id = ? AND source = 'grant' AND status != 'expired'", new Date().toISOString(), a.id);
+        if (body.tier !== 'essentials') {
+          recordPurchase(ctx, {
+            source: 'grant',
+            externalId: `grant_${randomUUID()}`,
+            productId: EDITION_PLANS[body.tier].productId!,
+            status: 'active',
+            periodEnd: body.days ? new Date(Date.now() + body.days * 86_400_000).toISOString() : null,
+            accountId: a.id,
+          });
+        }
       });
       ctx.audit.record({ type: 'user', id: p.id, label: p.label, tenantId: null, ip: req.ip }, 'account.granted', { type: 'account', id: a.id }, body);
       return accountView(ctx, a);
