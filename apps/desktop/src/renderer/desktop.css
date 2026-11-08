@@ -1496,8 +1496,14 @@ body.spotlight-body {
   .kanban {
     grid-template-columns: 1fr;
   }
-  .split-list {
+  .split:not(.has-selection) .split-main,
+  .split.has-selection .split-list {
     display: none;
+  }
+}
+@media (min-width: 901px) {
+  .split-back {
+    display: none !important;
   }
 }
 
