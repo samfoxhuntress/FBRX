@@ -60,7 +60,7 @@ describe('Changing FBRX Server’s roles from the console', () => {
   it('shows the roles, and why they cannot change until the server keeps its installer', async () => {
     const st = (await req('GET', '/v1/server/roles', viewer)).body;
     expect(st).toMatchObject({ roles: ['virtual', 'ai'], canChange: false, why: expect.stringContaining('keeps no copy of its installer'), change: null });
-    expect(st.catalog.map((r: { id: string }) => r.id)).toEqual(['virtual', 'ai', 'gate', 'minidome', 'time', 'command']);
+    expect(st.catalog.map((r: { id: string }) => r.id)).toEqual(['virtual', 'ai', 'gate', 'minidome', 'time', 'files', 'command']);
     expect((await req('POST', '/v1/server/roles', admin, { roles: ['virtual', 'ai', 'time'] })).status).toBe(409);
   });
 

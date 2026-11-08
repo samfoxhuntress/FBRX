@@ -22,7 +22,7 @@ import { HardwareService } from './hardware/service';
 import { BmcService } from './bmc/service';
 import { ConsoleTickets } from './console-proxy';
 import { CoreLink } from './core-link';
-import { HostMeshMark, type NftRunner } from './mesh-mark';
+import { HostMeshMark, runNft, type NftRunner } from './mesh-mark';
 import { bearer, type VirtualContext } from './context';
 import { VirtualError } from './errors';
 import { loadTls } from './tls';
@@ -42,11 +42,15 @@ import { coreRoutes } from './routes/core';
 import { gateRoutes } from './routes/gate';
 import { domeRoutes } from './routes/dome';
 import { timeRoutes } from './routes/time';
+import { filesRoutes } from './routes/files';
 import { readEnv, roleRoutes } from './routes/roles';
 import { commandRoutes, commandRule } from './routes/command';
 import { terminalRoutes } from './routes/terminal';
 import { troubleshootRoutes } from './routes/troubleshoot';
 import { TimeService } from './time/service';
+import { FilesService } from './files/service';
+import { LinuxFilesSystem, SimulatedFilesSystem, type FilesSystem } from './files/system';
+import { memoryNft } from './files/priority';
 import { LibvirtTimeDriver, SimulatedTimeDriver, type TimeDriver } from './time/driver';
 import { ConntrackSensor, DevicesSensor, DnsLogSensor, DomeEngine, DomeStore, SimulatedSensor, type DomeSensor } from '@fbrx/dome/node';
 import { DEFAULT_CONTROL_PLANE_PORT, type MeshNetworkComputer } from '@fbrx/shared';
@@ -86,6 +90,8 @@ export interface BuildOptions {
   domeSensors?: DomeSensor[];
   /** FBRX Time works through this (tests). */
   timeDriver?: TimeDriver;
+  /** The file server works through this (tests). */
+  filesSystem?: FilesSystem;
 }
 
 export function makeHypervisor(config: VirtualConfig): Hypervisor {
@@ -125,6 +131,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     gate: null,
     dome: null,
     time: null,
+    files: null,
     cliToken: randomBytes(32).toString('base64url'),
     log: app.log,
     tls: tls ? { fingerprint: tls.fingerprint, selfSigned: tls.selfSigned, notAfter: tls.notAfter } : null,
@@ -223,6 +230,23 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     time.start();
   }
 
+  // The file server: the files role.
+  if (config.roles.includes('files')) {
+    const linux = config.files.mode === 'linux';
+    const system = opts.filesSystem ?? (linux ? new LinuxFilesSystem({ root: config.files.root, smbConf: config.files.smbConf, workDir: join(config.dataDir, 'files-work') }) : new SimulatedFilesSystem(config.files.root));
+    ctx.files = new FilesService({
+      db,
+      hv,
+      system,
+      nft: opts.nft ?? (linux ? runNft : memoryNft()),
+      key,
+      log: (level, msg) => app.log[level](msg),
+      gate: () => ctx.gate,
+      advise: config.roles.includes('ai') ? (prompt) => ctx.core.call<{ answer: string; model: string }>('ai.quick', { reqId: randomUUID(), prompt }, 'file-server', 120_000) : undefined,
+    });
+    ctx.files.start();
+  }
+
   await app.register(helmet, {
     contentSecurityPolicy: {
       directives: {
@@ -274,6 +298,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   await gateRoutes(app, ctx);
   await domeRoutes(app, ctx);
   await timeRoutes(app, ctx);
+  await filesRoutes(app, ctx);
   await roleRoutes(app, ctx);
   await commandRoutes(app, ctx);
   await terminalRoutes(app, ctx);
@@ -311,6 +336,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     async close() {
       clearInterval(timer);
       ctx.time?.stop();
+      ctx.files?.stop();
       ctx.dome?.stop();
       domeStore?.close();
       ctx.gate?.engine.stop();

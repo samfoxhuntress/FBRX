@@ -36,9 +36,9 @@ CMD_ETC=/etc/fbrx-command
 CMD_UNIT=/etc/systemd/system/fbrx-command.service
 CMD_USER=fbrx-command
 NODE_MAJOR=22
-# Roles this installer sets up. Planned roles (dns, directory, files) come with later releases.
-AVAILABLE_ROLES="virtual ai gate minidome time command"
-PLANNED_ROLES="dns directory files"
+# Roles this installer sets up. Planned roles (dns, directory) come with later releases.
+AVAILABLE_ROLES="virtual ai gate minidome time command files"
+PLANNED_ROLES="dns directory"
 
 BUNDLE=""
 YES=0
@@ -83,6 +83,9 @@ Options:
                                          for computers
                                 command  FBRX Command: your organization's computers, their settings and policy,
                                          licenses and updates, with its own console on port 8787
+                                files    a file server: shared folders for your network (SMB) from this server, or
+                                         one of its virtual machines as the file server; priority for its traffic
+                                         and backups to a NAS
                               The web console comes with every role. The server keeps a copy of this installer, so
                               roles change later from the console (Roles) or with sudo fbrx-server roles add <role>.
   --gate-wan <nic>            the gate's internet port (from your modem or provider)
@@ -188,6 +191,15 @@ if [ "$UNINSTALL" -eq 1 ]; then
     [ -f /etc/resolv.conf.fbrx-backup ] && mv -f /etc/resolv.conf.fbrx-backup /etc/resolv.conf
     systemctl restart dnsmasq.service 2>/dev/null || true
     note "FBRX Gate is off. Restart the server (sudo reboot) for the ports to take their old settings."
+  fi
+  if [ -f /etc/samba/fbrx-files.conf ]; then
+    # The file server stops sharing; its folders and files stay in /srv/fbrx-files.
+    rm -f /etc/samba/fbrx-files.conf
+    [ -f /etc/samba/smb.conf ] && sed -i "\|^# FBRX file server\$|d; \|^include = /etc/samba/fbrx-files.conf\$|d" /etc/samba/smb.conf
+    nft delete table inet fbrx_files 2>/dev/null || true
+    nft delete table bridge fbrx_files 2>/dev/null || true
+    systemctl reload smbd.service 2>/dev/null || true
+    note "The file server's shares are off; their files stay in /srv/fbrx-files."
   fi
   systemctl disable fbrx-server-firstboot.service 2>/dev/null || true
   rm -f /etc/systemd/system/fbrx-server-firstboot.service /etc/issue.d/fbrx-server-firstboot.issue
@@ -407,6 +419,10 @@ fi
 if has_role time; then
   say "Installing FBRX Time's tools (the backup folder for computers: Samba)"
   apt_install samba qemu-utils
+fi
+if has_role files; then
+  say "Installing the file server's tools (Samba; rsync, CIFS and NFS for backups to another device)"
+  apt_install samba rsync cifs-utils nfs-common
 fi
 if has_role ai; then
   # The built-in AI runtime (llama.cpp, downloaded from the console's Mesh & AI → Models) needs OpenMP; with a graphics
@@ -653,6 +669,31 @@ elif [ -f "$TIME_SMB" ]; then
   if ! in_chroot; then systemctl reload smbd.service 2>/dev/null || true; fi
 fi
 
+# --------------------------------------------------------------------------------------------- files role
+
+FILES_DIR=/srv/fbrx-files
+FILES_SMB=/etc/samba/fbrx-files.conf
+if has_role files; then
+  say "Setting up the file server (shared folders in $FILES_DIR)"
+  # Share accounts are in this group; the console makes them (no login on the server).
+  getent group fbrx-files >/dev/null || groupadd --system fbrx-files
+  mkdir -p "$FILES_DIR"
+  chown root:fbrx-files "$FILES_DIR"
+  chmod 0750 "$FILES_DIR"
+  # The console writes the shares here; until then there are none.
+  [ -f "$FILES_SMB" ] || printf '%s\n' '# FBRX file server: its shares (FBRX Virtual writes this file; changes made here are replaced).' >"$FILES_SMB"
+  if [ -f /etc/samba/smb.conf ] && ! grep -q "include = $FILES_SMB" /etc/samba/smb.conf; then
+    printf '\n# FBRX file server\ninclude = %s\n' "$FILES_SMB" >>/etc/samba/smb.conf
+  fi
+elif [ -f "$FILES_SMB" ]; then
+  say "Turning the file server off (its folders and their files stay in $FILES_DIR)"
+  rm -f "$FILES_SMB"
+  if [ -f /etc/samba/smb.conf ]; then sed -i "\|^# FBRX file server\$|d; \|^include = $FILES_SMB\$|d" /etc/samba/smb.conf; fi
+  nft delete table inet fbrx_files 2>/dev/null || true
+  nft delete table bridge fbrx_files 2>/dev/null || true
+  if ! in_chroot; then systemctl reload smbd.service 2>/dev/null || true; fi
+fi
+
 # ------------------------------------------------------------------------------------------ command role
 
 cmd_existing() { (grep -E "^$1=" "$CMD_ETC/fbrx-command.env" 2>/dev/null || true) | tail -1 | cut -d= -f2-; }
@@ -839,7 +880,7 @@ mkdir -p /etc/systemd/system/multi-user.target.wants
 systemctl enable fbrx-virtual.service >/dev/null 2>&1 || ln -sf "$UNIT" /etc/systemd/system/multi-user.target.wants/fbrx-virtual.service
 if has_role ai; then systemctl enable fbrx-core.service >/dev/null 2>&1 || ln -sf "$CORE_UNIT" /etc/systemd/system/multi-user.target.wants/fbrx-core.service; fi
 if has_role command; then systemctl enable fbrx-command.service >/dev/null 2>&1 || ln -sf "$CMD_UNIT" /etc/systemd/system/multi-user.target.wants/fbrx-command.service; fi
-if has_role time; then systemctl enable smbd.service >/dev/null 2>&1 || true; fi
+if has_role time || has_role files; then systemctl enable smbd.service >/dev/null 2>&1 || true; fi
 if has_role gate; then
   mkdir -p /etc/systemd/system/sysinit.target.wants
   systemctl enable fbrx-gate-firewall.service >/dev/null 2>&1 || ln -sf "$GATE_UNIT" /etc/systemd/system/sysinit.target.wants/fbrx-gate-firewall.service
@@ -862,7 +903,7 @@ if [ "$START" -eq 1 ] && ! in_chroot; then
   fi
   if has_role ai; then systemctl restart fbrx-core.service || warn "The FBRX core did not start (journalctl -u fbrx-core)"; fi
   if has_role command; then systemctl restart fbrx-command.service || warn "FBRX Command did not start (journalctl -u fbrx-command)"; fi
-  if has_role time; then systemctl restart smbd.service || warn "Samba did not start: computers cannot reach the backup folder (journalctl -u smbd)"; fi
+  if has_role time || has_role files; then systemctl restart smbd.service || warn "Samba did not start: computers cannot reach $(if has_role files; then printf 'the shares'; else printf 'the backup folder'; fi) (journalctl -u smbd)"; fi
   systemctl restart fbrx-virtual.service
   say "Starting FBRX Virtual"
   for _ in $(seq 1 30); do
@@ -894,6 +935,7 @@ if has_role command; then
   if has_role gate && [ "$GATE_NEW" -eq 0 ]; then note "On this gate, let your network reach it: a firewall rule from your network to the gate, TCP $CMD_PORT (the console's FBRX Command page says when it is missing)."; fi
 fi
 if has_role time; then note "FBRX Time in the console: back up virtual machines on a schedule, and connect computers to the backup folder (its connection code is there).$(with_role gate ' On a gate, let your network reach it: a firewall rule for TCP 445 to the gate.')"; fi
+if has_role files; then note "The file server in the console (File server): serve shares from this server or pick a virtual machine as the file server, give its traffic priority, and back it up to a NAS.$(with_role gate ' On a gate, the page adds the firewall rule your networks need, for a commit with What If.')"; fi
 # Everything that should run, runs (fbrx-server doctor --fix switches on whatever is off).
 if [ "$START" -eq 1 ] && ! in_chroot; then /usr/local/sbin/fbrx-server doctor --quiet || note "sudo fbrx-server doctor --fix switches on what is off."; fi
 if [ "$REBOOT_NEEDED" -eq 1 ]; then

@@ -17,7 +17,7 @@ const jobBody = z.object({
 });
 
 /** The address people reach this console on, for the backup folder's path (\\address\fbrx-time). */
-function hostOf(req: FastifyRequest): string {
+export function hostOf(req: FastifyRequest): string {
   const h = (req.headers['x-forwarded-host'] as string | undefined) ?? req.headers.host ?? 'fbrx-server';
   return h.replace(/:\d+$/, '').replace(/^\[|\]$/g, '');
 }

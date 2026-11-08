@@ -43,9 +43,9 @@ roles fit.
 | `minidome` | FBRX MiniDome: threat detection through the gate | First stage |
 | `time` | FBRX Time: image backups of virtual machines and computers, each checked by starting it | 1.0 |
 | `command` | FBRX Command on the server: the organization's computers, settings and policy, licenses and updates; servers join it too | New |
+| `files` | A file server: shared folders from the server or one of its virtual machines, priority for their traffic, backups to a NAS | New |
 | `dns` | Name service for the network | Planned |
 | `directory` | Directory and sign-in for the organization's computers (a domain controller) | Planned |
-| `files` | File sharing | Planned |
 
 Where this is going, for example:
 

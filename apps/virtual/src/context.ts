@@ -14,6 +14,7 @@ import type { HostMeshMark } from './mesh-mark';
 import type { GateEngine, GateApplier } from '@fbrx/gate/node';
 import type { DomeEngine } from '@fbrx/dome/node';
 import type { TimeService } from './time/service';
+import type { FilesService } from './files/service';
 import { allows } from './auth';
 import { forbidden, unauthorized } from './errors';
 
@@ -38,6 +39,8 @@ export interface VirtualContext {
   dome: DomeEngine | null;
   /** FBRX Time (the time role): image backups and boot checks. */
   time: TimeService | null;
+  /** The file server (the files role): shares, priority for its traffic, backups to another device. */
+  files: FilesService | null;
   /** The command line's token (fbrx-gate, run as root on the server; accepted from this computer only). */
   cliToken: string;
   log: FastifyBaseLogger;

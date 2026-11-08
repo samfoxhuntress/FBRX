@@ -61,6 +61,11 @@ export interface VirtualConfig {
    */
   time: { dir: string; shareFile: string; mode: 'libvirt' | 'simulated' };
   /**
+   * The file server (the files role): the share folders (root), the shares file Samba includes (smbConf), and
+   * "simulated" to pretend (development, demos, tests). Linux on FBRX Server, simulated elsewhere unless FBRX_V_FILES.
+   */
+  files: { root: string; smbConf: string; mode: 'linux' | 'simulated' };
+  /**
    * Changing this server's roles from the console: fbrx-server (roles set …) runs the copy of the installer the server
    * keeps (bundleDir), in a job of its own (systemd-run) so it carries on while this console restarts. It writes how it
    * went to stateDir/roles.env and logFile.
@@ -139,6 +144,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
       shareFile: resolve(env.FBRX_V_TIME_SHARE_FILE ?? '/etc/fbrx-time/share.env'),
       mode: env.FBRX_V_TIME === 'simulated' || env.FBRX_V_TIME === 'libvirt' ? env.FBRX_V_TIME : driver === 'libvirt' ? 'libvirt' : 'simulated',
     },
+    files: (() => {
+      const mode = env.FBRX_V_FILES === 'linux' || env.FBRX_V_FILES === 'simulated' ? env.FBRX_V_FILES : process.platform === 'linux' && existsSync(resolve(env.FBRX_V_SYS_ROOT ?? '/', 'etc/fbrx-server-release')) ? 'linux' : 'simulated';
+      return { mode, root: resolve(env.FBRX_V_FILES_DIR ?? (mode === 'linux' ? '/srv/fbrx-files' : resolve(dataDir, 'files'))), smbConf: resolve(env.FBRX_V_FILES_SMB_CONF ?? '/etc/samba/fbrx-files.conf') };
+    })(),
     server: {
       command: resolve(env.FBRX_V_SERVER_CMD ?? '/usr/local/sbin/fbrx-server'),
       bundleDir: resolve(env.FBRX_V_BUNDLE_DIR ?? '/opt/fbrx-server/bundle'),

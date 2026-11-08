@@ -20,6 +20,10 @@ restore would: it opens it as a throwaway virtual machine on a private test netw
 confirms it starts and comes online, then shuts it down and deletes it; with the ai role, the server's AI explains a
 check that fails. Same console, *FBRX Time* page.
 
+With the **files** role the server is a **file server**: shared folders for your network, served by the server itself
+or by one of its virtual machines (a NAS system, Windows Server). Their traffic can go first, and their files are
+backed up to a NAS or another server on a schedule. Same console, *File server* page.
+
 With the **command** role the server runs your organization's **FBRX Command**: the computers that join it, their
 settings and policy, licenses, updates, backups and help desk, with its own console on port **8787**. It runs day and
 night, so computers stay in touch with it, and it updates with the server. A server with the ai role also joins an
@@ -90,9 +94,9 @@ helper, so work can go to the right server).
 | `minidome` | FBRX MiniDome: threat detection through the gate ([MINIDOME.md](MINIDOME.md)); needs `gate` | First stage |
 | `time` | FBRX Time: image backups of virtual machines and computers, each checked by starting it ([TIME.md](TIME.md)); needs `virtual` | New in 1.0 |
 | `command` | FBRX Command: your organization's computers, their settings and policy, licenses and updates, with its own console on port 8787 ([below](#fbrx-command-on-the-server-the-command-role)) | New |
+| `files` | A file server: shared folders (SMB) from the server or one of its virtual machines, priority for their traffic, backups to a NAS ([below](#file-server-the-files-role)) | New |
 | `dns` | Name service for the network | Planned |
 | `directory` | Directory and sign-in for the organization's computers (a domain controller) | Planned |
-| `files` | File sharing | Planned |
 
 The web console comes with every role (it is FBRX Virtual's service, with or without virtual machines). The installer
 refuses a planned role for now and says so.
@@ -367,6 +371,60 @@ DEPLOYMENT.md → Configuration) and its secrets in `/etc/fbrx-command/secrets.e
 token; an e-mail server's address with its password goes here too). `sudo systemctl restart fbrx-command` after a
 change.
 
+## File server (the files role)
+
+The **File server** page (Server section) shares folders with your network. First choose where it serves from:
+
+* **This server.** FBRX Server shares folders itself (Samba, the way Windows shares folders: Windows, macOS and Linux
+  all open them). Each share is a folder in `/srv/fbrx-files`.
+* **A virtual machine.** One of the server's virtual machines is the file server: a NAS system, Windows Server, any
+  machine that shares folders. It keeps its own shares and accounts; FBRX Server gives its traffic priority, can start
+  it with the server, and backs it up. FBRX uses the address the machine reports; type one in when it has a fixed
+  address on your network.
+* **Off.** Nothing is shared. Shares and their files stay, for when you turn it back on.
+
+### Shares and accounts (this server)
+
+1. **Add accounts.** People sign in to the shares with these, one each or one shared by a small office. They cannot
+   sign in to the server itself. Passwords are kept by Samba only: nobody can read them back, so give each person
+   theirs (*New password* sets another).
+2. **Make shares.** A name (`office`, `photos`, `scans`), a description, read only or not, and who can open it: the
+   accounts you tick, or every account when you tick none. People open it as `\<server>\<share>`; the page shows the
+   path with a *Copy* button. A Mac opens `smb://<server>/<share>` (Finder: Go → Connect to Server).
+3. **On a gate**, your networks need a firewall rule to reach the shares on the gate (TCP 445). The page says so and
+   *Add the firewall rule* adds one for each network to what you are editing; review it with What If on *Changes*, then
+   commit.
+
+Stopping a share leaves its files in its folder. A share a backup copies cannot be stopped until that backup is
+changed or removed.
+
+### Priority for its traffic
+
+*Let its traffic go first* marks the file server's traffic (SMB and NFS) with a priority class, so switches that honor
+priority and FBRX Gate's traffic shaping let it go first. For this server it marks what the shares send; for a virtual
+machine, its traffic as it passes through the server, whether it is on a NAT network, a gate network or bridged to
+your network. **AF31** (recommended) puts file copies ahead of everyday traffic and behind calls and video meetings;
+the page says whether the marking is in place. The marking is put back after every restart.
+
+### Backups to a NAS
+
+Each backup copies a folder to another device on a schedule (every day, every week, or only when you start it):
+
+* **From** a share on this server, or a folder on another device: the file server machine (`\<its address>\data`) or
+  anything else that shares folders.
+* **To** a shared folder (`\nasackups`, with an account and password) or an NFS export (`nas:/volume1/backups`).
+
+The backup gets a folder of its own there, named after it: `current` holds a full copy, and each copy after the first
+sends only what changed. Files that changed or were deleted move to `kept/<date>` and stay for as many days as you
+choose, so a mistake (or ransomware) can be undone: copy them back from there. 0 days keeps only the latest copy.
+
+*Back up now* starts one at once; one backup copies at a time and the others wait their turn. The *Last copy* column
+says how each went; open it for the details. With the ai role, the server's AI looks at a backup that fails and says
+what most likely went wrong and what to try. Operators can start and stop backups; administrators set them up.
+
+The account a backup signs in with needs to write to the folder on the NAS. Its password is encrypted with the
+server's key and never shown again: leave it empty when you change the backup to keep it.
+
 ## The hardware map
 
 *Hardware map* draws the server as it is wired: the processor sockets (NUMA nodes) with their cores on top, and the
@@ -510,6 +568,8 @@ No new ISO is needed for this, or for any update: the ISO is only for a server's
 | `FBRX_V_GATE_MANAGE_WAN` | | A private network on the internet side allowed to reach the console and SSH. |
 | `FBRX_V_GATE_LAN_ADDRESS` | | Your network's addresses in the starter configuration (default: 192.168.1.1/24, or the next free choice clear of the internet side's). |
 | `FBRX_V_GATE_WAN_ADDRESS` / `FBRX_V_GATE_WAN_GATEWAY` | | A fixed internet address in the starter configuration (both, or DHCP). |
+| `FBRX_V_FILES` | `linux` with FBRX Server | `simulated` pretends: shares and backups are folders in the data folder. |
+| `FBRX_V_FILES_DIR` | `/srv/fbrx-files` | The file server's share folders. |
 | `FBRX_V_COMMAND_URL` | `http://127.0.0.1:8788` | FBRX Command's local-only address (command role), where the console checks on it. |
 | `FBRX_V_TERMINAL` | `on` with FBRX Server | `off` removes the Terminal; `on` turns it on elsewhere (Linux only). |
 | `FBRX_V_TERMINAL_RECORD` | | `off`: do not record terminal sessions. |
@@ -528,7 +588,9 @@ roles this server announces (the installer writes it). Everything else about the
   systemd keeps home folders and kernel modules out of its reach.
 * virsh is called with argument lists (never a shell), and names, addresses and processor lists are checked before
   they reach it.
-* The management controller's password is encrypted with a key kept in the data folder (`keys/master.key`, mode 600).
+* The management controller's password is encrypted with a key kept in the data folder (`keys/master.key`, mode 600),
+  and so are the passwords backups use for other devices. File server accounts have no login on the server, and their
+  passwords are kept by Samba only.
 * The FBRX core (ai role) runs unprivileged and sandboxed by systemd (read-only system, only its data folder
   writable); see *Mesh & AI* for how the console reaches it.
 * FBRX Command (command role) runs unprivileged and sandboxed the same way, as its own `fbrx-command` account; its
@@ -555,6 +617,7 @@ All under `/v1`, with `Authorization: Bearer <token>` from `POST /v1/auth/login`
 | `GET/POST /networks`, `DELETE /networks/:name` | Networks |
 | `GET /hardware/topology`, `GET /hardware/flows`, `PUT /hardware/devices/:address/irqs`, `PUT /hardware/irqs/:irq`, `PUT /hardware/irqbalance` | Hardware map |
 | `GET/PUT/DELETE /bmc`, `POST /bmc/probe`, `GET /bmc/system`, `/sensors`, `/logs`, `POST /bmc/power`, `POST /bmc/boot-to-setup`, `GET/PATCH /bmc/bios`, `DELETE /bmc/bios/pending` | Server management |
+| `GET /files`, `PUT /files/mode`, `PUT /files/vm/autostart`, `POST /files/shares`, `PUT/DELETE /files/shares/:name`, `POST /files/accounts`, `PUT /files/accounts/:name/password`, `DELETE /files/accounts/:name`, `PUT /files/priority`, `POST /files/gate`, `POST /files/backups`, `PUT/DELETE /files/backups/:id`, `POST /files/backups/:id/run`, `POST /files/backups/:id/stop` | The file server (files role): administrators set it up, operators start and stop backups, viewers look |
 | `/gate/…` | FBRX Gate (gate role): see [GATE.md](GATE.md#api) |
 | `/dome/…` | FBRX MiniDome (minidome role): see [MINIDOME.md](MINIDOME.md#api) |
 | `GET /core`, `POST /core/call` `{ method, params }` | The FBRX core (ai role): `system.status`, `settings.get`, `ai.providers`, `mesh.status`, `mesh.assist.helpers`, `mesh.assist.sessions`, `approvals.list` (viewers); `mesh.assist.send`, `mesh.assist.followUp`, `mesh.assist.cancel`, `approvals.resolve` for Mesh Assist (operators); `settings.update` (Mesh Assist and AI provider settings), `vault.set` (provider keys), `vault.list`, `ai.models`, `mesh.setEnabled`, `mesh.rename`, `mesh.startPairing`, `mesh.cancelPairing`, `mesh.pair`, `mesh.removeDevice`, `mesh.setPermissions` (administrators) |

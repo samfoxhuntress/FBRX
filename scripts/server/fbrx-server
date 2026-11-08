@@ -160,7 +160,7 @@ update() {
 
 # ------------------------------------------------------------------------------------------------- roles
 # fbrx-server roles                       this server's roles, and how the last change went
-# sudo fbrx-server roles add <role> …     adds a role (time, ai, gate, minidome, virtual, command)
+# sudo fbrx-server roles add <role> …     adds a role (time, ai, gate, minidome, virtual, command, files)
 # sudo fbrx-server roles remove <role>    turns one off (its data stays)
 # sudo fbrx-server roles set <list> …     exactly these roles
 # Runs the copy of the installer the server keeps ($APP/bundle) with the new roles; the console's Roles page does the
@@ -273,6 +273,13 @@ doctor() {
     if command -v qemu-img >/dev/null 2>&1; then line ok "qemu-img" "copies and checks images"
     else line '!!' "qemu-img" "missing: FBRX Time cannot copy or check images (apt install qemu-utils)"; bad=$((bad + 1)); fi
   fi
+  if has_role files; then
+    unit smbd.service "the file server's shares (SMB)"
+    if [ -f /etc/samba/fbrx-files.conf ] && grep -q "include = /etc/samba/fbrx-files.conf" /etc/samba/smb.conf 2>/dev/null; then line ok "shares" "$(grep -c '^\[' /etc/samba/fbrx-files.conf) served from /srv/fbrx-files"
+    else line '!!' "shares" "Samba is not set up for them (run install.sh again with the files role)"; bad=$((bad + 1)); fi
+    if command -v rsync >/dev/null 2>&1 && command -v mount.cifs >/dev/null 2>&1; then line ok "backups" "rsync and CIFS are there"
+    else line '!!' "backups" "rsync or cifs-utils missing: backups to a NAS cannot run (apt install rsync cifs-utils nfs-common)"; bad=$((bad + 1)); fi
+  fi
   if has_gate; then
     unit systemd-networkd.service "the gate's ports and VLANs"
     unit dnsmasq.service "DHCP and DNS"
@@ -379,7 +386,7 @@ fbrx-server update check    looks for a newer FBRX Server and gets it ready (dow
                             uses one you brought along)
 fbrx-server update commit   installs it; if it does not come up, the server goes back by itself
 fbrx-server update rollback back to the version before the last update
-fbrx-server roles           this server's roles (virtual, ai, gate, minidome, time, command)
+fbrx-server roles           this server's roles (virtual, ai, gate, minidome, time, command, files)
 fbrx-server roles add <role>      adds one (sudo; the gate also needs --gate-wan <port> --gate-lan <port>)
 fbrx-server roles remove <role>   turns one off; its data stays (the gate also needs --force)
 fbrx-server url             the console's address
