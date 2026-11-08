@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { basename, isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, FILE_MIME, LOGIN_LIMITS, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, THINKING_LEVELS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, FILE_MIME, LOGIN_LIMITS, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, THINKING_LEVELS, TOOLKIT_INPUT_KINDS, TOOLKIT_SYSTEMS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -61,6 +61,10 @@ const USER_ONLY = new Set<string>([
   'skills.save',
   'skills.setEnabled',
   'skills.remove',
+  'toolkit.save',
+  'toolkit.setEnabled',
+  'toolkit.reset',
+  'toolkit.remove',
   'governance.removeFolder',
   'governance.answerFolder',
   'license.activate',
@@ -440,6 +444,30 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       return k.skills.setEnabled(q.id, q.enabled);
     },
     'skills.remove': (p) => ({ removed: k.skills.remove(IdSchema.parse(p).id) }),
+    'toolkit.list': () => ({ actions: k.toolkit.list(), system: k.toolkit.system }),
+    'toolkit.save': (p) => {
+      const commands = z.object({ windows: z.string().max(4000).optional(), mac: z.string().max(4000).optional(), linux: z.string().max(4000).optional() });
+      const q = z
+        .object({
+          id: z.string().max(80).optional(),
+          name: z.string().min(1).max(200),
+          kit: z.string().max(80).optional(),
+          when: z.string().max(1000).optional(),
+          commands: commands.optional(),
+          inputs: z.array(z.object({ name: z.string().max(40), label: z.string().max(400), kind: z.enum(TOOLKIT_INPUT_KINDS) })).max(10).optional(),
+          ask: z.boolean().optional(),
+          admin: z.array(z.enum(TOOLKIT_SYSTEMS)).max(3).optional(),
+          undo: z.object({ commands, seconds: z.number().int().min(1).max(3600) }).nullable().optional(),
+        })
+        .parse(p);
+      return k.toolkit.save(q, 'person');
+    },
+    'toolkit.setEnabled': (p) => {
+      const q = z.object({ id: z.string().max(80), enabled: z.boolean() }).parse(p);
+      return k.toolkit.setEnabled(q.id, q.enabled);
+    },
+    'toolkit.reset': (p) => k.toolkit.reset(IdSchema.parse(p).id),
+    'toolkit.remove': (p) => ({ removed: k.toolkit.remove(IdSchema.parse(p).id) }),
     'governance.folders': () => k.folders.status(),
     'governance.addFolder': (p, ctx) => k.folders.add(z.object({ path: z.string().min(1).max(4096) }).parse(p).path, ctx.actor),
     'governance.removeFolder': (p, ctx) => k.folders.remove(z.object({ entry: z.string().min(1).max(4096) }).parse(p).entry, ctx.actor),

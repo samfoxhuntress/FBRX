@@ -7939,3 +7939,13 @@ body.popout .fx-page-header p {
   width: 100%;
   height: 100%;
 }
+
+/* AI Toolkit: each action with the command it runs on this computer. */
+.kit-item { align-items: flex-start; }
+.kit-item .fx-cell-title { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.kit-cmd { display: block; margin-top: 6px; padding: 6px 9px; border-radius: 7px; background: var(--surface-2); color: var(--text-primary); font: 12px/1.45 var(--mono); white-space: pre-wrap; word-break: break-word; max-height: 4.5em; overflow: hidden; }
+.fx-modal .kit-cmd { max-height: none; margin: 0 0 12px; }
+.kit-out { max-height: 46vh; overflow: auto; margin-top: 12px; }
+.kit-input { gap: 8px; margin-bottom: 8px; align-items: center; }
+.kit-admin { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 10px 0; }
+.kit-undo { margin: 8px 0 0 12px; padding-left: 12px; border-left: 2px solid var(--border); }

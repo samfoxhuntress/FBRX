@@ -31,6 +31,7 @@ const HelpdeskPage = lazy(() => import('./pages/helpdesk').then((m) => ({ defaul
 const MessagesPage = lazy(() => import('./pages/messages').then((m) => ({ default: m.MessagesPage })));
 const ApprovalsPage = lazy(() => import('./pages/approvals').then((m) => ({ default: m.ApprovalsPage })));
 const ToolsPage = lazy(() => import('./pages/tools').then((m) => ({ default: m.ToolsPage })));
+const ToolkitPage = lazy(() => import('./pages/toolkit').then((m) => ({ default: m.ToolkitPage })));
 const ConnectionsPage = lazy(() => import('./pages/connections').then((m) => ({ default: m.ConnectionsPage })));
 const VaultPage = lazy(() => import('./pages/vault').then((m) => ({ default: m.VaultPage })));
 const GovernancePage = lazy(() => import('./pages/governance').then((m) => ({ default: m.GovernancePage })));
@@ -107,6 +108,7 @@ export type Route =
   | 'approvals'
   | 'vault'
   | 'governance'
+  | 'toolkit'
   | 'backup'
   | 'fleet'
   | 'settings'
@@ -403,6 +405,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const all: Array<NavItem & { need?: Tier }> = [
     { id: 'home', label: 'Dash', icon: 'dashboard', section: 'Command' },
     { id: 'agent', label: agentName, icon: 'sparkles', section: 'Command' },
+    // Every edition: the actions the AI runs, and the ones it built, to look over and change.
+    { id: 'toolkit', label: 'AI Toolkit', icon: 'braces', section: 'Command' },
     { id: 'alerts', label: 'Alerts', icon: 'bell', count: alertCounts?.unread, section: 'Command' },
     // Chat with your other devices and the organization's (or family's) computers, in every edition.
     ...(messagesOn ? [{ id: 'messages', label: 'Messages', icon: 'message' as IconName, count: unreadMessages || undefined, section: 'Command' }] : []),
@@ -617,6 +621,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return <VaultPage />;
       case 'governance':
         return <GovernancePage />;
+      case 'toolkit':
+        return <ToolkitPage />;
       case 'runtime':
         return <RuntimePage />;
       case 'ai-usage':
@@ -924,6 +930,7 @@ const LEARNER_PAGES = new Set(['home', 'agent', 'messages', 'helpdesk', 'calenda
 const ESSENTIALS_NAV: Array<[Route, string, string?]> = [
   ['home', 'Your AI', 'Home'],
   ['agent', 'Your AI'],
+  ['toolkit', 'Your AI', 'AI Toolkit'],
   ['runtime', 'Your AI', 'AI models'],
   ['ai-usage', 'Your AI', 'AI usage'],
   ['governance', 'Help & settings'],

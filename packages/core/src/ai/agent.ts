@@ -161,6 +161,8 @@ export class AgentRuntime {
       };
       /** Skills: the steps that fit a request, which go with it. */
       skills?: { context: (text: string) => string | null };
+      /** The AI Toolkit's actions that fit a request (each a kit.* tool). */
+      toolkit?: { context: (text: string) => { text: string; tools: string[] } | null };
       /** A message on a student computer sounded like a child may be in danger (the text is never passed on). */
       onConcern?: (category: LearnerConcern['category'], conversationId: string) => void;
       /** Mesh Assist: hands the task to another computer when this run runs out of steps or its AI fails. */
@@ -419,6 +421,14 @@ export class AgentRuntime {
             '- After a job that took three or more tool steps, that no skill covered and that is likely to come up again, save how you did it with skills.save (a short name, when it applies, the steps with the tools). FBRX asks the person to approve it, so do not ask first.',
           ]
         : []),
+      ...(this.d.toolkit
+        ? [
+            '',
+            '## AI Toolkit',
+            '- kit.* tools are ready-made actions from the AI Toolkit, set up the way the person wants them. The ones that fit a request come with the message in a <toolkit> block: when one does the job, call it rather than writing a command yourself, and never mention the block.',
+            '- When no kit.* tool fits something a person could well ask again and one command does it, build an action with toolkit.build (FBRX asks the person to approve it, so do not ask first), then call the new kit.* tool.',
+          ]
+        : []),
       ...(instructions ? ['', instructions] : []),
     ].join('\n');
   }
@@ -606,7 +616,8 @@ export class AgentRuntime {
     const memory = this.d.memory?.context({ conversationId, text, cloud: config.cloud }) ?? null;
     // The skills that fit go with the message, and the tools their steps name join a small model's short list.
     const skills = this.d.learner?.() ? null : (this.d.skills?.context(text) ?? null);
-    const skillTools = skills ? [...new Set(skills.match(/\b[a-z_]+\.[a-z_]+\b/g) ?? [])] : [];
+    const kit = this.d.learner?.() ? null : (this.d.toolkit?.context(text) ?? null);
+    const skillTools = [...new Set([...(kit?.tools ?? []), ...(skills ? (skills.match(/\b[a-z_]+\.[a-z_]+\b/g) ?? []) : [])])];
     // FBRX scaffolds as much as the agent needs (agent-fit.ts): a small model sees the tools this conversation is
     // about, briefly described; one that holds a long conversation sees them all. Either way what it remembers goes
     // with the person's message, so the start of every request stays the same and the provider reuses its reading.
@@ -655,7 +666,7 @@ export class AgentRuntime {
         if (steps === 1 && !this.d.learner?.()) {
           note = budgetNote({ ...reading, maxOutputTokens: maxTokens ?? 0, maxSteps });
         }
-        const extra = [memory && `<memory>\n${memory}\n</memory>`, skills && `<skills>\n${skills}\n</skills>`, note && `<budget>\n${note}\n</budget>`].filter(Boolean).join('\n\n');
+        const extra = [memory && `<memory>\n${memory}\n</memory>`, kit && `<toolkit>\n${kit.text}\n</toolkit>`, skills && `<skills>\n${skills}\n</skills>`, note && `<budget>\n${note}\n</budget>`].filter(Boolean).join('\n\n');
         if (extra) {
           const last = history.findLastIndex((m) => m.role === 'user');
           if (last >= 0) history[last] = { ...history[last], content: `${extra}\n\n${history[last].content}` } as ProviderMessage;

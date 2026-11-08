@@ -17,6 +17,7 @@ import type { SupportStatus } from './support';
 import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './browser';
 import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
 import type { Skill } from './skills';
+import type { ToolkitAction, ToolkitCommands, ToolkitInput, ToolkitSystem } from './toolkit';
 import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
 import type { ThinkingBudget, ThinkingLevel } from './thinking';
 import type { ExtEvents, ExtMethods } from './ext';
@@ -821,6 +822,12 @@ export interface CoreMethods extends ExtMethods {
   'skills.save': (p: { id?: string; name: string; when: string; steps: string[] }) => Skill;
   'skills.setEnabled': (p: { id: string; enabled: boolean }) => Skill;
   'skills.remove': (p: { id: string }) => { removed: boolean };
+  /** The AI Toolkit: every action, and the system this computer is (whose commands run here). */
+  'toolkit.list': () => { actions: ToolkitAction[]; system: ToolkitSystem };
+  'toolkit.save': (p: { id?: string; name: string; kit?: string; when?: string; commands?: ToolkitCommands; inputs?: ToolkitInput[]; ask?: boolean; admin?: ToolkitSystem[]; undo?: { commands: ToolkitCommands; seconds: number } | null }) => ToolkitAction;
+  'toolkit.setEnabled': (p: { id: string; enabled: boolean }) => ToolkitAction;
+  'toolkit.reset': (p: { id: string }) => ToolkitAction;
+  'toolkit.remove': (p: { id: string }) => { removed: boolean };
   'governance.folders': () => FolderAccessStatus;
   /** Lets the AI use a folder (picked by the person). */
   'governance.addFolder': (p: { path: string }) => FolderAccessStatus;
@@ -969,6 +976,7 @@ export interface CoreEvents extends ExtEvents {
   /** The AI's memory of the person changed (how many facts it holds now). */
   'memory.changed': { count: number };
   'skills.changed': { count: number };
+  'toolkit.changed': { count: number };
   'plugins.changed': PluginInfo[];
   'connectors.changed': ConnectorInfo[];
   'tools.changed': ToolInfo[];

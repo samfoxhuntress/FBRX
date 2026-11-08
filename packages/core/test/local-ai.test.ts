@@ -82,8 +82,8 @@ describe('a local model reads less, so it answers sooner', () => {
       expect(toolNames.length).toBeLessThanOrEqual(24);
       // What it remembers rides with the person's message; the instructions stay the same from one request to the next.
       expect(local.messages[0].content).not.toContain('Prefers short answers');
-      // So do the skills that fit (here the starter "Computer feels slow").
-      expect(local.messages.at(-1).content).toMatch(/^<memory>[\s\S]*Prefers short answers[\s\S]*<\/memory>\n\n<skills>\n### Computer feels slow[\s\S]*<\/skills>\n\nwhy is my computer so slow\?$/);
+      // So do the AI Toolkit's actions and the skills that fit (here "Busiest programs" and "Computer feels slow").
+      expect(local.messages.at(-1).content).toMatch(/^<memory>[\s\S]*Prefers short answers[\s\S]*<\/memory>\n\n<toolkit>\n- kit\.busiest_programs: [^\n]*\n<\/toolkit>\n\n<skills>\n### Computer feels slow[\s\S]*<\/skills>\n\nwhy is my computer so slow\?$/);
       const cloud = await ask('why is my computer so slow?', 'far');
       expect(cloud.tools.length).toBeGreaterThan(40);
       // The same instructions for both, so a cloud AI's prompt cache holds across the conversation too.

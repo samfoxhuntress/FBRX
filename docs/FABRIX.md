@@ -72,8 +72,48 @@ A skill is how Fabrix does a job of several steps, written down so it does it th
 - **Your own**: Settings → Skills → **Add a skill**: a name, when to use it and the steps, one per line.
 - The skills that fit what you ask (by the words of their name, when and keywords) go with your message, and the
   tools their steps name join a small model's short list of tools, so even a small model follows steps that worked.
-  Settings → Skills shows each skill's steps and how often it was used, turns any of them off, and edits or deletes
-  yours and the learned ones.
+  Settings → Skills (also *AI Toolkit → Skills*) shows each skill's steps and how often it was used, turns any of them
+  off, and edits or deletes yours and the learned ones.
+
+## AI Toolkit: actions it runs for you
+
+*AI Toolkit* (in every edition, Essentials included) holds ready-made actions Fabrix runs for you. Each is a command for
+this computer (PowerShell on Windows, the shell on macOS and Linux) that Fabrix calls in one step, so even a small model
+answers "what is my IP address?" at once and the same way every time.
+
+- **FBRX's library**, in toolkits:
+  - *Networking*: My IP address, Network adapters, Full network details, DNS servers in use, Look up a name, Routing
+    table, Trace the route, Devices this computer has talked to, Open connections, Wi-Fi connection, Flush the DNS
+    cache, Get a fresh address (DHCP), Set a fixed address, Use an automatic address (DHCP).
+  - *This computer*: About this computer, Time since the last restart, Disk space, Busiest programs.
+  - *Troubleshooting*: Check the internet (the router, then the internet past it, then names), Is a port open.
+- **Built by Fabrix**: when no action fits something you could well ask again and one command does it, Fabrix builds a
+  new action (`toolkit.build`) and runs it. FBRX asks you first, showing the command, so an action is kept only when you
+  approve it. Fabrix's actions that only look run straight away next time; one whose command could change anything
+  asks before each run.
+- **Your own**: **New action**: a name, the toolkit it goes in, when to use it, and the command for each system.
+
+**Make it do it your way.** Every action can be changed: find it (the search looks in names and commands), click the
+pencil, and change the command. Fabrix runs it your way from then on. For example, if the action Fabrix built for your
+IP address runs `ipconfig /all` and tells you more than you want, change it to plain `ipconfig`. A library action you
+changed says
+*Changed by you*, and **Reset to FBRX's** puts the original back. **Try** runs an action right there and shows what it
+printed. The switch turns an action off: Fabrix stops using it until you turn it back on.
+
+- **Inputs**: write `{{name}}` in a command where something goes each time (a host, an adapter), and add an input of
+  that name: a host or address, an IPv4 address, a number, a name or some text. FBRX checks each value and puts it in
+  quoted, so a value can never become a command of its own.
+- **Ask me before each run**: on for anything that changes settings, files or services. Off only for commands that
+  just look. Either way your policy (Governance) and the guardian check every run, and each run is in the audit log.
+- **Needs administrator rights**: Windows asks through its usual prompt (UAC); macOS and Linux ask for an
+  administrator's password.
+- **Put it back unless I keep the change**: for a change that could cut you off, such as *Set a fixed address*. After
+  it runs, FBRX asks whether to keep it, and runs the "put it back" command by itself when you say no or do not
+  answer in time (60 seconds unless you change it). A wrong address can never leave you stranded.
+
+The actions that fit what you ask go with your message, and Fabrix prefers them to writing a command of its own.
+Changing actions is for the person at the computer: other apps on the Local API can run actions (through governance)
+but cannot change them.
 
 ## Attach files and pictures
 

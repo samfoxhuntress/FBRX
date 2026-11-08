@@ -54,6 +54,7 @@ import { FolderAccess } from './governance/folder-access';
 import { KnowledgeBase } from './knowledge/knowledge-base';
 import { MemoryService } from './ai/memory';
 import { SkillStore } from './ai/skills';
+import { TOOLKIT_SOURCE_ID, ToolkitStore } from './ai/toolkit';
 import { runDoctor, type DoctorFinding } from './knowledge/doctor';
 import { fbrx1Commands } from './cli/fbrx1';
 import { expandPathVars } from './governance/path-guard';
@@ -65,7 +66,7 @@ import { ToolGate } from './governance/tool-gate';
 import { checkUrl } from './governance/network-guard';
 import { LicenseService } from './license/license-service';
 import { ToolRegistry } from './tools/registry';
-import { fbrxTools, folderTools, fsTools, knowledgeTools, memoryTools, netTools, shellTools, skillTools, systemTools, diskFreeGb } from './tools/builtin';
+import { fbrxTools, folderTools, fsTools, knowledgeTools, memoryTools, netTools, shellTools, skillTools, systemTools, toolkitTools, diskFreeGb } from './tools/builtin';
 import { pcTools, workspaceTools } from './tools/builtin/command-center-tools';
 import { WorkspaceStore } from './workspace/workspace-store';
 import { SystemMonitor } from './system/system-monitor';
@@ -214,6 +215,8 @@ export class Kernel {
   readonly memory: MemoryService;
   /** Fabrix's skills: starter ones, learned ones (each approved by the person) and the person's own. */
   readonly skills: SkillStore;
+  /** The AI Toolkit: FBRX's library of actions, the ones Fabrix built (approved) and the person's own. */
+  readonly toolkit: ToolkitStore;
   readonly redactor = new Redactor();
   readonly limiter: RateLimiter;
   readonly license: LicenseService;
@@ -338,6 +341,12 @@ export class Kernel {
       timeoutSeconds: () => this.policy.policy.approvals.timeoutSeconds,
     });
     this.skills = new SkillStore({ meta: this.meta, events: this.events });
+    this.toolkit = new ToolkitStore({ meta: this.meta, events: this.events, approvals: this.approvals, timeoutSeconds: () => this.policy.policy.shell.timeoutSeconds, workspace: this.paths.workspace });
+    // The AI Toolkit's actions are tools of their own: a changed action is in the agent's hands at once.
+    this.events.on('toolkit.changed', () => {
+      this.registry.unregisterSource('builtin', TOOLKIT_SOURCE_ID);
+      this.registry.registerMany(this.toolkit.tools());
+    });
     this.memory = new MemoryService({ db: this.db, settings: () => this.settings.get().memory, learner: () => this.edition().learner, events: this.events });
     this.guardian.setPrivateValues(() => this.memory.privateValues());
     this.knowledge = new KnowledgeBase({ file: join(this.paths.root, 'knowledge.db'), appVersion: this.platform.appVersion, commands: fbrx1Commands, log: L('knowledge') });
@@ -439,6 +448,7 @@ export class Kernel {
       onConcern: (category) => this.reportConcern(category),
       memory: { context: (o) => this.memory.context(o), learn: (text) => this.memory.learn(text) },
       skills: { context: (text) => this.skills.context(text) },
+      toolkit: { context: (text) => this.toolkit.context(text) },
       assist: {
         canHandoff: (trigger) => this.assist.canHandoff(trigger),
         handoff: (h) => this.assist.handoff(h),
@@ -1204,6 +1214,8 @@ export class Kernel {
           ...systemTools({ workspace: ws, notify: (title, body) => this.notify({ title, body, level: 'info', source: 'agent' }) }),
           ...memoryTools(this.memory),
           ...skillTools(this.skills),
+          ...toolkitTools(this.toolkit),
+          ...this.toolkit.tools(),
           ...passwordTools({ passwords: this.passwords, offerSave: (d) => this.events.emit('passwords.saveRequested', d) }),
           ...folderTools(this.folders),
           ...knowledgeTools({ kb: this.knowledge, doctor: () => this.doctor(), fix: (id) => this.applyFix(id) }),

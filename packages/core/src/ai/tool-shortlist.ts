@@ -30,6 +30,7 @@ const GROUPS: Array<{ tools: RegExp; words: RegExp }> = [
   { tools: /^passwords\./, words: starts('password', 'sign-in', 'sign in', 'signin', 'login', 'log in', 'account', 'vault', '2fa', 'two-factor', 'credential', 'sign up', 'signup', 'register') },
   { tools: /^(mesh|helpdesk)\./, words: starts('mesh', 'other computer', 'another computer', 'help desk', 'helpdesk', 'ticket', 'it team', 'it support', 'admin') },
   { tools: /^skills\./, words: starts('skill', 'save this', 'save that', 'next time', 'same way', 'procedure', 'routine', 'what can you do', 'how you did') },
+  { tools: /^toolkit\./, words: starts('toolkit', 'tool kit', 'build', 'save this', 'save that', 'next time', 'shortcut', 'command', 'what can you do') },
   { tools: /^memory\./, words: starts('remember', 'forget', 'memory', 'earlier', 'last time', 'you said', 'we talked', 'told you') },
   { tools: /^fbrx\./, words: starts('fbrx', 'setting', 'edition', 'audit') },
 ];
