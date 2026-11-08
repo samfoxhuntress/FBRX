@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, formatTokens, personalPlan, type AccountDevice, type AccountStatus, type BillingInterval, type CloudAiUsage, type InvitationPreview, type LocalAccountStatus, type PriceBook, type Tier, type Vertical } from '@fbrx/shared';
+import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, tierRank, formatTokens, personalPlan, type AccountDevice, type AccountStatus, type BillingInterval, type CloudAiUsage, type InvitationPreview, type LocalAccountStatus, type PriceBook, type Tier, type Vertical } from '@fbrx/shared';
 import { Button, Callout, Card, Field, Icons, Input, KeyValue, Select, Status, Toggle, formatDate, formatDay, timeAgo, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { call, onEvent, openExternal } from './client';
 import { useCore } from './hooks';
@@ -355,6 +355,10 @@ export function AccountSettings() {
       </>
     );
   }
+  // What the account gets: its own purchases, or more from an organization it belongs to (Black Hole only ever comes
+  // that way), so a member's Black Hole never reads as "Essentials (nothing bought yet)".
+  const org = [...account.memberships].sort((a, b) => tierRank(b.tier) - tierRank(a.tier))[0];
+  const fromOrg = org && tierRank(org.tier) > tierRank(account.tier) ? org : null;
   return (
     <>
       <Card
@@ -368,7 +372,19 @@ export function AccountSettings() {
       >
         <KeyValue
           items={[
-            ['Edition', <span className={`tier-badge ${account.tier}`}>{account.tier === 'essentials' ? 'Essentials (nothing bought yet)' : TIER_NAMES[account.tier]}</span>],
+            fromOrg
+              ? [
+                  'Edition',
+                  <span>
+                    <span className={`tier-badge ${fromOrg.tier}`}>{TIER_NAMES[fromOrg.tier]}</span>{' '}
+                    <span className="fx-muted">
+                      from {fromOrg.tenantName}
+                      {fleet?.tenantId === fromOrg.tenantId ? '' : ', on its computers (join this one to it below)'}
+                    </span>
+                  </span>,
+                ]
+              : ['Edition', <span className={`tier-badge ${account.tier}`}>{account.tier === 'essentials' ? 'Essentials (nothing bought yet)' : TIER_NAMES[account.tier]}</span>],
+            ...(fromOrg ? [['Bought', account.tier === 'essentials' ? 'Nothing yet' : TIER_NAMES[account.tier]] as [string, string]] : []),
             ['Renews by itself', account.licenseUntil ? `Runs until ${formatDay(account.licenseUntil)}` : '—'],
             ...(account.computers
               ? [

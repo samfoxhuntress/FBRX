@@ -111,6 +111,13 @@ license key) becomes the member's as soon as they sign in on it: it runs their e
 they joined follow it; removing a member leaves their computers in the organization on Essentials. This is how an admin
 signs in on any computer and gets Black Hole there.
 
+A member runs their edition up to what the organization's license allows. An organization billed through FBRX Command
+in the cloud has a license that allows everything, so its members' editions decide. One whose licenses are issued by
+hand (Licenses) runs at most the newest license's edition: when someone is given more, **Members** says so, with
+**Issue a … license** at the edition they need. On the computer, **Settings → FBRX account** shows the edition and the
+organization it comes from (what the account bought is under *Bought*). **FBRX accounts** (the operator's list) gives
+people an edition of their own, as if bought; in an organization, editions come from Members.
+
 FBRX OS accepts an edition only from a license signed with a key it was built to trust. FBRX OS you build yourself
 trusts your own key; when your FBRX Command runs on another computer, build FBRX OS with FBRX Command's key
 (`Install FBRX OS --signing-key`, see [INSTALL.md](INSTALL.md)). Until then the computer runs Standard, and

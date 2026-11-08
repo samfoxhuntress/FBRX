@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { EDITION_PLANS, SERVER_OFFER, TIERS, TIER_NAMES, TIER_SHORT, extraComputers, formatPrice, type AccountView, type AddMemberResult, type BillLine, type BillingInterval, type InvitationView, type MemberView, type PriceBook, type TenantPlanView, type Tier } from '@fbrx/shared';
+import { EDITION_PLANS, SERVER_OFFER, TIERS, TIER_NAMES, TIER_SHORT, extraComputers, formatPrice, licenseEditionFor, tierRank, type AccountView, type AddMemberResult, type BillLine, type BillingInterval, type InvitationView, type MemberView, type PriceBook, type TenantPlanView, type Tier } from '@fbrx/shared';
 import { Button, Callout, Card, ChoiceCards, CopyText, Empty, Field, Grid, Input, KeyValue, Modal, Page, Select, StatTile, Status, Table, formatDay, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
@@ -206,8 +206,15 @@ export function BillingPage() {
  * email needed; it is emailed too when this FBRX Command sends email).
  */
 export function MembersPage() {
+  const app = useApp();
   const q = useQuery<MemberView[]>('/v1/admin/members');
   const { options: tierOptions, prices } = useTierOptions();
+  // The organization's license is the most its computers run (the newest one in force, as computers get it): a member
+  // given more than it allows runs what it allows. Said here, with the license that fixes it one click away.
+  const lic = useQuery<Array<{ tier: Tier; vertical: string; revokedAt: string | null; expiresAt: string | null }>>(app.can('licenses.read') ? '/v1/admin/licenses' : null);
+  const current = lic.data?.find((l) => !l.revokedAt && (!l.expiresAt || Date.parse(l.expiresAt) > Date.now())) ?? null;
+  const held = lic.data ? (q.data ?? []).filter((m) => m.tier !== 'essentials' && (!current || tierRank(m.tier) > tierRank(current.tier))) : [];
+  const needed = held.reduce<Tier>((t, m) => (tierRank(m.tier) > tierRank(t) ? m.tier : t), 'essentials');
   const invites = useQuery<InvitationView[]>('/v1/admin/invitations');
   const [adding, setAdding] = useState(false);
   const [form, setForm] = useState<{ email: string; tier: Tier }>({ email: '', tier: 'essentials' });
@@ -234,6 +241,34 @@ export function MembersPage() {
         </Button>
       }
     >
+      {held.length > 0 && (
+        <Callout
+          tone="warning"
+          title={current ? `This organization's license allows up to ${TIER_NAMES[current.tier]}` : 'This organization has no license yet'}
+          actions={
+            app.can('licenses.manage') && (
+              <Button
+                size="sm"
+                variant="primary"
+                icon="key"
+                loading={busy === 'license'}
+                onClick={() =>
+                  void run(
+                    'license',
+                    () =>
+                      api('POST', '/v1/admin/licenses', { edition: licenseEditionFor(needed), tier: needed, seats: 0, ...(current && current.vertical !== 'business' ? { vertical: current.vertical } : {}) }).then(() => lic.reload()),
+                    `License for ${TIER_NAMES[needed]} issued: computers pick it up at their next check-in`,
+                  )
+                }
+              >
+                Issue a {TIER_SHORT[needed]} license
+              </Button>
+            )
+          }
+        >
+          {held.map((m) => m.name || m.email).join(', ')} {held.length === 1 ? 'is' : 'are'} given more than it allows, so their computers run {current ? TIER_NAMES[current.tier] : 'Essentials'}. A license for {TIER_NAMES[needed]} lets each run the edition given here.
+        </Callout>
+      )}
       <Card flush>
         <Table
           rows={q.data ?? []}
@@ -353,7 +388,10 @@ export function AccountsPage() {
   const [grant, setGrant] = useState<{ id: string; email: string; tier: 'essentials' | 'basic' | 'ultra'; days: string; given: string | null } | null>(null);
   const { run, busy } = useAction();
   return (
-    <Page title="FBRX accounts" description="Everyone with an FBRX account on this FBRX Command, and the edition their own purchases give them." actions={<div style={{ width: 280 }}><Input placeholder="Search by email or name" value={search} onChange={(e) => setSearch(e.target.value)} /></div>}>
+    <Page
+      title="FBRX accounts"
+      description="Everyone with an FBRX account on this FBRX Command: what they bought themselves, and the edition each organization gives them. People in an organization get their edition, Black Hole included, from its Members page."
+      actions={<div style={{ width: 280 }}><Input placeholder="Search by email or name" value={search} onChange={(e) => setSearch(e.target.value)} /></div>}>
       <Card flush>
         <Table
           rows={q.data ?? []}
@@ -361,9 +399,24 @@ export function AccountsPage() {
           empty={<Empty title="No accounts">People make FBRX accounts in FBRX, in the phone apps or on the website.</Empty>}
           columns={[
             { key: 'n', header: 'Account', render: (a) => (<div><div className="fx-cell-title">{a.name}</div><div className="fx-cell-sub">{a.email}</div></div>) },
-            { key: 't', header: 'Edition', render: (a) => <span className={`fx-badge${a.tier === 'essentials' ? '' : ' accent'}`}>{TIER_SHORT[a.tier]}</span> },
+            { key: 't', header: 'Their own', render: (a) => <span className={`fx-badge${a.tier === 'essentials' ? '' : ' accent'}`}>{TIER_SHORT[a.tier]}</span> },
             { key: 'p', header: 'Purchases', render: (a) => a.entitlements.filter((e) => e.valid).map((e) => `${e.productId} (${e.source})`).join(', ') || '—' },
-            { key: 'o', header: 'Organizations', render: (a) => a.memberships.map((m) => m.tenantName).join(', ') || '—' },
+            {
+              key: 'o',
+              header: 'From organizations',
+              render: (a) =>
+                a.memberships.length ? (
+                  <div className="fx-actions" style={{ gap: 4 }}>
+                    {a.memberships.map((m) => (
+                      <span key={m.tenantId} className={`fx-badge${m.tier === 'essentials' ? '' : ' accent'}`} title={`Set on ${m.tenantName}'s Members page`}>
+                        {m.tenantName}: {TIER_SHORT[m.tier]}
+                      </span>
+                    ))}
+                  </div>
+                ) : (
+                  '—'
+                ),
+            },
             { key: 's', header: 'Status', render: (a) => <Status tone={a.status !== 'active' ? 'warning' : a.emailVerified ? 'good' : 'neutral'}>{a.status !== 'active' ? a.status : a.emailVerified ? 'active' : 'email not confirmed'}</Status> },
             {
               key: 'x',
@@ -393,6 +446,9 @@ export function AccountsPage() {
           }
         >
           <div className="fx-form">
+            <Callout tone="info">
+              This is for the person on their own (a promotion, or support), as if they had bought it. In an organization, the edition comes from its <strong>Members</strong> page instead, and Black Hole only ever comes that way.
+            </Callout>
             <Field label="Edition" help={grant.given ? `Now given: ${grant.given}. Giving one replaces it.` : 'What they bought themselves is not touched.'}>
               <Select
                 value={grant.tier}
