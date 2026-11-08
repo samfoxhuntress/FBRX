@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { rolesProblem, type ServerRolesStatus } from '@fbrx/shared';
 import { Button, Callout, Card, CopyText, Empty, Field, formatDate, Page, Select, Status, Toggle, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
+import { AskAiButton, describeFor } from '../ask-ai';
 import { useApp, usePoll } from '../state';
 
 /**
@@ -70,7 +71,12 @@ export function RolesPage() {
         <Card
           title={running ? 'Changing the roles…' : s.change.state === 'done' ? 'The last change of roles' : 'The last change of roles did not finish'}
           subtitle={`${s.change.roles.split(',').join(', ')}${s.change.startedAt ? ` · ${formatDate(s.change.startedAt)}` : ''}`}
-          actions={<Status tone={running ? 'busy' : s.change.state === 'done' ? 'good' : 'critical'}>{running ? 'running' : s.change.state}</Status>}
+          actions={
+            <>
+              {!running && s.change.state !== 'done' && <AskAiButton what="the change of roles that did not finish" question="Changing this server's roles did not finish. Read its log below: what went wrong, and how do I fix it?" details={() => describeFor({ roles: s.change!.roles, state: s.change!.state, log: (s.change!.log ?? '').split('\n').slice(-80).join('\n') })} />}
+              <Status tone={running ? 'busy' : s.change.state === 'done' ? 'good' : 'critical'}>{running ? 'running' : s.change.state}</Status>
+            </>
+          }
         >
           {s.change.log ? <pre className="roles-log">{s.change.log.split('\n').slice(-30).join('\n')}</pre> : <p className="fx-muted">{running ? 'Starting…' : 'No output kept.'}</p>}
         </Card>

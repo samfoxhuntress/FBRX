@@ -5,6 +5,7 @@ import '@xterm/xterm/css/xterm.css';
 import { Button, Callout, Card, Empty, Page, Status, useToast } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, usePoll } from '../state';
+import { AskAiButton } from '../ask-ai';
 
 interface TerminalState {
   available: boolean;
@@ -154,6 +155,17 @@ function Screen({ state }: { state: TerminalState }) {
         }
         actions={
           <>
+            <AskAiButton
+              what={`the terminal on ${state.hostname} (its last lines)`}
+              question="Here is what is on the server's terminal. Explain what it shows, and if something went wrong, what to run next."
+              details={() => {
+                const b = term.current?.buffer.active;
+                if (!b) return '';
+                const out: string[] = [];
+                for (let i = Math.max(0, b.length - 80); i < b.length; i++) out.push(b.getLine(i)?.translateToString(true) ?? '');
+                return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+              }}
+            />
             <Button size="sm" icon="clipboard" disabled={phase !== 'open'} onClick={() => void paste()} title="Type the text on your clipboard into the shell">
               Paste
             </Button>

@@ -323,6 +323,11 @@ a thumbnail, and **Download** brings a file to the computer you are on; an attac
 gives out only what it made or was given, nothing else on the server. Drawings come as SVG (the server has no window
 to turn them into PNG); pictures from a description need a picture maker, which the server does not run yet.
 
+**Ask the AI**, all over the console, opens a new chat about what you are looking at, with its details already in the
+box: a virtual machine, a warning on the overview, a device in the hardware map, a storage pool, the hardware event
+log, a change of roles that did not finish, the gate and its firewall, and what is on the terminal's screen. Add your
+own question or send it as it is; nothing is sent until you do.
+
 Operators and administrators chat; administrators also delete chats. FBRX Virtual's audit log records who asked and
 how long the question was, never what it said, and of an attached file only its name, type and size.
 

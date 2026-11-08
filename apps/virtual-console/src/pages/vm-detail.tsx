@@ -5,6 +5,7 @@ import { api } from '../api';
 import { useApp, usePoll, useRoute } from '../state';
 import { gb, mb, networkLabel, networkOptions, osName, Pct, PowerButtons, VmStateBadge } from './common';
 import { DescriptionEditor } from './vms';
+import { AskAiButton, describeFor } from '../ask-ai';
 import { keysFor, MAX_PASTE, typeKeys } from '../type-text';
 
 type Tab = 'summary' | 'console' | 'snapshots' | 'placement' | 'settings';
@@ -24,7 +25,16 @@ export function VmDetailPage({ id, tab }: { id: string; tab?: string }) {
         </span>
       }
       description={v.description || `${osName(v.os)} · ${v.cpus} CPU · ${mb(v.memoryMb)} · ${gb(v.diskGb)}`}
-      actions={<PowerButtons vm={v} onDone={() => void vm.reload()} />}
+      actions={
+        <>
+          <AskAiButton
+            what={`the virtual machine ${v.name}`}
+            question={`Look at the virtual machine ${v.name} on this server. Is anything wrong or worth changing (its resources, disks, network, state)? What would you do?`}
+            details={() => describeFor({ ...v, isoName: v.isoName ?? undefined })}
+          />
+          <PowerButtons vm={v} onDone={() => void vm.reload()} />
+        </>
+      }
     >
       {v.restartNeeded && <Callout tone="info">Some changes are saved and take effect when this machine next starts (shut it down and start it, a restart inside it is not enough).</Callout>}
       <Tabs<Tab>

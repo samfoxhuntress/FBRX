@@ -25,6 +25,7 @@ import {
   type StatusTone,
 } from '@fbrx/ui';
 import { coreCall, useCore, type CoreState } from '../core';
+import { takeAiDraft } from '../ask-ai';
 import { useApp, usePoll, useRoute } from '../state';
 
 const TOOL_STATUS: Record<ToolCallRecord['status'], { tone: StatusTone; word: string }> = {
@@ -122,7 +123,8 @@ function Thread({ id, name, onSent }: { id: string | null; name: string; onSent:
   const [fast, setFast] = useState(false);
   const conv = useCore<OpenConversation>(id ? 'ai.conversations.get' : null, fast ? 700 : 5000, { id });
   const approvals = useCore<ApprovalRequest[]>(fast ? 'approvals.list' : null, 1500);
-  const [text, setText] = useState('');
+  // A new chat opened from an "Ask the AI" button starts with what it is about in the box.
+  const [text, setText] = useState(() => (id ? '' : (takeAiDraft() ?? '')));
   const [online, setOnline] = useState(false);
   const files = useAttachments(ATTACHMENTS);
   const picker = useRef<HTMLInputElement>(null);

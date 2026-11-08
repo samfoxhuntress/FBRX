@@ -1,6 +1,7 @@
 import type { GateLease } from '@fbrx/gate';
 import { Button, Callout, Card, Empty, formatBytes, formatNumber, Grid, KeyValue, LineChart, StatTile, Status, Table, timeAgo } from '@fbrx/ui';
 import { useGate } from '../gate-state';
+import { AskAiButton, describeFor } from '../ask-ai';
 import { useApp, useRoute } from '../state';
 import { bitRate, GatePage, zoneWords } from './gate-common';
 
@@ -15,6 +16,28 @@ export function GateDashboardPage() {
       description="FBRX Gate: this server routes and protects your network. Its firewall, networks, addresses, VPN and traffic priority are one configuration you edit, review and commit."
       actions={
         <>
+          {g.info && (
+            <AskAiButton
+              what="FBRX Gate on this server"
+              question="Look at the gate: its internet side, ports, networks and the problems it reports. Is the network healthy? What should I look at or change?"
+              details={() =>
+                describeFor({
+                  mode: g.info!.mode,
+                  committed: !!g.info!.state.running,
+                  changesNotCommitted: g.info!.state.changes.length,
+                  confirmPending: g.info!.state.confirm?.deadline,
+                  internet: g.live?.wan,
+                  ports: g.live?.interfaces.map((i) => `${i.name} ${i.up ? 'up' : 'down'} ${i.addresses.join(' ')}`),
+                  networks: g.info!.state.running?.networks.map((n) => `${n.name} (${n.purpose}) ${n.address} on ${n.interface}, access ${n.access}, DHCP ${n.dhcp.enabled ? 'on' : 'off'}`),
+                  devicesWithAddresses: g.live?.leases.length,
+                  dnsRunning: g.live?.dns.running,
+                  problems: g.live?.problems,
+                  settingsErrors: g.info!.state.errors.map((e) => e.message),
+                  settingsWarnings: g.info!.state.warnings.map((w) => w.message),
+                })
+              }
+            />
+          )}
           <Button icon="network" onClick={() => go('gate-networks')}>
             Networks
           </Button>

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import type { BiosAttribute, BiosSettings, BmcConfig, BmcLogEntry, BmcProbe, BmcSensor, BmcSystem } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, formatDate, Grid, Input, KeyValue, Page, Select, Status, Table, Tabs, Toggle, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { api } from '../api';
+import { AskAiButton, describeFor } from '../ask-ai';
 import { useApp, usePoll, useRoute } from '../state';
 
 type Tab = 'overview' | 'bios' | 'log' | 'connection';
@@ -395,7 +396,16 @@ function BiosRow({ a, edit, admin, onChange }: { a: BiosAttribute; edit: string 
 function EventLog() {
   const logs = usePoll<{ entries: BmcLogEntry[] }>('/v1/bmc/logs', 60000);
   return (
-    <Card title="Hardware event log" subtitle="What the controller recorded: memory and disk errors, power, temperature and fan events." flush>
+    <Card
+      title="Hardware event log"
+      subtitle="What the controller recorded: memory and disk errors, power, temperature and fan events."
+      actions={
+        (logs.data?.entries.length ?? 0) > 0 && (
+          <AskAiButton what="the server's hardware event log (newest first)" question="Read the server's hardware event log below. Is anything failing or about to (memory, disks, power supplies, fans, temperature)? What should I do first?" details={() => (logs.data?.entries ?? []).slice(0, 60).map((e) => describeFor(e as unknown as Record<string, unknown>).replace(/\n/g, ' · ')).join('\n')} />
+        )
+      }
+      flush
+    >
       <Table
         rows={logs.data?.entries ?? []}
         rowKey={(e) => e.id}
