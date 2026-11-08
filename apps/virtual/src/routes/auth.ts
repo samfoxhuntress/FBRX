@@ -83,6 +83,32 @@ export async function authRoutes(app: FastifyInstance, ctx: VirtualContext) {
     return { ok: true };
   });
 
+  // -------------------------------------------------------------------------------- app access
+
+  /** Apps with read-only access (Fabrix on a computer looking at the gate and MiniDome). */
+  app.get('/v1/auth/app-tokens', async (req) => {
+    need(req, 'admin');
+    return { tokens: ctx.auth.listAppTokens() };
+  });
+
+  app.post('/v1/auth/app-tokens', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+    const user = need(req, 'admin');
+    const { name } = z.object({ name: z.string().min(1).max(120) }).parse(req.body);
+    const t = ctx.auth.createAppToken(name, user.username);
+    ctx.audit.record(user.username, 'app-token.create', t.name, 'success', { id: t.id });
+    return t;
+  });
+
+  /** An administrator revokes an app's access, or the app gives its own up. */
+  app.delete<{ Params: { id: string } }>('/v1/auth/app-tokens/:id', async (req) => {
+    const user = need(req, 'viewer');
+    const own = user.id === `app:${req.params.id}`;
+    if (!own) need(req, 'admin');
+    const name = ctx.auth.revokeAppToken(req.params.id);
+    ctx.audit.record(user.username, 'app-token.revoke', name, 'success', { id: req.params.id });
+    return { ok: true };
+  });
+
   app.get('/v1/audit', async (req) => {
     need(req, 'admin');
     const q = z.object({ limit: z.coerce.number().int().min(1).max(1000).default(200), before: z.coerce.number().int().optional() }).parse(req.query);

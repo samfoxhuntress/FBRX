@@ -87,4 +87,18 @@ export const VIRTUAL_MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 3,
+    name: 'app tokens',
+    up: `
+      CREATE TABLE app_tokens (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT
+      );
+    `,
+  },
 ];

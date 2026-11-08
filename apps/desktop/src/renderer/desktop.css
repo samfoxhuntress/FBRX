@@ -7949,3 +7949,7 @@ body.popout .fx-page-header p {
 .kit-input { gap: 8px; margin-bottom: 8px; align-items: center; }
 .kit-admin { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 18px; margin: 10px 0; }
 .kit-undo { margin: 8px 0 0 12px; padding-left: 12px; border-left: 2px solid var(--border); }
+
+/* FBRX Server → a saved server: whether the AI may look at its gate and MiniDome. */
+.srv-fabrix { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); min-height: 30px; }
+.srv-fabrix > span { display: inline-flex; align-items: center; gap: 5px; }

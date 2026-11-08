@@ -32,6 +32,19 @@ export const STARTER_SKILLS: Starter[] = [
     ],
   },
   {
+    id: 'skill_troubleshoot',
+    name: 'Troubleshoot the network',
+    when: 'The person asks to troubleshoot the network, or the internet is down, slow or acting up for every device.',
+    keywords: ['troubleshoot', 'troubleshooting', 'network', 'internet', 'outage', 'gate', 'minidome', 'firewall', 'diagnose'],
+    steps: [
+      'kit.check_the_internet: the router, the internet past it, then names (DNS), in that order. Where it first fails is where to look.',
+      "server.network_check, when an FBRX Server lets you look: FBRX Gate's internet side (link, address, router), a change waiting to be confirmed (it rolls back by itself), DNS and DHCP, problems it found; and MiniDome's sensors and worst open findings.",
+      'When names fail but addresses work: kit.dns_servers, then kit.look_up_a_name on the site in question.',
+      'Only this computer affected: kit.my_ip_address (no address or a 169.254 one means DHCP failed; offer kit.get_a_fresh_address) and, on Wi-Fi, net.wifi_channels.',
+      'Say where it breaks (this computer, the Wi-Fi, the gate, or the internet provider) and the one or two things to do first; any fix asks the person before it runs.',
+    ],
+  },
+  {
     id: 'skill_space',
     name: 'Free up disk space',
     when: 'The disk is full or nearly full, or the person wants space back.',

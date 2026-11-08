@@ -1,8 +1,10 @@
 import net from 'node:net';
-import { newId, type SavedServer, type ServerCheck, type ServerSuggestion } from '@fbrx/shared';
+import { hostname } from 'node:os';
+import { newId, type SavedServer, type ServerCheck, type ServerNetworkReport, type ServerSuggestion } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
-import { formatFingerprint, peerCertificate, sameFingerprint } from '../util/pinned-tls';
+import type { Vault } from '../vault/vault';
+import { formatFingerprint, peerCertificate, pinnedAgent, pinnedFetch, sameFingerprint } from '../util/pinned-tls';
 
 const KEY = 'servers.saved';
 const MAX_SERVERS = 100;
@@ -14,7 +16,14 @@ export interface SavedServersDeps {
   audit: (action: string, details: Record<string, unknown>) => void;
   /** Paired computers on FBRX Mesh that announce server roles. */
   meshServers: () => Array<{ name: string; host: string; roles: string[] }>;
+  /** Where the read-only access a server gives Fabrix is kept. */
+  vault?: Vault;
+  /** Tests: how requests reach a server. */
+  fetch?: (url: string, init: RequestInit, s: SavedServer) => Promise<Response>;
 }
+
+/** The vault entry holding a server's read-only access for Fabrix. */
+const ACCESS = (id: string) => `fbrx.server.${id}`;
 
 type Stored = Omit<SavedServer, 'url'>;
 
@@ -57,7 +66,7 @@ export class SavedServers {
 
   list(): SavedServer[] {
     return this.stored()
-      .map((s) => ({ ...s, url: urlOf(s) }))
+      .map((s) => ({ ...s, fabrix: s.fabrix ?? null, url: urlOf(s) }))
       .sort((a, b) => (b.lastOpenedAt ?? b.createdAt).localeCompare(a.lastOpenedAt ?? a.createdAt));
   }
 
@@ -95,7 +104,10 @@ export class SavedServers {
       notes: (input.notes ?? prev?.notes ?? '').slice(0, 2000),
       createdAt: prev?.createdAt ?? new Date().toISOString(),
       lastOpenedAt: prev?.lastOpenedAt ?? null,
+      // Fabrix's access was given by the server at the old address.
+      fabrix: moved ? null : (prev?.fabrix ?? null),
     };
+    if (moved && prev?.fabrix) this.forgetAccess(prev.id);
     if (!prev && all.length >= MAX_SERVERS) throw new CoreError('CONFLICT', `At most ${MAX_SERVERS} servers can be saved`);
     this.write([next, ...all.filter((s) => s.id !== next.id)]);
     if (!prev) this.d.audit('server.saved', { host, port, scheme });
@@ -106,6 +118,7 @@ export class SavedServers {
     const all = this.stored();
     const s = all.find((x) => x.id === id);
     if (!s) return;
+    if (s.fabrix) void this.disconnectFabrix(id).catch(() => undefined);
     this.write(all.filter((x) => x.id !== id));
     this.d.audit('server.removed', { host: s.host, port: s.port });
   }
@@ -166,6 +179,117 @@ export class SavedServers {
     const port = Number(u.port || 443);
     const s = this.stored().find((x) => x.scheme === 'https' && x.host === host && x.port === port);
     return !!s && sameFingerprint(s.fingerprint, certificateFingerprint(fingerprint));
+  }
+
+  // ------------------------------------------------------------------------------------- Fabrix's access
+
+  /** A request to a server's API, over its trusted certificate (pinned when no authority vouches for it). */
+  private async request<T>(s: SavedServer, method: string, path: string, token: string | null, body?: unknown): Promise<T> {
+    const url = new URL(path, s.url).toString();
+    const init: RequestInit = {
+      method,
+      headers: { ...(token ? { authorization: `Bearer ${token}` } : {}), ...(body !== undefined ? { 'content-type': 'application/json' } : {}) },
+      ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+      signal: AbortSignal.timeout(20_000),
+    };
+    let res: Response;
+    try {
+      if (this.d.fetch) res = await this.d.fetch(url, init, s);
+      else if (s.scheme === 'https' && s.fingerprint) res = await pinnedFetch(url, init, pinnedAgent(s.fingerprint, `${s.name}'s certificate is not the one you trusted. Open it in FBRX Server and check it again.`));
+      else if (s.scheme === 'https') res = await fetch(url, init);
+      else throw new CoreError('INVALID_ARGUMENT', 'Fabrix only signs in over https://');
+    } catch (e) {
+      if (e instanceof CoreError) throw e;
+      throw new CoreError('UNAVAILABLE', reachError(e, s));
+    }
+    const text = await res.text();
+    let json: { error?: { message?: string } } | null = null;
+    try {
+      json = text ? JSON.parse(text) : null;
+    } catch {
+      /* not JSON */
+    }
+    if (!res.ok) {
+      const message = json?.error?.message ?? `${s.name} answered ${res.status}`;
+      throw new CoreError(res.status === 401 ? 'UNAUTHENTICATED' : res.status === 403 ? 'FORBIDDEN' : res.status === 404 ? 'NOT_FOUND' : 'UNAVAILABLE', message);
+    }
+    return json as T;
+  }
+
+  private access(id: string): string | null {
+    if (!this.d.vault?.isUnlocked) return null;
+    return this.d.vault.get(ACCESS(id), { allowInternal: true }) ?? null;
+  }
+
+  private forgetAccess(id: string) {
+    if (this.d.vault?.isUnlocked) this.d.vault.delete(ACCESS(id), { internal: true });
+  }
+
+  private setFabrix(id: string, fabrix: SavedServer['fabrix']) {
+    this.write(this.stored().map((x) => (x.id === id ? { ...x, fabrix } : x)));
+  }
+
+  /**
+   * Lets Fabrix look at a server, to troubleshoot the network: an administrator signs in once, the server gives this
+   * computer read-only access (a viewer that can never change anything), and the sign-in ends. The password is not
+   * kept; the access is, in the vault.
+   */
+  async connectFabrix(id: string, username: string, password: string): Promise<SavedServer> {
+    const s = this.get(id);
+    if (s.scheme !== 'https') throw new CoreError('INVALID_ARGUMENT', 'Fabrix only signs in over https://');
+    if (!this.d.vault) throw new CoreError('UNAVAILABLE', 'There is no vault on this computer to keep the access in');
+    if (!this.d.vault.isUnlocked) throw new CoreError('LOCKED', "Unlock the vault (Credentials) first: Fabrix's access to the server is kept there");
+    const check = await this.check(id);
+    if (!check.ok) throw new CoreError('UNAVAILABLE', check.error ?? `Open ${s.name} once and trust its certificate first`);
+    const login = await this.request<{ token: string }>(s, 'POST', '/v1/auth/login', null, { username, password }).catch((e: CoreError) => {
+      throw e.code === 'UNAUTHENTICATED' ? new CoreError('UNAUTHENTICATED', 'That user name or password is not right') : e;
+    });
+    try {
+      const app = await this.request<{ id: string; name: string; token: string }>(s, 'POST', '/v1/auth/app-tokens', login.token, { name: `Fabrix on ${hostname()}` }).catch((e: CoreError) => {
+        if (e.code === 'FORBIDDEN') throw new CoreError('FORBIDDEN', `Sign in as an administrator of ${s.name}`);
+        if (e.code === 'NOT_FOUND') throw new CoreError('UNAVAILABLE', `Update ${s.name} first: its FBRX Server is older than this`);
+        throw e;
+      });
+      if (s.fabrix) await this.request(s, 'DELETE', `/v1/auth/app-tokens/${s.fabrix.appId}`, this.access(id)).catch(() => undefined);
+      this.d.vault.set({ name: ACCESS(id), value: app.token, kind: 'token', description: `Fabrix's read-only access to ${s.name}` }, { internal: true });
+      this.setFabrix(id, { appId: app.id, name: app.name, connectedAt: new Date().toISOString() });
+      this.d.audit('server.fabrix.connected', { host: s.host, port: s.port, as: username });
+      return this.get(id);
+    } finally {
+      await this.request(s, 'POST', '/v1/auth/logout', login.token).catch(() => undefined);
+    }
+  }
+
+  /** Fabrix stops looking: it gives its access back to the server (when it can) and forgets it. */
+  async disconnectFabrix(id: string): Promise<SavedServer> {
+    const s = this.get(id);
+    const token = this.access(id);
+    if (s.fabrix && token) await this.request(s, 'DELETE', `/v1/auth/app-tokens/${s.fabrix.appId}`, token).catch(() => undefined);
+    this.forgetAccess(id);
+    this.setFabrix(id, null);
+    this.d.audit('server.fabrix.disconnected', { host: s.host, port: s.port });
+    return this.get(id);
+  }
+
+  /** The servers Fabrix may look at. */
+  looking(): SavedServer[] {
+    return this.list().filter((s) => s.fabrix);
+  }
+
+  /** What a server (the one named, or the one Fabrix looks at) sees of the network now: FBRX Gate and MiniDome. */
+  async networkReport(which?: string): Promise<{ server: SavedServer; report: ServerNetworkReport }> {
+    const all = this.looking();
+    const q = which?.trim().toLowerCase();
+    const s = q ? all.find((x) => x.id === which || x.name.toLowerCase() === q || x.host === q) ?? all.find((x) => x.name.toLowerCase().includes(q)) : all[0];
+    if (!s) throw new CoreError('NOT_FOUND', all.length ? `Fabrix does not look at a server called "${which}". It looks at ${all.map((x) => x.name).join(', ')}.` : 'No FBRX Server lets Fabrix look yet: FBRX Server → your server → Let Fabrix look');
+    const token = this.access(s.id);
+    if (!token) throw new CoreError('LOCKED', this.d.vault?.isUnlocked ? `Fabrix's access to ${s.name} is gone: let it look again (FBRX Server → ${s.name})` : `Unlock the vault (Credentials): Fabrix's access to ${s.name} is kept there`);
+    const report = await this.request<ServerNetworkReport>(s, 'GET', '/v1/troubleshoot', token).catch((e: CoreError) => {
+      if (e.code === 'UNAUTHENTICATED') throw new CoreError('UNAUTHENTICATED', `${s.name} no longer lets Fabrix look (its access was revoked there): let it look again`);
+      if (e.code === 'NOT_FOUND') throw new CoreError('UNAVAILABLE', `Update ${s.name}: its FBRX Server is older than this`);
+      throw e;
+    });
+    return { server: s, report };
   }
 
   private stored(): Stored[] {

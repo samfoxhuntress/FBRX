@@ -66,7 +66,8 @@ A skill is how Fabrix does a job of several steps, written down so it does it th
 
 - **Starter skills** come with FBRX: *Slow or dropping Wi-Fi* (the channel planner, then ping and a speed test),
   *Free up disk space* (the storage report and the space hogs, safe things first), *Computer feels slow*, *Security
-  check-up*, *What's on my network* and *Plan my day*.
+  check-up*, *What's on my network*, *Troubleshoot the network* (the internet check, then FBRX Gate and MiniDome on your
+  FBRX Server when it lets Fabrix look: see [SERVER.md](SERVER.md#your-servers-in-fbrx-endpoint)) and *Plan my day*.
 - **Learned skills**: after a job that took three or more tool steps and is likely to come up again, Fabrix saves how
   it did it (`skills.save`). FBRX asks you first, like any change, so a skill is kept only when you approve it.
 - **Your own**: Settings → Skills → **Add a skill**: a name, when to use it and the steps, one per line.

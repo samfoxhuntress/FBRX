@@ -538,6 +538,8 @@ All under `/v1`, with `Authorization: Bearer <token>` from `POST /v1/auth/login`
 | `GET/POST /vms`, `GET/PATCH/DELETE /vms/:id`, `POST /vms/:id/power` | Virtual machines |
 | `GET/POST /vms/:id/snapshots`, `POST …/:name/revert`, `DELETE …/:name` | Snapshots |
 | `POST /vms/:id/console` → ticket, WebSocket `/vms/:id/console/ws?ticket=` | The screen (VNC) |
+| `GET/POST /auth/app-tokens`, `DELETE /auth/app-tokens/:id` | Apps with read-only access (administrators; an app may give its own up) |
+| `GET /troubleshoot` | The network as the server sees it, for troubleshooting: the server's warnings, FBRX Gate and FBRX MiniDome (viewers) |
 | `GET /host/terminal`, `POST /host/terminal` → ticket, WebSocket `/host/terminal/ws?ticket=&cols=&rows=` | The server's shell (administrators): binary frames are the screen both ways, a text frame `{"type":"resize","cols":…,"rows":…}` sets the size |
 | `POST /vms/:id/hostdevs`, `DELETE /vms/:id/hostdevs/:address` | Device passthrough |
 | `GET /storage/pools`, `GET/DELETE /storage/pools/:pool/volumes[/:name]` | Storage |
@@ -572,6 +574,14 @@ window of its own** gives the server a window beside FBRX. Away from home, conne
 shows *FBRX VPN* when the server is reached through your gate, and a server that does not answer offers to connect it.
 When the server is the gate itself, its console, SSH and FBRX Mesh answer VPN devices while the gate's VPN has full
 access (the default). The server has no graphical desktop of its own yet; the console is its screen.
+
+**Let Fabrix look.** On an FBRX Server in *Your servers*, **Let Fabrix look** lets Fabrix check the network through it
+when you ask it to troubleshoot: FBRX Gate (its internet side: link, address and router; your networks, DHCP and DNS;
+a change waiting to be confirmed; problems it found) and FBRX MiniDome (whether its sensors work, and the worst open
+findings). An administrator of the server signs in once. The server then gives this computer read-only access: it can
+look at everything above but never change anything, and it never sees keys or passwords. The password you typed is
+not kept; the access is, in your vault (unlock it if FBRX asks). **Stop** gives the access back. On the server,
+*Users & audit → Apps with access* lists every computer that may look, when each last did, and **Revoke**s any of them.
 
 ## FBRX Server inside FBRX Endpoint (for now)
 

@@ -66,7 +66,7 @@ import { ToolGate } from './governance/tool-gate';
 import { checkUrl } from './governance/network-guard';
 import { LicenseService } from './license/license-service';
 import { ToolRegistry } from './tools/registry';
-import { fbrxTools, folderTools, fsTools, knowledgeTools, memoryTools, netTools, shellTools, skillTools, systemTools, toolkitTools, diskFreeGb } from './tools/builtin';
+import { fbrxTools, folderTools, fsTools, knowledgeTools, memoryTools, netTools, shellTools, serverTools, skillTools, systemTools, toolkitTools, diskFreeGb } from './tools/builtin';
 import { pcTools, workspaceTools } from './tools/builtin/command-center-tools';
 import { WorkspaceStore } from './workspace/workspace-store';
 import { SystemMonitor } from './system/system-monitor';
@@ -899,6 +899,7 @@ export class Kernel {
     });
     this.servers = new SavedServers({
       meta: this.meta,
+      vault: this.vault,
       audit: (action, details) => this.audit.append({ category: 'server', action, actor: 'user', outcome: 'success', details }),
       meshServers: () =>
         this.mesh
@@ -1215,6 +1216,7 @@ export class Kernel {
           ...memoryTools(this.memory),
           ...skillTools(this.skills),
           ...toolkitTools(this.toolkit),
+          ...serverTools(this.servers),
           ...this.toolkit.tools(),
           ...passwordTools({ passwords: this.passwords, offerSave: (d) => this.events.emit('passwords.saveRequested', d) }),
           ...folderTools(this.folders),

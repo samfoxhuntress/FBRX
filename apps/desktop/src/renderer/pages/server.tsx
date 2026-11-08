@@ -4,7 +4,7 @@ import { Button, Callout, Card, Empty, Field, Grid, Icons, InfoTip, Input, Markd
 import { bridge, call } from '../client';
 import { navigate, POPOUT, routeArg } from '../app';
 import { ConnectDialog, ConsoleScreen } from '../consoles';
-import { useConsoleSessions, useCore } from '../hooks';
+import { useAgentName, useConsoleSessions, useCore } from '../hooks';
 
 /** Electron's <webview> (allowed only for server consoles, see main/server-browser.ts). */
 type WebviewElement = HTMLElement & {
@@ -52,8 +52,53 @@ export function ServerPage() {
 /** FBRX Server's console port: a saved server on it opens as a remote desktop (console and command line). */
 const FBRX_SERVER_PORT = 9443;
 
+/**
+ * Lets the AI look at a server to troubleshoot the network: an administrator of the server signs in once and the
+ * server gives this computer read-only access (it can never change anything). The password is not kept.
+ */
+function LetFabrixLook({ server, onClose, onDone }: { server: SavedServer; onClose: () => void; onDone: () => void }) {
+  const agent = useAgentName();
+  const { run, busy } = useAction();
+  const [username, setUsername] = useState('');
+  const [password, setPassword] = useState('');
+  const go = async () => {
+    const r = await run('look', () => call('server.fabrixConnect', { id: server.id, username, password }), `${agent} can look at ${server.name}`);
+    if (r) {
+      onDone();
+      onClose();
+    }
+  };
+  return (
+    <Modal
+      title={`Let ${agent} look at ${server.name}`}
+      description={`When you ask ${agent} to troubleshoot the network, it checks this server's FBRX Gate (its internet side, networks, DNS and DHCP, a change waiting to be confirmed) and FBRX MiniDome (its sensors and findings). It can only look, never change anything.`}
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" loading={busy === 'look'} disabled={!username.trim() || !password} onClick={() => void go()}>
+            Let {agent} look
+          </Button>
+        </>
+      }
+    >
+      <div className="fx-form">
+        <Field label="An administrator of the server" help="The user name and password you sign in to its console with. They are used once and not kept: the server gives FBRX read-only access, kept in your vault. Users & audit on the server shows it, and revokes it.">
+          <Input autoFocus autoComplete="username" placeholder="User name" value={username} onChange={(e) => setUsername(e.target.value)} />
+        </Field>
+        <Input type="password" autoComplete="current-password" placeholder="Password" value={password} onChange={(e) => setPassword(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && username && password && void go()} />
+      </div>
+    </Modal>
+  );
+}
+
 function YourServers({ servers, suggestions, reload }: { servers: SavedServer[] | null; suggestions: ServerSuggestion[]; reload: () => void }) {
   const [editing, setEditing] = useState<SavedServer | 'new' | ServerSuggestion | null>(null);
+  const [letLook, setLetLook] = useState<SavedServer | null>(null);
+  const agent = useAgentName();
+  const { run, busy } = useAction();
   const { confirm, dialog } = useConfirm();
   const toast = useToast();
   const remove = async (s: SavedServer) => {
@@ -103,6 +148,24 @@ function YourServers({ servers, suggestions, reload }: { servers: SavedServer[] 
                     {s.lastOpenedAt ? `Opened ${timeAgo(s.lastOpenedAt)}` : 'Not opened yet'}
                   </div>
                   {s.notes && <div className="saved-notes">{s.notes}</div>}
+                  {s.port === FBRX_SERVER_PORT && s.scheme === 'https' && (
+                    <div className="srv-fabrix">
+                      {s.fabrix ? (
+                        <>
+                          <span title={`As "${s.fabrix.name}" on the server, since ${timeAgo(s.fabrix.connectedAt)}`}>
+                            <Icons.sparkles size={12} /> {agent} can look at its gate and MiniDome
+                          </span>
+                          <Button size="sm" variant="ghost" loading={busy === `off${s.id}`} onClick={() => void run(`off${s.id}`, () => call('server.fabrixDisconnect', { id: s.id }), `${agent} no longer looks at ${s.name}`).then(reload)}>
+                            Stop
+                          </Button>
+                        </>
+                      ) : (
+                        <Button size="sm" variant="ghost" icon="sparkles" onClick={() => setLetLook(s)}>
+                          Let {agent} look
+                        </Button>
+                      )}
+                    </div>
+                  )}
                   <div className="fx-actions">
                     <Button size="sm" variant="primary" icon={s.port === FBRX_SERVER_PORT ? 'monitor' : 'globe'} onClick={() => navigate(`server/open/${encodeURIComponent(s.id)}`)}>
                       {s.port === FBRX_SERVER_PORT ? 'Remote desktop' : 'Open'}
@@ -144,6 +207,7 @@ function YourServers({ servers, suggestions, reload }: { servers: SavedServer[] 
           }}
         />
       )}
+      {letLook && <LetFabrixLook server={letLook} onClose={() => setLetLook(null)} onDone={reload} />}
       {dialog}
     </Card>
   );

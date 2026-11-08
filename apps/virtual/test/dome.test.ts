@@ -117,3 +117,33 @@ describe('FBRX MiniDome on FBRX Server', () => {
     expect((await req('GET', '/v1/auth/me', viewer)).body.roles).toEqual(['gate', 'minidome', 'ai']);
   });
 });
+
+describe('Fabrix on a computer looks at the network through the server', () => {
+  it('gets read-only access from an administrator, sees the gate and MiniDome, and can give its access up', async () => {
+    expect((await req('POST', '/v1/auth/app-tokens', operator, { name: 'Fabrix on sam-laptop' })).status).toBe(403);
+    const t = (await req('POST', '/v1/auth/app-tokens', admin, { name: 'Fabrix on sam-laptop' })).body;
+    expect(t.token).toMatch(/^fbvapp_/);
+    expect((await req('GET', '/v1/auth/app-tokens', admin)).body.tokens).toEqual([expect.objectContaining({ id: t.id, name: 'Fabrix on sam-laptop', createdBy: 'sam' })]);
+    // A viewer: it reads, never changes.
+    expect((await req('GET', '/v1/auth/me', t.token)).body.user).toMatchObject({ username: 'app:Fabrix on sam-laptop', role: 'viewer' });
+    expect((await req('PUT', '/v1/gate/candidate', t.token, { config: {} })).status).toBe(403);
+    expect((await req('GET', '/v1/auth/app-tokens', t.token)).status).toBe(403);
+
+    sensor.emit({ type: 'dns', at: Date.now(), client: '192.168.1.120', name: `again.${DOME_TEST_DOMAIN}`, qtype: 'A' });
+    await wait(30);
+    const r = (await req('GET', '/v1/troubleshoot', t.token)).body;
+    expect(r.server).toMatchObject({ roles: ['gate', 'minidome', 'ai'], warnings: expect.any(Array) });
+    expect(r.gate).toMatchObject({ mode: 'simulated', committed: true, wan: { interface: 'eno1' }, dns: { blocking: expect.any(Boolean) }, problems: expect.any(Array) });
+    expect(r.gate.networks[0]).toMatchObject({ interface: expect.any(String), address: expect.stringMatching(/\/\d+$/), dhcp: true });
+    expect(r.dome).toMatchObject({ mode: 'simulated', sensors: [{ name: 'test', ok: true }] });
+    expect(r.dome.findings[0]).toMatchObject({ severity: 'serious', title: expect.stringContaining('known-bad name'), device: 'sam-phone' });
+    // Nothing secret goes out.
+    expect(JSON.stringify(r)).not.toMatch(/privateKey|password|psk/i);
+
+    // The app gives its own access up; then the token is worthless.
+    expect((await req('DELETE', `/v1/auth/app-tokens/${t.id}`, t.token)).body).toEqual({ ok: true });
+    expect((await req('GET', '/v1/troubleshoot', t.token)).status).toBe(401);
+    const audit = (await req('GET', '/v1/audit', admin)).body.entries.map((e: { action: string }) => e.action);
+    expect(audit).toEqual(expect.arrayContaining(['app-token.create', 'app-token.revoke']));
+  });
+});

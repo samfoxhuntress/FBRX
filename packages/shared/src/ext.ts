@@ -66,6 +66,41 @@ export interface SavedServer {
   notes: string;
   createdAt: string;
   lastOpenedAt: string | null;
+  /** Fabrix may look at it (read-only, to troubleshoot the network): since when, and as which app on the server. */
+  fabrix: { appId: string; name: string; connectedAt: string } | null;
+}
+/** What FBRX Server sees of the network (GET /v1/troubleshoot), for Fabrix to troubleshoot with. */
+export interface ServerNetworkReport {
+  at: string;
+  server: { hostname: string | null; product: string; version: string; roles: string[]; uptimeSeconds: number | null; cpuPct: number | null; memory: { totalMb: number; usedMb: number } | null; warnings: string[] };
+  gate: {
+    mode: string;
+    committed: boolean;
+    uncommittedChanges: number;
+    confirmPending: { deadline: string } | null;
+    lastCommit: { at: string; by: string; comment: string; status: string; error: string | null } | null;
+    errors: string[];
+    warnings: string[];
+    wan: { interface: string; mode: string | null; up: boolean | null; address: string | null; gateway: string | null };
+    networks: Array<{ name: string; purpose: string; interface: string; address: string; dhcp: boolean }>;
+    interfaces: Array<{ name: string; up: boolean; addresses: string[] }>;
+    leases: number | null;
+    dns: { running: boolean | null; blocking: boolean };
+    connections: number | null;
+    vpnPeers: number | null;
+    problems: string[];
+  } | null;
+  dome: {
+    mode: string;
+    learningUntil: string | null;
+    open: Record<string, number>;
+    devices: number;
+    dnsQueries: number;
+    sensors: Array<{ name: string; ok: boolean; detail: string }>;
+    feedUpdatedAt: string | null;
+    feedErrors: string[];
+    findings: Array<{ severity: string; title: string; detail: string; device: string | null; subject: string | null; lastAt: string; count: number }>;
+  } | null;
 }
 /** A paired computer on FBRX Mesh that announces server roles and is not saved yet. */
 export interface ServerSuggestion {
@@ -1405,6 +1440,11 @@ export interface ExtMethods {
   'server.check': (p: { id: string }) => ServerCheck;
   /** Trusts the certificate a saved server presents (compared with `fbrx-server fingerprint` on the server). */
   'server.trust': (p: { id: string; fingerprint: string }) => SavedServer;
+  /** Lets Fabrix look at the server: an administrator signs in once; the server gives FBRX read-only access. */
+  'server.fabrixConnect': (p: { id: string; username: string; password: string }) => SavedServer;
+  'server.fabrixDisconnect': (p: { id: string }) => SavedServer;
+  /** What the server sees of the network now: FBRX Gate and FBRX MiniDome (for troubleshooting). */
+  'server.networkReport': (p: { id?: string }) => ServerNetworkReport;
   'server.opened': (p: { id: string }) => { ok: true };
   /** Prefer Mesh: this computer's mesh networks, their MTU, and whether mesh traffic is marked for priority. */
   'mesh.network.status': () => MeshNetworkStatus;
@@ -1477,6 +1517,8 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'server.remove',
   'server.check',
   'server.trust',
+  'server.fabrixConnect',
+  'server.fabrixDisconnect',
   'server.opened',
   'helpdesk.assist',
   // Who asked what, and stopping or reordering it: for the people who run this computer, not its agent or plugins.

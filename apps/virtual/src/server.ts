@@ -45,6 +45,7 @@ import { timeRoutes } from './routes/time';
 import { readEnv, roleRoutes } from './routes/roles';
 import { commandRoutes, commandRule } from './routes/command';
 import { terminalRoutes } from './routes/terminal';
+import { troubleshootRoutes } from './routes/troubleshoot';
 import { TimeService } from './time/service';
 import { LibvirtTimeDriver, SimulatedTimeDriver, type TimeDriver } from './time/driver';
 import { ConntrackSensor, DevicesSensor, DnsLogSensor, DomeEngine, DomeStore, SimulatedSensor, type DomeSensor } from '@fbrx/dome/node';
@@ -266,6 +267,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   await roleRoutes(app, ctx);
   await commandRoutes(app, ctx);
   await terminalRoutes(app, ctx);
+  await troubleshootRoutes(app, ctx);
 
   if (config.consoleDir && existsSync(join(config.consoleDir, 'index.html'))) {
     await app.register(fastifyStatic, { root: config.consoleDir, index: 'index.html' });
