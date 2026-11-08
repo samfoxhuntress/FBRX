@@ -581,6 +581,10 @@ export class AgentRuntime {
     const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
     let steps = 0;
     let toolCallsUsed = 0;
+    // The same call again (same tool, same input) is a model going round in circles: it is not run again, the model is
+    // shown what it got the first time, and after REPEATS_BEFORE_ANSWER of them it must answer with what it has.
+    const earlier = new Map<string, string>();
+    let repeats = 0;
     let finalAnswer = '';
     const signal = controller.signal;
     // Tool calls whose results are not yet in history; closed out on cancel/failure so history stays well-formed.
@@ -685,7 +689,7 @@ export class AgentRuntime {
         for await (const chunk of provider.chat({
           model,
           messages,
-          tools: toolCallsUsed < policy.ai.maxToolCallsPerRun ? wireTools : [],
+          tools: toolCallsUsed < policy.ai.maxToolCallsPerRun && repeats < REPEATS_BEFORE_ANSWER ? wireTools : [],
           temperature: this.d.settings.get().ai.temperature,
           maxTokens,
           // A model on this computer or the network thinks first only when the Thinking level says so; a cloud AI
@@ -776,6 +780,11 @@ export class AgentRuntime {
           } else if (toolCallsUsed >= policy.ai.maxToolCallsPerRun) {
             output = `Denied: the per-run tool call limit (${policy.ai.maxToolCallsPerRun}) was reached.`;
             update({ status: 'denied', error: output, output });
+          } else if (earlier.has(callKey(spec.name, call.arguments))) {
+            repeats++;
+            const before = earlier.get(callKey(spec.name, call.arguments))!;
+            output = `Not run again: ${spec.name} was already called with this same input in this task, and gave:\n${before.slice(0, 2000)}\nDo not call it again. Answer the person now from what you have, or use a different tool if this one cannot answer the question.`;
+            update({ status: 'denied', error: 'Same call as before', output });
           } else if (this.needsOnline(spec, conversationId) && !(await this.goOnline(spec, call.arguments, runId, conversationId, p, signal, () => update({ status: 'awaiting-approval' })))) {
             output = 'Not run: this chat is offline and the user chose to stay offline. Answer from local knowledge and say what you would look up online.';
             update({ status: 'denied', error: 'Chat is offline', output });
@@ -795,6 +804,8 @@ export class AgentRuntime {
             );
             const flagged = result.findings.some((f) => f.code === 'output-injection');
             output = flagged ? UNTRUSTED_PREFIX + result.output : result.output;
+            // A failure may be passing (a timeout): trying once more is fair. What ran, or was refused, stands.
+            if (result.status !== 'failed') earlier.set(callKey(spec.name, call.arguments), output);
             update({
               status: result.status,
               output: result.output,
@@ -875,6 +886,16 @@ export class AgentRuntime {
 }
 
 /** The same files (by name, kind and size), as a question asked again carries them. */
+/** How many repeated calls a task may make before the model is asked to answer without tools. */
+const REPEATS_BEFORE_ANSWER = 2;
+
+/** One tool call's identity: its tool and its input (keys in any order). */
+function callKey(name: string, input: unknown): string {
+  const canonical = (v: unknown): unknown =>
+    Array.isArray(v) ? v.map(canonical) : v && typeof v === 'object' ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, canonical((v as Record<string, unknown>)[k])])) : v;
+  return `${name} ${JSON.stringify(canonical(input ?? {}))}`;
+}
+
 function sameFiles(a: AttachmentInfo[], b: AttachmentInfo[]): boolean {
   return a.length === b.length && a.every((f, i) => f.name === b[i].name && f.kind === b[i].kind && f.size === b[i].size);
 }

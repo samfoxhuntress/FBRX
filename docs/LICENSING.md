@@ -10,18 +10,22 @@ computers run under.
 The desktop app is **FBRX Endpoint**, in four editions (see COMMAND_CENTER.md for what each shows):
 
 * **FBRX Endpoint Essentials** (free) — where every new computer starts: the AI on its own (the chat, the AI models
-  and Settings, where it works Quick, Everyday or Thorough) and a walkthrough. It joins an organization's FBRX
-  Command for free.
+  and Settings, where it works Quick, Everyday or Thorough), Governance (what the AI may do, and the audit log) and a
+  walkthrough. It joins an organization's FBRX Command for free.
 * **FBRX Endpoint Standard** (`basic` in licenses and the API) — the everyday tools, the AI's work budget part by part
   (steps, answer length, how much it keeps in mind) and unloading the local model when idle. Each computer on its own
   may try it free for 7 days, once (`STANDARD_TRIAL_DAYS`).
 * **FBRX Endpoint Ultra** — expert tool sets (Terminal, FBRX/1, virtual lab, disks and partitions, Defender settings,
   adapters, device consoles, developer tools, the Local API), Mesh and AI coordination, connections, tools and
-  plugins, governance, the theme studio with its gradients and textures, deep space maps with duplicate files and
+  plugins, the theme studio with its gradients and textures, deep space maps with duplicate files and
   what grew, and the Wi-Fi channel planner's history and band-by-band advice.
 * **FBRX Endpoint Black Hole** (`blackhole`) — everything: Ultra plus the whole Library (The Lab and the FBRX command
   library), network environments in Network Center and the FBRX Server page. For the people who run
   an organization's FBRX Command and its FBRX Servers, and only through FBRX Command.
+
+**Governance** comes with every edition: what the AI may do on its own and what it asks first, the folders it may
+use, and the audit log, so whoever uses the computer stays in charge of its AI. (A second AI model reviewing risky
+calls, the guardian model, is part of Black Hole.)
 
 The easter eggs come with every edition, once their secret key unlocks them.
 

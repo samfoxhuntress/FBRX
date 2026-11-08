@@ -432,7 +432,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'shield', label: 'FBRX Shield', icon: 'shield', count: shieldCount || undefined, section: 'Protect' },
     { id: 'approvals', label: 'Approvals', icon: 'check', count: status.pendingApprovals, section: 'Protect' },
     { id: 'vault', label: 'Vault', icon: 'key', section: 'Protect' },
-    { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect', need: 'ultra' },
+    // Every edition sees what its AI may do, and can change it.
+    { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect' },
     { id: 'backup', label: 'Backup & restore', icon: 'archive', section: 'Protect' },
     { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', need: 'ultra' },
     { id: 'lab', label: 'Virtual lab', icon: 'box', section: 'Advanced', need: 'ultra' },
@@ -608,7 +609,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'vault':
         return <VaultPage />;
       case 'governance':
-        return ultra ? <GovernancePage /> : ultraOnly('Governance', 'Policies, the audit log and guardian review for everything the agent does.');
+        return <GovernancePage />;
       case 'runtime':
         return <RuntimePage />;
       case 'ai-usage':
@@ -918,6 +919,7 @@ const ESSENTIALS_NAV: Array<[Route, string, string?]> = [
   ['agent', 'Your AI'],
   ['runtime', 'Your AI', 'AI models'],
   ['ai-usage', 'Your AI', 'AI usage'],
+  ['governance', 'Help & settings'],
   ['helpdesk', 'Help & settings', 'Get help'],
   ['fleet', 'Help & settings'],
   ['settings', 'Help & settings'],

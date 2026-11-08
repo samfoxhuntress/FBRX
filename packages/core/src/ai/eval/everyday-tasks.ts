@@ -23,6 +23,7 @@ export const EVERYDAY_TASKS: EverydayTask[] = [
   { ask: 'Draw a storybook picture of a mouse knight fighting a giant', tools: ['image.compose'], skill: null },
   { ask: 'Is my computer safe? I think I clicked a bad link', tools: ['shield.status', 'net.check_link', 'pc.security_status'], skill: 'Security check-up' },
   { ask: 'Ping 8.8.8.8 and trace the route to it', tools: ['net.ping', 'net.traceroute'], skill: null },
+  { ask: 'What is my IP?', tools: ['net.ip_address'], skill: null },
   { ask: 'What did we decide about the VPN last week? You said something earlier', tools: ['memory.search_chats'], skill: null },
   { ask: 'Save how you did that as a skill for next time', tools: ['skills.save'], skill: null },
 ];

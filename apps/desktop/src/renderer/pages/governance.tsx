@@ -19,6 +19,7 @@ export function GovernancePage() {
 
 function PolicyTab() {
   const eff = useCore('governance.policy', undefined, ['policy.changed']);
+  const { data: license } = useCore('license.status', undefined, ['license.changed']);
   const [draft, setDraft] = useState<Policy | null>(null);
   const { run, busy } = useAction();
   useEffect(() => {
@@ -69,7 +70,12 @@ function PolicyTab() {
         <Card title="AI and approvals">
           <div className="fx-form">
             <Toggle disabled={managed} checked={p.ai.allowCloudProviders} onChange={(v) => upd((x) => (x.ai.allowCloudProviders = v))} label="Allow cloud AI providers" />
-            <Toggle disabled={managed} checked={p.ai.guardianModelReview} onChange={(v) => upd((x) => (x.ai.guardianModelReview = v))} label="Guardian also asks an AI model to review risky calls" />
+            <Toggle
+              disabled={managed || !license?.features.includes('guardian.model')}
+              checked={p.ai.guardianModelReview && !!license?.features.includes('guardian.model')}
+              onChange={(v) => upd((x) => (x.ai.guardianModelReview = v))}
+              label={license?.features.includes('guardian.model') ? 'Guardian also asks an AI model to review risky calls' : 'Guardian also asks an AI model to review risky calls (Black Hole)'}
+            />
             <Toggle disabled={managed} checked={p.data.redactSecrets} onChange={(v) => upd((x) => (x.data.redactSecrets = v))} label="Redact credentials from tool output" />
             <Toggle disabled={managed} checked={p.approvals.allowRemember} onChange={(v) => upd((x) => (x.approvals.allowRemember = v))} label='Allow "Always allow" on approvals' />
             <div className="fx-row">

@@ -761,7 +761,6 @@ const RESOURCE_HELP = {
 function AgentSettings() {
   const { s, locked, patch } = useSettings();
   const [name, setName] = useState<string | null>(null);
-  const ultra = useAtLeast('ultra');
   // Unloading the local model when idle comes with Standard (Thinking, in every edition, is a card of its own).
   const standard = useAtLeast('basic');
   if (!s) return null;
@@ -812,12 +811,12 @@ function AgentSettings() {
       <div style={{ gridColumn: '1 / -1' }}>
         <Creations />
       </div>
-      <Card title={ultra ? 'Models and permissions' : 'AI model'}>
+      <Card title="Models and permissions">
         <div className="fx-form">
-          <p className="fx-muted" style={{ margin: 0 }}>{ultra ? <>Choose which AI model {s.ai.agentName} uses in AI models, and what it may do without asking in Governance.</> : <>Choose which AI model {s.ai.agentName} uses. {s.ai.agentName} always asks before it changes anything on this computer.</>}</p>
+          <p className="fx-muted" style={{ margin: 0 }}>Choose which AI model {s.ai.agentName} uses in AI models, and what it may do without asking in Governance.</p>
           <div className="fx-actions">
             <Button onClick={() => (location.hash = '#/runtime')}>AI models</Button>
-            {ultra && <Button onClick={() => (location.hash = '#/governance')}>Governance</Button>}
+            <Button onClick={() => (location.hash = '#/governance')}>Governance</Button>
           </div>
         </div>
       </Card>

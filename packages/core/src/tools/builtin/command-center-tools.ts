@@ -254,6 +254,32 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       },
     }),
     tool({
+      name: 'net.ip_address',
+      title: 'My IP address',
+      description:
+        "This computer's IP addresses: its address on the local network (and on each network adapter, with the MAC address), the gateway, the DNS servers, and its public address on the internet. The answer to \"what is my IP\".",
+      risk: 'network',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          public: { type: 'boolean', default: true, description: 'Also look up the public (internet) address' },
+          adapters: { type: 'boolean', default: false, description: 'List every network adapter, not just the one in use' },
+        },
+      },
+      async run(i) {
+        const [ctx, pub] = await Promise.all([d.net.context(), i.public === false ? null : d.net.publicIp().catch(() => null)]);
+        const inUse = ctx.interfaces.find((x) => x.ip === ctx.ip);
+        const lines = [
+          `Local IP address: ${ctx.ip ?? 'not connected'}${inUse ? ` (${inUse.name}${inUse.netmask ? `, mask ${inUse.netmask}` : ''})` : ''}`,
+          ...(pub ? [`Public IP address: ${pub.ip ?? 'could not be found'}${pub.isp ? ` (${pub.isp}${pub.location ? `, ${pub.location}` : ''})` : ''}`] : []),
+          `Gateway: ${ctx.gateway ?? 'none'}`,
+          `DNS servers: ${ctx.dns.join(', ') || 'none'}`,
+          ...(i.adapters ? ctx.interfaces.map((x) => `Adapter ${x.name}: ${x.ip}${x.mac ? `, MAC ${x.mac}` : ''}${x.type ? `, ${x.type}` : ''}${x.up ? '' : ' (down)'}`) : []),
+        ];
+        return { output: lines.join('\n'), data: { ...ctx, public: pub } };
+      },
+    }),
+    tool({
       name: 'net.ping',
       title: 'Ping',
       description: 'Check whether a host answers and measure latency, jitter and packet loss.',

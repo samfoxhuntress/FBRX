@@ -23,6 +23,10 @@ describe('a local model reads less, so it answers sooner', () => {
     expect(later.slice(first.length)).toEqual(['shield.scan']);
     // A plugin's tool comes in when its name or title comes up.
     expect(names(shortlistTools(TOOLS, ["what's the weather tomorrow?"]))).toContain('weather.forecast');
+    // "What is my IP?" brings in the network tools, however it is put (and "ship" or "tip" do not).
+    const net = [...TOOLS, tool('net.ip_address')];
+    for (const ask of ['What is my IP?', 'whats my ip', 'my IP address please', 'show ipconfig', 'what is my gateway']) expect(names(shortlistTools(net, [ask]))).toContain('net.ip_address');
+    for (const ask of ['ship it', 'any tips?']) expect(names(shortlistTools(net, [ask]))).not.toContain('net.ip_address');
     expect(briefDescription('Reads a file. Only text files; binary files are refused.')).toBe('Reads a file.');
     expect(briefDescription('x'.repeat(400), 50)).toHaveLength(50);
   });
