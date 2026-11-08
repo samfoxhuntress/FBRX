@@ -208,7 +208,9 @@ across updates) and computers **pin** it:
   connection (the computer reports it rather than trusting the new one).
 * Plain `http://` is accepted only for FBRX Command on the same computer (`localhost`). The console on FBRX Command's
   own computer is on `http://127.0.0.1:<port + 1>`, bound to the loopback interface only.
-* The Windows script FBRX Command generates pins the same fingerprint when it downloads the installer.
+* The Windows script FBRX Command generates pins the same fingerprint when it downloads the installer from FBRX
+  Command. When the current release comes from FBRX's downloads instead (nothing as new uploaded to FBRX Command), it
+  downloads over ordinary HTTPS from there.
 
 ## Network environments (UniFi)
 

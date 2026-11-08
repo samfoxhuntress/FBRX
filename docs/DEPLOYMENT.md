@@ -212,7 +212,9 @@ FBRX Command makes the files: **Deploy & enroll → New enrollment token**, then
 * **Windows script** (`Install-FBRX.ps1`): for Intune, package it with `FBRX-OS-Setup-<version>.exe` as a Win32 app
   (`IntuneWinAppUtil`), install command `powershell.exe -ExecutionPolicy Bypass -NoProfile -File Install-FBRX.ps1`,
   detection rule *file `%ProgramFiles%\FBRX OS\FBRX OS.exe` exists*. It writes
-  `%ProgramData%\FBRX OS\fbrx-provision.json` and installs for all users (`/S /allusers`).
+  `%ProgramData%\FBRX OS\fbrx-provision.json` and installs for all users (`/S /allusers`). Without an installer next
+  to it, it downloads the current FBRX OS: the newest stable release uploaded to FBRX Command, or FBRX's own download
+  when that is newer.
 * Without a device manager the provisioning file works next to the installer, in `/Library/Application Support/FBRX OS`
   (Mac) or `%ProgramData%\FBRX OS` (Windows).
 

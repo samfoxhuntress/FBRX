@@ -24,6 +24,11 @@ interface Created extends Token {
   token: string;
   provisioning: Record<string, unknown>;
 }
+interface PublicRelease {
+  version: string;
+  page: string;
+  files: Array<{ fileName: string; platform: string; url: string; size: number }>;
+}
 interface Release {
   id: string;
   version: string;
@@ -48,7 +53,13 @@ export function EnrollmentPage() {
   const { confirm, dialog } = useConfirm();
   const { run } = useAction();
   const latest = releases.filter((r) => r.published && r.channel === 'stable').sort((a, b) => compareSemver(b.version, a.version))[0];
+  // The current FBRX OS (release.json and its GitHub release): installed instead when nothing as new was uploaded here.
+  const pub = useQuery<{ release: PublicRelease | null }>('/v1/admin/releases/public').data?.release ?? null;
+  const fromGithub = pub && (!latest || compareSemver(pub.version, latest.version) > 0) ? pub : null;
   const latestWin = latest?.files.find((f) => f.platform === 'win32' && f.fileName.endsWith('.exe'))?.fileName ?? null;
+  const winInstaller = (token: string) =>
+    fromGithub ? (fromGithub.files.find((f) => f.platform === 'win32')?.url ?? null) : latestWin ? `${address}/v1/downloads/${latest!.id}/${encodeURIComponent(latestWin)}?et=${token}` : null;
+  const platformName = (p: string) => (p === 'darwin' ? 'macOS' : p === 'win32' ? 'Windows' : 'Linux');
 
   const state = (t: Token) => {
     if (t.revokedAt) return <Status tone="neutral">Revoked</Status>;
@@ -79,14 +90,35 @@ export function EnrollmentPage() {
           )}
         </div>
       </Card>
-      <Card title="Installers" subtitle={latest ? `Latest stable release: ${latest.version}` : 'No stable release has been published yet'}>
-        {latest ? (
+      <Card
+        title="Installers"
+        subtitle={fromGithub ? `FBRX OS ${fromGithub.version}, the current release` : latest ? `Latest stable release: ${latest.version}` : 'No stable release has been published yet'}
+      >
+        {fromGithub ? (
+          <div className="fx-form">
+            <div className="fx-list">
+              {fromGithub.files.map((f) => (
+                <div className="fx-list-item" key={f.fileName} style={{ paddingLeft: 0 }}>
+                  <span className="fx-badge">{platformName(f.platform)}</span>
+                  <a className="mono" style={{ flex: 1 }} href={f.url} target="_blank" rel="noreferrer">
+                    {f.fileName}
+                  </a>
+                </div>
+              ))}
+            </div>
+            <span className="fx-muted" style={{ fontSize: 12.5 }}>
+              {latest
+                ? `The newest release uploaded here (Releases) is ${latest.version}, so computers set up from this page get ${fromGithub.version} from FBRX's downloads instead. Upload ${fromGithub.version} under Releases to serve it from here too (updates come from there).`
+                : `Nothing is uploaded here (Releases), so computers set up from this page get ${fromGithub.version} from FBRX's downloads.`}
+            </span>
+          </div>
+        ) : latest ? (
           <div className="fx-list">
             {latest.files
               .filter((f) => f.kind !== 'blockmap')
               .map((f) => (
                 <div className="fx-list-item" key={f.fileName} style={{ paddingLeft: 0 }}>
-                  <span className="fx-badge">{f.platform === 'darwin' ? 'macOS' : f.platform === 'win32' ? 'Windows' : 'Linux'}</span>
+                  <span className="fx-badge">{platformName(f.platform)}</span>
                   <span className="mono" style={{ flex: 1 }}>{f.fileName}</span>
                   <span className="fx-muted">Download links with a token appear after you create one.</span>
                 </div>
@@ -171,7 +203,7 @@ export function EnrollmentPage() {
                 title="A PowerShell script for Intune (Win32 app) or another Windows device manager"
                 onClick={() =>
                   saveBlob(
-                    new Blob([windowsScript({ organization, label: created.label, serverUrl: String(created.provisioning.serverUrl), enrollmentToken: created.token, audience: created.audience, serverFingerprint: (created.provisioning.serverFingerprint as string | undefined) ?? null, installerUrl: latestWin ? `${address}/v1/downloads/${latest!.id}/${encodeURIComponent(latestWin)}?et=${created.token}` : null })], { type: 'text/plain' }),
+                    new Blob([windowsScript({ organization, label: created.label, serverUrl: String(created.provisioning.serverUrl), enrollmentToken: created.token, audience: created.audience, serverFingerprint: (created.provisioning.serverFingerprint as string | undefined) ?? null, installerUrl: winInstaller(created.token) })], { type: 'text/plain' }),
                     'Install-FBRX.ps1',
                   )
                 }
@@ -188,7 +220,15 @@ export function EnrollmentPage() {
             <Field label="Enrollment token">
               <CopyText value={created.token} secret />
             </Field>
-            {latest && (
+            {fromGithub ? (
+              <Field label={`Installers (FBRX OS ${fromGithub.version})`}>
+                <div className="fx-form" style={{ gap: 8 }}>
+                  {fromGithub.files.map((f) => (
+                    <CopyText key={f.fileName} value={f.url} />
+                  ))}
+                </div>
+              </Field>
+            ) : latest && (
               <Field label="Installer links (valid while the token is active)">
                 <div className="fx-form" style={{ gap: 8 }}>
                   {latest.files

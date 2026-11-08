@@ -16,6 +16,7 @@ import { can } from '../rbac';
 import { storeStream } from '../services/storage';
 import { CP_WEBHOOK_EVENTS } from '../services/webhooks';
 import { inferFileKind } from './updates';
+import { publicRelease } from '../services/public-release';
 import { parseJson } from './util';
 
 const NAME_RE = /^[A-Za-z0-9_.-]{1,128}$/;
@@ -120,6 +121,12 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
         .all<any>('SELECT * FROM releases')
         .sort((a, b) => compareSemver(b.version, a.version))
         .map(releaseView);
+    });
+    // The FBRX OS release anyone can download (release.json and its GitHub release), for Deploy & enroll to offer
+    // when this FBRX Command has nothing newer uploaded.
+    admin.get('/v1/admin/releases/public', async (req) => {
+      requirePerm(req, 'devices.read');
+      return { release: await publicRelease() };
     });
     admin.post('/v1/admin/releases', async (req) => {
       const p = requirePerm(req, 'releases.manage');
