@@ -46,8 +46,8 @@ const api = {
   /** Open or focus the FBRX Browser window (optionally at a URL). */
   openBrowser: (url?: string) => void ipcRenderer.invoke('fbrx:browser', 'open', url),
   /** A URL to open as a new tab in the browser window (a link asked for a new window, or Spotlight sent one). */
-  onBrowserOpen(cb: (url: string) => void): () => void {
-    const h = (_e: unknown, url: string) => cb(url);
+  onBrowserOpen(cb: (url: string, o?: { background?: boolean; priv?: boolean; search?: boolean }) => void): () => void {
+    const h = (_e: unknown, url: string, o?: { background?: boolean; priv?: boolean; search?: boolean }) => cb(url, o);
     ipcRenderer.on('fbrx:browser-open', h);
     return () => ipcRenderer.removeListener('fbrx:browser-open', h);
   },

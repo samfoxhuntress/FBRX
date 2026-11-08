@@ -158,12 +158,19 @@ export function BrowserApp({ agentName }: { agentName: string }) {
     [patchTab],
   );
 
-  // When the window is told to open a URL (a popup became a tab, or Spotlight sent one), open it in a new tab.
+  // When the window is told to open a URL (a popup became a tab, Spotlight sent one, or a page's right-click menu asked:
+  // a link in a tab behind this one, maybe private, or a search for some text), open it in a new tab.
   useEffect(() => {
-    const off = bridge.onBrowserOpen?.((url) => {
-      const t = makeTab({ url, loading: true });
-      setTabs((ts) => [...ts, t]);
-      setActiveId(t.id);
+    const off = bridge.onBrowserOpen?.((raw, o) => {
+      const open = (url: string) => {
+        const t = makeTab({ url, loading: true, ...(o?.priv ? { priv: true } : {}) });
+        setTabs((ts) => [...ts, t]);
+        if (!o?.background) setActiveId(t.id);
+      };
+      if (!o?.search) return open(raw);
+      void call('browser.check', { input: raw })
+        .then((c) => c?.ok && c.url && open(c.url))
+        .catch(() => undefined);
     });
     return off;
   }, []);

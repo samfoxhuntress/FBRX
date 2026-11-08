@@ -13,7 +13,8 @@ Essentials is the AI on its own).
 
 | | |
 | --- | --- |
-| **Tabs** | New tab (Ctrl/⌘+T), close (Ctrl/⌘+W), a private tab (nothing kept once it closes). |
+| **Tabs** | New tab (Ctrl/⌘+T), close (Ctrl/⌘+W), a private tab (nothing kept once it closes). Ctrl/⌘+click or a middle click on a link opens it in a new tab behind this one. |
+| **Right-click** | On a link: *Open link in new tab* (behind this one), *in new private tab*, *in your default browser*, *Copy link address* and *Copy link text*. On a picture: open it in a new tab, save, copy it or its address. On selected text: *Copy* and *Search the web for* it. In a box you type in: spelling suggestions, undo, cut, copy, paste. Anywhere else: back, forward, reload and print. A private tab's links open in private tabs. |
 | **Address bar** | Type a web address, or a search. The search engine is yours to pick (Settings → Browser): DuckDuckGo (the default), Startpage, Google, Bing or Brave. A lock shows a secure (https) connection. |
 | **Fabrix** | The side panel (the ✶ button) asks the **local AI** about the page — *Summarize*, *Key points*, *Explain simply*, or your own question. It reads the page here on the computer; nothing is sent away. A private tab is never read. |
 | **Bookmarks and history** | The tag in the address bar keeps a page; the menu opens Bookmarks and History, each searchable, with a way to clear history. |

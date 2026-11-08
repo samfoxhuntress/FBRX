@@ -1,4 +1,4 @@
-import { app, BrowserWindow, screen, session, shell, type IpcMainInvokeEvent, type Session } from 'electron';
+import { app, BrowserWindow, clipboard, Menu, screen, session, shell, type ContextMenuParams, type IpcMainInvokeEvent, type MenuItemConstructorOptions, type Session, type WebContents } from 'electron';
 import { basename, join } from 'node:path';
 import { existsSync } from 'node:fs';
 import { certificateFingerprint, type Kernel } from '@fbrx/core';
@@ -130,12 +130,86 @@ export function setupWebSessions(deps: BrowserDeps): void {
   // browser. Server consoles (their own session, server-browser.ts) keep their own handling.
   app.on('web-contents-created', (_e, wc) => {
     if (wc.getType() !== 'webview' || !sessions.includes(wc.session)) return;
-    wc.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\//i.test(url)) deps.onPopup(url);
-      else openExternalSafe(url);
+    // Ctrl+click or a middle click opens the link in a tab behind this one; a private tab's links stay private.
+    wc.setWindowOpenHandler(({ url, disposition }) => {
+      if (!/^https?:\/\//i.test(url)) openExternalSafe(url);
+      else if (browserWin && !browserWin.isDestroyed()) openTab(url, { background: disposition === 'background-tab', priv: wc.session === sessions[1] });
+      else deps.onPopup(url);
       return { action: 'deny' };
     });
+    wc.on('context-menu', (_ev, params) => {
+      const menu = Menu.buildFromTemplate(pageMenu(wc, params, wc.session === sessions[1]));
+      if (menu.items.length) menu.popup({ window: browserWin && !browserWin.isDestroyed() ? browserWin : undefined });
+    });
   });
+}
+
+/** Asks the browser window for a new tab: in front, behind the current one, private, or a web search for some text. */
+function openTab(url: string, o: { background?: boolean; priv?: boolean; search?: boolean } = {}): void {
+  if (browserWin && !browserWin.isDestroyed()) browserWin.webContents.send('fbrx:browser-open', url, o);
+}
+
+/**
+ * A web page's right-click menu, as in other browsers: for a link, an image, selected text or a box being typed in,
+ * then back, forward, reload and print. Links open in a new tab behind this one (a private tab's links stay private).
+ */
+export function pageMenu(wc: WebContents, p: ContextMenuParams, priv: boolean): MenuItemConstructorOptions[] {
+  const web = (u: string) => /^https?:\/\//i.test(u);
+  const groups: MenuItemConstructorOptions[][] = [];
+  if (p.linkURL && web(p.linkURL)) {
+    groups.push([
+      { label: 'Open link in new tab', click: () => openTab(p.linkURL, { background: true, priv }) },
+      ...(priv ? [] : [{ label: 'Open link in new private tab', click: () => openTab(p.linkURL, { background: true, priv: true }) }]),
+      { label: 'Open link in your default browser', click: () => void shell.openExternal(p.linkURL) },
+      { label: 'Copy link address', click: () => clipboard.writeText(p.linkURL) },
+      ...(p.linkText ? [{ label: 'Copy link text', click: () => clipboard.writeText(p.linkText) }] : []),
+    ]);
+  }
+  if (p.mediaType === 'image' && p.srcURL) {
+    groups.push([
+      ...(web(p.srcURL) ? [{ label: 'Open image in new tab', click: () => openTab(p.srcURL, { background: true, priv }) }] : []),
+      { label: 'Save image as…', click: () => wc.downloadURL(p.srcURL) },
+      { label: 'Copy image', click: () => wc.copyImageAt(p.x, p.y) },
+      ...(web(p.srcURL) ? [{ label: 'Copy image address', click: () => clipboard.writeText(p.srcURL) }] : []),
+    ]);
+  }
+  if (p.isEditable) {
+    const spelling: MenuItemConstructorOptions[] = p.misspelledWord
+      ? [
+          ...p.dictionarySuggestions.slice(0, 4).map((s) => ({ label: s, click: () => wc.replaceMisspelling(s) })),
+          { label: 'Add to dictionary', click: () => wc.session.addWordToSpellCheckerDictionary(p.misspelledWord) },
+          { type: 'separator' as const },
+        ]
+      : [];
+    groups.push([
+      ...spelling,
+      { label: 'Undo', role: 'undo', enabled: p.editFlags.canUndo },
+      { label: 'Redo', role: 'redo', enabled: p.editFlags.canRedo },
+      { type: 'separator' },
+      { label: 'Cut', role: 'cut', enabled: p.editFlags.canCut },
+      { label: 'Copy', role: 'copy', enabled: p.editFlags.canCopy },
+      { label: 'Paste', role: 'paste', enabled: p.editFlags.canPaste },
+      { label: 'Select all', role: 'selectAll' },
+    ]);
+  } else if (p.selectionText.trim()) {
+    const text = p.selectionText.trim().replace(/\s+/g, ' ');
+    const shown = text.length > 30 ? `${text.slice(0, 29)}…` : text;
+    groups.push([
+      { label: 'Copy', role: 'copy' },
+      { label: `Search the web for “${shown}”`, click: () => openTab(text.slice(0, 500), { search: true, priv }) },
+    ]);
+  }
+  if (!p.linkURL && p.mediaType === 'none' && !p.isEditable && !p.selectionText.trim()) {
+    groups.push([
+      { label: 'Back', enabled: wc.navigationHistory.canGoBack(), click: () => wc.navigationHistory.goBack() },
+      { label: 'Forward', enabled: wc.navigationHistory.canGoForward(), click: () => wc.navigationHistory.goForward() },
+      { label: 'Reload', click: () => wc.reload() },
+      { type: 'separator' },
+      { label: 'Select all', role: 'selectAll' },
+      { label: 'Print…', click: () => wc.print() },
+    ]);
+  }
+  return groups.filter((g) => g.length).flatMap((g, i) => (i ? [{ type: 'separator' as const }, ...g] : g));
 }
 
 /** Opens FBRX Browser in its own window, or brings it forward (optionally to a URL). */

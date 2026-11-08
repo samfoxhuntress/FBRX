@@ -45,7 +45,7 @@ interface Bridge {
   /** Open or focus the FBRX Browser window (Electron only). */
   openBrowser?(url?: string): void;
   /** A URL to open as a new tab in the browser window. */
-  onBrowserOpen?(cb: (url: string) => void): () => void;
+  onBrowserOpen?(cb: (url: string, o?: { background?: boolean; priv?: boolean; search?: boolean }) => void): () => void;
   onBrowserCertificate?(cb: (problem: BrowserCertificateProblem) => void): () => void;
   trustBrowserCertificate?(host: string, fingerprint: string): Promise<boolean>;
   /** The pointer's position (the click-through overlay can't see it), honks and shoos, for the goose. */
