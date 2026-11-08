@@ -107,8 +107,10 @@
 }
 .msg-user {
   align-self: flex-end;
-  background: var(--accent-fill);
-  color: var(--accent-fill-ink);
+  /* Calm and readable: the colour stays with the buttons; what you wrote is a quiet grey bubble. */
+  background: color-mix(in srgb, var(--text-primary) 9%, var(--surface-1));
+  color: var(--text-primary);
+  border: 1px solid var(--border);
   padding: 9px 14px;
   border-radius: 14px 14px 4px 14px;
   max-width: 80%;
