@@ -1,34 +1,31 @@
 {
   "product": "FBRX OS",
   "stage": "Beta",
-  "version": "2.3.1",
+  "version": "2.3.2",
   "codename": "Weft",
   "released": "2026-11-08",
   "importance": "recommended",
-  "summary": "FBRX 2.3.1 Beta (Weft): the AI Toolkit, ready-made actions your AI runs and you can change, Fabrix troubleshooting your network through FBRX Server, and themes and governance in every edition.",
+  "summary": "FBRX 2.3.2 Beta (Weft): your own requests to this computer’s AI go ahead of help for the mesh, and FBRX Server becomes a file server.",
   "notes": [
-    "AI Toolkit (every edition): ready-made actions the AI runs in one step, such as your IP address, network adapters, DNS, a fixed or automatic address, the internet check and disk space. When it works out a new one it offers to keep it, and you can change any action's command; a change that could cut you off puts itself back unless you keep it.",
-    "Troubleshoot the network: let Fabrix look at your FBRX Server (FBRX Server → Let Fabrix look) and it checks FBRX Gate and MiniDome along with this computer. The server gives read-only access, and your password is not kept.",
-    "Every edition: Governance and the themes. A new computer asks whether you want the simple or the full menu, and which look.",
-    "Chats: send more while the AI works and they wait in a queue. The browser opens links in a new tab from the right-click menu, Ctrl+C stops the running command in Terminal, and notes open in a window of their own.",
-    "Editions: Standard includes 2 computers, Ultra 3 and Black Hole 5. An organization's members get their edition from FBRX Command, and support can be started from there in one step.",
-    "Ubuntu: uninstalling FBRX OS is one step (from its entry in your apps, or Settings), and Update now runs the installer for you."
+    "Your requests first: the AI on this computer answers one request at a time, and your own now start before help for other computers on FBRX Mesh (Mesh Assist, a lent model). Help that already started finishes first, and Mesh Assist shows who is waiting. Mesh Assist → This computer’s own requests go first turns it off.",
+    "FBRX Server 1.4.2 (below) adds a file server, FBRX Time backups seen coming online, and Ask the AI from anywhere in its console."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.3.1.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.1",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.3.2.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.2",
   "server": {
-    "version": "1.4.1",
+    "version": "1.4.2",
     "released": "2026-11-08",
-    "summary": "FBRX Server 1.4.1: the server's own terminal in the console, What if? before a gate change, and read-only access for Fabrix to troubleshoot your network.",
+    "summary": "FBRX Server 1.4.2: a file server with backups to a NAS, FBRX Time backups seen coming online, and Ask the AI from anywhere in the console.",
     "notes": [
-      "Server → Terminal: the server's shell in the browser for administrators, with Ctrl+C, Paste and full screen. Every session is in Users & audit and recorded on the server for 30 days.",
-      "FBRX Gate → Changes → What if?: before you commit, see who would gain or lose what, whether you would still reach the console, and which of the last hour's real connections the change would cut off. The server's AI can explain it.",
-      "Fabrix on your computer can look at the gate and MiniDome to troubleshoot the network, with read-only access you give it; Users & audit → Apps with access shows and revokes it.",
-      "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
+      "File server (the files role): share folders from the server itself, or make one of its virtual machines the file server. Accounts of their own, priority for its traffic, and backups to a NAS every night that keep changed and deleted files for as many days as you choose. On a gate, one button adds the firewall rule your networks need.",
+      "FBRX Time: a boot check gives the throwaway machine a private test network that reaches nothing else and sees it come online. When a check fails or warns, the server’s AI says what most likely went wrong.",
+      "Ask the AI: a button on virtual machines, the gate, the firewall, hardware, storage, roles and the terminal opens a chat with the server’s AI about what you are looking at.",
+      "The server’s own people go first on its AI, ahead of work for the mesh.",
+      "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit; sudo fbrx-server roles add files adds the file server."
     ],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.3.1/fbrx-server-1.4.1.tar.gz",
-    "sha256": "39674ce9f3b0d3a925160a62f93460d39ea9219dbc737f252b4af4686b09aec6",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.1"
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.3.2/fbrx-server-1.4.2.tar.gz",
+    "sha256": "5cbb9f030a86af862178a4e39c32ce65d52c82366d0475ee2964a5c6da647b4e",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.2"
   },
   "digger": {
     "version": "1.1.1",
