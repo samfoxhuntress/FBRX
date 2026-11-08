@@ -8,7 +8,7 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 
 ## Look and feel
 
-**Settings → Appearance** is the theme studio in FBRX Endpoint Ultra (Essentials and Standard have the plain light and dark look in FBRX's Tropical honey and red, with the sidebar icon, layout and behavior options below):
+**Settings → Appearance** picks the look, in every edition: the themes and an accent color, with the sidebar icon, layout and behavior options below. Textures, and a color of your own for the sidebar icons, come with FBRX Endpoint Ultra:
 
 | Option | Choices |
 | --- | --- |
@@ -71,11 +71,12 @@ saved goes away), up to what the computer may run. Prices are in US dollars, per
 | --- | --- | --- | --- | --- |
 | Price | Free, and free in an organization | $4.99 after a free 7-day trial, or $3.99 through FBRX Command | $11.99, or $9.59 through FBRX Command | $24.99 per computer, only through FBRX Command |
 | How you get it | Where every new computer starts | Bought on your FBRX account or with a license key, or through your organization's FBRX Command | The same | Only as an add-on in an organization's FBRX Command: for the people who run it and its FBRX Servers |
-| Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, the help desk (in an organization) and Settings. **Home** is the split-flap board and a few notes from FBRX: tips, the AI models, and what Standard and Ultra add (no dashboard) | Everything in Essentials, plus Dash, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Standard | Everything in Ultra, plus the FBRX Server page |
+| Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, Governance, the help desk (in an organization) and Settings. **Home** is the split-flap board and a few notes from FBRX: tips, the AI models, and what Standard and Ultra add (no dashboard) | Everything in Essentials, plus Dash, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Standard | Everything in Ultra, plus the FBRX Server page |
 | How much the AI does on a task | **Thinking**: Quick, Everyday or Thorough (see *Thinking* below), and whether it shows what it is doing | The same, each part on its own (steps per task, longest answer, how much the built-in and Ollama models keep in mind), and unloading the local model when idle | The same, and the temperature | The same |
 | IT and expert tool sets | — | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools and adapters, device consoles, the developer tools in the Toolbox, logs, update channels, the Local API | Everything in Ultra, plus **network environments** (your network controller) in Network Center and the whole Library: **The Lab** and the **FBRX command library** (FBRX/1, FBRX Server and FBRX Gate commands, also in Terminal → FBRX/1), always there |
-| Connect | AI models | AI models | Mesh & phone, FBRX VPN, AI coordination, connections, tools and plugins, governance | The same |
-| Look | Light, dark or follow the computer: plain | The same | The theme studio: eleven themes, accent colors, gradients and textures (with a strength slider) | The same |
+| Connect | AI models | AI models | Mesh & phone, FBRX VPN, AI coordination, connections, tools and plugins | The same |
+| Governance | What the AI may do on its own and what it asks first, the folders it may use, and the audit log | The same | The same | The same, and a second AI model reviewing risky calls |
+| Look | The themes (light, dark or follow the computer) and an accent color | The same | The same, plus textures (with a strength slider) and a sidebar icon color of your own | The same |
 | Fun | Easter eggs, the Silly Goose and the trophy case, once unlocked with the secret key (see EASTER_EGGS.md, spoilers) | The same | The same | The same |
 
 **The walkthrough.** On a new computer, after setup, Essentials dims the window and lights up one page at a time:
@@ -124,10 +125,13 @@ A new computer's first experience is a conversation, not a setup form:
 - **The ready-made installers** (the release's Setup.exe and .dmg, or a shared installer) download the same model
   when FBRX OS first opens; the chat shows the progress ("Getting your AI ready") and a *Try again* button if the
   internet drops.
-- **One screen** then asks only what Fabrix should call you (optional) and opens the chat with **Start chatting**.
-  Moving from another computer (*Restore its backup*) and *Join my organization* are links on the same screen. The
-  rest waits until you want it: a vault recovery passphrase (Credentials), another AI (AI models), the computer's name
-  (Settings).
+- **One screen** then asks what Fabrix should call you (optional), **Simple** or **Advanced**, and the look, and opens
+  the chat with **Start chatting**. *Simple* keeps a short menu: Fabrix, AI models, Governance, help and Settings.
+  *Advanced* shows every page the edition has, in sections; on a computer on its own it starts the free 7-day Standard
+  trial, which is where the everyday tools are. **Settings → General → Menu** changes it later. The look (light, dark
+  or the computer's, and a theme) changes as you pick it. Moving from another computer (*Restore its backup*) and
+  *Join my organization* are links on the same screen. The rest waits until you want it: a vault recovery passphrase
+  (Credentials), another AI (AI models), the computer's name (Settings).
 
 The starter is only ever set up by itself on a new computer where nobody chose an AI: picking another model or AI is
 never overruled, a removed starter is not downloaded again by itself, and a computer set up before this existed is not

@@ -174,16 +174,15 @@ export function resolvedMode(theme: Settings['general']['theme']): 'light' | 'da
 }
 
 /**
- * Applies appearance settings to <html> (presets live in theme.css). Endpoint Essentials and Standard get the plain
- * look: light or dark, no theme colors, gradients or textures (those come with Ultra). `tier` is undefined while the
- * license loads.
+ * Applies appearance settings to <html> (presets live in theme.css). Every edition has the themes and an accent color
+ * of its own; textures and the sidebar's own icon color come with Ultra. `tier` is undefined while the license loads.
  */
 export function useAppearance(settings: Settings | undefined, tier: Tier | undefined) {
   const theme = settings?.general.theme ?? 'dark';
   const basic = !!tier && !atLeast(tier, 'ultra');
-  const a = settings && basic ? { ...settings.appearance, preset: 'graphite' as const, texture: 'none' as const, accent: '' } : settings?.appearance;
+  const a = settings && basic ? { ...settings.appearance, texture: 'none' as const, navIcons: settings.appearance.navIcons === 'custom' ? ('accent' as const) : settings.appearance.navIcons } : settings?.appearance;
   useEffect(() => {
-    // Wait for the license, so Basic never flashes the Ultra look (or the other way round).
+    // Wait for the license, so a texture never flashes on where it is not part of the edition.
     if (!tier) return;
     const root = document.documentElement;
     const apply = () => {

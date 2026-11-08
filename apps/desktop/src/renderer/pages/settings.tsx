@@ -375,6 +375,11 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
           <Field label={<>Theme <Locked show={L('general.theme')} /></>}>
             <Select value={s.general.theme} disabled={L('general.theme')} onChange={(e) => void patch({ general: { theme: e.target.value as Settings['general']['theme'] } })} options={[{ value: 'system', label: 'Match system' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }]} />
           </Field>
+          {tier !== 'essentials' && !learner && (
+            <Field label={<>Menu <Locked show={L('general.mode')} /></>} help="Simple: your AI, Governance, help and Settings. Advanced: every page this edition has, in sections.">
+              <Select value={s.general.mode} disabled={L('general.mode')} onChange={(e) => void patch({ general: { mode: e.target.value as Settings['general']['mode'] } })} options={[{ value: 'simple', label: 'Simple' }, { value: 'advanced', label: 'Advanced' }]} />
+            </Field>
+          )}
           <Toggle checked={s.general.launchAtLogin} disabled={L('general.launchAtLogin')} onChange={(v) => void patch({ general: { launchAtLogin: v } })} label="Start FBRX when I sign in" />
           <Toggle checked={s.general.minimizeToTray} disabled={L('general.minimizeToTray')} onChange={(v) => void patch({ general: { minimizeToTray: v } })} label="Keep running in the tray when the window is closed" />
           {(ultra || enrolled) && <Toggle checked={s.general.telemetry} disabled={L('general.telemetry')} onChange={(v) => void patch({ general: { telemetry: v } })} label="Share health telemetry with my organization's control plane" />}
@@ -499,13 +504,11 @@ function Appearance() {
   );
   return (
     <>
-      <Card title="Theme" subtitle={ultra ? 'Pick a look. Each theme has a light and a dark version.' : 'Light or dark, or follow your computer.'}>
+      <Card title="Theme" subtitle="Pick a look. Each theme has a light and a dark version.">
         <div className="fx-form">
           <Field label={<>Mode <Locked show={L('general.theme')} /></>}>
             {seg(s.general.theme, [{ value: 'system', label: IS_WINDOWS ? 'Match Windows' : 'Match system' }, { value: 'light', label: 'Light' }, { value: 'dark', label: 'Dark' }], (v) => void patch({ general: { theme: v } }), L('general.theme'))}
           </Field>
-          {!ultra && <EditionHint>More themes, accent colors, gradients and textures come with Endpoint Ultra.</EditionHint>}
-          {ultra && <>
           <div className="swatches">
             {PRESETS.map((p) => {
               const [page, side, accent, glow] = mode === 'dark' ? p.dark : p.light;
@@ -532,7 +535,7 @@ function Appearance() {
               {a.accent && <Button size="sm" variant="ghost" onClick={() => void patch({ appearance: { accent: '' } })}>Use theme accent</Button>}
             </div>
           </Field>
-          </>}
+          {!ultra && <EditionHint>Textures, and a color of your own for the sidebar icons, come with Endpoint Ultra.</EditionHint>}
         </div>
       </Card>
       {ultra && <Card title="Texture" subtitle="A woven, grainy or patterned finish on the sidebar, top bar and page. Each theme has its own.">

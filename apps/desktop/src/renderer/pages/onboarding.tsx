@@ -1,18 +1,20 @@
 import { useState } from 'react';
-import type { SnapshotHeader, SystemStatus } from '@fbrx/shared';
+import { STANDARD_TRIAL_DAYS, type Settings, type SnapshotHeader, type SystemStatus } from '@fbrx/shared';
 import { Button, Card, Field, Input, Status, useAction, FbrxMark } from '@fbrx/ui';
 import { call, pickFile } from '../client';
-import { useAgentName, useStarterAi } from '../hooks';
+import { useAgentName, useCore, useStarterAi } from '../hooks';
+import { PRESETS, resolvedMode } from '../theme';
 import { RestoreModal } from './backup';
 import { JoinForm } from '../join';
 import { AccountSignInForm } from '../account';
 
 /**
  * First start: one screen, then the chat. The AI is already getting ready by itself (the starter model, which
- * "Install FBRX OS" usually downloaded before the app even opened), so the only question is an optional name.
- * Everything else waits until someone wants it: a vault recovery passphrase (Vault), another AI (AI models),
- * this computer's name (Settings). Moving from another computer (restore a backup) and joining an organization's
- * FBRX Command are a click away here, and so is signing in to an FBRX account (which brings what it bought).
+ * "Install FBRX OS" usually downloaded before the app even opened), so the questions are light: an optional name,
+ * Simple or Advanced, and the look (each theme shows at once). Everything else waits until someone wants it: a vault
+ * recovery passphrase (Vault), another AI (AI models), this computer's name (Settings). Moving from another computer
+ * (restore a backup) and joining an organization's FBRX Command are a click away here, and so is signing in to an FBRX
+ * account (which brings what it bought).
  */
 export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: () => void }) {
   const agentName = useAgentName();
@@ -21,15 +23,25 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
   const [joining, setJoining] = useState(false);
   const [signingIn, setSigningIn] = useState(false);
   const [restore, setRestore] = useState<{ file: string; header: SnapshotHeader } | null>(null);
+  const [mode, setMode] = useState<Settings['general']['mode']>('simple');
+  const settings = useCore('settings.get', undefined, ['settings.changed']).data?.settings;
   const { run, busy } = useAction();
+  // Advanced is every tool, which on a computer on its own is Standard's: its free trial starts with it, where it may.
+  const essentials = status.license.tier === 'essentials';
+  const trial = essentials && !!status.edition?.trialAvailable;
 
   const finish = () =>
     run('start', async () => {
       const n = name.trim();
-      await call('settings.update', { patch: { general: { onboardingComplete: true }, ...(n ? { profile: { name: n, callMe: '' } } : {}) } });
+      if (mode === 'advanced' && trial) await call('edition.startTrial').catch(() => undefined);
+      await call('settings.update', { patch: { general: { onboardingComplete: true, mode }, ...(n ? { profile: { name: n, callMe: '' } } : {}) } });
       location.hash = '#/agent';
       onDone();
     });
+  // The look changes as it is picked, so it is chosen by seeing it.
+  const look = (patch: { preset?: Settings['appearance']['preset']; theme?: Settings['general']['theme'] }) =>
+    void call('settings.update', { patch: { ...(patch.preset ? { appearance: { preset: patch.preset } } : {}), ...(patch.theme ? { general: { theme: patch.theme } } : {}) } });
+  const shade = resolvedMode(settings?.general.theme ?? 'dark');
 
   const ai =
     !starter || starter.state === 'not-needed' ? null : starter.state === 'ready' ? (
@@ -96,6 +108,50 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
               {ai}
               <Field label={`What should ${agentName} call you?`} help="Optional. You can change it later in Settings.">
                 <Input value={name} maxLength={60} placeholder="Your name" autoFocus onChange={(e) => setName(e.target.value)} />
+              </Field>
+              <Field label="How much should FBRX show?" help="Settings → General → Menu changes it later.">
+                <div className="choice-grid onboard-modes" role="radiogroup">
+                  <button type="button" role="radio" aria-checked={mode === 'simple'} className={`choice${mode === 'simple' ? ' selected' : ''}`} onClick={() => setMode('simple')}>
+                    <strong>Simple</strong>
+                    <span className="fx-secondary">{agentName}, its settings and help. A short menu; everything else stays out of the way.</span>
+                  </button>
+                  <button type="button" role="radio" aria-checked={mode === 'advanced'} className={`choice${mode === 'advanced' ? ' selected' : ''}`} onClick={() => setMode('advanced')}>
+                    <strong>Advanced</strong>
+                    <span className="fx-secondary">
+                      Every tool: files, notes, the network, the terminal and more, in sections.
+                      {essentials && (trial ? ` Starts your free ${STANDARD_TRIAL_DAYS}-day Standard trial.` : ' It comes with Standard.')}
+                    </span>
+                  </button>
+                </div>
+              </Field>
+              <Field label="Pick a look">
+                <div className="onboard-looks">
+                  <div className="seg" role="group" aria-label="Light or dark">
+                    {(['system', 'light', 'dark'] as const).map((t) => (
+                      <button type="button" key={t} className={settings?.general.theme === t ? 'on' : ''} onClick={() => look({ theme: t })}>
+                        {t === 'system' ? 'Match system' : t === 'light' ? 'Light' : 'Dark'}
+                      </button>
+                    ))}
+                  </div>
+                  <div className="swatches onboard-swatches">
+                    {PRESETS.map((p) => {
+                      const [page, side, accent] = shade === 'dark' ? p.dark : p.light;
+                      const on = settings?.appearance.preset === p.id;
+                      return (
+                        <button type="button" key={p.id} className={`swatch${on ? ' selected' : ''}`} aria-pressed={on} onClick={() => look({ preset: p.id })}>
+                          <div className="swatch-preview">
+                            <div style={{ background: side }} />
+                            <div style={{ background: page }}>
+                              <div className="swatch-bar" style={{ background: p.id === 'tropical' ? 'var(--accent-gradient)' : accent, width: '70%' }} />
+                              <div className="swatch-bar" style={{ background: shade === 'dark' ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.14)', width: '90%' }} />
+                            </div>
+                          </div>
+                          <div className="swatch-label">{p.name}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
               </Field>
               <div className="fx-actions" style={{ justifyContent: 'flex-end' }}>
                 <Button type="submit" variant="primary" icon="sparkles" loading={busy === 'start'}>

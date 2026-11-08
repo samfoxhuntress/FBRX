@@ -445,6 +445,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   // Endpoint Essentials: the everyday pages in one short list (no sections to open). Standard: the everyday tools and
   // the agent. Ultra adds the expert ones, Black Hole the FBRX Server page. Student computers keep only LEARNER_PAGES.
   const essentials = tier === 'essentials' && !learner;
+  // The simple menu: Essentials always; any other edition when the person chose it (Settings → General → Menu).
+  const simple = essentials || (!learner && s?.general.mode === 'simple');
   const byId = new Map(all.map((i) => [i.id, i]));
   const nav: NavItem[] = DIGGER
     ? DIGGER_PAGES.flatMap((id) => {
@@ -454,7 +456,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         const { need: _n, ...rest } = item;
         return [{ ...rest, section: 'Digger' }];
       })
-    : essentials
+    : simple
     ? ESSENTIALS_NAV.flatMap(([id, section, label]) => {
         const item = byId.get(id);
         if (!item || (id === 'fleet' && !enrolled)) return [];
@@ -464,7 +466,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     : all
         .filter((i) => (learner ? LEARNER_PAGES.has(i.id) : !i.need || atLeast(tier, i.need)))
         .map(({ need: _n, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
-  const groups: NavGroup[] | undefined = essentials || DIGGER
+  const groups: NavGroup[] | undefined = simple || DIGGER
     ? undefined
     : SECTIONS.map(({ basicHint, learnerHint, ...g }) => ({ ...g, hint: learner && learnerHint ? learnerHint : !ultra && basicHint ? basicHint : g.hint, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
   const ultraOnly = (title: string, what: string) => <UltraOnly title={title} what={what} />;
@@ -530,7 +532,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       return <NetworkPage advanced everything easterEggs={false} />;
     }
     // Essentials Home: the split-flap board and a few notes from FBRX (no dashboard).
-    if (essentials && route === 'home') return <EssentialsHome status={status} agentName={agentName} who={addressAs(s)} />;
+    if (simple && route === 'home') return <EssentialsHome status={status} agentName={agentName} who={addressAs(s)} />;
     if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && !byId.get(route)?.need) {
       return <StandardOnly title={byId.get(route)?.label ?? 'That page'} what={STANDARD_WHAT[route] ?? 'More of the everyday tools.'} />;
     }

@@ -47,15 +47,15 @@
 }
 
 /* ------------------------------------------------------------------------------------ Graphite (blue) */
-/* The design system's neutral page with a blue accent. Essentials and Standard use the same page with FBRX's honey. */
-:root[data-preset='graphite']:not([data-edition='basic']) {
+/* The design system's neutral page with a blue accent. */
+:root[data-preset='graphite'] {
   --accent: #2a78d6;
   --accent-hover: #256abf;
   --accent-ink: #ffffff;
   --accent-wash: rgba(42, 120, 214, 0.1);
   --focus: rgba(42, 120, 214, 0.45);
 }
-:root[data-preset='graphite']:not([data-edition='basic'])[data-theme='dark'] {
+:root[data-preset='graphite'][data-theme='dark'] {
   --accent: #3987e5;
   --accent-hover: #5598e7;
   --accent-ink: #ffffff;
@@ -424,11 +424,11 @@
 
 /* ------------------------------------------------------------------------------------- Accent fill */
 /*
- * Filled things (primary buttons, the current page, switches, progress) wear --accent-fill. Tropical and the plain
- * look of Essentials and Standard keep the design system's honey-to-red; the other themes light their own accent from
- * above, high contrast stays flat, and a custom accent (theme.ts) does the same as the themes.
+ * Filled things (primary buttons, the current page, switches, progress) wear --accent-fill. Tropical keeps the design
+ * system's honey-to-red; the other themes light their own accent from above, high contrast stays flat, and a custom
+ * accent (theme.ts) does the same as the themes.
  */
-:root[data-preset]:not([data-preset='tropical']):not([data-edition='basic']) {
+:root[data-preset]:not([data-preset='tropical']) {
   --accent-from: color-mix(in srgb, var(--accent) 86%, #ffffff);
   --accent-to: var(--accent);
   --accent-fill: linear-gradient(180deg, var(--accent-from) 0%, var(--accent-to) 100%);
@@ -552,8 +552,6 @@
 /* Tropical keeps its pages calm: a breath of honey and red, not a wash. */
 :root[data-preset='tropical'] { --glow-strength: 0.7; }
 :root[data-preset='tropical'][data-theme='light'] { --glow-strength: 0.35; }
-/* Endpoint Basic: plain light and dark, no glows (gradients and textures come with Ultra). */
-:root[data-edition='basic'][data-theme] { --glow-strength: 0; }
 
 :root:not([data-preset='contrast']) .fx-sidebar {
   /* A soft wash of the theme's glow at the top, and only a whisper of texture that fades out behind the menu. */

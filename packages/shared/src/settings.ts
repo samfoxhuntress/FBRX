@@ -108,6 +108,11 @@ export const SettingsSchema = z.object({
     telemetry: z.boolean(),
     /** First-run setup finished (travels with backups so a restored machine skips onboarding). */
     onboardingComplete: z.boolean(),
+    /**
+     * How much the menu shows: simple (the AI, Governance, help and Settings, with the plain Home) or advanced (every
+     * page the edition has, in sections). Chosen on the first screen; Essentials always shows the simple menu.
+     */
+    mode: z.enum(['simple', 'advanced']),
   }),
   ai: z.object({
     defaultProvider: z.string(),
@@ -582,6 +587,7 @@ export const DEFAULT_SETTINGS: Settings = {
     minimizeToTray: true,
     telemetry: true,
     onboardingComplete: false,
+    mode: 'advanced',
   },
   ai: {
     defaultProvider: 'local',
