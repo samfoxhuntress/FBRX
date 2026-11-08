@@ -254,7 +254,8 @@ export const MAX_YEARLY_MONTHS = 12;
 export const DEFAULT_PRICE_BOOK: PriceBook = {
   personal: { basic: EDITION_PLANS.basic.monthly!, ultra: EDITION_PLANS.ultra.monthly! },
   seats: { basic: EDITION_PLANS.basic.tenantMonthly, ultra: EDITION_PLANS.ultra.tenantMonthly, blackhole: EDITION_PLANS.blackhole.tenantMonthly },
-  computers: { included: { basic: 2, ultra: 5, blackhole: 15 }, extra: { basic: 199, ultra: 299, blackhole: 499 } },
+  // Essentials counts no computers at all: it is free on every one.
+  computers: { included: { basic: 2, ultra: 3, blackhole: 5 }, extra: { basic: 199, ultra: 299, blackhole: 499 } },
   volume: [],
   fees: { base: COMMAND_PLAN.monthly, large: null, home: null },
   yearlyMonths: 10,

@@ -69,8 +69,8 @@ looking after a managed computer.
 **The operator's price list** (FBRX Command → **Pricing**) sets:
 
 * Standard and Ultra on their own (set the same in App Store Connect and the Google Play Console, which charge their own);
-* the **computers each edition includes** (2 for Standard, 5 for Ultra, 15 for Black Hole to start) and the price of
-  each **further computer** a month, never discounted (`fbrx_standard_extra_computer_monthly`, `fbrx_ultra_…`,
+* the **computers each edition includes** (2 for Standard, 3 for Ultra, 5 for Black Hole to start; Essentials is
+  free on every computer and counts none) and the price of each **further computer** a month, never discounted (`fbrx_standard_extra_computer_monthly`, `fbrx_ultra_…`,
   `fbrx_blackhole_…`), for a person on their own and in an organization alike. On their own, people add computers to
   a plan bought on the website or in FBRX; the App Store and Google Play sell none;
 * the **organization fee**, never discounted: one for Work and School organizations, and optionally another for larger
@@ -155,7 +155,7 @@ signed with Ed25519. Older apps ignore the optional fields they do not know.
 * **Version cap** — `maxMajorVersion: 2` means the key works for 1.x and 2.x; 3.x needs a renewed key. Useful
   for selling major upgrades.
 * **Seats** — enforced by the control plane at enrollment: when the tenant's active devices reach the seat count,
-  further enrollments are refused until a device is retired or the license is upgraded. `0` = unlimited.
+  further enrollments are refused until a device is retired or the license is upgraded. `0` = seats are not counted.
 * **Fleet** — a tenant whose active license lacks `fleet` (Community, or Pro without the add-on) cannot enroll new
   devices; its keys are meant for offline activation. Tenants with no license at all may enroll devices, which then
   run Community features — handy for trials and internal use.

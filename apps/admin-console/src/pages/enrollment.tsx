@@ -263,7 +263,7 @@ function CreateTokenModal({ groups, snapshots, onClose, onCreated }: { groups: A
         </Field>
         <div className="fx-row">
           <Field label="Max uses">
-            <Input type="number" min={1} value={f.maxUses} onChange={(e) => setF({ ...f, maxUses: e.target.value })} placeholder="Unlimited" />
+            <Input type="number" min={1} value={f.maxUses} onChange={(e) => setF({ ...f, maxUses: e.target.value })} placeholder="No limit" />
           </Field>
           <Field label="Expires in (days)">
             <Input type="number" min={1} value={f.expiresInDays} onChange={(e) => setF({ ...f, expiresInDays: e.target.value })} placeholder="Never" />

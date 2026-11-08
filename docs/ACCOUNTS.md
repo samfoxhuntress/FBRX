@@ -21,8 +21,8 @@ organization in it, running a few days past the period paid for and never more t
 one as the subscription renews and a refund reaches them in time.
 
 **Each computer, up to those the edition covers.** An edition covers as many computers as it includes (2 for Standard,
-5 for Ultra; the operator's price list, LICENSING.md) and the extra ones bought on top. Each computer signed in to the
-account gets a key of its own, carrying its install id, which no other computer accepts. Computers count in the order
+3 for Ultra; the operator's price list, LICENSING.md) and the extra ones bought on top. Essentials counts none: it is
+free on every computer. Each computer signed in to the account gets a key of its own, carrying its install id, which no other computer accepts. Computers count in the order
 they first signed in, so signing in again keeps a computer's place; one past them runs Essentials and says why
 (**Settings → FBRX account**), with **Add a computer** when the plan was bought on the website or in FBRX: it adds the
 edition's extra-computer item (`fbrx_standard_extra_computer_monthly`, `fbrx_ultra_extra_computer_monthly`, or their

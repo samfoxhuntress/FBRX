@@ -72,7 +72,7 @@ export function LicensesPage() {
             { key: 'c', header: 'Customer', render: (l) => (<div><div className="fx-cell-title">{l.customer}</div><div className="fx-cell-sub">{tenants.find((t) => t.id === l.tenantId)?.name ?? l.tenantId}</div></div>) },
             { key: 'p', header: 'Product', render: (l) => (<div><div className="fx-cell-title">{TIER_NAMES[l.tier]}{l.vertical && l.vertical !== 'business' ? <span className="fx-badge accent" style={{ marginLeft: 6 }}>{l.vertical === 'education' ? 'School' : 'Home'}</span> : null}</div>{l.commandUrl && <div className="fx-cell-sub">Joins this tenant</div>}</div>) },
             { key: 'e', header: 'Edition', render: (l) => <span className="fx-badge accent">{l.edition}</span> },
-            { key: 's', header: 'Seats', className: 'num', render: (l) => l.seats || 'unlimited' },
+            { key: 's', header: 'Seats', className: 'num', render: (l) => l.seats || 'not counted' },
             { key: 'st', header: 'Status', render: state },
             { key: 'x', header: 'Expires', render: (l) => (l.expiresAt ? formatDate(l.expiresAt) : 'perpetual') },
             { key: 'i', header: 'Issued', render: (l) => formatDate(l.issuedAt) },
@@ -194,7 +194,7 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
           <Field label="Edition">
             <Select value={f.edition} onChange={(e) => setF({ ...f, edition: e.target.value as Edition })} options={[...EDITIONS]} />
           </Field>
-          <Field label="Seats" help="0 = unlimited">
+          <Field label="Seats" help="0 = not counted">
             <Input type="number" min={0} value={f.seats} onChange={(e) => setF({ ...f, seats: e.target.value })} />
           </Field>
         </div>

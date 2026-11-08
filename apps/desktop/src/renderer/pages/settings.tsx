@@ -1280,7 +1280,7 @@ function License() {
             ['License', <span className="fx-badge accent">{l.edition}</span>],
             ['State', <Status tone={l.state === 'valid' || l.state === 'development' ? 'good' : l.state === 'unlicensed' ? 'neutral' : 'warning'}>{l.state}</Status>],
             ['Licensed to', l.customer ?? '—'],
-            ['Seats', l.seats === 0 ? 'Unlimited' : l.seats ?? '—'],
+            ['Seats', l.seats === 0 ? 'Not counted' : l.seats ?? '—'],
             ['Expires', l.expiresAt ? formatDate(l.expiresAt) : l.state === 'valid' ? 'Never' : '—'],
             ['Source', { managed: 'Your organization (FBRX Command)', local: 'License key on this device', account: 'Your FBRX account', development: 'Development build', support: support?.active ? 'Support mode' : 'Unlocked on this computer', none: '—' }[l.source]],
             ...(l.commandUrl ? [['FBRX Command', <span className="mono">{l.commandUrl}</span>] as [string, ReactNode]] : []),

@@ -36,7 +36,7 @@ const customer = opt('--customer') ?? fail('Usage: npm run license:issue -- --cu
 const edition = (opt('--edition') ?? 'enterprise') as Edition;
 if (!EDITIONS.includes(edition)) fail(`--edition must be one of ${EDITIONS.join(', ')}`);
 const seats = Number(opt('--seats') ?? 0);
-if (!Number.isInteger(seats) || seats < 0) fail('--seats must be a whole number (0 = unlimited)');
+if (!Number.isInteger(seats) || seats < 0) fail('--seats must be a whole number (0 = not counted)');
 const expires = opt('--expires');
 const expiresAt = expires ? new Date(`${expires}T23:59:59Z`) : null;
 if (expiresAt && Number.isNaN(expiresAt.getTime())) fail('--expires must be a date like 2027-12-31');
@@ -81,7 +81,7 @@ const key = signLicense(payload, privateKeyPem!);
 const check = verifyLicense(key, [publicKeyFromPrivate(privateKeyPem!)]);
 if (!check.ok) fail(`Signed key failed verification: ${check.error}`);
 
-console.log(`\n${TIER_NAMES[tierFor(edition, tier)]}${vertical ? ` (${vertical})` : ''} · ${customer} · ${edition} · ${seats || 'unlimited'} seat(s) · ${payload.expiresAt ? `expires ${expires}` : 'perpetual'}`);
+console.log(`\n${TIER_NAMES[tierFor(edition, tier)]}${vertical ? ` (${vertical})` : ''} · ${customer} · ${edition} · ${seats ? `${seats} seat(s)` : 'seats not counted'} · ${payload.expiresAt ? `expires ${expires}` : 'perpetual'}`);
 if (commandUrl) console.log(`Joins the FBRX Command tenant at ${commandUrl}`);
 console.log(`Features: ${featuresFor(payload).join(', ')}\n`);
 console.log(key);

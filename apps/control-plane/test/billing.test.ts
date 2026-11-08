@@ -542,7 +542,7 @@ describe('FBRX accounts and what they buy', () => {
     sub.items.data[0]!.price = { id: 'price_three_ultra', lookup_key: 'fbrx_ultra_monthly' };
     await stripeEvent({ id: 'evt_three_ultra', type: 'customer.subscription.updated', data: { object: sub } });
     expect(sub.items.data.map((i: any) => `${i.price.lookup_key}=${i.quantity}`)).toEqual(['fbrx_ultra_monthly=1', 'fbrx_ultra_extra_computer_monthly=1']);
-    expect(await license(t3)).toMatchObject({ tier: 'ultra', computers: { allowed: 6, included: 5, extra: 1, extraPrice: 299 } });
+    expect(await license(t3)).toMatchObject({ tier: 'ultra', computers: { allowed: 4, included: 3, extra: 1, extraPrice: 299 } });
   });
 
   it('bills organizations from the operator’s price list, and brings Stripe to it', async () => {
@@ -562,8 +562,14 @@ describe('FBRX accounts and what they buy', () => {
     expect((await call('POST', '/v1/admin/pricing', { book: { ...book, volume: [{ from: 5, percentOff: 10 }, { from: 3, percentOff: 20 }] } }, op)).status).toBe(400);
     await ok('POST', '/v1/admin/pricing', { book }, op);
     const plans = await ok('GET', '/v1/plans');
-    // A price list without computers takes the prices in plans.ts for them: 2, 5 and 15 included.
-    expect(plans.prices).toMatchObject({ ...book, computers: { included: { basic: 2, ultra: 5, blackhole: 15 } } });
+    // A price list without computers takes the prices in plans.ts for them: 2, 3 and 5 included.
+    expect(plans.prices).toMatchObject({ ...book, computers: { included: { basic: 2, ultra: 3, blackhole: 5 } } });
+    // One saved with what the editions included before (2, 5 and 15) moves to them too; any other numbers stay.
+    await ok('POST', '/v1/admin/pricing', { book: { ...book, computers: { included: { basic: 2, ultra: 5, blackhole: 15 }, extra: { basic: 199, ultra: 299, blackhole: 499 } } } }, op);
+    expect((await ok('GET', '/v1/plans')).prices.computers.included).toEqual({ basic: 2, ultra: 3, blackhole: 5 });
+    await ok('POST', '/v1/admin/pricing', { book: { ...book, computers: { included: { basic: 1, ultra: 4, blackhole: 9 }, extra: { basic: 199, ultra: 299, blackhole: 499 } } } }, op);
+    expect((await ok('GET', '/v1/plans')).prices.computers.included).toEqual({ basic: 1, ultra: 4, blackhole: 9 });
+    await ok('POST', '/v1/admin/pricing', { book }, op);
     expect([plans.editions.ultra.monthly, plans.editions.ultra.tenantMonthly, plans.command.monthly]).toEqual([2900, 2900, 5000]);
 
     // A Work organization with two Ultra computers: the fee, and both computers 10% off.
@@ -612,8 +618,8 @@ describe('FBRX accounts and what they buy', () => {
     expect(items()).toEqual(['fbrx_command_large_monthly=1', 'fbrx_command_tenant_monthly=0', 'fbrx_ultra_tenant_monthly=2']);
     expect(stripe.subscriptions.get('sub_r').items.data.find((i: any) => i.price.lookup_key === 'fbrx_ultra_tenant_monthly').price.id).toBe(stripe.prices.get('fbrx_ultra_tenant_monthly')!.id);
 
-    // Per person: the owner becomes an Ultra member and joins 7 computers of their own. Their seat covers 5; the other
-    // 2 are extra computers, never discounted.
+    // Per person: the owner becomes an Ultra member and joins 7 computers of their own. Their seat covers 3; the other
+    // 4 are extra computers, never discounted.
     const me = await ok('GET', '/v1/accounts/me', undefined, owner.token);
     await ok('PATCH', `/v1/admin/members/${me.id}`, { tier: 'ultra' }, admin);
     for (const n of [1, 2, 3, 4, 5, 6, 7]) {
@@ -623,14 +629,14 @@ describe('FBRX accounts and what they buy', () => {
     r = await ok('POST', '/v1/admin/billing/sync', {}, admin);
     const line = (item: string, tier: string) => r.plan.bill.lines.find((l: any) => l.item === item && l.tier === tier);
     expect(line('seats', 'ultra')).toMatchObject({ quantity: 3, people: 1, shared: 2, percentOff: 10 });
-    expect(line('extra', 'ultra')).toMatchObject({ quantity: 2, each: 299, percentOff: 0, total: 598 });
-    expect(items()).toEqual(expect.arrayContaining(['fbrx_ultra_tenant_monthly=3', 'fbrx_ultra_extra_computer_monthly=2']));
+    expect(line('extra', 'ultra')).toMatchObject({ quantity: 4, each: 299, percentOff: 0, total: 1196 });
+    expect(items()).toEqual(expect.arrayContaining(['fbrx_ultra_tenant_monthly=3', 'fbrx_ultra_extra_computer_monthly=4']));
     // Leaving one computer: one extra fewer.
     const own = cp.ctx.db.get<{ id: string }>("SELECT id FROM devices WHERE hostname = 'own-7'")!;
     await ok('DELETE', `/v1/admin/devices/${own.id}`, undefined, admin);
     r = await ok('POST', '/v1/admin/billing/sync', {}, admin);
-    expect(line('extra', 'ultra')).toMatchObject({ quantity: 1, total: 299 });
-    expect(items()).toContain('fbrx_ultra_extra_computer_monthly=1');
+    expect(line('extra', 'ultra')).toMatchObject({ quantity: 3, total: 897 });
+    expect(items()).toContain('fbrx_ultra_extra_computer_monthly=3');
 
     // Someone who bought Standard at the old price keeps it: the price lost its lookup key, and is still Standard.
     const old = { id: 'sub_old', customer: 'cus_9', status: 'active', metadata: { fbrx_account: me.id }, items: { data: [{ id: 'si_old', quantity: 1, current_period_end: end, price: { id: 'price_fbrx_standard_monthly', lookup_key: null } }] } };
@@ -642,7 +648,7 @@ describe('FBRX accounts and what they buy', () => {
     r = await ok('POST', '/v1/admin/billing/sync', {}, admin);
     expect(r.plan.bill.percentOff).toBe(0);
     expect(coupon()).toEqual([]);
-    expect(cp.ctx.db.all<{ action: string }>("SELECT action FROM audit_log WHERE action IN ('pricing.book', 'pricing.stripe')")).toHaveLength(3);
+    expect(cp.ctx.db.all<{ action: string }>("SELECT action FROM audit_log WHERE action IN ('pricing.book', 'pricing.stripe')")).toHaveLength(6);
   });
 
   it('lets an organization pay yearly, everything on its plan alike, and move to monthly', async () => {

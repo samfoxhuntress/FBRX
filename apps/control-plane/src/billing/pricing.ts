@@ -53,10 +53,19 @@ export const PriceBookInput = z
   })
   .strict();
 
+/** What each edition included before 2.3.1 (2, 5 and 15): a price list still on them moves to plans.ts's. */
+const FORMER_INCLUDED = { basic: 2, ultra: 5, blackhole: 15 } as const;
+
 /** The price list as the operator set it (the prices in plans.ts until they do). */
 export function priceBook(db: Db): PriceBook {
   const r = PriceBookInput.safeParse(readMeta(db, BOOK_KEY));
-  return r.success ? r.data : structuredClone(DEFAULT_PRICE_BOOK);
+  if (!r.success) return structuredClone(DEFAULT_PRICE_BOOK);
+  const book = r.data;
+  const inc = book.computers.included;
+  if (inc.basic === FORMER_INCLUDED.basic && inc.ultra === FORMER_INCLUDED.ultra && inc.blackhole === FORMER_INCLUDED.blackhole) {
+    book.computers = { ...book.computers, included: { ...DEFAULT_PRICE_BOOK.computers.included } };
+  }
+  return book;
 }
 
 export function setPriceBook(ctx: AppContext, book: PriceBook): PriceBook {
