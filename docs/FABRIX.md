@@ -26,7 +26,14 @@ same rules:
   know (which file, which day, which account), it asks one short question first; otherwise it takes the sensible
   reading, says which, and goes.
 
-Thirteen everyday requests (packages/core/src/ai/eval/everyday-tasks.ts) are checked with every change: each must give
+It never runs the same tool with the same input twice in one task: a repeat gets what the first call gave, and after
+two it answers with what it has.
+
+**Queue the next thing.** While Fabrix works you can keep typing: **Enter** (or **Queue**) puts the message under *Up
+next*, and each one is sent when the answer before it is done, in order. Edit one (back into the box) or remove it
+from the list. **Stop** pauses the rest until you choose *Go on*.
+
+Fourteen everyday requests (packages/core/src/ai/eval/everyday-tasks.ts) are checked with every change: each must give
 even a small model the tools and the skill the job needs.
 
 ## Its room: the context window and the monthly budget

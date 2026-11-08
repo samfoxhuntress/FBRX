@@ -268,6 +268,10 @@ export function AgentPage({ agentName }: { agentName: string }) {
   const [busyChats, setBusyChats] = useState<ReadonlySet<string>>(new Set());
   const [error, setError] = useState<string | null>(null);
   const [input, setInput] = useState('');
+  // Messages typed while the agent works, for the chat they were typed in: each goes when the one before is done.
+  // Stopping the agent pauses them until you send the next one yourself.
+  const [queue, setQueue] = useState<Array<{ id: string; text: string; chat: string | null }>>([]);
+  const [queuePaused, setQueuePaused] = useState(false);
   const composerRef = useRef<HTMLTextAreaElement>(null);
   const slash = useSlashMenu({ value: input, setValue: setInput, inputRef: composerRef, scope: 'chat' });
   // Files and pictures for the next message (the paperclip, dropped on the chat, or pasted).
@@ -472,14 +476,25 @@ export function AgentPage({ agentName }: { agentName: string }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  /** Puts what is in the composer in line, to go when the agent is done with what it is doing in this chat. */
+  const enqueue = () => {
+    const text = input.trim();
+    if (!text) return;
+    setQueue((q) => [...q, { id: `q-${Date.now()}-${q.length}`, text, chat: selected }]);
+    setInput('');
+  };
+
   /** Sends a message: what is in the composer (with what is attached), or a message again with what it had attached. */
   const send = async (text = input, again?: AttachmentInfo[]) => {
     const message = text.trim();
     const pending = filesRef.current;
     const attached = again ?? pending.items.flatMap((i) => (i.info ? [i.info] : []));
+    // While the agent works, what is typed waits its turn (files stay in the composer for a message of their own).
+    if (busyRef.current && !again && message && text === input) return enqueue();
     if ((!message && !attached.length) || busyRef.current || (!again && pending.reading)) return;
     setError(null);
-    setInput('');
+    // A message sent again (or from the queue) leaves what is being typed alone.
+    if (!again) setInput('');
     setSending(true);
     const local: ChatMessage = { id: `local-${Date.now()}`, role: 'user', content: message, createdAt: new Date().toISOString(), ...(attached.length ? { attachments: attached } : {}) };
     setChat((v) => ({ ...v, messages: [...v.messages, local] }));
@@ -490,6 +505,8 @@ export function AgentPage({ agentName }: { agentName: string }) {
       if (/^talk\s+to\s+me,?\s+goose\W*$/i.test(message) && funEnabled(settings.data?.settings, tier)) summonGoose();
       // The chat as it is now, with the agent already at work in it (a new chat gets its id here).
       await openChat(r.conversationId);
+      // Messages queued while a new chat was being made belong to it.
+      if (!selected) setQueue((q) => q.map((x) => (x.chat === null ? { ...x, chat: r.conversationId } : x)));
       if (!selected) {
         const f = filterRef.current;
         if (f !== 'all' && f !== 'none' && !learner) await call('ai.conversations.setProject', { id: r.conversationId, projectId: f }).catch(() => undefined);
@@ -497,7 +514,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
       }
     } catch (err) {
       setChat((v) => ({ ...v, messages: v.messages.filter((x) => x.id !== local.id) }));
-      setInput(message);
+      setInput((cur) => (cur.trim() ? cur : message));
       // What was attached stays attached, to send again.
       if (!again) pending.restore(attached);
       setError((err as Error).message);
@@ -507,6 +524,19 @@ export function AgentPage({ agentName }: { agentName: string }) {
   };
 
   sendRef.current = (t: string) => void send(t);
+  // The agent is done in this chat: the next queued message goes (unless it was stopped).
+  const upNext = queue.filter((q) => q.chat === selected);
+  useEffect(() => {
+    if (!upNext.length && queuePaused) setQueuePaused(false);
+  }, [upNext.length, queuePaused]);
+  useEffect(() => {
+    if (busy || queuePaused) return;
+    const next = queue.find((q) => q.chat === selected);
+    if (!next) return;
+    setQueue((q) => q.filter((x) => x.id !== next.id));
+    void send(next.text, []);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busy, queuePaused, selected, queue]);
   const visible = useMemo(() => chat.messages.filter((m) => m.role === 'user' || m.role === 'assistant'), [chat.messages]);
   // Only the latest version of the agent's plan shows, where it was last updated.
   const lastPlan = useMemo(() => visible.flatMap((m) => m.toolCalls ?? []).filter((c) => c.name === 'plan.update').at(-1)?.id ?? null, [visible]);
@@ -692,6 +722,32 @@ export function AgentPage({ agentName }: { agentName: string }) {
               )}
             </div>
           )}
+          {upNext.length > 0 && (
+            <div className="chat-queue" aria-label="Up next">
+              <div className="chat-queue-head">
+                <Icons.list size={13} /> Up next{queuePaused ? ' (paused when you stopped)' : `, when ${agentName} is done`}
+                {queuePaused && (
+                  <button className="fx-link" onClick={() => setQueuePaused(false)}>
+                    Go on
+                  </button>
+                )}
+              </div>
+              {upNext.map((q, i) => (
+                <div key={q.id} className="chat-queue-item">
+                  <span className="chat-queue-n">{i + 1}</span>
+                  <span className="chat-queue-text" title={q.text}>
+                    {q.text}
+                  </span>
+                  <button title="Edit: put it back in the box" aria-label="Edit" onClick={() => (setQueue((all) => all.filter((x) => x.id !== q.id)), setInput(q.text))}>
+                    <Icons.edit size={13} />
+                  </button>
+                  <button title="Remove" aria-label="Remove" onClick={() => setQueue((all) => all.filter((x) => x.id !== q.id))}>
+                    <Icons.x size={13} />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <AttachmentTray items={files.items} onRemove={files.remove} />
           {blindToImages && (
             <div className="attach-warn">
@@ -706,7 +762,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
               e.preventDefault();
               files.add(e.clipboardData.files);
             }}
-            placeholder={busy ? `${agentName} is working…` : learner ? `Ask ${agentName} a question — Enter to send` : `Ask ${agentName} to do something — Enter to send, Shift+Enter for a new line, / for snippets`}
+            placeholder={busy ? `${agentName} is working… type the next thing, and Enter queues it` : learner ? `Ask ${agentName} a question — Enter to send` : `Ask ${agentName} to do something — Enter to send, Shift+Enter for a new line, / for snippets`}
             onChange={(e) => setInput(e.target.value)}
             onKeyDown={(e) => {
               if (slash.onKeyDown(e)) return;
@@ -804,16 +860,24 @@ export function AgentPage({ agentName }: { agentName: string }) {
                 </button>
               </div>
               {run ? (
-                <Button
-                  icon="stop"
-                  onClick={() => {
-                    stopSpeaking();
-                    stopThinking();
-                    void call('ai.cancel', { runId: run.runId });
-                  }}
-                >
-                  Stop
-                </Button>
+                <>
+                  {input.trim() && (
+                    <Button icon="list" title={`Send it when ${agentName} is done`} onClick={enqueue}>
+                      Queue
+                    </Button>
+                  )}
+                  <Button
+                    icon="stop"
+                    onClick={() => {
+                      stopSpeaking();
+                      stopThinking();
+                      if (upNext.length) setQueuePaused(true);
+                      void call('ai.cancel', { runId: run.runId });
+                    }}
+                  >
+                    Stop
+                  </Button>
+                </>
               ) : (
                 <Button variant="primary" icon="send" disabled={(!input.trim() && !files.ids.length) || files.reading} title={files.reading ? 'Reading the attached files…' : undefined} onClick={() => void send()}>
                   Send
