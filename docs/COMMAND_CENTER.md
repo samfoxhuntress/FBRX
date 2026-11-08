@@ -56,7 +56,7 @@ and its pages slide out beside it. Counts (unread alerts, waiting approvals) sho
 
 ### Version names
 
-FBRX 2.x is the Beta (1.x was the Alpha): versions read **FBRX Endpoint Ultra Beta 2.3.1** (or Essentials, Standard or
+FBRX 2.x is the Beta (1.x was the Alpha): versions read **FBRX Endpoint Ultra Beta 2.3.2** (or Essentials, Standard or
 Black Hole). FBRX is made by **Fox Huntress Labs**, as **Settings → Logs & about** says under the version. Versions also carry a codename from cloth, fiber to fabric, shown in **Settings → Logs & about**: 1.8
 *Spindle*, 1.9 *Bobbin*, 2.0 *Loom*, 2.1 *Warp*, and 2.2 *Weft*, which stays for the rest of 2.x. From now on a
 codename changes only with a major version: 3.0 *Selvedge*, 4.0 *Tapestry*.
