@@ -27,6 +27,11 @@ interface Block {
 }
 
 const SHELL_KEY = 'fbrx.terminal.shell';
+
+/** Ctrl+C alone (not Cmd+C on a Mac, which copies, and not with Shift or Alt). */
+function isInterrupt(e: KeyboardEvent): boolean {
+  return e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c';
+}
 const IS_WIN = bridge.platform === 'win32';
 
 /** Code blocks and inline code in a note: the parts worth pasting into a terminal. */
@@ -332,6 +337,30 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
     setTimeout(() => box.current?.focus(), 0);
   };
   const running = blocks.filter((b) => b.code === undefined);
+  /**
+   * Ctrl+C, as in any terminal: stops the newest command still running (its whole process tree), and shows ^C under
+   * it. Says whether there was one to stop. (With text selected, Ctrl+C copies instead; on a Mac, Cmd+C copies.)
+   */
+  const interrupt = (): boolean => {
+    const last = [...blocks].reverse().find((b) => b.code === undefined && !b.id.startsWith('local-'));
+    if (!last) return false;
+    setBlocks((bs) => bs.map((b) => (b.id === last.id ? { ...b, out: [...b.out, { stream: 'err', text: '^C\n' }] } : b)));
+    void call('terminal.kill', { sessionId: last.id });
+    return true;
+  };
+  const interruptRef = useRef(interrupt);
+  interruptRef.current = interrupt;
+  // Anywhere on the page (the output, a button), not only in the command box.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isInterrupt(e) || e.target === box.current) return;
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed && sel.toString()) return;
+      if (interruptRef.current()) e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const shellName = shell?.name ?? (IS_WIN ? 'PowerShell' : 'shell');
   const examples = useMemo(() => (IS_WIN ? ['Get-ComputerInfo | Select-Object OsName, OsVersion', '? find the 10 biggest files in Downloads'] : ['uname -a']), []);
 
@@ -423,7 +452,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
                   <div className="term-cmd">
                     <span className="term-prompt">❯</span> {b.command}
                     {b.code === undefined ? (
-                      <Button size="sm" variant="ghost" icon="stop" aria-label="Stop" onClick={() => void call('terminal.kill', { sessionId: b.id })} />
+                      <Button size="sm" variant="ghost" icon="stop" aria-label="Stop" title="Stop (Ctrl+C)" onClick={() => void call('terminal.kill', { sessionId: b.id })} />
                     ) : (
                       <>
                         <span className={b.code === 0 ? 'term-ok' : 'term-err'}>{b.code === null ? 'stopped' : `exit ${b.code}`}</span>
@@ -468,6 +497,13 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
                 onChange={(e) => setCmd(e.target.value)}
                 onKeyDown={(e) => {
                   if (slash.onKeyDown(e)) return;
+                  // Ctrl+C with nothing selected in the box: stop the running command, or (none running) drop the line.
+                  if (isInterrupt(e.nativeEvent) && e.currentTarget.selectionStart === e.currentTarget.selectionEnd) {
+                    e.preventDefault();
+                    if (!interrupt()) setCmd('');
+                    setHIdx(-1);
+                    return;
+                  }
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     void exec();
