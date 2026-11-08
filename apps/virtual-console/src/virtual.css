@@ -418,3 +418,4 @@
 .gt-whatif-sum { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); }
 .gt-whatif-sum b { color: var(--text-primary); font-size: 15px; }
 .gt-whatif-h { margin: 16px 0 6px; font-size: 13px; }
+.vt-line { margin: 4px 0 12px; font-size: 13px; }

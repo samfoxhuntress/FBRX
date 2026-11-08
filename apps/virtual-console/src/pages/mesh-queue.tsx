@@ -93,6 +93,13 @@ export function WorkQueue() {
         <StatTile label="Waiting" value={d.waiting.length} foot={d.waiting.length ? `Next: ${requesterLabel(d.waiting[0]!.requester) ?? d.waiting[0]!.peerName}` : 'Nothing waiting'} />
         <StatTile label="Queue" value={d.paused ? 'Paused' : 'Going'} foot={d.paused ? 'Nothing new starts' : 'Requests start as room frees up'} />
       </Grid>
+      {d.model && (
+        <p className="fx-secondary vt-line">
+          {d.model.hostFirst ? 'This server’s own requests go to its AI first.' : 'Requests go to this server’s AI in the order they come.'} Now: {d.model.host.running + d.model.mesh.running ? (d.model.host.running ? 'answering this server' : 'answering for the mesh') : 'free'}
+          {d.model.host.waiting ? ` · ${d.model.host.waiting} of this server’s waiting` : ''}
+          {d.model.mesh.waiting ? ` · ${d.model.mesh.waiting} for the mesh waiting${d.model.hostFirst && d.model.host.waiting ? ' behind them' : ''}` : ''}
+        </p>
+      )}
       {d.paused && (
         <Callout tone="warning" title="The queue is paused">
           What runs goes on; nothing new starts until it goes on again. Computers still add requests, and they wait.

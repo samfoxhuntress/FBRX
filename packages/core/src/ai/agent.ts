@@ -706,6 +706,8 @@ export class AgentRuntime {
           // A model on this computer or the network thinks first only when the Thinking level says so; a cloud AI
           // decides for itself.
           ...(config.cloud ? {} : { reasoning: this.d.settings.get().ai.localThinking }),
+          // Help this computer gives another through Mesh Assist waits while this computer's own requests do.
+          priority: p.origin === 'remote' && p.actor.startsWith('mesh-assist:') ? 'mesh' : 'host',
           signal,
         })) {
           if (chunk.type === 'text') {
@@ -719,7 +721,8 @@ export class AgentRuntime {
             pendingThinking += chunk.delta;
             if (Date.now() - lastFlush >= 66) flush();
           } else if (chunk.type === 'tool_call') calls.push(chunk.call);
-          else if (chunk.type === 'waiting') progress(steps === 1 ? 'model' : 'reading', `Waiting for your other chat: the AI on this computer answers one chat at a time`);
+          else if (chunk.type === 'waiting')
+            progress(steps === 1 ? 'model' : 'reading', chunk.for === 'mesh' ? 'Waiting for an answer this computer is giving another computer to finish: your requests go next' : 'Waiting for your other chat: the AI on this computer answers one chat at a time');
           else if (chunk.type === 'reading') {
             // How far the model has read the request: on a processor a long one takes a while before the first word.
             if (chunk.read < chunk.of && Date.now() - lastReading >= 1000) {

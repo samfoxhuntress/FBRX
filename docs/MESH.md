@@ -102,6 +102,7 @@ right away before one that asks its person, a ready AI, a free slot, a light loa
 | While helping, the agent here may | Look things up | Think and answer only, read-only tools, or anything its policy allows. |
 | Help at the same time / steps per request | 1 / 12 | The rest waits in a queue, highest priority first. |
 | Urgent work from a controller may stop lower-priority help | On | The stopped help is told why. |
+| This computer's own requests go first | On | The AI on this computer answers one request at a time: your own start before help for other computers (Mesh Assist, a lent model). Help that already started finishes first. |
 
 The **Help with AI** permission decides which paired computers may ask at all (on by default between computers, never
 for phones).

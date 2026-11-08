@@ -116,6 +116,11 @@ export interface AssistQueue {
   running: AssistSession[];
   /** Queued in the order they will run, then those waiting for someone here to allow them. */
   waiting: AssistSession[];
+  /**
+   * The line in front of this computer's own AI model: requests from here ("host") and for other computers ("mesh"),
+   * running and waiting, and whether this computer's own go first.
+   */
+  model?: { hostFirst: boolean; host: { running: number; waiting: number }; mesh: { running: number; waiting: number } };
 }
 
 /** One request in the log a computer keeps of the help it gave (and asked for), by computer and by person. */

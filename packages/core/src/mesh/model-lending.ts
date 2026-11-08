@@ -169,6 +169,8 @@ export class ModelLender {
         maxTokens: p.maxTokens,
         reasoning: this.d.reasoning(),
         signal: job.controller.signal,
+        // Another computer's work: this computer's own requests go first.
+        priority: 'mesh',
       };
       for await (const chunk of own.provider.chat(req)) {
         if (job.done) return;

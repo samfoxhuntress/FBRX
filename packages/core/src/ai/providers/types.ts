@@ -44,6 +44,11 @@ export interface ChatRequest {
    */
   reasoning?: boolean;
   signal: AbortSignal;
+  /**
+   * Whose request it is, for this computer's own model: this computer's ("host", the default) or work for another
+   * computer on FBRX Mesh ("mesh"), which waits while this computer's own requests do (model-line.ts).
+   */
+  priority?: 'host' | 'mesh';
 }
 
 export type FinishReason = 'stop' | 'tool_calls' | 'length' | 'refusal' | 'error';
@@ -57,7 +62,8 @@ export type ProviderChunk =
   /** How far the model has read the request before it answers (tokens), from runtimes that tell (llama.cpp). */
   | { type: 'reading'; read: number; of: number }
   /** The model is answering another chat first (the AI on this computer answers one at a time). */
-  | { type: 'waiting' }
+  /** The model is busy with another request; `for` says whose: another chat here, or work for another computer. */
+  | { type: 'waiting'; for?: 'chat' | 'mesh' }
   | { type: 'done'; finishReason: FinishReason; providerData?: ProviderData; servedModel?: string; message?: string };
 
 export interface ChatProvider {

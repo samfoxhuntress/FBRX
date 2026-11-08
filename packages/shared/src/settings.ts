@@ -401,6 +401,11 @@ export const SettingsSchema = z.object({
       priority: z.enum(ASSIST_PRIORITIES),
       /** An urgent request from a controller may stop lower-priority help running here. */
       allowPreempt: z.boolean(),
+      /**
+       * This computer's own requests go to its AI model before work done for other computers (Mesh Assist, a lent
+       * model): an FBRX Server's people never wait behind the mesh.
+       */
+      hostFirst: z.boolean(),
       /** Roles this computer announces (servers: ai, virtual, command, …). */
       roles: z.array(z.string().regex(/^[a-z][a-z0-9-]{0,31}$/)).max(16),
       /**
@@ -712,6 +717,7 @@ export const DEFAULT_SETTINGS: Settings = {
       maxSteps: 12,
       priority: 'normal',
       allowPreempt: true,
+      hostFirst: true,
       roles: [],
       controller: false,
     },

@@ -44,6 +44,8 @@ export interface RunHandle {
 
 export interface AssistDeps {
   settings: () => AssistSettings;
+  /** The line in front of this computer's own model (this computer's requests first), for the queue view. */
+  modelLine?: () => NonNullable<AssistQueue['model']>;
   meshRunning: () => boolean;
   agentName: () => string;
   devices: () => MeshDevice[];
@@ -647,6 +649,7 @@ export class MeshAssist {
       capacity: this.d.settings().maxConcurrent,
       running: inbound.filter((x) => x.status === 'running').sort(byAge).map((x) => this.view(x)),
       waiting: [...this.line(), ...inbound.filter((x) => x.status === 'waiting-approval').sort(byAge)].map((x) => this.view(x)),
+      ...(this.d.modelLine ? { model: this.d.modelLine() } : {}),
     };
   }
 

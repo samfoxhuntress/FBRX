@@ -213,6 +213,7 @@ function Assist() {
               </Field>
             </Grid>
             <Toggle disabled={!admin} checked={a.allowPreempt} onChange={(v) => set({ allowPreempt: v })} label="Urgent work from a controller may stop lower-priority help" />
+            <Toggle disabled={!admin} checked={a.hostFirst} onChange={(v) => set({ hostFirst: v })} label="This server’s own requests go first (its console, its people), before help for the mesh" />
           </fieldset>
         </Grid>
         <div className="vt-controller">

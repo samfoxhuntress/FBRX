@@ -1,4 +1,5 @@
 import { DIGGER_AI_PROVIDER, type CloudAiUsage, type LentModel, type ModelInfo, type ProviderConfig, type ProviderStatus } from '@fbrx/shared';
+import type { ModelLine } from './model-line';
 import { CoreError } from '../errors';
 import type { SettingsService } from '../settings/settings-service';
 import type { Vault } from '../vault/vault';
@@ -23,6 +24,8 @@ export class ProviderManager {
       policy: PolicyEngine;
       license: LicenseService;
       runtime: LocalRuntime;
+      /** The line in front of the built-in model (this computer's own requests first). */
+      line?: ModelLine;
       /** FBRX Mesh, for another computer's AI: a sealed request to it, and its name. */
       mesh?: { call: <T>(peerId: string, method: string, params: unknown, timeoutMs?: number) => Promise<T>; name: (peerId: string) => string | null };
       /** FBRX Cloud AI, through the signed-in FBRX account: where it is, and the account's month there. */
@@ -75,6 +78,7 @@ export class ProviderManager {
     switch (cfg.type) {
       case 'local-runtime': {
         const rt = this.d.runtime;
+        const line = this.d.line;
         const ctx = rt.contextTokens();
         const inner = new OpenAICompatibleProvider({
           id: cfg.id,
@@ -94,13 +98,23 @@ export class ProviderManager {
           listModels: (signal) => inner.listModels(signal),
           health: (signal) => inner.health(signal),
           async *chat(req: ChatRequest): AsyncIterable<ProviderChunk> {
-            // One chat at a time on this computer: the other one answers first.
-            if (rt.busy) yield { type: 'waiting' };
-            await rt.acquire();
+            // One request at a time on this computer: the others wait their turn, this computer's own first.
+            const st = line?.status();
+            const kind = req.priority ?? 'host';
+            const ahead = st ? st.host.waiting + (kind === 'mesh' || !st.hostFirst ? st.mesh.waiting : 0) : 0;
+            if (st ? st.host.running + st.mesh.running >= st.capacity || ahead > 0 : rt.busy) {
+              yield { type: 'waiting', for: st && st.mesh.running > 0 && st.host.running === 0 ? 'mesh' : 'chat' };
+            }
+            const done = line ? await line.acquire(kind, req.signal) : () => undefined;
             try {
-              yield* inner.chat(req);
+              await rt.acquire();
+              try {
+                yield* inner.chat(req);
+              } finally {
+                rt.release();
+              }
             } finally {
-              rt.release();
+              done();
             }
           },
         };

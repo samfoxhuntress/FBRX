@@ -55,6 +55,7 @@ import { KnowledgeBase } from './knowledge/knowledge-base';
 import { MemoryService } from './ai/memory';
 import { SkillStore } from './ai/skills';
 import { TOOLKIT_SOURCE_ID, ToolkitStore } from './ai/toolkit';
+import { ModelLine } from './ai/model-line';
 import { runDoctor, type DoctorFinding } from './knowledge/doctor';
 import { fbrx1Commands } from './cli/fbrx1';
 import { expandPathVars } from './governance/path-guard';
@@ -217,6 +218,8 @@ export class Kernel {
   readonly skills: SkillStore;
   /** The AI Toolkit: FBRX's library of actions, the ones Fabrix built (approved) and the person's own. */
   readonly toolkit: ToolkitStore;
+  /** The line in front of the built-in model: this computer's own requests first (mesh.assist.hostFirst). */
+  readonly modelLine: ModelLine;
   readonly redactor = new Redactor();
   readonly limiter: RateLimiter;
   readonly license: LicenseService;
@@ -407,12 +410,15 @@ export class Kernel {
       // Models go in the data folder, which is there from the first start (the models folder may not be yet).
       diskFree: async () => ((await diskFreeGb(this.paths.root)) ?? 0) * 1024 ** 3,
     });
+    // This computer's own requests go to its built-in model before work for other computers on FBRX Mesh.
+    this.modelLine = new ModelLine({ capacity: () => 1, hostFirst: () => this.settings.get().mesh.assist.hostFirst });
     this.providers = new ProviderManager({
       settings: this.settings,
       vault: this.vault,
       policy: this.policy,
       license: this.license,
       runtime: this.runtime,
+      line: this.modelLine,
       mesh: {
         call: (peerId, method, params, timeoutMs) => this.mesh.call(peerId, method, params, timeoutMs),
         name: (peerId) => this.mesh.devices().find((d) => d.id === peerId)?.name ?? null,
@@ -920,6 +926,10 @@ export class Kernel {
     this.assistLog.interrupted();
     this.assist = new MeshAssist({
       settings: () => this.settings.get().mesh.assist,
+      modelLine: () => {
+        const { capacity: _c, ...st } = this.modelLine.status();
+        return st;
+      },
       meshRunning: () => this.mesh.running,
       agentName: () => this.settings.get().ai.agentName,
       devices: () => this.mesh.devices(),

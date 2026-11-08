@@ -111,6 +111,7 @@ export function MeshAssistCard({ devices, running }: { devices: MeshDevice[]; ru
               </Field>
             </Grid>
             <Toggle checked={a.allowPreempt} onChange={(v) => set({ allowPreempt: v })} label="Urgent work may stop less important help" info="A controller’s urgent work goes first: help in progress for others is stopped and they are told." />
+            <Toggle checked={a.hostFirst} onChange={(v) => set({ hostFirst: v })} label="This computer’s own requests go first" info="The AI on this computer answers one request at a time. With this on, your own requests start before help for other computers (Mesh Assist, a lent model); help that already started finishes first." />
           </div>
         </Grid>
       </More>

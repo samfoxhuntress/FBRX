@@ -194,7 +194,9 @@ before anything risky, like on any FBRX computer. It listens for FBRX Mesh on po
   unreachable, the agent consulting another), whether it lends its own (never, ask an operator here first, or
   automatically), what its agent may do while helping, how much help at once and at what priority. **This server is a
   controller** makes its requests run without asking on computers that gave it the Controller permission (urgent ones
-  may stop lower-priority help there). *Who can help?* lists the paired computers with their AI, load and roles;
+  may stop lower-priority help there). **This server's own requests go first** (on by default): its console's chats,
+  MiniDome's and What If's explanations, its automations start on its AI before help for the mesh, and the work queue
+  shows who the AI is answering and who waits. *Who can help?* lists the paired computers with their AI, load and roles;
   *Hand out work* sends a task to the best helper, every computer, or one; requests waiting for a yes, and all help
   asked and given (with the answers and follow-up questions), are on the same tab. See [MESH.md](MESH.md).
 * **Work queue:** the requests of every computer that asks this server's AI, as they run and wait their turn, with the
