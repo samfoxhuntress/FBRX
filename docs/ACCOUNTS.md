@@ -178,8 +178,8 @@ the account's email and password, and are a member on Essentials. Nothing is cha
 * While the plan runs, FBRX Command holds one license for the organization that allows everything; each computer runs
   what it was given, and **Essentials when nobody gave it anything**. Without the plan (not started, or ended), every
   computer runs Essentials.
-* **Members** gives editions to people (above); **FBRX Server is coming** shows on Billing and the Overview: a
-  one-time $100 purchase, not on sale yet, whose installer will stay on the FBRX Command or the account for good.
+* **Members** gives editions to people (above); **FBRX Server is coming** shows on Billing and the Overview: not on
+  sale yet.
 
 Organizations the operator sets up by hand (Tenants, `billing = manual`) keep working as before, with the licenses
 the operator issues. The operator sees every account under **FBRX accounts**.

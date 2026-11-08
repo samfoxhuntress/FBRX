@@ -56,7 +56,7 @@ Stripe follow.
 | **Black Hole** | — | $24.99 per computer (full price, an add-on) | `fbrx_blackhole_tenant_monthly` |
 | **FBRX Command tenant** | — | $54.99 | `fbrx_command_tenant_monthly` |
 | **MDM add-on** (not sold yet) | — | $4 per managed computer, whatever its edition (Essentials included); the operator sets it | `fbrx_mdm_tenant_monthly` |
-| **FBRX Server** (coming soon) | $100 once: the installer ISO stays on the account or tenant | The same | `fbrx_server_iso` |
+| **FBRX Server** (coming soon) | Free while in beta; not on sale yet | The same | `fbrx_server_iso` |
 
 **The MDM add-on** (device management: patching, remote help, device security) is one price per managed computer a
 month, the same whatever edition the computer runs. FBRX Command's operator sets that price and puts it on sale

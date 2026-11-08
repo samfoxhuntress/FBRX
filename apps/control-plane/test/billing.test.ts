@@ -235,7 +235,7 @@ describe('FBRX accounts and what they buy', () => {
 
   it('publishes the price list and the ways to pay', async () => {
     const plans = await ok('GET', '/v1/plans');
-    expect(plans).toMatchObject({ publicSignup: true, payments: { stripe: true, apple: true, google: true }, command: { monthly: 5499 }, server: { available: false, price: 10000 } });
+    expect(plans).toMatchObject({ publicSignup: true, payments: { stripe: true, apple: true, google: true }, command: { monthly: 5499 }, server: { available: false } });
     expect(plans.editions.ultra).toMatchObject({ monthly: 1199, tenantMonthly: 959, productId: 'fbrx_ultra_monthly' });
   });
 

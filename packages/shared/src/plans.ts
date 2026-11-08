@@ -130,14 +130,12 @@ export interface MdmPricing {
 }
 export const DEFAULT_MDM_PRICING: MdmPricing = { available: false, perEndpoint: MDM_ADDON.perEndpoint };
 
-/** FBRX Server: announced, not for sale yet. */
+/** FBRX Server: announced, not for sale yet, and with no price named until it is. */
 export const SERVER_OFFER = {
   available: false,
-  /** One-time, in cents: the installer ISO stays on the account (or the tenant) for good. */
-  price: 10000,
   productId: 'fbrx_server_iso',
   summary: 'FBRX Server: your own server for virtual machines, backups, AI and your network. Coming soon.',
-  highlights: ['Virtual machines, image backups checked by starting them', 'AI for your whole organization', 'One purchase, the installer is yours to keep'],
+  highlights: ['Virtual machines, image backups checked by starting them', 'AI for your whole organization', 'Runs on your own hardware'],
 };
 
 /** What an edition has, as a list of editions shows it: everything in the one before it, then what it adds. */
@@ -146,7 +144,7 @@ export function editionPoints(t: Tier): string[] {
   return before ? [`Everything in ${TIER_SHORT[before]}`, ...EDITION_PLANS[t].highlights] : EDITION_PLANS[t].highlights;
 }
 
-/** "$4.99", "Free", "$100". */
+/** "$4.99", "Free", "$24.99". */
 export function formatPrice(cents: number): string {
   if (cents === 0) return 'Free';
   const d = cents / 100;

@@ -73,7 +73,8 @@ describe('editions and prices', () => {
     expect([priceOf('essentials', 'tenant'), priceOf('basic', 'tenant'), priceOf('ultra', 'tenant'), priceOf('blackhole', 'tenant')]).toEqual([0, 399, 959, 2499]);
     expect(COMMAND_PLAN.monthly).toBe(5499);
     expect(tenantMonthlyTotal({ essentials: 40, basic: 10, ultra: 2, blackhole: 1 })).toBe(5499 + 3990 + 1918 + 2499);
-    expect(SERVER_OFFER).toMatchObject({ available: false, price: 10000 });
+    expect(SERVER_OFFER).toMatchObject({ available: false });
+    expect(SERVER_OFFER).not.toHaveProperty('price');
     expect([0, 499, 1199, 10000].map(formatPrice)).toEqual(['Free', '$4.99', '$11.99', '$100']);
     // Every paid edition has a product id for Stripe and the stores, and Black Hole is sold only in a tenant.
     for (const t of TIERS) expect(EDITION_PLANS[t].tenantProductId === null).toBe(t === 'essentials');

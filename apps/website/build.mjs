@@ -180,9 +180,8 @@ const serverSection = `<section class="band server" id="server">
       <p class="ctas"><a class="btn" href="server.html">About FBRX Server</a></p>
     </div>
     <div class="card offer">
-      <div class="price"><b>${formatPrice(SERVER_OFFER.price)}</b><small> once</small></div>
-      <p>The installer stays on your FBRX account, or your organization’s FBRX Command, for good.</p>
-      <p class="muted">Free to try while it is in beta; on sale later.</p>
+      <div class="price"><b>Free</b><small> while in beta</small></div>
+      <p>Install it on your own hardware: a spare PC, a mini PC or a rack server.</p>
     </div>
   </div>
 </section>`;

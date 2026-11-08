@@ -56,10 +56,6 @@ export function ServerComingSoon() {
           <li key={h}>{h}</li>
         ))}
       </ul>
-      <p style={{ margin: 0 }}>
-        <strong>{formatPrice(SERVER_OFFER.price)} once</strong>
-        <span className="fx-secondary">: the installer stays on your FBRX Command (or your FBRX account) for good.</span>
-      </p>
     </Card>
   );
 }
