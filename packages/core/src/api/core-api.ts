@@ -102,6 +102,7 @@ const USER_ONLY = new Set<string>([
   'updates.install',
   'release.skip',
   'release.install',
+  'release.uninstall',
   ...EXT_USER_ONLY,
 ]);
 
@@ -584,6 +585,7 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'release.check': () => k.release.check(),
     'release.skip': (p) => k.release.skip(z.object({ version: z.string().max(40) }).parse(p).version),
     'release.install': () => k.release.install(),
+    'release.uninstall': () => k.release.uninstall(),
 
     'localapi.info': (p) => k.localApi.info(!!p?.revealToken),
     'localapi.rotateToken': async () => {

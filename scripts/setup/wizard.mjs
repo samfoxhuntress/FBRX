@@ -5,6 +5,7 @@
  * launchers fetch a private copy of Node.js first when needed. Running it again updates the app and keeps all data.
  *
  *   node scripts/setup/wizard.mjs [--name "Your Name"] [--no-launch] [--no-ai] [--allow-downgrade] [--signing-key file]
+ *   node scripts/setup/wizard.mjs --uninstall [--delete-data] [--yes]                        (macOS and Linux)
  *   node scripts/setup/wizard.mjs --share [--for "Their Name"] [--days 30] [--yes]        (Windows)
  *
  * It asks no questions: the license goes to --name (or this computer's user). Steps: download what the app is
@@ -477,10 +478,61 @@ function linuxMenuEntry(bin) {
       // X11 matches windows to the entry by this; Wayland by the entry's file name.
       `StartupWMClass=${PRODUCT}`,
       'Categories=Utility;System;',
+      // Right-click the icon (in the dock or the apps) to remove it: the installer opens in a terminal and asks first.
+      'Actions=Uninstall;',
+      '',
+      '[Desktop Action Uninstall]',
+      `Name=Uninstall ${PRODUCT}…`,
+      `Exec=bash "${join(ROOT, `Install ${PRODUCT}.command`)}" --uninstall`,
       '',
     ].join('\n'),
   );
   chmodSync(entry, 0o755);
+}
+
+/**
+ * Removes FBRX OS from this Mac or Linux computer: closes it, then removes the app (a Mac's Applications copy; on Linux
+ * the entry in the apps and the build this folder made). Its data (chats, notes, settings, the vault) stays for a later
+ * install unless --delete-data. The license signing keys (~/.fbrx-keys) always stay. Windows has its own uninstaller.
+ */
+async function uninstall() {
+  if (win) throw new SetupError(`On Windows, remove ${PRODUCT} in Settings → Apps → ${PRODUCT} → Uninstall.`, 'Or run its Setup file again and choose Uninstall.');
+  const deleteData = flag('--delete-data');
+  console.log(`${bold(`Remove ${PRODUCT}`)} from this ${platformName}.`);
+  console.log(deleteData ? `${yellow('!')} Its data is deleted too: chats, notes, settings and the vault (${dataRoot()}).
+` : `  Its data (chats, notes, settings, the vault) stays in ${dataRoot()}, for a later install.
+`);
+  if (!yes) {
+    const rl = createInterface({ input: process.stdin, output: process.stdout });
+    const answer = (await rl.question(`${bold(`Remove ${PRODUCT}?`)} [y/N]: `)).trim().toLowerCase();
+    rl.close();
+    if (!answer.startsWith('y')) {
+      console.log('\nNothing was changed.');
+      return 0;
+    }
+  }
+  const removed = [];
+  if (await quitRunningApp()) removed.push(`closed ${PRODUCT}`);
+  if (process.platform === 'darwin') {
+    for (const dir of ['/Applications', join(homedir(), 'Applications')]) {
+      const app = join(dir, `${PRODUCT}.app`);
+      if (existsSync(app)) (rmSync(app, { recursive: true, force: true }), removed.push(app));
+    }
+  } else {
+    const share = process.env.XDG_DATA_HOME ?? join(homedir(), '.local', 'share');
+    for (const f of [join(share, 'applications', 'fbrx-os.desktop'), join(share, 'icons', 'fbrx-os.png')]) if (existsSync(f)) (rmSync(f, { force: true }), removed.push(f));
+    spawnSync('update-desktop-database', [join(share, 'applications')], { stdio: 'ignore' });
+  }
+  // The app this folder built (it is made again by the installer).
+  const built = join(DESKTOP, 'release');
+  if (existsSync(built)) (rmSync(built, { recursive: true, force: true }), removed.push(built));
+  if (deleteData && existsSync(dataRoot())) (rmSync(dataRoot(), { recursive: true, force: true }), removed.push(dataRoot()));
+  else rmSync(join(dataRoot(), 'install-source.json'), { force: true });
+  console.log(`\n${green(bold(`${PRODUCT} is removed`))}\n`);
+  for (const r of removed) console.log(`  ${dim('·')} ${r}`);
+  if (!deleteData) console.log(`\n  ${dim(`Your data is still in ${dataRoot()}: run this with --uninstall --delete-data to erase it too.`)}`);
+  console.log(`  ${dim(`This folder (${ROOT}) can be deleted now, or kept to install ${PRODUCT} again. Your license signing keys stay in ${dirname(KEY_BACKUP)}.`)}\n`);
+  return 0;
 }
 
 /**
@@ -623,6 +675,7 @@ async function main() {
   if (major < 22 || (major === 22 && minor < 15)) throw new SetupError(`Node.js ${process.version} is too old; 22.15 or newer is needed.`, 'Start the setup with the "Install FBRX OS" launcher, which downloads a suitable Node.js automatically.');
   if (!existsSync(join(ROOT, 'package-lock.json')) || !existsSync(DESKTOP)) throw new SetupError('This does not look like the FBRX OS folder.', 'Keep the installer inside the downloaded FBRX folder and run it from there.');
 
+  if (flag('--uninstall')) return uninstall();
   const share = flag('--share');
   if (share && !win) throw new SetupError('Making an installer to send is available on Windows for now.', 'Run this from the FBRX folder on a Windows PC.');
 

@@ -940,6 +940,8 @@ export interface CoreMethods extends ExtMethods {
   'release.skip': (p: { version: string }) => ReleaseCheck;
   /** Downloads the new version into the folder FBRX was installed from and starts its installer. */
   'release.install': () => ReleaseCheck;
+  /** macOS and Linux, installed from an FBRX folder: opens the uninstaller in a terminal window (it asks first). */
+  'release.uninstall': () => { message: string };
 
   'localapi.info': (p: { revealToken?: boolean }) => LocalApiInfo;
   'localapi.rotateToken': () => LocalApiInfo;

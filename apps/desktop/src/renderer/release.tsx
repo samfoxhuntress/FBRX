@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { TIER_NAMES, codenameFor, displayVersion, type ReleaseCheck } from '@fbrx/shared';
-import { Button, Callout, Card, Icons, KeyValue, LabsMark, Modal, Status, Toggle, timeAgo, useAction } from '@fbrx/ui';
-import { call, openExternal } from './client';
+import { Button, Callout, Card, Icons, KeyValue, LabsMark, Modal, Status, Toggle, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
+import { bridge, call, openExternal } from './client';
 import { useCore } from './hooks';
 import { useTier } from './edition';
 
@@ -109,6 +109,8 @@ const PHASE: Record<NonNullable<ReleaseCheck['installing']>['phase'], string> = 
 export function ReleasePanel({ checkRepo, locked, onToggle, autoInstall }: { checkRepo: boolean; locked: boolean; onToggle: (v: boolean) => void; autoInstall?: { on: boolean; locked: boolean; onChange: (v: boolean) => void } }) {
   const r = useRelease().data;
   const { run, busy } = useAction();
+  const { confirm, dialog } = useConfirm();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   if (!r) return null;
   const tone = r.state === 'available' ? 'warning' : r.state === 'current' ? 'good' : r.state === 'error' ? 'critical' : r.state === 'checking' ? 'busy' : 'neutral';
@@ -134,6 +136,21 @@ export function ReleasePanel({ checkRepo, locked, onToggle, autoInstall }: { che
               {r.skipped ? `See ${r.latest.version} anyway` : `See what's new in ${r.latest.version}`}
             </Button>
           )}
+          {/* macOS and Linux, installed from an FBRX folder: removing it is one click too (Windows: Settings → Apps). */}
+          {r.canInstall && bridge.platform !== 'win32' && (
+            <Button
+              variant="ghost"
+              icon="trash"
+              loading={busy === 'u'}
+              onClick={async () => {
+                if (!(await confirm({ title: 'Uninstall FBRX OS?', body: 'The uninstaller opens in a terminal window and asks once more before it removes anything. Your data (chats, notes, settings, the vault) is kept unless you choose to erase it there.', confirmLabel: 'Open the uninstaller', danger: true }))) return;
+                const done = await run('u', () => call('release.uninstall'));
+                if (done) toast.info('Uninstall', done.message);
+              }}
+            >
+              Uninstall FBRX OS
+            </Button>
+          )}
         </div>
         <Toggle checked={checkRepo} disabled={locked} onChange={onToggle} label="Check for new versions automatically (every few hours)" />
         {autoInstall && (
@@ -146,6 +163,7 @@ export function ReleasePanel({ checkRepo, locked, onToggle, autoInstall }: { che
         )}
       </div>
       {open && <ReleaseDialog release={r} onClose={() => setOpen(false)} />}
+      {dialog}
     </Card>
   );
 }

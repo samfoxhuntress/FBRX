@@ -163,6 +163,14 @@ export class ReleaseChecker {
   }
 
   /** The folder the setup wizard installed from, when it is still there. */
+  /** Removes FBRX OS (see launchUninstaller); says what happens next. */
+  uninstall(): { message: string } {
+    const root = this.installRoot();
+    if (process.platform === 'win32') throw new CoreError('CONFLICT', 'On Windows, remove FBRX OS in Settings → Apps → FBRX OS → Uninstall.');
+    if (!root) throw new CoreError('CONFLICT', 'FBRX OS was not installed from an FBRX folder here. Remove it the way it was installed (sudo apt remove fbrx-os for the .deb, or delete the AppImage).');
+    return { message: launchUninstaller(root) };
+  }
+
   installRoot(): string | null {
     // Digger is installed from its own installers: a new version is downloaded from its release page.
     if (this.d.flavor === 'digger') return null;
@@ -256,6 +264,22 @@ function launchInstaller(root: string): string {
     spawn('open', ['-a', 'Terminal', join(root, 'Install FBRX OS.command')], { detached: true, stdio: 'ignore' }).unref();
     return 'The installer opened in Terminal: press Return to start. FBRX OS closes, updates and opens again by itself.';
   }
-  spawn('xdg-open', [root], { detached: true, stdio: 'ignore' }).unref();
-  return `The new version is in ${root}. Run the installer there to finish.`;
+  // Linux: the launcher opens a terminal window of its own when it is started without one (Install FBRX OS.command).
+  spawn('bash', [join(root, 'Install FBRX OS.command'), '--yes'], { cwd: root, detached: true, stdio: 'ignore' }).unref();
+  return 'The installer opened in a terminal window. FBRX OS closes, updates and opens again by itself (a few minutes).';
+}
+
+/**
+ * Starts removing FBRX OS (macOS and Linux, installed from an FBRX folder): the installer opens in a terminal window
+ * and asks before it removes anything. Windows removes it in Settings → Apps.
+ */
+export function launchUninstaller(root: string): string {
+  const script = join(root, 'Install FBRX OS.command');
+  if (process.platform === 'darwin') {
+    // A shell command (the path in single quotes), then an AppleScript string around it.
+    const shell = `bash '${script.replace(/'/g, "'\\''")}' --uninstall`;
+    const applescript = shell.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    spawn('osascript', ['-e', `tell application "Terminal" to do script "${applescript}"`, '-e', 'tell application "Terminal" to activate'], { detached: true, stdio: 'ignore' }).unref();
+  } else spawn('bash', [script, '--uninstall'], { cwd: root, detached: true, stdio: 'ignore' }).unref();
+  return 'The uninstaller opened in a terminal window: it asks before it removes anything, and keeps your data unless you say otherwise.';
 }

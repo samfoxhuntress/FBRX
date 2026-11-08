@@ -42,6 +42,18 @@ version into the same place and run the installer again; your data, settings and
 is closed for you. Options: `--name "Acme Ltd"` (the name on your license), `--no-launch`, `--no-ai` (leave the model
 to the app), `--allow-downgrade`, `--signing-key <file>` (below). The full log is in `.fbrx-setup/setup.log`.
 
+**Removing it.** On a Mac or Linux, *Settings → Updates → Uninstall FBRX OS*, or run the installer with `--uninstall`
+(on Linux, also right-click FBRX OS in your apps or dock → *Uninstall FBRX OS…*). It opens in a terminal window and
+asks first, closes FBRX OS, and removes the app (on Linux its entry in your apps and the build in the FBRX folder).
+Your data (chats, notes, settings, the vault) stays for a later install; `--uninstall --delete-data` erases it too.
+Windows removes it in *Settings → Apps*, or with its Setup file.
+
+**On Ubuntu and other Linux.** Installed from the FBRX folder, *Update now* runs the installer in a terminal window and
+FBRX OS opens again on the new version. Installed from the website instead: the AppImage updates itself, and a newer
+`.deb` installs over the old one with `sudo apt install ./FBRX-OS-<version>-amd64.deb`. To remove that one, use
+Ubuntu's App Center, or `sudo apt remove` with the name `dpkg -l | grep -i fbrx` shows; your data in `~/.config/FBRX OS`
+stays.
+
 **With FBRX Command on another computer.** FBRX OS accepts the editions FBRX Command gives (to the organization, or to
 FBRX accounts on it) only when it was built with FBRX Command's license signing key. On one computer the two installers
 share it by themselves. For FBRX OS on another computer, copy `~/.fbrx-keys/license-signing.pem` from the FBRX Command
