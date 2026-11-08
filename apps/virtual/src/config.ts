@@ -1,6 +1,7 @@
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
+import type { TerminalConfig } from './host-terminal';
 import { DEFAULT_LOCAL_API_PORT, isCidr, isIPv4, networkOf, parseCidr, VIRTUAL_DEFAULT_PORT } from '@fbrx/shared';
 
 /** An IPv4 address with its network size (192.168.50.1/24), or null. */
@@ -71,6 +72,11 @@ export interface VirtualConfig {
    * console checks on it.
    */
   command: { envFile: string; secretsFile: string; certFile: string; localUrl: string };
+  /**
+   * The server's shell in the console (Server → Terminal), for administrators: on with FBRX Server, off elsewhere
+   * unless FBRX_V_TERMINAL=on. Sessions are recorded to recordDir (FBRX_V_TERMINAL_RECORD=off not to), kept keepDays.
+   */
+  terminal: TerminalConfig;
 }
 
 function hasVirsh(): boolean {
@@ -145,6 +151,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
       secretsFile: resolve(env.FBRX_V_COMMAND_SECRETS ?? '/etc/fbrx-command/secrets.env'),
       certFile: resolve(env.FBRX_V_COMMAND_CERT ?? '/var/lib/fbrx-command/tls/command.crt'),
       localUrl: (env.FBRX_V_COMMAND_URL ?? 'http://127.0.0.1:8788').replace(/\/+$/, ''),
+    },
+    terminal: {
+      enabled: process.platform === 'linux' && (env.FBRX_V_TERMINAL === 'on' || (env.FBRX_V_TERMINAL !== 'off' && existsSync(resolve(env.FBRX_V_SYS_ROOT ?? '/', 'etc/fbrx-server-release')))),
+      // Under systemd (FBRX Server) the shell gets a service of its own, outside this console's sandbox.
+      spawn: env.FBRX_V_SPAWN !== 'direct' && env.INVOCATION_ID ? 'systemd-run' : 'direct',
+      shell: env.FBRX_V_TERMINAL_SHELL ?? '/bin/bash',
+      recordDir: env.FBRX_V_TERMINAL_RECORD === 'off' ? null : resolve(dataDir, 'terminal'),
+      keepDays: Math.max(1, Number(env.FBRX_V_TERMINAL_KEEP_DAYS ?? 30) || 30),
     },
     ...overrides,
   };

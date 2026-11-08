@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { Suspense, lazy, useEffect, useState } from 'react';
 import { Button, ErrorBoundary, Icons, Shell, Spinner, type NavItem } from '@fbrx/ui';
 import { api, session, setUnauthorizedHandler } from './api';
 import { AppStateProvider, useApp, useRoute, type Me } from './state';
@@ -24,6 +24,9 @@ import { DomePage } from './pages/dome';
 import { TimePage } from './pages/time';
 import { RolesPage } from './pages/roles';
 import { CommandPage } from './pages/command';
+
+// The terminal brings xterm.js along: loaded when opened.
+const TerminalPage = lazy(() => import('./pages/terminal').then((m) => ({ default: m.TerminalPage })));
 
 export function App() {
   const [phase, setPhase] = useState<'loading' | 'setup' | 'login' | 'ready'>('loading');
@@ -123,6 +126,7 @@ function Console() {
     { id: 'mesh', label: 'Mesh & AI', icon: 'sparkles', section: 'Server' },
     { id: 'command', label: 'FBRX Command', icon: 'globe', section: 'Server' },
     { id: 'roles', label: 'Roles', icon: 'layers', section: 'Server' },
+    ...(app.can('admin') ? [{ id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Server' } as NavItem] : []),
     ...(app.can('admin') ? [{ id: 'access', label: 'Users & audit', icon: 'users', section: 'Access' } as NavItem] : []),
   ];
   // Without virtual machines, the console opens on the gate (or the hardware map).
@@ -167,6 +171,12 @@ function Console() {
         return <RolesPage />;
       case 'command':
         return <CommandPage />;
+      case 'terminal':
+        return (
+          <Suspense fallback={<Spinner />}>
+            <TerminalPage />
+          </Suspense>
+        );
       case 'access':
         return <AccessPage />;
       default:

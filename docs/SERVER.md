@@ -395,6 +395,27 @@ talks only to that exact controller, and keeps the password encrypted.
   boots into the setup screen once (see it through the controller's remote console).
 * **Event log:** the hardware event log (memory, power supply, fan and temperature events).
 
+## Terminal
+
+*Server → Terminal* (administrators only) is the server's own shell in the browser: bash as root on its Debian, the
+same as sitting at the server's keyboard or signing in over SSH. It opens in your home folder (`/root`), sees the whole
+system, and runs every command line tool on the server, `fbrx-server` and `fbrx-gate` included.
+
+* **Ctrl+C** stops the running command. With text selected, Ctrl+C copies it instead (Ctrl+Shift+C always copies).
+* **Paste** types the text on your clipboard into the shell; **Ctrl+Shift+V** (Cmd+V on a Mac) does the same from the
+  keyboard. Over plain HTTP some browsers keep the clipboard to themselves: then the keyboard shortcut is the way.
+* The terminal follows the size of the window; **Full screen** gives it the whole screen.
+* **End session** closes the shell, and so does `exit`. Closing the tab or signing out ends it too: nothing keeps running
+  after you leave (start long jobs with `systemd-run` or in `tmux` if you need them to carry on).
+* Up to four terminals can be open on a server at once.
+
+Every session is in *Users & audit* (who opened it, when, and for how long), and what was on the screen is recorded on
+the server in `/var/lib/fbrx-virtual/terminal`, readable by root only and kept 30 days. What you type without it being
+shown, such as a password, is not in the recording.
+
+The terminal is on with FBRX Server. To turn it off, add `FBRX_V_TERMINAL=off` to the settings below and restart the
+service; FBRX Virtual installed some other way has it off unless you set `FBRX_V_TERMINAL=on`.
+
 ## Everyday commands
 
 ```
@@ -482,6 +503,9 @@ No new ISO is needed for this, or for any update: the ISO is only for a server's
 | `FBRX_V_GATE_LAN_ADDRESS` | | Your network's addresses in the starter configuration (default: 192.168.1.1/24, or the next free choice clear of the internet side's). |
 | `FBRX_V_GATE_WAN_ADDRESS` / `FBRX_V_GATE_WAN_GATEWAY` | | A fixed internet address in the starter configuration (both, or DHCP). |
 | `FBRX_V_COMMAND_URL` | `http://127.0.0.1:8788` | FBRX Command's local-only address (command role), where the console checks on it. |
+| `FBRX_V_TERMINAL` | `on` with FBRX Server | `off` removes the Terminal; `on` turns it on elsewhere (Linux only). |
+| `FBRX_V_TERMINAL_RECORD` | | `off`: do not record terminal sessions. |
+| `FBRX_V_TERMINAL_KEEP_DAYS` | `30` | How long terminal recordings are kept. |
 
 `/etc/fbrx-core/fbrx-core.env` (ai role; `sudo systemctl restart fbrx-core` after a change): `FBRX_SERVER_ROLES`, the
 roles this server announces (the installer writes it). Everything else about the core is set from *Mesh & AI*.
@@ -489,7 +513,9 @@ roles this server announces (the installer writes it). Everything else about the
 ## Security
 
 * HTTPS with a certificate checked by fingerprint; sessions are random tokens stored hashed; passwords are scrypt
-  hashes; sign-in is rate limited; the browser screen uses one-time tickets (30 seconds, one machine).
+  hashes; sign-in is rate limited; the browser screen and the terminal use one-time tickets (30 seconds, one use).
+* The terminal is for administrators only, audited and recorded. On FBRX Server each terminal runs as a systemd service
+  of its own (outside the console's sandbox, so it sees the whole system) and is stopped when its browser tab goes.
 * The service runs as root because it drives the system hypervisor, moves interrupts and hands devices to machines;
   systemd keeps home folders and kernel modules out of its reach.
 * virsh is called with argument lists (never a shell), and names, addresses and processor lists are checked before
@@ -512,6 +538,7 @@ All under `/v1`, with `Authorization: Bearer <token>` from `POST /v1/auth/login`
 | `GET/POST /vms`, `GET/PATCH/DELETE /vms/:id`, `POST /vms/:id/power` | Virtual machines |
 | `GET/POST /vms/:id/snapshots`, `POST …/:name/revert`, `DELETE …/:name` | Snapshots |
 | `POST /vms/:id/console` → ticket, WebSocket `/vms/:id/console/ws?ticket=` | The screen (VNC) |
+| `GET /host/terminal`, `POST /host/terminal` → ticket, WebSocket `/host/terminal/ws?ticket=&cols=&rows=` | The server's shell (administrators): binary frames are the screen both ways, a text frame `{"type":"resize","cols":…,"rows":…}` sets the size |
 | `POST /vms/:id/hostdevs`, `DELETE /vms/:id/hostdevs/:address` | Device passthrough |
 | `GET /storage/pools`, `GET/DELETE /storage/pools/:pool/volumes[/:name]` | Storage |
 | `GET /isos`, `PUT /isos/:name` (upload), `POST /isos/download`, `DELETE /isos/:name` | ISO library |

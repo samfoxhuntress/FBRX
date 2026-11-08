@@ -5,6 +5,11 @@
 
 .vt-screen { min-height: 420px; height: min(72vh, 820px); background: #0b0b0d; border-radius: 0 0 var(--radius) var(--radius); overflow: hidden; }
 .vt-screen:fullscreen { height: 100vh; border-radius: 0; }
+.vt-term-sub { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.vt-term-wrap { background: #0b0b0d; padding: 8px 4px 4px 10px; border-radius: 0 0 var(--radius) var(--radius); }
+.vt-term-wrap:fullscreen { padding: 12px; border-radius: 0; }
+.vt-term { height: min(70vh, 780px); min-height: 360px; }
+.vt-term-wrap:fullscreen .vt-term { height: calc(100vh - 24px); }
 
 .vt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .vt-chip { border: 1px solid var(--border); background: var(--surface-1); color: var(--text-primary); border-radius: 999px; padding: 5px 12px; font: inherit; font-size: 13px; cursor: pointer; }
