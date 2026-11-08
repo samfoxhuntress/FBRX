@@ -470,7 +470,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
       now.toISOString(),
       new Date(now.getTime() + (expiresInMinutes ?? 60 * 24) * 60_000).toISOString(),
     );
-    ctx.audit.record(actorOf(req), `command.${type}`, { type: 'device', id: device.id, tenantId: device.tenant_id }, { commandId: id, payload: type === 'agent.run' ? { prompt: String((parsed as any).prompt).slice(0, 200) } : parsed });
+    ctx.audit.record(actorOf(req), `command.${type}`, { type: 'device', id: device.id, tenantId: device.tenant_id }, { commandId: id, payload: type === 'agent.run' ? { prompt: String((parsed as any).prompt).slice(0, 200) } : type === 'support.start' ? {} : parsed });
     ctx.dispatch(id);
     return commandView(ctx.db.get('SELECT * FROM commands WHERE id = ?', id));
   };

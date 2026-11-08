@@ -157,7 +157,8 @@ export function commandView(c: any) {
     tenantId: c.tenant_id,
     deviceId: c.device_id,
     type: c.type,
-    payload: parseJson(c.payload, {}),
+    // A support pass works as a key to its computer for a few hours: it goes to the computer, never back to a list.
+    payload: c.type === 'support.start' ? { pass: 'FBRXSUP1.…' } : parseJson(c.payload, {}),
     status: c.status,
     createdBy: c.created_by,
     createdAt: c.created_at,

@@ -126,13 +126,15 @@ export function SpotlightView({ agentName, fun }: { agentName: string; fun: bool
       e.preventDefault();
       void quickAnswer();
     } else if (e.key === 'Enter' && supportFromInput(q.trim())) {
-      // Support mode (troubleshooting), typed here too: the phrase opens the license box; a pass or the resume phrase act.
+      // Support mode (troubleshooting), typed here too: a pass, or the resume phrase, acts at once.
       e.preventDefault();
       const t = q.trim();
-      if (t.toLowerCase() === SUPPORT_ENTER_PHRASE) bridge.openMain?.('settings/license');
-      else if (t.toLowerCase() === SUPPORT_EXIT_PHRASE) void call('support.end').catch(() => undefined);
-      else void call('support.activate', { pass: t }).catch((err: Error) => setMessage(err.message));
-      hide();
+      void call('support.activate', { pass: t })
+        .then(() => {
+          if (t.toLowerCase() === SUPPORT_ENTER_PHRASE) bridge.openMain?.('settings/license');
+          hide();
+        })
+        .catch((err: Error) => setMessage(err.message));
     } else if (e.key === 'Enter' && merged[sel]) {
       e.preventDefault();
       void exec(merged[sel], e.ctrlKey || e.metaKey ? 'reveal' : undefined);

@@ -31,6 +31,7 @@ import {
   isLearner,
   productNameFor,
   parseTier,
+  parseSemver,
   type Tier,
   type SystemStatus,
   type UpdateStatus,
@@ -565,6 +566,8 @@ export class Kernel {
       installId: () => this.meta.get<string>('install.id') ?? '',
       allowed: () => !this.fleet.enrolled || this.settings.get().support.allowOnManaged,
       report: (message, data) => this.fleet.enrolled && this.fleet.reportEvent({ kind: 'alert', severity: 'warning', message, data, at: new Date().toISOString() }),
+      tenantId: () => (this.fleet.enrolled ? (this.meta.get<string>('fleet.tenantId') ?? null) : null),
+      appMajor: parseSemver(this.platform.appVersion)?.major ?? 0,
     });
     this.settings.setSupportActive(() => this.support.status().active);
     this.settings.onChange(() => this.support.settingsChanged());
@@ -1794,6 +1797,11 @@ export class Kernel {
         return { restarting: true };
       case 'helpdesk.assist':
         return this.helpdeskAssist.handle(p);
+      case 'support.start': {
+        const st = this.support.activate(p.pass, 'control-plane');
+        this.notify({ title: 'Support mode is on', body: `Your organization started support mode${st.until ? ` until ${new Date(st.until).toLocaleTimeString()}` : ''}. Settings → License can end it.`, level: 'warning', source: 'administrator' });
+        return { active: st.active, tier: st.tier, until: st.until };
+      }
     }
   }
 

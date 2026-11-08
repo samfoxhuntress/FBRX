@@ -1,6 +1,6 @@
 import { mkdtempSync, rmSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
-import { generateSigningKeyPair } from '@fbrx/shared/node';
+import { generateSigningKeyPair, verifySupportPass } from '@fbrx/shared/node';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { AddressInfo } from 'node:net';
@@ -192,6 +192,23 @@ describe('signing in on a computer with an FBRX account', () => {
       expect(k.license.status()).toMatchObject({ tier: 'blackhole', source: 'support', support: true });
       expect((await k.call('support.end', {}, USER)) as any).toMatchObject({ active: false });
       expect(k.license.status().tier).toBe('essentials');
+
+      // Once the computer is in the organization, a pass made for it in Devices goes straight to it: no install id to
+      // copy, nothing to paste, and no extra setting, since its own organization made it.
+      const { token } = await api('POST', '/v1/admin/enrollment-tokens', { label: 'Support' }, admin, { 'x-fbrx-tenant': tenantId });
+      await k.call('fleet.enroll', { serverUrl: base, token }, USER);
+      const deviceId = k.fleet.credentials()!.deviceId;
+      await waitFor(async () => (await api('GET', `/v1/admin/devices/${deviceId}`, undefined, admin, { 'x-fbrx-tenant': tenantId })).installId === installId);
+      const sent = await api('POST', '/v1/admin/support-passes', { deviceId, hours: 1, note: 'Ticket 43' }, admin, { 'x-fbrx-tenant': tenantId });
+      expect(sent).toMatchObject({ installId, tier: 'blackhole' });
+      expect(verifySupportPass(sent.pass, [cp.ctx.keys.licensePublicPem])).toMatchObject({ ok: true, payload: { installId, tenantId } });
+      const cmd = await api('POST', `/v1/admin/devices/${deviceId}/commands`, { type: 'support.start', payload: { pass: sent.pass } }, admin, { 'x-fbrx-tenant': tenantId });
+      // FBRX Command's lists never show the pass itself.
+      expect(JSON.stringify(cmd)).not.toContain(sent.pass);
+      await waitFor(async () => (await k.fleet.sync().catch(() => undefined), k.support.status().active));
+      expect(k.license.status()).toMatchObject({ tier: 'blackhole', source: 'support' });
+      expect(JSON.stringify(await api('GET', '/v1/admin/commands', undefined, admin, { 'x-fbrx-tenant': tenantId }))).not.toContain(sent.pass);
+      expect(JSON.stringify(await api('GET', '/v1/admin/audit?limit=50', undefined, admin, { 'x-fbrx-tenant': tenantId }))).not.toContain(sent.pass);
     } finally {
       await k.stop();
       rmSync(dir, { recursive: true, force: true });

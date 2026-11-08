@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SUPPORT_PASS_PREFIX, type SupportPass } from '@fbrx/shared';
+import { ALL_FEATURES, SUPPORT_PASS_PREFIX, type SupportPass } from '@fbrx/shared';
 import { generateSigningKeyPair, signSupportPass, verifySupportPass } from '@fbrx/shared/node';
 import { makeKernel, USER } from './helpers';
 
@@ -114,6 +114,86 @@ describe('support mode (kernel)', () => {
       // A pass that is already in the past: activating is refused, but a stored, expired pass never elevates.
       kernel.meta.set('support.pass', makePass(keys.privateKeyPem, installId, { expiresAt: new Date(Date.now() - 1000).toISOString() }));
       expect(kernel.support.status().active).toBe(false);
+      expect(kernel.license.status().tier).toBe('essentials');
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('takes a pass its own organization made without the extra setting, but not one made for another organization', async () => {
+    const keys = generateSigningKeyPair();
+    const { kernel, cleanup } = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem] });
+    try {
+      const installId = kernel.meta.get<string>('install.id')!;
+      kernel.meta.set('fleet.deviceId', 'dev_test');
+      kernel.meta.set('fleet.tenantId', 'ten_mine');
+      // Made in another organization's FBRX Command: refused (support access is not turned on).
+      await expect(kernel.call('support.activate', { pass: makePass(keys.privateKeyPem, installId, { tenantId: 'ten_other' }) }, USER)).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      // Made in its own organization's FBRX Command: works.
+      expect(await kernel.call('support.activate', { pass: makePass(keys.privateKeyPem, installId, { tenantId: 'ten_mine' }) }, USER)).toMatchObject({ active: true, tier: 'blackhole' });
+      // Turning support access off does not end a session the organization started itself.
+      kernel.settings.applyManaged({ support: { allowOnManaged: false } }, ['support.allowOnManaged']);
+      expect(kernel.support.status().active).toBe(true);
+      // The resume phrase, taken where a pass is, ends it.
+      expect(await kernel.call('support.activate', { pass: 'refusetobrew' }, USER)).toMatchObject({ active: false });
+      expect(kernel.license.status().source).not.toBe('support');
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('starts from FBRX Command with the support.start command', async () => {
+    const keys = generateSigningKeyPair();
+    const { kernel, cleanup } = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem] });
+    try {
+      const installId = kernel.meta.get<string>('install.id')!;
+      kernel.meta.set('fleet.deviceId', 'dev_test');
+      kernel.meta.set('fleet.tenantId', 'ten_mine');
+      const run = (kernel as unknown as { executeRemoteCommand(c: unknown): Promise<unknown> }).executeRemoteCommand.bind(kernel);
+      const now = new Date().toISOString();
+      expect(await run({ id: 'cmd_1', type: 'support.start', payload: { pass: makePass(keys.privateKeyPem, installId, { tenantId: 'ten_mine' }) }, createdAt: now, expiresAt: null })).toMatchObject({ active: true, tier: 'blackhole' });
+      expect(kernel.license.status().source).toBe('support');
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('the developer phrase unlocks Black Hole at once, until FBRX 3.0', async () => {
+    const keys = generateSigningKeyPair();
+    const { kernel, cleanup } = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem], platform: { appVersion: '2.3.1' } });
+    try {
+      expect(kernel.license.status().tier).toBe('essentials');
+      const st = await kernel.call('support.activate', { pass: '418TeapotAdmin' }, USER);
+      // Not a support pass: no banner, no unlocked organization settings, no end time.
+      expect(st).toMatchObject({ active: false, developer: true });
+      expect(kernel.license.status()).toMatchObject({ tier: 'blackhole', source: 'support' });
+      expect(kernel.license.status().features).toEqual([...ALL_FEATURES]);
+      // It survives a restart of the services (it is stored), and a support pass coming and going leaves it on.
+      kernel.support.start();
+      const installId = kernel.meta.get<string>('install.id')!;
+      await kernel.call('support.activate', { pass: makePass(keys.privateKeyPem, installId, { tier: 'ultra' }) }, USER);
+      expect(kernel.license.status().tier).toBe('ultra');
+      kernel.meta.set('support.pass', makePass(keys.privateKeyPem, installId, { expiresAt: new Date(Date.now() - 1000).toISOString() }));
+      kernel.support.start();
+      expect(kernel.support.status()).toMatchObject({ active: false, developer: true });
+      expect(kernel.license.status().tier).toBe('blackhole');
+      // Ending it puts the edition back.
+      await kernel.call('support.end', {}, USER);
+      expect(kernel.support.status().developer).toBe(false);
+      expect(kernel.license.status().tier).toBe('essentials');
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('the developer phrase does nothing from FBRX 3.0 on', async () => {
+    const { kernel, cleanup } = await makeKernel({ devMode: false, platform: { appVersion: '3.0.0' } });
+    try {
+      // An unlock left from a 2.x build is forgotten.
+      kernel.meta.set('support.developer', { at: new Date().toISOString() });
+      kernel.support.start();
+      expect(kernel.meta.get('support.developer')).toBeNull();
+      await expect(kernel.call('support.activate', { pass: '418teapotadmin' }, USER)).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
       expect(kernel.license.status().tier).toBe('essentials');
     } finally {
       await cleanup();

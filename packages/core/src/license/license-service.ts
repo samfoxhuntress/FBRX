@@ -15,7 +15,7 @@ export class LicenseService {
   private cached: LicenseStatus | null = null;
 
   /** While a support pass is active, SupportService sets this so the computer runs fully for troubleshooting. */
-  private supportElevation: (() => { tier: Tier; until: string } | null) | null = null;
+  private supportElevation: (() => { tier: Tier; until: string | null } | null) | null = null;
 
   constructor(
     private readonly meta: MetaStore,
@@ -25,8 +25,11 @@ export class LicenseService {
     private readonly events?: EventBus,
   ) {}
 
-  /** SupportService wires this; when it returns an elevation, the computer runs at that edition with everything on. */
-  setSupportElevation(fn: () => { tier: Tier; until: string } | null): void {
+  /**
+   * SupportService wires this; when it returns an elevation, the computer runs at that edition with everything on
+   * (`until` null: the developer unlock, which has no end time).
+   */
+  setSupportElevation(fn: () => { tier: Tier; until: string | null } | null): void {
     this.supportElevation = fn;
     this.cached = null;
   }
@@ -46,7 +49,7 @@ export class LicenseService {
         features: [...ALL_FEATURES],
         source: 'support',
         support: true,
-        message: `Support mode: running as ${TIER_NAMES[support.tier]} until ${new Date(support.until).toLocaleString()}`,
+        message: support.until ? `Support mode: running as ${TIER_NAMES[support.tier]} until ${new Date(support.until).toLocaleString()}` : `${TIER_NAMES[support.tier]}, unlocked on this computer`,
       };
     }
     // The Standard trial ends by itself: look again once it is over.

@@ -1,14 +1,14 @@
 /**
  * Signs an FBRX **support pass** with the same private key as `npm run license:issue`, no FBRX Command needed. A
  * support pass lets an FBRX support engineer get full access to one computer's FBRX apps for troubleshooting: it is
- * tied to that computer's install id and runs out on its own. Paste the printed pass into the computer after typing
- * `418teapotadmin` (in a license box, Spotlight, FBRX/1, or the browser's address bar). The resume phrase
- * `refusetobrew`, or the pass expiring, puts the computer back to what it was.
+ * tied to that computer's install id and runs out on its own. Paste the printed pass into the computer's Settings →
+ * License → Support access (or Spotlight, or the browser's address bar). Ending it there, the resume phrase
+ * `refusetobrew`, or the pass expiring puts the computer back to what it was.
  *
  *   npm run support:pass -- --install-id <the computer's install id> [--hours 4] [--tier blackhole|ultra|basic]
  *                           [--note "Ticket 1234"] [--by name@fbrx] [--key .fbrx-keys/license-signing.pem]
  *
- * Find the install id on the computer: Settings → License shows it, or the FBRX/1 command `show version` prints it.
+ * Find the install id on the computer: Settings → License → Support access shows it, or the FBRX/1 command `show version` prints it.
  * Keep passes short; they cannot be revoked once signed, only wait out.
  */
 import { existsSync, readFileSync } from 'node:fs';
@@ -62,6 +62,6 @@ if (!check.ok) fail(`Internal error: the pass did not verify (${check.error}).`)
 console.log(`\nSupport pass for computer ${installId}`);
 console.log(`Runs as ${TIER_NAMES[tier]} for ${hours} hour(s), until ${payload.expiresAt}`);
 if (note) console.log(`Note: ${note}`);
-console.log('\nGive this to the computer after typing 418teapotadmin:\n');
+console.log('\nPaste this into the computer\'s Settings → License → Support access:\n');
 console.log(pass);
 console.log('\nOn the computer, "refusetobrew" ends support early; otherwise it ends on its own.\n');

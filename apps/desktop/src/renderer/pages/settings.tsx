@@ -1224,35 +1224,24 @@ function License() {
   const { data: support } = useCore('support.status', undefined, ['support.changed']);
   const { s, patch } = useSettings();
   const [key, setKey] = useState('');
-  // When the support phrase is typed, the box turns into a support-pass prompt.
-  const [awaitingPass, setAwaitingPass] = useState(false);
+  const [pass, setPass] = useState('');
   const { run, busy } = useAction();
   const toast = useToast();
   if (!l || !s) return null;
+  /** A support pass, the resume phrase or the developer phrase, typed in either box: support handles it. */
+  const startSupport = (text: string, clear: () => void) =>
+    void run('s', () =>
+      call('support.activate', { pass: text }).then((st) => {
+        clear();
+        if (text.toLowerCase() === SUPPORT_EXIT_PHRASE) toast.info('Support mode ended', 'This computer is back to what it was.');
+        else if (st.active) toast.success('Support mode on', `This computer runs as ${TIER_NAMES[st.tier ?? 'blackhole']} until ${st.until ? formatDate(st.until) : 'the pass runs out'}.`);
+        else if (st.developer) toast.success(`${TIER_NAMES.blackhole} unlocked`, 'Every feature is on, on this computer.');
+      }),
+    );
+  const supportText = (t: string) => t.startsWith(`${SUPPORT_PASS_PREFIX}.`) || [SUPPORT_EXIT_PHRASE, SUPPORT_ENTER_PHRASE].includes(t.toLowerCase());
   const activate = () => {
     const trimmed = key.trim();
-    // Support mode (troubleshooting): the phrase asks for a signed pass; the resume phrase, or a pass, acts at once.
-    if (trimmed.toLowerCase() === SUPPORT_ENTER_PHRASE) {
-      setKey('');
-      setAwaitingPass(true);
-      return;
-    }
-    if (trimmed.toLowerCase() === SUPPORT_EXIT_PHRASE) {
-      setKey('');
-      setAwaitingPass(false);
-      if (support?.active) void run('a', () => call('support.end'), 'Support mode ended');
-      return;
-    }
-    if (trimmed.startsWith(`${SUPPORT_PASS_PREFIX}.`)) {
-      void run('a', () =>
-        call('support.activate', { pass: trimmed }).then((st) => {
-          setKey('');
-          setAwaitingPass(false);
-          toast.success('Support mode on', `This computer runs as ${TIER_NAMES[(st as { tier: Tier }).tier ?? 'blackhole']} until the pass runs out. Type "${SUPPORT_EXIT_PHRASE}" to end it.`);
-        }),
-      );
-      return;
-    }
+    if (supportText(trimmed)) return startSupport(trimmed, () => setKey(''));
     // 418: not a license at all, just a teapot. It unlocks the easter eggs, in every edition.
     if (key === '418') {
       setKey('');
@@ -1279,6 +1268,7 @@ function License() {
         }),
     );
   };
+  const endSupport = () => void run('e', () => call('support.end'), 'Back to what it was');
   return (
     <Grid cols={2}>
       <Card title="Your license">
@@ -1290,51 +1280,82 @@ function License() {
             ['Licensed to', l.customer ?? '—'],
             ['Seats', l.seats === 0 ? 'Unlimited' : l.seats ?? '—'],
             ['Expires', l.expiresAt ? formatDate(l.expiresAt) : l.state === 'valid' ? 'Never' : '—'],
-            ['Source', { managed: 'Your organization (FBRX Command)', local: 'License key on this device', account: 'Your FBRX account', development: 'Development build', support: 'Support mode', none: '—' }[l.source]],
-            ...(support ? [['Install id', <CopyText value={support.installId} />] as [string, ReactNode]] : []),
+            ['Source', { managed: 'Your organization (FBRX Command)', local: 'License key on this device', account: 'Your FBRX account', development: 'Development build', support: support?.active ? 'Support mode' : 'Unlocked on this computer', none: '—' }[l.source]],
             ...(l.commandUrl ? [['FBRX Command', <span className="mono">{l.commandUrl}</span>] as [string, ReactNode]] : []),
             ['Features', l.features.join(', ')],
           ]}
         />
-        {l.message && <Callout tone="info">{l.message}</Callout>}
-        {support?.active && (
-          <Callout tone="warning">
-            Support mode is on until {support.until ? formatDate(support.until) : 'the pass runs out'}. This computer runs with full access for troubleshooting. Type “{SUPPORT_EXIT_PHRASE}” below, or{' '}
-            <button className="fx-link" onClick={() => void run('a', () => call('support.end'), 'Support mode ended')}>
-              end support now
+        {support?.developer && !support.active ? (
+          <Callout tone="info">
+            {TIER_NAMES.blackhole} is unlocked on this computer.{' '}
+            <button className="fx-link" onClick={endSupport}>
+              Turn it off
             </button>
-            .
           </Callout>
+        ) : (
+          l.message && <Callout tone="info">{l.message}</Callout>
         )}
       </Card>
       <Card
-        title={awaitingPass ? 'Enter the support pass' : l.state === 'valid' ? 'Change the license key' : 'Enter a license key'}
-        subtitle={
-          awaitingPass
-            ? 'Paste the support pass made for this computer: in FBRX Command, Devices → this computer → Support pass (or Licenses → Support pass, with the install id above). It turns on full access for a short while, for troubleshooting.'
-            : l.source === 'managed'
-              ? 'Computers in an organization receive their license automatically'
-              : 'Paste the license key you bought or got from your organization. If it belongs to an FBRX Command tenant, this computer joins it too.'
-        }
+        title={l.state === 'valid' ? 'Change the license key' : 'Enter a license key'}
+        subtitle={l.source === 'managed' ? 'Computers in an organization receive their license automatically' : 'Paste the license key you bought or got from your organization. If it belongs to an FBRX Command tenant, this computer joins it too.'}
       >
         <div className="fx-form">
-          <TextArea code rows={4} value={key} onChange={(e) => setKey(e.target.value)} placeholder={awaitingPass ? `${SUPPORT_PASS_PREFIX}.…` : 'FBRX1.…'} />
+          <TextArea code rows={4} value={key} onChange={(e) => setKey(e.target.value)} placeholder="FBRX1.…" />
           <div className="fx-actions">
-            <Button variant="primary" loading={busy === 'a'} disabled={!key.trim()} onClick={activate}>
-              {awaitingPass ? 'Start support mode' : 'Activate'}
+            <Button variant="primary" loading={busy === 'a' || busy === 's'} disabled={!key.trim()} onClick={activate}>
+              Activate
             </Button>
-            {awaitingPass && (
-              <Button variant="ghost" onClick={() => (setAwaitingPass(false), setKey(''))}>
-                Cancel
-              </Button>
-            )}
-            {!awaitingPass && l.source === 'local' && (
+            {l.source === 'local' && (
               <Button variant="danger" onClick={() => void run('r', () => call('license.remove'), 'License removed')}>
                 Remove license
               </Button>
             )}
           </div>
         </div>
+      </Card>
+      <Card
+        title="Support access"
+        subtitle={
+          support?.active
+            ? undefined
+            : 'Someone helping you (your organization, or FBRX support) can give this computer full access for a few hours. Give them the install id; they send back a support pass, or start it from FBRX Command.'
+        }
+      >
+        {support?.active ? (
+          <div className="fx-form">
+            <KeyValue
+              items={[
+                ['Running as', <span className={`tier-badge ${support.tier ?? 'blackhole'}`}>{TIER_NAMES[support.tier ?? 'blackhole']}</span>],
+                ['Until', support.until ? formatDate(support.until) : '—'],
+                ['From', support.issuedBy ?? '—'],
+                ...(support.note ? [['Note', support.note] as [string, ReactNode]] : []),
+              ]}
+            />
+            <Callout tone="warning">Everything done while support mode is on is written to the audit log. Ending it puts the edition and settings back exactly as they were.</Callout>
+            <div className="fx-actions">
+              <Button variant="danger" icon="power" loading={busy === 'e'} onClick={endSupport}>
+                End support now
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="fx-form">
+            {support && (
+              <Field label="This computer's install id" help="What a support pass is made for.">
+                <CopyText value={support.installId} />
+              </Field>
+            )}
+            <Field label="Support pass">
+              <TextArea code rows={3} value={pass} onChange={(e) => setPass(e.target.value)} placeholder={`${SUPPORT_PASS_PREFIX}.…`} spellCheck={false} />
+            </Field>
+            <div className="fx-actions">
+              <Button variant="primary" icon="lifebuoy" loading={busy === 's'} disabled={!pass.trim()} onClick={() => startSupport(pass.trim(), () => setPass(''))}>
+                Start support mode
+              </Button>
+            </div>
+          </div>
+        )}
       </Card>
     </Grid>
   );

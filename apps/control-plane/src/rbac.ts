@@ -57,4 +57,4 @@ export function assignableRoles(role: Role): Role[] {
 }
 
 /** Commands that can change data or run the agent need a more trusted role. */
-export const PRIVILEGED_COMMANDS = new Set(['agent.run', 'plugin.install', 'plugin.uninstall', 'update.install', 'vault.lock', 'app.restart', 'backup.create', 'backup.image', 'helpdesk.assist']);
+export const PRIVILEGED_COMMANDS = new Set(['agent.run', 'plugin.install', 'plugin.uninstall', 'update.install', 'vault.lock', 'app.restart', 'backup.create', 'backup.image', 'helpdesk.assist', 'support.start']);

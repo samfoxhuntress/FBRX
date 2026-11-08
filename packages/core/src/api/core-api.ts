@@ -556,7 +556,11 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'localAccount.remove': (p, ctx) => k.localAccount.remove(z.object({ confirm: z.literal('DELETE') }).parse(p), ctx.actor),
 
     'support.status': () => k.support.status(),
-    'support.activate': (p, ctx) => k.support.activate(z.object({ pass: z.string().min(1).max(4000) }).parse(p).pass, ctx.actor),
+    'support.activate': (p, ctx) => {
+      const pass = z.object({ pass: z.string().min(1).max(4000) }).parse(p).pass;
+      if (k.support.isResumePhrase(pass)) return k.support.end(ctx.actor, 'resume-phrase');
+      return k.support.isDeveloperPhrase(pass) ? k.support.developerUnlock(ctx.actor) : k.support.activate(pass, ctx.actor);
+    },
     'support.end': (_p, ctx) => k.support.end(ctx.actor, 'ended'),
 
     'browser.state': () => k.browser.state(),

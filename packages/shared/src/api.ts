@@ -910,7 +910,10 @@ export interface CoreMethods extends ExtMethods {
   'localAccount.unlock': (p: { password: string }) => LocalAccountStatus;
   'localAccount.remove': (p: { confirm: 'DELETE' }) => LocalAccountStatus;
 
-  /** Support mode (troubleshooting): a signed pass elevates this computer; the resume phrase or expiry restores it. */
+  /**
+   * Support mode (troubleshooting): a signed pass elevates this computer; the resume phrase or expiry restores it.
+   * `support.activate` also takes the resume phrase (ends support).
+   */
   'support.status': () => SupportStatus;
   'support.activate': (p: { pass: string }) => SupportStatus;
   'support.end': () => SupportStatus;

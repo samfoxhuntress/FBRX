@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ALL_FEATURES, EDITIONS, EDITION_FEATURES, FEATURES, SUPPORT_ENTER_PHRASE, SUPPORT_EXIT_PHRASE, SUPPORT_PASS_DEFAULT_HOURS, SUPPORT_PASS_MAX_HOURS, TIER_NAMES, tierFor, type Edition, type Tier } from '@fbrx/shared';
+import { ALL_FEATURES, EDITIONS, EDITION_FEATURES, FEATURES, SUPPORT_PASS_DEFAULT_HOURS, SUPPORT_PASS_MAX_HOURS, TIER_NAMES, tierFor, type Edition, type Tier } from '@fbrx/shared';
 import { Button, Callout, Card, CopyText, Empty, Field, Input, KeyValue, Modal, Page, Select, Status, Table, formatDate, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
@@ -232,19 +232,31 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
 
 /**
  * A support pass for one computer (docs/SUPPORT.md): signed with this FBRX Command's license key, so it works on
- * builds that carry the public key above. The person at the computer reads its install id from Settings → License; a
- * computer's page in Devices fills it in.
+ * builds that carry the public key above. From a computer's page in Devices it can go straight to that computer
+ * (support.start); otherwise the person at the computer pastes it into Settings → License → Support access. A pass made
+ * here names this organization, so its own computers take it without any extra setting.
  */
-export function SupportPassModal({ installId = '', onClose }: { installId?: string; onClose: () => void }) {
+export function SupportPassModal({ installId = '', device, onClose }: { installId?: string; device?: { id: string; name: string; canSend: boolean }; onClose: () => void }) {
   const [f, setF] = useState({ installId, hours: String(SUPPORT_PASS_DEFAULT_HOURS), tier: 'blackhole' as Tier, note: '' });
-  const [made, setMade] = useState<{ pass: string; expiresAt: string; tier: Tier } | null>(null);
+  const [made, setMade] = useState<{ pass: string; expiresAt: string; tier: Tier; sent: boolean } | null>(null);
   const { busy, run } = useAction();
-  const make = () =>
-    void run('p', () => api<{ pass: string; expiresAt: string; tier: Tier }>('POST', '/v1/admin/support-passes', { installId: f.installId.trim(), hours: Number(f.hours), tier: f.tier, note: f.note.trim() }).then(setMade));
+  const mint = () =>
+    api<{ pass: string; expiresAt: string; tier: Tier }>('POST', '/v1/admin/support-passes', {
+      ...(device ? { deviceId: device.id } : {}),
+      ...(f.installId.trim() ? { installId: f.installId.trim() } : {}),
+      hours: Number(f.hours),
+      tier: f.tier,
+      note: f.note.trim(),
+    });
+  const send = (pass: string) => api('POST', `/v1/admin/devices/${device!.id}/commands`, { type: 'support.start', payload: { pass }, expiresInMinutes: Number(f.hours) * 60 });
+  const make = () => void run('p', () => mint().then((m) => setMade({ ...m, sent: false })));
+  const startNow = () => void run('s', () => mint().then((m) => send(m.pass).then(() => setMade({ ...m, sent: true }))));
+  const sendMade = () => void run('s', () => send(made!.pass).then(() => setMade({ ...made!, sent: true })));
+  const canStart = !!device?.canSend;
   return (
     <Modal
-      title="Support pass"
-      description="Full access to one computer's FBRX apps for troubleshooting, for a few hours. On a computer in an organization, that organization must have FBRX support access turned on."
+      title={device ? `Support for ${device.name}` : 'Support pass'}
+      description="Full access to one computer's FBRX apps for troubleshooting, for a few hours. Everything done is in both audit logs, and ending it puts the computer back exactly as it was."
       onClose={onClose}
       footer={
         made ? (
@@ -254,16 +266,39 @@ export function SupportPassModal({ installId = '', onClose }: { installId?: stri
         ) : (
           <>
             <Button onClick={onClose}>Cancel</Button>
-            <Button variant="primary" icon="key" loading={busy === 'p'} disabled={!f.installId.trim()} onClick={make}>
-              Make the pass
+            <Button variant={canStart ? undefined : 'primary'} icon="key" loading={busy === 'p'} disabled={!device && !f.installId.trim()} onClick={make}>
+              {canStart ? 'Make a pass to paste' : 'Make the pass'}
             </Button>
+            {canStart && (
+              <Button variant="primary" icon="lifebuoy" loading={busy === 's'} onClick={startNow}>
+                Start support now
+              </Button>
+            )}
           </>
         )
       }
     >
       {made ? (
         <div className="fx-form">
-          <Field label="Support pass" help="Shown once. Hand it to the computer it is for.">
+          {made.sent ? (
+            <Callout tone="good" title={`Sent to ${device?.name ?? 'the computer'}`}>
+              Support mode starts as soon as it is online, and the person at it sees a notification. Its Settings → License → Support access ends it.
+            </Callout>
+          ) : (
+            <Callout tone="info" title="On the computer">
+              Paste it into Settings → License → Support access, then Start support mode. The same place ends it.
+              {canStart && (
+                <>
+                  {' '}
+                  <button className="fx-link" disabled={busy === 's'} onClick={sendMade}>
+                    Or send it to {device!.name} now
+                  </button>
+                  .
+                </>
+              )}
+            </Callout>
+          )}
+          <Field label="Support pass" help="Shown once. It works on that one computer only, until it runs out.">
             <CopyText value={made.pass} secret />
           </Field>
           <KeyValue
@@ -272,15 +307,14 @@ export function SupportPassModal({ installId = '', onClose }: { installId?: stri
               ['Ends', formatDate(made.expiresAt)],
             ]}
           />
-          <Callout tone="info" title="On the computer">
-            Type <code>{SUPPORT_ENTER_PHRASE}</code> in Settings → License (or Spotlight, or FBRX Browser&apos;s address bar), then paste the pass. <code>{SUPPORT_EXIT_PHRASE}</code> ends support and puts everything back.
-          </Callout>
         </div>
       ) : (
         <div className="fx-form">
-          <Field label="Install id" help="On the computer: Settings → License (copy button), or show version in Terminal → FBRX/1.">
-            <Input value={f.installId} autoFocus spellCheck={false} onChange={(e) => setF({ ...f, installId: e.target.value })} />
-          </Field>
+          {(!device || !installId) && (
+            <Field label="Install id" help={device ? 'This computer has not reported it yet. On the computer: Settings → License → Support access (copy button).' : 'On the computer: Settings → License → Support access (copy button), or show version in Terminal → FBRX/1.'}>
+              <Input value={f.installId} autoFocus spellCheck={false} onChange={(e) => setF({ ...f, installId: e.target.value })} />
+            </Field>
+          )}
           <Field label="For how long">
             <Select value={f.hours} options={Array.from({ length: SUPPORT_PASS_MAX_HOURS }, (_, i) => ({ value: String(i + 1), label: `${i + 1} hour${i ? 's' : ''}` }))} onChange={(e) => setF({ ...f, hours: e.target.value })} />
           </Field>

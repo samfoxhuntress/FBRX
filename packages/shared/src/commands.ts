@@ -37,6 +37,8 @@ export const CommandPayloadSchemas = {
     action: z.enum(['diagnostics', 'ask', 'run']),
     text: z.string().max(8000).default(''),
   }),
+  /** A support pass this organization made for the computer (docs/SUPPORT.md): support mode starts without pasting. */
+  'support.start': z.object({ pass: z.string().min(10).max(4000) }),
 } as const;
 
 export type CommandType = keyof typeof CommandPayloadSchemas;
@@ -59,6 +61,7 @@ export const COMMAND_DESCRIPTIONS: Record<CommandType, string> = {
   'vault.lock': 'Lock the credential vault on the device',
   'app.restart': 'Restart the FBRX OS application',
   'helpdesk.assist': 'A help desk receiver works on the computer for a ticket it sent (diagnostics, ask its AI, run a command)',
+  'support.start': 'Start support mode with a support pass made for this computer (full access for a few hours)',
 };
 
 export const COMMAND_STATUSES = ['queued', 'sent', 'running', 'succeeded', 'failed', 'expired', 'cancelled'] as const;

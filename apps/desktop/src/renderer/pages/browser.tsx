@@ -99,7 +99,6 @@ export function BrowserApp({ agentName }: { agentName: string }) {
   const [panel, setPanel] = useState<null | 'fabrix' | 'bookmarks' | 'history' | 'passwords'>(null);
   const [menu, setMenu] = useState(false);
   const [find, setFind] = useState<string | null>(null);
-  const [supportAsk, setSupportAsk] = useState(false);
   const [zoom, setZoom] = useState(1);
   const views = useRef<Map<string, WebviewElement>>(new Map());
   // An address on the home network typed without https:// or http:// opens as https://, then as http:// if it does not
@@ -125,15 +124,16 @@ export function BrowserApp({ agentName }: { agentName: string }) {
     async (raw: string, tabId = activeRef.current.id) => {
       const input = raw.trim();
       if (!input) return;
-      // Support mode (troubleshooting), typed here as in the endpoint: the phrase asks for a pass; the resume phrase
-      // or a pass acts at once.
+      // Support mode (troubleshooting), typed here as in the endpoint: a pass, or the resume phrase, acts at once.
       const low = input.toLowerCase();
-      if (low === SUPPORT_ENTER_PHRASE) return void (setSupportAsk(true), setAddress(''));
-      if (low === SUPPORT_EXIT_PHRASE) return void (setAddress(''), call('support.end').then(() => toast.info('Support mode ended')).catch(() => undefined));
-      if (input.startsWith(`${SUPPORT_PASS_PREFIX}.`)) {
+      if (low === SUPPORT_ENTER_PHRASE || low === SUPPORT_EXIT_PHRASE || input.startsWith(`${SUPPORT_PASS_PREFIX}.`)) {
         setAddress('');
         void call('support.activate', { pass: input })
-          .then(() => toast.success('Support mode on', 'This computer is running with full access until the pass runs out.'))
+          .then((st) => {
+            if (low === SUPPORT_EXIT_PHRASE) toast.info('Support mode ended');
+            else if (st.active) toast.success('Support mode on', 'This computer is running with full access until the pass runs out.');
+            else if (st.developer) toast.success('Black Hole unlocked', 'Every feature is on, on this computer.');
+          })
           .catch((e: Error) => toast.error('That support pass was not accepted', e.message));
         return;
       }
@@ -414,17 +414,6 @@ export function BrowserApp({ agentName }: { agentName: string }) {
           />
         )}
       </div>
-      {supportAsk && (
-        <SupportAskBar
-          onClose={() => setSupportAsk(false)}
-          onSubmit={(pass) => {
-            setSupportAsk(false);
-            void call('support.activate', { pass })
-              .then(() => toast.success('Support mode on', 'This computer is running with full access until the pass runs out.'))
-              .catch((e: Error) => toast.error('That support pass was not accepted', e.message));
-          }}
-        />
-      )}
       {vault.offer?.tabId === active.id && <SaveBar key={vault.offer.password} offer={vault.offer} onDone={vault.dismissOffer} toast={toast} />}
       {find !== null && (
         <FindBar
@@ -537,30 +526,6 @@ function FindBar({ value, onChange, onClose }: { value: string; onChange: (v: st
         <Icons.x size={14} />
       </button>
     </div>
-  );
-}
-
-function SupportAskBar({ onSubmit, onClose }: { onSubmit: (pass: string) => void; onClose: () => void }) {
-  const [pass, setPass] = useState('');
-  const ref = useRef<HTMLInputElement>(null);
-  useEffect(() => ref.current?.focus(), []);
-  return (
-    <form
-      className="br-support"
-      onSubmit={(e) => {
-        e.preventDefault();
-        if (pass.trim()) onSubmit(pass.trim());
-      }}
-    >
-      <Icons.wrench size={14} />
-      <input ref={ref} value={pass} onChange={(e) => setPass(e.target.value)} placeholder={`Paste the support pass (${SUPPORT_PASS_PREFIX}.…)`} aria-label="Support pass" />
-      <Button size="sm" variant="primary" type="submit" disabled={!pass.trim()}>
-        Start
-      </Button>
-      <button type="button" onClick={onClose} aria-label="Cancel">
-        <Icons.x size={14} />
-      </button>
-    </form>
   );
 }
 

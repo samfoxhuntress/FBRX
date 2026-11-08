@@ -1,4 +1,4 @@
-import { SUPPORT_EXIT_PHRASE, type SupportStatus, type Tier } from '@fbrx/shared';
+import { DEVELOPER_UNLOCK_LAST_MAJOR, SUPPORT_ENTER_PHRASE, SUPPORT_EXIT_PHRASE, type SupportStatus, type Tier } from '@fbrx/shared';
 import { verifySupportPass } from '@fbrx/shared/node';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
@@ -11,6 +11,8 @@ import type { Logger } from '../logger';
 const PASS_KEY = 'support.pass';
 /** The edition the person had chosen before support began, so the resume phrase and expiry put it back exactly. */
 const BEFORE_KEY = 'support.beforeChosen';
+/** Black Hole unlocked for FBRX's own development (SUPPORT_ENTER_PHRASE, until 3.0): when, and by whom. */
+const DEVELOPER_KEY = 'support.developer';
 
 export interface SupportDeps {
   meta: MetaStore;
@@ -27,6 +29,10 @@ export interface SupportDeps {
   allowed: () => boolean;
   /** Tells an organization's FBRX Command that a support session started or ended on this computer. */
   report?: (message: string, data: Record<string, unknown>) => void;
+  /** The organization this computer is enrolled in (fleet.tenantId), or null on a computer on its own. */
+  tenantId?: () => string | null;
+  /** This build's major version: the developer unlock works only up to DEVELOPER_UNLOCK_LAST_MAJOR. */
+  appMajor?: number;
 }
 
 /**
@@ -41,22 +47,71 @@ export class SupportService {
     // The license service asks this for the current elevation; null means support is off (or the pass ran out).
     this.d.license.setSupportElevation(() => {
       const p = this.valid();
-      return p ? { tier: p.tier, until: p.expiresAt } : null;
+      if (p) return { tier: p.tier, until: p.expiresAt };
+      return this.developer() ? { tier: 'blackhole', until: null } : null;
     });
+  }
+
+  /** Whether the pass may run here: the computer's own organization made it, or support is allowed here at all. */
+  private permits(passTenant: string | undefined): boolean {
+    const mine = this.d.tenantId?.() ?? null;
+    return (!!passTenant && !!mine && passTenant === mine) || this.d.allowed();
   }
 
   /** The active, unexpired pass's payload, or null. A pass for another computer or a stale one never counts. */
   private valid(): { tier: Tier; expiresAt: string; issuedBy: string; note: string } | null {
     const pass = this.d.meta.get<string>(PASS_KEY);
-    if (!pass || !this.d.allowed()) return null;
+    if (!pass) return null;
     const v = verifySupportPass(pass, this.d.publicKeys);
-    if (!v.ok || v.expired || v.payload.installId !== this.d.installId()) return null;
+    if (!v.ok || v.expired || v.payload.installId !== this.d.installId() || !this.permits(v.payload.tenantId)) return null;
     return { tier: v.payload.tier, expiresAt: v.payload.expiresAt, issuedBy: v.payload.issuedBy, note: v.payload.note };
+  }
+
+  /** Whether this build still honors the developer unlock (it stops by itself from DEVELOPER_UNLOCK_LAST_MAJOR + 1). */
+  developerUnlockAvailable(): boolean {
+    return (this.d.appMajor ?? 0) <= DEVELOPER_UNLOCK_LAST_MAJOR;
+  }
+
+  /** Whether Black Hole is unlocked here for FBRX's development (and this build still honors it). */
+  private developer(): boolean {
+    return !!this.d.meta.get<{ at: string }>(DEVELOPER_KEY) && this.developerUnlockAvailable();
   }
 
   status(): SupportStatus {
     const p = this.valid();
-    return { active: !!p, installId: this.d.installId(), tier: p?.tier ?? null, until: p?.expiresAt ?? null, issuedBy: p?.issuedBy ?? null, note: p?.note ?? null };
+    return {
+      active: !!p,
+      installId: this.d.installId(),
+      tier: p?.tier ?? null,
+      until: p?.expiresAt ?? null,
+      issuedBy: p?.issuedBy ?? null,
+      note: p?.note ?? null,
+      developer: this.developer(),
+    };
+  }
+
+  /** Whether some text is the developer phrase (the entry points pass it here instead of to a license or a search). */
+  isDeveloperPhrase(text: string): boolean {
+    return text.trim().toLowerCase() === SUPPORT_ENTER_PHRASE;
+  }
+
+  /**
+   * Unlocks Black Hole on this computer at once, for FBRX's own development (until FBRX 3.0, then it is gone). It is
+   * not a support pass: settings an organization locked stay locked, and it stays until the resume phrase ends it. On
+   * an organization's computer its FBRX Command is told, as with a pass.
+   */
+  developerUnlock(actor: string): SupportStatus {
+    if (!this.developerUnlockAvailable()) throw new CoreError('INVALID_ARGUMENT', 'That is not a license key or a support pass.');
+    if (!this.developer()) {
+      if (!this.d.meta.get<string>(PASS_KEY) && !this.d.meta.get<Tier>(BEFORE_KEY)) this.d.meta.set(BEFORE_KEY, this.d.meta.get<Tier>('edition.chosen') ?? 'essentials');
+      this.d.meta.set(DEVELOPER_KEY, { at: new Date().toISOString(), by: actor });
+      this.d.license.refresh();
+      this.d.audit.append({ category: 'security', action: 'support.developer', actor, outcome: 'success', details: { tier: 'blackhole' } });
+      this.d.report?.('Black Hole was unlocked on this computer for FBRX development.', { by: actor });
+      this.d.log.warn('Black Hole unlocked for development');
+      this.d.events.emit('support.changed', this.status());
+    }
+    return this.status();
   }
 
   /**
@@ -64,15 +119,18 @@ export class SupportService {
    * edition the person had is remembered so it comes back exactly when support ends.
    */
   activate(pass: string, actor: string): SupportStatus {
-    if (!this.d.allowed()) {
-      this.d.audit.append({ category: 'security', action: 'support.refused', actor, outcome: 'failure', details: { reason: 'organization' } });
-      throw new CoreError('FORBIDDEN', 'This computer belongs to an organization that has not turned on FBRX support access. Its FBRX Command can turn it on (support.allowOnManaged).');
-    }
     const v = verifySupportPass(pass.trim(), this.d.publicKeys);
     if (!v.ok) throw new CoreError('INVALID_ARGUMENT', v.error);
     if (v.expired) throw new CoreError('INVALID_ARGUMENT', 'This support pass has expired. Ask for a fresh one.');
     if (v.payload.installId !== this.d.installId()) throw new CoreError('FORBIDDEN', 'This support pass is for a different computer.');
-    if (!this.d.meta.get<string>(PASS_KEY)) this.d.meta.set(BEFORE_KEY, this.d.meta.get<Tier>('edition.chosen') ?? 'essentials');
+    if (!this.permits(v.payload.tenantId)) {
+      this.d.audit.append({ category: 'security', action: 'support.refused', actor, outcome: 'failure', details: { reason: 'organization', by: v.payload.issuedBy } });
+      throw new CoreError(
+        'FORBIDDEN',
+        'This computer belongs to an organization, and this pass was not made by its FBRX Command. Ask that organization for a pass, or for it to turn on FBRX support access (support.allowOnManaged).',
+      );
+    }
+    if (!this.d.meta.get<string>(PASS_KEY) && !this.d.meta.get<Tier>(BEFORE_KEY)) this.d.meta.set(BEFORE_KEY, this.d.meta.get<Tier>('edition.chosen') ?? 'essentials');
     this.d.meta.set(PASS_KEY, pass.trim());
     this.d.license.refresh();
     this.d.audit.append({ category: 'security', action: 'support.activated', actor, target: v.payload.issuedBy, outcome: 'success', details: { tier: v.payload.tier, until: v.payload.expiresAt, note: v.payload.note } });
@@ -83,11 +141,26 @@ export class SupportService {
     return this.status();
   }
 
-  /** Ends support mode (the resume phrase, a button, or the pass running out) and restores the previous edition. */
+  /**
+   * Ends support mode (the resume phrase, a button, or the pass running out) and restores the previous edition. The
+   * resume phrase and the button also end the developer unlock; a pass running out leaves it.
+   */
   end(actor: string, reason: 'resume-phrase' | 'ended' | 'expired' | 'withdrawn'): SupportStatus {
-    if (!this.d.meta.get<string>(PASS_KEY)) return this.status();
-    const before = this.d.meta.get<Tier>(BEFORE_KEY) ?? 'essentials';
+    const pass = !!this.d.meta.get<string>(PASS_KEY);
+    const developer = !!this.d.meta.get(DEVELOPER_KEY) && (reason === 'resume-phrase' || reason === 'ended');
+    if (!pass && !developer) return this.status();
     this.d.meta.delete(PASS_KEY);
+    if (developer) this.d.meta.delete(DEVELOPER_KEY);
+    // The developer unlock still holds: the edition stays Black Hole, and what came before is kept for its end.
+    if (this.developer()) {
+      this.d.license.refresh();
+      this.stopTimer();
+      this.d.audit.append({ category: 'security', action: 'support.ended', actor, outcome: 'success', details: { reason } });
+      this.d.report?.('Support mode ended on this computer.', { reason });
+      this.d.events.emit('support.changed', this.status());
+      return this.status();
+    }
+    const before = this.d.meta.get<Tier>(BEFORE_KEY) ?? 'essentials';
     this.d.meta.delete(BEFORE_KEY);
     this.d.license.refresh();
     try {
@@ -108,21 +181,36 @@ export class SupportService {
     return text.trim().toLowerCase() === SUPPORT_EXIT_PHRASE;
   }
 
-  /** On start and every minute, end support by itself the moment its pass has run out. */
-  start(): void {
-    if (this.valid()) this.schedule();
-    else if (this.d.meta.get<string>(PASS_KEY)) this.end('system', this.d.allowed() ? 'expired' : 'withdrawn');
+  /** Why a stored pass no longer counts: it ran out, or the organization no longer allows it here. */
+  private lapsed(): 'expired' | 'withdrawn' | null {
+    const pass = this.d.meta.get<string>(PASS_KEY);
+    if (!pass || this.valid()) return null;
+    const v = verifySupportPass(pass, this.d.publicKeys);
+    return v.ok && !v.expired && v.payload.installId === this.d.installId() ? 'withdrawn' : 'expired';
   }
 
-  /** The organization changed its mind (support.allowOnManaged turned off): support ends at once. */
+  /** On start and every minute, end support by itself the moment its pass has run out. */
+  start(): void {
+    // A build past the developer unlock's last version forgets it (and the edition it was keeping, when no pass is on).
+    if (this.d.meta.get(DEVELOPER_KEY) && !this.developerUnlockAvailable()) {
+      this.d.meta.delete(DEVELOPER_KEY);
+      if (!this.d.meta.get<string>(PASS_KEY)) this.d.meta.delete(BEFORE_KEY);
+    }
+    const lapsed = this.lapsed();
+    if (lapsed) this.end('system', lapsed);
+    else if (this.valid()) this.schedule();
+  }
+
+  /** The organization changed its mind (support.allowOnManaged turned off): a pass it did not make ends at once. */
   settingsChanged(): void {
-    if (this.d.meta.get<string>(PASS_KEY) && !this.d.allowed()) this.end('system', 'withdrawn');
+    if (this.lapsed() === 'withdrawn') this.end('system', 'withdrawn');
   }
 
   private schedule(): void {
     this.stopTimer();
     this.timer = setInterval(() => {
-      if (!this.valid() && this.d.meta.get<string>(PASS_KEY)) this.end('system', this.d.allowed() ? 'expired' : 'withdrawn');
+      const lapsed = this.lapsed();
+      if (lapsed) this.end('system', lapsed);
     }, 60_000);
     this.timer.unref?.();
   }

@@ -89,7 +89,7 @@ export function DeviceDetailPage({ id }: { id: string }) {
               </Button>
             )}
             {app.can('licenses.manage') && (
-              <Button icon="lifebuoy" title="Full access to this computer's FBRX apps for a few hours, for troubleshooting (typed after 418teapotadmin)" onClick={() => setSupportPass(true)}>
+              <Button icon="lifebuoy" title="Full access to this computer's FBRX apps for a few hours, for troubleshooting" onClick={() => setSupportPass(true)}>
                 Support pass
               </Button>
             )}
@@ -269,7 +269,7 @@ export function DeviceDetailPage({ id }: { id: string }) {
         </Card>
       )}
       {composer && <CommandComposer target={{ deviceId: id, label: d.name }} onClose={() => setComposer(false)} onSent={reload} />}
-      {supportPass && <SupportPassModal installId={d.installId ?? ''} onClose={() => setSupportPass(false)} />}
+      {supportPass && <SupportPassModal installId={d.installId ?? ''} device={{ id, name: d.name, canSend: app.can('commands.privileged') && app.can('commands.send') && d.status === 'active' }} onClose={() => (setSupportPass(false), reload())} />}
       {dialog}
     </Page>
   );

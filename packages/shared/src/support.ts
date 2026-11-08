@@ -4,15 +4,20 @@ import { LICENSE_TIERS, type Tier } from './license';
 /**
  * Support mode: the way an FBRX support engineer, or the person who runs an organization's FBRX Command, gets full
  * access to one computer's FBRX apps (FBRX OS and the browser) to troubleshoot, without that power being free for the
- * taking. Typing the support phrase alone does nothing; it asks for a **support pass**: a short-lived token, signed by
- * FBRX's own license key and tied to one computer, that the apps verify offline. While a valid pass is active the
- * computer runs as Black Hole with every feature on, settings the organization locked can be changed, and everything
- * done is written to the audit log (and reported to FBRX Command on a managed computer). The resume phrase, or the
- * pass running out, puts everything back exactly as it was.
+ * taking. It takes a **support pass**: a short-lived token, signed by FBRX's own license key and tied to one computer,
+ * that the apps verify offline. It is pasted into Settings → License, or FBRX Command sends it to the computer. While a
+ * valid pass is active the computer runs as Black Hole with every feature on, settings the organization locked can be
+ * changed, and everything done is written to the audit log (and reported to FBRX Command on a managed computer). The
+ * resume phrase, the End button, or the pass running out puts everything back exactly as it was.
  */
 
-/** Typed in a license box, Spotlight, the browser's address bar or FBRX/1 to begin (then a pass is asked for). */
+/**
+ * Not advertised anywhere: until FBRX 3.0 it unlocks Black Hole on the computer it is typed into, for FBRX's own
+ * development. Builds from 3.0 on ignore it (SupportService checks the version), and it is removed then.
+ */
 export const SUPPORT_ENTER_PHRASE = '418teapotadmin';
+/** The last major version where SUPPORT_ENTER_PHRASE works. */
+export const DEVELOPER_UNLOCK_LAST_MAJOR = 2;
 /** Typed anywhere support mode is active to end it and restore the computer to what it was. */
 export const SUPPORT_EXIT_PHRASE = 'refusetobrew';
 
@@ -35,6 +40,11 @@ export const SupportPassSchema = z.object({
   note: z.string().max(200),
   /** Who minted it (an email or name), for the audit trail. */
   issuedBy: z.string().max(200),
+  /**
+   * The organization whose FBRX Command made it. On a computer in that same organization the pass needs no extra
+   * setting; on any other organization's computer, that organization must allow FBRX support (support.allowOnManaged).
+   */
+  tenantId: z.string().max(80).optional(),
   issuedAt: z.string(),
   expiresAt: z.string(),
 });
@@ -55,4 +65,6 @@ export interface SupportStatus {
   /** Who the pass was minted for/by, and its note. */
   issuedBy: string | null;
   note: string | null;
+  /** Black Hole was unlocked on this computer for FBRX's development (not a pass; it has no end time). */
+  developer?: boolean;
 }
