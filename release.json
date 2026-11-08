@@ -1,45 +1,45 @@
 {
   "product": "FBRX OS",
   "stage": "Beta",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "codename": "Weft",
-  "released": "2026-11-05",
+  "released": "2026-11-08",
   "importance": "recommended",
-  "summary": "FBRX 2.3.0 Beta (Weft): a new look with Tropical by default, the AI on your computer answering in a fraction of the time and saying how far it has read, and editions that follow a member to any computer.",
+  "summary": "FBRX 2.3.1 Beta (Weft): the AI Toolkit, ready-made actions your AI runs and you can change, Fabrix troubleshooting your network through FBRX Server, and themes and governance in every edition.",
   "notes": [
-    "A new look: Tropical, FBRX's honey running into red, is the default on calm, neutral pages, with capsule buttons, a raised segmented control and a few small bounces. Textures are off unless you pick one, and the Fabrics theme is now called Honey.",
-    "The AI on this computer reads about a quarter of what it did with each request (only the tools the chat is about), so a simple question no longer waits minutes. While it reads, the chat says how far (\"Reading your request: 4,100 of 9,800 tokens\"), and a second chat says it is waiting for the first.",
-    "A computer in an organization runs the edition FBRX Command gave the member signed in on it, however it joined. Settings → Edition says plainly when this copy of FBRX OS was built for another license signing key, and Install FBRX OS --signing-key fixes it.",
-    "Linux: FBRX OS installed from the FBRX folder appears in your apps with its icon, and the installers open a terminal window when started from the file manager.",
-    "FBRX Command: giving an FBRX account an edition replaces the last one instead of adding another."
+    "AI Toolkit (every edition): ready-made actions the AI runs in one step, such as your IP address, network adapters, DNS, a fixed or automatic address, the internet check and disk space. When it works out a new one it offers to keep it, and you can change any action's command; a change that could cut you off puts itself back unless you keep it.",
+    "Troubleshoot the network: let Fabrix look at your FBRX Server (FBRX Server → Let Fabrix look) and it checks FBRX Gate and MiniDome along with this computer. The server gives read-only access, and your password is not kept.",
+    "Every edition: Governance and the themes. A new computer asks whether you want the simple or the full menu, and which look.",
+    "Chats: send more while the AI works and they wait in a queue. The browser opens links in a new tab from the right-click menu, Ctrl+C stops the running command in Terminal, and notes open in a window of their own.",
+    "Editions: Standard includes 2 computers, Ultra 3 and Black Hole 5. An organization's members get their edition from FBRX Command, and support can be started from there in one step.",
+    "Ubuntu: uninstalling FBRX OS is one step (from its entry in your apps, or Settings), and Update now runs the installer for you."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.3.0.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.0",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.3.1.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.1",
   "server": {
-    "version": "1.4.0",
-    "released": "2026-11-05",
-    "summary": "FBRX Server 1.4.0: Paste text from your computer into a machine's screen, the console's AI chat fixed, a faster AI on the server and the new look.",
+    "version": "1.4.1",
+    "released": "2026-11-08",
+    "summary": "FBRX Server 1.4.1: the server's own terminal in the console, What if? before a gate change, and read-only access for Fabrix to troubleshoot your network.",
     "notes": [
-      "Paste on a machine's screen: it shows your clipboard (or a box to paste into), then types the text into the machine as on a US keyboard, so it works anywhere, even on a login prompt or a BIOS screen.",
-      "Asking the server's AI a question in the console no longer ends in \"is not a function\".",
-      "The server's own AI sees only the tools a chat is about and says how far it has read a long request, so answers start sooner.",
-      "The console has the new look: honey running into red on calm pages.",
+      "Server → Terminal: the server's shell in the browser for administrators, with Ctrl+C, Paste and full screen. Every session is in Users & audit and recorded on the server for 30 days.",
+      "FBRX Gate → Changes → What if?: before you commit, see who would gain or lose what, whether you would still reach the console, and which of the last hour's real connections the change would cut off. The server's AI can explain it.",
+      "Fabrix on your computer can look at the gate and MiniDome to troubleshoot the network, with read-only access you give it; Users & audit → Apps with access shows and revokes it.",
       "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
     ],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.3.0/fbrx-server-1.4.0.tar.gz",
-    "sha256": "90ebf7e4bbdbbf7d9683d4482dbf2874a44a9f8e4e6520fdad16a8d00cbec0f9",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.0"
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.3.1/fbrx-server-1.4.1.tar.gz",
+    "sha256": "39674ce9f3b0d3a925160a62f93460d39ea9219dbc737f252b4af4686b09aec6",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.1"
   },
   "digger": {
-    "version": "1.1.0",
-    "released": "2026-11-05",
-    "summary": "FBRX Digger 1.1.0: it runs entirely on its own, thinks with FBRX Endpoint's AI while Endpoint runs, and has a new mole icon.",
+    "version": "1.1.1",
+    "released": "2026-11-08",
+    "summary": "FBRX Digger 1.1.1: smaller and simpler, with device consoles in the Network Center and clearer sign-in errors.",
     "notes": [
-      "On its own: every network tool with no edition or FBRX account, and none of FBRX Endpoint's background work, so nothing fails and it never gets in the way.",
-      "While FBRX Endpoint runs on the same computer, Ask Fabrix and Diagnose with Fabrix appear and think with Endpoint's AI; nothing leaves the computer.",
-      "A new icon: a mole in a miner's helmet, drawn in honey and red on black."
+      "Links open in your own browser; Digger has no browser or edition settings of its own.",
+      "Device consoles (SSH, Telnet) are a tab of the Network Center; a sign-in that fails says why, and trying again keeps the device's key; a successful SSH sign-in opens its session.",
+      "Digger has its own tray icon and menu."
     ],
-    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.0",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.0"
+    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.1",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.1"
   }
 }
