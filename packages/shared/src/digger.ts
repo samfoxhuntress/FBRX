@@ -12,20 +12,20 @@ import type { ProviderConfig } from './settings';
 
 export const DIGGER_NAME = 'FBRX Digger';
 /** Digger's own version: its releases are tagged digger-v<version>. */
-export const DIGGER_VERSION = '1.1.0';
+export const DIGGER_VERSION = '1.1.1';
 
 export type AppFlavor = 'os' | 'digger';
 
 /**
- * The pages Digger shows: the Network Center, the browser (for router and device pages) and its settings, and the
- * chat while FBRX Endpoint's AI is there to answer it.
+ * The pages Digger shows: the Network Center and its settings, and the chat while FBRX Endpoint's AI is there to answer
+ * it. A router's or device's own page opens in the computer's browser.
  */
-export const DIGGER_PAGES = ['network', 'browser', 'settings', 'agent'] as const;
+export const DIGGER_PAGES = ['network', 'settings', 'agent'] as const;
 
 /** Digger's one AI: FBRX Endpoint's, on the same computer, found while Endpoint runs. */
 export const DIGGER_AI_PROVIDER: ProviderConfig = { id: 'fbrx-endpoint', type: 'fbrx-endpoint', name: 'FBRX Endpoint', enabled: true, cloud: false };
 /** The settings tabs that apply to Digger. */
-export const DIGGER_SETTINGS = ['general', 'appearance', 'browser', 'updates', 'logs'] as const;
+export const DIGGER_SETTINGS = ['general', 'appearance', 'updates', 'logs'] as const;
 
 /**
  * Digger's icon: a mole in a miner's helmet, its lamp lit, peeking out of the ground over a few specks of dirt, drawn

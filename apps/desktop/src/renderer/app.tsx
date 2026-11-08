@@ -2,7 +2,7 @@ import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNod
 import type { NotificationEvent, PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
 import { DIGGER_AI_PROVIDER, DIGGER_ICON_SVG, DIGGER_PAGES, TIER_NAMES, TIER_SHORT, addressAs, atLeast, displayVersion, funEnabled, type ProviderStatus } from '@fbrx/shared';
 import { Button, ErrorBoundary, FBRX_MARK, FbrxMark, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
-import { bridge, call, onEvent } from './client';
+import { bridge, call, onEvent, openExternal } from './client';
 import { playChime } from './notify-sound';
 import { useConsoleSessions, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
@@ -127,6 +127,12 @@ let ownWindows: Record<string, boolean> = {};
 /** Navigates to a page; `to` may carry a sub-path such as `notes/note_123` or `settings/appearance`. */
 export function navigate(to: string) {
   const page = to.split('/')[0];
+  // FBRX Digger has no browser of its own: a router's or device's page opens in the computer's browser.
+  if (page === 'browser' && DIGGER) {
+    const url = to.split('/').slice(1).join('/');
+    if (/^https?:\/\//i.test(url)) void openExternal(url);
+    return;
+  }
   // The browser lives in its own window: opening it from the main window focuses that window, not a page here.
   if (page === 'browser' && !BROWSER_WINDOW && bridge.openBrowser) return bridge.openBrowser(to.split('/').slice(1).join('/') || undefined);
   // A popped-out page keeps to itself: links to other pages open in the main window.
@@ -526,7 +532,6 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     // FBRX Digger: its own pages, every network tool whatever the edition, and the chat while FBRX Endpoint's AI is
     // there to answer it; anything else opens the Network Center.
     if (DIGGER) {
-      if (route === 'browser') return <BrowserApp agentName={agentName} />;
       if (route === 'settings') return <SettingsPage onRerunSetup={() => setForceOnboarding(true)} />;
       if (route === 'agent' && diggerAi) return <AgentPage agentName={agentName} />;
       return <NetworkPage advanced everything easterEggs={false} />;
@@ -862,8 +867,8 @@ function TopBar({
       <PresenterPill status={presenter} />
       <UpdatePill />
       {status.aiHalt && <EmergencyStop compact />}
-      {openConsoles > 0 && route !== 'terminal' && (
-        <button className="model-pill console-pill" onClick={() => navigate('terminal/console')} title="Device consoles that are connected">
+      {openConsoles > 0 && route !== 'terminal' && !(DIGGER && routeArg()?.startsWith('consoles')) && (
+        <button className="model-pill console-pill" onClick={() => navigate(DIGGER ? 'network/consoles' : 'terminal/console')} title="Device consoles that are connected">
           <span className="dot ok" aria-hidden />
           {openConsoles} console{openConsoles > 1 ? 's' : ''}
         </button>

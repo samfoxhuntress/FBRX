@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { TIER_NAMES, codenameFor, displayVersion, type ReleaseCheck } from '@fbrx/shared';
+import { DIGGER_NAME, TIER_NAMES, codenameFor, displayVersion, type ReleaseCheck } from '@fbrx/shared';
 import { Button, Callout, Card, Icons, KeyValue, LabsMark, Modal, Status, Toggle, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call, openExternal } from './client';
 import { useCore } from './hooks';
 import { useTier } from './edition';
+import { DIGGER } from './app';
 
 /**
  * New versions published in the FBRX repository: a pill in the top bar, a dialog with what's new, and the panel in
@@ -170,11 +171,13 @@ export function ReleasePanel({ checkRepo, locked, onToggle, autoInstall }: { che
 
 /** The version, as shown in Settings → About. */
 export function AboutVersion({ version }: { version: string }) {
-  const code = codenameFor(version);
+  const tier = useTier();
+  // FBRX Digger has its own versions (DIGGER_VERSION) and no editions or codenames.
+  const code = DIGGER ? null : codenameFor(version);
   return (
     <div className="about-version">
       <div className="about-version-name">
-        {TIER_NAMES[useTier()]} <b>{displayVersion(version)}</b>
+        {DIGGER ? DIGGER_NAME : TIER_NAMES[tier]} <b>{DIGGER ? version : displayVersion(version)}</b>
       </div>
       <div className="fx-muted" style={{ fontSize: 12 }}>Built on FBRX OS.</div>
       {code && (

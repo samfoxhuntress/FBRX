@@ -5,7 +5,7 @@ import { bridge, call, onEvent, pickFile } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
 import { DIGGER, IS_WINDOWS, navigate, routeArg } from '../app';
 import { AiContext, AskButton, askAgent } from '../widgets';
-import { ConnectDialog, type ConnectTarget } from '../consoles';
+import { ConnectDialog, DeviceConsolesPanel, consoleRoute, type ConnectTarget } from '../consoles';
 import { Speedometer, speedFraction } from '../speedometer';
 import { unlockTrophy } from '../fun';
 import { commandSearchUrl, matchDeviceProfile } from '@fbrx/shared';
@@ -13,7 +13,7 @@ import { EditionHint } from '../edition';
 import { Environments } from './network-environments';
 import { WifiChannelPlanner } from './wifi-channels';
 
-type Tab = 'overview' | 'environments' | 'trace' | 'devices' | 'speed' | 'wifi' | 'bluetooth' | 'printers' | 'tools' | 'adapters';
+type Tab = 'overview' | 'environments' | 'trace' | 'devices' | 'speed' | 'wifi' | 'bluetooth' | 'printers' | 'tools' | 'adapters' | 'consoles';
 
 const ROLE: Record<TraceHop['role'], { label: string; tone: 'good' | 'info' | 'neutral' | 'warning' | 'busy' }> = {
   'this-pc': { label: 'This PC', tone: 'info' },
@@ -402,7 +402,7 @@ function Devices({ advanced }: { advanced: boolean }) {
           onConnected={(s) => {
             setConnect(null);
             setDetail(null);
-            navigate(`terminal/console/${s.id}`);
+            navigate(consoleRoute(s.id));
           }}
         />
       )}
@@ -739,7 +739,7 @@ function Tools({ advanced }: { advanced: boolean }) {
           onClose={() => setConsole(null)}
           onConnected={(s) => {
             setConsole(null);
-            navigate(`terminal/console/${s.id}`);
+            navigate(consoleRoute(s.id));
           }}
         />
       )}
@@ -826,11 +826,23 @@ function Adapters() {
   );
 }
 
-const NET_TABS: Tab[] = ['overview', 'environments', 'trace', 'devices', 'speed', 'wifi', 'bluetooth', 'printers', 'tools', 'adapters'];
+const NET_TABS: Tab[] = ['overview', 'environments', 'trace', 'devices', 'speed', 'wifi', 'bluetooth', 'printers', 'tools', 'adapters', 'consoles'];
 
 export function NetworkPage({ advanced, everything, easterEggs }: { advanced: boolean; everything: boolean; easterEggs: boolean }) {
   // network/speed, network/printers… open that tab directly.
-  const [tab, setTab] = useState<Tab>(() => (NET_TABS.includes(routeArg() as Tab) ? (routeArg() as Tab) : 'overview'));
+  const first = () => (routeArg() ?? '').split('/')[0] as Tab;
+  const [tab, setTab] = useState<Tab>(() => (NET_TABS.includes(first()) ? first() : 'overview'));
+  // FBRX Digger: a console opened from a scan (network/consoles/<id>) shows here, Digger having no Terminal page.
+  const [consoleId, setConsoleId] = useState<string | null>(() => (first() === 'consoles' ? (routeArg() ?? '').split('/')[1] || null : null));
+  useEffect(() => {
+    const on = () => {
+      if (first() !== 'consoles') return;
+      setTab('consoles');
+      setConsoleId((routeArg() ?? '').split('/')[1] || null);
+    };
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
   // Endpoint Essentials and Standard keep the everyday tabs; Ultra adds the IT ones, Black Hole the network
   // environments (network controllers).
   const all: Array<{ id: Tab; label: ReactNode; need?: 'ultra' | 'blackhole' }> = [
@@ -845,6 +857,8 @@ export function NetworkPage({ advanced, everything, easterEggs }: { advanced: bo
     { id: 'printers', label: 'Printers' },
     { id: 'tools', label: 'Tools', need: 'ultra' },
     ...(IS_WINDOWS ? [{ id: 'adapters' as const, label: DIGGER ? 'Adapters' : advancedLabel('Adapters'), need: 'ultra' as const }] : []),
+    // FBRX OS has them in Terminal → Device consoles.
+    ...(DIGGER ? [{ id: 'consoles' as const, label: 'Consoles' }] : []),
   ];
   const tabs = all.filter((t) => !t.need || (t.need === 'ultra' ? advanced : everything)).map(({ need: _n, ...t }) => t);
   const shown = tabs.some((t) => t.id === tab) ? tab : 'overview';
@@ -854,6 +868,7 @@ export function NetworkPage({ advanced, everything, easterEggs }: { advanced: bo
       {!advanced && shown === 'overview' && <EditionHint>Network scans and device consoles come with Endpoint Ultra.</EditionHint>}
       {advanced && !everything && shown === 'overview' && <EditionHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole, through your organization’s FBRX Command.</EditionHint>}
       {shown === 'overview' && <Overview />}
+      {shown === 'consoles' && <DeviceConsolesPanel selected={consoleId} onSelect={setConsoleId} />}
       {shown === 'environments' && <Environments />}
       {shown === 'trace' && <Trace />}
       {shown === 'devices' && <Devices advanced={advanced} />}

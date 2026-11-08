@@ -7,6 +7,7 @@ import { Button, Callout, Empty, Field, Icons, InfoTip, Input, Modal, Select, St
 import { bridge, call, onEvent } from './client';
 import { useAgentName, useConsoleSessions, useCore } from './hooks';
 import { askAgent } from './widgets';
+import { DIGGER } from './app';
 
 // ------------------------------------------------------------------------------------ session output
 
@@ -21,6 +22,14 @@ onEvent('console.data', (e) => {
 
 
 const webUrl = (host: string, port: number) => `${[80, 8080, 5000, 8000].includes(port) ? 'http' : 'https'}://${host}${port === 80 || port === 443 ? '' : `:${port}`}`;
+
+/**
+ * Where a device console opens: Terminal → Device consoles in FBRX OS, the Network Center's Consoles tab in FBRX Digger
+ * (which has no Terminal page).
+ */
+export function consoleRoute(id?: string): string {
+  return DIGGER ? `network/consoles${id ? `/${id}` : ''}` : `terminal/console${id ? `/${id}` : ''}`;
+}
 
 // ---------------------------------------------------------------------------------- connect dialog
 
@@ -60,8 +69,13 @@ export function ConnectDialog({ target, onClose, onConnected }: { target?: Conne
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hostKey, setHostKey] = useState<{ fingerprint: string; keyType: string; status: 'new' | 'changed'; previous: string | null } | null>(null);
+  // The device key trusted in this dialog: a login that then fails (a wrong password) is tried again without asking
+  // about the key again. The device's key is saved once a login works.
+  const trusted = useRef<{ host: string; fingerprint: string } | null>(null);
 
-  const connect = async (trust?: string) => {
+  const connect = async (trustNow?: string) => {
+    if (trustNow) trusted.current = { host: host.trim(), fingerprint: trustNow };
+    const trust = trustNow ?? (trusted.current?.host === host.trim() ? trusted.current.fingerprint : undefined);
     setBusy(true);
     setError(null);
     try {
@@ -85,6 +99,9 @@ export function ConnectDialog({ target, onClose, onConnected }: { target?: Conne
       if ('hostKey' in r) setHostKey(r.hostKey);
       else onConnected(r.session);
     } catch (e) {
+      // The form shows why (a wrong password, a refused login…), with the password box there to try again: never
+      // left on the key question, where the error does not show.
+      setHostKey(null);
       setError((e as Error).message);
     } finally {
       setBusy(false);

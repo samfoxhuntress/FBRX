@@ -115,7 +115,8 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   let group = '';
   return (
     <Page title="Settings" description={`How FBRX looks and behaves on this computer. Settings your ${vertical === 'home' ? 'family' : 'organization'} manages show a lock.`}>
-      <EditionCard />
+      {/* FBRX Digger has no editions: every network tool, always. */}
+      {!DIGGER && <EditionCard />}
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Settings sections">
           {sections.map((x) => {

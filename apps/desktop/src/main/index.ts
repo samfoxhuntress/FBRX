@@ -677,6 +677,20 @@ function summonGoose() {
 
 function trayMenu() {
   if (!tray || !kernel) return;
+  // FBRX Digger: its name and version, open it, quit (no editions, approvals or FBRX Endpoint's tools).
+  if (FLAVOR === 'digger') {
+    tray.setContextMenu(
+      Menu.buildFromTemplate([
+        { label: `${APP_NAME} ${app.getVersion()}`, enabled: false },
+        { type: 'separator' },
+        { label: `Open ${APP_NAME}`, click: () => showWindow() },
+        { type: 'separator' },
+        { label: 'Quit', click: () => ((quitting = true), app.quit()) },
+      ]),
+    );
+    tray.setToolTip(APP_NAME);
+    return;
+  }
   const pending = kernel.approvals.size;
   const fleet = kernel.fleet.status();
   const vault = kernel.vault.status();
@@ -701,7 +715,7 @@ function trayMenu() {
     { label: 'Quit', click: () => ((quitting = true), app.quit()) },
   ];
   tray.setContextMenu(Menu.buildFromTemplate(template));
-  const name = FLAVOR === 'digger' ? APP_NAME : TIER_NAMES[kernel?.license.status().tier ?? 'basic'];
+  const name = TIER_NAMES[kernel?.license.status().tier ?? 'basic'];
   tray.setToolTip(pending ? `${name} — ${pending} approval(s) waiting` : name);
 }
 
@@ -873,7 +887,10 @@ function registerIpc() {
   // FBRX Browser: open or focus its own window (from the sidebar, the tray, or a link).
   ipcMain.handle('fbrx:browser', (e, action: unknown, url?: unknown) => {
     // Endpoint Essentials is the AI on its own; the browser comes with Standard and up (and on learners' computers).
-    if (!trusted(e) || action !== 'open' || kernel?.license.status().tier === 'essentials') return false;
+    if (!trusted(e) || action !== 'open') return false;
+    // FBRX Digger has no browser of its own: the page opens in the computer's browser.
+    if (FLAVOR === 'digger') return typeof url === 'string' && /^https?:\/\//i.test(url) ? (void shell.openExternal(url), true) : false;
+    if (kernel?.license.status().tier === 'essentials') return false;
     openBrowserWindow(browserDeps(), typeof url === 'string' && /^https?:\/\//i.test(url) ? url : undefined);
     return true;
   });
