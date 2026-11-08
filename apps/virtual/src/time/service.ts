@@ -50,6 +50,24 @@ export interface TimeServiceOptions {
   log: (level: 'info' | 'warn' | 'error', msg: string) => void;
   /** A computer's backup counts as finished when nothing in it changed for this long. */
   quietMs?: number;
+  /** This server's AI (the ai role), asked once for an answer; absent when the server has none. */
+  advise?: (prompt: string) => Promise<{ answer: string; model: string }>;
+}
+
+/** What this server's AI is asked about a check that failed or warned: the image, what the check saw, short. */
+export function advicePrompt(img: TimeImage): string {
+  const c = img.check;
+  return [
+    'You help someone who looks after the backups on their FBRX Server. FBRX Time checks every backup image by starting it as a throwaway virtual machine (its disks only read, on a private test network that reaches nothing else, or none), letting it run a few minutes, then looking at it: still running, the guest agent answering, its screen, whether it asked the test network for an address.',
+    'This check did not pass cleanly. Say in plain words what most likely went wrong, how worried to be about restoring from this image, and three to five concrete next steps (in the original machine or computer, in FBRX Time, or by restoring it to look). Keep it short; no headings.',
+    '',
+    `Image: ${img.subject} (${img.source === 'vm' ? 'a virtual machine on this server' : 'a computer'}), taken ${img.createdAt}, ${img.os ?? 'unknown system'}, ${img.firmware ?? 'unknown'} firmware, consistency ${img.consistency ?? 'unknown'}`,
+    `Disks: ${img.disks.map((d) => `${d.target} (${d.format}, ${d.bus})`).join(', ') || 'none'}`,
+    `Check: ${c.state}, ran ${c.seconds ?? '?'} seconds. ${c.detail}`,
+    `Guest agent: ${c.agent === null ? 'none answered (may not be installed)' : c.agent ? 'answered' : 'did not answer'}`,
+    `Test network: ${!c.network ? 'not tried' : c.network.address ? `got ${c.network.address}${c.network.answered ? ', answered a ping' : ', no answer to ping'}` : 'it did not ask for an address'}`,
+    `Screen at the end: ${c.screenshot ? 'kept (described in the check above)' : 'none'}`,
+  ].join('\n');
 }
 
 interface Pending {
@@ -240,6 +258,23 @@ export class TimeService {
 
   private saveCheck(id: string, c: BootCheck) {
     this.o.db.run('UPDATE time_images SET check_json = ? WHERE id = ?', JSON.stringify(c), id);
+  }
+
+  /**
+   * This server's AI looks at a check that failed or warned and says what to do; kept with the image's check. Asked
+   * by itself after such a check (Settings: AI advice on problems), or again from the image.
+   */
+  async advise(id: string): Promise<BootCheck> {
+    const img = this.image(id);
+    if (!this.o.advise) throw conflict("This server has no AI to ask (the ai role adds one)");
+    if (img.check.state !== 'failed' && img.check.state !== 'warning') throw conflict('Only a check that failed or warned has something to explain');
+    const r = await this.o.advise(advicePrompt(img));
+    // The check may have run again meanwhile: keep the advice only with the check it is about.
+    const now = this.image(id).check;
+    if (now.at !== img.check.at) return now;
+    const next = { ...now, advice: { text: r.answer.trim().slice(0, 6000), model: r.model, at: new Date().toISOString() } };
+    this.saveCheck(id, next);
+    return next;
   }
 
   /** The boot check's picture, as a data URL. */
@@ -450,8 +485,12 @@ export class TimeService {
       const seconds = this.settings().checkSeconds;
       const timer = setInterval(() => (task.progress = Math.min(99, Math.round(((Date.now() - started) / 1000 / seconds) * 100))), 2000);
       try {
-        const result = await this.o.driver.bootCheck(image, this.imageDir(image.id), scratch, seconds, signal);
+        const result = await this.o.driver.bootCheck(image, this.imageDir(image.id), scratch, seconds, signal, { network: this.settings().checkNetwork });
         this.saveCheck(image.id, result);
+        // A problem: this server's AI looks at it right away (it waits its turn with the AI, not with the checks).
+        if ((result.state === 'failed' || result.state === 'warning') && this.o.advise && this.settings().aiAdvice) {
+          void this.advise(image.id).catch((e) => this.o.log('warn', `FBRX Time: the AI could not look at the check of ${image.subject}: ${errorMessage(e)}`));
+        }
         if (result.state === 'failed') throw new Error(result.detail);
         return result.detail;
       } catch (e) {

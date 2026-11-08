@@ -7,7 +7,7 @@ import { useApp, usePoll, useRoute } from '../state';
 type Tab = 'overview' | 'jobs' | 'images' | 'computers' | 'settings';
 
 const CHECK_TONE: Record<BootCheckState, StatusTone> = { none: 'neutral', queued: 'busy', running: 'busy', passed: 'good', warning: 'warning', failed: 'critical' };
-const CHECK_WORDS: Record<BootCheckState, string> = { none: 'Not checked', queued: 'Check waiting', running: 'Checking…', passed: 'Starts', warning: 'Look at it', failed: 'Did not start' };
+const CHECK_WORDS: Record<BootCheckState, string> = { none: 'Not checked', queued: 'Check waiting', running: 'Checking…', passed: 'Tested: it starts', warning: 'Look at it', failed: 'Did not start' };
 const KIND_WORDS: Record<TimeTask['kind'], string> = { backup: 'Backup', check: 'Boot check', restore: 'Restore', import: 'Kept from the backup folder' };
 const CONSISTENCY: Record<TimeImage['consistency'], string> = {
   offline: 'The machine was off',
@@ -42,7 +42,7 @@ export function TimePage({ tab }: { tab?: string }) {
     );
   const s = st.data as TimeStatus | null;
   return (
-    <Page title="FBRX Time" description="Image backups of the virtual machines and computers, each checked by starting it as a throwaway machine with no network.">
+    <Page title="FBRX Time" description="Image backups of the virtual machines and computers, each checked by starting it as a throwaway machine that reaches nothing else.">
       {!s ? (
         st.error ? <Callout tone="critical" title="FBRX Time does not answer">{st.error}</Callout> : <Empty title="Loading…" />
       ) : (
@@ -295,14 +295,62 @@ function Jobs() {
   );
 }
 
-function ScreenDialog({ image, onClose }: { image: TimeImage; onClose: () => void }) {
+/** A boot check up close: what it saw, whether it came online, its screen, and what this server's AI makes of a problem. */
+function CheckDialog({ image, onClose, onChanged }: { image: TimeImage; onClose: () => void; onChanged: () => void }) {
+  const app = useApp();
+  const { run, busy } = useAction();
   const [src, setSrc] = useState<string | null>(null);
+  const [check, setCheck] = useState(image.check);
   useEffect(() => {
-    void api<{ dataUrl: string | null }>('GET', `/v1/time/images/${image.id}/screenshot`).then((r) => setSrc(r.dataUrl));
-  }, [image.id]);
+    if (image.check.screenshot) void api<{ dataUrl: string | null }>('GET', `/v1/time/images/${image.id}/screenshot`).then((r) => setSrc(r.dataUrl));
+  }, [image.id, image.check.screenshot]);
+  const problem = check.state === 'failed' || check.state === 'warning';
+  const n = check.network;
   return (
-    <Modal title={`${image.subject}: its screen at the boot check`} description={image.check.detail} onClose={onClose} wide footer={<Button onClick={onClose}>Close</Button>}>
-      {src ? <img className="time-shot" src={src} alt={`The screen of ${image.subject} during its boot check`} /> : <Empty title={image.check.screenshot ? 'Loading…' : 'No picture from this check'} />}
+    <Modal
+      title={`${image.subject}: its boot check`}
+      description={`${formatDate(image.createdAt)} · ${CHECK_WORDS[check.state]}${check.at ? `, ${timeAgo(check.at)}` : ''}`}
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          {problem && app.has('ai') && app.can('operator') && (
+            <Button
+              icon="sparkles"
+              loading={busy === 'ai'}
+              onClick={() =>
+                void run('ai', async () => {
+                  const r = await api<{ check: TimeImage['check'] }>('POST', `/v1/time/images/${image.id}/advice`);
+                  setCheck(r.check);
+                  onChanged();
+                })
+              }
+            >
+              {check.advice ? 'Ask the AI again' : 'Ask the AI'}
+            </Button>
+          )}
+          <Button onClick={onClose}>Close</Button>
+        </>
+      }
+    >
+      <p style={{ marginTop: 0 }}>
+        <Status tone={CHECK_TONE[check.state]}>{CHECK_WORDS[check.state]}</Status> {check.detail}
+      </p>
+      <KeyValue
+        items={[
+          ['Ran', check.seconds !== null ? `${check.seconds} seconds` : '—'],
+          ['Guest agent', check.agent === null ? 'Did not answer (it may not have one)' : check.agent ? 'Answered: the system is up' : 'Did not answer'],
+          ['Online', !n ? 'Not tried (no network card)' : n.address ? `Yes: got ${n.address} on the test network${n.answered ? ' and answered a ping' : ' (no answer to a ping: its firewall, most likely)'}` : 'Did not ask the test network for an address'],
+        ]}
+      />
+      {check.advice && (
+        <div className="vt-assist-answer time-advice">
+          <b>This server's AI: </b>
+          {check.advice.text}
+          <small className="fx-muted"> · {timeAgo(check.advice.at)}</small>
+        </div>
+      )}
+      {check.screenshot ? src ? <img className="time-shot" src={src} alt={`The screen of ${image.subject} during its boot check`} /> : <Empty title="Loading…" /> : null}
     </Modal>
   );
 }
@@ -348,7 +396,7 @@ function Images() {
   return (
     <Card
       title="Images"
-      subtitle="Newest first. Boot check: the image started as a throwaway machine with no network, looked at, then deleted (the image itself is only read)."
+      subtitle="Newest first. Boot check: the image started as a throwaway machine (on a private test network that reaches nothing else), looked at, then deleted; the image itself is only read."
       actions={
         <div style={{ width: 220 }}>
           <Select value={subject} onChange={(e) => setSubject(e.target.value)} aria-label="Machine" options={[{ value: '', label: 'Every machine' }, ...subjects]} />
@@ -369,7 +417,13 @@ function Images() {
             render: (i) => (
               <span className="time-check" title={i.check.detail}>
                 <Status tone={CHECK_TONE[i.check.state]}>{CHECK_WORDS[i.check.state]}</Status>
-                {i.check.at && <small className="fx-muted">{timeAgo(i.check.at)}</small>}
+                {i.check.at && (
+                  <small className="fx-muted">
+                    {timeAgo(i.check.at)}
+                    {i.check.network?.address ? ' · came online' : ''}
+                    {i.check.advice ? ' · the AI looked at it' : ''}
+                  </small>
+                )}
               </span>
             ),
           },
@@ -379,9 +433,9 @@ function Images() {
             width: 300,
             render: (i) => (
               <div className="fx-actions" style={{ justifyContent: 'flex-end', flexWrap: 'nowrap' }}>
-                {i.check.screenshot && (
-                  <Button size="sm" variant="ghost" icon="eye" onClick={() => setLook(i)}>
-                    Screen
+                {i.check.at && (
+                  <Button size="sm" variant="ghost" icon={i.check.advice ? 'sparkles' : 'eye'} onClick={() => setLook(i)}>
+                    Details
                   </Button>
                 )}
                 {app.can('operator') && (
@@ -411,7 +465,7 @@ function Images() {
         ]}
         empty={<Empty title="No images yet">Back up a machine, or connect a computer to the backup folder.</Empty>}
       />
-      {look && <ScreenDialog image={look} onClose={() => setLook(null)} />}
+      {look && <CheckDialog image={look} onClose={() => setLook(null)} onChanged={() => void images.reload()} />}
       {restore && <RestoreDialog image={restore} onClose={() => setRestore(null)} />}
       {dialog}
     </Card>
@@ -492,6 +546,8 @@ function Settings({ s, reload }: { s: TimeStatus; reload: () => Promise<void> })
     <Card title="Settings">
       <div className="fx-form">
         <Toggle checked={s.settings.verifyComputers} onChange={(v) => save({ verifyComputers: v })} label="Check computers' images when they arrive (start each one as a throwaway machine)" />
+        <Toggle checked={s.settings.checkNetwork} onChange={(v) => save({ checkNetwork: v })} label="See it come online: give the throwaway machine a private test network that reaches nothing else" />
+        <Toggle checked={s.settings.aiAdvice} onChange={(v) => save({ aiAdvice: v })} label="When a check fails or warns, this server's AI looks at it and says what to do (with the ai role)" />
         <Field label="How long a boot check lets the machine run" help="Then it looks at the machine: still running, its screen, and (when the machine has one) its guest agent. Windows can need a few minutes.">
           <div className="fx-actions">
             <Input type="number" min={30} max={1800} value={seconds} style={{ width: 120 }} onChange={(e) => setSeconds(Number(e.target.value))} onBlur={() => seconds !== s.settings.checkSeconds && save({ checkSeconds: seconds })} />

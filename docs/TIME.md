@@ -18,19 +18,30 @@ would and watches it start:
 
 1. It makes a **throwaway copy-on-write layer** over each of the image's disks. The image itself is only read; nothing
    the test machine writes reaches it.
-2. It starts a **temporary virtual machine** from those layers with **no network card** (it cannot talk to anything,
-   so a copy of a server does not answer for the real one), the same firmware as the original (BIOS or UEFI), and its
-   screen reachable only from the server itself.
+2. It starts a **temporary virtual machine** from those layers, with the same firmware as the original (BIOS or UEFI)
+   and its screen reachable only from the server itself. Its one network card is on a **private test network**
+   (`fbrx-time-check`, 10.254.254.0/24) that forwards nothing anywhere: it can ask for an address there and nothing
+   else, so a copy of a server never answers for the real one. (Settings → *See it come online* off: no network card
+   at all.)
 3. It lets the machine run (three minutes by default; *FBRX Time → Settings*), then looks at it:
    * **Still running?** A machine that stops by itself, or never starts, **fails** the check.
    * **The guest agent answered?** When the machine has a guest agent, its answer means the operating system is up.
      That **passes**.
-   * **Its screen.** FBRX Time keeps a picture of the screen at the end (*Images → Screen*). A desktop or sign-in
-     picture **passes**; a text console or a blank screen gets a **warning** (it started, but someone should look).
+   * **Did it come online?** A machine whose system starts its network asks the test network for an address. Getting
+     one **passes** (a server on a text console too), and FBRX Time also tries a ping (many computers' firewalls do
+     not answer one, which is fine). A machine with a fixed address does not ask, which is not held against it.
+   * **Its screen.** FBRX Time keeps a picture of the screen at the end (*Images → Details*). A desktop or sign-in
+     picture **passes**; a text console or a blank screen that did not come online gets a **warning** (it started,
+     but someone should look).
 4. It **shuts the machine down and deletes it**, and its throwaway layers with it.
 
 Checks run one at a time, after backups, so a busy server is not swamped. *Check* on an image runs one again
-whenever you like.
+whenever you like. An image that passed reads **Tested: it starts**.
+
+**When a check fails or warns**, this server's AI (with the ai role) looks at what the check saw (how long it ran,
+the guest agent, the network, the screen) and leaves its advice with the image: what most likely went wrong, how much
+to worry about restoring from it, and what to do next. *Images → Details* shows it; **Ask the AI again** asks anew
+(after a fix, say). Settings → *When a check fails or warns, this server's AI looks at it* turns that off.
 
 ## Virtual machines (FBRX Server)
 
@@ -144,8 +155,9 @@ operator; jobs, restores, deleting images and settings need an administrator.
 | `POST /v1/time/backup` `{ vmId }` | One image now |
 | `GET /v1/time/images[?subject=]` | Images, newest first |
 | `POST /v1/time/images/:id/check` | Boot-check again |
+| `POST /v1/time/images/:id/advice` | This server's AI looks at a check that failed or warned (operators) |
 | `GET /v1/time/images/:id/screenshot` | The boot check's screen (PNG) |
 | `POST /v1/time/images/:id/restore` `{ name }` | A new virtual machine (or, for a computer, a copy in the backup folder) |
 | `DELETE /v1/time/images/:id` | Delete an image |
 | `POST /v1/time/computers/scan` | Look for finished computer backups now |
-| `PUT /v1/time/settings` | Boot-check computers, how long a check runs, images kept per computer |
+| `PUT /v1/time/settings` | Boot-check computers, how long a check runs, images kept per computer, the online check (`checkNetwork`), the AI's advice (`aiAdvice`) |

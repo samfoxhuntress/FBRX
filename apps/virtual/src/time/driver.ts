@@ -1,6 +1,7 @@
 import { spawn } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, rmSync, statSync, unlinkSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import type { BootCheck, TimeDiskFile, TimeImage, VmDetail } from '@fbrx/shared';
 import { VirtualError, badRequest } from '../errors';
@@ -10,7 +11,8 @@ import { lookAt, readPpm, samplePicture, toPng, type ScreenLook } from './png';
 
 /**
  * What FBRX Time needs from the hypervisor: copy a virtual machine's disks at one moment (while it runs, too), open an
- * image as a throwaway machine with no network to see whether it starts, and make a new machine from an image. The
+ * image as a throwaway machine (on a private test network at most) to see whether it starts and comes online, and make
+ * a new machine from an image. The
  * libvirt driver does it with virsh and qemu-img; the simulated one pretends, for development, demos and tests.
  */
 export interface TimeDriver {
@@ -18,7 +20,7 @@ export interface TimeDriver {
   /** Images can be opened here (a hypervisor is installed). */
   canBoot(): Promise<boolean>;
   backupVm(vm: VmDetail, dir: string, progress: (pct: number) => void): Promise<{ disks: TimeDiskFile[]; consistency: TimeImage['consistency']; domainXml: string | null }>;
-  bootCheck(image: TimeImage, dir: string, scratch: string, seconds: number, signal?: AbortSignal): Promise<BootCheck>;
+  bootCheck(image: TimeImage, dir: string, scratch: string, seconds: number, signal?: AbortSignal, o?: { network: boolean }): Promise<BootCheck>;
   restore(image: TimeImage, dir: string, name: string, imagesDir: string): Promise<{ vmName: string }>;
   /** Format and size of a disk file that arrived from a computer. */
   inspect(file: string): Promise<{ format: TimeDiskFile['format']; virtualBytes: number | null }>;
@@ -30,16 +32,50 @@ const sleep = (ms: number, signal?: AbortSignal) =>
     signal?.addEventListener('abort', () => (clearTimeout(t), resolve()), { once: true });
   });
 
+/** The private test network a boot check's machine may join: it reaches nothing but a DHCP server on this one. */
+export const CHECK_NETWORK = { name: 'fbrx-time-check', bridge: 'fbrxtime0', address: '10.254.254.1', start: '10.254.254.100', end: '10.254.254.199' } as const;
+
+/** Whether an address answers a ping within two seconds. */
+const ping = (address: string): Promise<boolean> =>
+  new Promise((resolve) => {
+    const p = spawn('ping', ['-c', '1', '-W', '2', address], { stdio: 'ignore' });
+    p.on('error', () => resolve(false));
+    p.on('close', (code) => resolve(code === 0));
+  });
+
 /** How a boot check reads what it saw, in words people use. */
-export function judgeCheck(o: { ranSeconds: number; stoppedEarly: string | null; agent: boolean | null; screen: ScreenLook | null; screenshot: string | null; at: string }): BootCheck {
+export function judgeCheck(o: { ranSeconds: number; stoppedEarly: string | null; agent: boolean | null; screen: ScreenLook | null; screenshot: string | null; at: string; network?: BootCheck['network'] }): BootCheck {
   const mins = o.ranSeconds >= 120 ? `${Math.round(o.ranSeconds / 60)} minutes` : `${o.ranSeconds} seconds`;
-  const base = { at: o.at, seconds: o.ranSeconds, screenshot: o.screenshot, agent: o.agent };
+  const base = { at: o.at, seconds: o.ranSeconds, screenshot: o.screenshot, agent: o.agent, network: o.network ?? null };
+  const n = o.network;
+  // Came online: it asked the test network for an address (and maybe answered a ping there).
+  const online = n?.address ? ` It came online on the test network (it got ${n.address}${n.answered ? ' and answered a ping' : ''}).` : '';
+  const offline = n && !n.address ? ' It did not ask the test network for an address (it may have a fixed one, or its network did not come up).' : '';
   if (o.stoppedEarly) return { ...base, state: 'failed', detail: `It stopped by itself after ${mins} (${o.stoppedEarly}). The image may not start; see its screen.` };
-  if (o.agent) return { ...base, state: 'passed', detail: `Started and kept running for ${mins}; the guest agent answered, so its operating system is up.` };
-  if (o.screen?.graphical) return { ...base, state: 'passed', detail: `Started and kept running for ${mins}; its screen shows a desktop or sign-in picture.` };
-  if (o.screen && !o.screen.blank) return { ...base, state: 'warning', detail: `Kept running for ${mins}, but its screen shows only text: a server's sign-in prompt, or a boot error. Look at the picture.` };
-  return { ...base, state: 'warning', detail: `Kept running for ${mins}, but its screen stayed blank. It may still be starting, or it did not find what to start.` };
+  if (o.agent) return { ...base, state: 'passed', detail: `Started and kept running for ${mins}; the guest agent answered, so its operating system is up.${online || offline}` };
+  if (o.screen?.graphical) return { ...base, state: 'passed', detail: `Started and kept running for ${mins}; its screen shows a desktop or sign-in picture.${online || offline}` };
+  // A server's text console that came online is up, too.
+  if (n?.address) return { ...base, state: 'passed', detail: `Started and kept running for ${mins}.${online}${o.screen && !o.screen.blank ? ' Its screen shows text (a server’s sign-in prompt).' : ''}` };
+  if (o.screen && !o.screen.blank) return { ...base, state: 'warning', detail: `Kept running for ${mins}, but its screen shows only text: a server's sign-in prompt, or a boot error. Look at the picture.${offline}` };
+  return { ...base, state: 'warning', detail: `Kept running for ${mins}, but its screen stayed blank. It may still be starting, or it did not find what to start.${offline}` };
 }
+
+/** The test network as libvirt defines it: no forwarding, so nothing it carries leaves this server. */
+export function checkNetworkXml(): string {
+  const n = CHECK_NETWORK;
+  return [
+    '<network>',
+    `  <name>${n.name}</name>`,
+    `  <bridge name='${n.bridge}' stp='off'/>`,
+    `  <ip address='${n.address}' netmask='255.255.255.0'>`,
+    `    <dhcp><range start='${n.start}' end='${n.end}'/></dhcp>`,
+    '  </ip>',
+    '</network>',
+  ].join('\n');
+}
+
+/** A made-up, locally administered hardware address on the range libvirt uses for its machines. */
+export const checkMac = () => `52:54:00:${[0, 0, 0].map(() => Math.floor(Math.random() * 256).toString(16).padStart(2, '0')).join(':')}`;
 
 // ------------------------------------------------------------------------------------------------ libvirt
 
@@ -71,8 +107,8 @@ function qemuImg(args: string[], progress?: (pct: number) => void, timeoutMs = 1
   });
 }
 
-/** The domain XML of a throwaway machine for a boot check: the image's disks behind scratch overlays, no network. */
-export function checkDomainXml(o: { name: string; uuid: string; image: TimeImage; overlays: Array<{ path: string; target: string; bus: string }>; memoryMb: number; cpus: number; domainType: 'kvm' | 'qemu' }): string {
+/** The domain XML of a throwaway machine for a boot check: the image's disks behind scratch overlays; no network, or the test network. */
+export function checkDomainXml(o: { name: string; uuid: string; image: TimeImage; overlays: Array<{ path: string; target: string; bus: string }>; memoryMb: number; cpus: number; domainType: 'kvm' | 'qemu'; mac?: string | null }): string {
   const uefi = o.image.firmware === 'uefi';
   const win = o.image.os === 'windows';
   return [
@@ -94,7 +130,9 @@ export function checkDomainXml(o: { name: string; uuid: string; image: TimeImage
     `  <on_crash>destroy</on_crash>`,
     `  <devices>`,
     ...o.overlays.map((d) => `    <disk type='file' device='disk'><driver name='qemu' type='qcow2'/><source file='${esc(d.path)}'/><target dev='${esc(d.target)}' bus='${esc(d.bus)}'/></disk>`),
-    // No network card: the copy must not meet the real machine on the network.
+    // The copy must not meet the real machine on the network: no network card, or one on the test network, which
+    // reaches nothing but its own DHCP server here.
+    o.mac ? `    <interface type='network'><source network='${CHECK_NETWORK.name}'/><mac address='${o.mac}'/><model type='${win ? 'e1000e' : 'virtio'}'/></interface>` : '',
     `    <channel type='unix'><target type='virtio' name='org.qemu.guest_agent.0'/></channel>`,
     `    <graphics type='vnc' port='-1' autoport='yes' listen='127.0.0.1'/>`,
     `    <video><model type='${win ? 'vga' : 'virtio'}'/></video>`,
@@ -222,7 +260,34 @@ export class LibvirtTimeDriver implements TimeDriver {
     return { disks: out, consistency, domainXml };
   }
 
-  async bootCheck(image: TimeImage, dir: string, scratch: string, seconds: number, signal?: AbortSignal): Promise<BootCheck> {
+  /** The test network, defined and started (once; it starts with the server from then on). False when it cannot be. */
+  private async checkNetwork(): Promise<boolean> {
+    const info = await this.virsh(['net-info', CHECK_NETWORK.name]).catch(() => null);
+    try {
+      if (info === null) {
+        const file = join(tmpdir(), `fbrx-time-check-net-${randomUUID()}.xml`);
+        writeFileSync(file, checkNetworkXml());
+        try {
+          await this.virsh(['net-define', file]);
+        } finally {
+          rmSync(file, { force: true });
+        }
+        await this.virsh(['net-autostart', CHECK_NETWORK.name]).catch(() => undefined);
+      }
+      if (!/Active:\s+yes/.test(info ?? '')) await this.virsh(['net-start', CHECK_NETWORK.name]);
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The address the test network's DHCP server gave this hardware address, if any. */
+  private async leaseOf(mac: string): Promise<string | null> {
+    const out = await this.virsh(['net-dhcp-leases', CHECK_NETWORK.name, '--mac', mac]).catch(() => '');
+    return /(\d{1,3}(?:\.\d{1,3}){3})\/\d+/.exec(out)?.[1] ?? null;
+  }
+
+  async bootCheck(image: TimeImage, dir: string, scratch: string, seconds: number, signal?: AbortSignal, o: { network: boolean } = { network: true }): Promise<BootCheck> {
     mkdirSync(scratch, { recursive: true });
     const name = `fbrx-time-check-${image.id.slice(0, 8)}`;
     const facts = this.opts.facts(image);
@@ -237,12 +302,14 @@ export class LibvirtTimeDriver implements TimeDriver {
         await qemuImg(['create', '-q', '-f', 'qcow2', '-F', d.format, '-b', join(dir, d.file), path]);
         overlays.push({ path, target: d.target, bus: d.bus });
       }
+      const mac = o.network && (await this.checkNetwork()) ? checkMac() : null;
       const xmlFile = join(scratch, 'domain.xml');
-      writeFileSync(xmlFile, checkDomainXml({ name, uuid: randomUUID(), image, overlays, memoryMb: Math.min(Math.max(facts.memoryMb, 1024), 16384), cpus: Math.min(Math.max(facts.cpus, 1), 4), domainType: await this.domainType() }));
+      writeFileSync(xmlFile, checkDomainXml({ name, uuid: randomUUID(), image, overlays, memoryMb: Math.min(Math.max(facts.memoryMb, 1024), 16384), cpus: Math.min(Math.max(facts.cpus, 1), 4), domainType: await this.domainType(), mac }));
       await this.virsh(['create', xmlFile]);
       const t0 = Date.now();
       let stoppedEarly: string | null = null;
       let agent: boolean | null = null;
+      const network: BootCheck['network'] = mac ? { address: null, answered: null } : null;
       while (Date.now() - t0 < seconds * 1000 && !signal?.aborted) {
         await sleep(5000, signal);
         const state = (await this.virsh(['domstate', name]).catch(() => 'shut off')).trim();
@@ -255,6 +322,8 @@ export class LibvirtTimeDriver implements TimeDriver {
             .then(() => true)
             .catch(() => (agent === null ? null : false));
         }
+        if (network && mac && !network.address) network.address = await this.leaseOf(mac);
+        if (network?.address && network.answered !== true) network.answered = await ping(network.address);
       }
       if (signal?.aborted) throw new VirtualError(409, 'The check was stopped');
       const ranSeconds = Math.round((Date.now() - t0) / 1000);
@@ -271,7 +340,7 @@ export class LibvirtTimeDriver implements TimeDriver {
           /* no picture */
         }
       }
-      return judgeCheck({ ranSeconds, stoppedEarly, agent, screen, screenshot, at });
+      return judgeCheck({ ranSeconds, stoppedEarly, agent, screen, screenshot, at, network });
     } finally {
       await this.virsh(['destroy', name]).catch(() => undefined);
       rmSync(scratch, { recursive: true, force: true });
@@ -335,15 +404,17 @@ export class SimulatedTimeDriver implements TimeDriver {
     return { disks: out, consistency: (vm.state === 'running' ? 'quiesced' : 'offline') as TimeImage['consistency'], domainXml: `<domain><name>${esc(vm.name)}</name></domain>` };
   }
 
-  async bootCheck(image: TimeImage, dir: string, _scratch: string, seconds: number): Promise<BootCheck> {
+  async bootCheck(image: TimeImage, dir: string, _scratch: string, seconds: number, _signal?: AbortSignal, o: { network: boolean } = { network: true }): Promise<BootCheck> {
     await sleep(this.opts.delayMs ?? 0);
     const at = new Date().toISOString();
-    if (this.outcome === 'stops') return judgeCheck({ ranSeconds: 12, stoppedEarly: 'shut off', agent: null, screen: null, screenshot: null, at });
+    // A machine that starts properly asks the test network for an address; one stuck on a text screen does not.
+    const network = o.network ? (this.outcome === 'passed' ? { address: '10.254.254.123', answered: true } : { address: null, answered: null }) : null;
+    if (this.outcome === 'stops') return judgeCheck({ ranSeconds: 12, stoppedEarly: 'shut off', agent: null, screen: null, screenshot: null, at, network });
     const pic = this.outcome === 'text' ? { width: 160, height: 100, rgb: Buffer.alloc(160 * 100 * 3) } : samplePicture(320, 200, image.os === 'windows' ? 210 : 120);
     if (this.outcome === 'text') for (let i = 0; i < 400; i += 3) pic.rgb[i * 30] = 200;
     const screenshot = `check-${at.replace(/[:.]/g, '-')}.png`;
     writeFileSync(join(dir, screenshot), toPng(pic));
-    return judgeCheck({ ranSeconds: seconds, stoppedEarly: null, agent: image.source === 'vm' && this.outcome === 'passed', screen: lookAt(pic), screenshot, at });
+    return judgeCheck({ ranSeconds: seconds, stoppedEarly: null, agent: image.source === 'vm' && this.outcome === 'passed', screen: lookAt(pic), screenshot, at, network });
   }
 
   async restore(image: TimeImage, _dir: string, name: string): Promise<{ vmName: string }> {

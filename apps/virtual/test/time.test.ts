@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { decodeTimeCode, type TimeImage, type TimeTask } from '@fbrx/shared';
 import { loadConfig } from '../src/config';
 import { buildServer, type BuiltVirtual } from '../src/server';
-import { checkDomainXml, judgeCheck, SimulatedTimeDriver } from '../src/time/driver';
+import { checkDomainXml, checkNetworkXml, judgeCheck, SimulatedTimeDriver } from '../src/time/driver';
 import { lookAt, readPpm, samplePicture, toPng } from '../src/time/png';
 
 // FBRX Server with the virtual and time roles, on the simulated hypervisor.
@@ -87,7 +87,8 @@ describe('FBRX Time on FBRX Server', () => {
     expect(tasks.find((t) => t.kind === 'check')).toMatchObject({ state: 'done', detail: expect.stringContaining('guest agent answered') });
 
     const [img] = await images('files-01');
-    expect(img).toMatchObject({ source: 'vm', jobId: job.id, os: 'linux', firmware: 'uefi', consistency: 'quiesced', check: { state: 'passed', agent: true, screenshot: expect.stringMatching(/^check-.+\.png$/) } });
+    expect(img).toMatchObject({ source: 'vm', jobId: job.id, os: 'linux', firmware: 'uefi', consistency: 'quiesced', check: { state: 'passed', agent: true, screenshot: expect.stringMatching(/^check-.+\.png$/), network: { address: '10.254.254.123', answered: true } } });
+    expect(img.check.detail).toContain('came online on the test network (it got 10.254.254.123 and answered a ping)');
     expect(img.disks[0]).toMatchObject({ format: 'qcow2', file: expect.stringMatching(/\.qcow2$/) });
     const shot = (await req('GET', `/v1/time/images/${img.id}/screenshot`, viewer)).body.dataUrl as string;
     expect(shot.startsWith('data:image/png;base64,iVBORw0KGgo')).toBe(true);
@@ -136,7 +137,10 @@ describe('FBRX Time on FBRX Server', () => {
     driver.outcome = 'text';
     await req('POST', `/v1/time/images/${img.id}/check`, operator);
     await settle();
-    expect((await images('files-01'))[0].check).toMatchObject({ state: 'warning', detail: expect.stringContaining('only text') });
+    expect((await images('files-01'))[0].check).toMatchObject({ state: 'warning', detail: expect.stringContaining('only text'), network: { address: null } });
+    expect((await images('files-01'))[0].check.detail).toContain('did not ask the test network for an address');
+    // No AI on this server: nothing to ask.
+    expect((await req('POST', `/v1/time/images/${img.id}/advice`, operator)).status).toBe(409);
     driver.outcome = 'passed';
 
     expect((await req('POST', `/v1/time/images/${img.id}/restore`, operator, { name: 'files-restored' })).status).toBe(403);
@@ -188,7 +192,7 @@ describe('FBRX Time on FBRX Server', () => {
   it('changes its settings for administrators, within limits', async () => {
     expect((await req('PUT', '/v1/time/settings', operator, { checkSeconds: 60 })).status).toBe(403);
     expect((await req('PUT', '/v1/time/settings', admin, { checkSeconds: 5 })).status).toBe(400);
-    expect((await req('PUT', '/v1/time/settings', admin, { checkSeconds: 300, verifyComputers: false })).body.settings).toEqual({ verifyComputers: false, checkSeconds: 300, keepComputer: 7 });
+    expect((await req('PUT', '/v1/time/settings', admin, { checkSeconds: 300, verifyComputers: false })).body.settings).toEqual({ verifyComputers: false, checkSeconds: 300, keepComputer: 7, checkNetwork: true, aiAdvice: true });
   });
 });
 
@@ -210,6 +214,10 @@ describe('Boot checks, in pieces', () => {
     expect(judgeCheck({ ranSeconds: 180, stoppedEarly: null, agent: true, screen: null, screenshot: null, at })).toMatchObject({ state: 'passed', detail: expect.stringContaining('3 minutes') });
     expect(judgeCheck({ ranSeconds: 90, stoppedEarly: null, agent: null, screen: { blank: true, colors: 1, graphical: false }, screenshot: 'x.png', at }).state).toBe('warning');
     expect(judgeCheck({ ranSeconds: 9, stoppedEarly: 'crashed', agent: null, screen: null, screenshot: null, at })).toMatchObject({ state: 'failed', detail: expect.stringContaining('9 seconds (crashed)') });
+    // A server's text console that came online on the test network is up.
+    const text = { blank: false, colors: 2, graphical: false };
+    expect(judgeCheck({ ranSeconds: 180, stoppedEarly: null, agent: null, screen: text, screenshot: 'x.png', at, network: { address: '10.254.254.140', answered: false } })).toMatchObject({ state: 'passed', detail: expect.stringContaining('it got 10.254.254.140)') });
+    expect(judgeCheck({ ranSeconds: 180, stoppedEarly: null, agent: null, screen: text, screenshot: 'x.png', at, network: { address: null, answered: null } }).state).toBe('warning');
   });
 
   it('opens the image with no network card, behind scratch disks', () => {
@@ -219,5 +227,54 @@ describe('Boot checks, in pieces', () => {
     expect(xml).toContain("firmware='efi'");
     expect(xml).toContain('org.qemu.guest_agent.0');
     expect(xml).not.toContain('<interface');
+    // With the online check: a card on the test network, which forwards nowhere.
+    const online = checkDomainXml({ name: 'c', uuid: '00000000-0000-0000-0000-000000000002', image, overlays: [], memoryMb: 1024, cpus: 1, domainType: 'kvm', mac: '52:54:00:aa:bb:cc' });
+    expect(online).toContain("<interface type='network'><source network='fbrx-time-check'/><mac address='52:54:00:aa:bb:cc'/><model type='virtio'/></interface>");
+    expect(checkNetworkXml()).toContain("<dhcp><range start='10.254.254.100' end='10.254.254.199'/></dhcp>");
+    expect(checkNetworkXml()).not.toContain('<forward');
+  });
+});
+
+describe('FBRX Time with this server’s AI', () => {
+  it('has the AI look at a check that failed, by itself and again on request', async () => {
+    const d = mkdtempSync(join(tmpdir(), 'fbrx-time-ai-'));
+    const tokenFile = join(d, 'console.token');
+    writeFileSync(tokenFile, 'fbrx_console_x\n', { mode: 0o600 });
+    const prompts: string[] = [];
+    const coreFetch = (async (url: string, init?: RequestInit) => {
+      const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { 'content-type': 'application/json' } });
+      if (String(url).endsWith('/v1/health')) return json({ ok: true, version: '2.3.2' });
+      const { method, params } = JSON.parse(String(init?.body ?? '{}'));
+      if (method === 'ai.quick') {
+        prompts.push(params.prompt);
+        return json({ result: { answer: `Most likely the boot disk is missing (answer ${prompts.length}).`, model: 'm' } });
+      }
+      return new Response(JSON.stringify({ error: { message: `no ${method}` } }), { status: 404 });
+    }) as typeof fetch;
+    const drv = new SimulatedTimeDriver();
+    const config = loadConfig({ FBRX_V_DATA_DIR: d, FBRX_V_ROLES: 'virtual,time,ai', FBRX_V_DRIVER: 'simulated', FBRX_V_TIME_SHARE_FILE: join(d, 'share.env'), FBRX_V_TLS: 'off', FBRX_V_LOG_LEVEL: 'silent', FBRX_V_SYS_ROOT: join(d, 'no-sysfs'), FBRX_V_ADMIN_USER: 'sam', FBRX_V_ADMIN_PASSWORD: 'correct horse battery', FBRX_V_CORE_URL: 'http://127.0.0.1:1/', FBRX_V_CORE_TOKEN_FILE: tokenFile });
+    const v = await buildServer(config, { timeDriver: drv, coreFetch });
+    try {
+      const token = (await v.app.inject({ method: 'POST', url: '/v1/auth/login', payload: { username: 'sam', password: 'correct horse battery' } })).json().token as string;
+      const call = async (method: string, url: string, payload?: unknown) => (await v.app.inject({ method: method as 'GET', url, headers: { authorization: `Bearer ${token}` }, payload: payload as never })).json();
+      const vm = (await call('GET', '/v1/vms')).vms[0];
+      const job = (await call('POST', '/v1/time/jobs', { vmId: vm.id, schedule: 'daily', time: '21:30', day: 1, verify: true, keep: 2 })).job;
+      drv.outcome = 'stops';
+      await call('POST', `/v1/time/jobs/${job.id}/run`);
+      let img: TimeImage | undefined;
+      for (let i = 0; i < 200 && !img?.check.advice; i++) {
+        await new Promise((r) => setTimeout(r, 25));
+        img = (await call('GET', '/v1/time/images')).images[0];
+      }
+      expect(img!.check).toMatchObject({ state: 'failed', advice: { text: 'Most likely the boot disk is missing (answer 1).', model: 'm' } });
+      expect(prompts[0]).toContain(`Image: ${vm.name}`);
+      expect(prompts[0]).toMatch(/Check: failed, ran 12 seconds\. It stopped by itself/);
+      // Ask again: a new answer replaces the old one.
+      const again = await call('POST', `/v1/time/images/${img!.id}/advice`);
+      expect(again.check.advice.text).toContain('answer 2');
+    } finally {
+      await v.close();
+      rmSync(d, { recursive: true, force: true });
+    }
   });
 });

@@ -16,8 +16,9 @@ MiniDome**, [MINIDOME.md](MINIDOME.md)). Same console, *Gate* pages.
 
 With the **time** role the server makes image backups (**FBRX Time**, [TIME.md](TIME.md)): its virtual machines on a
 schedule while they run, and the computers that send it their whole-computer images. It checks every image the way a
-restore would: it opens it as a throwaway virtual machine with no network, confirms it starts, then shuts it down and
-deletes it. Same console, *FBRX Time* page.
+restore would: it opens it as a throwaway virtual machine on a private test network that reaches nothing else,
+confirms it starts and comes online, then shuts it down and deletes it; with the ai role, the server's AI explains a
+check that fails. Same console, *FBRX Time* page.
 
 With the **command** role the server runs your organization's **FBRX Command**: the computers that join it, their
 settings and policy, licenses, updates, backups and help desk, with its own console on port **8787**. It runs day and

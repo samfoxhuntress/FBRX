@@ -1,6 +1,6 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { hostname, networkInterfaces } from 'node:os';
-import { randomBytes, timingSafeEqual } from 'node:crypto';
+import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { dirname, join } from 'node:path';
@@ -208,7 +208,17 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   if (config.roles.includes('time')) {
     let time: TimeService | null = null;
     const driver = opts.timeDriver ?? (config.time.mode === 'libvirt' ? new LibvirtTimeDriver({ uri: config.libvirtUri, facts: (img) => time!.factsOf(img) }) : new SimulatedTimeDriver({ delayMs: 1500 }));
-    time = new TimeService({ db, hv, driver, dir: config.time.dir, shareFile: config.time.shareFile, imagesDir: config.imagesDir, log: (level, msg) => app.log[level](msg) });
+    time = new TimeService({
+      db,
+      hv,
+      driver,
+      dir: config.time.dir,
+      shareFile: config.time.shareFile,
+      imagesDir: config.imagesDir,
+      log: (level, msg) => app.log[level](msg),
+      // With the ai role, this server's AI looks at checks that fail or warn.
+      advise: config.roles.includes('ai') ? (prompt) => ctx.core.call<{ answer: string; model: string }>('ai.quick', { reqId: randomUUID(), prompt }, 'fbrx-time', 120_000) : undefined,
+    });
     ctx.time = time;
     time.start();
   }

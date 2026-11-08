@@ -69,6 +69,13 @@ export interface BootCheck {
   screenshot: string | null;
   /** The machine's guest agent answered (the operating system is up), when it has one. */
   agent: boolean | null;
+  /**
+   * Whether it came online, on a private test network that reaches nothing else: the address it asked for and got,
+   * and whether it answered a ping there (many computers do not, by their firewall). Null when not tried.
+   */
+  network?: { address: string | null; answered: boolean | null } | null;
+  /** What this server's AI (the ai role) made of a check that failed or warned, and what to do. */
+  advice?: { text: string; model: string; at: string } | null;
 }
 
 export interface TimeImage {
@@ -127,6 +134,10 @@ export interface TimeSettings {
   checkSeconds: number;
   /** Images kept for each computer. */
   keepComputer: number;
+  /** Give the throwaway machine a network card on a private test network, to see it come online. */
+  checkNetwork: boolean;
+  /** When a check fails or warns, this server's AI (the ai role) looks at it and says what to do. */
+  aiAdvice: boolean;
 }
 
 export interface TimeComputer {
@@ -153,7 +164,7 @@ export interface TimeStatus {
   canBoot: boolean;
 }
 
-export const TIME_DEFAULT_SETTINGS: TimeSettings = { verifyComputers: true, checkSeconds: 180, keepComputer: 7 };
+export const TIME_DEFAULT_SETTINGS: TimeSettings = { verifyComputers: true, checkSeconds: 180, keepComputer: 7, checkNetwork: true, aiAdvice: true };
 
 // ------------------------------------------------------------------------------------------ connection code
 

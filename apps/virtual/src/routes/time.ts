@@ -88,6 +88,13 @@ export async function timeRoutes(app: FastifyInstance, ctx: VirtualContext) {
     return audited(ctx, req, 'time.check', `${img.subject} ${img.createdAt}`, () => ({ task: time().check(img.id) }));
   });
 
+  /** This server's AI looks at a check that failed or warned (again), and says what to do. */
+  app.post<{ Params: { id: string } }>('/v1/time/images/:id/advice', async (req) => {
+    need(req, 'operator');
+    const img = time().image(req.params.id);
+    return audited(ctx, req, 'time.advice', `${img.subject} ${img.createdAt}`, async () => ({ check: await time().advise(img.id) }));
+  });
+
   app.post<{ Params: { id: string } }>('/v1/time/images/:id/restore', async (req) => {
     need(req, 'admin');
     const { name } = z.object({ name: z.string().max(63).default('') }).parse(req.body ?? {});
@@ -114,7 +121,7 @@ export async function timeRoutes(app: FastifyInstance, ctx: VirtualContext) {
 
   app.put('/v1/time/settings', async (req) => {
     need(req, 'admin');
-    const body = z.object({ verifyComputers: z.boolean(), checkSeconds: z.number().int(), keepComputer: z.number().int() }).partial().parse(req.body);
+    const body = z.object({ verifyComputers: z.boolean(), checkSeconds: z.number().int(), keepComputer: z.number().int(), checkNetwork: z.boolean(), aiAdvice: z.boolean() }).partial().parse(req.body);
     return audited(ctx, req, 'time.settings', null, () => ({ settings: time().setSettings(body) }), body);
   });
 }
