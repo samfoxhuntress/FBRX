@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { TIER_NAMES, codenameFor, displayVersion, type ReleaseCheck } from '@fbrx/shared';
-import { Button, Callout, Card, Icons, KeyValue, Modal, Status, Toggle, timeAgo, useAction } from '@fbrx/ui';
+import { Button, Callout, Card, Icons, KeyValue, LabsMark, Modal, Status, Toggle, timeAgo, useAction } from '@fbrx/ui';
 import { call, openExternal } from './client';
 import { useCore } from './hooks';
 import { useTier } from './edition';
@@ -165,6 +165,10 @@ export function AboutVersion({ version }: { version: string }) {
           <span className="fx-muted">{code.meaning}.</span>
         </div>
       )}
+      <div className="about-maker">
+        <span className="fx-muted">Made by</span>
+        <LabsMark width={150} />
+      </div>
     </div>
   );
 }

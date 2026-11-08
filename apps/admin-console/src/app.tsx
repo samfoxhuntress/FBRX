@@ -1,6 +1,6 @@
 import { VERTICAL_NAMES } from '@fbrx/shared';
 import { useEffect, useState } from 'react';
-import { Button, ErrorBoundary, Icons, Select, Shell, Spinner, type NavItem } from '@fbrx/ui';
+import { Button, ErrorBoundary, Icons, LabsMark, Select, Shell, Spinner, type NavItem } from '@fbrx/ui';
 import { api, session, setUnauthorizedHandler } from './api';
 import { AppStateProvider, useApp, useRoute, type Me } from './state';
 import { LoginPage, SetupPage } from './pages/login';
@@ -184,9 +184,12 @@ function Console() {
       active={activeNav}
       onNavigate={(id) => go(id)}
       footer={
-        <span>
-          FBRX Command {app.me.version} ·{' '}
-          <span style={{ color: app.live ? 'var(--good-text)' : 'var(--text-muted)' }}>{app.live ? '● live' : '○ reconnecting'}</span>
+        <span style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <span>
+            FBRX Command {app.me.version} ·{' '}
+            <span style={{ color: app.live ? 'var(--good-text)' : 'var(--text-muted)' }}>{app.live ? '● live' : '○ reconnecting'}</span>
+          </span>
+          <LabsMark width={96} style={{ opacity: 0.7 }} />
         </span>
       }
       topbar={

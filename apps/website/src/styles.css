@@ -190,6 +190,26 @@ footer {
 footer .foot-brand {
   font-size: 16px;
 }
+.foot-maker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  max-width: 1120px;
+  margin: 28px auto 0;
+  padding-top: 18px;
+  border-top: 1px solid var(--line, rgba(127, 127, 127, 0.25));
+  font-size: 13px;
+}
+.labs-mark {
+  display: inline-block;
+  width: 140px;
+  background-color: var(--text);
+  -webkit-mask-size: 100% 100%;
+  mask-size: 100% 100%;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+}
 .foot-cols {
   display: grid;
   grid-template-columns: 2fr repeat(3, 1fr);

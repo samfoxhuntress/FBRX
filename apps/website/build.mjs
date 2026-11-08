@@ -53,6 +53,9 @@ const server = release.server ? { version: release.server.version, iso: release.
 const SELF_HOST_ZIP = `${REPO}/releases/latest/download/FBRX-OS.zip`;
 
 const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
+/** FBRX's maker, Fox Huntress Labs: its wordmark as a mask, drawn in the footer's text color. */
+const labs = JSON.parse(readFileSync(join(root, 'packages', 'ui', 'src', 'fhl-wordmark.json'), 'utf8'));
+const labsMark = `<span class="labs-mark" role="img" aria-label="Fox Huntress Labs" style="aspect-ratio:${labs.width}/${labs.height};-webkit-mask-image:url(${labs.mask});mask-image:url(${labs.mask})"></span>`;
 const logo = readFileSync(join(root, 'docs', 'assets', 'fbrx-logo-dark.svg'), 'utf8')
   .replace(/#ffffff/gi, 'currentColor')
   .replace(/width="96" height="96"/, 'width="30" height="30" aria-hidden="true"')
@@ -115,6 +118,7 @@ ${body}
     <div><h4>Get FBRX</h4><a href="download.html">Download</a><a href="pricing.html">Pricing</a><a href="account.html">Your account</a><a href="self-host.html">Self-host FBRX</a></div>
     <div><h4>Help</h4><a href="support.html">Support</a>${statusUrl ? `<a href="${esc(statusUrl)}">Status</a>` : ''}<a href="terms.html">Terms</a><a href="privacy.html">Privacy</a><a href="${REPO}">Source and docs</a></div>
   </div>
+  <div class="foot-maker"><span>FBRX is made by</span>${labsMark}</div>
 </footer>
 ${scripts.map((s) => `<script src="${s}"></script>`).join('\n')}
 </body>
