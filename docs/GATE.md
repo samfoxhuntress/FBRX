@@ -24,6 +24,20 @@ Everything the gate does is **one configuration**. You never change the network 
 3. **Commit** — checked again (`nft -c`, `dnsmasq --test`), then applied. If applying fails, the previous configuration
    is put back at once and nothing changed.
 
+**What if?** Before you commit, *Changes* works out what the change would do to traffic, from the firewall itself and
+before anything changes on the network:
+
+- **Every kind of connection**: each network to the internet, to the other networks and to the gate (this console,
+  SSH, DNS, DHCP), the VPN, and the internet to the console and to each port forward, now and after the change, with
+  the reason (the rule that decides it, or the gate's default). What changes comes first: cut off, then newly opened.
+- **You**: whether you can still reach this console from where you are. When a change would cut you off, it says so in
+  red, and committing asks again (on trial, the old configuration comes back by itself if you cannot reach the console
+  to keep it).
+- **What really happened**: the connections the gate saw in the last hour (FBRX MiniDome keeps them) replayed against
+  the change: "56 of 56 recent connections would be cut off" is a change to look at again.
+- **Ask the AI** (with the ai role): this server's AI reads all of the above and explains the change, what could go
+  wrong, and whether to commit it on trial or change something first.
+
 **Trial commits** (on by default, 5 minutes): the commit undoes itself unless you press **Keep it** in time. If a change
 cuts you off (a wrong port, a rule that blocks the console), wait: the old configuration comes back by itself. A gate
 that restarts during a trial also goes back. Every commit is kept; *Changes → History* goes back to any of them (as a
@@ -232,6 +246,7 @@ Under `/v1` on the console's port (see [SERVER.md](SERVER.md#api)):
 | --- | --- |
 | `GET /gate`, `GET /gate/live`, `GET /gate/interfaces` | The state (running, candidate, changes, problems, trial), live status, the server's ports (viewers) |
 | `PUT /gate/candidate`, `POST /gate/candidate/reset`, `GET /gate/preview` | Edit, throw away, preview (administrators) |
+| `GET /gate/whatif`, `POST /gate/whatif/explain` | What the change being edited would do to traffic (viewers); the server's AI explains it (operators) |
 | `POST /gate/commit` `{ comment, confirmMinutes }`, `POST /gate/confirm`, `POST /gate/confirm/undo`, `POST /gate/rollback` `{ to, confirmMinutes }` | Commit, keep, undo the trial, go back |
 | `GET /gate/history`, `GET /gate/history/:id` | Commits |
 | `POST /gate/vpn/peers` `{ name, endpoint?, fullTunnel }` | A new VPN device: its settings and QR code, once |

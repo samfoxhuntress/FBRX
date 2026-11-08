@@ -147,3 +147,34 @@ describe('Fabrix on a computer looks at the network through the server', () => {
     expect(audit).toEqual(expect.arrayContaining(['app-token.create', 'app-token.revoke']));
   });
 });
+
+describe('FBRX Gate What If', () => {
+  it('replays what the gate saw against a change, warns about the console, and has the AI explain it', async () => {
+    const st = (await req('GET', '/v1/gate', viewer)).body.state;
+    const lan = st.running.networks[0];
+    const host = lan.dhcp.start as string;
+    // Devices on lan used the web and the gate's console in the last hour.
+    sensor.emit({ type: 'flow', at: Date.now(), proto: 'tcp', src: host, dst: '142.250.1.1', dport: 443 });
+    sensor.emit({ type: 'flow', at: Date.now(), proto: 'tcp', src: host, dst: '142.250.1.1', dport: 443 });
+    // The change: lan loses the internet and may no longer manage the gate.
+    const next = structuredClone(st.candidate);
+    next.networks[0].access = 'isolated';
+    next.networks[0].manage = false;
+    expect((await req('PUT', '/v1/gate/candidate', admin, { config: next })).status).toBe(200);
+
+    const r = await s.app.inject({ method: 'GET', url: '/v1/gate/whatif', headers: { authorization: `Bearer ${viewer}` }, remoteAddress: host });
+    const w = r.json();
+    expect(w.you).toMatchObject({ address: host, from: 'lan', before: { verdict: 'allowed' }, after: { verdict: 'blocked' } });
+    expect(w.summary).toMatchObject({ youCutOff: true, flowsCutOff: 1 });
+    expect(w.flows[0]).toMatchObject({ src: host, dst: '142.250.1.1', port: 443, count: 2, before: { verdict: 'allowed' }, after: { verdict: 'blocked' } });
+    expect(w.matrix.find((m: { from: string; to: string }) => m.from === 'lan' && m.to === 'wan')).toMatchObject({ after: { verdict: 'blocked' } });
+
+    expect((await req('POST', '/v1/gate/whatif/explain', viewer)).status).toBe(403);
+    const ex = await req('POST', '/v1/gate/whatif/explain', operator);
+    expect(ex.status).toBe(200);
+    const prompt = calls.filter((c) => c.method === 'ai.quick').at(-1)!.params.prompt as string;
+    expect(prompt).toContain('lan → the internet (web): now allowed');
+    expect(prompt).toMatch(/1 would be cut off/);
+    await req('POST', '/v1/gate/candidate/reset', admin, {});
+  });
+});

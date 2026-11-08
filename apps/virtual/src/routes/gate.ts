@@ -2,10 +2,34 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { z } from 'zod';
 import QRCode from 'qrcode';
 import { hostRange, intToIPv4, ipv4ToInt } from '@fbrx/shared';
-import { checkConfig, DEFAULT_PATHS, peerConfig, render, type GateConfig } from '@fbrx/gate';
+import { randomUUID } from 'node:crypto';
+import { checkConfig, DEFAULT_PATHS, peerConfig, render, whatIf, type GateChange, type GateConfig, type WhatIfReport } from '@fbrx/gate';
 import { GateError, wgKeyPair } from '@fbrx/gate/node';
 import { audited, need, type VirtualContext } from '../context';
 import { conflict } from '../errors';
+
+/** The address a request came from, as IPv4 ("::ffff:192.168.1.5" is 192.168.1.5). */
+const clientIp = (ip: string) => ip.replace(/^::ffff:/, '');
+
+const verdictWords = (v: { verdict: string; because: string }) => `${v.verdict} (${v.because})`;
+
+/** What the server's AI is asked about a change: the differences and what What If found, short. */
+function whatIfPrompt(changes: GateChange[], r: WhatIfReport): string {
+  const moved = r.matrix.filter((m) => (m.before.verdict === 'allowed') !== (m.after.verdict === 'allowed'));
+  return [
+    'You help someone who looks after a home or small-office network decide whether to commit a change to FBRX Gate, the firewall and router on their FBRX Server.',
+    'FBRX worked out exactly what the change does to traffic (below). Explain in plain words: what the change does, what could go wrong (who loses access to what, whether they could lock themselves out), and whether to commit it on trial (it undoes itself unless kept) or change something first. Keep it short; no headings.',
+    '',
+    `The change (${changes.length} difference${changes.length === 1 ? '' : 's'}):`,
+    ...changes.slice(0, 30).map((c) => `- ${c.kind} ${c.path.replace(/^\./, '')}${c.kind !== 'added' ? ` (was ${JSON.stringify(c.from)?.slice(0, 120)})` : ''}${c.kind !== 'removed' ? ` (becomes ${JSON.stringify(c.to)?.slice(0, 120)})` : ''}`),
+    '',
+    r.you ? `The person is at ${r.you.address} (${r.you.from}). Their access to this console: now ${verdictWords(r.you.before)}, after ${verdictWords(r.you.after)}.` : '',
+    moved.length ? 'Kinds of connection that change:' : 'No kind of connection between the networks changes.',
+    ...moved.map((m) => `- ${m.from} → ${m.what}: now ${verdictWords(m.before)}, after ${verdictWords(m.after)}`),
+    r.flowsChecked ? `Of ${r.flowsChecked} connections the gate saw in the last hour, ${r.summary.flowsCutOff} would be cut off and ${r.summary.flowsOpened} newly allowed.` : 'No recent connections were available to replay.',
+    ...r.flows.slice(0, 10).map((f) => `- ${f.src} → ${f.dst} ${f.proto}/${f.port} (${f.count}×): now ${f.before.verdict}, after ${verdictWords(f.after)}`),
+  ].join('\n');
+}
 
 const STATUS: Record<GateError['code'], number> = { INVALID: 400, CONFLICT: 409, APPLY: 502, NOT_FOUND: 404 };
 
@@ -66,6 +90,33 @@ export async function gateRoutes(app: FastifyInstance, ctx: VirtualContext) {
     if (!check.config) return reply.status(400).send({ error: { code: 'INVALID', message: 'The candidate has the wrong shape', issues: check.errors } });
     const r = render(check.config, DEFAULT_PATHS);
     return { nftables: r.nftables, dnsmasq: r.dnsmasq, networkd: r.networkd, qos: r.qos };
+  });
+
+  /**
+   * What If: what the change being edited would do to traffic, before it is committed (see @fbrx/gate whatif.ts): the
+   * kinds of connection between the zones, whether the person asking keeps this console, and the connections MiniDome
+   * saw in the last hour, now and after.
+   */
+  const report = async (ip: string) => {
+    const g = gate();
+    const st = g.engine.state();
+    const live = await g.engine.live().catch(() => null);
+    // From the server itself (or a reverse proxy on it), the console is not reached through the gate.
+    const you = /^(127\.|::1$)/.test(clientIp(ip)) ? null : clientIp(ip);
+    return { state: st, report: whatIf(st.running, st.candidate, { you, wanAddress: live?.wan.address ?? null, flows: ctx.dome?.recentFlows() ?? [] }) };
+  };
+
+  app.get('/v1/gate/whatif', async (req) => {
+    need(req, 'viewer');
+    return (await report(req.ip)).report;
+  });
+
+  /** This server's AI (the ai role) reads What If and explains the change, its risks and whether to commit it. */
+  app.post('/v1/gate/whatif/explain', async (req) => {
+    const user = need(req, 'operator');
+    const { state, report: r } = await report(req.ip);
+    const answer = await ctx.core.call<{ answer: string; model: string }>('ai.quick', { reqId: randomUUID(), prompt: whatIfPrompt(state.changes, r) }, user.username, 120_000);
+    return { answer: answer.answer, model: answer.model };
   });
 
   app.post('/v1/gate/commit', async (req, reply) => {

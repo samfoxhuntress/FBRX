@@ -411,3 +411,10 @@
   font-size: 12px;
   white-space: pre-wrap;
 }
+
+/* Gate → Changes → What if: what committing would do to traffic. */
+.gt-because { display: block; margin-top: 2px; }
+.gt-whatif-you { display: flex; align-items: center; gap: 8px; margin: 0 0 10px; }
+.gt-whatif-sum { display: flex; flex-wrap: wrap; gap: 6px 22px; margin: 0 0 12px; font-size: 13px; color: var(--text-secondary); }
+.gt-whatif-sum b { color: var(--text-primary); font-size: 15px; }
+.gt-whatif-h { margin: 16px 0 6px; font-size: 13px; }
