@@ -1,9 +1,8 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROVIDERS, soulCommandIn, soulCommands, soulSection, soulSections, toolkitToolName, withSoulSection, type AgentEvent, type SoulStatus } from '@fbrx/shared';
+import { DEFAULT_PROVIDERS, soulCommandIn, soulCommands, soulSection, soulSections, withSoulSection, type AgentEvent, type SoulStatus } from '@fbrx/shared';
 import { DEFAULT_SOUL } from '../src/ai/soul';
-import { TOOLKIT_LIBRARY } from '../src/ai/toolkit-library';
 import { makeKernel, USER, waitFor } from './helpers';
 import { mockOpenAI } from './mock-llm';
 
@@ -32,7 +31,8 @@ describe('the default soul', () => {
   it('names only tools FBRX has', async () => {
     const { kernel, cleanup } = await makeKernel();
     try {
-      const kits = TOOLKIT_LIBRARY.map((a) => toolkitToolName(a.name));
+      // The tool names the AI Toolkit really registers (not names worked out from the actions' titles).
+      const kits = kernel.toolkit.list().map((a) => a.tool);
       // Some tools are there only on some systems (pc.security_status and its kind): they are in FBRX all the same.
       const everywhere = readFileSync(join(__dirname, '../src/tools/builtin/command-center-tools.ts'), 'utf8').match(/name: '[a-z_.]+'/g)!.map((m) => m.slice(7, -1));
       const known = new Set([...kernel.registry.list().map((t) => t.name), ...kits, ...everywhere]);

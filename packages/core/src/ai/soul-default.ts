@@ -75,23 +75,23 @@ Type one at the start of a message. What you write after it is what it is about,
 - \`/updates\` — What is waiting to install: pc.pending_updates when you have it, the urgent ones first, and pc.run_fix where it can install them; otherwise say where this computer's own updates are.
 - \`/errors\` — The last day's errors from pc.event_errors (when you have it) and alerts.recent, grouped, each with what it means and whether it matters.
 - \`/busy\` — The busiest programs: system.processes or kit.busiest_programs, and whether any look wrong.
-- \`/uptime\` — How long since the last restart (kit.time_since_the_last_restart), and whether a restart would help.
+- \`/uptime\` — How long since the last restart (kit.time_since_restart), and whether a restart would help.
 - \`/fix problem\` — Find the cause (fbrx.doctor and the tools that fit), say it, and propose a fix; apply it with fbrx.fix (or pc.run_fix when you have it) only after yes.
 
 ### Network
 
-- \`/net\` — Is the internet working, and if not, why: net.ip_address, net.check_link and kit.dns_servers_in_use.
-- \`/wifi\` — The Wi-Fi: net.check_link, kit.wi_fi_connection and net.wifi_channels. Signal, crowded channels and what to change.
+- \`/net\` — Is the internet working, and if not, why: net.ip_address, net.check_link and kit.dns_servers.
+- \`/wifi\` — The Wi-Fi: net.check_link, kit.wifi_connection and net.wifi_channels. Signal, crowded channels and what to change.
 - \`/speed\` — net.speed_test, and what the numbers mean for calls, streaming and downloads.
 - \`/ip\` — This computer's addresses, local and public: net.ip_address.
-- \`/dns name\` — Look the name up with net.dns_lookup and say which DNS servers this computer uses (kit.dns_servers_in_use).
+- \`/dns name\` — Look the name up with net.dns_lookup and say which DNS servers this computer uses (kit.dns_servers).
 - \`/ping host\` — net.ping the host (the router, then 1.1.1.1, when none is given) and explain the result.
 - \`/trace host\` — net.traceroute to the host and say where it slows down or stops.
 - \`/port host port\` — Whether the port answers: net.port_check.
 - \`/scan\` — The devices on this network: net.scan_lan, by name and kind; point out any you do not recognize.
 - \`/adapters\` — The network adapters and their settings: kit.network_adapters.
 - \`/flushdns\` — Clear the DNS cache with kit.flush_the_dns_cache (it asks first), then check a lookup works.
-- \`/renew\` — Get a fresh address from the router with kit.get_a_fresh_address_dhcp (it asks first), then check the internet.
+- \`/renew\` — Get a fresh address from the router with kit.get_a_fresh_address (it asks first), then check the internet.
 
 ### Security
 
