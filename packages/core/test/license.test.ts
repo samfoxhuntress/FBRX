@@ -25,17 +25,17 @@ describe('licensing', () => {
         { v: 1, lid: 'lic_1', tenantId: 't', customer: 'Acme', edition: 'enterprise', seats: 5, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null },
         keys.privateKeyPem,
       );
-      // A new computer opens in Essentials, free; on its own, Standard and Ultra are bought (Standard can be tried).
+      // A new computer opens in Essentials, free; on its own, Pro and Ultra are bought (Pro can be tried).
       expect(kernel.license.status()).toMatchObject({ tier: 'essentials', chosen: 'essentials', ceiling: 'essentials', ceilingReason: 'standalone', trialUntil: null, trialAvailable: true });
       expect(kernel.edition()).toMatchObject({ productName: 'FBRX Endpoint Essentials', tourDone: false, trialUntil: null, trialAvailable: true });
-      await expect(kernel.call('edition.choose', { tier: 'basic' }, USER)).rejects.toThrow(/FBRX Endpoint Standard is \$4\.99 a month .*, or try it free for 7 days/);
+      await expect(kernel.call('edition.choose', { tier: 'basic' }, USER)).rejects.toThrow(/FBRX Endpoint Pro is \$4\.99 a month .*, or try it free for 7 days/);
       const status = (await kernel.call('license.activate', { key }, USER)) as any;
-      // A license (one bought for this computer) turns on its features and goes up to Ultra; Black Hole comes only
+      // A license (one bought for this computer) turns on its features and goes up to Ultra; Black Hole Edition comes only
       // through an organization.
       expect(status).toMatchObject({ state: 'valid', edition: 'enterprise', tier: 'essentials', ceiling: 'ultra', ceilingReason: 'license', commandUrl: null });
       await waitFor(() => kernel.services.get('plugins')?.state === 'running');
       await expect(kernel.call('edition.choose', { tier: 'blackhole' }, USER)).rejects.toThrow(/comes only through an organization's FBRX Command/);
-      expect(await kernel.call('edition.choose', { tier: 'basic' }, USER)).toMatchObject({ tier: 'basic', productName: 'FBRX Endpoint Standard' });
+      expect(await kernel.call('edition.choose', { tier: 'basic' }, USER)).toMatchObject({ tier: 'basic', productName: 'FBRX Endpoint Pro' });
       expect(await kernel.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra', productName: 'FBRX Endpoint Ultra' });
       // Only the person at the computer chooses.
       await expect(kernel.call('edition.choose', { tier: 'essentials' }, { origin: 'api', actor: 'localapi:x' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
@@ -51,15 +51,15 @@ describe('licensing', () => {
       expect(await kernel.call('license.activate', { key: sign({ tier: 'basic' }) }, USER)).toMatchObject({ edition: 'enterprise', ceiling: 'basic' });
       expect(await kernel.call('license.activate', { key: sign({ edition: 'community', tier: 'ultra' }) }, USER)).toMatchObject({ ceiling: 'ultra', tier: 'ultra' });
       await expect(kernel.call('edition.choose', { tier: 'blackhole' }, USER)).rejects.toThrow(/license allows up to FBRX Endpoint Ultra/);
-      // Black Hole: only in an organization whose license allows it.
+      // Black Hole Edition: only in an organization whose license allows it.
       expect(await kernel.call('license.activate', { key: sign({ tier: 'blackhole' }) }, USER)).toMatchObject({ ceiling: 'blackhole', tier: 'ultra' });
-      expect(await kernel.call('edition.choose', { tier: 'blackhole' }, USER)).toMatchObject({ tier: 'blackhole', productName: 'FBRX Endpoint Black Hole' });
+      expect(await kernel.call('edition.choose', { tier: 'blackhole' }, USER)).toMatchObject({ tier: 'blackhole', productName: 'FBRX Endpoint Black Hole Edition' });
       expect(kernel.ultraOnly('Mesh')).toBeNull();
       expect(kernel.blackHoleOnly('Network environments')).toBeNull();
       // The same license on a computer on its own goes up to Ultra.
       kernel.meta.delete('fleet.deviceId');
       expect(kernel.license.refresh()).toMatchObject({ tier: 'ultra', chosen: 'blackhole', ceiling: 'ultra', ceilingReason: 'license' });
-      expect(kernel.blackHoleOnly('Network environments')).toMatch(/come with FBRX Endpoint Black Hole/);
+      expect(kernel.blackHoleOnly('Network environments')).toMatch(/come with FBRX Endpoint Black Hole Edition/);
       kernel.meta.set('fleet.deviceId', 'dev_test');
       expect(await kernel.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra' });
       kernel.meta.set('fleet.edition', { vertical: 'business', audience: 'staff', tier: 'essentials', helpdesk: { enabled: true, receiver: false }, autoUpdate: 'notify' });
@@ -95,13 +95,13 @@ describe('licensing', () => {
     }
   });
 
-  it('lets a computer on its own try Standard free for 7 days, once', async () => {
+  it('lets a computer on its own try Pro free for 7 days, once', async () => {
     const { kernel, cleanup } = await makeKernel({ devMode: false });
     try {
       // Only the person at the computer starts it.
       await expect(kernel.call('edition.startTrial', undefined, { origin: 'api', actor: 'localapi:x' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
       const ed = (await kernel.call('edition.startTrial', undefined, USER)) as any;
-      expect(ed).toMatchObject({ tier: 'basic', chosen: 'basic', ceiling: 'basic', ceilingReason: 'trial', trialAvailable: false, productName: 'FBRX Endpoint Standard' });
+      expect(ed).toMatchObject({ tier: 'basic', chosen: 'basic', ceiling: 'basic', ceilingReason: 'trial', trialAvailable: false, productName: 'FBRX Endpoint Pro' });
       const left = Date.parse(ed.trialUntil) - Date.now();
       expect(left).toBeGreaterThan(6.9 * 86_400_000);
       expect(left).toBeLessThanOrEqual(7 * 86_400_000);
@@ -116,7 +116,7 @@ describe('licensing', () => {
       kernel.license.refresh();
       expect(kernel.license.takeTrialNotice()).toBe('ended');
       expect(kernel.license.takeTrialNotice()).toBeNull();
-      // When it ends, the computer runs Essentials; what was chosen comes back once Standard is bought.
+      // When it ends, the computer runs Essentials; what was chosen comes back once Pro is bought.
       kernel.meta.set('edition.trial', { until: new Date(Date.now() - 1000).toISOString() });
       expect(kernel.license.refresh()).toMatchObject({ tier: 'essentials', chosen: 'basic', ceilingReason: 'standalone', trialUntil: null, trialAvailable: false });
     } finally {
@@ -144,13 +144,13 @@ describe('licensing', () => {
     await first.cleanup();
     const again = await makeKernel({ dataDir, devMode: false, keychain: first.keychain });
     try {
-      // It keeps the most it ran on its own (Standard) through its 7-day trial, started by itself, and is not walked
+      // It keeps the most it ran on its own (Pro) through its 7-day trial, started by itself, and is not walked
       // through the app again.
       const st = again.kernel.license.status();
       expect(st).toMatchObject({ chosen: 'ultra', tier: 'basic', ceiling: 'basic', ceilingReason: 'trial', trialAvailable: false });
       expect(Date.parse(st.trialUntil!) - Date.now()).toBeGreaterThan(6.9 * 86_400_000);
       expect(again.kernel.edition()).toMatchObject({ tourDone: true, ceilingReason: 'trial', trialUntil: st.trialUntil });
-      // Then Essentials, unless Standard is bought.
+      // Then Essentials, unless Pro is bought.
       again.kernel.meta.set('edition.trial', { until: new Date(Date.now() - 1000).toISOString() });
       expect(again.kernel.license.refresh()).toMatchObject({ tier: 'essentials', ceiling: 'essentials', ceilingReason: 'standalone', trialUntil: null });
       // It was had once: starting again does not give it again.

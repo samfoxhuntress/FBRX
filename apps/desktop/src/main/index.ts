@@ -197,7 +197,7 @@ function snapshotDeps(): SnapshotDeps {
   };
 }
 
-/** FBRX Snapshot comes with Standard and up (Essentials is the AI on its own), and not on student computers. */
+/** FBRX Snapshot comes with Pro and up (Essentials is the AI on its own), and not on student computers. */
 function snapshotsAllowed() {
   const e = kernel?.edition();
   return !!e && e.tier !== 'essentials' && !e.learner;
@@ -886,7 +886,7 @@ function registerIpc() {
   });
   // FBRX Browser: open or focus its own window (from the sidebar, the tray, or a link).
   ipcMain.handle('fbrx:browser', (e, action: unknown, url?: unknown) => {
-    // Endpoint Essentials is the AI on its own; the browser comes with Standard and up (and on learners' computers).
+    // Endpoint Essentials is the AI on its own; the browser comes with Pro and up (and on learners' computers).
     if (!trusted(e) || action !== 'open') return false;
     // FBRX Digger has no browser of its own: the page opens in the computer's browser.
     if (FLAVOR === 'digger') return typeof url === 'string' && /^https?:\/\//i.test(url) ? (void shell.openExternal(url), true) : false;

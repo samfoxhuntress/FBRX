@@ -42,7 +42,7 @@ describe('support passes (shared)', () => {
 });
 
 describe('support mode (kernel)', () => {
-  it('elevates to Black Hole with a valid pass, unlocks locked settings, and restores on end', async () => {
+  it('elevates to Black Hole Edition with a valid pass, unlocks locked settings, and restores on end', async () => {
     const keys = generateSigningKeyPair();
     const { kernel, cleanup } = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem] });
     try {
@@ -63,7 +63,7 @@ describe('support mode (kernel)', () => {
       // An expired pass is refused.
       await expect(kernel.call('support.activate', { pass: makePass(keys.privateKeyPem, installId, { expiresAt: new Date(Date.now() - 1000).toISOString() }) }, USER)).rejects.toThrow(/expired/);
 
-      // A valid pass elevates the computer to Black Hole with everything on.
+      // A valid pass elevates the computer to Black Hole Edition with everything on.
       const st = (await kernel.call('support.activate', { pass: makePass(keys.privateKeyPem, installId) }, USER)) as { active: boolean; tier: string };
       expect(st).toMatchObject({ active: true, tier: 'blackhole' });
       expect(kernel.license.status()).toMatchObject({ tier: 'blackhole', source: 'support', support: true });
@@ -158,7 +158,7 @@ describe('support mode (kernel)', () => {
     }
   });
 
-  it('the developer phrase unlocks Black Hole at once, until FBRX 3.0', async () => {
+  it('the developer phrase unlocks Black Hole Edition at once, until FBRX 3.0', async () => {
     const keys = generateSigningKeyPair();
     const { kernel, cleanup } = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem], platform: { appVersion: '2.3.1' } });
     try {

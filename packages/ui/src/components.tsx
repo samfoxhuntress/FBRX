@@ -35,11 +35,11 @@ export function AdvancedTag({ label = 'Ultra', title = 'Part of FBRX Endpoint Ul
   );
 }
 
-/** A tab label with the Ultra tag (or the Black Hole one). */
+/** A tab label with the Ultra tag (or the Black Hole Edition one). */
 export function advancedLabel(label: ReactNode, blackHole = false): ReactNode {
   return (
     <>
-      {label} {blackHole ? <AdvancedTag label="Black Hole" title="Part of FBRX Endpoint Black Hole" /> : <AdvancedTag />}
+      {label} {blackHole ? <AdvancedTag label="Black Hole Edition" title="Part of FBRX Endpoint Black Hole Edition" /> : <AdvancedTag />}
     </>
   );
 }

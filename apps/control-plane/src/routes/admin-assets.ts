@@ -200,7 +200,7 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
       tenantId: l.tenant_id,
       customer: l.customer,
       edition: l.edition,
-      /** The most FBRX Endpoint may run on the devices that use it (Standard or Ultra). */
+      /** The most FBRX Endpoint may run on the devices that use it (Pro or Ultra). */
       tier: tierFor(l.edition as Edition, claims?.tier),
       /** The FBRX Command address devices join when the key is pasted in. */
       commandUrl: claims?.command?.url ?? null,
@@ -233,7 +233,7 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
           expiresAt: z.string().datetime().nullable().optional(),
           maxMajorVersion: z.number().int().min(1).nullable().optional(),
           customer: z.string().max(200).optional(),
-          /** Up to Endpoint Standard (basic) or Ultra (otherwise Community allows Standard and Pro or Enterprise Ultra). */
+          /** Up to Endpoint Pro (basic) or Ultra (otherwise a Community license allows Pro, an Ultra (`pro`) or Enterprise license Ultra). */
           tier: z.enum(LICENSE_TIERS).optional(),
           /** Computers that activate the key join this tenant on their own (FBRX Command). */
           joinTenant: z.boolean().optional(),

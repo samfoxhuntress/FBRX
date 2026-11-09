@@ -1,6 +1,6 @@
 # The Vault
 
-The Vault (Protect → **Vault**, Endpoint Standard and up) keeps your passwords and the keys FBRX uses, encrypted on
+The Vault (Protect → **Vault**, Endpoint Pro and up) keeps your passwords and the keys FBRX uses, encrypted on
 this computer. It has three parts:
 
 * **Passwords**: your sign-ins for websites and devices, which FBRX Browser fills in for you.

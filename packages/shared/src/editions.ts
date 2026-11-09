@@ -6,7 +6,7 @@ import { minTier, TIER_NAMES, type CeilingReason, type Tier } from './license';
  * - **Vertical** (the *kind* of tenant): **Work** (`business`), **School** (`education`: classroom defaults for staff,
  *   student computers possible) or **Home** (`home`: a family, with parents' and children's computers). Chosen when
  *   FBRX Command is set up or a tenant is created, and changeable later.
- * - **Audience**: who uses a computer. Staff (and parents) get FBRX Endpoint (Essentials, Standard, Ultra or Black
+ * - **Audience**: who uses a computer. Staff (and parents) get FBRX Endpoint (Essentials, Pro, Ultra or Black
  *   Hole). Students (and children) get **FBRX OS Education** (or Home): a narrowed, safe set of tools and a lightweight
  *   learning helper.
  *
@@ -37,7 +37,7 @@ export const VERTICAL_INFO: Record<Vertical, VerticalInfo> = {
   business: {
     noun: 'company',
     tagline: 'A business, nonprofit or team: staff computers, IT tools and a help desk.',
-    computers: 'Staff on FBRX Endpoint up to Standard, IT up to Black Hole (as the license allows).',
+    computers: 'Staff on FBRX Endpoint up to Pro, IT up to Black Hole Edition (as the license allows).',
     example: 'Harbor Lane Design',
     helpers: 'the IT team',
     learner: null,
@@ -45,7 +45,7 @@ export const VERTICAL_INFO: Record<Vertical, VerticalInfo> = {
   education: {
     noun: 'school',
     tagline: 'A school or co-op: classroom mode for teachers, safe student computers, a help desk to IT.',
-    computers: 'Teachers up to Standard in classroom mode, IT up to Black Hole, students on FBRX OS Education.',
+    computers: 'Teachers up to Pro in classroom mode, IT up to Black Hole Edition, students on FBRX OS Education.',
     example: 'Hillside Co-op',
     helpers: 'the IT team',
     learner: 'student',
@@ -77,12 +77,12 @@ export function learnerAudienceFor(vertical: Vertical): Audience | null {
 /** The groups FBRX Command's quick setup creates for each kind, each with its own enrollment token. */
 export const KIND_GROUPS: Record<Vertical, Array<{ name: string; description: string; audience: Audience; tier: Tier | null }>> = {
   business: [
-    { name: 'Staff', description: 'Staff computers: FBRX Endpoint, up to Standard', audience: 'staff', tier: 'basic' },
-    { name: 'IT', description: 'IT and administrators: up to Black Hole, as the license allows; receives help desk tickets', audience: 'staff', tier: null },
+    { name: 'Staff', description: 'Staff computers: FBRX Endpoint, up to Pro', audience: 'staff', tier: 'basic' },
+    { name: 'IT', description: 'IT and administrators: up to Black Hole Edition, as the license allows; receives help desk tickets', audience: 'staff', tier: null },
   ],
   education: [
-    { name: 'Teachers', description: 'Staff computers: up to Endpoint Standard, in classroom mode', audience: 'staff', tier: 'basic' },
-    { name: 'IT', description: 'IT and administrators: up to Black Hole, as the license allows; receives help desk tickets', audience: 'staff', tier: null },
+    { name: 'Teachers', description: 'Staff computers: up to Endpoint Pro, in classroom mode', audience: 'staff', tier: 'basic' },
+    { name: 'IT', description: 'IT and administrators: up to Black Hole Edition, as the license allows; receives help desk tickets', audience: 'staff', tier: null },
     { name: 'Students', description: 'Student computers: FBRX OS Education', audience: 'student', tier: null },
   ],
   home: [
@@ -158,7 +158,7 @@ export interface EditionStatus {
   chosen: Tier;
   ceiling: Tier;
   ceilingReason: CeilingReason;
-  /** Until when this computer's free Standard trial runs (STANDARD_TRIAL_DAYS). */
+  /** Until when this computer's free Pro trial runs (STANDARD_TRIAL_DAYS). */
   trialUntil: string | null;
   /** The trial can still be started here: a computer on its own, with nothing bought, that has not had it. */
   trialAvailable: boolean;
@@ -168,7 +168,7 @@ export interface EditionStatus {
   vertical: Vertical;
   audience: Audience;
   learner: boolean;
-  /** "FBRX Endpoint Essentials", "FBRX Endpoint Standard", "FBRX Endpoint Black Hole", "FBRX OS Education"… */
+  /** "FBRX Endpoint Essentials", "FBRX Endpoint Pro", "FBRX Endpoint Black Hole Edition", "FBRX OS Education"… */
   productName: string;
   /** Why the organization's or the FBRX account's license does not count here (LicenseStatus.problem). */
   licenseProblem: string | null;

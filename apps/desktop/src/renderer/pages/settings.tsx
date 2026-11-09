@@ -226,19 +226,19 @@ function ceilingLine(ed: EditionStatus): string {
     case 'development':
       return 'Development build: every edition can be turned on.';
     case 'trial':
-      return `${trialLine(ed)} Then Standard is ${formatPrice(DEFAULT_PRICE_BOOK.personal.basic)} a month or ${formatPrice(personalPlan(DEFAULT_PRICE_BOOK, 'basic', 'year').amount)} a year; Essentials stays free.`;
+      return `${trialLine(ed)} Then Pro is ${formatPrice(DEFAULT_PRICE_BOOK.personal.basic)} a month or ${formatPrice(personalPlan(DEFAULT_PRICE_BOOK, 'basic', 'year').amount)} a year; Essentials stays free.`;
     case 'standalone':
-      return `On its own, this computer runs Essentials for free.${ed.trialAvailable ? ` Standard can be tried free for ${STANDARD_TRIAL_DAYS} days, once.` : ''} Standard and Ultra are bought on your FBRX account or with a license key (Settings → License), or come through your organization’s FBRX Command. Black Hole comes only through FBRX Command.`;
+      return `On its own, this computer runs Essentials for free.${ed.trialAvailable ? ` Pro can be tried free for ${STANDARD_TRIAL_DAYS} days, once.` : ''} Pro and Ultra are bought on your FBRX account or with a license key (Settings → License), or come through your organization’s FBRX Command. Black Hole Edition comes only through FBRX Command.`;
     case 'organization':
       return `Your organization (FBRX Command) lets this computer go up to ${TIER_SHORT[ed.ceiling]}.`;
     default:
-      return ed.enrolled ? `Your organization's license allows up to ${TIER_SHORT[ed.ceiling]}.` : `Your license allows up to ${TIER_SHORT[ed.ceiling]}. Black Hole comes only through an organization's FBRX Command.`;
+      return ed.enrolled ? `Your organization's license allows up to ${TIER_SHORT[ed.ceiling]}.` : `Your license allows up to ${TIER_SHORT[ed.ceiling]}. Black Hole Edition comes only through an organization's FBRX Command.`;
   }
 }
 
 /**
- * Settings → Edition: Essentials (free, where a new computer starts), Standard and Ultra (bought, or through an
- * organization's FBRX Command) and Black Hole (only through FBRX Command), with why a choice is locked and the
+ * Settings → Edition: Essentials (free, where a new computer starts), Pro and Ultra (bought, or through an
+ * organization's FBRX Command) and Black Hole Edition (only through FBRX Command), with why a choice is locked and the
  * walkthrough again.
  */
 function EditionSettings() {
@@ -765,7 +765,7 @@ const RESOURCE_HELP = {
 function AgentSettings() {
   const { s, locked, patch } = useSettings();
   const [name, setName] = useState<string | null>(null);
-  // Unloading the local model when idle comes with Standard (Thinking, in every edition, is a card of its own).
+  // Unloading the local model when idle comes with Pro (Thinking, in every edition, is a card of its own).
   const standard = useAtLeast('basic');
   if (!s) return null;
   const L = (p: string) => isLocked(locked, p);
@@ -920,7 +920,7 @@ const THINKING_HELP: Record<ThinkingLevel, string> = {
 };
 
 /**
- * How much the agent does on one task. Every edition picks a level (Quick, Everyday or Thorough); from Standard up,
+ * How much the agent does on one task. Every edition picks a level (Quick, Everyday or Thorough); from Pro up,
  * each part is also set on its own, which makes the level Custom.
  */
 function Thinking() {
@@ -949,7 +949,7 @@ function Thinking() {
         {standard ? (
           <WorkBudget policy={pol.data} />
         ) : (
-          <EditionHint tier="basic">Standard sets each part on its own: steps per task, the longest answer, how much a local model keeps in mind and whether it thinks first.</EditionHint>
+          <EditionHint tier="basic">Pro sets each part on its own: steps per task, the longest answer, how much a local model keeps in mind and whether it thinks first.</EditionHint>
         )}
         <Toggle checked={s.ai.showThinking} disabled={L('ai.showThinking')} onChange={(v) => void patch({ ai: { showThinking: v } })} label={`Show what ${name} is thinking and doing while it works`} />
       </div>
@@ -975,7 +975,7 @@ const ctxLabel = (n: number, auto: number | null) => (n === 0 ? `Auto: fits this
 // Rough extra memory for the conversation itself (the 8-bit KV cache of a typical 7–8B model).
 const ctxMemory = (n: number) => (n <= 8192 ? 'about 0.5 GB extra memory' : n <= 16384 ? 'about 1 GB' : n <= 32768 ? 'about 2 GB' : n <= 65536 ? 'about 4 GB' : 'about 8 GB');
 
-/** Each part of the work budget on its own (Standard and up): steps, answer length, what a model keeps in mind. */
+/** Each part of the work budget on its own (Pro and up): steps, answer length, what a model keeps in mind. */
 function WorkBudget({ policy }: { policy: EffectivePolicy }) {
   const { s, locked, patch } = useSettings();
   const providers = useCore('ai.providers', undefined, ['settings.changed']);

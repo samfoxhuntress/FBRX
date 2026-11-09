@@ -27,11 +27,11 @@ const CARD_FEE = 0.029;
 const EXAMPLES = [30, 150, 400];
 /** People at an edition, each on so many computers. */
 const many = (n: number, tier: (typeof PAID_TIERS)[number], computers: number) => Array.from({ length: n }, () => ({ tier, computers }));
-/** The example bills: Work organizations of three sizes, mostly Standard. */
+/** The example bills: Work organizations of three sizes, mostly Pro. */
 const EXAMPLE_BILLS = [
-  { name: 'Business', who: '20 Standard people, 10 Ultra (2 of them on 7 computers)', counts: { people: [...many(20, 'basic', 1), ...many(8, 'ultra', 2), ...many(2, 'ultra', 7)], shared: {}, computers: 50 } },
-  { name: 'School', who: '120 Standard people, 30 Ultra, 40 lab computers on Standard', counts: { people: [...many(120, 'basic', 1), ...many(30, 'ultra', 1)], shared: { basic: 40 }, computers: 190 } },
-  { name: 'District', who: '300 Standard people, 100 Ultra', counts: { people: [...many(300, 'basic', 1), ...many(100, 'ultra', 1)], shared: {}, computers: 400 } },
+  { name: 'Business', who: '20 Pro people, 10 Ultra (2 of them on 7 computers)', counts: { people: [...many(20, 'basic', 1), ...many(8, 'ultra', 2), ...many(2, 'ultra', 7)], shared: {}, computers: 50 } },
+  { name: 'School', who: '120 Pro people, 30 Ultra, 40 lab computers on Pro', counts: { people: [...many(120, 'basic', 1), ...many(30, 'ultra', 1)], shared: { basic: 40 }, computers: 190 } },
+  { name: 'District', who: '300 Pro people, 100 Ultra', counts: { people: [...many(300, 'basic', 1), ...many(100, 'ultra', 1)], shared: {}, computers: 400 } },
 ];
 
 const dollars = (cents: number) => (cents / 100).toFixed(2);
@@ -119,11 +119,11 @@ function bookOf(d: Draft): PriceBook | string {
     const yearlyMonths = toCount(d.yearlyMonths);
     if (yearlyMonths === null || yearlyMonths > MAX_YEARLY_MONTHS) throw new Error(`Paying yearly: a year costs from 1 to ${MAX_YEARLY_MONTHS} months' price`);
     return {
-      personal: { basic: price(d.personal.basic, 'Standard on its own'), ultra: price(d.personal.ultra, 'Ultra on its own') },
-      seats: { basic: price(d.seats.basic, 'Standard in an organization'), ultra: price(d.seats.ultra, 'Ultra in an organization'), blackhole: price(d.seats.blackhole, 'Black Hole in an organization') },
+      personal: { basic: price(d.personal.basic, 'Pro on its own'), ultra: price(d.personal.ultra, 'Ultra on its own') },
+      seats: { basic: price(d.seats.basic, 'Pro in an organization'), ultra: price(d.seats.ultra, 'Ultra in an organization'), blackhole: price(d.seats.blackhole, 'Black Hole Edition in an organization') },
       computers: {
-        included: { basic: count(d.included.basic, 'Standard'), ultra: count(d.included.ultra, 'Ultra'), blackhole: count(d.included.blackhole, 'Black Hole') },
-        extra: { basic: price(d.extra.basic, 'Each further Standard computer'), ultra: price(d.extra.ultra, 'Each further Ultra computer'), blackhole: price(d.extra.blackhole, 'Each further Black Hole computer') },
+        included: { basic: count(d.included.basic, 'Pro'), ultra: count(d.included.ultra, 'Ultra'), blackhole: count(d.included.blackhole, 'Black Hole Edition') },
+        extra: { basic: price(d.extra.basic, 'Each further Pro computer'), ultra: price(d.extra.ultra, 'Each further Ultra computer'), blackhole: price(d.extra.blackhole, 'Each further Black Hole Edition computer') },
       },
       volume,
       fees: {
@@ -160,7 +160,7 @@ function PriceBookEditor({ book, onSaved }: { book: PriceBook; onSaved: () => vo
       <Grid cols={2}>
         <Card title="Editions on their own" subtitle="What a person pays for their own computers, a month. Essentials is free. Set the same prices in App Store Connect and the Google Play Console: the stores charge their own.">
           <div className="fx-form">
-            <Field label="Standard">{money$(d.personal.basic, (v) => set({ personal: { ...d.personal, basic: v } }))}</Field>
+            <Field label="Pro">{money$(d.personal.basic, (v) => set({ personal: { ...d.personal, basic: v } }))}</Field>
             <Field label="Ultra">{money$(d.personal.ultra, (v) => set({ personal: { ...d.personal, ultra: v } }))}</Field>
           </div>
         </Card>
@@ -183,7 +183,7 @@ function PriceBookEditor({ book, onSaved }: { book: PriceBook; onSaved: () => vo
       </Grid>
       <Card
         title="Each person in an organization"
-        subtitle="A month, before the volume discount: a person at an edition, on as many of the organization's computers as it includes, or a shared, lab or student computer nobody pays for. Essentials is free; student and child computers are billed as Standard."
+        subtitle="A month, before the volume discount: a person at an edition, on as many of the organization's computers as it includes, or a shared, lab or student computer nobody pays for. Essentials is free; student and child computers are billed as Pro."
       >
         <div className="fx-form">
           <div className="fx-row">
@@ -206,7 +206,7 @@ function PriceBookEditor({ book, onSaved }: { book: PriceBook; onSaved: () => vo
               ))}
             </div>
           </Field>
-          <Field label="Volume discount" help="Off every seat once the organization has this many (people and shared computers at Standard, Ultra and Black Hole together; never extra computers). The highest step reached counts. Stripe shows it on the invoice as its own line.">
+          <Field label="Volume discount" help="Off every seat once the organization has this many (people and shared computers at Pro, Ultra and Black Hole Edition together; never extra computers). The highest step reached counts. Stripe shows it on the invoice as its own line.">
             <div className="fx-form">
               {d.volume.length === 0 && <div className="fx-muted">None: every organization pays the prices above.</div>}
               {d.volume.map((s, i) => (

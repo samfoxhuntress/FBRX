@@ -101,7 +101,7 @@ describe('FBRX Command for a school', () => {
   let student: Kernel;
   let staffToken: string;
 
-  it('runs teachers up to Standard in classroom mode, IT up to Ultra, and students on FBRX OS Education', async () => {
+  it('runs teachers up to Pro in classroom mode, IT up to Ultra, and students on FBRX OS Education', async () => {
     const teachers = await api('POST', '/v1/admin/groups', { name: 'Teachers', audience: 'staff', tier: 'basic' });
     const itGroup = await api('POST', '/v1/admin/groups', { name: 'IT', audience: 'staff' });
     const students = await api('POST', '/v1/admin/groups', { name: 'Students', audience: 'student' });
@@ -116,10 +116,10 @@ describe('FBRX Command for a school', () => {
 
     const ed = async (k: Kernel) => ((await k.call('system.status', undefined, USER)) as SystemStatus).edition;
     await waitFor(async () => (await ed(staff)).vertical === 'education');
-    // Every new computer opens in Essentials. Teachers may go up to Standard (their group holds them there), IT to Ultra.
+    // Every new computer opens in Essentials. Teachers may go up to Pro (their group holds them there), IT to Ultra.
     expect(await ed(staff)).toMatchObject({ tier: 'essentials', ceiling: 'basic', ceilingReason: 'organization', audience: 'staff', learner: false, productName: 'FBRX Endpoint Essentials' });
-    await expect(staff.call('edition.choose', { tier: 'ultra' }, USER)).rejects.toThrow(/holds this computer to FBRX Endpoint Standard/);
-    expect(await staff.call('edition.choose', { tier: 'basic' }, USER)).toMatchObject({ tier: 'basic', productName: 'FBRX Endpoint Standard' });
+    await expect(staff.call('edition.choose', { tier: 'ultra' }, USER)).rejects.toThrow(/holds this computer to FBRX Endpoint Pro/);
+    expect(await staff.call('edition.choose', { tier: 'basic' }, USER)).toMatchObject({ tier: 'basic', productName: 'FBRX Endpoint Pro' });
     expect(await ed(it_)).toMatchObject({ tier: 'essentials', ceiling: 'ultra', audience: 'staff' });
     expect(await it_.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra', productName: 'FBRX Endpoint Ultra' });
     expect(await ed(student)).toMatchObject({ tier: 'basic', ceilingReason: 'learner', audience: 'student', learner: true, productName: 'FBRX OS Education' });

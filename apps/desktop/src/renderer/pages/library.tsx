@@ -297,7 +297,7 @@ function FbrxCommands({ q, agentName }: { q: string; agentName: string }) {
 }
 
 /**
- * `everything` (Black Hole): the whole Library, The Lab and the FBRX command library included. Talking to the search
+ * `everything` (Black Hole Edition): the whole Library, The Lab and the FBRX command library included. Talking to the search
  * like a switch still finds the command library (Fun Mode's Operator Mode trophy, in any edition); in a lighter edition
  * it says where the commands are.
  */

@@ -57,7 +57,7 @@ export class ProviderManager {
     const ai = this.d.policy.policy.ai;
     if (cfg.cloud && !ai.allowCloudProviders) return 'Cloud AI providers are disabled by policy';
     if (ai.allowedProviders.length && !ai.allowedProviders.includes(cfg.id)) return 'Provider is not on the policy allow-list';
-    if (cfg.cloud && !this.d.license.has('agent.cloud')) return 'Cloud AI requires a Pro or Enterprise license';
+    if (cfg.cloud && !this.d.license.has('agent.cloud')) return 'Cloud AI providers are not included in this license';
     if (!cfg.cloud && !this.d.license.has('agent.local')) return 'Local AI is not licensed';
     if (cfg.type === 'fbrx-cloud') {
       if (this.d.cloud?.learner()) return 'FBRX Cloud AI is off on this computer: it runs the learner edition your organization chose';

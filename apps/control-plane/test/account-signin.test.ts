@@ -87,7 +87,7 @@ describe('signing in on a computer with an FBRX account', () => {
       expect(k.license.status()).toMatchObject({ source: 'account', tier: 'ultra', chosen: 'ultra', ceiling: 'ultra', ceilingReason: 'license', commandUrl: null });
       expect(k.edition().productName).toBe('FBRX Endpoint Ultra');
 
-      // The organization adds Sam as a Black Hole member (its license allows it): Sam's computer joins at Black Hole.
+      // The organization adds Sam as a Black Hole Edition member (its license allows it): Sam's computer joins at Black Hole Edition.
       await api('POST', '/v1/admin/licenses', { edition: 'enterprise', seats: 0, tier: 'blackhole' }, admin, { 'x-fbrx-tenant': tenantId });
       // Only an account whose email is confirmed becomes a member.
       await expect(api('POST', '/v1/admin/members', { email: 'sam@harbor.example', tier: 'blackhole' }, admin, { 'x-fbrx-tenant': tenantId })).rejects.toThrow(/has not confirmed/);
@@ -187,7 +187,7 @@ describe('signing in on a computer with an FBRX account', () => {
       const wrong = await api('POST', '/v1/admin/support-passes', { installId: 'not-this-one', hours: 1 }, admin, { 'x-fbrx-tenant': tenantId });
       await expect(k.call('support.activate', { pass: wrong.pass }, USER)).rejects.toMatchObject({ code: 'FORBIDDEN' });
 
-      // The right pass turns this computer into Black Hole with everything on; "refusetobrew" ends it.
+      // The right pass turns this computer into Black Hole Edition with everything on; "refusetobrew" ends it.
       expect((await k.call('support.activate', { pass: minted.pass }, USER)) as any).toMatchObject({ active: true, tier: 'blackhole' });
       expect(k.license.status()).toMatchObject({ tier: 'blackhole', source: 'support', support: true });
       expect((await k.call('support.end', {}, USER)) as any).toMatchObject({ active: false });
@@ -215,16 +215,16 @@ describe('signing in on a computer with an FBRX account', () => {
     }
   }, 60_000);
 
-  it('makes a member’s computer that joined another way theirs, so it runs their edition, after a Standard trial too', async () => {
+  it('makes a member’s computer that joined another way theirs, so it runs their edition, after a Pro trial too', async () => {
     const dir = mkdtempSync(join(tmpdir(), 'fbrx-claim-'));
     const k = await Kernel.create({ dataDir: dir, platform: createNodePlatform({ dataDir: dir, devMode: false, keychain: new StaticKeyKeychain(randomBytes(32), 'memory'), licensePublicKeys: [cp.ctx.keys.licensePublicPem] }) });
     const t = { 'x-fbrx-tenant': tenantId };
     try {
       k.settings.update({ localApi: { enabled: false }, runtime: { enabled: false }, protection: { shield: { updateSignatures: false } } });
       await k.start();
-      // On its own first, with the free Standard trial.
+      // On its own first, with the free Pro trial.
       expect(await k.call('edition.startTrial', {}, USER)).toMatchObject({ tier: 'basic', ceilingReason: 'trial' });
-      // Signed in to an account with Ultra, made a Black Hole member of the organization.
+      // Signed in to an account with Ultra, made a Black Hole Edition member of the organization.
       await k.call('account.signIn', { server: base, email: 'jo@harbor.example', password: PASSWORD, name: 'Jo', create: true }, USER);
       const acct = (await api('GET', '/v1/admin/accounts?q=jo@')).at(0);
       await api('POST', `/v1/admin/accounts/${acct.id}/grant`, { tier: 'ultra', days: 30 });
@@ -234,7 +234,7 @@ describe('signing in on a computer with an FBRX account', () => {
       expect(k.license.status()).toMatchObject({ tier: 'ultra', ceiling: 'ultra' });
 
       // The computer joins with an enrollment token from Deploy & enroll, not through the sign-in: it becomes Jo's and
-      // runs Jo's Black Hole.
+      // runs Jo's Black Hole Edition.
       const { token } = await api('POST', '/v1/admin/enrollment-tokens', { label: 'Lab' }, admin, t);
       await k.call('fleet.enroll', { serverUrl: base, token }, USER);
       await waitFor(() => k.license.status().tier === 'blackhole');

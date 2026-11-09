@@ -808,7 +808,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export const PROTECTED_SETTING_PATHS: readonly string[] = [];
 
 /**
- * Fun extras come with every edition (Essentials, Standard and Ultra), stay hidden until someone enters 418 as a
+ * Fun extras come with every edition (Essentials, Pro and Ultra), stay hidden until someone enters 418 as a
  * license key (Settings → License; student computers have no License page), and can be switched off again (an
  * organization can lock them off). `tier` is undefined while the license loads.
  */

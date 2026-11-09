@@ -31,7 +31,7 @@ The same FBRX Mobile a computer serves to phones in a browser, plus what only an
 - **Pairing by camera**: *Scan the code* reads the QR code under **Mesh & phone → Add a device → Show a code on this
   computer** (the computer's address, the one-time code and its key fingerprint). *Type it instead* takes the address
   and the code. Pairing is the same as from the browser ([MESH.md](../docs/MESH.md#pairing)); the app keeps the address.
-- **The FBRX account**: sign in or make an account, buy Standard or Ultra through the store, **Restore purchases**,
+- **The FBRX account**: sign in or make an account, buy Pro or Ultra through the store, **Restore purchases**,
   **Manage subscription** (the store's own page), sign out, delete the account. What is bought turns on in every
   computer signed in to the same account ([ACCOUNTS.md](../docs/ACCOUNTS.md)).
 - On a computer running Essentials, *See the editions* on Home opens the account here instead of pointing at the
@@ -72,7 +72,7 @@ and test them on a Mac and an Android device before each upload.
 The product ids come from the price list (`packages/shared/src/plans.ts`) and are the same everywhere.
 
 **App Store Connect**: one auto-renewable subscription group with `fbrx_standard_monthly` ($4.99) and
-`fbrx_ultra_monthly` ($11.99), Ultra ranked above Standard so a change between them is an upgrade or a downgrade. Turn
+`fbrx_ultra_monthly` ($11.99), Ultra ranked above Pro so a change between them is an upgrade or a downgrade. Turn
 on the **In-App Purchase** capability for the app id (Xcode → Signing & Capabilities). Set up the server side as in
 [ACCOUNTS.md → App Store](PAYMENTS.md#app-store).
 
@@ -87,7 +87,7 @@ How a purchase reaches the account:
   FBRX Command and finishes the transaction only once FBRX Command has recorded it, so a purchase made while offline
   comes back at the next start. Renewals and refunds arrive as App Store Server Notifications.
 - **Android**: the purchase carries the account's id; the app sends the purchase token, and FBRX Command asks Google
-  Play about it and acknowledges it. Purchases not yet acknowledged are sent again whenever the app opens. Standard to
+  Play about it and acknowledges it. Purchases not yet acknowledged are sent again whenever the app opens. Pro to
   Ultra replaces the subscription, and Play charges the difference.
 
 ### Store rules this follows

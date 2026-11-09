@@ -110,7 +110,7 @@ const SERVER_SETS = FBRX_COMMAND_SETS.filter((set) => set.kind === 'server');
 
 /**
  * The console with its library beside it. "prefill" types a command in, ready to run (from the Library). The FBRX
- * Server and FBRX Gate commands join the library in Black Hole, the same as the Library's FBRX commands.
+ * Server and FBRX Gate commands join the library in Black Hole Edition, the same as the Library's FBRX commands.
  */
 export function Fbrx1Panel({ prefill }: { prefill?: string }) {
   const api = useRef<ConsoleApi | null>(null);

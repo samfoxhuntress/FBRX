@@ -20,7 +20,7 @@ tools, its memory, approvals and files stay on the computer, as with any AI it t
 
 - **Tokens** read and written, together, times the model's weight (a large model's count for more), by the month
   (UTC).
-- **Each edition's allowance a month**, until the operator changes it: Essentials none, Standard 1M, Ultra 3M, Black
+- **Each edition's allowance a month**, until the operator changes it: Essentials none, Pro 1M, Ultra 3M, Black
   Hole 5M (`CLOUD_AI_ALLOWANCE`). The edition is the account's own or the fullest one an organization gives it.
   Essentials' allowance, when there is one, waits for the account's email to be confirmed.
 - **Extra tokens** (from a promo code or the operator) are spent once the month's allowance is used, and do not run
@@ -42,7 +42,7 @@ the models, the promo codes in use) and:
 - **Accounts** (this month's, most used first; or any account, by search). **Manage** one: its own monthly limit
   instead of its edition's, extra tokens to add (or take back), **lift its limit until the month ends** (it goes on,
   still counted, without spending extra tokens), **turn FBRX Cloud AI off** for it, a note, and its last twelve months.
-- **Promo codes**: a code (or one FBRX makes up, FBRX-XXXX-XXXX) that gives extra tokens, Standard or Ultra for some
+- **Promo codes**: a code (or one FBRX makes up, FBRX-XXXX-XXXX) that gives extra tokens, Pro or Ultra for some
   days (as a grant, like *Give an edition*), or both; for how many accounts and until when. Each account uses a code
   once, in FBRX OS, on the website or in the phone apps. Turn one off or back on, and see who used it.
 

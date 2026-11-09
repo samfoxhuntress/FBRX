@@ -74,7 +74,7 @@ function PolicyTab() {
               disabled={managed || !license?.features.includes('guardian.model')}
               checked={p.ai.guardianModelReview && !!license?.features.includes('guardian.model')}
               onChange={(v) => upd((x) => (x.ai.guardianModelReview = v))}
-              label={license?.features.includes('guardian.model') ? 'Guardian also asks an AI model to review risky calls' : 'Guardian also asks an AI model to review risky calls (Black Hole)'}
+              label={license?.features.includes('guardian.model') ? 'Guardian also asks an AI model to review risky calls' : 'Guardian also asks an AI model to review risky calls (Black Hole Edition)'}
             />
             <Toggle disabled={managed} checked={p.data.redactSecrets} onChange={(v) => upd((x) => (x.data.redactSecrets = v))} label="Redact credentials from tool output" />
             <Toggle disabled={managed} checked={p.approvals.allowRemember} onChange={(v) => upd((x) => (x.approvals.allowRemember = v))} label='Allow "Always allow" on approvals' />

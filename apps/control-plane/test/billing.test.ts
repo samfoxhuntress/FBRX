@@ -370,7 +370,7 @@ describe('FBRX accounts and what they buy', () => {
     expect((await ok('GET', '/v1/accounts/me', undefined, token)).tier).toBe('essentials');
   });
 
-  it('runs an organization’s FBRX Command plan: each computer at its edition, Black Hole as an add-on, Essentials free', async () => {
+  it('runs an organization’s FBRX Command plan: each computer at its edition, Black Hole Edition as an add-on, Essentials free', async () => {
     const owner = await ok('POST', '/v1/accounts/signup', { email: 'owner@river.example', name: 'Riv', password: PASSWORD });
     // An organization is started from a confirmed email.
     expect((await call('POST', '/v1/accounts/tenants', { name: 'River Design', kind: 'business' }, owner.token)).json.error.code).toBe('EMAIL_NOT_CONFIRMED');
@@ -383,7 +383,7 @@ describe('FBRX accounts and what they buy', () => {
     expect((await ok('GET', '/v1/accounts/me', undefined, owner.token)).memberships).toEqual([{ tenantId: t.tenantId, tenantName: 'River Design', tier: 'essentials' }]);
     expect((await ok('GET', '/v1/admin/billing', undefined, admin)).plan).toMatchObject({ billing: 'cloud', active: false, interval: 'month', bill: { total: 5499 } });
 
-    // Three computers join; one is given Ultra, one Black Hole.
+    // Three computers join; one is given Ultra, one Black Hole Edition.
     const { token: enroll } = await ok('POST', '/v1/admin/enrollment-tokens', { label: 'Everyone' }, admin);
     const devices: Array<{ deviceId: string; deviceToken: string }> = [];
     for (const n of [1, 2, 3]) {
@@ -410,7 +410,7 @@ describe('FBRX accounts and what they buy', () => {
     expect((await config(2)).edition.tier).toBe('essentials');
     const lic = licenseStatusFrom((await config(1)).license, [cp.ctx.keys.licensePublicPem], 'managed', 2);
     expect(lic).toMatchObject({ state: 'valid', tier: 'blackhole', edition: 'enterprise' });
-    // The plan counts the computers by itself: Ultra at 20% off, Black Hole at full price, Essentials free.
+    // The plan counts the computers by itself: Ultra at 20% off, Black Hole Edition at full price, Essentials free.
     await new Promise((r) => setTimeout(r, 300));
     expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).plan).toMatchObject({ active: true, computers: { essentials: 1, basic: 0, ultra: 1, blackhole: 1 }, bill: { total: 5499 + 959 + 2499 } });
     const items = stripe.subscriptions.get('sub_t').items.data.map((i: any) => `${i.price.lookup_key}=${i.quantity}`);
@@ -501,14 +501,14 @@ describe('FBRX accounts and what they buy', () => {
     const signIn = async (n: number) => (await ok('POST', '/v1/accounts/login', { email, password: PASSWORD, device: device(n) })).token as string;
     const [t2, t3] = [await signIn(2), await signIn(3)];
     const me = await ok('GET', '/v1/accounts/me', undefined, t1);
-    // Standard, bought with Stripe.
+    // Pro, bought with Stripe.
     const end = Math.floor(Date.now() / 1000) + 30 * 86400;
     const sub = { id: 'sub_three', customer: 'cus_3', status: 'active', metadata: { fbrx_account: me.id }, items: { data: [{ id: 'si_three', quantity: 1, current_period_end: end, price: { id: 'price_three', lookup_key: 'fbrx_standard_monthly' } }] } };
     stripe.subscriptions.set('sub_three', sub);
     await stripeEvent({ id: 'evt_three', type: 'customer.subscription.created', data: { object: sub } });
     const license = (token: string) => ok('GET', '/v1/accounts/license', undefined, token);
 
-    // Standard covers 2 computers: the first two to sign in get a key, each for its own computer only.
+    // Pro covers 2 computers: the first two to sign in get a key, each for its own computer only.
     const first = await license(t1);
     expect(first).toMatchObject({ tier: 'basic', note: null, computers: { used: 3, allowed: 2, included: 2, extra: 0, extraPrice: 199, canAdd: true } });
     expect(licenseStatusFrom(first.key, [cp.ctx.keys.licensePublicPem], 'account', 2, 'inst-1').state).toBe('valid');
@@ -516,7 +516,7 @@ describe('FBRX accounts and what they buy', () => {
     expect((await license(t2)).key).toBeTruthy();
     const third = await license(t3);
     expect(third).toMatchObject({ key: null, tier: 'basic' });
-    expect(third.note).toBe('Your Standard covers 2 computers, and 3 are signed in: this one runs Essentials. Sign one of the others out, or add a computer for $1.99 a month.');
+    expect(third.note).toBe('Your Pro covers 2 computers, and 3 are signed in: this one runs Essentials. Sign one of the others out, or add a computer for $1.99 a month.');
     // Signing in again from the same computer keeps its place.
     expect((await license(await signIn(1))).key).toBeTruthy();
     expect((await license(t3)).key).toBeNull();
@@ -638,7 +638,7 @@ describe('FBRX accounts and what they buy', () => {
     expect(line('extra', 'ultra')).toMatchObject({ quantity: 3, total: 897 });
     expect(items()).toContain('fbrx_ultra_extra_computer_monthly=3');
 
-    // Someone who bought Standard at the old price keeps it: the price lost its lookup key, and is still Standard.
+    // Someone who bought Pro at the old price keeps it: the price lost its lookup key, and is still Pro.
     const old = { id: 'sub_old', customer: 'cus_9', status: 'active', metadata: { fbrx_account: me.id }, items: { data: [{ id: 'si_old', quantity: 1, current_period_end: end, price: { id: 'price_fbrx_standard_monthly', lookup_key: null } }] } };
     await stripeEvent({ id: 'evt_old', type: 'customer.subscription.updated', data: { object: old } });
     expect((await ok('GET', '/v1/accounts/me', undefined, owner.token)).tier).toBe('basic');
@@ -710,7 +710,7 @@ describe('FBRX accounts and what they buy', () => {
     expect(cp.ctx.db.get<{ details: string }>("SELECT details FROM audit_log WHERE action = 'billing.interval'")?.details).toContain('"after":"month"');
   });
 
-  it('sells a person Standard or Ultra yearly, and their extra computers yearly with it', async () => {
+  it('sells a person Pro or Ultra yearly, and their extra computers yearly with it', async () => {
     const { token: op } = await ok('POST', '/v1/auth/login', { email: 'op@fbrx.example', password: PASSWORD });
     await ok('POST', '/v1/admin/pricing/stripe', {}, op);
     const email = 'yearly@person.example';
@@ -718,14 +718,14 @@ describe('FBRX accounts and what they buy', () => {
     await ok('POST', '/v1/accounts/verify', { token: linkFor(email, 'verify') });
     const me = await ok('GET', '/v1/accounts/me', undefined, token);
 
-    // Checkout charges Standard's yearly price; an organization's price is not for sale to a person.
+    // Checkout charges Pro's yearly price; an organization's price is not for sale to a person.
     expect((await call('POST', '/v1/billing/checkout', { productId: 'fbrx_standard_tenant_yearly' }, token)).status).toBe(400);
     await ok('POST', '/v1/billing/checkout', { productId: 'fbrx_standard_yearly' }, token);
     const yearly = stripe.prices.get('fbrx_standard_yearly')!;
     expect(yearly).toMatchObject({ unit_amount: 4990, recurring: { interval: 'year' } });
     expect(stripe.calls.filter((c) => c.path === '/v1/checkout/sessions').at(-1)!.body).toContain(encodeURIComponent(yearly.id));
 
-    // Paid: Standard for a year; a further computer costs a year of its price, on the same plan.
+    // Paid: Pro for a year; a further computer costs a year of its price, on the same plan.
     const end = Math.floor(Date.now() / 1000) + 365 * 86400;
     const sub = { id: 'sub_y', customer: 'cus_y', status: 'active', metadata: { fbrx_account: me.id }, items: { data: [{ id: 'si_y', quantity: 1, current_period_end: end, price: { id: yearly.id, lookup_key: 'fbrx_standard_yearly' } }] } };
     stripe.subscriptions.set('sub_y', sub);

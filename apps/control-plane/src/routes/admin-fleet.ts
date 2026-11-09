@@ -139,7 +139,7 @@ export async function adminFleetRoutes(app: FastifyInstance, ctx: AppContext) {
     pinnedVersion: z.string().refine(isValidSemver, 'Invalid version').nullable().optional(),
     /** Who uses the group's computers (Education: staff or student). */
     audience: z.enum(AUDIENCES).nullable().optional(),
-    /** The most the group's computers may run (essentials, basic = Standard, ultra), or null for what the license allows. */
+    /** The most the group's computers may run (essentials, basic = Pro, ultra), or null for what the license allows. */
     tier: z.enum(TIERS).nullable().optional(),
     autoUpdate: z.enum(AUTO_UPDATE_MODES).nullable().optional(),
     /** The group's computers are managed with the MDM add-on (counted for it while the operator sells it). */

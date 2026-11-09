@@ -356,8 +356,8 @@ export class Kernel {
     this.limiter = new RateLimiter(() => this.policy.policy.rateLimits.toolCallsPerMinute);
     this.license = new LicenseService(this.meta, this.platform.licensePublicKeys, this.platform.appVersion, this.platform.devMode, this.events);
     // The edition a computer starts in: a new one opens in Essentials (with its walkthrough); one set up before
-    // Essentials existed keeps what it had (up to what it may run now). One set up before 2.0 starts its Standard trial
-    // (Standard is bought from 2.0).
+    // Essentials existed keeps what it had (up to what it may run now). One set up before 2.0 starts its Pro trial
+    // (Pro is bought from 2.0).
     const setUpBefore = this.meta.get<Tier>('edition.chosen') != null || this.settings.get().general.onboardingComplete;
     if (this.meta.get<Tier>('edition.chosen') == null) {
       const tried = this.platform.devMode ? parseTier(process.env.FBRX_EDITION) : null;
@@ -478,7 +478,7 @@ export class Kernel {
       blocked: () => {
         const e = this.edition();
         if (e.learner) return 'Automations are not on student computers';
-        return e.tier === 'essentials' ? 'Automations come with FBRX Endpoint Standard (Settings → Edition)' : null;
+        return e.tier === 'essentials' ? 'Automations come with FBRX Endpoint Pro (Settings → Edition)' : null;
       },
       takenHotkeys: () => {
         const s = this.settings.get();
@@ -1857,7 +1857,7 @@ export class Kernel {
 
   // ------------------------------------------------------------------------------- command center
 
-  /** What this computer is: Endpoint Essentials, Standard or Ultra, or FBRX OS Education on a student computer. */
+  /** What this computer is: Endpoint Essentials, Pro or Ultra, or FBRX OS Education on a student computer. */
   /** Makes an installed model the one the agent uses, with the built-in runtime as the default AI, and starts it. */
   async useLocalModel(modelId: string): Promise<RuntimeStatus> {
     if (!this.models.get(modelId)) throw new CoreError('NOT_FOUND', 'Model is not installed');
@@ -1901,17 +1901,17 @@ export class Kernel {
     return this.edition();
   }
 
-  /** The day before the Standard trial ends, and when it has: what to say (alerts, once each). */
+  /** The day before the Pro trial ends, and when it has: what to say (alerts, once each). */
   private trialNotice(): { title: string; body: string } | null {
     const notice = this.license.takeTrialNotice();
     if (!notice) return null;
     const price = formatPrice(EDITION_PLANS.basic.monthly!);
     return notice === 'ending'
-      ? { title: 'Your Standard trial ends tomorrow', body: `To keep Standard, get it for ${price} a month in Settings → Edition. Otherwise this computer goes back to Essentials, free, and nothing you saved goes away.` }
-      : { title: 'Your Standard trial has ended', body: `This computer runs Essentials again, free, and nothing you saved went away. Standard is ${price} a month in Settings → Edition.` };
+      ? { title: 'Your Pro trial ends tomorrow', body: `To keep Pro, get it for ${price} a month in Settings → Edition. Otherwise this computer goes back to Essentials, free, and nothing you saved goes away.` }
+      : { title: 'Your Pro trial has ended', body: `This computer runs Essentials again, free, and nothing you saved went away. Pro is ${price} a month in Settings → Edition.` };
   }
 
-  /** Starts this computer's free Standard trial (Settings → Edition), once. */
+  /** Starts this computer's free Pro trial (Settings → Edition), once. */
   startTrial(actor: string): EditionStatus {
     const until = this.license.startTrial().trialUntil;
     this.audit.append({ category: 'user', action: 'edition.trial', actor, target: 'basic', outcome: 'success', details: { until } });
@@ -2010,12 +2010,12 @@ export class Kernel {
     return this.platform.flavor === 'digger' || !this.ultraOnly('Network tools');
   }
 
-  /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Essentials or Standard), or null. */
+  /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Essentials or Pro), or null. */
   ultraOnly(what: string): string | null {
     return atLeast(this.license.status().tier, 'ultra') ? null : `${what} come with ${TIER_NAMES.ultra}`;
   }
 
-  /** Why a Black Hole feature cannot be used on this computer (it runs a lighter edition), or null. */
+  /** Why a Black Hole Edition feature cannot be used on this computer (it runs a lighter edition), or null. */
   blackHoleOnly(what: string): string | null {
     return atLeast(this.license.status().tier, 'blackhole') ? null : `${what} come with ${TIER_NAMES.blackhole}, through your organization's FBRX Command`;
   }

@@ -2,11 +2,11 @@
 
 ## Unlocking them: 418
 
-The easter eggs, the Silly Goose and the trophy case come with every edition of FBRX Endpoint (Essentials, Standard and
+The easter eggs, the Silly Goose and the trophy case come with every edition of FBRX Endpoint (Essentials, Pro and
 Ultra), but they stay hidden until someone enters **418** as a license key (**Settings → License**). It is not a
 license: it is HTTP status 418, *I'm a teapot*. The locked trophy case in Settings drops the only hint: "The key is
 short and stout." Some eggs live on pages a lighter edition does not show (the Terminal's are in Ultra, Dash's in
-Standard and Ultra); the rest, the chat's among them, work everywhere. Student computers have no License page, so they
+Pro and Ultra); the rest, the chat's among them, work everywhere. Student computers have no License page, so they
 stay plain.
 
 Once unlocked, **Settings → Appearance → Fun extras** appears, with a switch to turn them off again. An organization

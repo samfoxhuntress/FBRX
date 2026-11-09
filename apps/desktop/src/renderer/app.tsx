@@ -448,12 +448,12 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', need: 'ultra' },
     { id: 'lab', label: 'Virtual lab', icon: 'box', section: 'Advanced', need: 'ultra' },
     { id: 'server', label: 'FBRX Server', icon: 'server', section: 'Advanced', need: 'blackhole' },
-    // Every edition sees its organization, or how to join one (Black Hole only ever comes through FBRX Command).
+    // Every edition sees its organization, or how to join one (Black Hole Edition only ever comes through FBRX Command).
     { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System' },
     { id: 'settings', label: 'Settings', icon: 'settings', section: 'System' },
   ];
-  // Endpoint Essentials: the everyday pages in one short list (no sections to open). Standard: the everyday tools and
-  // the agent. Ultra adds the expert ones, Black Hole the FBRX Server page. Student computers keep only LEARNER_PAGES.
+  // Endpoint Essentials: the everyday pages in one short list (no sections to open). Pro: the everyday tools and
+  // the agent. Ultra adds the expert ones, Black Hole Edition the FBRX Server page. Student computers keep only LEARNER_PAGES.
   const essentials = tier === 'essentials' && !learner;
   // The simple menu: Essentials always; any other edition when the person chose it (Settings → General → Menu).
   const simple = essentials || (!learner && s?.general.mode === 'simple');
@@ -513,7 +513,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       body: (
         <>
           <p><b>Memory</b> (what {agentName} remembers about you, on this computer only), <b>Voice</b> (talk instead of typing) and the look.</p>
-          <p className="fx-muted"><b>Edition</b>: switch to Standard whenever you want everyday tools too (storage, antivirus, notes…), and back any time.</p>
+          <p className="fx-muted"><b>Edition</b>: switch to Pro whenever you want everyday tools too (storage, antivirus, notes…), and back any time.</p>
         </>
       ),
     },
@@ -940,7 +940,7 @@ const ESSENTIALS_NAV: Array<[Route, string, string?]> = [
 ];
 const ESSENTIALS_PAGES = new Set<string>(ESSENTIALS_NAV.map(([id]) => id));
 
-/** What a Standard page does, said on its place in Essentials. */
+/** What a Pro page does, said on its place in Essentials. */
 const STANDARD_WHAT: Partial<Record<Route, string>> = {
   home: 'Dash: your computer at a glance, how it is doing and anything that needs you.',
   alerts: 'What FBRX keeps an eye on (space running low, a threat stopped, an update waiting), in one place.',

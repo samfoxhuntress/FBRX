@@ -1288,7 +1288,7 @@ export interface ExtMethods {
   'edition.status': () => EditionStatus;
   /** Settings → Edition: anything up to what this computer may run (the person only). */
   'edition.choose': (p: { tier: Tier }) => EditionStatus;
-  /** Starts this computer's free Standard trial and turns Standard on (once; the person only). */
+  /** Starts this computer's free Pro trial and turns Pro on (once; the person only). */
   'edition.startTrial': () => EditionStatus;
   /** The Essentials walkthrough was finished or skipped; false shows it again (the person only). */
   'edition.tourDone': (p: { done: boolean }) => EditionStatus;

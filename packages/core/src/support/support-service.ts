@@ -11,7 +11,7 @@ import type { Logger } from '../logger';
 const PASS_KEY = 'support.pass';
 /** The edition the person had chosen before support began, so the resume phrase and expiry put it back exactly. */
 const BEFORE_KEY = 'support.beforeChosen';
-/** Black Hole unlocked for FBRX's own development (SUPPORT_ENTER_PHRASE, until 3.0): when, and by whom. */
+/** Black Hole Edition unlocked for FBRX's own development (SUPPORT_ENTER_PHRASE, until 3.0): when, and by whom. */
 const DEVELOPER_KEY = 'support.developer';
 
 export interface SupportDeps {
@@ -72,7 +72,7 @@ export class SupportService {
     return (this.d.appMajor ?? 0) <= DEVELOPER_UNLOCK_LAST_MAJOR;
   }
 
-  /** Whether Black Hole is unlocked here for FBRX's development (and this build still honors it). */
+  /** Whether Black Hole Edition is unlocked here for FBRX's development (and this build still honors it). */
   private developer(): boolean {
     return !!this.d.meta.get<{ at: string }>(DEVELOPER_KEY) && this.developerUnlockAvailable();
   }
@@ -96,7 +96,7 @@ export class SupportService {
   }
 
   /**
-   * Unlocks Black Hole on this computer at once, for FBRX's own development (until FBRX 3.0, then it is gone). It is
+   * Unlocks Black Hole Edition on this computer at once, for FBRX's own development (until FBRX 3.0, then it is gone). It is
    * not a support pass: settings an organization locked stay locked, and it stays until the resume phrase ends it. On
    * an organization's computer its FBRX Command is told, as with a pass.
    */
@@ -107,8 +107,8 @@ export class SupportService {
       this.d.meta.set(DEVELOPER_KEY, { at: new Date().toISOString(), by: actor });
       this.d.license.refresh();
       this.d.audit.append({ category: 'security', action: 'support.developer', actor, outcome: 'success', details: { tier: 'blackhole' } });
-      this.d.report?.('Black Hole was unlocked on this computer for FBRX development.', { by: actor });
-      this.d.log.warn('Black Hole unlocked for development');
+      this.d.report?.('Black Hole Edition was unlocked on this computer for FBRX development.', { by: actor });
+      this.d.log.warn('Black Hole Edition unlocked for development');
       this.d.events.emit('support.changed', this.status());
     }
     return this.status();
@@ -151,7 +151,7 @@ export class SupportService {
     if (!pass && !developer) return this.status();
     this.d.meta.delete(PASS_KEY);
     if (developer) this.d.meta.delete(DEVELOPER_KEY);
-    // The developer unlock still holds: the edition stays Black Hole, and what came before is kept for its end.
+    // The developer unlock still holds: the edition stays Black Hole Edition, and what came before is kept for its end.
     if (this.developer()) {
       this.d.license.refresh();
       this.stopTimer();

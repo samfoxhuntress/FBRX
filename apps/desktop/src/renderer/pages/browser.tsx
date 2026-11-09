@@ -132,7 +132,7 @@ export function BrowserApp({ agentName }: { agentName: string }) {
           .then((st) => {
             if (low === SUPPORT_EXIT_PHRASE) toast.info('Support mode ended');
             else if (st.active) toast.success('Support mode on', 'This computer is running with full access until the pass runs out.');
-            else if (st.developer) toast.success('Black Hole unlocked', 'Every feature is on, on this computer.');
+            else if (st.developer) toast.success('Black Hole Edition unlocked', 'Every feature is on, on this computer.');
           })
           .catch((e: Error) => toast.error('That support pass was not accepted', e.message));
         return;

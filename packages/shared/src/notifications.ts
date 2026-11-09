@@ -70,7 +70,7 @@ export function notificationKind(source: string): string {
 
 /**
  * Endpoint Essentials is the AI on its own: what pops up there is about the AI, FBRX itself, the organization and new
- * versions. Everything else (storage, antivirus, messages…) waits for Standard, where its pages are.
+ * versions. Everything else (storage, antivirus, messages…) waits for Pro, where its pages are.
  */
 const ESSENTIALS_SOURCES = new Set(['governance', 'agent', 'watchdog', 'administrator', 'helpdesk', 'updates']);
 export function essentialsNotifies(source: string): boolean {

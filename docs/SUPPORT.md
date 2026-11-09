@@ -5,7 +5,7 @@ access to **one computer's** FBRX apps (FBRX OS and FBRX Browser) to troubleshoo
 the taking.
 
 It takes a **support pass**: a short-lived token, signed by FBRX's own license key and tied to that one computer, that
-the apps verify offline. While a valid pass is active the computer runs as Black Hole with every feature on, settings
+the apps verify offline. While a valid pass is active the computer runs as Black Hole Edition with every feature on, settings
 an organization locked can be changed, and everything done is written to the audit log (and reported to FBRX Command
 on a managed computer). Ending it, or the pass running out, puts the computer back exactly as it was.
 

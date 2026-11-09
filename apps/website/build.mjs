@@ -247,7 +247,7 @@ page({
     </div>
     <div class="card offer">
       <div class="price"><b>${formatPrice(COMMAND_PLAN.monthly)}</b><small> a month</small></div>
-      <p>Plus each person at their edition, ${off} off: Standard ${formatPrice(EDITION_PLANS.basic.tenantMonthly)} (${book.computers.included.basic} computers), Ultra ${formatPrice(EDITION_PLANS.ultra.tenantMonthly)} (${book.computers.included.ultra}). Black Hole ${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} for your admins. Essentials free. Monthly or yearly.</p>
+      <p>Plus each person at their edition, ${off} off: Pro ${formatPrice(EDITION_PLANS.basic.tenantMonthly)} (${book.computers.included.basic} computers), Ultra ${formatPrice(EDITION_PLANS.ultra.tenantMonthly)} (${book.computers.included.ultra}). Black Hole Edition ${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} for your admins. Essentials free. Monthly or yearly.</p>
     </div>
   </div>
 </section>
@@ -333,7 +333,7 @@ page({
   body: `${hero({
     eyebrow: 'FBRX OS on the computer you have',
     title: 'FBRX Endpoint',
-    lead: 'A private AI on your computer, with the tools to look after it: your network, your storage, your security. Essentials is free; Standard and Ultra add the everyday and expert tools.',
+    lead: 'A private AI on your computer, with the tools to look after it: your network, your storage, your security. Essentials is free; Pro and Ultra add the everyday and expert tools.',
     ctas: '<a class="btn primary" href="download.html">Download, free</a><a class="btn" href="pricing.html">Editions and prices</a>',
   })}
 <section class="wrap">
@@ -428,7 +428,7 @@ page({
     ['Policy', 'What the AI may do and where it may think, which tools are on, and approvals for the things that matter.'],
     ['FBRX Mesh', 'Your computers and servers talking to each other directly, end-to-end encrypted, lending each other their AI.'],
     ['Schools and families', 'Student and child computers with the learner edition, kept to what suits them.'],
-    ['Your servers', 'FBRX Servers join like any computer; the Black Hole edition gives your admins every tool.'],
+    ['Your servers', 'FBRX Servers join like any computer; the Black Hole Edition gives your admins every tool.'],
   ])}
 </section>
 <section class="band">
@@ -455,7 +455,7 @@ const prices = { basic: EDITION_PLANS.basic.tenantMonthly, ultra: EDITION_PLANS.
 page({
   file: 'pricing.html',
   title: 'FBRX pricing',
-  description: `Essentials is free. Standard ${formatPrice(EDITION_PLANS.basic.monthly)} and Ultra ${formatPrice(EDITION_PLANS.ultra.monthly)} a month. FBRX Command ${formatPrice(COMMAND_PLAN.monthly)} a month for your organization.`,
+  description: `Essentials is free. Pro ${formatPrice(EDITION_PLANS.basic.monthly)} and Ultra ${formatPrice(EDITION_PLANS.ultra.monthly)} a month. FBRX Command ${formatPrice(COMMAND_PLAN.monthly)} a month for your organization.`,
   scripts: ['pricing.js'],
   body: `<section class="wrap">
   <h1 class="center">Pricing</h1>
@@ -479,7 +479,7 @@ page({
           ${TIERS.map((t) => `<tr><td>${TIER_SHORT[t]}</td><td>${tenantRate(t)}</td></tr>`).join('\n          ')}
         </tbody>
       </table>
-      <p class="muted small">A shared, lab or student computer nobody pays for costs the same as a person. Student and child computers count as Standard.</p>
+      <p class="muted small">A shared, lab or student computer nobody pays for costs the same as a person. Student and child computers count as Pro.</p>
     </div>
     <form class="card calc" id="calc" data-prices='${JSON.stringify(prices)}' aria-label="What a month comes to">
       <h3>What a month comes to</h3>
@@ -496,10 +496,10 @@ ${serverSection}
   <details><summary>Is Essentials really free?</summary><p>Yes, on as many computers as you like, and in an organization too. It is your AI on its own: the chat, its memory and voice, and the AI models.</p></details>
   <details><summary>Where does my AI run?</summary><p>On your computer. ${esc(ESSENTIALS_TIPS.find((t) => t.id === 'tip-offline')?.body.replace('{agent}', 'It') ?? '')}</p></details>
   <details><summary>Can I switch editions?</summary><p>Any time, in Settings → Edition. Nothing you saved goes away when you switch down.</p></details>
-  <details><summary>Can I try Standard first?</summary><p>Yes: every computer can try Standard free for ${STANDARD_TRIAL_DAYS} days, once, from Settings → Edition in FBRX. No card needed; when it ends, the computer goes back to Essentials unless you buy Standard. Standard used to be free, so a computer that ran FBRX before 2.0 starts its trial by itself when it updates.</p></details>
+  <details><summary>Can I try Pro first?</summary><p>Yes: every computer can try Pro free for ${STANDARD_TRIAL_DAYS} days, once, from Settings → Edition in FBRX. No card needed; when it ends, the computer goes back to Essentials unless you buy Pro. Pro used to be free, so a computer that ran FBRX before 2.0 starts its trial by itself when it updates.</p></details>
   <details><summary>How do I pay?</summary><p>On this site and in FBRX on your computer: by card, or with the wallet on your phone or computer when checkout offers it. In the phone apps, through the app store, once they leave beta. It all goes to one FBRX account, so what you buy anywhere works everywhere you sign in.</p></details>
   <details><summary>What does beta mean?</summary><p>FBRX is finished enough to use every day, and still changing quickly: new versions arrive often and install by themselves. Tell us what breaks, right from the app. Prices are the ones above.</p></details>
-  <details><summary>What is Black Hole?</summary><p>${esc(EDITION_PLANS.blackhole.summary)} It is an add-on in FBRX Command, ${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} a month a person (on up to ${book.computers.included.blackhole} computers), and comes on wherever its person signs in.</p></details>
+  <details><summary>What is Black Hole Edition?</summary><p>${esc(EDITION_PLANS.blackhole.summary)} It is an add-on in FBRX Command, ${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} a month a person (on up to ${book.computers.included.blackhole} computers), and comes on wherever its person signs in.</p></details>
 </section>`,
 });
 

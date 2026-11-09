@@ -58,7 +58,7 @@ stays.
 FBRX accounts on it) only when it was built with FBRX Command's license signing key. On one computer the two installers
 share it by themselves. For FBRX OS on another computer, copy `~/.fbrx-keys/license-signing.pem` from the FBRX Command
 computer and run `Install FBRX OS` with `--signing-key <that file>`; the keys it replaces are kept beside it, dated.
-Until then that computer runs Standard, and *Settings → Edition* says why.
+Until then that computer runs Pro, and *Settings → Edition* says why.
 
 ## Giving FBRX OS to someone else
 

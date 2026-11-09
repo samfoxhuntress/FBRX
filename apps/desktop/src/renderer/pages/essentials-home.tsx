@@ -20,7 +20,7 @@ const ROUTE: Record<NonNullable<EssentialsNote['action']>['to'], string> = { age
 
 /**
  * Home in Endpoint Essentials: no dashboard, just the split-flap board and a few notes from FBRX: tips and tricks, the
- * AI models, and what Standard and Ultra add. The same notes are on the phone (FBRX Mobile).
+ * AI models, and what Pro and Ultra add. The same notes are on the phone (FBRX Mobile).
  */
 export function EssentialsHome({ status, agentName, who }: { status: SystemStatus; agentName: string; who: string | null }) {
   const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed']);

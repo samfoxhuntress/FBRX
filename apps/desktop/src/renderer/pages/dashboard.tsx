@@ -53,9 +53,9 @@ const ULTRA_TIPS = [
   'Library → The Lab has power-user how-tos. Goggles recommended.',
   'Snippets save commands you reuse; the Terminal lists them on the right.',
 ];
-/** Standard and Ultra (pages Essentials leaves out). */
+/** Pro and Ultra (pages Essentials leaves out). */
 const STANDARD_TIPS = ['Press Ctrl+Alt+Z for your clipboard history: W and S move, type to search, Enter pastes.'];
-const ESSENTIALS_TIPS = ['Want more tools? Settings → Edition switches to Standard, and back, any time.'];
+const ESSENTIALS_TIPS = ['Want more tools? Settings → Edition switches to Pro, and back, any time.'];
 const ALL_TIPS = [
   'Press Ctrl+K anywhere for Spotlight: apps, files, settings and quick answers.',
   'The big red Emergency stop in Settings → Agent halts every AI action at once.',

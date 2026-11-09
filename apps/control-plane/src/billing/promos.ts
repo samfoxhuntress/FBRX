@@ -7,7 +7,7 @@ import { changeCloudAiAccount } from './cloud-ai';
 import { recordPurchase } from './entitlements';
 
 /**
- * Promo codes the operator makes (FBRX Command → Cloud AI → Promo codes): extra FBRX Cloud AI tokens, Standard or
+ * Promo codes the operator makes (FBRX Command → Cloud AI → Promo codes): extra FBRX Cloud AI tokens, Pro or
  * Ultra for some days, or both. An account uses each code once (in FBRX OS, on the website or in the phone apps); a
  * code works for a number of accounts, until a date, or until the operator turns it off.
  */

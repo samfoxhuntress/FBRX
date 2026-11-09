@@ -189,10 +189,10 @@ async function checkPassword(ctx: AppContext, a: AccountRow, password: string, w
   ctx.db.run('UPDATE accounts SET failed_logins = 0, locked_until = NULL, last_login_at = ? WHERE id = ?', new Date().toISOString(), a.id);
 }
 
-/** A product an account may buy for itself: Standard or Ultra, the personal plans. */
+/** A product an account may buy for itself: Pro or Ultra, the personal plans. */
 function personalProduct(productId: string) {
   const p = productById(productId);
-  if (!p || p.kind !== 'edition' || p.tenant) throw badRequest('That is not an edition you can buy for yourself (Standard or Ultra)');
+  if (!p || p.kind !== 'edition' || p.tenant) throw badRequest('That is not an edition you can buy for yourself (Pro or Ultra)');
   return p;
 }
 
@@ -563,7 +563,7 @@ export async function accountRoutes(app: FastifyInstance, ctx: AppContext) {
     const s = requireStripe(cloud);
     const { tier } = accountTier(ctx, a.id);
     const plan = accountEntitlements(ctx, a.id).find((e) => e.kind === 'edition' && e.source === 'stripe' && !e.tenant_id && e.tier === tier && isValid(e));
-    if (tier === 'essentials' || !plan) throw badRequest('Extra computers go on a Standard or Ultra plan bought here (on the website or in FBRX), not through the App Store or Google Play');
+    if (tier === 'essentials' || !plan) throw badRequest('Extra computers go on a Pro or Ultra plan bought here (on the website or in FBRX), not through the App Store or Google Play');
     // At the plan's interval: Stripe bills a subscription's items at one.
     const productId = productFor(EXTRA_COMPUTER_PRODUCTS[tier as PaidTier], productInterval(plan.product_id));
     const sub = await s.subscription(plan.external_id);

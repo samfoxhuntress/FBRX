@@ -115,7 +115,7 @@ export function accountEntitlements(ctx: AppContext, accountId: string): Row[] {
   return ctx.db.all<Row>('SELECT * FROM entitlements WHERE account_id = ? ORDER BY created_at', accountId);
 }
 
-/** Black Hole is never bought on an account: one there (a grant, say) counts as Ultra. */
+/** Black Hole Edition is never bought on an account: one there (a grant, say) counts as Ultra. */
 const onAccount = (t: Tier): Tier => (t === 'blackhole' ? 'ultra' : t);
 
 /** The edition an account's own purchases give (Essentials with none), and until when. */
@@ -165,7 +165,7 @@ export function accountComputers(ctx: AppContext, accountId: string, tier: PaidT
 }
 
 /**
- * The license key an account signs one of its computers up to: Standard or Ultra (no FBRX Command tenant in it, so it
+ * The license key an account signs one of its computers up to: Pro or Ultra (no FBRX Command tenant in it, so it
  * works on a computer on its own), for that computer's install only, while it is one of the computers the edition
  * covers. It runs a few days past the period paid for, and never more than LICENSE_MAX_DAYS, so computers fetch a fresh
  * one as they renew.

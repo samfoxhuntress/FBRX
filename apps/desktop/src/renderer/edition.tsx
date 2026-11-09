@@ -6,13 +6,13 @@ import { call } from './client';
 import { navigate } from './app';
 
 /**
- * FBRX Endpoint Essentials, Standard, Ultra or Black Hole (see TIERS in @fbrx/shared, prices in plans.ts). Every new
+ * FBRX Endpoint Essentials, Pro, Ultra or Black Hole Edition (see TIERS in @fbrx/shared, prices in plans.ts). Every new
  * computer opens in Essentials, free: the AI on its own (the chat, the AI models, Settings) and a walkthrough. Every
- * edition picks how much the AI does on a task (Settings → Agent → Thinking). Standard adds the everyday tools and the
+ * edition picks how much the AI does on a task (Settings → Agent → Thinking). Pro adds the everyday tools and the
  * AI's work budget part by part, with a free trial; Ultra the expert tool sets, Mesh, AI coordination, connections and
  * plugins and the theme studio. Both are bought (an FBRX account or a license key) or come through an organization's
  * FBRX Command.
- * Black Hole (everything: the whole Library, network environments, the FBRX Server page) comes only through FBRX
+ * Black Hole Edition (everything: the whole Library, network environments, the FBRX Server page) comes only through FBRX
  * Command.
  */
 export const TierContext = createContext<Tier>('basic');
@@ -43,14 +43,14 @@ export function useLicenseTier(): Tier | undefined {
 
 export const ULTRA = TIER_NAMES.ultra;
 
-/** Whether this computer runs at least `min` (Black Hole has everything Ultra has, and so on). */
+/** Whether this computer runs at least `min` (Black Hole Edition has everything Ultra has, and so on). */
 export function useAtLeast(min: Tier): boolean {
   return atLeast(useTier(), min);
 }
 
 /**
  * How this computer could get `tier`, in a sentence: it may already (turn it on), its organization decides, it is
- * bought, or (Black Hole) it comes only through an organization.
+ * bought, or (Black Hole Edition) it comes only through an organization.
  */
 export function howToGet(tier: Tier, ed: EditionStatus | null): string {
   const plan = EDITION_PLANS[tier];
@@ -62,7 +62,7 @@ export function howToGet(tier: Tier, ed: EditionStatus | null): string {
   return `${TIER_SHORT[tier]} is ${formatPrice(plan.monthly)} a month on your FBRX account, or comes through your organization's FBRX Command.`;
 }
 
-/** "Standard is free on this computer until October 26, 2026: its 7-day trial." during the trial, else null. */
+/** "Pro is free on this computer until October 26, 2026: its 7-day trial." during the trial, else null. */
 export function trialLine(ed: EditionStatus | null): string | null {
   if (ed?.ceilingReason !== 'trial' || !ed.trialUntil) return null;
   return `${TIER_SHORT[ed.ceiling]} is free on this computer until ${formatDay(ed.trialUntil)}: its ${STANDARD_TRIAL_DAYS}-day trial.`;
@@ -75,7 +75,7 @@ export function useEditionStatus(): EditionStatus | null {
 
 /**
  * Switches this computer's edition (the person's choice; FBRX Command decides how far up it may go), or starts its
- * Standard trial.
+ * Pro trial.
  */
 export function useChooseEdition(): { choose: (tier: Tier) => Promise<boolean>; startTrial: () => Promise<boolean>; busy: Tier | null } {
   const toast = useToast();
@@ -98,7 +98,7 @@ export function useChooseEdition(): { choose: (tier: Tier) => Promise<boolean>; 
   return { choose, startTrial, busy };
 }
 
-/** Where a Standard page would be, in Essentials: what it does, and one click to switch. */
+/** Where a Pro page would be, in Essentials: what it does, and one click to switch. */
 export function StandardOnly({ title, what }: { title: string; what: string }) {
   const ed = useEditionStatus();
   const { choose, startTrial, busy } = useChooseEdition();
@@ -116,12 +116,12 @@ export function StandardOnly({ title, what }: { title: string; what: string }) {
             </h2>
             <p className="fx-muted">{what}</p>
             <p className="fx-muted">
-              {held ? howToGet('basic', ed) : 'Essentials is your AI on its own. Standard adds the everyday tools, and you can switch back any time.'}
+              {held ? howToGet('basic', ed) : 'Essentials is your AI on its own. Pro adds the everyday tools, and you can switch back any time.'}
             </p>
             <div className="fx-actions">
               {!held && (
                 <Button variant="primary" icon="unlock" loading={busy === 'basic'} onClick={() => void choose('basic')}>
-                  Switch to Standard
+                  Switch to Pro
                 </Button>
               )}
               {held && ed?.trialAvailable && (
@@ -140,7 +140,7 @@ export function StandardOnly({ title, what }: { title: string; what: string }) {
   );
 }
 
-/** Where an Ultra (or Black Hole) page would be, in a lighter edition: what it does and how to get it. */
+/** Where an Ultra (or Black Hole Edition) page would be, in a lighter edition: what it does and how to get it. */
 export function UltraOnly({ title, what, learner, need = 'ultra' }: { title: string; what: string; learner?: boolean; need?: 'ultra' | 'blackhole' }) {
   const ed = useEditionStatus();
   const { choose, busy } = useChooseEdition();

@@ -228,7 +228,7 @@ function PromoCodes({ q }: { q: Promos }) {
       <Table
         rows={q.data ?? []}
         rowKey={(p) => p.id}
-        empty={<Empty title="No promo codes yet">Make one to give extra FBRX Cloud AI tokens, Standard or Ultra for some days, or both.</Empty>}
+        empty={<Empty title="No promo codes yet">Make one to give extra FBRX Cloud AI tokens, Pro or Ultra for some days, or both.</Empty>}
         columns={[
           { key: 'c', header: 'Code', render: (p) => (<div><CopyText value={p.code} />{p.note && <div className="fx-cell-sub">{p.note}</div>}</div>) },
           { key: 'g', header: 'Gives', render: (p) => promoGives(p) },

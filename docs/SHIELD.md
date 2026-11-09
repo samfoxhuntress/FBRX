@@ -81,7 +81,7 @@ running too.
 
 ### Editions
 
-Every edition (Essentials, Standard and Ultra) has FBRX Shield's download checks, scans, threat database, rules and
+Every edition (Essentials, Pro and Ultra) has FBRX Shield's download checks, scans, threat database, rules and
 quarantine, the choice of antivirus, and a **scheduled scan** (Settings on the FBRX Shield page: a quick scan every
 day or every week, at noon). **Endpoint Ultra** chooses when: picking a schedule shows *At what time?* (and *On which
 day?* for a weekly scan). A computer that is off at that time scans when it is next on, and a new or changed schedule

@@ -6,13 +6,13 @@ import { LICENSE_TIERS, type Tier } from './license';
  * access to one computer's FBRX apps (FBRX OS and the browser) to troubleshoot, without that power being free for the
  * taking. It takes a **support pass**: a short-lived token, signed by FBRX's own license key and tied to one computer,
  * that the apps verify offline. It is pasted into Settings → License, or FBRX Command sends it to the computer. While a
- * valid pass is active the computer runs as Black Hole with every feature on, settings the organization locked can be
+ * valid pass is active the computer runs as Black Hole Edition with every feature on, settings the organization locked can be
  * changed, and everything done is written to the audit log (and reported to FBRX Command on a managed computer). The
  * resume phrase, the End button, or the pass running out puts everything back exactly as it was.
  */
 
 /**
- * Not advertised anywhere: until FBRX 3.0 it unlocks Black Hole on the computer it is typed into, for FBRX's own
+ * Not advertised anywhere: until FBRX 3.0 it unlocks Black Hole Edition on the computer it is typed into, for FBRX's own
  * development. Builds from 3.0 on ignore it (SupportService checks the version), and it is removed then.
  */
 export const SUPPORT_ENTER_PHRASE = '418teapotadmin';
@@ -33,7 +33,7 @@ export const SupportPassSchema = z.object({
   v: z.literal(1),
   /** The one computer this pass is for: its install id (meta `install.id`). */
   installId: z.string().min(1).max(200),
-  /** The edition to run while the pass is active (Black Hole gives everything; a lighter one can be minted too). */
+  /** The edition to run while the pass is active (Black Hole Edition gives everything; a lighter one can be minted too). */
   tier: z.enum(LICENSE_TIERS),
   scope: z.enum(SUPPORT_SCOPES),
   /** Who the pass is for and why, shown in the app and written to the audit log (no secrets). */
@@ -58,13 +58,13 @@ export interface SupportStatus {
   active: boolean;
   /** This computer's install id: what a support pass is minted for (shown in Settings → License and FBRX/1). */
   installId: string;
-  /** The edition support mode is running (Black Hole unless a lighter pass was minted). */
+  /** The edition support mode is running (Black Hole Edition unless a lighter pass was minted). */
   tier: Tier | null;
   /** Until when the pass is valid. */
   until: string | null;
   /** Who the pass was minted for/by, and its note. */
   issuedBy: string | null;
   note: string | null;
-  /** Black Hole was unlocked on this computer for FBRX's development (not a pass; it has no end time). */
+  /** Black Hole Edition was unlocked on this computer for FBRX's development (not a pass; it has no end time). */
   developer?: boolean;
 }

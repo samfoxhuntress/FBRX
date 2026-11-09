@@ -643,7 +643,7 @@ export interface SystemStatus {
   services: ServiceStatus[];
   vault: VaultStatus;
   license: LicenseStatus;
-  /** Endpoint Essentials, Standard or Ultra, or FBRX OS Education on a student computer; the organization kind and who uses it. */
+  /** Endpoint Essentials, Pro or Ultra, or FBRX OS Education on a student computer; the organization kind and who uses it. */
   edition: EditionStatus;
   fleet: FleetStatus;
   runtime: RuntimeStatus;
@@ -877,7 +877,7 @@ export interface CoreMethods extends ExtMethods {
   'account.signIn': (p: { server?: string; fingerprint?: string; email: string; password: string; name?: string; create?: boolean }) => AccountStatus;
   'account.signOut': () => AccountStatus;
   'account.refresh': () => AccountStatus;
-  /** A page to buy Standard or Ultra (Stripe Checkout), to open in the browser. */
+  /** A page to buy Pro or Ultra (Stripe Checkout), to open in the browser. */
   'account.checkout': (p: { productId: string }) => { url: string };
   /** The billing portal: change the plan or the card, invoices, cancel. */
   'account.portal': () => { url: string };

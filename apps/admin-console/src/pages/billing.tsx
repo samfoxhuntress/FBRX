@@ -156,7 +156,7 @@ export function BillingPage() {
           )}
           <Card
             title="What it comes to"
-            subtitle="Each member at their edition, on as many computers as it includes; each further computer they use; and each shared, lab or student computer at the edition you give it (Members, Devices, Profiles & groups). Student and child computers count as Standard. It follows by itself; changes are prorated."
+            subtitle="Each member at their edition, on as many computers as it includes; each further computer they use; and each shared, lab or student computer at the edition you give it (Members, Devices, Profiles & groups). Student and child computers count as Pro. It follows by itself; changes are prorated."
             actions={
               manage && p.active ? (
                 <Button size="sm" loading={busy === 'interval'} onClick={() => void switchInterval()}>
@@ -180,7 +180,7 @@ export function BillingPage() {
         </>
       )}
       <Grid cols={2}>
-        <Card title="Black Hole, for the people who run your FBRX Command">
+        <Card title="Black Hole Edition, for the people who run your FBRX Command">
           <p className="fx-secondary" style={{ marginTop: 0 }}>
             {EDITION_PLANS.blackhole.summary} It is an add-on here, per computer: give it to your admins in Members (it comes on wherever they sign in) or to a computer in Devices.
           </p>
@@ -340,7 +340,7 @@ export function MembersPage() {
             <Field label="Their email" help="With a confirmed FBRX account, they are added now. Otherwise you get an invitation code to give them: it makes their account in FBRX OS.">
               <Input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value.trim() })} />
             </Field>
-            <Field label="Edition" help="Black Hole is for the people who run this FBRX Command and its servers.">
+            <Field label="Edition" help="Black Hole Edition is for the people who run this FBRX Command and its servers.">
               <Select value={form.tier} options={tierOptions} onChange={(e) => setForm({ ...form, tier: e.target.value as Tier })} />
             </Field>
           </div>
@@ -386,7 +386,7 @@ export function AccountsPage() {
   return (
     <Page
       title="FBRX accounts"
-      description="Everyone with an FBRX account on this FBRX Command: what they bought themselves, and the edition each organization gives them. People in an organization get their edition, Black Hole included, from its Members page."
+      description="Everyone with an FBRX account on this FBRX Command: what they bought themselves, and the edition each organization gives them. People in an organization get their edition, Black Hole Edition included, from its Members page."
       actions={<div style={{ width: 280 }}><Input placeholder="Search by email or name" value={search} onChange={(e) => setSearch(e.target.value)} /></div>}>
       <Card flush>
         <Table
@@ -443,7 +443,7 @@ export function AccountsPage() {
         >
           <div className="fx-form">
             <Callout tone="info">
-              This is for the person on their own (a promotion, or support), as if they had bought it. In an organization, the edition comes from its <strong>Members</strong> page instead, and Black Hole only ever comes that way.
+              This is for the person on their own (a promotion, or support), as if they had bought it. In an organization, the edition comes from its <strong>Members</strong> page instead, and Black Hole Edition only ever comes that way.
             </Callout>
             <Field label="Edition" help={grant.given ? `Now given: ${grant.given}. Giving one replaces it.` : 'What they bought themselves is not touched.'}>
               <Select

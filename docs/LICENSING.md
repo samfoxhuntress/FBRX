@@ -5,40 +5,41 @@ What each FBRX edition includes, what it costs, and how licenses decide what a c
 devices, users, configuration, credentials, plugins, backups, webhooks and audit trail, and signs the licenses its
 computers run under.
 
-## Products: FBRX Endpoint Essentials, Standard, Ultra and Black Hole
+## Products: FBRX Endpoint Essentials, Pro, Ultra and Black Hole Edition
 
 The desktop app is **FBRX Endpoint**, in four editions (see COMMAND_CENTER.md for what each shows):
 
 * **FBRX Endpoint Essentials** (free) — where every new computer starts: the AI on its own (the chat, the AI models
   and Settings, where it works Quick, Everyday or Thorough), Governance (what the AI may do, and the audit log) and a
   walkthrough. It joins an organization's FBRX Command for free.
-* **FBRX Endpoint Standard** (`basic` in licenses and the API) — the everyday tools, the AI's work budget part by part
+* **FBRX Endpoint Pro** (`basic` in licenses and the API) — the everyday tools, the AI's work budget part by part
   (steps, answer length, how much it keeps in mind) and unloading the local model when idle. Each computer on its own
   may try it free for 7 days, once (`STANDARD_TRIAL_DAYS`).
 * **FBRX Endpoint Ultra** — expert tool sets (Terminal, FBRX/1, virtual lab, disks and partitions, Defender settings,
   adapters, device consoles, developer tools, the Local API), Mesh and AI coordination, connections, tools and
   plugins, the theme studio with its gradients and textures, deep space maps with duplicate files and
   what grew, and the Wi-Fi channel planner's history and band-by-band advice.
-* **FBRX Endpoint Black Hole** (`blackhole`) — everything: Ultra plus the whole Library (The Lab and the FBRX command
+* **FBRX Endpoint Black Hole Edition** (`blackhole`) — everything: Ultra plus the whole Library (The Lab and the FBRX command
   library), network environments in Network Center and the FBRX Server page. For the people who run
   an organization's FBRX Command and its FBRX Servers, and only through FBRX Command.
 
 **Governance** comes with every edition: what the AI may do on its own and what it asks first, the folders it may
 use, and the audit log, so whoever uses the computer stays in charge of its AI. (A second AI model reviewing risky
-calls, the guardian model, is part of Black Hole.)
+calls, the guardian model, is part of Black Hole Edition.)
 
 The easter eggs come with every edition, once their secret key unlocks them.
 
 The person chooses the edition; what may be chosen is decided above them. A license's **tier** is the most it allows:
-Community up to Standard, Pro and Enterprise up to Ultra, and a license can name it outright (`tier: "basic"`,
+a Community license up to Pro, an Ultra license (`pro` in the key) or an Enterprise license up to Ultra, and a
+license can name it outright (`tier: "basic"`,
 `"ultra"` or `"blackhole"`). **On its own**, a computer runs Essentials unless something was bought: a license key
 (or a purchase on the person's FBRX account) goes up to its tier, at most Ultra. A purchase on an account covers as many
 of the person's computers as its edition includes, and the further ones they add (below): each signed-in computer gets
 a key of its own, for that install only, in the order they first signed in, and one past them runs Essentials until
 another signs out or the person adds a computer (ACCOUNTS.md). A license that names an FBRX Command
 tenant belongs to that organization and counts only there. **In an organization**, a computer goes up to its
-license's tier, Black Hole included, held lower by its group or by the computer itself in FBRX Command (*Essentials
-only*, *Up to Standard*, *Up to Ultra*, *Up to Black Hole*). The tier and the features below are separate: features
+license's tier, Black Hole Edition included, held lower by its group or by the computer itself in FBRX Command (*Essentials
+only*, *Up to Pro*, *Up to Ultra*, *Up to Black Hole Edition*). The tier and the features below are separate: features
 gate services in the runtime, the tier decides how far the product the user sees can go.
 
 ## Prices
@@ -51,9 +52,9 @@ Stripe follow.
 | | On its own | Through an FBRX Command tenant | Product ids |
 | --- | --- | --- | --- |
 | **Essentials** | Free | Free | — |
-| **Standard** | $4.99 | $3.99 per computer (20% off) | `fbrx_standard_monthly`, `fbrx_standard_tenant_monthly` |
+| **Pro** | $4.99 | $3.99 per computer (20% off) | `fbrx_standard_monthly`, `fbrx_standard_tenant_monthly` |
 | **Ultra** | $11.99 | $9.59 per computer (20% off) | `fbrx_ultra_monthly`, `fbrx_ultra_tenant_monthly` |
-| **Black Hole** | — | $24.99 per computer (full price, an add-on) | `fbrx_blackhole_tenant_monthly` |
+| **Black Hole Edition** | — | $24.99 per computer (full price, an add-on) | `fbrx_blackhole_tenant_monthly` |
 | **FBRX Command tenant** | — | $54.99 | `fbrx_command_tenant_monthly` |
 | **MDM add-on** (not sold yet) | — | $4 per managed computer, whatever its edition (Essentials included); the operator sets it | `fbrx_mdm_tenant_monthly` |
 | **FBRX Server** (coming soon) | Free while in beta; not on sale yet | The same | `fbrx_server_iso` |
@@ -68,19 +69,19 @@ looking after a managed computer.
 
 **The operator's price list** (FBRX Command → **Pricing**) sets:
 
-* Standard and Ultra on their own (set the same in App Store Connect and the Google Play Console, which charge their own);
-* the **computers each edition includes** (2 for Standard, 3 for Ultra, 5 for Black Hole to start; Essentials is
+* Pro and Ultra on their own (set the same in App Store Connect and the Google Play Console, which charge their own);
+* the **computers each edition includes** (2 for Pro, 3 for Ultra, 5 for Black Hole Edition to start; Essentials is
   free on every computer and counts none) and the price of each **further computer** a month, never discounted (`fbrx_standard_extra_computer_monthly`, `fbrx_ultra_…`,
   `fbrx_blackhole_…`), for a person on their own and in an organization alike. On their own, people add computers to
   a plan bought on the website or in FBRX; the App Store and Google Play sell none;
 * the **organization fee**, never discounted: one for Work and School organizations, and optionally another for larger
   ones (from so many computers, Essentials included, `fbrx_command_large_monthly`) and for Home ones
   (`fbrx_command_home_monthly`);
-* each **person's price in an organization** (Standard, Ultra, Black Hole; Essentials is free): a person pays once,
+* each **person's price in an organization** (Pro, Ultra, Black Hole Edition; Essentials is free): a person pays once,
   whatever number of the organization's computers they use, up to the computers their edition includes, and each
   further computer on top. A paid computer nobody pays for (a
   shared, lab or student computer, given its edition in Devices or Profiles & groups) takes a seat of its own at the
-  same price; student and child computers are billed as Standard;
+  same price; student and child computers are billed as Pro;
 * the **volume discount**: up to five steps, each so much off every seat (people and shared computers) once an
   organization has so many (the highest step reached counts). Stripe applies it as a coupon on the seats' prices,
   never on the fee, extra computers or MDM;
@@ -92,7 +93,7 @@ subscription's items at one interval): its fee, its people, their extra computer
 each price is `yearlyMonths` months of the monthly one, under the same product id ending in `_yearly`
 (`fbrx_command_tenant_yearly`, `fbrx_ultra_tenant_yearly`, `fbrx_ultra_extra_computer_yearly`,
 `fbrx_mdm_tenant_yearly`, and so on). The volume discount comes off the same way; it is rounded on each line, so a year
-can differ from ten months by a few cents. A person's own Standard or Ultra is monthly or yearly too, on the website
+can differ from ten months by a few cents. A person's own Pro or Ultra is monthly or yearly too, on the website
 and in FBRX (`fbrx_standard_yearly`, `fbrx_ultra_yearly`), with their extra computers at the same interval; the phone
 apps sell them monthly.
 
@@ -102,19 +103,19 @@ FBRX Command counts the people and their computers (a computer a member joined i
 (ACCOUNTS.md). Until the operator changes it, the list is the table above. The app and the website show the table
 above; `GET /v1/plans` gives the operator's prices.
 
-**The Standard trial.** A computer on its own with nothing bought may run Standard free for `STANDARD_TRIAL_DAYS` (7)
-days, once (`edition.startTrial`; Settings → Edition). Standard was free on a computer on its own until 2.0: a computer
-set up before starts its trial by itself the first time it starts 2.0. Then it runs Essentials unless Standard or
+**The Pro trial.** A computer on its own with nothing bought may run Pro free for `STANDARD_TRIAL_DAYS` (7)
+days, once (`edition.startTrial`; Settings → Edition). Pro was free on a computer on its own until 2.0: a computer
+set up before starts its trial by itself the first time it starts 2.0. Then it runs Essentials unless Pro or
 Ultra is bought. Computers in an organization have no trial.
 
 **Student and child computers** exist only in an organization's FBRX Command (the audience comes from it), run the
-learner edition and are billed as Standard at the FBRX Command price ($3.99, 20% off).
+learner edition and are billed as Pro at the FBRX Command price ($3.99, 20% off).
 
 **School and Home licenses.** A license can also say what kind of tenant it is for: `vertical: "education"` (School)
 or `"home"` (Home); without it, it is a Work license. Issued from FBRX Command (*Kind of license*) or with
 `npm run license:issue -- … --vertical education` (or `home`), it also sets the tenant's kind, which you otherwise pick
 when the tenant is created. A School tenant starts staff computers in classroom mode, groups can hold teachers to
-Standard, and student computers run **FBRX OS Education**, whatever the tier (see [EDUCATION.md](EDUCATION.md)). A Home
+Pro, and student computers run **FBRX OS Education**, whatever the tier (see [EDUCATION.md](EDUCATION.md)). A Home
 tenant runs children's computers as **FBRX OS Home** (see [HOME.md](HOME.md)). A standalone computer that activates an Education key starts in classroom mode too.
 
 **FBRX Command** is the team tenant controller (fleet management with RMM-style tooling: configuration and policy,
@@ -135,10 +136,10 @@ product and settings the tenant chose for it (see *Joining FBRX Command* below).
 | Scheduled encrypted backups (`backup.scheduled`) | | ✔ | ✔ |
 | Fleet management via the control plane (`fleet`) | | | ✔ |
 | Model-assisted guardian review (`guardian.model`) | | | ✔ |
-| **The most the computers may run, unless the license names it** | Standard | Ultra | Ultra |
+| **The most the computers may run, unless the license names it** | Pro | Ultra | Ultra |
 
 A license can also grant individual extra features on top of its edition (for example Pro + `fleet`). Workstations
-without a license run as Community (Essentials on their own; in an organization, up to Endpoint Standard).
+without a license run as Community (Essentials on their own; in an organization, up to Endpoint Pro).
 
 ## License keys
 
@@ -164,7 +165,7 @@ signed with Ed25519. Older apps ignore the optional fields they do not know.
 
 1. **Tenants → New tenant** for the customer (name, contact, default update channel).
 2. Switch to the tenant, open **Licenses → Issue license**: the product on the computers (by edition, Endpoint Black
-   Hole, Ultra or Standard), whether computers that activate the key join this tenant automatically (on by default),
+   Hole, Ultra or Pro), whether computers that activate the key join this tenant automatically (on by default),
    edition, seats, expiry, version cap, extra features.
 3. Delivery:
    * **Managed (recommended)** — workstations enrolled in that tenant receive the license automatically with their
@@ -181,7 +182,7 @@ Without a control plane, sign keys from the command line with the same private k
 
 ```bash
 npm run license:issue -- --customer "Acme Ltd" --edition pro --seats 10 --expires 2027-12-31 --feature connectors.mcp
-# Up to Endpoint Standard on an Enterprise license, joining a tenant on activation:
+# Up to Endpoint Pro on an Enterprise license, joining a tenant on activation:
 npm run license:issue -- --customer "Acme Ltd" --edition enterprise --tier basic \
   --command-url https://command.acme.example --enroll-token fbrx_enr_…
 ```
@@ -198,11 +199,11 @@ the key, and adds `fleet` to its features. On a computer:
 
 1. Someone pastes the key into **Settings → License** (or drops it in as `fbrx-license.key`).
 2. The key is verified offline; its features turn on at once, and Settings → Edition shows how far the computer may
-   go (Black Hole only once it is in the tenant, when the license allows it).
+   go (Black Hole Edition only once it is in the tenant, when the license allows it).
 3. If the computer is not in a tenant yet, it enrolls itself with the token and from then on receives the tenant's
    license, settings, policy and credentials like any enrolled device. The License page shows the FBRX Command
    address, and the activation message says which organization it joined.
 
 It joins once per license: if the vault is locked it waits until it is unlocked, if the server cannot be reached it
 tries again at the next start, and if someone later leaves the tenant on purpose (Organization → Disconnect) the key does
-not join again by itself. The tenant then decides how far each license goes (up to Standard, Ultra or Black Hole).
+not join again by itself. The tenant then decides how far each license goes (up to Pro, Ultra or Black Hole Edition).

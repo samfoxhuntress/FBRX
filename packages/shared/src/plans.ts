@@ -7,12 +7,12 @@ import { TIERS, TIER_SHORT, type Tier } from './license';
  * here (Stripe: the price's lookup key; the stores: the subscription's product id).
  *
  * - Essentials is free, and joins an FBRX Command tenant for free.
- * - Standard and Ultra are sold to anyone for their own computers (an FBRX account), monthly or yearly, and through a
+ * - Pro and Ultra are sold to anyone for their own computers (an FBRX account), monthly or yearly, and through a
  *   tenant with the tenant's discount.
- * - Black Hole is only an add-on in a tenant, per endpoint, at its full price.
+ * - Black Hole Edition is only an add-on in a tenant, per endpoint, at its full price.
  * - An FBRX Command tenant is a plan of its own, paid monthly or yearly: one interval for everything on it. A year costs
  *   the price list's `yearlyMonths` months of each price, under the same product id ending in `_yearly`; the same goes
- *   for a person's own Standard or Ultra.
+ *   for a person's own Pro or Ultra.
  * - FBRX Command's operator may change the prices (Pricing, the PriceBook below): the organization fee by kind and
  *   size, each computer's price in an organization with discounts by how many it has, and the editions on their own.
  *   The prices here are where that price list starts.
@@ -23,13 +23,13 @@ import { TIERS, TIER_SHORT, type Tier } from './license';
 export const CURRENCY = 'usd';
 
 /**
- * Standard, free, for this many days: once per computer on its own, no card needed (Settings → Edition). A computer
- * that ran FBRX before 2.0 starts it by itself when it updates; then it is Essentials unless Standard (or Ultra) is
+ * Pro, free, for this many days: once per computer on its own, no card needed (Settings → Edition). A computer
+ * that ran FBRX before 2.0 starts it by itself when it updates; then it is Essentials unless Pro (or Ultra) is
  * bought.
  */
 export const STANDARD_TRIAL_DAYS = 7;
 
-/** Off Standard and Ultra bought through an FBRX Command tenant (Black Hole is always full price). */
+/** Off Pro and Ultra bought through an FBRX Command tenant (Black Hole Edition is always full price). */
 export const TENANT_DISCOUNT = 0.2;
 
 const tenantPrice = (cents: number) => Math.round(cents * (1 - TENANT_DISCOUNT));
@@ -102,9 +102,9 @@ export const COMMAND_PLAN = {
   summary: 'Your organization’s FBRX Command: computers, people, licenses and billing in one place.',
   highlights: [
     'Add and look after your organization’s computers',
-    `Standard and Ultra at ${Math.round(TENANT_DISCOUNT * 100)}% off for each person`,
+    `Pro and Ultra at ${Math.round(TENANT_DISCOUNT * 100)}% off for each person`,
     'Essentials computers join for free',
-    'Black Hole for your admins and server people',
+    'Black Hole Edition for your admins and server people',
   ],
 };
 
@@ -193,7 +193,7 @@ export const productInterval = (productId: string): BillingInterval => (productI
 /** A price a month at an interval: itself, or a year of it at the price list's months. */
 export const intervalPrice = (book: PriceBook, monthly: number, interval: BillingInterval) => (interval === 'year' ? monthly * book.yearlyMonths : monthly);
 
-/** Standard or Ultra on one's own, paid monthly or yearly: its product id (Stripe lookup key) and price. */
+/** Pro or Ultra on one's own, paid monthly or yearly: its product id (Stripe lookup key) and price. */
 export function personalPlan(book: PriceBook, tier: 'basic' | 'ultra', interval: BillingInterval): { productId: string; amount: number } {
   return { productId: productFor(EDITION_PLANS[tier].productId!, interval), amount: intervalPrice(book, book.personal[tier], interval) };
 }
@@ -217,7 +217,7 @@ export const EXTRA_COMPUTER_PRODUCTS: Record<PaidTier, string> = {
  * DEFAULT_PRICE_BOOK: the prices above.
  */
 export interface PriceBook {
-  /** Standard and Ultra on their own, for a person's own computers. */
+  /** Pro and Ultra on their own, for a person's own computers. */
   personal: { basic: number; ultra: number };
   /**
    * Each person in an organization at their edition (on as many of its computers as the edition covers), and each paid
@@ -388,7 +388,7 @@ export function priceBookProducts(book: PriceBook, mdm: MdmPricing): PriceBookPr
     { productId: MDM_ADDON.productId, label: 'MDM add-on, each managed computer', amount: mdm.perEndpoint },
   ];
   const all = [
-    { productId: EDITION_PLANS.basic.productId!, label: 'Standard on its own', amount: book.personal.basic },
+    { productId: EDITION_PLANS.basic.productId!, label: 'Pro on its own', amount: book.personal.basic },
     { productId: EDITION_PLANS.ultra.productId!, label: 'Ultra on its own', amount: book.personal.ultra },
     ...organizations,
   ];

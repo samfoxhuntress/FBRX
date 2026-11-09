@@ -6,7 +6,7 @@ Vault fills in your sign-ins and offers to save new ones, Notes keeps a page, FB
 an organization's FBRX Command decides which sites may open.
 
 Open it from the sidebar (**Browser**), the tray (**Open FBRX Browser**), or Settings → Browser. It opens in a window
-of its own, beside FBRX. It comes with Endpoint Standard and up, and on students' and children's computers (Endpoint
+of its own, beside FBRX. It comes with Endpoint Pro and up, and on students' and children's computers (Endpoint
 Essentials is the AI on its own).
 
 ## What it does

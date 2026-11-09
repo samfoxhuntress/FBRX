@@ -2,7 +2,7 @@ import type { Tier } from './license';
 import type { BillingInterval, MdmPricing, OrganizationBill, PriceBook, ProductInfo } from './plans';
 
 /**
- * FBRX accounts: one per person, held by FBRX Command in the cloud. An account keeps what its person bought (Standard
+ * FBRX accounts: one per person, held by FBRX Command in the cloud. An account keeps what its person bought (Pro
  * or Ultra, through Stripe on the website and the computer, or the App Store / Google Play on the phone), and signs any
  * computer or phone they sign in on up to that edition. In an organization, FBRX Command hands out the editions.
  */
@@ -228,7 +228,7 @@ export interface AccountStatus {
   memberships: AccountMembership[];
   /** Whether the account can buy and manage plans from this computer (the website's way: Stripe). */
   canBuy: boolean;
-  /** The price list of the account's FBRX Command (what Standard and Ultra cost, monthly and yearly); null until known. */
+  /** The price list of the account's FBRX Command (what Pro and Ultra cost, monthly and yearly); null until known. */
   prices: PriceBook | null;
   billingPortal: boolean;
   lastSyncAt: string | null;

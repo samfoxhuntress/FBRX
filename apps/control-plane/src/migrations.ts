@@ -417,7 +417,7 @@ export const CP_MIGRATIONS: Migration[] = [
   {
     version: 7,
     name: 'device-edition',
-    // The most a computer may run (essentials, basic = Standard, ultra), over its group's; null = its group's.
+    // The most a computer may run (essentials, basic = Pro, ultra), over its group's; null = its group's.
     up: `ALTER TABLE devices ADD COLUMN tier TEXT;`,
   },
   {

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ALL_FEATURES, EDITIONS, EDITION_FEATURES, FEATURES, SUPPORT_PASS_DEFAULT_HOURS, SUPPORT_PASS_MAX_HOURS, TIER_NAMES, tierFor, type Edition, type Tier } from '@fbrx/shared';
+import { ALL_FEATURES, EDITIONS, EDITION_FEATURES, FEATURES, LICENSE_EDITION_NAMES, SUPPORT_PASS_DEFAULT_HOURS, SUPPORT_PASS_MAX_HOURS, TIER_NAMES, tierFor, type Edition, type Tier } from '@fbrx/shared';
 import { Button, Callout, Card, CopyText, Empty, Field, Input, KeyValue, Modal, Page, Select, Status, Table, formatDate, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
@@ -37,7 +37,7 @@ export function LicensesPage() {
   return (
     <Page
       title="Licenses"
-      description="Each customer is a tenant with a signed license (product, edition, seats, features, expiry). Computers open in FBRX Endpoint Essentials, free. A license key goes up to Ultra on a computer on its own; Black Hole comes only when the computer is in this tenant and the license allows it. A key that joins the tenant enrolls the computer here on its own. Licenses are verified offline by the app using your public key and delivered automatically to enrolled devices."
+      description="Each customer is a tenant with a signed license (product, edition, seats, features, expiry). Computers open in FBRX Endpoint Essentials, free. A license key goes up to Ultra on a computer on its own; Black Hole Edition comes only when the computer is in this tenant and the license allows it. A key that joins the tenant enrolls the computer here on its own. Licenses are verified offline by the app using your public key and delivered automatically to enrolled devices."
       actions={
         manage ? (
           <>
@@ -71,7 +71,7 @@ export function LicensesPage() {
           columns={[
             { key: 'c', header: 'Customer', render: (l) => (<div><div className="fx-cell-title">{l.customer}</div><div className="fx-cell-sub">{tenants.find((t) => t.id === l.tenantId)?.name ?? l.tenantId}</div></div>) },
             { key: 'p', header: 'Product', render: (l) => (<div><div className="fx-cell-title">{TIER_NAMES[l.tier]}{l.vertical && l.vertical !== 'business' ? <span className="fx-badge accent" style={{ marginLeft: 6 }}>{l.vertical === 'education' ? 'School' : 'Home'}</span> : null}</div>{l.commandUrl && <div className="fx-cell-sub">Joins this tenant</div>}</div>) },
-            { key: 'e', header: 'Edition', render: (l) => <span className="fx-badge accent">{l.edition}</span> },
+            { key: 'e', header: 'Edition', render: (l) => <span className="fx-badge accent">{LICENSE_EDITION_NAMES[l.edition as Edition] ?? l.edition}</span> },
             { key: 's', header: 'Seats', className: 'num', render: (l) => l.seats || 'not counted' },
             { key: 'st', header: 'Status', render: state },
             { key: 'x', header: 'Expires', render: (l) => (l.expiresAt ? formatDate(l.expiresAt) : 'perpetual') },
@@ -84,7 +84,7 @@ export function LicensesPage() {
       {show && (
         <Modal
           wide
-          title={`${show.customer} · ${show.edition}`}
+          title={`${show.customer} · ${LICENSE_EDITION_NAMES[show.edition as Edition] ?? show.edition}`}
           onClose={() => setShow(null)}
           footer={
             <>
@@ -163,7 +163,7 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
       }
     >
       <div className="fx-form">
-        <Field label="Product on the computers" help="The most FBRX Endpoint may run with this license. Computers open in Essentials and switch up in Settings. Black Hole works only in this organization (FBRX Command); on a computer on its own, the license goes up to Ultra.">
+        <Field label="Product on the computers" help="The most FBRX Endpoint may run with this license. Computers open in Essentials and switch up in Settings. Black Hole Edition works only in this organization (FBRX Command); on a computer on its own, the license goes up to Ultra.">
           <Select
             value={f.tier}
             onChange={(e) => setF({ ...f, tier: e.target.value as Tier | 'auto' })}
@@ -192,7 +192,7 @@ function IssueModal({ onClose, onIssued }: { onClose: () => void; onIssued: () =
         </label>
         <div className="fx-row">
           <Field label="Edition">
-            <Select value={f.edition} onChange={(e) => setF({ ...f, edition: e.target.value as Edition })} options={[...EDITIONS]} />
+            <Select value={f.edition} onChange={(e) => setF({ ...f, edition: e.target.value as Edition })} options={EDITIONS.map((e) => ({ value: e, label: LICENSE_EDITION_NAMES[e] }))} />
           </Field>
           <Field label="Seats" help="0 = not counted">
             <Input type="number" min={0} value={f.seats} onChange={(e) => setF({ ...f, seats: e.target.value })} />

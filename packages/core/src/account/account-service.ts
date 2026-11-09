@@ -48,7 +48,7 @@ export interface FleetCredentials {
 }
 
 /**
- * The person's FBRX account on this computer. Signing in brings what the account bought (Standard or Ultra, bought on
+ * The person's FBRX account on this computer. Signing in brings what the account bought (Pro or Ultra, bought on
  * the website, on another computer or in a phone app) as a license key, and turns that edition on; the key is renewed
  * every few hours, and when the account's purchase ends the computer goes back to what it had. An account that belongs
  * to an organization can join this computer to it, at the edition the organization gave that person.
@@ -349,7 +349,7 @@ export class AccountService {
     return { ok: true };
   }
 
-  /** A Stripe Checkout page for Standard or Ultra, opened in the browser. */
+  /** A Stripe Checkout page for Pro or Ultra, opened in the browser. */
   async checkout(productId: string): Promise<{ url: string }> {
     return this.request<{ url: string }>('POST', '/v1/billing/checkout', { productId }, this.requireToken());
   }

@@ -1,6 +1,6 @@
 # FBRX accounts and payments (FBRX Command in the cloud)
 
-From 2.0, FBRX Command can run in the cloud for everyone: people make an **FBRX account**, buy Standard or Ultra for
+From 2.0, FBRX Command can run in the cloud for everyone: people make an **FBRX account**, buy Pro or Ultra for
 themselves, and sign in on any computer or phone, which then runs what the account bought. Organizations run their
 own FBRX Command tenant there (see LICENSING.md, *Prices*). This page is how accounts, buying and organizations'
 plans work.
@@ -20,7 +20,7 @@ with an ordinary FBRX license key (Ed25519, verified offline like any other): up
 organization in it, running a few days past the period paid for and never more than 35 days, so computers fetch a fresh
 one as the subscription renews and a refund reaches them in time.
 
-**Each computer, up to those the edition covers.** An edition covers as many computers as it includes (2 for Standard,
+**Each computer, up to those the edition covers.** An edition covers as many computers as it includes (2 for Pro,
 3 for Ultra; the operator's price list, LICENSING.md) and the extra ones bought on top. Essentials counts none: it is
 free on every computer. Each computer signed in to the account gets a key of its own, carrying its install id, which no other computer accepts. Computers count in the order
 they first signed in, so signing in again keeps a computer's place; one past them runs Essentials and says why
@@ -31,14 +31,14 @@ Stripe subscription, prorated. The App Store and Google Play sell no extra compu
 place: that computer gives its key back the next time it renews (every six hours while FBRX runs). When a plan moves to
 the other edition in the Stripe portal, its extra computers move with it, at that edition's price.
 
-Black Hole is never sold to an account: it is an add-on in an FBRX Command tenant (LICENSING.md).
+Black Hole Edition is never sold to an account: it is an add-on in an FBRX Command tenant (LICENSING.md).
 
 ## On a computer
 
 **Settings → FBRX account** (or *I have an FBRX account* on the first screen) signs in, or makes a new account. The
 computer brings the account's license and turns that edition on by itself ("whatever the account has"); it renews the
 license every six hours while FBRX runs, and when the account's purchase ends, the computer goes back to what it had
-(Essentials on its own). Signed in, **Get Standard** and **Get Ultra** open the checkout in the browser, monthly or
+(Essentials on its own). Signed in, **Get Pro** and **Get Ultra** open the checkout in the browser, monthly or
 yearly as chosen beside them (a year at the price list's months: ten to start), and **Manage
 billing** opens the Stripe portal; Settings → Edition offers the same on the locked editions. Signing out takes the
 account's license away again. The account token is kept in the vault, like the computer's FBRX Command credential.
@@ -109,7 +109,7 @@ and turns it on. A computer that is in the organization already (it joined with 
 license key) becomes the member's as soon as they sign in on it: it runs their edition and counts as theirs under
 **Members** (another member's computer stays theirs). When the organization changes a member's edition, the computers
 they joined follow it; removing a member leaves their computers in the organization on Essentials. This is how an admin
-signs in on any computer and gets Black Hole there.
+signs in on any computer and gets Black Hole Edition there.
 
 A member runs their edition up to what the organization's license allows. An organization billed through FBRX Command
 in the cloud has a license that allows everything, so its members' editions decide. One whose licenses are issued by
@@ -120,7 +120,7 @@ people an edition of their own, as if bought; in an organization, editions come 
 
 FBRX OS accepts an edition only from a license signed with a key it was built to trust. FBRX OS you build yourself
 trusts your own key; when your FBRX Command runs on another computer, build FBRX OS with FBRX Command's key
-(`Install FBRX OS --signing-key`, see [INSTALL.md](INSTALL.md)). Until then the computer runs Standard, and
+(`Install FBRX OS --signing-key`, see [INSTALL.md](INSTALL.md)). Until then the computer runs Pro, and
 *Settings → Edition* says why.
 
 ### Inviting someone without an FBRX account (no website or email needed)
@@ -168,10 +168,10 @@ the account's email and password, and are a member on Essentials. Nothing is cha
   update, and Stripe starts the new period that day, crediting what is left of the old one. The page shows what a month
   or a year comes to: the plan;
   each member at the edition the organization gives them, once whatever number of its computers they join, up to
-  those their edition includes (2 Standard, 5 Ultra, 15 Black Hole), and each further computer of theirs at its extra
+  those their edition includes (2 Pro, 5 Ultra, 15 Black Hole Edition), and each further computer of theirs at its extra
   price; and each paid computer no paying member uses (shared, lab and student computers) at its edition's price.
   The prices are the operator's price list (LICENSING.md); Essentials is free. Student and child computers (only ever
-  in an FBRX Command) run the learner edition and count as Standard. **Members** shows who uses more computers than
+  in an FBRX Command) run the learner edition and count as Pro. **Members** shows who uses more computers than
   their edition includes.
 * The plan's per-person and per-computer items in Stripe follow by themselves (a few seconds after a change, and every
   quarter of an hour), at the plan's interval, prorated by Stripe.

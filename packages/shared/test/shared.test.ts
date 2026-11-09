@@ -57,32 +57,34 @@ describe('licensing', () => {
 });
 
 describe('editions and prices', () => {
-  it('orders the four editions, Black Hole having everything', () => {
+  it('orders the four editions, Black Hole Edition having everything', () => {
     expect(TIERS).toEqual(['essentials', 'basic', 'ultra', 'blackhole']);
     expect(atLeast('blackhole', 'ultra')).toBe(true);
     expect(atLeast('ultra', 'blackhole')).toBe(false);
     expect(atLeast('basic', 'basic')).toBe(true);
     expect(atLeast(null, 'essentials')).toBe(false);
     expect(maxTier('basic', 'ultra')).toBe('ultra');
-    expect(['Black Hole', 'black-hole', 'blackhole', 'Standard', 'ESSENTIALS'].map(parseTier)).toEqual(['blackhole', 'blackhole', 'blackhole', 'basic', 'essentials']);
+    expect(['Black Hole Edition', 'black-hole', 'blackhole', 'Pro', 'ESSENTIALS'].map(parseTier)).toEqual(['blackhole', 'blackhole', 'blackhole', 'basic', 'essentials']);
+    // The old names still work (settings, environment variables and scripts written before the rename).
+    expect(['Black Hole', 'Standard', 'basic', 'FBRX Endpoint Pro'].map(parseTier)).toEqual(['blackhole', 'basic', 'basic', 'basic']);
   });
 
-  it('carries the price list: Standard $4.99, Ultra $11.99, Black Hole $24.99 per computer in a tenant, FBRX Command $54.99', () => {
+  it('carries the price list: Pro $4.99, Ultra $11.99, Black Hole Edition $24.99 per computer in a tenant, FBRX Command $54.99', () => {
     expect([priceOf('essentials', 'personal'), priceOf('basic', 'personal'), priceOf('ultra', 'personal'), priceOf('blackhole', 'personal')]).toEqual([0, 499, 1199, null]);
-    // 20% off Standard and Ultra in a tenant; Black Hole always full price; Essentials free everywhere.
+    // 20% off Pro and Ultra in a tenant; Black Hole Edition always full price; Essentials free everywhere.
     expect([priceOf('essentials', 'tenant'), priceOf('basic', 'tenant'), priceOf('ultra', 'tenant'), priceOf('blackhole', 'tenant')]).toEqual([0, 399, 959, 2499]);
     expect(COMMAND_PLAN.monthly).toBe(5499);
     expect(tenantMonthlyTotal({ essentials: 40, basic: 10, ultra: 2, blackhole: 1 })).toBe(5499 + 3990 + 1918 + 2499);
     expect(SERVER_OFFER).toMatchObject({ available: false });
     expect(SERVER_OFFER).not.toHaveProperty('price');
     expect([0, 499, 1199, 10000].map(formatPrice)).toEqual(['Free', '$4.99', '$11.99', '$100']);
-    // Every paid edition has a product id for Stripe and the stores, and Black Hole is sold only in a tenant.
+    // Every paid edition has a product id for Stripe and the stores, and Black Hole Edition is sold only in a tenant.
     for (const t of TIERS) expect(EDITION_PLANS[t].tenantProductId === null).toBe(t === 'essentials');
     expect(EDITION_PLANS.blackhole).toMatchObject({ sold: 'tenant', productId: null });
   });
 
   it('bills an organization per person: each covers its computers up to its edition, further ones cost extra', () => {
-    // Until the operator changes it, the price list is the prices above: 10 shared Standard computers in a school.
+    // Until the operator changes it, the price list is the prices above: 10 shared Pro computers in a school.
     expect(organizationBill(DEFAULT_PRICE_BOOK, { kind: 'education', counts: { people: [], shared: { basic: 10 }, computers: 10 } }).total).toBe(5499 + 3990);
     const book: PriceBook = {
       personal: { basic: 1200, ultra: 2900 },
@@ -98,12 +100,12 @@ describe('editions and prices', () => {
     };
     const people = (n: number, tier: 'basic' | 'ultra' | 'blackhole', computers = 1) => Array.from({ length: n }, () => ({ tier, computers }));
     const bill = (kind: 'business' | 'education' | 'home', counts: { people: ReturnType<typeof people>; shared?: Record<string, number>; computers: number }) => organizationBill(book, { kind, counts: { shared: {}, ...counts } });
-    // The examples on the price sheet, now people: 20 Standard and 10 Ultra; 120 and 30; 300 and 100.
+    // The examples on the price sheet, now people: 20 Pro and 10 Ultra; 120 and 30; 300 and 100.
     expect(bill('business', { people: [...people(20, 'basic'), ...people(10, 'ultra')], computers: 30 })).toMatchObject({ total: 52700, fee: 'base', paid: 30, percentOff: 10 });
     expect(bill('education', { people: [...people(120, 'basic'), ...people(30, 'ultra')], computers: 150 })).toMatchObject({ total: 206350, fee: 'large', percentOff: 15 });
     expect(bill('education', { people: [...people(300, 'basic'), ...people(100, 'ultra')], computers: 400 })).toMatchObject({ total: 530000, fee: 'large', percentOff: 20 });
 
-    // A Standard person on 3 computers, an Ultra one on 7, a Black Hole one on 15, and one on none: each pays once; past
+    // A Pro person on 3 computers, an Ultra one on 7, a Black Hole Edition one on 15, and one on none: each pays once; past
     // what the edition includes, each computer costs extra, never discounted.
     const team = bill('business', { people: [...people(1, 'basic', 3), ...people(1, 'ultra', 7), ...people(1, 'blackhole', 15), ...people(1, 'basic', 0)], computers: 25 });
     expect(team.lines.filter((l) => l.item === 'extra').map((l) => [l.tier, l.quantity, l.total])).toEqual([
@@ -149,7 +151,7 @@ describe('editions and prices', () => {
     expect(productById('fbrx_blackhole_tenant_yearly')).toEqual({ kind: 'edition', tier: 'blackhole', tenant: true });
     expect([productInterval('fbrx_mdm_tenant_yearly'), productInterval('fbrx_mdm_tenant_monthly')]).toEqual(['year', 'month']);
     expect([productFor('fbrx_mdm_tenant_yearly', 'month'), productFor(SERVER_OFFER.productId, 'year')]).toEqual(['fbrx_mdm_tenant_monthly', 'fbrx_server_iso']);
-    // Stripe gets a yearly price for each price on the list, a person's own Standard and Ultra included.
+    // Stripe gets a yearly price for each price on the list, a person's own Pro and Ultra included.
     const products = priceBookProducts(book, { available: true, perEndpoint: 400 });
     expect(products.find((p) => p.productId === 'fbrx_command_home_yearly')).toMatchObject({ interval: 'year', amount: 14990 });
     expect(products.find((p) => p.productId === 'fbrx_mdm_tenant_yearly')).toMatchObject({ interval: 'year', amount: 4000 });
@@ -245,7 +247,7 @@ describe('thinking levels and the editions list', () => {
 
   it('lists each edition as everything in the one before, then what it adds', () => {
     expect(editionPoints('essentials')).toEqual(EDITION_PLANS.essentials.highlights);
-    expect(editionPoints('ultra')).toEqual(['Everything in Standard', ...EDITION_PLANS.ultra.highlights]);
+    expect(editionPoints('ultra')).toEqual(['Everything in Pro', ...EDITION_PLANS.ultra.highlights]);
     expect(editionPoints('blackhole')[0]).toBe('Everything in Ultra');
   });
 });

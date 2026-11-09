@@ -149,15 +149,15 @@ export function audienceOptions(kind: Vertical | null): Array<{ value: Audience;
 
 /**
  * The most a group or a computer may run. Every computer opens in Essentials and its person may switch up to this in
- * Settings → Edition. Black Hole only ever comes from here (and the organization's license).
+ * Settings → Edition. Black Hole Edition only ever comes from here (and the organization's license).
  */
 export function tierLimitOptions(inherit: string): Array<{ value: Tier | ''; label: string }> {
   return [
     { value: '', label: inherit },
     { value: 'essentials', label: 'Essentials only' },
-    { value: 'basic', label: 'Up to Standard' },
+    { value: 'basic', label: 'Up to Pro' },
     { value: 'ultra', label: 'Up to Ultra' },
-    { value: 'blackhole', label: 'Up to Black Hole' },
+    { value: 'blackhole', label: 'Up to Black Hole Edition' },
   ];
 }
 
@@ -165,7 +165,7 @@ export function tierLimitWords(t: Tier | null | undefined): string | null {
   return t === 'essentials' ? 'Essentials only' : t ? `Up to ${TIER_SHORT[t]}` : null;
 }
 
-/** "Essentials", "Standard", "Ultra", "Black Hole": what a computer runs. */
+/** "Essentials", "Pro", "Ultra", "Black Hole Edition": what a computer runs. */
 export const tierShort = (t: Tier | null | undefined): string | null => (t ? TIER_SHORT[t] : null);
 
 export function audienceHelp(kind: Vertical | null): string | undefined {

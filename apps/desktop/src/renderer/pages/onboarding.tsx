@@ -26,7 +26,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
   const [mode, setMode] = useState<Settings['general']['mode']>('simple');
   const settings = useCore('settings.get', undefined, ['settings.changed']).data?.settings;
   const { run, busy } = useAction();
-  // Advanced is every tool, which on a computer on its own is Standard's: its free trial starts with it, where it may.
+  // Advanced is every tool, which on a computer on its own is Pro's: its free trial starts with it, where it may.
   const essentials = status.license.tier === 'essentials';
   const trial = essentials && !!status.edition?.trialAvailable;
 
@@ -119,7 +119,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
                     <strong>Advanced</strong>
                     <span className="fx-secondary">
                       Every tool: files, notes, the network, the terminal and more, in sections.
-                      {essentials && (trial ? ` Starts your free ${STANDARD_TRIAL_DAYS}-day Standard trial.` : ' It comes with Standard.')}
+                      {essentials && (trial ? ` Starts your free ${STANDARD_TRIAL_DAYS}-day Pro trial.` : ' It comes with Pro.')}
                     </span>
                   </button>
                 </div>

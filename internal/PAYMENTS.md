@@ -33,7 +33,7 @@ Setting up the FBRX account server's payments (Stripe, the App Store, Google Pla
    (`fbrx_volume_<percent>_…`), on the computers' prices only.
 2. **Settings → Payment methods**: turn on cards, Apple Pay and Google Pay. For Apple Pay, verify the website's domain
    in Stripe.
-3. **Settings → Billing → Customer portal**: turn it on, allow switching between the Standard and Ultra prices,
+3. **Settings → Billing → Customer portal**: turn it on, allow switching between the Pro and Ultra prices,
    monthly and yearly (all four), and cancelling.
 4. **Developers → Webhooks**: add `https://<FBRX Command>/v1/billing/stripe/webhook` with the events
    `checkout.session.completed`, `customer.subscription.created`, `customer.subscription.updated`,
@@ -107,7 +107,7 @@ downgrade ends the purchase it replaced.
 | `DELETE /v1/accounts/me` `{ password }` | Deletes the account and ends its Stripe subscriptions (store subscriptions end in the store's settings) |
 | `GET /v1/accounts/ai` | The account's FBRX Cloud AI this month: its allowance, what it used, extra tokens, and whether it takes chats ([CLOUD_AI.md](../docs/CLOUD_AI.md)) |
 | `POST /v1/accounts/promo` `{ code }` | Uses a promo code: extra FBRX Cloud AI tokens, an edition for some days, or both (once per account) |
-| `POST /v1/billing/checkout` `{ productId }` | A Stripe Checkout page for Standard or Ultra |
+| `POST /v1/billing/checkout` `{ productId }` | A Stripe Checkout page for Pro or Ultra |
 | `POST /v1/billing/computers` `{ extra }` | Sets how many extra computers (0 to 100) the account's Stripe plan carries, prorated; answers with this computer's license |
 | `POST /v1/billing/portal` | The Stripe customer portal: change plan or card, invoices, cancel |
 | `POST /v1/billing/apple/transactions` `{ signedTransaction }` | A purchase from the iPhone or iPad app |

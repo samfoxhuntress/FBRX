@@ -48,7 +48,7 @@ section to open its pages (one at a time; the section of the page you are on ope
 | **Workbench** | Files, Task Manager, Clipboard, Copy & migrate, Toolbox, Library |
 | **Orbit** | Mesh & phone, FBRX VPN, AI models, AI coordination, Connections, Tools & plugins |
 | **Stronghold** | FBRX Shield (antivirus), Approvals, Credentials, Governance, Backup & restore |
-| **Lab** | Terminal, Virtual lab (Endpoint Ultra), FBRX Server (Black Hole) |
+| **Lab** | Terminal, Virtual lab (Endpoint Ultra), FBRX Server (Black Hole Edition) |
 | **Control** | Organization, Settings |
 
 **Collapse** at the bottom folds the sidebar down to the section icons (remembered on this computer); click an icon
@@ -56,22 +56,22 @@ and its pages slide out beside it. Counts (unread alerts, waiting approvals) sho
 
 ### Version names
 
-FBRX 2.x is the Beta (1.x was the Alpha): versions read **FBRX Endpoint Ultra Beta 2.3.2** (or Essentials, Standard or
-Black Hole). FBRX is made by **Fox Huntress Labs**, as **Settings → Logs & about** says under the version. Versions also carry a codename from cloth, fiber to fabric, shown in **Settings → Logs & about**: 1.8
+FBRX 2.x is the Beta (1.x was the Alpha): versions read **FBRX Endpoint Ultra Beta 2.3.2** (or Essentials, Pro or
+Black Hole Edition). FBRX is made by **Fox Huntress Labs**, as **Settings → Logs & about** says under the version. Versions also carry a codename from cloth, fiber to fabric, shown in **Settings → Logs & about**: 1.8
 *Spindle*, 1.9 *Bobbin*, 2.0 *Loom*, 2.1 *Warp*, and 2.2 *Weft*, which stays for the rest of 2.x. From now on a
 codename changes only with a major version: 3.0 *Selvedge*, 4.0 *Tapestry*.
 
-### FBRX Endpoint Essentials, Standard, Ultra and Black Hole
+### FBRX Endpoint Essentials, Pro, Ultra and Black Hole Edition
 
 The desktop app comes in four editions. Every new computer opens in **Essentials**, free: your own AI and nothing
 else, ready on the first screen (see *The first start* below). **Settings → Edition** switches between them (nothing
 saved goes away), up to what the computer may run. Prices are in US dollars, per month (see LICENSING.md, *Prices*):
 
-| | **Essentials** | **Standard** | **Ultra** | **Black Hole** |
+| | **Essentials** | **Pro** | **Ultra** | **Black Hole Edition** |
 | --- | --- | --- | --- | --- |
 | Price | Free, and free in an organization | $4.99 after a free 7-day trial, or $3.99 through FBRX Command | $11.99, or $9.59 through FBRX Command | $24.99 per computer, only through FBRX Command |
 | How you get it | Where every new computer starts | Bought on your FBRX account or with a license key, or through your organization's FBRX Command | The same | Only as an add-on in an organization's FBRX Command: for the people who run it and its FBRX Servers |
-| Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, Governance, the help desk (in an organization) and Settings. **Home** is the split-flap board and a few notes from FBRX: tips, the AI models, and what Standard and Ultra add (no dashboard) | Everything in Essentials, plus Dash, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Standard | Everything in Ultra, plus the FBRX Server page |
+| Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, Governance, the help desk (in an organization) and Settings. **Home** is the split-flap board and a few notes from FBRX: tips, the AI models, and what Pro and Ultra add (no dashboard) | Everything in Essentials, plus Dash, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Pro | Everything in Ultra, plus the FBRX Server page |
 | How much the AI does on a task | **Thinking**: Quick, Everyday or Thorough (see *Thinking* below), and whether it shows what it is doing | The same, each part on its own (steps per task, longest answer, how much the built-in and Ollama models keep in mind), and unloading the local model when idle | The same, and the temperature | The same |
 | IT and expert tool sets | — | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools and adapters, device consoles, the developer tools in the Toolbox, logs, update channels, the Local API | Everything in Ultra, plus **network environments** (your network controller) in Network Center and the whole Library: **The Lab** and the **FBRX command library** (FBRX/1, FBRX Server and FBRX Gate commands, also in Terminal → FBRX/1), always there |
 | Connect | AI models | AI models | Mesh & phone, FBRX VPN, AI coordination, connections, tools and plugins | The same |
@@ -84,17 +84,17 @@ Fabrix, AI models and Settings (memory, voice, and the edition for when you want
 shortcut. Enter or → goes on, ← back, Esc skips; *Take the tour again* is in Settings → Edition.
 
 **Notifications in Essentials** are only the ones about the AI and the computer's safety: approvals, the AI,
-the watchdog, messages from your organization and the help desk, and new FBRX versions. Standard and up show the
+the watchdog, messages from your organization and the help desk, and new FBRX versions. Pro and up show the
 rest (alerts, storage, FBRX Shield and so on) as set in **Settings → Notifications**.
 
-**What may be unlocked.** On its own, a computer runs Essentials for free. Standard and Ultra are bought: on the
+**What may be unlocked.** On its own, a computer runs Essentials for free. Pro and Ultra are bought: on the
 person's FBRX account, or with a license key (Settings → License); a license that belongs to an organization (it
-names its FBRX Command) counts only in that organization. Black Hole comes only through FBRX Command. In an
-organization, the most a computer may run is what the license allows (Community up to Standard; Pro and Enterprise up
-to Ultra; a license can name it, Black Hole included), held lower by its group in FBRX Command (*Profiles & groups →
+names its FBRX Command) counts only in that organization. Black Hole Edition comes only through FBRX Command. In an
+organization, the most a computer may run is what the license allows (a Community license up to Pro; an Ultra
+or Enterprise license up to Ultra; a license can name it, Black Hole Edition included), held lower by its group in FBRX Command (*Profiles & groups →
 Edition*) or by the computer itself (*Devices → a device → Configuration → Edition*): **Essentials only**, **Up to
-Standard**, **Up to Ultra** or **Up to Black Hole**. A page from a higher edition opens a short card that says what it
-does and how to get it: *Switch to Standard* in one click when it is allowed, *Turn on Ultra* (or Black Hole) when it
+Pro**, **Up to Ultra** or **Up to Black Hole Edition**. A page from a higher edition opens a short card that says what it
+does and how to get it: *Switch to Pro* in one click when it is allowed, *Turn on Ultra* (or Black Hole Edition) when it
 is allowed, and otherwise its price and *Join your organization*. Student computers run **FBRX OS Education** (see
 EDUCATION.md). The edition shows beside the name in the sidebar, at the top of **Settings**, in the window title,
 under **Settings → Logs & about**, and in FBRX Command next to each device's version.
@@ -106,14 +106,14 @@ opens the checkout in the browser. See ACCOUNTS.md. Where the account's server o
 shows the month's tokens and **Use for chats** makes FBRX's cloud models the agent's; both there and in Settings →
 FBRX account, **Have a promo code?** takes a code from FBRX (extra tokens, an edition for some days). See CLOUD_AI.md.
 
-**Try Standard free for 7 days.** A computer on its own with nothing bought may try Standard free, once, for 7 days,
-no card needed: **Try free for 7 days** in Settings → Edition, on a page that comes with Standard, or in the note on
-Essentials Home. Settings → Edition says until when; then it runs Essentials unless Standard or Ultra is bought (and
-turns Standard back on by itself once it is). Until 2.0, Standard was free on a computer on its own: a computer set up
+**Try Pro free for 7 days.** A computer on its own with nothing bought may try Pro free, once, for 7 days,
+no card needed: **Try free for 7 days** in Settings → Edition, on a page that comes with Pro, or in the note on
+Essentials Home. Settings → Edition says until when; then it runs Essentials unless Pro or Ultra is bought (and
+turns Pro back on by itself once it is). Until 2.0, Pro was free on a computer on its own: a computer set up
 before starts its trial by itself the first time it starts 2.0. Computers in an organization have no trial: FBRX
 Command decides what they run. A computer set up before Essentials existed keeps the edition it had
 (up to what it may run now). Developers can try the lighter editions in a development build (which otherwise runs
-Black Hole) with `FBRX_EDITION=essentials`, `standard` or `ultra`.
+Black Hole Edition) with `FBRX_EDITION=essentials`, `standard` or `ultra`.
 
 ### The first start: straight to your AI
 
@@ -127,7 +127,7 @@ A new computer's first experience is a conversation, not a setup form:
   internet drops.
 - **One screen** then asks what Fabrix should call you (optional), **Simple** or **Advanced**, and the look, and opens
   the chat with **Start chatting**. *Simple* keeps a short menu: Fabrix, AI models, Governance, help and Settings.
-  *Advanced* shows every page the edition has, in sections; on a computer on its own it starts the free 7-day Standard
+  *Advanced* shows every page the edition has, in sections; on a computer on its own it starts the free 7-day Pro
   trial, which is where the everyday tools are. **Settings → General → Menu** changes it later. The look (light, dark
   or the computer's, and a theme) changes as you pick it. Moving from another computer (*Restore its backup*) and
   *Join my organization* are links on the same screen. The rest waits until you want it: a vault recovery passphrase
@@ -292,7 +292,7 @@ is edited in FBRX Command (Governance), not on the computer.
 | **Copy & migrate** | Copy, back up, mirror or move folders between drives, computers and network shares with **Robocopy** (Windows), **rsync** (Mac and Linux) or FBRX's own copier. Pick the folders, the tool and what to do (copy; new and changed only; mirror; move), skip clutter, retries, files at once, files and folders to leave out; the exact command is shown before it runs. **Preview** lists what would happen without changing anything; mirror and move ask first. Live output, counts and a summary, with *Explain this result*. Recipes: back up Documents, mirror to a NAS, copy a USB stick, move a project, and **Move my user folders to a new PC** (Desktop, Documents, Pictures, Music, Videos and Downloads, one after another). Guard rails refuse mirroring onto a drive root or a system or home folder, copying a folder into itself, and moving a whole drive or home folder away |
 | **Terminal** (Ultra) | **What if?** next to Run has Fabrix explain what the command in the box would do — what it reads, changes, deletes or downloads, whether it needs admin rights, and a verdict — without running it. Runs commands with streaming output in **PowerShell 7** when it is installed, otherwise **Windows PowerShell 5.1**, or Command Prompt (picker in the header). A **reference panel** puts ready-made commands (network, system, disks, processes, repair, security, power, printing; admin-only ones marked), your snippets, the code in your notes, and each project's snippets and notes one click away; ▶ runs one (commands that change something ask first). Save any command you ran as a snippet. **Ctrl+C** stops the command that is running (the newest, if several are), as in any terminal; with text selected it copies, and with nothing running it clears the line. Start a line with `?` to ask Fabrix for a command. Every command is in the audit log. The **Code** tab is the code lab (below), the **Device consoles** tab holds SSH and Telnet sessions (see Network Center), and **FBRX/1** is the management console for FBRX itself (below) |
 | **Toolbox** | Passwords, QR codes (guest Wi-Fi codes phones join by scanning, links, text), text tools, compare text, sizes and numbers (why a 1 TB drive shows 931 GB; decimal, hex, binary), decision maker, colors. Ultra: JSON, Base64, URL, hashes, UUIDs, timestamps, regex, JWT, subnet calculator, MAC vendor lookup, port reference (with risky ports flagged) and the command library. Every tool has *Try* examples, and the top row recommends common jobs — all offline |
-| **Library** | 61 short how-tos (Windows basics, files, Wi-Fi, security, speed, devices, troubleshooting) with buttons that open the right Windows setting or ask Fabrix. In Endpoint Black Hole, **The Lab** adds power-user how-tos (install USBs, dual boot, a malware lab, device consoles, blue screen dumps, repairs, verifying downloads) and official download pages for Windows, Linux, security distributions and power tools, plus your computer maker's driver page. Safety goggles recommended (sold separately). **FBRX commands** (Black Hole, always there) is the library of FBRX's own command lines: FBRX/1 on this computer (*Try it* opens FBRX/1 with the command typed in), FBRX Server and FBRX Gate (copy, then run in a device console), and how-tos such as copying settings to another computer or changing a gate without locking yourself out. Talking to the search like a switch (`show commands`, `enable`, `configure terminal`) opens it, and with fun extras on earns *Operator Mode* in any edition |
+| **Library** | 61 short how-tos (Windows basics, files, Wi-Fi, security, speed, devices, troubleshooting) with buttons that open the right Windows setting or ask Fabrix. In Endpoint Black Hole Edition, **The Lab** adds power-user how-tos (install USBs, dual boot, a malware lab, device consoles, blue screen dumps, repairs, verifying downloads) and official download pages for Windows, Linux, security distributions and power tools, plus your computer maker's driver page. Safety goggles recommended (sold separately). **FBRX commands** (Black Hole Edition, always there) is the library of FBRX's own command lines: FBRX/1 on this computer (*Try it* opens FBRX/1 with the command typed in), FBRX Server and FBRX Gate (copy, then run in a device console), and how-tos such as copying settings to another computer or changing a gate without locking yourself out. Talking to the search like a switch (`show commands`, `enable`, `configure terminal`) opens it, and with fun extras on earns *Operator Mode* in any edition |
 
 ### Snippets and the / menu
 
@@ -510,7 +510,7 @@ Presenter-safe mode still holds notifications back while you present.
 | **Bug catcher** | Errors from the event log grouped by source, app crashes, blue screens, unexpected shutdowns, problem devices and stopped services — with one-click repairs (SFC, DISM, network reset, Windows Update reset, Explorer restart, icon cache, print queue, Store cache, clock resync, battery and energy reports) and "explain with Fabrix" |
 | **Backup & restore → Whole computer** | **FBRX Time** (1.9.8+, every edition): an image of the whole computer, by hand or every day or week at a time you choose, to an external drive, a network folder, or an FBRX Server (paste its connection code). Set up once with one UAC prompt; after that *Back up now* and FBRX Command's *Image backup now* start it without asking, and a computer that was off at the time catches up when it is next on. Shows the last image, the next one and how many the target holds; right-click it for the same actions. Images go back with Windows' *System Image Recovery*; on an FBRX Server each one is also checked by starting it ([TIME.md](TIME.md)) |
 | **Virtual lab** (advanced) | **Room for a VM**: live processor, memory and disk gauges and which VM sizes fit right now (keeping 2 GB and a core for Windows). **My VMs**: cards with state, resources, network (isolate / internet / unplug), console, shut down, save, power off, named checkpoints, revert and delete (optionally keeping the disk). **New safe VM**: templates for Kali Linux, REMnux, FLARE-VM, Parrot Security, Ubuntu, a Windows 11 evaluation machine or your own disc, each with its official download page, a fit check and a setup guide from Fabrix; Generation 2, secure boot, a TPM for Windows guests and a first checkpoint. **Windows Sandbox**: launch it with a link or a read-only shared folder, networking on or off. **Readiness**: edition, firmware virtualization, memory, processors and account, plus turning on Hyper-V, Windows Sandbox, the Virtual Machine Platform and WSL. *Plan a lab* asks Fabrix to design one for this PC |
-| **FBRX Server** (Black Hole) | **Your servers**: FBRX Servers and any other server or device with a web console, saved by address and port, opened inside FBRX in a browser of its own (separate sign-ins and cookies, no access to FBRX). An FBRX Server opens as a **remote desktop**: its console with a command line (SSH) under it, full screen or in a window of its own, through FBRX VPN when you are away. A server's own certificate is trusted once, after comparing its fingerprint with the server's, and only that certificate is accepted at that address from then on. FBRX Servers paired on FBRX Mesh are offered. **Set up a server**: the installer ISO, the bundle for a Debian 13 server you already have, the firmware settings to check first, and the guides (see [SERVER.md](SERVER.md)) |
+| **FBRX Server** (Black Hole Edition) | **Your servers**: FBRX Servers and any other server or device with a web console, saved by address and port, opened inside FBRX in a browser of its own (separate sign-ins and cookies, no access to FBRX). An FBRX Server opens as a **remote desktop**: its console with a command line (SSH) under it, full screen or in a window of its own, through FBRX VPN when you are away. A server's own certificate is trusted once, after comparing its fingerprint with the server's, and only that certificate is accepted at that address from then on. FBRX Servers paired on FBRX Mesh are offered. **Set up a server**: the installer ISO, the bundle for a Debian 13 server you already have, the firmware settings to check first, and the guides (see [SERVER.md](SERVER.md)) |
 
 Actions that need administrator rights show the Windows UAC prompt. FBRX passes the script to the elevated
 PowerShell as an encoded command — it is never written to a file that another program could swap before you
@@ -535,7 +535,7 @@ entries, the most specific block wins; randomized phone and laptop addresses are
 the IEEE* in Toolbox → MAC vendor lookup downloads the current lists (falling back to the daily published JSON copy
 when the IEEE site refuses the download).
 
-### Network environments (Black Hole): your UniFi console
+### Network environments (Black Hole Edition): your UniFi console
 
 **Network Center → Environments** attaches the UniFi console that runs a school's or office's network (Dream Machine,
 Cloud Gateway, Cloud Key or UniFi OS Server with UniFi Network 9 or newer):
@@ -551,7 +551,7 @@ device), every client (name, address, MAC, Wi-Fi or wired, which access point or
 device its uptime, CPU, memory and uplink traffic. **Restart** a device, and make **Guest Wi-Fi codes** (vouchers for a
 hotspot guest network) for visitors, substitutes or parent night. The key is kept in the vault; the agent can read the
 network (*which access points are offline? where is the Room 12 TV connected?*), and asks before it restarts anything
-or makes codes. Essentials and Standard do not show environments.
+or makes codes. Essentials and Pro do not show environments.
 
 ### Device consoles (advanced)
 
@@ -754,7 +754,7 @@ uses them all it says so, and *continue* goes on. The steps are kept in the poli
 step), so an organization can set them; when it sets any part, the levels are locked. **Show what Fabrix is thinking
 and doing** turns the live activity panel and the thinking notes on or off.
 
-**Standard and up** also set each part on its own, starting from the level's values; changing one makes the level
+**Pro and up** also set each part on its own, starting from the level's values; changing one makes the level
 **Custom** (picking a level puts it all back):
 
 | Setting | What it does | Default |

@@ -45,7 +45,7 @@ export const ALERT_RULES: RuleDef[] = [
   { id: 'mesh_online', group: 'Mesh', label: 'One of my devices came online', unit: null, threshold: null, enabled: false, severity: 'info', help: '' },
   { id: 'approval_waiting', group: 'Agent', label: 'An action is waiting for my approval', unit: null, threshold: null, enabled: true, severity: 'warning', help: 'So you can approve from your phone' },
   { id: 'update_available', group: 'Updates', label: 'FBRX OS update available', unit: null, threshold: null, enabled: true, severity: 'info', help: '' },
-  { id: 'edition_trial', group: 'Edition', label: 'My Standard trial is ending, or has ended', unit: null, threshold: null, enabled: true, severity: 'info', help: 'The day before the free trial ends, and when it has' },
+  { id: 'edition_trial', group: 'Edition', label: 'My Pro trial is ending, or has ended', unit: null, threshold: null, enabled: true, severity: 'info', help: 'The day before the free trial ends, and when it has' },
 ];
 
 export interface AlertEngineDeps {
@@ -62,7 +62,7 @@ export interface AlertEngineDeps {
   toOrganisation: (alert: AlertItem) => boolean;
   secret: (name: string) => string | undefined;
   meshPeers: () => Array<{ id: string; name: string; online: boolean }>;
-  /** What to tell the person about this computer's edition (its Standard trial ending, or over), once each. */
+  /** What to tell the person about this computer's edition (its Pro trial ending, or over), once each. */
   editionNotice: () => { title: string; body: string } | null;
 }
 

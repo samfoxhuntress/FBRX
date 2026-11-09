@@ -355,8 +355,8 @@ export function AccountSettings() {
       </>
     );
   }
-  // What the account gets: its own purchases, or more from an organization it belongs to (Black Hole only ever comes
-  // that way), so a member's Black Hole never reads as "Essentials (nothing bought yet)".
+  // What the account gets: its own purchases, or more from an organization it belongs to (Black Hole Edition only ever comes
+  // that way), so a member's Black Hole Edition never reads as "Essentials (nothing bought yet)".
   const org = [...account.memberships].sort((a, b) => tierRank(b.tier) - tierRank(a.tier))[0];
   const fromOrg = org && tierRank(org.tier) > tierRank(account.tier) ? org : null;
   return (

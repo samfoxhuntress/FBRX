@@ -843,7 +843,7 @@ export function NetworkPage({ advanced, everything, easterEggs }: { advanced: bo
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
-  // Endpoint Essentials and Standard keep the everyday tabs; Ultra adds the IT ones, Black Hole the network
+  // Endpoint Essentials and Pro keep the everyday tabs; Ultra adds the IT ones, Black Hole Edition the network
   // environments (network controllers).
   const all: Array<{ id: Tab; label: ReactNode; need?: 'ultra' | 'blackhole' }> = [
     { id: 'overview', label: 'Overview' },
@@ -866,7 +866,7 @@ export function NetworkPage({ advanced, everything, easterEggs }: { advanced: bo
     <Page title="Network Center" description={advanced ? 'See how this PC connects, what else is on your network, and what is slowing things down.' : 'See how this computer connects and what is slowing things down.'}>
       <Tabs tabs={tabs} active={shown} onChange={setTab} />
       {!advanced && shown === 'overview' && <EditionHint>Network scans and device consoles come with Endpoint Ultra.</EditionHint>}
-      {advanced && !everything && shown === 'overview' && <EditionHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole, through your organization’s FBRX Command.</EditionHint>}
+      {advanced && !everything && shown === 'overview' && <EditionHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole Edition, through your organization’s FBRX Command.</EditionHint>}
       {shown === 'overview' && <Overview />}
       {shown === 'consoles' && <DeviceConsolesPanel selected={consoleId} onSelect={setConsoleId} />}
       {shown === 'environments' && <Environments />}

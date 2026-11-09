@@ -4,7 +4,7 @@ import type { Settings } from './settings';
 /**
  * How much the agent does on one task, in plain terms (Settings → Agent → Thinking, in every edition). Each level sets
  * the whole work budget underneath it: steps per task, how much of a conversation a local model keeps in mind, and the
- * longest answer (left to the model). From Standard up, each of these is also set on its own, which makes the level
+ * longest answer (left to the model). From Pro up, each of these is also set on its own, which makes the level
  * Custom.
  */
 export const THINKING_LEVELS = ['quick', 'everyday', 'thorough'] as const;

@@ -170,7 +170,7 @@ the organization's blocked sites apply.
 
 ## Automations
 
-Automations (Studio → **Automations**, Endpoint Standard and up) are jobs Fabrix does by itself and tells you about.
+Automations (Studio → **Automations**, Endpoint Pro and up) are jobs Fabrix does by itself and tells you about.
 Each one is a request, as you would type it in the chat, with:
 
 * **When:** every 15 minutes to 7 days, at a time on chosen days, when FBRX starts, or only when you run it.
@@ -207,7 +207,7 @@ A picture of the screen (Workbench → **Snapshot**, or **Ctrl+Alt+S** from any 
    and crop included, saved or not. Snapshots in the list drag out the same way.
 
 On a Mac, the first snapshot asks for **Screen Recording** permission (System Settings → Privacy & Security). On Linux
-with Wayland, the system may ask which screen to share. Snapshot is in Endpoint Standard and up.
+with Wayland, the system may ask which screen to share. Snapshot is in Endpoint Pro and up.
 
 ## Fabrix on FBRX Server
 

@@ -148,7 +148,7 @@ describe('FBRX Cloud AI', () => {
   it('passes chats on under FBRX’s names with the key only FBRX Command holds, and counts their tokens', async () => {
     const { id, token } = await signUp('ana@example.com');
     // Essentials comes with none: the chat never reaches the provider.
-    expect(await usage(token)).toMatchObject({ state: 'limit', tier: 'essentials', allowance: 0, message: 'FBRX Cloud AI comes with Standard and Ultra, and a promo code adds tokens.' });
+    expect(await usage(token)).toMatchObject({ state: 'limit', tier: 'essentials', allowance: 0, message: 'FBRX Cloud AI comes with Pro and Ultra, and a promo code adds tokens.' });
     const refused = await chat(token, { stream: true });
     expect(refused.status).toBe(402);
     expect(provider.seen).toHaveLength(0);
@@ -331,7 +331,7 @@ describe('FBRX Cloud AI', () => {
       const { provider: cloud, model } = k.providers.resolve('fbrx-cloud');
       expect(model).toBe('');
       // Essentials comes with no tokens: not ready, and it says why before a chat fails on it.
-      expect(await cloud.health()).toEqual({ ok: false, message: 'FBRX Cloud AI comes with Standard and Ultra, and a promo code adds tokens.' });
+      expect(await cloud.health()).toEqual({ ok: false, message: 'FBRX Cloud AI comes with Pro and Ultra, and a promo code adds tokens.' });
 
       await ok('POST', '/v1/admin/promos', { code: 'HELLO-HAL', tokens: 1000 }, admin);
       const used = (await k.call('account.redeemPromo', { code: 'hello hal' }, USER)) as { redeemed: { message: string }; ai: CloudAiUsage };
@@ -350,7 +350,7 @@ describe('FBRX Cloud AI', () => {
       // Out of tokens: the chat stops with the reason, the way any provider's error reaches the person.
       const { accounts } = await ok<CloudAiOverview>('GET', '/v1/admin/ai?q=hal@', undefined, admin);
       await change(accounts[0]!.accountId, { tokens: -950 });
-      await expect(drain(cloud.chat(ask))).rejects.toThrow(/^FBRX Cloud AI comes with Standard and Ultra/);
+      await expect(drain(cloud.chat(ask))).rejects.toThrow(/^FBRX Cloud AI comes with Pro and Ultra/);
       expect((await cloud.health()).ok).toBe(false);
 
       await k.call('account.signOut', {}, USER);

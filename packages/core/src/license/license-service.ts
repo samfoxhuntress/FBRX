@@ -4,7 +4,7 @@ import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
 import type { EventBus } from '../events';
 
-/** Where this computer keeps its Standard trial: until when it runs (kept after it ends, so it is had once). */
+/** Where this computer keeps its Pro trial: until when it runs (kept after it ends, so it is had once). */
 const TRIAL_KEY = 'edition.trial';
 
 /**
@@ -52,7 +52,7 @@ export class LicenseService {
         message: support.until ? `Support mode: running as ${TIER_NAMES[support.tier]} until ${new Date(support.until).toLocaleString()}` : `${TIER_NAMES[support.tier]}, unlocked on this computer`,
       };
     }
-    // The Standard trial ends by itself: look again once it is over.
+    // The Pro trial ends by itself: look again once it is over.
     if (this.cached && !(this.cached.trialUntil && Date.parse(this.cached.trialUntil) <= Date.now())) return this.cached;
     const major = parseSemver(this.appVersion)?.major ?? 1;
     const managed = this.meta.get<string>('license.managed');
@@ -69,7 +69,7 @@ export class LicenseService {
       if (fromAccount.state === 'valid' && (status.state !== 'valid' || tierRank(fromAccount.tier) > tierRank(status.tier))) status = fromAccount;
       else if (fromAccount.state !== 'valid') problem ??= unusable('account', fromAccount);
     }
-    // Development builds may run Black Hole with everything on, unless FBRX_EDITION asks to try a lighter edition
+    // Development builds may run Black Hole Edition with everything on, unless FBRX_EDITION asks to try a lighter edition
     // (then they start there, like a computer on its own that may run it).
     const asked = this.devMode ? parseTier(process.env.FBRX_EDITION) : null;
     const tryTier = asked === 'blackhole' ? null : asked;
@@ -88,9 +88,9 @@ export class LicenseService {
     // - In an organization: what its license allows, held lower by FBRX Command for the computer or its group.
     // - On its own: Essentials, unless something was bought: a license key (or a purchase on the person's FBRX
     //   account) goes up to Ultra. A license that belongs to an organization (it names its FBRX Command) counts only
-    //   there. Black Hole comes only through an organization.
-    // - On its own, a computer may try Standard free for STANDARD_TRIAL_DAYS, once (startTrial).
-    // Student and child computers always run the learner edition, on Standard (LEARNER_TIER).
+    //   there. Black Hole Edition comes only through an organization.
+    // - On its own, a computer may try Pro free for STANDARD_TRIAL_DAYS, once (startTrial).
+    // Student and child computers always run the learner edition, on Pro (LEARNER_TIER).
     const ed = this.meta.get<DeviceEdition>('fleet.edition');
     const enrolled = !!this.meta.get<string>('fleet.deviceId');
     let ceiling: Tier = status.tier;
@@ -122,16 +122,16 @@ export class LicenseService {
     return this.cached;
   }
 
-  /** Standard, free, for STANDARD_TRIAL_DAYS: once, on a computer on its own with nothing bought. Turns it on. */
+  /** Pro, free, for STANDARD_TRIAL_DAYS: once, on a computer on its own with nothing bought. Turns it on. */
   startTrial(): LicenseStatus {
-    if (!this.status().trialAvailable) throw new CoreError('FORBIDDEN', 'The Standard trial is for a computer on its own, once, before anything is bought');
+    if (!this.status().trialAvailable) throw new CoreError('FORBIDDEN', 'The Pro trial is for a computer on its own, once, before anything is bought');
     this.meta.set(TRIAL_KEY, { until: new Date(Date.now() + STANDARD_TRIAL_DAYS * 86_400_000).toISOString() });
     if (tierRank(this.meta.get<Tier>('edition.chosen') ?? 'essentials') < tierRank('basic')) this.meta.set('edition.chosen', 'basic');
     return this.changed();
   }
 
   /**
-   * What to tell the person about the Standard trial, once each: its last day has come (`ending`), or it is over with
+   * What to tell the person about the Pro trial, once each: its last day has come (`ending`), or it is over with
    * nothing bought (`ended`, and the pages it had close). Null when there is nothing new.
    */
   takeTrialNotice(now = Date.now()): 'ending' | 'ended' | null {
@@ -147,7 +147,7 @@ export class LicenseService {
   }
 
   /**
-   * From 2.0, Standard is bought. A computer that ran FBRX before starts its Standard trial by itself the first time it
+   * From 2.0, Pro is bought. A computer that ran FBRX before starts its Pro trial by itself the first time it
    * starts 2.0, so what it used does not go away without notice (the same trial every computer may take, once).
    */
   beginV2(setUpBefore: boolean): void {

@@ -61,7 +61,7 @@ export const HeartbeatSchema = z.object({
     vaultState: z.string(),
     licenseEdition: z.string(),
     licenseState: z.string(),
-    /** The edition it runs (FBRX Endpoint 1.9.6+): essentials, basic (Standard) or ultra. */
+    /** The edition it runs (FBRX Endpoint 1.9.6+): essentials, basic (Pro) or ultra. */
     editionTier: z.enum(TIERS).optional(),
     activeAgentRuns: z.number().int(),
     pendingApprovals: z.number().int(),

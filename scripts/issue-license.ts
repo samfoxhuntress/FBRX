@@ -1,7 +1,7 @@
 /**
  * Signs an offline FBRX license key with the private key from `npm run keys:generate`, no FBRX Command needed.
  * Paste the printed key into FBRX Endpoint under Settings → License: Community runs Endpoint Basic, Pro and
- * Enterprise allow Endpoint Ultra (or pick one with --tier; basic is Endpoint Standard).
+ * Enterprise allow Endpoint Ultra (or pick one with --tier; basic is Endpoint Pro).
  *
  *   npm run license:issue -- --customer "Acme Ltd" [--edition enterprise|pro|community] [--seats 25]
  *                            [--tier basic|ultra] [--vertical education|home] [--expires 2027-12-31] [--max-major 2]
@@ -42,7 +42,7 @@ const expiresAt = expires ? new Date(`${expires}T23:59:59Z`) : null;
 if (expiresAt && Number.isNaN(expiresAt.getTime())) fail('--expires must be a date like 2027-12-31');
 const maxMajor = opt('--max-major');
 const tier = opt('--tier') as (typeof LICENSE_TIERS)[number] | undefined;
-if (tier && !LICENSE_TIERS.includes(tier)) fail(`--tier must be one of ${LICENSE_TIERS.join(', ')} (basic is Endpoint Standard)`);
+if (tier && !LICENSE_TIERS.includes(tier)) fail(`--tier must be one of ${LICENSE_TIERS.join(', ')} (basic is Endpoint Pro)`);
 const vertical = opt('--vertical') as 'education' | 'home' | undefined;
 if (vertical && !['education', 'home'].includes(vertical)) fail('--vertical must be education or home');
 const commandUrl = opt('--command-url');

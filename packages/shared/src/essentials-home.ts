@@ -30,7 +30,7 @@ export const ESSENTIALS_TIPS: Array<Omit<EssentialsNote, 'kind'>> = [
 
 /**
  * The notes for Home: a welcome the first days, two tips that change each day, the AI models, and (in Essentials) what
- * Standard and Ultra add, with their prices, or Standard's free trial while this computer may start it (`trial`).
+ * Pro and Ultra add, with their prices, or Pro's free trial while this computer may start it (`trial`).
  * `dismissed` ids are left out.
  */
 export function notesFor(o: { tier: Tier; agentName: string; modelName?: string | null; now?: Date; dismissed?: string[]; paired?: boolean; firstDays?: boolean; trial?: boolean }): EssentialsNote[] {
@@ -61,11 +61,11 @@ export function notesFor(o: { tier: Tier; agentName: string; modelName?: string 
         ? {
             id: 'upgrade-standard',
             kind: 'upgrade',
-            title: `Try Standard free for ${STANDARD_TRIAL_DAYS} days`,
+            title: `Try Pro free for ${STANDARD_TRIAL_DAYS} days`,
             body: `${standard} No card needed; then ${formatPrice(std.monthly!)} a month.`,
             action: { label: 'Try it free', to: 'edition' },
           }
-        : { id: 'upgrade-standard', kind: 'upgrade', title: `More with Standard, ${formatPrice(std.monthly!)} a month`, body: standard, action: { label: 'See the editions', to: 'edition' } },
+        : { id: 'upgrade-standard', kind: 'upgrade', title: `More with Pro, ${formatPrice(std.monthly!)} a month`, body: standard, action: { label: 'See the editions', to: 'edition' } },
     );
     notes.push({
       id: 'upgrade-ultra',

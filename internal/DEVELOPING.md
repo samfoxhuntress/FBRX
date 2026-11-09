@@ -313,7 +313,7 @@ npm run support:pass -- --install-id <id> [--hours 4] [--tier blackhole|ultra|ba
 The build must carry the matching public key (the same one that verifies license keys), so a pass made with the
 project's signing key works on the builds made from it. Release builds carry the key in the `FBRX_LICENSE_PUBLIC_KEY`
 repository secret; FBRX Command shows its own on the Licenses page. A build made on your own computer without a key
-(`npm run dev:desktop`) already runs as Black Hole, so it needs no pass.
+(`npm run dev:desktop`) already runs as Black Hole Edition, so it needs no pass.
 
 ## Recipes
 

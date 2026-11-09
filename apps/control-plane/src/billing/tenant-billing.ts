@@ -13,7 +13,7 @@ import { VOLUME_COUPON_PREFIX, discountCoupon, itemProduct, type Stripe, type St
  * each of its computers at its edition's price, counted from what the organization gives them, less the volume
  * discount; Essentials is free. The prices are the operator's price list (pricing.ts). It pays monthly or yearly, one
  * interval for everything on its plan: the interval of the organization fee it pays. With the plan active, FBRX
- * Command holds a license for the organization that allows everything (Black Hole); each computer runs what it is
+ * Command holds a license for the organization that allows everything (Black Hole Edition); each computer runs what it is
  * given, Essentials when nobody gave it anything. Without the plan, its computers run Essentials.
  *
  * The MDM add-on, once the operator sells it, adds each computer the organization's groups manage with it, at one price

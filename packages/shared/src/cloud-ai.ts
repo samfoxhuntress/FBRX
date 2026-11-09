@@ -111,7 +111,7 @@ export interface PromoCodeView {
   id: string;
   code: string;
   tokens: number;
-  /** The edition it gives (Standard or Ultra), for `days`. */
+  /** The edition it gives (Pro or Ultra), for `days`. */
   tier: Tier | null;
   days: number | null;
   /** How many accounts may use it (null: any number). */
