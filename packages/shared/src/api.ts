@@ -829,7 +829,7 @@ export interface CoreMethods extends ExtMethods {
   'toolkit.setEnabled': (p: { id: string; enabled: boolean }) => ToolkitAction;
   'toolkit.reset': (p: { id: string }) => ToolkitAction;
   'toolkit.remove': (p: { id: string }) => { removed: boolean };
-  /** The AI's soul (soul.md): who it is, its options, the commands the person can type (Settings → Agent → Soul). */
+  /** The AI's soul (soul.md): who it is, its options, the commands the person can type (Settings → Soul). */
   'soul.get': () => SoulStatus;
   'soul.set': (p: { text: string }) => SoulStatus;
   /** Back to FBRX's default (the version before is kept). */

@@ -62,7 +62,7 @@ export function soulTools(soul: SoulStore, tools: () => ToolSpec[]): ToolSpec[] 
     {
       name: 'soul.update',
       title: 'Change your soul',
-      description: `Change one section of soul.md, when the person asks you to work differently (a new option, a command, a note on how they like things). Replace the section, or append lines to it (Notes, a command). The person approves the change first and can undo it in Settings → Agent → Soul. ${SOUL_LIMITS.change} characters at most, no # or ## headings inside.`,
+      description: `Change one section of soul.md, when the person asks you to work differently (a new option, a command, a note on how they like things). Replace the section, or append lines to it (Notes, a command). The person approves the change first and can undo it in Settings → Soul. ${SOUL_LIMITS.change} characters at most, no # or ## headings inside.`,
       risk: 'write',
       source: 'builtin',
       sourceId: null,
@@ -78,7 +78,7 @@ export function soulTools(soul: SoulStore, tools: () => ToolSpec[]): ToolSpec[] 
       },
       async run(i) {
         const s = soul.update({ section: i.section, content: i.content, mode: i.mode === 'replace' ? 'replace' : 'append' }, 'Fabrix');
-        return { output: `soul.md changed (${i.mode === 'replace' ? 'replaced' : 'added to'} ${i.section}). You follow it from the next message; the person can undo it in Settings → Agent → Soul.`, data: { sections: s.sections } };
+        return { output: `soul.md changed (${i.mode === 'replace' ? 'replaced' : 'added to'} ${i.section}). You follow it from the next message; the person can undo it in Settings → Soul.`, data: { sections: s.sections } };
       },
     },
     {

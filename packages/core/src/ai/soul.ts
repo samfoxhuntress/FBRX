@@ -156,7 +156,7 @@ export class SoulStore {
     return this.status();
   }
 
-  /** Replaces the whole soul (Settings → Agent → Soul). */
+  /** Replaces the whole soul (Settings → Soul). */
   set(text: string, by: string): SoulStatus {
     const t = text.replace(/\r\n/g, '\n').trim();
     if (!t) throw new CoreError('INVALID_ARGUMENT', 'The soul cannot be empty: reset it to FBRX’s default instead');

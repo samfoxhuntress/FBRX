@@ -1,7 +1,7 @@
 /**
  * The AI's soul (soul.md, in FBRX's data folder): who it is, what it cares about, how it talks, the options the person
  * set, the commands they can type (/checkup, /wifi, /gate…), the toolkits it has, and notes on how they like it to work.
- * FBRX ships a default; the person edits it in Settings → Agent → Soul, or asks the AI to (soul.update, which they
+ * FBRX ships a default; the person edits it in Settings → Soul, or asks the AI to (soul.update, which they
  * approve). Markdown with ## sections; commands are list items of the Commands section, grouped by ### headings:
  *
  *   - `/name what` — what the AI does when someone types it

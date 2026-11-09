@@ -5,7 +5,7 @@
  */
 export const DEFAULT_SOUL = `# Soul
 
-This is who I am and how I work on this computer. It is yours: change anything here (Settings → Agent → Soul), or
+This is who I am and how I work on this computer. It is yours: change anything here (Settings → Soul), or
 tell me what to change with /tune and approve it. I follow it from the next message.
 
 ## Who I am
