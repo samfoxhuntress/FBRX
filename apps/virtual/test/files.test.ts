@@ -327,7 +327,7 @@ describe('the file server’s parts', () => {
     const rsync = calls.find((c) => c[0] === 'rsync')!;
     expect(rsync).toContain('-rt');
     expect(rsync).toContain('--delete');
-    expect(rsync.find((a) => a.startsWith('--backup-dir='))).toMatch(/office\/kept\/2026-11-08$/);
+    expect(rsync.find((a) => a.startsWith('--backup-dir='))).toMatch(/office[\\/]kept[\\/]2026-11-08$/);
     expect(calls.find((c) => c[0] === 'mount')).toEqual(expect.arrayContaining(['-t', 'cifs', '//nas/backups']));
     // The credentials file is gone once mounted.
     expect(existsSync(join(work, 'run'))).toBe(true);

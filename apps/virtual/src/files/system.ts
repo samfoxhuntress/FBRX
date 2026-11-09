@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmdirSync, rmSync, statSync, unlinkSync, utimesSync, writeFileSync } from 'node:fs';
-import { dirname, join, relative } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 import { nfsPath, smbPath } from '@fbrx/shared';
 
 /**
@@ -198,7 +198,7 @@ export class LinuxFilesSystem implements FilesSystem {
     if (place.kind === 'smb') {
       const share = smbPath(place.path);
       if (!share) throw new Error(`${place.path} is not a shared folder's path (\\\\device\\folder)`);
-      const cred = join(work, `${at.split('/').pop()}.cred`);
+      const cred = join(work, `${basename(at)}.cred`);
       writeFileSync(cred, cifsCredentials(place.user, place.password), { mode: 0o600 });
       try {
         const r = await this.run('mount', ['-t', 'cifs', share, at, '-o', `credentials=${cred},iocharset=utf8,${readOnly ? 'ro' : 'rw,file_mode=0660,dir_mode=0770'}`], { timeoutMs: 60_000, signal });
