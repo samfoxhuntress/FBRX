@@ -5,9 +5,11 @@
   "codename": "Weft",
   "released": "2026-11-09",
   "importance": "important",
-  "summary": "FBRX 2.3.3 Beta (Weft): a safer install on Linux, offline chats that stay offline, and the right tools for questions about your notes and tasks.",
+  "summary": "FBRX 2.3.3 Beta (Weft): a safer install on Linux, Fabrix’s soul with its own commands, offline chats that stay offline, and the right tools for your notes and tasks.",
   "notes": [
     "Linux: the .deb installed FBRX OS’s files so that anyone on the computer could change them. 2.3.3 installs them as it should, and installing it repairs an older copy. Update soon on Linux.",
+    "Fabrix’s soul (Settings → Soul): who Fabrix is and how it works for you, with options you can change and more than sixty slash commands (type /help in a chat). Fabrix changes it only with your yes, and you can undo any change.",
+    "Editions are now called Essentials, Pro, Ultra and Black Hole Edition.",
     "Offline chats: AI Toolkit actions that reach past this computer (Check the internet, Look up a name, Trace the route, Is a port open, and your own that ping or download) now ask to put the chat online first, like every other internet tool. So does asking another computer’s AI on the mesh.",
     "Notes and tasks: questions about your own notes and tasks get the notes search and the task list every time, and words inside them (“my notes about the router”) no longer bring in network tools.",
     "Notifications from the AI start with its name, and it shows at most a few a minute.",
