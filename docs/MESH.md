@@ -84,7 +84,8 @@ it through. It also lets one computer (typically a server) hand work out to the 
 * **The AI provider stopped answering.** Out of credits, over a quota or rate limit, a billing problem, an outage or a
   network failure: the same handover, instead of an error.
 * **The agent asks.** Mid-task, the agent can look at who could help (`mesh.helpers`) and consult another computer's
-  agent (`mesh.consult`), with follow-up questions in the same conversation on the helper.
+  agent (`mesh.consult`), with follow-up questions in the same conversation on the helper. The question leaves this
+  computer, so in an offline chat the agent asks to put the chat online first.
 * **A person or a controller sends work** to the best helper, to every computer, or to one, with a priority.
 
 **Who helps.** The asking computer asks each paired computer what it can do right now (its AI and model, whether it

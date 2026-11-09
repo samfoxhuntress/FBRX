@@ -1232,7 +1232,7 @@ export class Kernel {
           ...fsTools({ workspace: ws, maxFileBytes: () => this.policy.policy.filesystem.maxFileBytes }),
           ...shellTools({ workspace: ws, timeoutSeconds: () => this.policy.policy.shell.timeoutSeconds }),
           ...netTools({ checkUrl: (u) => checkUrl(u, this.policy.policy.network) }),
-          ...systemTools({ workspace: ws, notify: (title, body) => this.notify({ title, body, level: 'info', source: 'agent' }) }),
+          ...systemTools({ workspace: ws, notify: (title, body) => this.notify({ title, body, level: 'info', source: 'agent' }), agentName: () => this.settings.get().ai.agentName }),
           ...memoryTools(this.memory),
           ...skillTools(this.skills),
           ...toolkitTools(this.toolkit),

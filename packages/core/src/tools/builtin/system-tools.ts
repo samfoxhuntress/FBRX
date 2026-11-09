@@ -6,7 +6,14 @@ import { runShell } from './shell-tools';
 export interface SystemDeps {
   workspace: string;
   notify: (title: string, body: string) => void;
+  /** The AI's name: every notification it shows says who it is from. */
+  agentName?: () => string;
+  /** Tests: the clock. */
+  now?: () => number;
 }
+
+/** At most this many notifications from the AI a minute, and an hour: more is a loop, or a nuisance. */
+export const NOTIFY_LIMITS = { perMinute: 3, perHour: 20 } as const;
 
 export async function diskFreeGb(path: string): Promise<number | null> {
   try {
@@ -18,6 +25,9 @@ export async function diskFreeGb(path: string): Promise<number | null> {
 }
 
 export function systemTools(d: SystemDeps): ToolSpec[] {
+  const now = d.now ?? Date.now;
+  /** When the AI's last notifications were shown (the last hour's). */
+  let shown: number[] = [];
   return [
     {
       name: 'system.info',
@@ -71,7 +81,7 @@ export function systemTools(d: SystemDeps): ToolSpec[] {
     {
       name: 'system.notify',
       title: 'Notify user',
-      description: 'Show a desktop notification to the person at this workstation.',
+      description: `Show a desktop notification to the person at this workstation (its title starts with your name; at most ${NOTIFY_LIMITS.perMinute} a minute and ${NOTIFY_LIMITS.perHour} an hour).`,
       risk: 'read',
       source: 'builtin',
       sourceId: null,
@@ -80,8 +90,17 @@ export function systemTools(d: SystemDeps): ToolSpec[] {
         properties: { title: { type: 'string', maxLength: 200 }, body: { type: 'string', maxLength: 2000 } },
         required: ['title', 'body'],
       },
-      async run(i) {
-        d.notify(i.title, i.body);
+      async run(i: { title: string; body: string }) {
+        const at = now();
+        shown = shown.filter((t) => at - t < 3_600_000);
+        if (shown.filter((t) => at - t < 60_000).length >= NOTIFY_LIMITS.perMinute || shown.length >= NOTIFY_LIMITS.perHour) {
+          return { output: `Not shown: that is more than ${NOTIFY_LIMITS.perMinute} notifications a minute or ${NOTIFY_LIMITS.perHour} an hour. Tell the person in the chat instead.` };
+        }
+        shown.push(at);
+        // Who it is from, so a notification cannot pass for the system's or another app's.
+        const name = d.agentName?.().trim() || 'FBRX';
+        const title = String(i.title ?? '').trim();
+        d.notify(title.toLowerCase().startsWith(`${name.toLowerCase()}:`) ? title : `${name}: ${title}`, String(i.body ?? ''));
         return { output: 'Notification shown' };
       },
     },

@@ -106,7 +106,9 @@ describe('Mesh Assist', () => {
       return { text: 'server-b says 42, and 84 doubled.' };
     };
     scriptB = (b) => ({ text: lastUser(b).includes('doubled') ? 'Doubled it is 84.' : 'It is 42.' });
-    const r = await ka.agent.runToCompletion({ message: 'Ask the other server what 6 x 7 is, then double it', origin: 'user', actor: 'test' });
+    // An online chat: consulting another computer is a network tool (an offline chat asks first, below).
+    expect(ka.registry.get('mesh.consult')?.risk).toBe('network');
+    const r = await ka.agent.runToCompletion({ message: 'Ask the other server what 6 x 7 is, then double it', origin: 'user', actor: 'test', offline: false });
     expect(r.status).toBe('completed');
     expect(r.answer).toBe('server-b says 42, and 84 doubled.');
     const toolResults = ka.conversations.messages(r.conversationId).filter((m) => m.role === 'tool').map((m) => m.content);
@@ -122,6 +124,21 @@ describe('Mesh Assist', () => {
     const helperRequest = modelB.requests.at(-1);
     expect(toolNames(helperRequest).some((n: string) => n.startsWith('mesh__'))).toBe(false);
     expect(toolNames(helperRequest).every((n: string) => !/write|delete|run_command|shell/.test(n))).toBe(true);
+  }, 60_000);
+
+  // Noah report 2.3.2, item 6: the question leaves this computer for another AI that can use tools.
+  it('asks before an offline chat consults another computer, and sends nothing on a no', async () => {
+    assist(ka, { request: 'auto' });
+    assist(kb, { offer: 'auto' });
+    const before = kb.assist.list().length;
+    scriptA = (b) => (b.messages.some((m: any) => m.role === 'tool') ? { text: 'Answered here.' } : { tool: { name: 'mesh__consult', args: { question: 'What is 6 x 7?' } } });
+    const run = ka.agent.runToCompletion({ message: 'Ask the other server what 6 x 7 is', origin: 'user', actor: 'test', offline: true });
+    const ask = (await waitFor(() => ka.approvals.list().find((x) => x.tool === 'mesh.consult')))!;
+    expect(ask.toolTitle).toBe('Go online: Consult another computer');
+    ka.approvals.resolve(ask.id, 'deny', 'test');
+    const r = await run;
+    expect(ka.conversations.messages(r.conversationId).find((m) => m.role === 'tool')?.content).toContain('the user chose to stay offline');
+    expect(kb.assist.list().length).toBe(before);
   }, 60_000);
 
   it('hands a task to another computer when the agent runs out of steps', async () => {
@@ -164,7 +181,7 @@ describe('Mesh Assist', () => {
     // Asking side "ask": the agent's consultation waits for the person here.
     assist(ka, { request: 'ask' });
     scriptA = (b) => (toolNames(b).length && !b.messages.some((m: any) => m.role === 'tool') ? { tool: { name: 'mesh__consult', args: { question: 'Check the backups' } } } : { text: 'ok' });
-    const run = ka.agent.runToCompletion({ message: 'Have the other server check the backups', origin: 'user', actor: 'test' });
+    const run = ka.agent.runToCompletion({ message: 'Have the other server check the backups', origin: 'user', actor: 'test', offline: false });
     const ask = (await waitFor(() => ka.approvals.list().find((x) => x.tool === 'mesh.assist')))!;
     expect(ask.toolTitle).toBe('Bring in server-b');
     ka.approvals.resolve(ask.id, 'deny', 'test');
