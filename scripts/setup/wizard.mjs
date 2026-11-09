@@ -33,6 +33,7 @@ import { homedir, tmpdir, userInfo } from 'node:os';
 import { basename, delimiter, dirname, join, resolve } from 'node:path';
 import { createInterface } from 'node:readline/promises';
 import { fileURLToPath } from 'node:url';
+import { appProcesses, quitLinuxApp } from './linux-quit.mjs';
 import { downloadStarterModel, STARTER_MODEL, starterModelFile } from './starter-model.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -210,19 +211,27 @@ function writable(dir) {
 function isRunning() {
   if (process.platform === 'darwin') return spawnSync('pgrep', ['-x', PRODUCT]).status === 0;
   if (win) return (spawnSync('tasklist', ['/FI', `IMAGENAME eq ${PRODUCT}.exe`, '/NH'], { encoding: 'utf8' }).stdout ?? '').includes(`${PRODUCT}.exe`);
-  return spawnSync('pgrep', ['-f', 'linux-unpacked/fbrx-os']).status === 0;
+  return appProcesses().length > 0;
 }
 
+/**
+ * Closes a running FBRX OS, asking it to quit properly first. On Linux (linux-quit.mjs) only its main process is asked,
+ * so Ubuntu does not take it for a crash and open it again, and its AI runtime must have stopped too: what would not
+ * stop is an error, before any file is touched.
+ */
 async function quitRunningApp() {
+  if (process.platform === 'linux') {
+    const { wasRunning, left } = await quitLinuxApp({ dataRoot: dataRoot() });
+    if (left.length) throw new SetupError(`${PRODUCT} is still running (${left.map((p) => `process ${p.pid}`).join(', ')}) and could not be closed.`, `Close ${PRODUCT}, or restart the computer, and run this again.`);
+    return wasRunning;
+  }
   if (!isRunning()) return false;
   if (process.platform === 'darwin') spawnSync('osascript', ['-e', `if application "${PRODUCT}" is running then tell application "${PRODUCT}" to quit`]);
   else if (win) spawnSync('taskkill', ['/IM', `${PRODUCT}.exe`]);
-  else spawnSync('pkill', ['-f', 'linux-unpacked/fbrx-os']);
   for (let i = 0; i < 40 && isRunning(); i++) await new Promise((r) => setTimeout(r, 250));
   if (isRunning()) {
     if (process.platform === 'darwin') spawnSync('pkill', ['-x', PRODUCT]);
     else if (win) spawnSync('taskkill', ['/F', '/IM', `${PRODUCT}.exe`]);
-    else spawnSync('pkill', ['-9', '-f', 'linux-unpacked/fbrx-os']);
     for (let i = 0; i < 20 && isRunning(); i++) await new Promise((r) => setTimeout(r, 250));
   }
   return true;

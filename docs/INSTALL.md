@@ -44,8 +44,9 @@ to the app), `--allow-downgrade`, `--signing-key <file>` (below). The full log i
 
 **Removing it.** On a Mac or Linux, *Settings → Updates → Uninstall FBRX OS*, or run the installer with `--uninstall`
 (on Linux, also right-click FBRX OS in your apps or dock → *Uninstall FBRX OS…*). It opens in a terminal window and
-asks first, closes FBRX OS, and removes the app (on Linux its entry in your apps and the build in the FBRX folder).
-Your data (chats, notes, settings, the vault) stays for a later install; `--uninstall --delete-data` erases it too.
+asks first, closes FBRX OS (asking it to quit, so it stops its AI properly), and removes the app (on Linux its entry
+in your apps and the build in the FBRX folder). If FBRX OS will not close, nothing is removed and it says so. Your
+data (chats, notes, settings, the vault) stays for a later install; `--uninstall --delete-data` erases it too.
 Windows removes it in *Settings → Apps*, or with its Setup file.
 
 **On Ubuntu and other Linux.** Installed from the FBRX folder, *Update now* runs the installer in a terminal window and
