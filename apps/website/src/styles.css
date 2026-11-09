@@ -585,10 +585,87 @@ input {
   color: var(--bad);
 }
 
+/* The editions at a glance: each picture builds on the one before. */
+.ed-diagram {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 28px;
+  margin: 8px 0 24px;
+}
+.ed-step {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 18px 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+}
+.ed-step + .ed-step::before {
+  content: '+';
+  position: absolute;
+  left: -24px;
+  top: 70px;
+  width: 20px;
+  text-align: center;
+  font-size: 26px;
+  font-weight: 700;
+  color: var(--accent);
+}
+.ed-art {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-bottom: 6px;
+}
+.ed-step h3 {
+  margin: 0;
+  font-size: 20px;
+}
+.ed-price {
+  margin: 0;
+  font-weight: 600;
+  color: var(--accent);
+}
+.ed-lead {
+  margin: 6px 0 2px;
+  color: var(--muted);
+  font-size: 14px;
+}
+.ed-step ul {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 14px;
+}
+.ed-step.ultra {
+  border-color: color-mix(in srgb, var(--accent-strong) 55%, var(--line));
+}
+.ed-step.blackhole {
+  --ed-ink: #ece6ff;
+  --ed-paper: #1b1530;
+  background: radial-gradient(circle at 15% 0%, #241a3d, #0d0b12 70%);
+  color: #ece6ff;
+  border-color: #3c2f63;
+}
+.ed-step.blackhole .ed-lead {
+  color: #b9addf;
+}
+.ed-step.blackhole .ed-price {
+  color: #ffb547;
+}
+
 @media (max-width: 900px) {
   .plans,
   .lineup {
     grid-template-columns: repeat(2, 1fr);
+  }
+  .ed-diagram {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .ed-step:nth-child(3)::before {
+    display: none;
   }
   .two,
   .features,
@@ -606,6 +683,20 @@ input {
   .plans,
   .lineup {
     grid-template-columns: 1fr;
+  }
+  .ed-diagram {
+    grid-template-columns: 1fr;
+  }
+  .ed-art {
+    max-width: 300px;
+    margin: 0 auto 6px;
+  }
+  .ed-step + .ed-step::before,
+  .ed-step:nth-child(3)::before {
+    display: block;
+    left: 50%;
+    top: -27px;
+    transform: translateX(-50%);
   }
   .top nav a:not(.btn) {
     font-size: 14px;

@@ -15,6 +15,7 @@
 import { copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { editionsDiagram } from './editions-art.mjs';
 import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, ESSENTIALS_TIPS, PURCHASE_SOURCE_NAMES, STANDARD_TRIAL_DAYS, RELEASE_REPO, SERVER_OFFER, TENANT_DISCOUNT, TIERS, TIER_SHORT, VERTICAL_NAMES, editionPoints, formatPrice, personalPlan } from '@fbrx/shared';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -231,9 +232,8 @@ page({
 </section>
 <section class="wrap">
   <h2 class="center">Four editions</h2>
-  <div class="plans compact">
-    ${TIERS.map((t) => editionCard(t, '')).join('\n')}
-  </div>
+  <p class="lead center">Each one is the one before it, and more.</p>
+  ${editionsDiagram('home')}
   <p class="center"><a class="btn" href="pricing.html">Compare the editions</a></p>
 </section>
 <section class="band" id="command">
@@ -359,7 +359,8 @@ page({
 </section>
 <section class="wrap">
   <h2 class="center">Four editions</h2>
-  <div class="plans compact">${TIERS.map((t) => editionCard(t, '')).join('\n')}</div>
+  <p class="lead center">Each one is the one before it, and more.</p>
+  ${editionsDiagram('endpoint')}
   <p class="center"><a class="btn" href="pricing.html">Compare the editions</a></p>
 </section>`,
 });
