@@ -18,6 +18,7 @@ import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './brows
 import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
 import type { Skill } from './skills';
 import type { ToolkitAction, ToolkitCommands, ToolkitInput, ToolkitSystem } from './toolkit';
+import type { SoulStatus } from './soul';
 import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
 import type { ThinkingBudget, ThinkingLevel } from './thinking';
 import type { ExtEvents, ExtMethods } from './ext';
@@ -828,6 +829,13 @@ export interface CoreMethods extends ExtMethods {
   'toolkit.setEnabled': (p: { id: string; enabled: boolean }) => ToolkitAction;
   'toolkit.reset': (p: { id: string }) => ToolkitAction;
   'toolkit.remove': (p: { id: string }) => { removed: boolean };
+  /** The AI's soul (soul.md): who it is, its options, the commands the person can type (Settings → Agent → Soul). */
+  'soul.get': () => SoulStatus;
+  'soul.set': (p: { text: string }) => SoulStatus;
+  /** Back to FBRX's default (the version before is kept). */
+  'soul.reset': () => SoulStatus;
+  /** The version before the last change, back in place. */
+  'soul.undo': () => SoulStatus;
   'governance.folders': () => FolderAccessStatus;
   /** Lets the AI use a folder (picked by the person). */
   'governance.addFolder': (p: { path: string }) => FolderAccessStatus;
@@ -976,6 +984,8 @@ export interface CoreEvents extends ExtEvents {
   /** The AI's memory of the person changed (how many facts it holds now). */
   'memory.changed': { count: number };
   'skills.changed': { count: number };
+  /** soul.md changed (by the person, the AI with their yes, or FBRX's newer default). */
+  'soul.changed': { isDefault: boolean };
   'toolkit.changed': { count: number };
   'plugins.changed': PluginInfo[];
   'connectors.changed': ConnectorInfo[];

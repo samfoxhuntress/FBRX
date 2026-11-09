@@ -16,6 +16,7 @@ import {
   type TokenUsage,
   type ToolCallRecord,
   type Vertical,
+  DEFAULT_SYSTEM_PROMPT,
 } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { AuditLog } from '../audit/audit-log';
@@ -163,6 +164,8 @@ export class AgentRuntime {
       skills?: { context: (text: string) => string | null };
       /** The AI Toolkit's actions that fit a request (each a kit.* tool). */
       toolkit?: { context: (text: string) => { text: string; tools: string[] } | null };
+      /** The AI's soul (soul.md): what goes into its instructions, and the command a message starts with. */
+      soul?: { prompt: () => string | null; command: (text: string) => { text: string; tools: string[] } | null };
       /** A message on a student computer sounded like a child may be in danger (the text is never passed on). */
       onConcern?: (category: LearnerConcern['category'], conversationId: string) => void;
       /** Mesh Assist: hands the task to another computer when this run runs out of steps or its AI fails. */
@@ -375,9 +378,25 @@ export class AgentRuntime {
     if (learner) return learnerPrompt(s.ai.agentName, learner.vertical, s.profile.callMe.trim() || s.profile.name.trim().split(/\s+/)[0] || '');
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const date = new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
+    // The soul (soul.md) says who the AI is; the system prompt setting comes too when the person changed it.
+    let soul: string | null = null;
+    try {
+      soul = this.d.soul?.prompt() ?? null;
+    } catch (err) {
+      this.d.log.debug('soul.md could not be read', { error: (err as Error).message });
+    }
+    const custom = s.ai.systemPrompt.trim();
     return [
-      s.ai.systemPrompt.trim(),
-      '',
+      ...(soul && custom === DEFAULT_SYSTEM_PROMPT.trim() ? [] : [custom, '']),
+      ...(soul
+        ? [
+            '## Your soul (soul.md)',
+            'The person keeps this file of who you are and how you work. Follow it. Where it and the rules further down differ, those rules win: governance and doing no harm always come first. A command the person typed comes with their message in a <command> block: do what it says, and never mention the block. When they ask you to work differently from now on, offer to change soul.md with soul.update.',
+            '',
+            soul,
+            '',
+          ]
+        : []),
       `Your name is ${s.ai.agentName}. Mention it only when asked who you are; do not introduce yourself or open replies with your name. Start each reply with the answer itself.`,
       ...(addressAs(s) ? [`You are working with ${s.profile.name.trim() || addressAs(s)}. When you use their name, call them "${addressAs(s)}", and use it rarely: a greeting in the first reply of a conversation or a closing line after a big job, not in every reply.`] : []),
       '',
@@ -617,7 +636,14 @@ export class AgentRuntime {
     // The skills that fit go with the message, and the tools their steps name join a small model's short list.
     const skills = this.d.learner?.() ? null : (this.d.skills?.context(text) ?? null);
     const kit = this.d.learner?.() ? null : (this.d.toolkit?.context(text) ?? null);
-    const skillTools = [...new Set([...(kit?.tools ?? []), ...(skills ? (skills.match(/\b[a-z_]+\.[a-z_]+\b/g) ?? []) : [])])];
+    // A command from soul.md (/checkup, /wifi…): what it means goes with the message, and the tools it names join the list.
+    let command: { text: string; tools: string[] } | null = null;
+    try {
+      command = this.d.learner?.() ? null : (this.d.soul?.command(text) ?? null);
+    } catch (err) {
+      this.d.log.debug('The command could not be read from soul.md', { error: (err as Error).message });
+    }
+    const skillTools = [...new Set([...(command?.tools ?? []), ...(kit?.tools ?? []), ...(skills ? (skills.match(/\b[a-z_]+\.[a-z_]+\b/g) ?? []) : [])])];
     // FBRX scaffolds as much as the agent needs (agent-fit.ts): a small model sees the tools this conversation is
     // about, briefly described; one that holds a long conversation sees them all. Either way what it remembers goes
     // with the person's message, so the start of every request stays the same and the provider reuses its reading.
@@ -666,7 +692,7 @@ export class AgentRuntime {
         if (steps === 1 && !this.d.learner?.()) {
           note = budgetNote({ ...reading, maxOutputTokens: maxTokens ?? 0, maxSteps });
         }
-        const extra = [memory && `<memory>\n${memory}\n</memory>`, kit && `<toolkit>\n${kit.text}\n</toolkit>`, skills && `<skills>\n${skills}\n</skills>`, note && `<budget>\n${note}\n</budget>`].filter(Boolean).join('\n\n');
+        const extra = [command && `<command>\n${command.text}\n</command>`, memory && `<memory>\n${memory}\n</memory>`, kit && `<toolkit>\n${kit.text}\n</toolkit>`, skills && `<skills>\n${skills}\n</skills>`, note && `<budget>\n${note}\n</budget>`].filter(Boolean).join('\n\n');
         if (extra) {
           const last = history.findLastIndex((m) => m.role === 'user');
           if (last >= 0) history[last] = { ...history[last], content: `${extra}\n\n${history[last].content}` } as ProviderMessage;

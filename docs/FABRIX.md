@@ -60,6 +60,42 @@ even a small model the tools and the skill the job needs.
 - **AI usage** (next to AI models): this month's tokens by day and by model, the budget, what the agent's model holds,
   and your FBRX account's FBRX Cloud AI. Only counts are kept, never what was said.
 
+## Soul: who Fabrix is, and your commands
+
+**soul.md** is Fabrix's own file of who it is and how it works on your computer (*Settings → Soul*). It comes with
+FBRX and is yours to change:
+
+* **Who I am, What I care about, How I talk**: its character. Your data stays on the computer, it does no harm
+  whoever asks, it says it did something only when a tool shows it worked, and it starts with the answer.
+* **Options**: how it works for you, one line each, like `length: short`, `emoji: off`, `plan-first: 3 steps`,
+  `ask-before-changes: always`, `also-noticed: on` or `units: your region's`. Change a value and Fabrix follows it from
+  your next message.
+* **Commands**: start a message with one and Fabrix does it. `/help` lists them all, and `/help wifi` the ones about
+  Wi-Fi. There are more than sixty, in groups:
+
+  | Group | For example |
+  | --- | --- |
+  | Getting around | `/status`, `/explain`, `/plan`, `/go`, `/undo`, `/audit` |
+  | This computer | `/checkup`, `/slow`, `/disk`, `/clean`, `/updates`, `/errors`, `/fix` |
+  | Network | `/net`, `/wifi`, `/speed`, `/ip`, `/dns`, `/ping`, `/trace`, `/port`, `/scan`, `/flushdns`, `/renew` |
+  | Security | `/security`, `/scanfile`, `/password`, `/newpassword` |
+  | FBRX Server and Gate | `/server`, `/gate`, `/dome`, `/lan` |
+  | Mesh and devices | `/mesh`, `/askmesh`, `/consoles`, `/sites`, `/guests` |
+  | Work | `/brief`, `/agenda`, `/tasks`, `/todo`, `/note`, `/doc`, `/web`, `/ticket` |
+  | You and me | `/remember`, `/forget`, `/skills`, `/kit`, `/toolkits`, `/soul`, `/tune`, `/short`, `/detail`, `/eli5` |
+
+  Add your own the same way: a line like `` - `/standup` — Read my tasks due today and draft three lines for the team. ``
+* **Toolkits**: what Fabrix works with, by family. Ask it (or type `/toolkits`) and it reads the live list: each tool,
+  whether it works right now, and for FBRX Server and FBRX Gate what you can do on the server itself (its console
+  pages and the `fbrx-server` and `fbrx-gate` commands).
+* **Notes**: how you like it to work, as it learns.
+
+Fabrix reads its soul with every message (the commands only when you type one, so a small AI on your computer stays
+quick). Ask it to work differently from now on (or type `/tune` and what to change) and it offers the change to
+soul.md: you see the change and approve it first. Every change keeps the version before it, so *Undo the last change*
+goes back; *Use FBRX's* goes back to FBRX's soul.md. Until you change yours, it follows FBRX's newer soul.md when FBRX
+updates. Student and child computers have the learning helper instead, with no soul or commands.
+
 ## Skills: jobs it knows how to do
 
 A skill is how Fabrix does a job of several steps, written down so it does it the same good way next time.

@@ -33,6 +33,7 @@ export * from './privacy';
 export * from './memory';
 export * from './time';
 export * from './files';
+export * from './soul';
 export * from './virtual';
 export * from './mesh-assist';
 export * from './net';

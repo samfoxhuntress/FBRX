@@ -54,6 +54,7 @@ import { FolderAccess } from './governance/folder-access';
 import { KnowledgeBase } from './knowledge/knowledge-base';
 import { MemoryService } from './ai/memory';
 import { SkillStore } from './ai/skills';
+import { SoulStore } from './ai/soul';
 import { TOOLKIT_SOURCE_ID, ToolkitStore } from './ai/toolkit';
 import { ModelLine } from './ai/model-line';
 import { runDoctor, type DoctorFinding } from './knowledge/doctor';
@@ -67,7 +68,7 @@ import { ToolGate } from './governance/tool-gate';
 import { checkUrl } from './governance/network-guard';
 import { LicenseService } from './license/license-service';
 import { ToolRegistry } from './tools/registry';
-import { fbrxTools, folderTools, fsTools, knowledgeTools, memoryTools, netTools, shellTools, serverTools, skillTools, systemTools, toolkitTools, diskFreeGb } from './tools/builtin';
+import { fbrxTools, folderTools, fsTools, knowledgeTools, memoryTools, netTools, shellTools, serverTools, skillTools, soulTools, systemTools, toolkitTools, diskFreeGb } from './tools/builtin';
 import { pcTools, workspaceTools } from './tools/builtin/command-center-tools';
 import { WorkspaceStore } from './workspace/workspace-store';
 import { SystemMonitor } from './system/system-monitor';
@@ -218,6 +219,8 @@ export class Kernel {
   readonly skills: SkillStore;
   /** The AI Toolkit: FBRX's library of actions, the ones Fabrix built (approved) and the person's own. */
   readonly toolkit: ToolkitStore;
+  /** The AI's soul (soul.md in the data folder): who it is, its options and the person's commands. */
+  readonly soul: SoulStore;
   /** The line in front of the built-in model: this computer's own requests first (mesh.assist.hostFirst). */
   readonly modelLine: ModelLine;
   readonly redactor = new Redactor();
@@ -344,6 +347,12 @@ export class Kernel {
       timeoutSeconds: () => this.policy.policy.approvals.timeoutSeconds,
     });
     this.skills = new SkillStore({ meta: this.meta, events: this.events });
+    this.soul = new SoulStore({ file: join(this.paths.root, 'soul.md'), meta: this.meta, events: this.events, log: (m) => this.log.info(m) });
+    try {
+      this.soul.ensure();
+    } catch (err) {
+      this.log.warn('soul.md could not be written; FBRX’s default is used', { error: (err as Error).message });
+    }
     this.toolkit = new ToolkitStore({ meta: this.meta, events: this.events, approvals: this.approvals, timeoutSeconds: () => this.policy.policy.shell.timeoutSeconds, workspace: this.paths.workspace });
     // The AI Toolkit's actions are tools of their own: a changed action is in the agent's hands at once.
     this.events.on('toolkit.changed', () => {
@@ -455,6 +464,7 @@ export class Kernel {
       memory: { context: (o) => this.memory.context(o), learn: (text) => this.memory.learn(text) },
       skills: { context: (text) => this.skills.context(text) },
       toolkit: { context: (text) => this.toolkit.context(text) },
+      soul: { prompt: () => this.soul.prompt(), command: (text) => this.soul.command(text) },
       assist: {
         canHandoff: (trigger) => this.assist.canHandoff(trigger),
         handoff: (h) => this.assist.handoff(h),
@@ -1226,6 +1236,7 @@ export class Kernel {
           ...memoryTools(this.memory),
           ...skillTools(this.skills),
           ...toolkitTools(this.toolkit),
+          ...soulTools(this.soul, () => this.registry.list()),
           ...serverTools(this.servers),
           ...this.toolkit.tools(),
           ...passwordTools({ passwords: this.passwords, offerSave: (d) => this.events.emit('passwords.saveRequested', d) }),
