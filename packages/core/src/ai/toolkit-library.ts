@@ -5,7 +5,11 @@ import type { ToolkitAction } from '@fbrx/shared';
  * look run straight away; the ones that change something ask first, and a change that could cut the connection puts
  * itself back unless the person keeps it.
  */
-export type LibraryAction = Pick<ToolkitAction, 'id' | 'tool' | 'kit' | 'name' | 'when' | 'commands' | 'inputs' | 'ask' | 'admin' | 'undo'> & { keywords: string[] };
+export type LibraryAction = Pick<ToolkitAction, 'id' | 'tool' | 'kit' | 'name' | 'when' | 'commands' | 'inputs' | 'ask' | 'admin' | 'undo'> & {
+  keywords: string[];
+  /** It sends traffic beyond this computer (a lookup, a ping, a port check): an offline chat asks before it runs. */
+  network?: boolean;
+};
 
 const NET = 'Networking';
 const PC = 'This computer';
@@ -87,6 +91,7 @@ export const TOOLKIT_LIBRARY: LibraryAction[] = [
     keywords: ['lookup', 'nslookup', 'resolve', 'dns', 'domain', 'look up a name'],
     commands: { windows: 'Resolve-DnsName {{name}} | Format-Table Name, Type, IPAddress, NameHost -AutoSize', mac: 'nslookup {{name}}', linux: 'getent ahosts {{name}}' },
     inputs: [{ name: 'name', label: 'The name to look up, like example.com', kind: 'host' }],
+    network: true,
     ask: false,
     admin: [],
     undo: null,
@@ -113,6 +118,7 @@ export const TOOLKIT_LIBRARY: LibraryAction[] = [
     keywords: ['trace', 'traceroute', 'tracert', 'hop', 'hops'],
     commands: { windows: 'tracert -d -h 20 {{host}}', mac: 'traceroute -n -m 20 {{host}}', linux: 'traceroute -n -m 20 {{host}} 2>/dev/null || tracepath -n {{host}}' },
     inputs: [{ name: 'host', label: 'The host or address to trace to', kind: 'host' }],
+    network: true,
     ask: false,
     admin: [],
     undo: null,
@@ -323,6 +329,7 @@ export const TOOLKIT_LIBRARY: LibraryAction[] = [
       linux: 'gw=$(ip route show default | awk \'{print $3; exit}\'); echo "== The router ($gw)"; ping -c 2 -W 2 "$gw"; echo "== The internet (1.1.1.1)"; ping -c 2 -W 2 1.1.1.1; echo "== Names (DNS)"; getent ahosts example.com | head -1',
     },
     inputs: [],
+    network: true,
     ask: false,
     admin: [],
     undo: null,
@@ -343,6 +350,7 @@ export const TOOLKIT_LIBRARY: LibraryAction[] = [
       { name: 'host', label: 'The device or server (a name or an address)', kind: 'host' },
       { name: 'port', label: 'The port number, like 443', kind: 'number' },
     ],
+    network: true,
     ask: false,
     admin: [],
     undo: null,

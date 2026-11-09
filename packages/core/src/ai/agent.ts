@@ -28,7 +28,7 @@ import type { ToolGate } from '../governance/tool-gate';
 import type { LicenseService } from '../license/license-service';
 import type { SettingsService } from '../settings/settings-service';
 import type { ToolRegistry } from '../tools/registry';
-import type { ToolSpec } from '../tools/types';
+import { sendsTraffic, type ToolSpec } from '../tools/types';
 import type { ConversationStore, StoredMessage } from './conversations';
 import type { ProviderManager } from './provider-manager';
 import type { ProviderImage, ProviderMessage, ProviderTool, ProviderToolCall } from './providers/types';
@@ -318,7 +318,7 @@ export class AgentRuntime {
         // With nobody to answer, a tool that would ask is as good as denied.
         return action !== 'deny' && !(limits?.unattended && action === 'ask');
       })
-      .filter((t) => !limits?.unattended || !offline || (t.risk !== 'network' && t.source !== 'connector'))
+      .filter((t) => !limits?.unattended || !offline || !sendsTraffic(t))
       .filter((t) => limits?.tools !== 'read' || t.risk === 'read' || t.risk === 'network')
       .filter((t) => limits?.assist !== false || !t.name.startsWith('mesh.'));
   }
@@ -453,7 +453,7 @@ export class AgentRuntime {
   }
 
   private needsOnline(spec: ToolSpec, conversationId: string): boolean {
-    return (spec.risk === 'network' || spec.source === 'connector') && this.d.store.isOffline(conversationId);
+    return sendsTraffic(spec) && this.d.store.isOffline(conversationId);
   }
 
   /** Asks the person whether an offline chat may go online for an internet tool; approval switches the chat online. */

@@ -166,9 +166,9 @@ computer keeps it too.
 * **Private kinds** (addresses, location, email and phone, birthday, cards by last four digits) are stored only when
   the person allows that kind, and are sent only to providers marked local. With a cloud provider the agent gets
   general facts or nothing (the person's choice), never private facts and never the last 24 hours.
-* **Online tools**: when a tool goes online (network risk, a connector, or a call with URLs), the guardian blocks any
-  identity or money number in its input as **critical** (refused, never sent), and a remembered private value in its
-  input as a **warning** that needs approval.
+* **Online tools**: when a tool goes online (network risk, an AI Toolkit action that reaches the network, a connector, or
+  a call with URLs), the guardian blocks any identity or money number in its input as **critical** (refused, never
+  sent), and a remembered private value in its input as a **warning** that needs approval.
 * Memory is off on student and child computers. Adding, changing and forgetting memories is for the person at the
   computer (not the Local API or FBRX Command).
 

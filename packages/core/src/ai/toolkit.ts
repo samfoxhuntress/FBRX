@@ -120,6 +120,24 @@ export function looksOnly(command: string): boolean {
   return true;
 }
 
+/**
+ * Programs that send traffic beyond this computer: lookups, pings, traces, port checks and downloads. An action that
+ * runs one is a network tool, so an offline chat asks before it runs (the library also says so for its own).
+ */
+const NETWORK_PROGRAMS =
+  /(^|[\s;|&(`$'"])(ping6?|tracert|traceroute6?|tracepath6?|mtr|pathping|nslookup|dig|host|drill|resolvectl\s+query|getent\s+a?hosts|nc|ncat|netcat|telnet|curl|wget|ssh|scp|sftp|rsync|ftp|nmap|arping|whois|test-netconnection|tnc|test-connection|resolve-dnsname|invoke-webrequest|iwr|invoke-restmethod|irm|start-bitstransfer)(\.exe)?(?=$|[\s;|&)'"])|\/dev\/(tcp|udp)\/|\bnet\.webclient\b|\bnet\.sockets\.tcpclient\b/i;
+
+/** Whether a command sends traffic beyond this computer (see NETWORK_PROGRAMS). */
+export function usesNetwork(command: string): boolean {
+  return NETWORK_PROGRAMS.test(command);
+}
+
+/** Whether an action reaches the network: the library says so for its own, and any action's commands can show it. */
+export function actionUsesNetwork(a: Pick<ToolkitAction, 'id' | 'commands' | 'undo'>): boolean {
+  if (TOOLKIT_LIBRARY.some((l) => l.id === a.id && l.network)) return true;
+  return [...Object.values(a.commands), ...Object.values(a.undo?.commands ?? {})].some((c) => !!c && usesNetwork(c));
+}
+
 const STOP = new Set('the and for with that this what why how can you your please help are was from into have has not but out about there they them then when where which would could should just like make get its our very also some any all thing things show tell give find check see run use computer fabrix'.split(' '));
 const stem = (w: string) => (w.length > 5 ? w.replace(/(ing|ed|es|s)$/, '') : w);
 const words = (text: string) =>
@@ -172,7 +190,7 @@ export class ToolkitStore {
   }
 
   private static fromLibrary(l: LibraryAction): ToolkitAction {
-    const { keywords: _k, ...a } = l;
+    const { keywords: _k, network: _n, ...a } = l;
     return { ...a, source: 'library', changed: false, enabled: true, uses: 0, createdAt: '', updatedAt: '', lastUsedAt: null };
   }
 
@@ -385,11 +403,14 @@ export class ToolkitStore {
       .filter((a) => a.enabled)
       .map((a): ToolSpec => {
         const undoMs = a.undo ? a.undo.seconds * 1000 + 60_000 : 0;
+        const network = actionUsesNetwork(a);
         return {
           name: a.tool,
           title: a.name,
           description: `${a.when || a.name} An action in the AI Toolkit (${a.kit}).${a.undo ? ` Puts the change back after ${a.undo.seconds} seconds unless the person keeps it.` : ''}`,
-          risk: a.ask ? 'execute' : 'read',
+          // One that asks first stays 'execute'; one that reaches the network says so, so an offline chat asks.
+          risk: a.ask ? 'execute' : network ? 'network' : 'read',
+          network,
           source: 'builtin',
           sourceId: TOOLKIT_SOURCE_ID,
           timeoutMs: this.d.timeoutSeconds() * 1000 * (a.undo ? 2 : 1) + undoMs + 5_000,

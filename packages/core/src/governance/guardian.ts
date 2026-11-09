@@ -1,5 +1,5 @@
 import { findSensitive, type GuardianFinding } from '@fbrx/shared';
-import type { ToolResources, ToolSpec } from '../tools/types';
+import { sendsTraffic, type ToolResources, type ToolSpec } from '../tools/types';
 
 /** Text as it reads after URL decoding ('+' as a space), whatever is malformed left as it was. */
 function decodeLoosely(s: string): string {
@@ -81,7 +81,7 @@ export class Guardian {
       findings.push({ severity: 'warning', code: 'prompt-injection', message: 'Tool input contains prompt-injection language' });
     }
     // What goes onto the internet: never an identity or money number, and the person's private details only if they say so.
-    if (tool.risk === 'network' || tool.source === 'connector' || (resources.urls?.length ?? 0) > 0) {
+    if (sendsTraffic(tool) || (resources.urls?.length ?? 0) > 0) {
       // As a web address would carry it too ("12+Oak+St", "123%2D45%2D6789").
       const plain = `${serialized}\n${decodeLoosely(serialized)}`;
       const ids = findSensitive(plain);

@@ -2,7 +2,8 @@ import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PROVIDERS, toolkitToolName, type ToolkitAction } from '@fbrx/shared';
-import { fillCommand, looksOnly } from '../src/ai/toolkit';
+import { fillCommand, looksOnly, usesNetwork } from '../src/ai/toolkit';
+import { TOOLKIT_LIBRARY } from '../src/ai/toolkit-library';
 import { makeKernel, waitFor, USER } from './helpers';
 import { mockOpenAI } from './mock-llm';
 
@@ -27,6 +28,17 @@ describe('AI Toolkit commands', () => {
     expect(looksOnly('ipconfig /all | findstr IPv4'), 'a filter after a pipe').toBe(true);
   });
 
+  it('tells a command that reaches the network from one that stays on this computer', () => {
+    for (const c of ['ping -c 2 1.1.1.1', 'tracert -d {{host}}', 'nslookup example.com', 'dig +short example.com', 'getent ahosts example.com', 'nc -vz -G 4 h 22', "timeout 5 bash -c 'exec 3<>/dev/tcp/$0/$1' h 22", 'Test-NetConnection h -Port 443', 'Resolve-DnsName example.com', 'curl -s https://example.com', 'wget -qO- x', 'iwr https://example.com', 'Invoke-RestMethod https://example.com', 'traceroute -n h 2>/dev/null || tracepath -n h', 'PING.EXE 1.1.1.1', 'ssh admin@router'])
+      expect(usesNetwork(c), c).toBe(true);
+    for (const c of ['ipconfig', 'ip -brief address show', 'arp -a', 'netstat -an', 'Get-NetAdapter | Format-Table Name, NameHost', 'hostname', 'df -h', 'resolvectl dns', '$host.UI.RawUI', 'nmcli device status', 'du -sh * | sort -h'])
+      expect(usesNetwork(c), c).toBe(false);
+    // The library says so for its own, and agrees with the commands.
+    const flagged = TOOLKIT_LIBRARY.filter((l) => l.network).map((l) => l.tool);
+    expect(flagged.sort()).toEqual(['kit.check_the_internet', 'kit.is_a_port_open', 'kit.look_up_a_name', 'kit.trace_the_route']);
+    expect(TOOLKIT_LIBRARY.filter((l) => Object.values(l.commands).some((c) => c && usesNetwork(c))).map((l) => l.tool).sort()).toEqual(flagged.sort());
+  });
+
   it('names each action as a tool of its own', () => {
     expect(toolkitToolName('My IP address')).toBe('kit.my_ip_address');
     expect(toolkitToolName('Wi-Fi 6 check!')).toBe('kit.wi_fi_check');
@@ -45,6 +57,7 @@ describe.runIf(process.platform === 'linux')('AI Toolkit', () => {
       expect(ip).toMatchObject({ source: 'library', ask: false, changed: false });
       expect(kernel.registry.get('kit.my_ip_address')?.risk).toBe('read');
       expect(kernel.registry.get('kit.set_a_fixed_address')?.risk).toBe('execute');
+      expect(kernel.registry.get('kit.check_the_internet')?.risk).toBe('network');
       expect(kernel.toolkit.match('Fabrix, what is my IP address?')[0].tool).toBe('kit.my_ip_address');
 
       // Too much? Change it: the tool runs the new command at once, and Reset puts FBRX's back.
@@ -124,6 +137,56 @@ describe.runIf(process.platform === 'linux')('AI Toolkit', () => {
       expect(body.messages[0].content).toContain('## AI Toolkit');
       expect(body.messages.at(-1).content).toMatch(/<toolkit>\n- kit\.my_ip_address: My IP address\./);
       expect(body.tools.map((t: { function: { name: string } }) => t.function.name)).toContain('kit__my_ip_address');
+    } finally {
+      await llm.close();
+      await cleanup();
+    }
+  });
+  // Noah report 2.3.2, item 2: these four sent traffic from an offline chat without asking.
+  it('asks before an action that reaches the network runs in an offline chat, and runs nothing when the answer is no', async () => {
+    const calls: Record<string, Record<string, string>> = {
+      kit__check_the_internet: {},
+      kit__look_up_a_name: { name: 'localhost' },
+      kit__trace_the_route: { host: '127.0.0.1' },
+      kit__is_a_port_open: { host: '127.0.0.1', port: '9' },
+    };
+    for (const [tool, args] of Object.entries(calls)) {
+      const llm = await mockOpenAI((_b, turn) => (turn === 0 ? { tool: { name: tool, args } } : { text: 'Done.' }));
+      const { kernel, cleanup } = await makeKernel();
+      try {
+        kernel.settings.update({ ai: { defaultProvider: 'lan', defaultModel: 'mock-model', providers: [...DEFAULT_PROVIDERS, { id: 'lan', type: 'openai-compatible', name: 'lan', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } } as never);
+        const { conversationId, runId } = (await kernel.call('ai.chat', { message: 'Check it.', model: 'mock-model' }, USER)) as { conversationId: string; runId: string };
+        expect(kernel.conversations.isOffline(conversationId)).toBe(true);
+        const ask = await waitFor(() => kernel.approvals.list()[0] ?? null);
+        expect(ask.toolTitle, tool).toMatch(/^Go online: /);
+        kernel.approvals.resolve(ask.id, 'deny', 'test-user');
+        await waitFor(() => !kernel.agent.activities().some((a) => a.runId === runId));
+        const result = kernel.conversations.get(conversationId).messages.find((m) => m.role === 'tool')!.content;
+        expect(result, tool).toContain('the user chose to stay offline');
+        expect(kernel.toolkit.get(tool.replace('__', '.')).uses, tool).toBe(0);
+        expect(kernel.conversations.isOffline(conversationId)).toBe(true);
+      } finally {
+        await llm.close();
+        await cleanup();
+      }
+    }
+
+    // A yes puts the chat online and the action runs as before; an action someone builds that pings is the same.
+    const llm = await mockOpenAI((_b, turn) => (turn === 0 ? { tool: { name: 'kit__look_up_a_name', args: { name: 'localhost' } } } : { text: 'Done.' }));
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      kernel.settings.update({ ai: { defaultProvider: 'lan', defaultModel: 'mock-model', providers: [...DEFAULT_PROVIDERS, { id: 'lan', type: 'openai-compatible', name: 'lan', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } } as never);
+      const { conversationId, runId } = (await kernel.call('ai.chat', { message: 'Look up localhost.', model: 'mock-model' }, USER)) as { conversationId: string; runId: string };
+      const ask = await waitFor(() => kernel.approvals.list()[0] ?? null);
+      kernel.approvals.resolve(ask.id, 'approve', 'test-user');
+      await waitFor(() => !kernel.agent.activities().some((a) => a.runId === runId));
+      expect(kernel.conversations.isOffline(conversationId)).toBe(false);
+      expect(kernel.toolkit.get('kit.look_up_a_name').uses).toBe(1);
+      expect(kernel.conversations.get(conversationId).messages.find((m) => m.role === 'tool')!.content).toMatch(/127\.0\.0\.1|::1/);
+      const mine = (await kernel.call('toolkit.save', { name: 'Ping the printer', commands: { linux: 'ping -c 1 192.168.1.20' }, ask: false }, USER)) as ToolkitAction;
+      expect(kernel.registry.get(mine.tool)).toMatchObject({ risk: 'network', network: true });
+      const asking = (await kernel.call('toolkit.save', { name: 'Fetch the status page', commands: { linux: 'curl -s https://example.com' }, ask: true }, USER)) as ToolkitAction;
+      expect(kernel.registry.get(asking.tool)).toMatchObject({ risk: 'execute', network: true });
     } finally {
       await llm.close();
       await cleanup();

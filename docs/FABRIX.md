@@ -142,6 +142,9 @@ printed. The switch turns an action off: Fabrix stops using it until you turn it
   quoted, so a value can never become a command of its own.
 - **Ask me before each run**: on for anything that changes settings, files or services. Off only for commands that
   just look. Either way your policy (Governance) and the guardian check every run, and each run is in the audit log.
+- **Offline chats**: an action that reaches past this computer (Look up a name, Trace the route, Check the internet, Is
+  a port open, and any action whose command pings, looks up, traces, connects or downloads) is an internet tool: in an
+  offline chat Fabrix asks to put the chat online first, and runs nothing if you say no.
 - **Needs administrator rights**: Windows asks through its usual prompt (UAC); macOS and Linux ask for an
   administrator's password.
 - **Put it back unless I keep the change**: for a change that could cut you off, such as *Set a fixed address*. After
