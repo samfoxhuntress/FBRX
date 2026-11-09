@@ -11,6 +11,8 @@ extraMetadata:
   description: FBRX Digger, the FBRX Network Center on its own
   desktopName: fbrx-digger.desktop
   fbrxFlavor: digger
+# Linux packages get normal file modes (Electron's own files arrive world-writable): scripts/after-pack.cjs.
+afterPack: scripts/after-pack.cjs
 directories:
   output: release/digger-${version}
   buildResources: build
@@ -84,4 +86,6 @@ linux:
   maintainer: FBRX
   vendor: FBRX
 deb:
+  # electron-builder's after-install script plus a repair of older installs' file modes.
+  afterInstall: build/linux/after-install.tpl
   depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0]

@@ -203,6 +203,10 @@ jobs:
             echo "Signing ${{ matrix.name }} packages with: $SIGNED"
           fi
           npm run ${{ matrix.package }} -w @fbrx/desktop -- "${EXTRA[@]}"
+      # Nothing in a Linux package may be writable by anyone but its owner (2.3.2's .deb was).
+      - name: Check the Linux packages' file modes
+        if: matrix.platform == 'linux'
+        run: scripts/check-linux-packages.sh "apps/desktop/release/${{ needs.meta.outputs.version }}"
       - uses: actions/upload-artifact@v4
         with:
           name: desktop-${{ matrix.platform }}

@@ -104,6 +104,9 @@ jobs:
             echo "Signing ${{ matrix.name }} packages with: $SIGNED"
           fi
           npm run package:digger -w @fbrx/desktop -- ${{ matrix.flag }} "${EXTRA[@]}"
+      - name: Check the Linux packages' file modes
+        if: matrix.platform == 'linux'
+        run: scripts/check-linux-packages.sh "apps/desktop/release/digger-${{ needs.meta.outputs.version }}"
       - uses: actions/upload-artifact@v4
         with:
           name: digger-${{ matrix.platform }}

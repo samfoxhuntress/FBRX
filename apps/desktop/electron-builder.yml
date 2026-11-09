@@ -4,6 +4,8 @@
 appId: com.fbrx.os
 productName: FBRX OS
 copyright: Copyright © 2026 FBRX
+# Linux packages get normal file modes (Electron's own files arrive world-writable): scripts/after-pack.cjs.
+afterPack: scripts/after-pack.cjs
 directories:
   output: release/${version}
   buildResources: build
@@ -115,5 +117,7 @@ linux:
   maintainer: FBRX
   vendor: FBRX
 deb:
+  # electron-builder's after-install script plus a repair of older installs' file modes.
+  afterInstall: build/linux/after-install.tpl
   # The desktop menu entry and its icon come from the app; these let the system tray and notifications work.
   depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0]
