@@ -1,42 +1,40 @@
 {
   "product": "FBRX OS",
   "stage": "Beta",
-  "version": "2.3.2",
+  "version": "2.3.3",
   "codename": "Weft",
-  "released": "2026-11-08",
-  "importance": "recommended",
-  "summary": "FBRX 2.3.2 Beta (Weft): your own requests to this computer’s AI go ahead of help for the mesh, and FBRX Server becomes a file server.",
+  "released": "2026-11-09",
+  "importance": "important",
+  "summary": "FBRX 2.3.3 Beta (Weft): a safer install on Linux, offline chats that stay offline, and the right tools for questions about your notes and tasks.",
   "notes": [
-    "Your requests first: the AI on this computer answers one request at a time, and your own now start before help for other computers on FBRX Mesh (Mesh Assist, a lent model). Help that already started finishes first, and Mesh Assist shows who is waiting. Mesh Assist → This computer’s own requests go first turns it off.",
-    "FBRX Server 1.4.2 (below) adds a file server, FBRX Time backups seen coming online, and Ask the AI from anywhere in its console."
+    "Linux: the .deb installed FBRX OS’s files so that anyone on the computer could change them. 2.3.3 installs them as it should, and installing it repairs an older copy. Update soon on Linux.",
+    "Offline chats: AI Toolkit actions that reach past this computer (Check the internet, Look up a name, Trace the route, Is a port open, and your own that ping or download) now ask to put the chat online first, like every other internet tool. So does asking another computer’s AI on the mesh.",
+    "Notes and tasks: questions about your own notes and tasks get the notes search and the task list every time, and words inside them (“my notes about the router”) no longer bring in network tools.",
+    "Notifications from the AI start with its name, and it shows at most a few a minute.",
+    "Linux uninstall asks FBRX OS to quit properly, so Ubuntu does not reopen it, and stops its AI first."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.3.2.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.2",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.3.3.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.3",
   "server": {
-    "version": "1.4.2",
-    "released": "2026-11-08",
-    "summary": "FBRX Server 1.4.2: a file server with backups to a NAS, FBRX Time backups seen coming online, and Ask the AI from anywhere in the console.",
+    "version": "1.4.3",
+    "released": "2026-11-09",
+    "summary": "FBRX Server 1.4.3 comes with FBRX OS 2.3.3 and changes nothing on the server itself: updating from 1.4.2 is optional.",
     "notes": [
-      "File server (the files role): share folders from the server itself, or make one of its virtual machines the file server. Accounts of their own, priority for its traffic, and backups to a NAS every night that keep changed and deleted files for as many days as you choose. On a gate, one button adds the firewall rule your networks need.",
-      "FBRX Time: a boot check gives the throwaway machine a private test network that reaches nothing else and sees it come online. When a check fails or warns, the server’s AI says what most likely went wrong.",
-      "Ask the AI: a button on virtual machines, the gate, the firewall, hardware, storage, roles and the terminal opens a chat with the server’s AI about what you are looking at.",
-      "The server’s own people go first on its AI, ahead of work for the mesh.",
-      "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit; sudo fbrx-server roles add files adds the file server."
+      "The same server as 1.4.2, released alongside FBRX OS 2.3.3.",
+      "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
     ],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.3.2/fbrx-server-1.4.2.tar.gz",
-    "sha256": "5cbb9f030a86af862178a4e39c32ce65d52c82366d0475ee2964a5c6da647b4e",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.2"
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.3.3/fbrx-server-1.4.3.tar.gz",
+    "sha256": "5f5ffa76f686b596ae9bbc9c787f0d42f22d87ed1f7d6c96ccb8d1a9a00b7461",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.3"
   },
   "digger": {
-    "version": "1.1.1",
-    "released": "2026-11-08",
-    "summary": "FBRX Digger 1.1.1: smaller and simpler, with device consoles in the Network Center and clearer sign-in errors.",
+    "version": "1.1.2",
+    "released": "2026-11-09",
+    "summary": "FBRX Digger 1.1.2: a safer install on Linux.",
     "notes": [
-      "Links open in your own browser; Digger has no browser or edition settings of its own.",
-      "Device consoles (SSH, Telnet) are a tab of the Network Center; a sign-in that fails says why, and trying again keeps the device's key; a successful SSH sign-in opens its session.",
-      "Digger has its own tray icon and menu."
+      "Linux: the .deb installed Digger’s files so that anyone on the computer could change them. 1.1.2 installs them as it should, and installing it repairs an older copy."
     ],
-    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.1",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.1"
+    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.2",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.2"
   }
 }
