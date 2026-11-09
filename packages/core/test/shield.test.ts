@@ -252,6 +252,7 @@ describe('FBRX Shield on a computer', () => {
     }
   });
 
+  // It waits up to 15 seconds twice for the watcher, so its own time limit leaves room for both.
   it('checks new downloads as they arrive and raises an alert', async () => {
     const { kernel, cleanup } = await makeKernel({ start: false });
     const home = tempDir('fbrx-home-');
@@ -292,7 +293,7 @@ describe('FBRX Shield on a computer', () => {
     } finally {
       await cleanup();
     }
-  });
+  }, 40_000);
 
   it('checks a file the browser downloaded the way the Downloads watcher does', async () => {
     const { kernel, cleanup } = await makeKernel();

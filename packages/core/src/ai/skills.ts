@@ -2,6 +2,7 @@ import { SKILL_LIMITS, newId, type Skill } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { MetaStore } from '../storage/meta';
+import { aboutOwnWork, requestWords } from './request-words';
 
 /**
  * Fabrix's skills (see @fbrx/shared skills.ts): the starter ones FBRX comes with, the ones it learned with the person's
@@ -14,13 +15,18 @@ const STARTER_STATE = 'ai.skills.starter';
 /** At most this many skills go with one request. */
 const PER_REQUEST = 2;
 
-type Starter = Pick<Skill, 'id' | 'name' | 'when' | 'steps'> & { keywords: string[] };
+type Starter = Pick<Skill, 'id' | 'name' | 'when' | 'steps'> & {
+  keywords: string[];
+  /** It looks after the computer or the network: for a question about the person's own notes or tasks, it needs more. */
+  fix?: true;
+};
 
 /** The starter library: everyday jobs, with the tools FBRX has for them. */
 export const STARTER_SKILLS: Starter[] = [
   {
     id: 'skill_wifi',
     name: 'Slow or dropping Wi-Fi',
+    fix: true,
     when: 'The Wi-Fi is slow, keeps dropping, or the signal is weak in a room.',
     keywords: ['wifi', 'wi-fi', 'wireless', 'signal', 'router', 'channel', 'internet', 'drop', 'disconnect', 'buffer', 'lag'],
     steps: [
@@ -34,6 +40,7 @@ export const STARTER_SKILLS: Starter[] = [
   {
     id: 'skill_troubleshoot',
     name: 'Troubleshoot the network',
+    fix: true,
     when: 'The person asks to troubleshoot the network, or the internet is down, slow or acting up for every device.',
     keywords: ['troubleshoot', 'troubleshooting', 'network', 'internet', 'outage', 'gate', 'minidome', 'firewall', 'diagnose'],
     steps: [
@@ -47,6 +54,7 @@ export const STARTER_SKILLS: Starter[] = [
   {
     id: 'skill_space',
     name: 'Free up disk space',
+    fix: true,
     when: 'The disk is full or nearly full, or the person wants space back.',
     keywords: ['disk', 'space', 'storage', 'full', 'drive', 'free', 'clean', 'cleanup', 'room', 'gigabyte'],
     steps: [
@@ -60,6 +68,7 @@ export const STARTER_SKILLS: Starter[] = [
   {
     id: 'skill_slow',
     name: 'Computer feels slow',
+    fix: true,
     when: 'The computer is slow, freezes, or the fan runs loud.',
     keywords: ['slow', 'sluggish', 'laggy', 'freeze', 'freezing', 'hang', 'performance', 'fan', 'hot', 'cpu', 'memory'],
     steps: [
@@ -73,6 +82,7 @@ export const STARTER_SKILLS: Starter[] = [
   {
     id: 'skill_security',
     name: 'Security check-up',
+    fix: true,
     when: 'The person wants to know whether the computer is safe, or thinks something is wrong.',
     keywords: ['secure', 'security', 'safe', 'virus', 'malware', 'hacked', 'protect', 'antivirus', 'firewall', 'checkup', 'phishing', 'suspicious'],
     steps: [
@@ -87,6 +97,7 @@ export const STARTER_SKILLS: Starter[] = [
   {
     id: 'skill_network_map',
     name: "What's on my network",
+    fix: true,
     when: 'The person wants to see the devices on their network, or spotted one they do not know.',
     keywords: ['network', 'device', 'devices', 'scan', 'lan', 'connected', 'unknown', 'router', 'who'],
     steps: [
@@ -148,7 +159,7 @@ export class SkillStore {
   /** Every skill: the starter ones first, then the learned and your own, newest first. */
   list(): Skill[] {
     const state = this.starterState();
-    const starters = STARTER_SKILLS.map(({ keywords: _k, ...s }): Skill => ({ ...s, source: 'starter', enabled: state[s.id]?.enabled ?? true, uses: state[s.id]?.uses ?? 0, createdAt: '', updatedAt: '', lastUsedAt: state[s.id]?.lastUsedAt ?? null }));
+    const starters = STARTER_SKILLS.map(({ keywords: _k, fix: _f, ...s }): Skill => ({ ...s, source: 'starter', enabled: state[s.id]?.enabled ?? true, uses: state[s.id]?.uses ?? 0, createdAt: '', updatedAt: '', lastUsedAt: state[s.id]?.lastUsedAt ?? null }));
     return [...starters, ...this.saved().sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))];
   }
 
@@ -197,9 +208,12 @@ export class SkillStore {
    * counts 2, one of its "when" 1. A skill needs 2, and goes along only when it fits nearly as well as the best one.
    */
   match(text: string, limit = PER_REQUEST): Skill[] {
-    const asked = words(text);
+    // Only what the request asks: not a name in quotes, the content to save, or the subject of the person's notes.
+    const asked = words(requestWords(text));
     if (!asked.size) return [];
+    const own = aboutOwnWork(text);
     const keywords = new Map(STARTER_SKILLS.map((s) => [s.id, s.keywords]));
+    const fixes = new Set(STARTER_SKILLS.filter((s) => s.fix).map((s) => s.id));
     const scored = this.list()
       .filter((s) => s.enabled)
       .map((s) => {
@@ -207,7 +221,7 @@ export class SkillStore {
         const about = words(s.when);
         let score = 0;
         for (const w of asked) score += strong.has(w) ? 2 : about.has(w) ? 1 : 0;
-        return { s, score };
+        return { s, score: own && fixes.has(s.id) ? score / 2 : score };
       })
       .filter((x) => x.score >= 2)
       .sort((a, b) => b.score - a.score || b.s.uses - a.s.uses);

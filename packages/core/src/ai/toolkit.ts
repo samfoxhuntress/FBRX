@@ -21,6 +21,7 @@ import { runShell } from '../tools/builtin/shell-tools';
 import { elevated } from '../windows/ps';
 import { truncate } from '../util/misc';
 import { TOOLKIT_LIBRARY, type LibraryAction } from './toolkit-library';
+import { aboutOwnWork, requestWords } from './request-words';
 
 /**
  * The AI Toolkit (see @fbrx/shared toolkit.ts): FBRX's library of actions, the ones Fabrix built (each approved by the
@@ -293,9 +294,12 @@ export class ToolkitStore {
    * of "when" 1. An action needs 3, and goes along only when it fits nearly as well as the best one.
    */
   match(text: string, limit = PER_REQUEST): ToolkitAction[] {
-    const asked = words(text);
+    // Only what the request asks: not a name in quotes, the content to save, or the subject of the person's notes.
+    const request = requestWords(text);
+    const asked = words(request);
     if (!asked.size) return [];
-    const flat = ` ${text.toLowerCase().replace(/wi-fi/g, 'wifi').replace(/[^a-z0-9.]+/g, ' ')} `;
+    const flat = ` ${request.toLowerCase().replace(/wi-fi/g, 'wifi').replace(/[^a-z0-9.]+/g, ' ')} `;
+    const own = aboutOwnWork(text);
     const keywords = new Map(
       TOOLKIT_LIBRARY.map((l) => [l.id, { single: words(l.keywords.filter((k) => !k.includes(' ')).join(' ')), phrases: l.keywords.filter((k) => k.includes(' ')) }]),
     );
@@ -305,9 +309,17 @@ export class ToolkitStore {
         const keys = keywords.get(a.id);
         const name = words(a.name);
         const about = words(`${a.when} ${a.kit}`);
+        // A library action's name is everyday words ("Time since the last restart", "Is a port open"): its keywords
+        // and its whole name pick it, not one word of its name. An action someone built has no keywords: its name does.
+        const nameWord = keys ? 1 : 2;
         let score = 0;
-        for (const w of asked) score += keys?.single.has(w) ? 3 : name.has(w) ? 2 : about.has(w) ? 1 : 0;
-        for (const p of keys?.phrases ?? []) if (flat.includes(` ${p} `)) score += 3;
+        for (const w of asked) score += keys?.single.has(w) ? 3 : name.has(w) ? nameWord : about.has(w) ? 1 : 0;
+        // Whole phrases weigh more than single words.
+        for (const p of keys?.phrases ?? []) if (flat.includes(` ${p} `)) score += 4;
+        const whole = a.name.toLowerCase().replace(/wi-fi/g, 'wifi').replace(/[^a-z0-9.]+/g, ' ').trim();
+        if (whole.includes(' ') && flat.includes(` ${whole} `)) score += 4;
+        // FBRX's network and computer actions, for a question about the person's own notes, tasks or files.
+        if (own && keys) score /= 2;
         return { a, score };
       })
       .filter((x) => x.score >= 3)

@@ -9,6 +9,8 @@ export interface EverydayTask {
   /** Tools the job needs; Windows-only ones are checked on Windows. */
   tools: string[];
   skill: string | null;
+  /** Tools it must not be offered: words in the request that are not what it asks for (a note's subject, text to save). */
+  never?: string[];
 }
 
 export const EVERYDAY_TASKS: EverydayTask[] = [
@@ -26,4 +28,13 @@ export const EVERYDAY_TASKS: EverydayTask[] = [
   { ask: 'What is my IP?', tools: ['net.ip_address'], skill: null },
   { ask: 'What did we decide about the VPN last week? You said something earlier', tools: ['memory.search_chats'], skill: null },
   { ask: 'Save how you did that as a skill for next time', tools: ['skills.save'], skill: null },
+  // From the Noah eval on 2.3.2: the person's own notes and tasks, where a word in them is not the request.
+  { ask: 'My notes about the router are a mess. Can you tidy them up?', tools: ['workspace.search_notes', 'workspace.create_note', 'workspace.append_note'], skill: null, never: ['kit.check_the_internet', 'net.ip_address'] },
+  { ask: 'Check my notes: who serviced the boiler last time, and when is the next service due?', tools: ['workspace.search_notes'], skill: null, never: ['kit.time_since_restart'] },
+  { ask: 'Summarize my note about the router.', tools: ['workspace.search_notes'], skill: null, never: ['kit.check_the_internet', 'net.ip_address'] },
+  { ask: 'Make a PDF report of my open tasks.', tools: ['docs.create', 'workspace.list_tasks'], skill: null, never: ['kit.is_a_port_open', 'kit.open_connections'] },
+  { ask: 'Email my list of open tasks to my manager.', tools: ['workspace.list_tasks'], skill: null, never: ['kit.is_a_port_open', 'kit.open_connections'] },
+  { ask: 'What tasks do I have open?', tools: ['workspace.list_tasks'], skill: null, never: ['kit.is_a_port_open', 'kit.open_connections'] },
+  { ask: "Save this as a snippet called 'disk usage': du -sh * | sort -h", tools: ['workspace.save_snippet'], skill: null, never: ['kit.disk_space'] },
+  { ask: 'Save a text file called shopping.txt in my workspace with: milk, eggs, bread.', tools: ['fs.write_file'], skill: null, never: ['kit.disk_space'] },
 ];
