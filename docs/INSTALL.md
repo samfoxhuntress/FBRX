@@ -35,7 +35,7 @@ FBRX OS opens straight into a chat with your own AI, running on your computer:
 4. gets your AI ready: the starter model (about 1 GB) downloads meanwhile into FBRX OS's data folder (only on a
    computer that doesn't have FBRX OS yet),
 5. installs it in Applications (Mac) or for your user with Start menu and desktop shortcuts (Windows), with an
-   Enterprise license in your name that activates by itself, and opens the app.
+   Ultra license in your name that activates by itself, and opens the app.
 
 To update later, choose **Update now** when FBRX OS offers a new version (*Settings → Updates*), or download the new
 version into the same place and run the installer again; your data, settings and keys are kept, and a running FBRX OS
@@ -66,8 +66,8 @@ For someone who isn't technical, send the ready-made installer from the website.
 downloads its AI when it first opens, showing the progress in the chat.
 
 On Windows you can also make one for them: open a Command Prompt in your FBRX folder and run
-`"Install FBRX OS.cmd" --share`. Enter their name to build a trial license into the installer (30 days by default;
-Enterprise features, then the free Community features), or leave it blank to send an update to someone who is already
+`"Install FBRX OS.cmd" --share`. Enter their name to build a trial license into the installer (30 days by default:
+Ultra, then the free features), or leave it blank to send an update to someone who is already
 set up (`--for "Alex" --days 30 --yes` skips the questions). The result is one file in the `Share` folder, for example
 `Share\FBRX-OS-Setup-2.3.2-for-Alex.exe`, plus a short *How to install* note to send along.
 

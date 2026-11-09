@@ -1,6 +1,6 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { CalendarEvent, ProtectionState, SystemLive, SystemStatus } from '@fbrx/shared';
-import { TIER_NAMES, TROPHIES, atLeast, displayVersion } from '@fbrx/shared';
+import { TIER_NAMES, TIER_SHORT, TROPHIES, atLeast, displayVersion } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Grid, Icons, KeyValue, LineChart, Meter, StatTile, Status, formatBytes, formatDuration, timeAgo, useAction, type IconName } from '@fbrx/ui';
 import { call, onEvent, openExternal } from '../client';
 import { useCore, useStarterAi } from '../hooks';
@@ -519,7 +519,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
               ['Processor', info.data ? `${info.data.cpu.model} (${info.data.cpu.cores} cores)` : '…'],
               ['Memory', info.data ? formatBytes(info.data.memoryTotal) : '…'],
               ['Graphics', info.data?.gpus.map((g) => g.model).join(', ') || '—'],
-              ['License', `${status.license.edition} (${status.license.state})`],
+              ['License', status.license.state === 'unlicensed' ? 'None (the free features)' : `Up to ${TIER_SHORT[status.license.ceiling ?? status.license.tier]} (${status.license.state})`],
               ['Organization', status.fleet.state === 'unenrolled' ? 'Standalone' : `${status.fleet.tenantName} · ${status.fleet.state}`],
             ]}
           />

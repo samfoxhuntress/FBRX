@@ -23,7 +23,7 @@ Already running a control plane that generated its own key? Export the public ha
 npm run keys:generate -- --from /path/to/control-plane-data/keys/license-signing.pem
 ```
 
-Builds without an embedded key run as Community edition (development builds unlock everything).
+Builds without an embedded key accept no license key and run the free features (development builds unlock everything).
 
 ## 2. Control plane
 

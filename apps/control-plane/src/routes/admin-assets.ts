@@ -233,7 +233,7 @@ export async function adminAssetRoutes(app: FastifyInstance, ctx: AppContext) {
           expiresAt: z.string().datetime().nullable().optional(),
           maxMajorVersion: z.number().int().min(1).nullable().optional(),
           customer: z.string().max(200).optional(),
-          /** Up to Endpoint Pro (basic) or Ultra (otherwise a Community license allows Pro, an Ultra (`pro`) or Enterprise license Ultra). */
+          /** Up to Endpoint Pro (basic), Ultra or Black Hole Edition (otherwise as far as the key's services go, see tierFor). */
           tier: z.enum(LICENSE_TIERS).optional(),
           /** Computers that activate the key join this tenant on their own (FBRX Command). */
           joinTenant: z.boolean().optional(),

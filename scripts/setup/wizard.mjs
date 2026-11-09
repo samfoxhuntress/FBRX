@@ -549,9 +549,9 @@ function rememberSource() {
   }
 }
 
-/** Signs an Enterprise license key with your signing key. `expires` is YYYY-MM-DD or undefined (no expiry). */
+/** Signs an Ultra license key with your signing key. `expires` is YYYY-MM-DD or undefined (no expiry). */
 async function issueKey(customer, expires) {
-  const args = ['--import', 'tsx', join(ROOT, 'scripts', 'issue-license.ts'), '--customer', customer, '--edition', 'enterprise'];
+  const args = ['--import', 'tsx', join(ROOT, 'scripts', 'issue-license.ts'), '--customer', customer, '--edition', 'ultra'];
   if (expires) args.push('--expires', expires);
   const out = await node(args, { label: 'Issuing the license' });
   const key = out.split(/\r?\n/).find((l) => l.startsWith('FBRX1.'));
@@ -566,7 +566,7 @@ async function issueLicense(name) {
   // FBRX OS activates this file the next time it starts and then deletes it.
   writeFileSync(join(dir, LICENSE_FILE), `${key}\n`, { mode: 0o600 });
   writeFileSync(join(ROOT, '.fbrx-keys', 'my-license.txt'), `${key}\n`, { mode: 0o600 });
-  return { note: `Enterprise · ${name}` };
+  return { note: `Ultra · ${name}` };
 }
 
 const SHARE = join(ROOT, 'Share');
@@ -763,8 +763,8 @@ async function shareMain(rl, ask) {
   console.log(`\n${green(bold('The installer is ready'))} ${dim(`in ${elapsed(started)}`)}\n`);
   console.log(`  ${bold('File')}           ${pkg.path} ${dim(`(${mb} MB)`)}`);
   if (recipient) {
-    console.log(`  ${bold('License')}        Enterprise trial for ${recipient}, ${pkg.expires ? `until ${pkg.expires}` : 'no expiry'} (built in; activates on first start;`);
-    console.log(`                 afterwards ${PRODUCT} keeps working with the free Community features)`);
+    console.log(`  ${bold('License')}        Ultra trial for ${recipient}, ${pkg.expires ? `until ${pkg.expires}` : 'no expiry'} (built in; activates on first start;`);
+    console.log(`                 afterwards ${PRODUCT} keeps working with the free features)`);
   } else {
     console.log(`  ${bold('License')}        none built in: their existing license is kept; a new user can paste a key in Settings`);
   }

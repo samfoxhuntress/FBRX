@@ -108,7 +108,7 @@ export function licenseStatusFrom(
     commandUrl: p.command?.url ?? null,
     vertical: p.vertical ?? null,
   };
-  if (v.expired) return { ...base, ...info, state: 'expired', message: 'License has expired; running with Community features' };
+  if (v.expired) return { ...base, ...info, state: 'expired', message: 'This license has expired: until it is renewed, this computer runs the free features (Essentials on its own, up to Pro in an organization)' };
   if (p.installId && installId && p.installId !== installId) return { ...base, ...info, state: 'invalid', message: 'This license is for another computer' };
   if (p.maxMajorVersion !== null && appMajorVersion > p.maxMajorVersion) {
     return { ...base, ...info, state: 'invalid', message: `License covers versions up to ${p.maxMajorVersion}.x` };

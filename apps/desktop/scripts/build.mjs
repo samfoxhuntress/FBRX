@@ -15,7 +15,7 @@ const keys = [];
 if (process.env.FBRX_LICENSE_PUBLIC_KEY) keys.push(process.env.FBRX_LICENSE_PUBLIC_KEY.replace(/\\n/g, '\n'));
 const keyFile = join(app, 'build', 'license-public-key.pem');
 if (existsSync(keyFile)) keys.push(readFileSync(keyFile, 'utf8'));
-if (!keys.length) console.warn('⚠ No license public key embedded (set FBRX_LICENSE_PUBLIC_KEY or add build/license-public-key.pem). Packaged builds will run as Community edition unless enrolled.');
+if (!keys.length) console.warn('⚠ No license public key embedded (set FBRX_LICENSE_PUBLIC_KEY or add build/license-public-key.pem). Packaged builds accept no license key: they run the free features unless enrolled in an organization.');
 
 if (!watch) rmSync(join(app, 'dist'), { recursive: true, force: true });
 mkdirSync(join(app, 'dist', 'main'), { recursive: true });

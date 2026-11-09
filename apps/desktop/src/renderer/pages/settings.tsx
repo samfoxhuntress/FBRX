@@ -1281,7 +1281,7 @@ function License() {
         <KeyValue
           items={[
             ['Product', <span className={`tier-badge ${l.tier}`}>{TIER_NAMES[l.tier]}</span>],
-            ['License', <span className="fx-badge accent">{l.edition}</span>],
+            ['License', l.state === 'unlicensed' ? 'None: the free features' : <span className="fx-badge accent">Up to {TIER_SHORT[l.ceiling ?? l.tier]}</span>],
             ['State', <Status tone={l.state === 'valid' || l.state === 'development' ? 'good' : l.state === 'unlicensed' ? 'neutral' : 'warning'}>{l.state}</Status>],
             ['Licensed to', l.customer ?? '—'],
             ['Seats', l.seats === 0 ? 'Not counted' : l.seats ?? '—'],

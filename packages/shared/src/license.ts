@@ -1,12 +1,12 @@
 import { z } from 'zod';
 
+/**
+ * The services a license key carries (see EDITION_FEATURES). These ids are from before the editions had their names
+ * and stay inside keys only: people see the edition a key goes up to (tierFor), never these. A `pro` key goes up to
+ * Ultra; every key FBRX Command issues is `enterprise` (every service), its tier saying how far it goes.
+ */
 export const EDITIONS = ['community', 'pro', 'enterprise'] as const;
 export type Edition = (typeof EDITIONS)[number];
-/**
- * What people call each kind of license key. The ids are from before the editions had their names: a `pro` key is
- * an Ultra license (it goes up to Ultra), not the Pro edition.
- */
-export const LICENSE_EDITION_NAMES: Record<Edition, string> = { community: 'Community (up to Pro)', pro: 'Ultra', enterprise: 'Enterprise (every feature)' };
 
 /** Feature flags that a license can unlock. */
 export const FEATURES = {
@@ -72,13 +72,13 @@ export function parseTier(raw: string | null | undefined): Tier | null {
   return null;
 }
 
-/** Without a `tier` claim, a Community license allows Pro; an Ultra (`pro`) or Enterprise license allows Ultra. */
+/** Without a `tier` claim, a `community` key goes up to Pro, a `pro` or `enterprise` one up to Ultra. */
 export function tierFor(edition: Edition, claim?: Tier | null): Tier {
   return claim ?? (edition === 'community' ? 'basic' : 'ultra');
 }
 
 /**
- * The license edition (its features) a key for an edition carries: Community up to Pro, `pro` (the Ultra license) for Ultra, Enterprise
+ * The services a key for an edition carries: `community` for Pro, `pro` for Ultra, `enterprise`
  * for Black Hole Edition (tierFor the other way round).
  */
 export function licenseEditionFor(tier: Tier): Edition {

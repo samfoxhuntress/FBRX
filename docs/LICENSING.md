@@ -29,10 +29,8 @@ calls, the guardian model, is part of Black Hole Edition.)
 
 The easter eggs come with every edition, once their secret key unlocks them.
 
-The person chooses the edition; what may be chosen is decided above them. A license's **tier** is the most it allows:
-a Community license up to Pro, an Ultra license (`pro` in the key) or an Enterprise license up to Ultra, and a
-license can name it outright (`tier: "basic"`,
-`"ultra"` or `"blackhole"`). **On its own**, a computer runs Essentials unless something was bought: a license key
+The person chooses the edition; what may be chosen is decided above them. A license's **edition** is the most it allows:
+Pro, Ultra or Black Hole Edition (`tier: "basic"`, `"ultra"` or `"blackhole"` in the key). **On its own**, a computer runs Essentials unless something was bought: a license key
 (or a purchase on the person's FBRX account) goes up to its tier, at most Ultra. A purchase on an account covers as many
 of the person's computers as its edition includes, and the further ones they add (below): each signed-in computer gets
 a key of its own, for that install only, in the order they first signed in, and one past them runs Essentials until
@@ -123,23 +121,25 @@ remote commands, credentials, packages, updates, backups, audit). A license issu
 address: when a computer activates that key it **joins the tenant by itself** and receives the
 product and settings the tenant chose for it (see *Joining FBRX Command* below).
 
-## Editions
+## What a key unlocks
 
-| Feature | Community | Pro | Enterprise |
-| --- | :-: | :-: | :-: |
-| Built-in local AI agent (`agent.local`) | ✔ | ✔ | ✔ |
-| REST / webhook / peer connectors (`connectors`) | ✔ | ✔ | ✔ |
-| Local automation API (`localapi`) | ✔ | ✔ | ✔ |
-| Cloud AI providers — Claude, OpenAI-compatible, with your own key (`agent.cloud`) | ✔ | ✔ | ✔ |
-| Third-party plugins (`plugins`) | | ✔ | ✔ |
-| MCP connectors (`connectors.mcp`) | | ✔ | ✔ |
-| Scheduled encrypted backups (`backup.scheduled`) | | ✔ | ✔ |
-| Fleet management via the control plane (`fleet`) | | | ✔ |
-| Model-assisted guardian review (`guardian.model`) | | | ✔ |
-| **The most the computers may run, unless the license names it** | Pro | Ultra | Ultra |
+A key goes up to an edition, and carries the services behind the scenes that edition uses:
 
-A license can also grant individual extra features on top of its edition (for example Pro + `fleet`). Workstations
-without a license run as Community (Essentials on their own; in an organization, up to Endpoint Pro).
+| Service | Free (no key) | Pro | Ultra | Black Hole Edition |
+| --- | :-: | :-: | :-: | :-: |
+| Built-in local AI agent (`agent.local`) | ✔ | ✔ | ✔ | ✔ |
+| REST / webhook / peer connectors (`connectors`) | ✔ | ✔ | ✔ | ✔ |
+| Local automation API (`localapi`) | ✔ | ✔ | ✔ | ✔ |
+| Cloud AI providers with your own key (`agent.cloud`) | ✔ | ✔ | ✔ | ✔ |
+| Third-party plugins (`plugins`) | | | ✔ | ✔ |
+| MCP connectors (`connectors.mcp`) | | | ✔ | ✔ |
+| Scheduled encrypted backups (`backup.scheduled`) | | | ✔ | ✔ |
+| Fleet management via the control plane (`fleet`) | | | | ✔ |
+| Model-assisted guardian review (`guardian.model`) | | | | ✔ |
+
+That is a key bought on an FBRX account. Every key **FBRX Command** issues (and every key `npm run license:issue`
+signs) carries all of them, whatever edition it goes up to: the edition decides what people see. Computers without a
+license run the free features (Essentials on their own; in an organization, up to Endpoint Pro).
 
 ## License keys
 
@@ -151,22 +151,22 @@ signed with Ed25519. Older apps ignore the optional fields they do not know.
   [DEPLOYMENT.md](DEPLOYMENT.md#1-license-signing-keys)).
 * **Verification** happens offline on each workstation against the public key embedded at build time — no
   phone-home needed, and nobody else can mint keys your builds accept.
-* **Expiry** — after `expiresAt` the workstation falls back to Community features (on its own, Essentials; data is
+* **Expiry** — after `expiresAt` the workstation falls back to the free features (on its own, Essentials; data is
   never locked away).
 * **Version cap** — `maxMajorVersion: 2` means the key works for 1.x and 2.x; 3.x needs a renewed key. Useful
   for selling major upgrades.
 * **Seats** — enforced by the control plane at enrollment: when the tenant's active devices reach the seat count,
   further enrollments are refused until a device is retired or the license is upgraded. `0` = seats are not counted.
-* **Fleet** — a tenant whose active license lacks `fleet` (Community, or Pro without the add-on) cannot enroll new
-  devices; its keys are meant for offline activation. Tenants with no license at all may enroll devices, which then
-  run Community features — handy for trials and internal use.
+* **Fleet** — a tenant whose active license lacks `fleet` (an older key) cannot enroll new devices; its keys are meant
+  for offline activation. Tenants with no license at all may enroll devices, which then run the free features, up to
+  Pro — handy for trials and internal use.
 
 ## Issuing and delivering licenses
 
 1. **Tenants → New tenant** for the customer (name, contact, default update channel).
-2. Switch to the tenant, open **Licenses → Issue license**: the product on the computers (by edition, Endpoint Black
-   Hole, Ultra or Pro), whether computers that activate the key join this tenant automatically (on by default),
-   edition, seats, expiry, version cap, extra features.
+2. Switch to the tenant, open **Licenses → Issue license**: the edition it goes up to (Black Hole Edition, Ultra or
+   Pro), whether computers that activate the key join this tenant automatically (on by default), seats, expiry and
+   version cap.
 3. Delivery:
    * **Managed (recommended)** — workstations enrolled in that tenant receive the license automatically with their
      configuration. Revoking it in the console removes it from every device on its next sync.
@@ -181,14 +181,14 @@ signed with Ed25519. Older apps ignore the optional fields they do not know.
 Without a control plane, sign keys from the command line with the same private key:
 
 ```bash
-npm run license:issue -- --customer "Acme Ltd" --edition pro --seats 10 --expires 2027-12-31 --feature connectors.mcp
-# Up to Endpoint Pro on an Enterprise license, joining a tenant on activation:
-npm run license:issue -- --customer "Acme Ltd" --edition enterprise --tier basic \
+npm run license:issue -- --customer "Acme Ltd" --edition ultra --seats 10 --expires 2027-12-31
+# Up to Endpoint Pro, joining a tenant on activation:
+npm run license:issue -- --customer "Acme Ltd" --edition pro \
   --command-url https://command.acme.example --enroll-token fbrx_enr_…
 ```
 
 A managed license takes precedence over an offline one; if it is revoked, a device falls back to its offline key,
-if any, and otherwise to Community. License changes take effect immediately (licensed services start or stop
+if any, and otherwise to the free features. License changes take effect immediately (licensed services start or stop
 without a restart).
 
 ## Joining FBRX Command
