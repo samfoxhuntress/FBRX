@@ -5,9 +5,10 @@ import { call } from '../client';
 import { useAgentName, useCore } from '../hooks';
 
 /**
- * Settings → Soul: soul.md, the AI's own file of who it is and how it works (what it cares about, how it talks, the
- * options you set, the commands you can type, its toolkits and its notes). You edit it here; the AI changes it only
- * with your yes (soul.update), and every change keeps the version before it, so Undo goes back.
+ * Settings → Soul: soul.md, the AI's persona (who it is, how it talks, the options you set, the commands you can type,
+ * its toolkits and its notes). You edit it here; the AI changes it only with your yes (soul.update), and every change
+ * keeps the version before it, so Undo goes back. FBRX's core principles are shown too, read-only: they are fixed and
+ * not part of the file.
  */
 export function SoulSettings() {
   const name = useAgentName();
@@ -36,7 +37,7 @@ export function SoulSettings() {
     <>
       <Card
         title="Soul"
-        subtitle={`Who ${name} is and how it works on this computer: soul.md. It follows the options from your next message, and a command when you start a message with one (/help lists them). ${name} changes it only when you say yes.`}
+        subtitle={`Who ${name} is and how it sounds and works on this computer: soul.md, its persona. It follows the options from your next message, and a command when you start a message with one (/help lists them). ${name} changes it only when you say yes.`}
         actions={
           s && <Badge tone={s.isDefault ? undefined : 'accent'}>{s.isDefault ? 'FBRX’s default' : 'Yours'}</Badge>
         }
@@ -65,6 +66,13 @@ export function SoulSettings() {
           </p>
         )}
       </Card>
+      {s && (
+        <Card title="FBRX’s core principles" subtitle={`Fixed: they come with FBRX and come first in everything ${name} is told. No persona, soul.md or setting changes them, so soul.md holds no principles and no options about approvals, secrets or safety (Governance sets approvals).`}>
+          <div className="fx-muted" style={{ whiteSpace: 'pre-wrap' }}>
+            {s.core}
+          </div>
+        </Card>
+      )}
       <Card title="Commands" subtitle={`Start a message with one and ${name} does it. Add, change or remove them in the Commands section above.`}>
         {groups.map((g) => (
           <div key={g} className="soul-group">

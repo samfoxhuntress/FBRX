@@ -2,10 +2,14 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import {
+  SOUL_CORE,
   SOUL_LIMITS,
   SOUL_PROMPT_SKIP,
+  SOUL_RESERVED,
   soulCommandIn,
   soulCommands,
+  soulPersona,
+  soulProblems,
   soulSections,
   withSoulSection,
   type SoulCommand,
@@ -17,10 +21,13 @@ import type { MetaStore } from '../storage/meta';
 import { DEFAULT_SOUL } from './soul-default';
 
 /**
- * The AI's soul (soul.md in FBRX's data folder, see @fbrx/shared soul.ts). Its first sections (who it is, what it
- * cares about, how it talks, the options, the notes) go into the AI's instructions on every request; a command goes
- * with the message it starts; the toolkits are read when asked. Every change keeps the version before it
- * (soul.history), so a change can be undone. A soul the person never changed follows FBRX's newer default.
+ * The AI's soul (soul.md in FBRX's data folder, see @fbrx/shared soul.ts): its persona. Its sections (who it is, how
+ * it talks, the options, the notes) go into the AI's instructions on every request, after FBRX's fixed core principles
+ * (SOUL_CORE, which are not in the file); a command goes with the message it starts; the toolkits are read when asked.
+ * soul.md never holds principles or options about approvals, secrets or safety: a change that would is refused, and a
+ * file that has them (an older soul.md, or one edited by hand) loses them at start and in what the AI reads. Every
+ * change keeps the version before it (soul.history), so a change can be undone. A soul the person never changed
+ * follows FBRX's newer default.
  */
 
 const WRITTEN = 'ai.soul.written';
@@ -61,6 +68,13 @@ export class SoulStore {
     if (written && sha(now) === written && written !== sha(DEFAULT_SOUL)) {
       this.write(DEFAULT_SOUL, 'FBRX (a newer default)', true);
       this.o.log?.('soul.md follows FBRX’s newer default (it had not been changed)');
+      return;
+    }
+    // An older soul.md (up to 2.3.3 it held What I care about and safety options), or one edited by hand: the
+    // principles are FBRX's own now, so they leave the file (the version before is kept, and Undo shows it).
+    if (soulProblems(now).length) {
+      this.write(soulPersona(now), 'FBRX (its core principles are fixed now)', true);
+      this.o.log?.('soul.md: sections about principles and options about approvals or safety left the file; FBRX keeps its core principles itself');
     }
   }
 
@@ -95,6 +109,7 @@ export class SoulStore {
     }
     return {
       text,
+      core: SOUL_CORE,
       path: this.o.file,
       isDefault: this.isDefault(),
       commands: soulCommands(text),
@@ -104,9 +119,13 @@ export class SoulStore {
     };
   }
 
-  /** What goes into the AI's instructions on every request: all but the commands and toolkits, and the command names. */
+  /**
+   * The persona as the AI reads it on every request: all but the commands and toolkits, and the command names. Never
+   * a section about principles or an option it may not set (whatever the file says), and cut to SOUL_LIMITS.prompt:
+   * FBRX's core principles (SOUL_CORE) go to the AI separately, whole, before this.
+   */
   prompt(): string | null {
-    const text = this.read();
+    const text = soulPersona(this.read());
     const kept = soulSections(text).filter((s) => !SOUL_PROMPT_SKIP.includes(s.title.trim().toLowerCase()) && s.body.trim());
     if (!kept.length) return null;
     const names = soulCommands(text).map((c) => `/${c.name}`);
@@ -148,11 +167,15 @@ export class SoulStore {
   update(p: { section: string; content: string; mode: 'replace' | 'append' }, by: string): SoulStatus {
     const title = p.section.trim().replace(/^#+\s*/, '');
     if (!title || title.length > 60 || /[\r\n]/.test(title)) throw new CoreError('INVALID_ARGUMENT', 'Name the section to change, like Options or Notes');
+    if (SOUL_RESERVED.test(title)) throw new CoreError('FORBIDDEN', `FBRX's core principles are fixed: soul.md has no "${title}" section, and no change can add one`);
     const content = p.content.trim();
     if (!content) throw new CoreError('INVALID_ARGUMENT', 'Say what the section should hold');
     if (content.length > SOUL_LIMITS.change) throw new CoreError('INVALID_ARGUMENT', `One change holds ${SOUL_LIMITS.change} characters at most`);
     if (/^#\s/m.test(content) || /^##\s/m.test(content)) throw new CoreError('INVALID_ARGUMENT', 'A section cannot hold other sections (# or ## headings); change one section at a time');
-    this.set(withSoulSection(this.read(), title, content, p.mode), by);
+    const next = withSoulSection(soulPersona(this.read()), title, content, p.mode);
+    const problems = soulProblems(next);
+    if (problems.length) throw new CoreError('FORBIDDEN', `FBRX's core principles are fixed, so soul.md cannot hold ${problems.join('; ')}`);
+    this.set(next, by);
     return this.status();
   }
 
@@ -161,6 +184,8 @@ export class SoulStore {
     const t = text.replace(/\r\n/g, '\n').trim();
     if (!t) throw new CoreError('INVALID_ARGUMENT', 'The soul cannot be empty: reset it to FBRX’s default instead');
     if (t.length > SOUL_LIMITS.file) throw new CoreError('INVALID_ARGUMENT', `soul.md holds ${SOUL_LIMITS.file.toLocaleString('en-US')} characters at most`);
+    const problems = soulProblems(t);
+    if (problems.length) throw new CoreError('FORBIDDEN', `FBRX's core principles are fixed, so soul.md cannot hold ${problems.join('; ')}`);
     this.write(`${t}\n`, by, true);
     return this.status();
   }
@@ -175,7 +200,8 @@ export class SoulStore {
   undo(by: string): SoulStatus {
     const prev = this.historyFiles()[0];
     if (!prev) throw new CoreError('NOT_FOUND', 'There is no earlier version of soul.md to go back to');
-    const text = readFileSync(join(this.historyDir, prev), 'utf8');
+    // An older version may hold what soul.md no longer does (principles, safety options): it comes back without them.
+    const text = soulPersona(readFileSync(join(this.historyDir, prev), 'utf8'));
     rmSync(join(this.historyDir, prev), { force: true });
     this.write(text, by, false);
     return this.status();

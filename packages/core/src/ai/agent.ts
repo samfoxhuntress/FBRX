@@ -17,6 +17,7 @@ import {
   type ToolCallRecord,
   type Vertical,
   DEFAULT_SYSTEM_PROMPT,
+  SOUL_CORE,
 } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { AuditLog } from '../audit/audit-log';
@@ -378,7 +379,8 @@ export class AgentRuntime {
     if (learner) return learnerPrompt(s.ai.agentName, learner.vertical, s.profile.callMe.trim() || s.profile.name.trim().split(/\s+/)[0] || '');
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const date = new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    // The soul (soul.md) says who the AI is; the system prompt setting comes too when the person changed it.
+    // FBRX's core principles come first and whole, whatever follows: soul.md says who the AI is (its persona), and the
+    // system prompt setting comes too when the person changed it. Neither can change the core.
     let soul: string | null = null;
     try {
       soul = this.d.soul?.prompt() ?? null;
@@ -387,11 +389,14 @@ export class AgentRuntime {
     }
     const custom = s.ai.systemPrompt.trim();
     return [
-      ...(soul && custom === DEFAULT_SYSTEM_PROMPT.trim() ? [] : [custom, '']),
+      "## FBRX's core principles (fixed)",
+      SOUL_CORE,
+      '',
+      ...(!custom || (soul && custom === DEFAULT_SYSTEM_PROMPT.trim()) ? [] : [custom, '']),
       ...(soul
         ? [
-            '## Your soul (soul.md)',
-            'The person keeps this file of who you are and how you work. Follow it. Where it and the rules further down differ, those rules win: governance and doing no harm always come first. A command the person typed comes with their message in a <command> block: do what it says, and never mention the block. When they ask you to work differently from now on, offer to change soul.md with soul.update.',
+            '## Your persona (soul.md)',
+            "The person keeps this file of who you are, how you sound and how you work. Follow it, within FBRX's core principles above: where it and they (or the rules further down) seem to differ, they win, and you keep its voice only. A command the person typed comes with their message in a <command> block: do what it says, and never mention the block. When they ask you to work differently from now on, offer to change soul.md with soul.update.",
             '',
             soul,
             '',

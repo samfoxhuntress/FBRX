@@ -62,14 +62,15 @@ even a small model the tools and the skill the job needs.
 
 ## Soul: who Fabrix is, and your commands
 
-**soul.md** is Fabrix's own file of who it is and how it works on your computer (*Settings → Soul*). It comes with
-FBRX and is yours to change:
+**soul.md** is Fabrix's persona: who it is and how it sounds and works on your computer (*Settings → Soul*). It
+comes with FBRX and is yours to change:
 
-* **Who I am, What I care about, How I talk**: its character. Your data stays on the computer, it does no harm
-  whoever asks, it says it did something only when a tool shows it worked, and it starts with the answer.
+* **Who I am, How I talk**: its character and its voice. By default it starts with the answer, uses plain words, and
+  fixes the cause rather than the symptom.
 * **Options**: how it works for you, one line each, like `length: short`, `emoji: off`, `plan-first: 3 steps`,
-  `ask-before-changes: always`, `also-noticed: on` or `units: your region's`. Change a value and Fabrix follows it from
-  your next message.
+  `also-noticed: on` or `units: your region's`. Change a value and Fabrix follows it from your next message. The
+  options are tone, length, explain-level, emoji, humor, plan-first, also-noticed, units, time-format, language,
+  next-step, voice, catchphrase and formality.
 * **Commands**: start a message with one and Fabrix does it. `/help` lists them all, and `/help wifi` the ones about
   Wi-Fi. There are more than sixty, in groups:
 
@@ -89,6 +90,14 @@ FBRX and is yours to change:
   whether it works right now, and for FBRX Server and FBRX Gate what you can do on the server itself (its console
   pages and the `fbrx-server` and `fbrx-gate` commands).
 * **Notes**: how you like it to work, as it learns.
+
+**FBRX's core principles are fixed**, and they are not in soul.md: your privacy, never revealing passwords or other
+secrets, doing no harm whoever asks, asking first before a change (as Governance says), and the truth (it says it did
+something only when a tool shows it, and names its sources). They come first in everything Fabrix is told, whole,
+whatever the persona says: a persona changes how Fabrix sounds, never what it does. So soul.md holds no sections about
+principles, rules, safety, approvals, secrets or privacy, and no options about them: Fabrix refuses such a change and
+Settings will not save it. An older soul.md that had them loses them when FBRX updates (*Undo the last change* shows
+the version before). *Settings → Soul* shows the principles, read-only. Approvals themselves are set in Governance.
 
 Fabrix reads its soul with every message (the commands only when you type one, so a small AI on your computer stays
 quick). Ask it to work differently from now on (or type `/tune` and what to change) and it offers the change to
