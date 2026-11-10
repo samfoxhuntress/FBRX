@@ -1,7 +1,7 @@
 {
   "name": "@fbrx/desktop",
   "productName": "FBRX OS",
-  "version": "2.3.3",
+  "version": "2.3.4",
   "private": true,
   "description": "FBRX OS — the desktop super-tool with a governed, local-first AI agent",
   "author": "FBRX",
