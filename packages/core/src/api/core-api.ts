@@ -68,6 +68,7 @@ const USER_ONLY = new Set<string>([
   'soul.set',
   'soul.reset',
   'soul.undo',
+  'soul.dismissNotice',
   'governance.removeFolder',
   'governance.answerFolder',
   'license.activate',
@@ -256,6 +257,7 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
 
     'ai.providers': () => k.providers.status(),
     'ai.models': (p) => k.providers.models(z.object({ providerId: z.string() }).parse(p).providerId),
+    'ai.explain': (p) => k.agent.explain(z.object({ offline: z.boolean().optional() }).parse(p ?? {})),
     'ai.context': (p) => k.agent.context(z.object({ conversationId: z.string().max(80).optional(), providerId: z.string().max(80).optional(), model: z.string().max(200).optional() }).parse(p)),
     'ai.usage': () => k.aiUsage(),
     'ai.chat': (p, ctx) => {
@@ -475,6 +477,8 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'soul.set': (p, ctx) => k.soul.set(z.object({ text: z.string().max(SOUL_LIMITS.file + 1000) }).parse(p).text, ctx.actor),
     'soul.reset': (_p, ctx) => k.soul.reset(ctx.actor),
     'soul.undo': (_p, ctx) => k.soul.undo(ctx.actor),
+    'soul.previous': () => ({ text: k.soul.previous() }),
+    'soul.dismissNotice': () => k.soul.dismissNotice(),
     'governance.folders': () => k.folders.status(),
     'governance.addFolder': (p, ctx) => k.folders.add(z.object({ path: z.string().min(1).max(4096) }).parse(p).path, ctx.actor),
     'governance.removeFolder': (p, ctx) => k.folders.remove(z.object({ entry: z.string().min(1).max(4096) }).parse(p).entry, ctx.actor),

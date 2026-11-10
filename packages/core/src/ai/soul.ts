@@ -4,12 +4,13 @@ import { dirname, join } from 'node:path';
 import {
   SOUL_CORE,
   SOUL_LIMITS,
+  SOUL_OPTIONS_INTRO,
   SOUL_PROMPT_SKIP,
-  SOUL_RESERVED,
   soulCommandIn,
   soulCommands,
   soulPersona,
   soulProblems,
+  soulReservedTitle,
   soulSections,
   withSoulSection,
   type SoulCommand,
@@ -32,6 +33,8 @@ import { DEFAULT_SOUL } from './soul-default';
 
 const WRITTEN = 'ai.soul.written';
 const LOG = 'ai.soul.log';
+/** What FBRX took out of soul.md at start, and the history file of the version before, until the person has seen it. */
+const NOTICE = 'ai.soul.notice';
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-');
@@ -72,8 +75,10 @@ export class SoulStore {
     }
     // An older soul.md (up to 2.3.3 it held What I care about and safety options), or one edited by hand: the
     // principles are FBRX's own now, so they leave the file (the version before is kept, and Undo shows it).
-    if (soulProblems(now).length) {
-      this.write(soulPersona(now), 'FBRX (its core principles are fixed now)', true);
+    const removed = soulProblems(now);
+    if (removed.length) {
+      const before = this.write(soulPersona(now), 'FBRX (its core principles are fixed now)', true);
+      this.o.meta.set(NOTICE, { at: new Date().toISOString(), removed, file: before });
       this.o.log?.('soul.md: sections about principles and options about approvals or safety left the file; FBRX keeps its core principles itself');
     }
   }
@@ -116,7 +121,30 @@ export class SoulStore {
       sections: soulSections(text).map((s) => s.title),
       updatedAt,
       history: (this.o.meta.get<Array<{ at: string; by: string }>>(LOG) ?? []).slice(0, SOUL_LIMITS.history),
+      notice: this.noticeNow(),
     };
+  }
+
+  private noticeNow(): { at: string; removed: string[] } | null {
+    const n = this.o.meta.get<{ at: string; removed: string[]; file: string | null } | null>(NOTICE);
+    return n ? { at: n.at, removed: n.removed } : null;
+  }
+
+  /** The version from before FBRX took the principles out of soul.md (for the notice in Settings), or null. */
+  previous(): string | null {
+    const n = this.o.meta.get<{ file: string | null } | null>(NOTICE);
+    if (!n?.file) return null;
+    try {
+      return readFileSync(join(this.historyDir, n.file), 'utf8');
+    } catch {
+      return null;
+    }
+  }
+
+  /** The person has seen the notice. */
+  dismissNotice(): SoulStatus {
+    this.o.meta.set(NOTICE, null);
+    return this.status();
   }
 
   /**
@@ -129,7 +157,8 @@ export class SoulStore {
     const kept = soulSections(text).filter((s) => !SOUL_PROMPT_SKIP.includes(s.title.trim().toLowerCase()) && s.body.trim());
     if (!kept.length) return null;
     const names = soulCommands(text).map((c) => `/${c.name}`);
-    let out = kept.map((s) => `### ${s.title}\n${s.body}`).join('\n\n');
+    // The options come with FBRX's own line ahead of them, not the file's.
+    let out = kept.map((s) => `### ${s.title}\n${s.title.trim().toLowerCase() === 'options' ? `${SOUL_OPTIONS_INTRO}\n` : ''}${s.body}`).join('\n\n');
     if (out.length > SOUL_LIMITS.prompt) out = `${out.slice(0, SOUL_LIMITS.prompt)}\n[…the rest of soul.md is longer than the AI reads with every request: soul.read has all of it]`;
     if (names.length) out += `\n\n### Commands\nThe person can start a message with one of these: ${names.join(' ')}. When they do, what it means comes with the message.`;
     return out;
@@ -167,7 +196,7 @@ export class SoulStore {
   update(p: { section: string; content: string; mode: 'replace' | 'append' }, by: string): SoulStatus {
     const title = p.section.trim().replace(/^#+\s*/, '');
     if (!title || title.length > 60 || /[\r\n]/.test(title)) throw new CoreError('INVALID_ARGUMENT', 'Name the section to change, like Options or Notes');
-    if (SOUL_RESERVED.test(title)) throw new CoreError('FORBIDDEN', `FBRX's core principles are fixed: soul.md has no "${title}" section, and no change can add one`);
+    if (soulReservedTitle(title)) throw new CoreError('FORBIDDEN', `FBRX's core principles are fixed: soul.md has no "${title}" section, and no change can add one`);
     const content = p.content.trim();
     if (!content) throw new CoreError('INVALID_ARGUMENT', 'Say what the section should hold');
     if (content.length > SOUL_LIMITS.change) throw new CoreError('INVALID_ARGUMENT', `One change holds ${SOUL_LIMITS.change} characters at most`);
@@ -196,14 +225,17 @@ export class SoulStore {
     return this.status();
   }
 
-  /** The version before the last change, back in place (that one is kept too). */
+  /**
+   * The version before the last change, back in place. The one it replaces goes into the history in its turn, so an
+   * undo can be undone.
+   */
   undo(by: string): SoulStatus {
     const prev = this.historyFiles()[0];
     if (!prev) throw new CoreError('NOT_FOUND', 'There is no earlier version of soul.md to go back to');
     // An older version may hold what soul.md no longer does (principles, safety options): it comes back without them.
     const text = soulPersona(readFileSync(join(this.historyDir, prev), 'utf8'));
     rmSync(join(this.historyDir, prev), { force: true });
-    this.write(text, by, false);
+    this.write(text, by, true);
     return this.status();
   }
 
@@ -215,11 +247,18 @@ export class SoulStore {
     }
   }
 
-  private write(text: string, by: string, keepOld: boolean): void {
+  /** Writes soul.md; with keepOld, the version before goes into the history first (its file name is returned). */
+  private write(text: string, by: string, keepOld: boolean): string | null {
     mkdirSync(dirname(this.o.file), { recursive: true });
+    let kept: string | null = null;
     if (keepOld && existsSync(this.o.file)) {
       mkdirSync(this.historyDir, { recursive: true });
-      writeFileSync(join(this.historyDir, `${stamp()}.md`), readFileSync(this.o.file, 'utf8'));
+      // A later name than any kept so far, so the newest is always first (two writes can share a millisecond).
+      let name = `${stamp()}.md`;
+      const newest = this.historyFiles()[0];
+      if (newest && name <= newest) name = `${newest.slice(0, -3)}~.md`;
+      writeFileSync(join(this.historyDir, name), readFileSync(this.o.file, 'utf8'));
+      kept = name;
       for (const old of this.historyFiles().slice(SOUL_LIMITS.history)) rmSync(join(this.historyDir, old), { force: true });
     }
     writeFileSync(this.o.file, text);
@@ -229,6 +268,7 @@ export class SoulStore {
     const log = this.o.meta.get<Array<{ at: string; by: string }>>(LOG) ?? [];
     this.o.meta.set(LOG, [{ at: new Date().toISOString(), by }, ...log].slice(0, SOUL_LIMITS.history));
     this.o.events?.emit('soul.changed', { isDefault: text === DEFAULT_SOUL });
+    return kept;
   }
 }
 

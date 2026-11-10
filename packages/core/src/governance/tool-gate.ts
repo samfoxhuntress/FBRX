@@ -100,7 +100,14 @@ export class ToolGate {
     const needsApproval = decision.action === 'ask' || findings.some((f) => f.severity === 'warning');
     // A person invoking a tool directly from the UI is the approval.
     if (needsApproval && ctx.origin !== 'user') {
-      const reason = decision.action === 'ask' ? decision.reason : `Guardian: ${findings.map((f) => f.message).join('; ')}`;
+      let note: string | null = null;
+      try {
+        note = tool.note?.(input) ?? null;
+      } catch {
+        /* the card goes without it */
+      }
+      const why = decision.action === 'ask' ? decision.reason : `Guardian: ${findings.map((f) => f.message).join('; ')}`;
+      const reason = note ? `${why}. ${note}` : why;
       hooks.onAwaitingApproval?.({ findings, reason });
       const policy = this.d.policy.policy;
       const answer = await this.d.approvals.request(

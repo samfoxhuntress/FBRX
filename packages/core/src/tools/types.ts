@@ -39,6 +39,8 @@ export interface ToolSpec {
    */
   network?: boolean;
   timeoutMs?: number;
+  /** For the approval card, in plain words: what saying yes does (an action that will run without asking, a change). */
+  note?(input: any): string | null;
   resources?(input: any): ToolResources | Promise<ToolResources>;
   run(input: any, ctx: ToolExecContext): Promise<ToolOutcome>;
 }

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { arch, hostname, platform } from 'node:os';
 import {
   addressAs,
@@ -18,6 +19,8 @@ import {
   type Vertical,
   DEFAULT_SYSTEM_PROMPT,
   SOUL_CORE,
+  SOUL_PERSONA_END,
+  type EffectiveInstructions,
 } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { AuditLog } from '../audit/audit-log';
@@ -400,6 +403,8 @@ export class AgentRuntime {
             '',
             soul,
             '',
+            SOUL_PERSONA_END,
+            '',
           ]
         : []),
       `Your name is ${s.ai.agentName}. Mention it only when asked who you are; do not introduce yourself or open replies with your name. Start each reply with the answer itself.`,
@@ -572,6 +577,31 @@ export class AgentRuntime {
    * How full a chat is for the agent that would answer it now: the gauge under the chat, before a request (after one,
    * the run's events carry what the provider counted).
    */
+  /**
+   * What the AI is told on every request here, for an audit or an evaluation: the system prompt and its hash, whether
+   * FBRX's core principles come first and whole, the persona as read, and the tools it may use.
+   */
+  explain(p: { offline?: boolean } = {}): EffectiveInstructions {
+    const offline = p.offline ?? this.d.settings.get().ai.newChatsOffline;
+    const sha = (t: string) => createHash('sha256').update(t).digest('hex');
+    const system = this.systemPrompt(offline);
+    let persona: string | null = null;
+    try {
+      persona = this.d.soul?.prompt() ?? null;
+    } catch {
+      /* unreadable: the AI gets no persona either */
+    }
+    return {
+      offline,
+      system,
+      sha256: sha(system),
+      coreSha256: sha(SOUL_CORE),
+      coreFirstAndWhole: system.startsWith(`## FBRX's core principles (fixed)\n${SOUL_CORE}\n`),
+      persona,
+      tools: this.availableTools(undefined, offline).map((t) => t.name),
+    };
+  }
+
   async context(p: { conversationId?: string; providerId?: string; model?: string }): Promise<ContextReading> {
     const { provider, config, model } = this.d.providers.resolve(p.providerId, p.model);
     const windowTokens = tokensFor(provider.historyBudgetChars);

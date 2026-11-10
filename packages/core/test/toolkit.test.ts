@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PROVIDERS, toolkitToolName, type ToolkitAction } from '@fbrx/shared';
@@ -26,6 +26,37 @@ describe('AI Toolkit commands', () => {
     for (const c of ['ipconfig', 'ipconfig /all', 'ip -brief address show; ip route show default', 'Get-NetAdapter | Format-Table Name, Status', 'nslookup example.com 2>&1', 'netsh wlan show interfaces', 'arp -a', 'nmcli device status']) expect(looksOnly(c), c).toBe(true);
     for (const c of ['ipconfig /release', 'ipconfig /flushdns', 'ip addr add 10.0.0.2/24 dev eth0', 'rm -rf /tmp/x', 'echo hi > /etc/hosts', 'Set-NetIPInterface -Dhcp Enabled', 'netsh interface set interface Wi-Fi disable', 'sudo ip link', 'nmcli connection up home', 'cat $(whoami)', 'cat ~/.ssh/id_rsa', 'Get-Content $HOME\\notes.txt', 'grep -r password ~', 'netsh wlan show profile name=Home key=clear', 'nmcli -s connection show Home', 'arp -a | sed -i s/a/b/ x']) expect(looksOnly(c), c).toBe(false);
     expect(looksOnly('ipconfig /all | findstr IPv4'), 'a filter after a pipe').toBe(true);
+    for (const c of ['ps aux | sort -k3 -nr | head -5', 'ps -ef | grep chrome', 'Get-Process | Sort-Object CPU -Descending | Select-Object -First 5 Name, CPU', 'Get-NetIPConfiguration | Format-List', 'df -h | tail -n 3'])
+      expect(looksOnly(c), c).toBe(true);
+  });
+
+  // Noah review of 3a2b937, finding 1 (TK-4 to TK-19): each of these ran programs, wrote files, read secrets or reached
+  // another computer, and passed as look-only, so an action Fabrix built from it ran without asking.
+  it('does not take a command that runs programs, writes files, reads secrets or reaches another computer for a look', () => {
+    const notLooks = [
+      `uptime | awk '{system("mv /home/sam/Documents /home/sam/.gone")}'`,
+      `uptime | awk '{print $1}'`,
+      `uptime | sed '1e touch /tmp/proof'`,
+      `ps aux | sed 'w /home/sam/.bashrc'`,
+      'ps aux | sort -o /home/sam/.bashrc',
+      'ps aux | sort --output=/home/sam/.bashrc',
+      'ps aux | uniq - /home/sam/.bashrc',
+      'ps eww -u sam',
+      'ps auxe',
+      'ps -E',
+      'Get-Process | Where-Object { Stop-Computer -Force }',
+      'Get-Process | Sort-Object { Clear-Content C:\\Users\\sam\\notes.txt }',
+      "Get-ItemProperty 'HKLM:\\SOFTWARE\\Microsoft\\Windows NT\\CurrentVersion\\Winlogon'",
+      'Get-ChildItem Env:',
+      'Get-BitLockerVolume | Select-Object -ExpandProperty KeyProtector',
+      'Get-AzKeyVaultSecret -VaultName corp -Name db -AsPlainText',
+      'Get-CimInstance Win32_OperatingSystem -ComputerName 203.0.113.9',
+      'Get-ChildItem \\\\203.0.113.9\\share',
+      'ps aux | grep ssh ~/.ssh/id_rsa',
+      'echo $AWS_SECRET_ACCESS_KEY',
+    ];
+    for (const c of notLooks) expect(looksOnly(c), c).toBe(false);
+    for (const c of ['Get-CimInstance Win32_OperatingSystem -ComputerName 203.0.113.9', 'Get-ChildItem \\\\203.0.113.9\\share', 'Invoke-Command -ComputerName pc2 { hostname }']) expect(usesNetwork(c), c).toBe(true);
   });
 
   it('tells a command that reaches the network from one that stays on this computer', () => {
@@ -189,6 +220,35 @@ describe.runIf(process.platform === 'linux')('AI Toolkit', () => {
       expect(kernel.registry.get(asking.tool)).toMatchObject({ risk: 'execute', network: true });
     } finally {
       await llm.close();
+      await cleanup();
+    }
+  });
+  // Noah review of 3a2b937, finding 1, end to end: one yes to a build that reads as harmless used to give an action that
+  // ran unasked from then on.
+  it('makes an action Fabrix builds from a command that is more than a look ask before each run, and says so first', async () => {
+    const { kernel, dataDir, cleanup } = await makeKernel();
+    try {
+      const proof = join(dataDir, 'proof.txt');
+      const agent = { origin: 'agent' as const, actor: 'agent' };
+      const build = kernel.gate.invoke('toolkit.build', { name: 'Uptime in words', when: 'How long the computer has been on', command: `uptime | awk '{system("touch ${proof}")}'`, changes: false }, agent);
+      const card = await waitFor(() => kernel.approvals.list()[0] ?? null);
+      expect(card.reason).toMatch(/Once built, it asks you before each run/);
+      kernel.approvals.resolve(card.id, 'approve', 'test-user');
+      expect((await build).ok).toBe(true);
+      expect(kernel.registry.get('kit.uptime_in_words')?.risk).toBe('execute');
+      const run = kernel.gate.invoke('kit.uptime_in_words', {}, agent);
+      const ask = await waitFor(() => kernel.approvals.list()[0] ?? null);
+      expect(ask.tool).toBe('kit.uptime_in_words');
+      kernel.approvals.resolve(ask.id, 'deny', 'test-user');
+      expect((await run).ok).toBe(false);
+      expect(existsSync(proof)).toBe(false);
+      // One that only looks says it will run without asking.
+      const looks = kernel.gate.invoke('toolkit.build', { name: 'Busy programs', when: 'Which programs are busy', command: 'ps aux | sort -k3 -nr | head -5', changes: false }, agent);
+      const card2 = await waitFor(() => kernel.approvals.list()[0] ?? null);
+      expect(card2.reason).toMatch(/runs without asking you from now on/);
+      kernel.approvals.resolve(card2.id, 'deny', 'test-user');
+      await looks;
+    } finally {
       await cleanup();
     }
   });

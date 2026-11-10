@@ -16,6 +16,7 @@ export function SoulSettings() {
   const { run, busy } = useAction();
   const { confirm, dialog } = useConfirm();
   const [text, setText] = useState<string | null>(null);
+  const [earlier, setEarlier] = useState<string | null>(null);
   const saved = soul.data?.text ?? '';
   // What is on screen follows the file until you start editing.
   useEffect(() => {
@@ -33,8 +34,25 @@ export function SoulSettings() {
   };
 
   const s = soul.data;
+  const showEarlier = () => void run('earlier', () => call('soul.previous').then((r) => setEarlier(r.text ?? 'The earlier version is no longer kept.')));
+  const dismiss = () => void run('dismiss', () => call('soul.dismissNotice').then(() => setEarlier(null)));
   return (
     <>
+      {s?.notice && (
+        <Card title="soul.md changed with this update" subtitle={`FBRX’s core principles are fixed now and come first in everything ${name} is told, so these left your soul.md: ${s.notice.removed.join('; ')}. Your earlier version is kept.`}>
+          {earlier !== null && <TextArea code rows={12} value={earlier} readOnly aria-label="The earlier soul.md" />}
+          <div className="fx-actions" style={{ marginTop: 10 }}>
+            {earlier === null && (
+              <Button loading={busy === 'earlier'} onClick={showEarlier}>
+                Show the earlier version
+              </Button>
+            )}
+            <Button variant="ghost" loading={busy === 'dismiss'} onClick={dismiss}>
+              Got it
+            </Button>
+          </div>
+        </Card>
+      )}
       <Card
         title="Soul"
         subtitle={`Who ${name} is and how it sounds and works on this computer: soul.md, its persona. It follows the options from your next message, and a command when you start a message with one (/help lists them). ${name} changes it only when you say yes.`}
@@ -67,7 +85,7 @@ export function SoulSettings() {
         )}
       </Card>
       {s && (
-        <Card title="FBRX’s core principles" subtitle={`Fixed: they come with FBRX and come first in everything ${name} is told. No persona, soul.md or setting changes them, so soul.md holds no principles and no options about approvals, secrets or safety (Governance sets approvals).`}>
+        <Card title="FBRX’s core principles" subtitle={`Fixed: they come with FBRX and come first in everything ${name} is told. No persona, soul.md, setting, skill or memory changes them, so soul.md holds no principles and no options about approvals, secrets or safety (Governance sets approvals). Other words in soul.md ${name} reads as its persona, under these.`}>
           <div className="fx-muted" style={{ whiteSpace: 'pre-wrap' }}>
             {s.core}
           </div>

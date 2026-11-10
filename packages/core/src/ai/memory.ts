@@ -1,4 +1,5 @@
 import {
+  principleProblem,
   MEMORY_CATEGORIES,
   NEVER_KEPT,
   PRIVATE_MEMORY,
@@ -191,6 +192,9 @@ export class MemoryService {
    */
   remember(p: { content: string; category?: MemoryCategory; key?: string | null; source: MemoryEntry['source']; tags?: string[] }): MemoryEntry {
     if (!this.on()) throw new CoreError('UNAVAILABLE', 'Memory is turned off (Settings → Memory)');
+    // A memory comes back to the AI with later messages: it cannot carry a change to FBRX's core principles.
+    const against = principleProblem(p.content);
+    if (against) throw new CoreError('FORBIDDEN', `Not kept: it holds ${against}`);
     const scrubbed = scrubSensitive(p.content.trim().slice(0, 2000), { cardLast4: this.d.settings().keep.payment });
     const rest = scrubbed.text.replace(/\[[^\]]*: never kept\]/g, '').replace(/[\W_]+/g, '');
     if (scrubbed.removed.length && rest.length < 8) throw new CoreError('FORBIDDEN', `Not kept: it is ${scrubbed.removed[0].what}, which FBRX never remembers`);

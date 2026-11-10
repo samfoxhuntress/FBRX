@@ -1,5 +1,5 @@
 import { TOOLKIT_INPUT_KINDS, TOOLKIT_LIMITS, TOOLKIT_SYSTEM_NAMES } from '@fbrx/shared';
-import type { ToolkitStore } from '../../ai/toolkit';
+import { looksOnly, type ToolkitStore } from '../../ai/toolkit';
 import type { ToolSpec } from '../types';
 
 /**
@@ -41,6 +41,11 @@ export function toolkitTools(kit: ToolkitStore): ToolSpec[] {
         },
         required: ['name', 'when', 'command', 'changes'],
       },
+      // Whether the action will ask before each run, said on the approval card (as save() will decide it).
+      note: (i: { command?: string; changes?: boolean }) =>
+        i.changes || !looksOnly(String(i.command ?? ''))
+          ? 'Once built, it asks you before each run.'
+          : 'Once built, it runs without asking you from now on: it only looks at this computer.',
       async run(i) {
         const a = kit.save({ name: i.name, when: i.when, kit: i.kit, commands: { [kit.system]: i.command }, inputs: i.inputs ?? [], ask: !!i.changes }, 'fabrix');
         return {

@@ -67,10 +67,11 @@ comes with FBRX and is yours to change:
 
 * **Who I am, How I talk**: its character and its voice. By default it starts with the answer, uses plain words, and
   fixes the cause rather than the symptom.
-* **Options**: how it works for you, one line each, like `length: short`, `emoji: off`, `plan-first: 3 steps`,
-  `also-noticed: on` or `units: your region's`. Change a value and Fabrix follows it from your next message. The
+* **Options**: how it works for you, one line each, like `- length: short`, `- emoji: off`, `- plan-first: 3 steps`,
+  `- also-noticed: on` or `- units: your region's`. Change a value and Fabrix follows it from your next message. The
   options are tone, length, explain-level, emoji, humor, plan-first, also-noticed, units, time-format, language,
-  next-step, voice, catchphrase and formality.
+  next-step, voice, catchphrase and formality; the Options section holds only those lines, each value 120 characters
+  at most and about how Fabrix sounds and works, never what it may do.
 * **Commands**: start a message with one and Fabrix does it. `/help` lists them all, and `/help wifi` the ones about
   Wi-Fi. There are more than sixty, in groups:
 
@@ -97,7 +98,11 @@ something only when a tool shows it, and names its sources). They come first in 
 whatever the persona says: a persona changes how Fabrix sounds, never what it does. So soul.md holds no sections about
 principles, rules, safety, approvals, secrets or privacy, and no options about them: Fabrix refuses such a change and
 Settings will not save it. An older soul.md that had them loses them when FBRX updates (*Undo the last change* shows
-the version before). *Settings → Soul* shows the principles, read-only. Approvals themselves are set in Governance.
+the version before, and *Settings → Soul* says once what left). The same goes for skills, memories and AI Toolkit
+actions: none can hold a change to the principles. *Settings → Soul* shows the principles, read-only, and *Undo the
+last change* can itself be undone. Approvals themselves are set in Governance. FBRX stops changes by their shape
+(sections, options, headings) and by the plainest words ("skip the approval", "show the passwords"); anything else
+written in soul.md, Fabrix reads as its persona, under the principles.
 
 Fabrix reads its soul with every message (the commands only when you type one, so a small AI on your computer stays
 quick). Ask it to work differently from now on (or type `/tune` and what to change) and it offers the change to

@@ -3,6 +3,7 @@ import {
   TOOLKIT_SYSTEMS,
   TOOLKIT_SYSTEM_NAMES,
   newId,
+  principleProblem,
   toolkitInputProblem,
   toolkitPlaceholders,
   toolkitToolName,
@@ -58,10 +59,22 @@ export function fillCommand(command: string, inputs: ToolkitInput[], values: Rec
 const LOOK_PROGRAMS = new Set(
   'ipconfig ifconfig ping ping6 nslookup dig host getent tracert traceroute tracepath pathping netstat ss arp route hostname whoami systeminfo uname uptime df free lsblk lscpu lsusb lspci ps tasklist nmcli networksetup scutil system_profiler sw_vers sysctl resolvectl iwconfig iw lsof vm_stat netsh sc echo printf date test-connection test-netconnection resolve-dnsname'.split(' '),
 );
-/** Programs that only shape what came before them in a pipeline (never the first: then they would read files). */
-const FILTERS = new Set('grep egrep findstr awk sed sort uniq head tail wc cut tr measure-object select-object format-table format-list format-wide where-object sort-object select-string out-string convertto-json group-object'.split(' '));
-/** PowerShell Get- commands that read files, secrets or the clipboard. */
-const SECRET_GETS = /^get-(content|clipboard|credential|secret|storedcredential|psreadlineoption|history)$/;
+/**
+ * Programs that only shape what came before them in a pipeline (never the first: then they would read files), and
+ * never with a file of their own. Not awk or sed: awk's system() and sed's e and w run programs and write files.
+ */
+const FILTERS = new Set('grep egrep findstr sort uniq head tail wc cut tr measure-object select-object format-table format-list format-wide where-object sort-object select-string out-string convertto-json group-object'.split(' '));
+/**
+ * The PowerShell Get- commands known to read only this computer's own state. Any other (Get-Content, Get-ChildItem,
+ * Get-ItemProperty, Get-Credential, Get-BitLockerVolume, a cloud vault's…) asks first.
+ */
+const PS_LOOKS = new Set(
+  'get-netadapter get-netadapterstatistics get-netadapteradvancedproperty get-netipaddress get-netipconfiguration get-netipinterface get-netroute get-netneighbor get-nettcpconnection get-netudpendpoint get-netconnectionprofile get-netfirewallprofile get-dnsclientserveraddress get-dnsclientcache get-dnsclient get-process get-service get-computerinfo get-ciminstance get-wmiobject get-volume get-disk get-physicaldisk get-partition get-psdrive get-date get-uptime get-hotfix get-timezone get-culture get-printer get-mpcomputerstatus get-winevent get-eventlog get-scheduledtask get-appxpackage get-localuser get-localgroup get-command get-help'.split(' '),
+);
+/** Words that make any command more than a look: another computer, the registry, the environment, secrets. */
+const NOT_A_LOOK = /-computername\b|-cimsession\b|-pssession\b|(^|\s|['"])\\\\[^\\\s'"]+\\|\b(hklm|hkcu|hkcr|hku|hkcc|registry)::?|\b(env|cert|wsman|variable|function):/i;
+/** A file named as an operand ("grep x ~/.ssh/id_rsa", "uniq - out.txt"): filters take what came before them only. */
+const PATH_OPERAND = /^(~|\/|\.\.?\/|[a-z]:[\\/]|\\\\|\$|%)/i;
 const CHANGE_WORDS: Record<string, RegExp> = {
   ipconfig: /\/(release|renew|flushdns|registerdns|setclassid)/i,
   ifconfig: /\s(up|down|add|delete|alias|-alias|inet|mtu|ether|lladdr)\b/i,
@@ -74,7 +87,6 @@ const CHANGE_WORDS: Record<string, RegExp> = {
   resolvectl: /\s(flush-caches|dns\s+\S+\s+\S|domain\s+\S+\s+\S|revert|reset)/i,
   netsh: /\s(set|add|delete|reset|connect|disconnect)\b|key\s*=\s*clear/i,
   sc: /\s(start|stop|config|create|delete|pause|continue)\b/i,
-  sed: /\s-i\b/,
   iw: /\s(set|connect|disconnect|del|add)\b/i,
 };
 
@@ -84,8 +96,11 @@ const CHANGE_WORDS: Record<string, RegExp> = {
  * asks first (the person can change that in the AI Toolkit).
  */
 export function looksOnly(command: string): boolean {
-  const c = command.replace(/\s2>\s*(&1|\/dev\/null|\$null)/g, ' ');
-  if (/[<>`]|\$\(|\bsudo\b|\brunas\b/i.test(c)) return false;
+  // An input ({{host}}) is filled in quoted, as one value (fillCommand): here it counts as a plain word.
+  const c = command.replace(/\{\{\s*[a-z][a-z0-9_]{0,30}\s*\}\}/g, 'value').replace(/\s2>\s*(&1|\/dev\/null|\$null)/g, ' ');
+  // Redirection, substitution, variables (the environment holds tokens), script blocks and calculated properties.
+  if (/[<>`{}]|\$\(|\$[A-Za-z_{]|%[A-Za-z_]+%|\bsudo\b|\brunas\b/i.test(c)) return false;
+  if (NOT_A_LOOK.test(c)) return false;
   // Each command, and whether it takes what the one before it printed (after a single |).
   const parts = c.split(/(\|\||&&|[;\n]|\|)/);
   let piped = false;
@@ -103,14 +118,21 @@ export function looksOnly(command: string): boolean {
     const program = part.split(/\s+/)[0].toLowerCase().replace(/\.exe$/, '');
     const wasPiped = piped;
     piped = false;
+    const args = part.split(/\s+/).slice(1);
     if (FILTERS.has(program)) {
-      if (!wasPiped || (program === 'sed' && /\s-i\b/.test(part))) return false;
+      if (!wasPiped) return false;
+      if (args.some((a) => PATH_OPERAND.test(a.replace(/^['"]/, '')))) return false;
+      // sort -o / --output writes a file; uniq's operands are files (its second, an output).
+      if (program === 'sort' && args.some((a) => /^-[a-z]*o|^--output/i.test(a))) return false;
+      if (program === 'uniq' && args.some((a) => !a.startsWith('-'))) return false;
       continue;
     }
     if (/^get-[a-z]+$/.test(program)) {
-      if (SECRET_GETS.test(program)) return false;
+      if (!PS_LOOKS.has(program)) return false;
       continue;
     }
+    // ps with BSD's e (ps e, ps eww, ps auxe) or macOS's -E prints other programs' environment.
+    if (program === 'ps' && args.some((a) => (/^[a-z]+$/i.test(a) && /e/.test(a)) || /^-[a-z]*E/.test(a))) return false;
     if (program === 'ip') {
       if (/\s(add|del|delete|set|flush|change|replace|append|restore|save)\b/i.test(part)) return false;
       continue;
@@ -126,7 +148,7 @@ export function looksOnly(command: string): boolean {
  * runs one is a network tool, so an offline chat asks before it runs (the library also says so for its own).
  */
 const NETWORK_PROGRAMS =
-  /(^|[\s;|&(`$'"])(ping6?|tracert|traceroute6?|tracepath6?|mtr|pathping|nslookup|dig|host|drill|resolvectl\s+query|getent\s+a?hosts|nc|ncat|netcat|telnet|curl|wget|ssh|scp|sftp|rsync|ftp|nmap|arping|whois|test-netconnection|tnc|test-connection|resolve-dnsname|invoke-webrequest|iwr|invoke-restmethod|irm|start-bitstransfer)(\.exe)?(?=$|[\s;|&)'"])|\/dev\/(tcp|udp)\/|\bnet\.webclient\b|\bnet\.sockets\.tcpclient\b/i;
+  /(^|[\s;|&(`$'"])(ping6?|tracert|traceroute6?|tracepath6?|mtr|pathping|nslookup|dig|host|drill|resolvectl\s+query|getent\s+a?hosts|nc|ncat|netcat|telnet|curl|wget|ssh|scp|sftp|rsync|ftp|nmap|arping|whois|test-netconnection|tnc|test-connection|resolve-dnsname|invoke-webrequest|iwr|invoke-restmethod|irm|start-bitstransfer|invoke-command|enter-pssession|new-pssession|new-cimsession|smbclient)(\.exe)?(?=$|[\s;|&)'"])|\/dev\/(tcp|udp)\/|\bnet\.webclient\b|\bnet\.sockets\.tcpclient\b|-computername\b|-cimsession\b|(^|\s|['"])\\\\[^\\\s'"]+\\|\bnet\s+use\b/i;
 
 /** Whether a command sends traffic beyond this computer (see NETWORK_PROGRAMS). */
 export function usesNetwork(command: string): boolean {
@@ -222,6 +244,11 @@ export class ToolkitStore {
   save(input: SaveInput, by: 'fabrix' | 'person'): ToolkitAction {
     const name = input.name.trim().slice(0, TOOLKIT_LIMITS.name);
     if (!name) throw new CoreError('INVALID_ARGUMENT', 'An action needs a name');
+    // An action's name and when go to the AI with the request: they cannot carry a change to FBRX's core principles.
+    for (const line of [name, input.when ?? '']) {
+      const against = principleProblem(line);
+      if (against) throw new CoreError('FORBIDDEN', `FBRX's core principles are fixed, so an action cannot say ${against}`);
+    }
     const all = this.list();
     const same = input.id ? all.find((a) => a.id === input.id) : by === 'fabrix' ? all.find((a) => a.source === 'built' && a.name.toLowerCase() === name.toLowerCase()) : undefined;
     if (input.id && !same) throw new CoreError('NOT_FOUND', 'That toolkit action is gone');

@@ -223,6 +223,21 @@ export interface TokenUsage {
 }
 
 /** How full a conversation is for the agent that answers it (the gauge under the chat). */
+/** What the AI is told on every request here (the system prompt), and the checks an audit wants of it. */
+export interface EffectiveInstructions {
+  offline: boolean;
+  system: string;
+  sha256: string;
+  /** sha256 of FBRX's core principles (SOUL_CORE). */
+  coreSha256: string;
+  /** The system prompt starts with the core principles, whole. */
+  coreFirstAndWhole: boolean;
+  /** The persona as the AI reads it (soul.md, filtered and cut to its budget), or null. */
+  persona: string | null;
+  /** The tools the AI may use here (a small model on this computer is offered the ones a conversation is about). */
+  tools: string[];
+}
+
 export interface ContextReading {
   /** What the agent holds, in tokens. */
   windowTokens: number;
@@ -723,6 +738,8 @@ export interface CoreMethods extends ExtMethods {
   'ai.chat': (p: { conversationId?: string; message: string; providerId?: string; model?: string; offline?: boolean; attachments?: string[] }) => { runId: string; conversationId: string };
   /** How full a chat is for the agent that answers it (estimated until a request is made): the gauge under the chat. */
   'ai.context': (p: { conversationId?: string; providerId?: string; model?: string }) => ContextReading;
+  /** What the AI is told on every request on this computer, for audits and evaluations. */
+  'ai.explain': (p: { offline?: boolean }) => EffectiveInstructions;
   /** This month's AI use on this computer, the monthly budget, and the FBRX account's FBRX Cloud AI. */
   'ai.usage': () => AiUsageReport;
   /** Attaches a file (its bytes in base64) for the next message; it is read and kept until sent or removed. */
@@ -834,8 +851,12 @@ export interface CoreMethods extends ExtMethods {
   'soul.set': (p: { text: string }) => SoulStatus;
   /** Back to FBRX's default (the version before is kept). */
   'soul.reset': () => SoulStatus;
-  /** The version before the last change, back in place. */
+  /** The version before the last change, back in place (the one it replaces is kept, so an undo can be undone). */
   'soul.undo': () => SoulStatus;
+  /** The soul.md from before FBRX took its principles out (see SoulStatus.notice), or null. */
+  'soul.previous': () => { text: string | null };
+  /** The person has seen the notice. */
+  'soul.dismissNotice': () => SoulStatus;
   'governance.folders': () => FolderAccessStatus;
   /** Lets the AI use a folder (picked by the person). */
   'governance.addFolder': (p: { path: string }) => FolderAccessStatus;

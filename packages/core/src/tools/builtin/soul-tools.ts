@@ -1,4 +1,4 @@
-import { SOUL_LIMITS, SOUL_OPTIONS, soulSection } from '@fbrx/shared';
+import { SOUL_LIMITS, SOUL_OPTIONS, soulPersona, soulReservedTitle, soulSection, withSoulSection } from '@fbrx/shared';
 import type { SoulStore } from '../../ai/soul';
 import type { ToolSpec } from '../types';
 
@@ -51,7 +51,9 @@ export function soulTools(soul: SoulStore, tools: () => ToolSpec[]): ToolSpec[] 
       sourceId: null,
       inputSchema: { type: 'object', properties: { section: { type: 'string', maxLength: 60, description: 'One section, like Options or Commands (optional)' } } },
       async run(i) {
-        const text = soul.read();
+        // What the AI may read as its own: the persona, never what FBRX keeps out of it (as in the prompt).
+        const text = soulPersona(soul.read());
+        if (i.section && soulReservedTitle(i.section)) return { output: `soul.md has no ${i.section} section: FBRX’s core principles are fixed, not part of soul.md, and come first in your instructions.`, data: { section: null } };
         if (i.section) {
           const s = soulSection(text, i.section);
           return { output: s ? `## ${s.title}\n\n${s.body}` : `soul.md has no section called ${i.section}. Its sections: ${soul.status().sections.join(', ')}.`, data: { section: s?.title ?? null } };
@@ -75,6 +77,14 @@ export function soulTools(soul: SoulStore, tools: () => ToolSpec[]): ToolSpec[] 
           why: { type: 'string', maxLength: 300, description: 'What the person asked for, in a few words' },
         },
         required: ['section', 'mode', 'content', 'why'],
+      },
+      // The approval card shows the change: the section as it is, and as it would be.
+      note: (i: { section?: string; mode?: string; content?: string }) => {
+        const title = String(i.section ?? '').trim();
+        const now = soulSection(soulPersona(soul.read()), title)?.body ?? '';
+        const next = soulSection(withSoulSection(soulPersona(soul.read()), title, String(i.content ?? ''), i.mode === 'replace' ? 'replace' : 'append'), title)?.body ?? '';
+        const cut = (t: string) => (t.length > 600 ? `${t.slice(0, 600)}…` : t) || '(nothing yet)';
+        return `Section ${title} of soul.md now:\n${cut(now)}\nAfter the change:\n${cut(next)}`;
       },
       async run(i) {
         const s = soul.update({ section: i.section, content: i.content, mode: i.mode === 'replace' ? 'replace' : 'append' }, 'Fabrix');

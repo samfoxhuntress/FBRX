@@ -1,4 +1,4 @@
-import { SKILL_LIMITS, newId, type Skill } from '@fbrx/shared';
+import { SKILL_LIMITS, newId, principleProblem, type Skill } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { MetaStore } from '../storage/meta';
@@ -170,6 +170,11 @@ export class SkillStore {
     const steps = input.steps.map((s) => s.trim().slice(0, SKILL_LIMITS.step)).filter(Boolean).slice(0, SKILL_LIMITS.steps);
     if (!name || !steps.length) throw new CoreError('INVALID_ARGUMENT', 'A skill needs a name and at least one step');
     if (STARTER_SKILLS.some((s) => s.id === input.id)) throw new CoreError('INVALID_ARGUMENT', 'Starter skills can be turned off, not changed');
+    // A skill's steps go to the AI to follow: they cannot carry a change to FBRX's core principles.
+    for (const line of [name, when, ...steps]) {
+      const against = principleProblem(line);
+      if (against) throw new CoreError('FORBIDDEN', `FBRX's core principles are fixed, so a skill cannot hold ${against}`);
+    }
     const all = this.saved();
     const at = this.now();
     const same = all.find((s) => (input.id ? s.id === input.id : s.name.toLowerCase() === name.toLowerCase()));
