@@ -24,6 +24,8 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
   const [signingIn, setSigningIn] = useState(false);
   const [restore, setRestore] = useState<{ file: string; header: SnapshotHeader } | null>(null);
   const [mode, setMode] = useState<Settings['general']['mode']>('simple');
+  const [uses, setUses] = useState<string[]>(['everyday']);
+  const useList = useCore('setup.uses').data ?? [];
   const settings = useCore('settings.get', undefined, ['settings.changed']).data?.settings;
   const { run, busy } = useAction();
   // Advanced is every tool, which on a computer on its own is Pro's: its free trial starts with it, where it may.
@@ -34,6 +36,8 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
     run('start', async () => {
       const n = name.trim();
       if (mode === 'advanced' && trial) await call('edition.startTrial').catch(() => undefined);
+      // What it will be used for: the persona and the AI Toolkit kits that fit (Settings changes either later).
+      await call('setup.apply', { uses }).catch(() => undefined);
       await call('settings.update', { patch: { general: { onboardingComplete: true, mode }, ...(n ? { profile: { name: n, callMe: '' } } : {}) } });
       location.hash = '#/agent';
       onDone();
@@ -109,6 +113,20 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
               <Field label={`What should ${agentName} call you?`} help="Optional. You can change it later in Settings.">
                 <Input value={name} maxLength={60} placeholder="Your name" autoFocus onChange={(e) => setName(e.target.value)} />
               </Field>
+              {useList.length > 0 && (
+                <Field label="What will you use FBRX for?" help={`Pick any. It sets how ${agentName} sounds and the toolkits it starts with; Settings → Personality changes it later.`}>
+                  <div className="onboard-uses" role="group" aria-label="What you will use FBRX for">
+                    {useList.map((u) => {
+                      const on = uses.includes(u.id);
+                      return (
+                        <button type="button" key={u.id} aria-pressed={on} title={u.blurb} onClick={() => setUses(on ? uses.filter((x) => x !== u.id) : [...uses.filter((x) => x !== 'everyday' || u.id === 'everyday'), u.id])}>
+                          {u.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </Field>
+              )}
               <Field label="How much should FBRX show?" help="Settings → General → Menu changes it later.">
                 <div className="choice-grid onboard-modes" role="radiogroup">
                   <button type="button" role="radio" aria-checked={mode === 'simple'} className={`choice${mode === 'simple' ? ' selected' : ''}`} onClick={() => setMode('simple')}>

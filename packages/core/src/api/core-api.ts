@@ -1,3 +1,4 @@
+import { SETUP_USES } from '../ai/personas';
 import { readFile } from 'node:fs/promises';
 import { basename, isAbsolute } from 'node:path';
 import { z } from 'zod';
@@ -69,6 +70,8 @@ const USER_ONLY = new Set<string>([
   'personality.reset',
   'personality.undo',
   'personality.dismissNotice',
+  'personality.usePersona',
+  'setup.apply',
   'governance.removeFolder',
   'governance.answerFolder',
   'license.activate',
@@ -479,6 +482,20 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'personality.undo': (_p, ctx) => k.personality.undo(ctx.actor),
     'personality.previous': () => ({ text: k.personality.previous() }),
     'personality.dismissNotice': () => k.personality.dismissNotice(),
+    'personality.personas': () => k.personality.personas(),
+    'personality.usePersona': (p, ctx) => k.personality.usePersona(z.object({ id: z.string().max(40) }).parse(p).id, ctx.actor),
+    'setup.uses': () => SETUP_USES.map(({ id, label, blurb }) => ({ id, label, blurb })),
+    'setup.apply': (p, ctx) => {
+      const ids = z.object({ uses: z.array(z.string().max(40)).max(10) }).parse(p).uses;
+      const picked = SETUP_USES.filter((u) => ids.includes(u.id));
+      const uses = picked.length ? picked : [SETUP_USES[0]!];
+      // The first one picked, in the order they are offered, sets the persona; every one picked brings its kits.
+      const persona = uses[0]!.persona;
+      k.personality.usePersona(persona, ctx.actor);
+      const kits = [...new Set(uses.flatMap((u) => u.kits))];
+      for (const a of k.toolkit.list().filter((x) => x.source === 'library')) if (a.enabled !== kits.includes(a.kit)) k.toolkit.setEnabled(a.id, kits.includes(a.kit));
+      return { persona, kits };
+    },
     'governance.folders': () => k.folders.status(),
     'governance.addFolder': (p, ctx) => k.folders.add(z.object({ path: z.string().min(1).max(4096) }).parse(p).path, ctx.actor),
     'governance.removeFolder': (p, ctx) => k.folders.remove(z.object({ entry: z.string().min(1).max(4096) }).parse(p).entry, ctx.actor),

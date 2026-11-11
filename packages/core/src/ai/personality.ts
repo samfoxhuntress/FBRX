@@ -15,12 +15,14 @@ import {
   personalitySections,
   withPersonalitySection,
   type PersonalityCommand,
+  type PersonaInfo,
   type PersonalityStatus,
 } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { MetaStore } from '../storage/meta';
 import { DEFAULT_PERSONALITY } from './personality-default';
+import { PERSONAS, personaList, withPersona } from './personas';
 
 /**
  * The AI's personality (personality.md in FBRX's data folder, see @fbrx/shared personality.ts): its persona. Its sections (who it is, how
@@ -241,6 +243,22 @@ export class PersonalityStore {
     if (problems.length) throw new CoreError('FORBIDDEN', `FBRX's core principles are fixed, so personality.md cannot hold ${problems.join('; ')}`);
     this.write(`${t}\n`, by, true);
     return this.status();
+  }
+
+  /**
+   * A ready-made persona in place of Who I am, How I talk and the option values it sets; the commands, toolkits, notes
+   * and other options stay. The everyday persona on an unchanged default leaves it as it is (it is the default).
+   */
+  usePersona(id: string, by: string): PersonalityStatus {
+    const p = PERSONAS.find((x) => x.id === id);
+    if (!p) throw new CoreError('NOT_FOUND', `There is no persona "${id}"`);
+    const now = personaOf(this.read());
+    if (p.id === 'everyday' && sha(this.read()) === sha(DEFAULT_PERSONALITY)) return this.status();
+    return this.set(withPersona(now, p), by);
+  }
+
+  personas(): PersonaInfo[] {
+    return personaList(this.read());
   }
 
   /** Back to FBRX's default (the one before is kept). */

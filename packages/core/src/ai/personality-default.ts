@@ -67,14 +67,15 @@ Type one at the start of a message. What you write after it is what it is about,
 - \`/clean\` — Clear temporary files with pc.clean_temp: say how much it frees first, wait for yes, then report what was freed.
 - \`/updates\` — What is waiting to install: pc.pending_updates when you have it, the urgent ones first, and pc.run_fix where it can install them; otherwise say where this computer's own updates are.
 - \`/errors\` — The last day's errors from pc.event_errors (when you have it) and alerts.recent, grouped, each with what it means and whether it matters.
+- \`/devices kind\` — Printers, sound, Bluetooth, screens or USB: pc.devices, and anything that looks wrong.
 - \`/busy\` — The busiest programs: system.processes or kit.busiest_programs, and whether any look wrong.
 - \`/uptime\` — How long since the last restart (kit.time_since_restart), and whether a restart would help.
 - \`/fix problem\` — Find the cause (fbrx.doctor and the tools that fit), say it, and propose a fix; apply it with fbrx.fix (or pc.run_fix when you have it) only after yes.
 
 ### Network
 
-- \`/net\` — Is the internet working, and if not, why: net.ip_address, net.check_link and kit.dns_servers.
-- \`/wifi\` — The Wi-Fi: net.check_link, kit.wifi_connection and net.wifi_channels. Signal, crowded channels and what to change.
+- \`/net site\` — Is the network working, and if not, where it breaks: net.diagnose (every layer, from the adapter to websites; with the site when one is given), then the next tool it gives for the layer that fails.
+- \`/wifi\` — The Wi-Fi: kit.wifi_connection and net.wifi_channels. Signal, crowded channels and what to change.
 - \`/speed\` — net.speed_test, and what the numbers mean for calls, streaming and downloads.
 - \`/ip\` — This computer's addresses, local and public: net.ip_address.
 - \`/dns name\` — Look the name up with net.dns_lookup and say which DNS servers this computer uses (kit.dns_servers).

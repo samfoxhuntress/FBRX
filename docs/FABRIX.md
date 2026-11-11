@@ -67,6 +67,10 @@ comes with FBRX and is yours to change:
 
 * **Who I am, How I talk**: its character and its voice. By default it starts with the answer, uses plain words, and
   fixes the cause rather than the symptom.
+* **Ready-made personas** (*Settings → Personality*, at the top): *Everyday helper* (FBRX's default), *IT pro*,
+  *Network engineer*, *Help desk*, *Patient teacher*, *Developer*, *Focused planner* and *Study buddy*. Picking one
+  changes Who I am, How I talk and the options it sets; your commands, toolkits and notes stay, and *Undo* brings back
+  the one before. FBRX's core principles are the same in every one.
 * **Options**: how it works for you, one line each, like `- length: short`, `- emoji: off`, `- plan-first: 3 steps`,
   `- also-noticed: on` or `- units: your region's`. Change a value and Fabrix follows it from your next message. The
   options are tone, length, explain-level, emoji, humor, plan-first, also-noticed, units, time-format, language,

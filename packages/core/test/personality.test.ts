@@ -2,8 +2,9 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROVIDERS, CORE_PRINCIPLES, SOUL_CORE, PERSONALITY_LIMITS, PERSONA_END, principleProblem, personalityCommandIn, personalityCommands, personaOf, personalityProblems, personalitySection, personalitySections, withPersonalitySection, type AgentEvent, type PersonalityStatus } from '@fbrx/shared';
+import { DEFAULT_PROVIDERS, CORE_PRINCIPLES, SOUL_CORE, PERSONALITY_LIMITS, PERSONA_END, principleProblem, personalityCommandIn, personalityCommands, personaOf, personalityProblems, personalitySection, personalitySections, withPersonalitySection, type AgentEvent, type PersonaInfo, type PersonalityStatus } from '@fbrx/shared';
 import { DEFAULT_PERSONALITY } from '../src/ai/personality';
+import { PERSONAS, withPersona } from '../src/ai/personas';
 import { makeKernel, USER, waitFor } from './helpers';
 import { mockOpenAI } from './mock-llm';
 
@@ -607,6 +608,59 @@ describe('a negation governs the act, and a help-desk persona keeps its lines', 
       const system = (kernel.agent as any).systemPrompt(false) as string;
       for (const line of REFUSED) expect(system, line).not.toContain(line);
       for (const line of PASSING) expect(system, line).toContain(line);
+    } finally {
+      await cleanup();
+    }
+  });
+});
+
+describe('ready-made personas and the first start', () => {
+  it('each one keeps the core principles, the commands and the notes, and Undo brings the one before back', async () => {
+    const { kernel, dataDir, cleanup } = await makeKernel();
+    try {
+      const list = (await kernel.call('personality.personas', {}, USER)) as PersonaInfo[];
+      expect(list.length).toBeGreaterThanOrEqual(7);
+      expect(list.find((p) => p.current)?.id).toBe('everyday');
+      for (const p of list) {
+        const text = withPersona(DEFAULT_PERSONALITY, PERSONAS.find((x) => x.id === p.id)!);
+        expect(personalityProblems(text), p.id).toEqual([]);
+        expect(personaOf(text), p.id).toBe(text.replace(/\n{3,}/g, '\n\n'));
+        expect(personalitySection(text, 'Commands')?.body, p.id).toBe(personalitySection(DEFAULT_PERSONALITY, 'Commands')?.body);
+        for (const [k, v] of Object.entries(p.options)) expect(personalitySection(text, 'Options')?.body, `${p.id} ${k}`).toContain(`- ${k}: ${v}`);
+      }
+      // The everyday persona on an unchanged default leaves it alone, so it keeps following FBRX's default.
+      expect(((await kernel.call('personality.usePersona', { id: 'everyday' }, USER)) as { isDefault: boolean }).isDefault).toBe(true);
+      kernel.personality.update({ section: 'Notes', content: '- Call me Dave.', mode: 'append' }, 'Fabrix');
+      const st = (await kernel.call('personality.usePersona', { id: 'network' }, USER)) as { text: string };
+      expect(st.text).toContain('I think like a network engineer');
+      expect(st.text).toContain('- Call me Dave.');
+      expect(((await kernel.call('personality.personas', {}, USER)) as PersonaInfo[]).find((p) => p.current)?.id).toBe('network');
+      expect((kernel.agent as any).systemPrompt(false)).toContain('I think like a network engineer');
+      // Only the person picks one, never a script.
+      await expect(kernel.call('personality.usePersona', { id: 'it-pro' }, { origin: 'api', actor: 'script' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
+      kernel.personality.undo('Sam');
+      expect(readFileSync(join(dataDir, 'personality.md'), 'utf8')).not.toContain('network engineer');
+      await expect(kernel.call('personality.usePersona', { id: 'nope' }, USER)).rejects.toMatchObject({ code: 'NOT_FOUND' });
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('"What will you use FBRX for?" picks the persona and the AI Toolkit kits', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      const uses = (await kernel.call('setup.uses', {}, USER)) as Array<{ id: string; label: string }>;
+      expect(uses.map((u) => u.id)).toEqual(['everyday', 'it', 'network', 'helpdesk', 'work', 'learning', 'coding']);
+      const kitOn = (kit: string) => kernel.toolkit.list().filter((a) => a.source === 'library' && a.kit === kit).every((a) => a.enabled);
+      const kitOff = (kit: string) => kernel.toolkit.list().filter((a) => a.source === 'library' && a.kit === kit).every((a) => !a.enabled);
+      expect(await kernel.call('setup.apply', { uses: ['learning', 'work'] }, USER)).toEqual({ persona: 'planner', kits: ['This computer', 'Troubleshooting'] });
+      expect(kitOff('Networking')).toBe(true);
+      expect(kitOn('This computer')).toBe(true);
+      expect(kernel.personality.read()).toContain('keep the day on track');
+      expect(await kernel.call('setup.apply', { uses: ['coding', 'network'] }, USER)).toMatchObject({ persona: 'network' });
+      expect(kitOn('Networking')).toBe(true);
+      expect((await kernel.call('setup.apply', { uses: [] }, USER)) as { persona: string }).toMatchObject({ persona: 'everyday' });
+      await expect(kernel.call('setup.apply', { uses: ['it'] }, { origin: 'api', actor: 'script' })).rejects.toMatchObject({ code: 'FORBIDDEN' });
     } finally {
       await cleanup();
     }

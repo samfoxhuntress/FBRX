@@ -53,6 +53,7 @@ export function PersonalitySettings() {
           </div>
         </Card>
       )}
+      <PersonaPicker onUsed={(t) => setText(t)} disabled={changed} />
       <Card
         title="Personality"
         subtitle={`Who ${name} is and how it sounds and works on this computer: personality.md, its persona. It follows the options from your next message, and a command when you start a message with one (/help lists them). ${name} changes it only when you say yes.`}
@@ -114,5 +115,55 @@ export function PersonalitySettings() {
       </Card>
       {dialog}
     </>
+  );
+}
+
+/**
+ * Ready-made personas: pick one and it becomes Who I am, How I talk and its options in personality.md. Your commands,
+ * toolkits and notes stay, and Undo brings back the one before.
+ */
+function PersonaPicker({ onUsed, disabled }: { onUsed: (text: string) => void; disabled: boolean }) {
+  const name = useAgentName();
+  const list = useCore('personality.personas', undefined, ['personality.changed']);
+  const { run, busy } = useAction();
+  const current = list.data?.find((p) => p.current)?.id ?? '';
+  const [picked, setPicked] = useState('');
+  const shown = list.data?.find((p) => p.id === (picked || current));
+  const use = (id: string) => void run('persona', () => call('personality.usePersona', { id }).then((st) => onUsed(st.text)), `${name} is now: ${list.data?.find((p) => p.id === id)?.name ?? id}`);
+  if (!list.data) return null;
+  return (
+    <Card title="Ready-made personas" subtitle={`Pick how ${name} sounds and works. It changes Who I am, How I talk and the options it sets; your commands, toolkits and notes stay, and Undo brings back the one before. FBRX’s core principles are the same in every one.`}>
+      <div className="persona-grid" role="radiogroup" aria-label="Personas">
+        {list.data.map((p) => (
+          <button key={p.id} type="button" role="radio" aria-checked={(picked || current) === p.id} className={`fx-choice${(picked || current) === p.id ? ' active' : ''}`} onClick={() => setPicked(p.id)}>
+            <span className="fx-choice-head">
+              <b>{p.name}</b>
+              {p.current && <Badge tone="accent">In use</Badge>}
+            </span>
+            <span className="fx-choice-desc">{p.blurb}</span>
+          </button>
+        ))}
+      </div>
+      {shown && (
+        <div className="persona-preview">
+          <p>{shown.who}</p>
+          <ul>
+            {shown.talk.map((t) => (
+              <li key={t}>{t}</li>
+            ))}
+          </ul>
+          <div className="fx-actions">
+            {shown.current ? (
+              <span className="fx-muted">{name} uses this one now.</span>
+            ) : (
+              <Button variant="primary" loading={busy === 'persona'} disabled={disabled} onClick={() => use(shown.id)}>
+                Use {shown.name}
+              </Button>
+            )}
+            {disabled && !shown.current && <span className="fx-muted">Save or undo your edits below first.</span>}
+          </div>
+        </div>
+      )}
+    </Card>
   );
 }

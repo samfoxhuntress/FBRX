@@ -18,7 +18,7 @@ import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './brows
 import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
 import type { Skill } from './skills';
 import type { ToolkitAction, ToolkitCommands, ToolkitInput, ToolkitSystem } from './toolkit';
-import type { PersonalityStatus } from './personality';
+import type { PersonaInfo, PersonalityStatus, SetupUse } from './personality';
 import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
 import type { ThinkingBudget, ThinkingLevel } from './thinking';
 import type { ExtEvents, ExtMethods } from './ext';
@@ -857,6 +857,14 @@ export interface CoreMethods extends ExtMethods {
   'personality.previous': () => { text: string | null };
   /** The person has seen the notice. */
   'personality.dismissNotice': () => PersonalityStatus;
+  /** The ready-made personas, the one in use marked. */
+  'personality.personas': () => PersonaInfo[];
+  /** Puts a ready-made persona in personality.md (Who I am, How I talk, the option values); the rest is kept, and Undo brings the one before back. */
+  'personality.usePersona': (p: { id: string }) => PersonalityStatus;
+  /** What FBRX can be used for, as the first start asks. */
+  'setup.uses': () => SetupUse[];
+  /** The first start's answer: the persona for the first use picked, and the AI Toolkit kits for all of them. */
+  'setup.apply': (p: { uses: string[] }) => { persona: string; kits: string[] };
   'governance.folders': () => FolderAccessStatus;
   /** Lets the AI use a folder (picked by the person). */
   'governance.addFolder': (p: { path: string }) => FolderAccessStatus;

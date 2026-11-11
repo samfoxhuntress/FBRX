@@ -70,6 +70,24 @@ export interface PersonalityCommand {
   group: string;
 }
 
+/** A ready-made persona, as Settings → Personality and the first start show it. */
+export interface PersonaInfo {
+  id: string;
+  name: string;
+  blurb: string;
+  who: string;
+  talk: string[];
+  options: Record<string, string>;
+  /** personality.md has it now (its Who I am is this persona's). */
+  current: boolean;
+}
+/** An answer to "What will you use FBRX for?" at the first start. */
+export interface SetupUse {
+  id: string;
+  label: string;
+  blurb: string;
+}
+
 export interface PersonalityStatus {
   text: string;
   /** FBRX's core principles (CORE_PRINCIPLES): fixed, not part of the file. */

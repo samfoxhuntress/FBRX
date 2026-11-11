@@ -125,8 +125,12 @@ A new computer's first experience is a conversation, not a setup form:
 - **The ready-made installers** (the release's Setup.exe and .dmg, or a shared installer) download the same model
   when FBRX OS first opens; the chat shows the progress ("Getting your AI ready") and a *Try again* button if the
   internet drops.
-- **One screen** then asks what Fabrix should call you (optional), **Simple** or **Advanced**, and the look, and opens
-  the chat with **Start chatting**. *Simple* keeps a short menu: Fabrix, AI models, Governance, help and Settings.
+- **One screen** then asks what Fabrix should call you (optional), **what you will use FBRX for** (everyday help,
+  fixing computers, networks, helping others, work and planning, learning or coding: pick any), **Simple** or
+  **Advanced**, and the look, and opens the chat with **Start chatting**. What you pick sets Fabrix's persona (the
+  first one picked, in that order: *IT pro* for fixing computers, *Network engineer* for networks, and so on) and the
+  AI Toolkit kits it starts with (the networking actions stay off when you picked none of everyday help, fixing
+  computers, networks or helping others); *Settings → Personality* and *AI Toolkit* change either later. *Simple* keeps a short menu: Fabrix, AI models, Governance, help and Settings.
   *Advanced* shows every page the edition has, in sections; on a computer on its own it starts the free 7-day Pro
   trial, which is where the everyday tools are. **Settings → General → Menu** changes it later. The look (light, dark
   or the computer's, and a theme) changes as you pick it. Moving from another computer (*Restore its backup*) and
