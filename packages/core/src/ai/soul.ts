@@ -10,7 +10,8 @@ import {
   soulCommands,
   soulPersona,
   soulProblems,
-  soulReservedTitle,
+  soulAllowedTitle,
+  SOUL_SECTIONS,
   soulSections,
   withSoulSection,
   type SoulCommand,
@@ -48,8 +49,6 @@ export interface SoulStoreOptions {
 }
 
 export class SoulStore {
-  private cache: { mtime: number; text: string } | null = null;
-
   constructor(private readonly o: SoulStoreOptions) {}
 
   get path(): string {
@@ -83,14 +82,13 @@ export class SoulStore {
     }
   }
 
-  /** The soul as it is now (FBRX's default when the file cannot be read). */
+  /**
+   * The soul as it is now (FBRX's default when the file cannot be read). Read from the file every time: it is small,
+   * and a copy kept by its modified time could lag behind a change made within the same tick of the clock.
+   */
   read(): string {
     try {
-      const st = statSync(this.o.file);
-      if (this.cache && this.cache.mtime === st.mtimeMs) return this.cache.text;
-      const text = readFileSync(this.o.file, 'utf8').slice(0, SOUL_LIMITS.file);
-      this.cache = { mtime: st.mtimeMs, text };
-      return text;
+      return readFileSync(this.o.file, 'utf8').slice(0, SOUL_LIMITS.file);
     } catch {
       return DEFAULT_SOUL;
     }
@@ -196,7 +194,7 @@ export class SoulStore {
   update(p: { section: string; content: string; mode: 'replace' | 'append' }, by: string): SoulStatus {
     const title = p.section.trim().replace(/^#+\s*/, '');
     if (!title || title.length > 60 || /[\r\n]/.test(title)) throw new CoreError('INVALID_ARGUMENT', 'Name the section to change, like Options or Notes');
-    if (soulReservedTitle(title)) throw new CoreError('FORBIDDEN', `FBRX's core principles are fixed: soul.md has no "${title}" section, and no change can add one`);
+    if (!soulAllowedTitle(title)) throw new CoreError('FORBIDDEN', `FBRX's core principles are fixed, and soul.md holds only these sections: ${SOUL_SECTIONS.join(', ')} (not "${title}")`);
     const content = p.content.trim();
     if (!content) throw new CoreError('INVALID_ARGUMENT', 'Say what the section should hold');
     if (content.length > SOUL_LIMITS.change) throw new CoreError('INVALID_ARGUMENT', `One change holds ${SOUL_LIMITS.change} characters at most`);
@@ -262,7 +260,6 @@ export class SoulStore {
       for (const old of this.historyFiles().slice(SOUL_LIMITS.history)) rmSync(join(this.historyDir, old), { force: true });
     }
     writeFileSync(this.o.file, text);
-    this.cache = null;
     // Written from FBRX's default: followed when FBRX's default changes, until the person changes it.
     this.o.meta.set(WRITTEN, text === DEFAULT_SOUL ? sha(text) : '');
     const log = this.o.meta.get<Array<{ at: string; by: string }>>(LOG) ?? [];

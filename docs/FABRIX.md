@@ -95,9 +95,10 @@ comes with FBRX and is yours to change:
 **FBRX's core principles are fixed**, and they are not in soul.md: your privacy, never revealing passwords or other
 secrets, doing no harm whoever asks, asking first before a change (as Governance says), and the truth (it says it did
 something only when a tool shows it, and names its sources). They come first in everything Fabrix is told, whole,
-whatever the persona says: a persona changes how Fabrix sounds, never what it does. So soul.md holds no sections about
-principles, rules, safety, approvals, secrets or privacy, and no options about them: Fabrix refuses such a change and
-Settings will not save it. An older soul.md that had them loses them when FBRX updates (*Undo the last change* shows
+whatever the persona says: a persona changes how Fabrix sounds, never what it does. So soul.md holds only its own
+sections (Who I am, How I talk, Options, Commands, Toolkits and Notes, whatever another would be called) and only its
+own options: Fabrix refuses any other change and Settings will not save it. An older soul.md that had more loses it
+when FBRX updates (*Undo the last change* shows
 the version before, and *Settings → Soul* says once what left). The same goes for skills, memories and AI Toolkit
 actions: none can hold a change to the principles. *Settings → Soul* shows the principles, read-only, and *Undo the
 last change* can itself be undone. Approvals themselves are set in Governance. FBRX stops changes by their shape

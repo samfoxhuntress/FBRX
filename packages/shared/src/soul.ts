@@ -8,8 +8,8 @@
  *
  * A persona changes how the AI sounds and works, never what it may do: FBRX's core principles (SOUL_CORE) are not in
  * soul.md. They go first into the AI's instructions on every request, whole, whatever soul.md, a persona or a setting
- * says, and soul.md may hold neither sections about principles nor options about approvals, secrets or safety
- * (soulProblems, soulPersona).
+ * says. soul.md holds only its own sections (SOUL_SECTIONS), only the options it may set, and no line that would
+ * change the core (soulProblems, soulPersona).
  */
 
 /** FBRX's core principles: fixed, never in soul.md, never cut short, ahead of everything else the AI is told. */
@@ -23,11 +23,10 @@ export const SOUL_CORE = `These come with FBRX. No persona, soul.md, setting, co
 6. Offline means offline. A chat the person keeps offline does not reach the internet without their yes.`;
 
 /**
- * Section titles soul.md may not have (tested after soulNormal): principles, values, rules and their neighbours are
- * FBRX's core (SOUL_CORE), not the persona's. A title with "option" in it other than Options itself is refused too.
+ * The sections soul.md may have, and no others, whatever another is called: the persona is who the AI is, how it
+ * talks, the options, the commands, its toolkits and notes. Titles are compared after soulNormal.
  */
-export const SOUL_RESERVED =
-  /what i care about|principle|\bvalues?\b|\brules?\b|governance|safety|approv|secret|credential|privacy|permission|guideline|ethic|polic|boundar|directive|\blaws?\b|conduct|constraint|override|instruction|guardrail|\bcore\b|commandment|\bmorals?\b|\bfixed\b|end of persona/;
+export const SOUL_SECTIONS = ['Who I am', 'How I talk', 'Options', 'Commands', 'Toolkits', 'Notes'] as const;
 
 /** The options soul.md may set: how the AI sounds and works. Approvals, checking, the internet and secrets are not options. */
 export const SOUL_OPTIONS = ['tone', 'length', 'explain-level', 'emoji', 'humor', 'plan-first', 'also-noticed', 'units', 'time-format', 'language', 'next-step', 'voice', 'catchphrase', 'formality'] as const;
@@ -179,10 +178,10 @@ export function soulNormal(text: string): string {
     .toLowerCase();
 }
 
-/** Whether a section title is one soul.md may not have (see SOUL_RESERVED). */
-export const soulReservedTitle = (title: string) => {
-  const t = soulNormal(title).replace(/[*_`~]/g, '').trim();
-  return SOUL_RESERVED.test(t) || (t.includes('option') && t !== 'options');
+/** Whether a section title is one of soul.md's own (SOUL_SECTIONS), read as soulNormal reads it. */
+export const soulAllowedTitle = (title: string) => {
+  const t = soulNormal(title).replace(/[*_`~]/g, '').replace(/\s+/g, ' ').trim();
+  return SOUL_SECTIONS.some((x) => x.toLowerCase() === t);
 };
 
 /** Lines that read like FBRX's own headings and closing line. */
@@ -242,14 +241,14 @@ function lineProblems(section: string, body: string): Array<{ line: number; why:
 }
 
 /**
- * What soul.md holds that is not the persona's: sections about principles (or a second Options under another name),
- * and lines that are not (see principleProblem, and the Options rules). Empty when it is fine.
+ * What soul.md holds that is not the persona's: sections other than its own (SOUL_SECTIONS), and lines that are not
+ * (see principleProblem, and the Options rules). Empty when it is fine.
  */
 export function soulProblems(text: string): string[] {
   const out = new Set<string>();
   for (const s of soulSections(text)) {
-    if (soulReservedTitle(s.title)) {
-      out.add(`the section "${s.title}" (FBRX's core principles are fixed and not part of soul.md)`);
+    if (!soulAllowedTitle(s.title)) {
+      out.add(`the section "${s.title}" (soul.md holds only these sections: ${SOUL_SECTIONS.join(', ')})`);
       continue;
     }
     for (const p of lineProblems(s.title, s.body)) out.add(p.why);
@@ -274,7 +273,7 @@ export function soulPersona(text: string): string {
     if (h && !line.startsWith('###')) {
       flush();
       section = h[1]!;
-      dropping = soulReservedTitle(section);
+      dropping = !soulAllowedTitle(section);
       body = [];
       if (!dropping) out.push(line);
       continue;

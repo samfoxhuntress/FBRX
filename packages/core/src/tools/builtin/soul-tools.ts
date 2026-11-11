@@ -1,4 +1,4 @@
-import { SOUL_LIMITS, SOUL_OPTIONS, soulPersona, soulReservedTitle, soulSection, withSoulSection } from '@fbrx/shared';
+import { SOUL_LIMITS, SOUL_OPTIONS, SOUL_SECTIONS, soulAllowedTitle, soulPersona, soulSection, withSoulSection } from '@fbrx/shared';
 import type { SoulStore } from '../../ai/soul';
 import type { ToolSpec } from '../types';
 
@@ -53,7 +53,7 @@ export function soulTools(soul: SoulStore, tools: () => ToolSpec[]): ToolSpec[] 
       async run(i) {
         // What the AI may read as its own: the persona, never what FBRX keeps out of it (as in the prompt).
         const text = soulPersona(soul.read());
-        if (i.section && soulReservedTitle(i.section)) return { output: `soul.md has no ${i.section} section: FBRX’s core principles are fixed, not part of soul.md, and come first in your instructions.`, data: { section: null } };
+        if (i.section && !soulAllowedTitle(i.section)) return { output: `soul.md has no ${i.section} section: it holds only ${SOUL_SECTIONS.join(', ')}. FBRX’s core principles are fixed, not part of soul.md, and come first in your instructions.`, data: { section: null } };
         if (i.section) {
           const s = soulSection(text, i.section);
           return { output: s ? `## ${s.title}\n\n${s.body}` : `soul.md has no section called ${i.section}. Its sections: ${soul.status().sections.join(', ')}.`, data: { section: s?.title ?? null } };
@@ -64,14 +64,14 @@ export function soulTools(soul: SoulStore, tools: () => ToolSpec[]): ToolSpec[] 
     {
       name: 'soul.update',
       title: 'Change your soul',
-      description: `Change one section of soul.md (your persona), when the person asks you to work differently (a new option, a command, a note on how they like things). Replace the section, or append lines to it (Notes, a command). The person approves the change first and can undo it in Settings → Soul. It changes how you sound and work, never FBRX’s core principles: sections about principles, rules, safety, approvals, secrets or privacy are refused, and the options are ${SOUL_OPTIONS.join(', ')}. ${SOUL_LIMITS.change} characters at most, no # or ## headings inside.`,
+      description: `Change one section of soul.md (your persona), when the person asks you to work differently (a new option, a command, a note on how they like things). Replace the section, or append lines to it (Notes, a command). The person approves the change first and can undo it in Settings → Soul. It changes how you sound and work, never FBRX’s core principles: its sections are ${SOUL_SECTIONS.join(', ')} (no others), and the options are ${SOUL_OPTIONS.join(', ')}. ${SOUL_LIMITS.change} characters at most, no # or ## headings inside.`,
       risk: 'write',
       source: 'builtin',
       sourceId: null,
       inputSchema: {
         type: 'object',
         properties: {
-          section: { type: 'string', minLength: 2, maxLength: 60, description: 'The section, like Options, Commands or Notes (a new one is added before Notes)' },
+          section: { type: 'string', minLength: 2, maxLength: 60, description: `The section: ${SOUL_SECTIONS.join(', ')}` },
           mode: { type: 'string', enum: ['append', 'replace'], description: 'append adds lines at its end; replace sets the whole section' },
           content: { type: 'string', minLength: 1, maxLength: SOUL_LIMITS.change, description: 'The lines to add, or the section’s new text' },
           why: { type: 'string', maxLength: 300, description: 'What the person asked for, in a few words' },
