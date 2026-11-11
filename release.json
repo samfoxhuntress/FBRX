@@ -1,22 +1,25 @@
 {
   "product": "FBRX OS",
   "stage": "Beta",
-  "version": "2.3.3",
+  "version": "2.4.0",
   "codename": "Weft",
-  "released": "2026-11-09",
-  "importance": "important",
-  "summary": "FBRX 2.3.3 Beta (Weft): a safer install on Linux, Fabrix’s soul with its own commands, offline chats that stay offline, and the right tools for your notes and tasks.",
+  "released": "2026-11-11",
+  "importance": "recommended",
+  "summary": "FBRX 2.4.0 Beta (Weft): Fabrix’s personality with ready-made personas, a network check that finds where the internet stops, remote desktop to your other computers, and This PC.",
   "notes": [
-    "Linux: the .deb installed FBRX OS’s files so that anyone on the computer could change them. 2.3.3 installs them as it should, and installing it repairs an older copy. Update soon on Linux.",
-    "Fabrix’s soul (Settings → Soul): who Fabrix is and how it works for you, with options you can change and more than sixty slash commands (type /help in a chat). Fabrix changes it only with your yes, and you can undo any change.",
-    "Editions are now called Essentials, Pro, Ultra and Black Hole Edition.",
-    "Offline chats: AI Toolkit actions that reach past this computer (Check the internet, Look up a name, Trace the route, Is a port open, and your own that ping or download) now ask to put the chat online first, like every other internet tool. So does asking another computer’s AI on the mesh.",
-    "Notes and tasks: questions about your own notes and tasks get the notes search and the task list every time, and words inside them (“my notes about the router”) no longer bring in network tools.",
-    "Notifications from the AI start with its name, and it shows at most a few a minute.",
-    "Linux uninstall asks FBRX OS to quit properly, so Ubuntu does not reopen it, and stops its AI first."
+    "Personality (Settings → Personality, it was Soul): ready-made personas such as Everyday helper and IT pro, and your options as simple fields. FBRX’s own principles (privacy, secrets, no harm, asking first) always come first, whatever the persona says.",
+    "Setup asks what you will be using FBRX for and picks a persona and AI Toolkit actions to match; Settings → Personality and AI Toolkit change them later.",
+    "Network Center → Check every layer: finds where a network stops working, from the adapter and Wi-Fi up to websites, with what to do first. Fabrix runs the same check when you ask why the internet is down, and has new skills for printers, sound, Bluetooth, screens and USB.",
+    "Remote desktop (RDP) and screen sharing (VNC) beside SSH and Telnet (Ultra): from a scanned device or New connection in Terminal → Device consoles, in your computer’s own viewer, which asks for the password. Kept in Saved connections.",
+    "This PC (first in Pit Stop): the make and model, serial number, processor, each memory module, drives and their health, graphics, screens, network adapters and battery, with Copy all and a link to the page that looks after each part.",
+    "Glass is now called Home in the sidebar.",
+    "Every notification has a close button, and Clear all clears them at once.",
+    "FBRX/1 shows your edition (Essentials, Pro, Ultra or Black Hole Edition).",
+    "Fabrix’s instructions are shorter, so small local models answer sooner.",
+    "Prices: Ultra is now $24.99 a month and Black Hole Edition $49.99; Pro stays $4.99."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.3.3.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.3",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.4.0.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.4.0",
   "server": {
     "version": "1.4.3",
     "released": "2026-11-09",
@@ -30,13 +33,14 @@
     "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.3"
   },
   "digger": {
-    "version": "1.1.2",
-    "released": "2026-11-09",
-    "summary": "FBRX Digger 1.1.2: a safer install on Linux.",
+    "version": "1.2.0",
+    "released": "2026-11-11",
+    "summary": "FBRX Digger 1.2.0: Check every layer finds where a network stops working, and remote desktop opens beside the consoles.",
     "notes": [
-      "Linux: the .deb installed Digger’s files so that anyone on the computer could change them. 1.1.2 installs them as it should, and installing it repairs an older copy."
+      "Overview → Check every layer: from the adapter and Wi-Fi signal through the router, the address, routing, names (DNS) and secure connections up to websites, with what to do first and the commands that show each layer by hand.",
+      "Remote desktop (RDP) and screen sharing (VNC) from a scan or New connection, in your computer’s own viewer, which asks for the password. They go in Saved connections like the consoles."
     ],
-    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.2",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.2"
+    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.2.0",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.2.0"
   }
 }
