@@ -518,6 +518,14 @@ approve. Read-only information never asks for elevation.
 
 ## Network Center
 
+**Check every layer** (on the Overview): when the network or internet is not working, it checks from the bottom up,
+in order: the adapter, cable or Wi-Fi signal; the link to the router; this computer's address (a 169.254 address means
+the router gave none); routing, to the router and past it; names (DNS), your DNS server against a public one; secure
+connections (port 443), a proxy or a VPN; and websites (a sign-in page in the way, the clock). It says where it first
+breaks and what to do first; open a layer to see what it found and the commands that show the same by hand, ready to
+copy. Name a site that will not load to check it too. A network that blocks pings is not taken for one that is down.
+It needs no AI, and in a chat Fabrix runs the same check (`net.diagnose`) before it fixes anything.
+
 Overview (this PC, router, internet latency and loss, public address, plain-language verdict), ping and
 **trace route with hop identification** (your router, other local routers / double NAT, your provider, the
 internet, the destination; names, makers and locations), **device discovery** (ping sweep, ARP, mDNS/Bonjour,
@@ -687,11 +695,11 @@ Desktop app itself.
 | --- | --- |
 | `workspace.list_tasks`, `workspace.search_notes`, `workspace.list_projects`, `workspace.search_snippets` | read |
 | `workspace.add_task`, `workspace.update_task`, `workspace.create_note`, `workspace.append_note`, `workspace.save_snippet` | write (allowed by the built-in `builtin-workspace` rule: they only touch FBRX's own data) |
-| `pc.live_status`, `pc.storage_report`, `pc.space_hogs`, `alerts.recent`, `net.wifi_channels`, `skills.list`; Windows: `pc.security_status`, `pc.event_errors`, `pc.pending_updates` | read |
+| `pc.live_status`, `pc.storage_report`, `pc.space_hogs`, `pc.devices` (printers, sound, Bluetooth, screens, USB), `alerts.recent`, `net.wifi_channels`, `skills.list`; Windows: `pc.security_status`, `pc.event_errors`, `pc.pending_updates` | read |
 | `skills.save` | write (asks the person, so every learned skill is one they approved) |
 | `pc.clean_temp` | write |
 | `pc.run_fix` (Windows) | execute — asks by default |
-| `net.ping`, `net.traceroute`, `net.dns_lookup`, `net.port_check`, `net.scan_lan`, `net.check_link`, `net.speed_test` | network — offline chats ask to go online first |
+| `net.diagnose` (the full check, every layer), `net.ping`, `net.traceroute`, `net.dns_lookup`, `net.port_check`, `net.scan_lan`, `net.check_link`, `net.speed_test` | network — offline chats ask to go online first |
 | `device_console.sessions`, `device_console.read` | read |
 | `device_console.send` | execute — asks by default, showing the exact command |
 | `calendar.agenda`, `calendar.free_time` (when a calendar is connected) | read |

@@ -1,6 +1,6 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { LanDevice, LanScan, LanScanCompare, NetAdapter, PingResult, SpeedTestResult, TraceHop } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Grid, Icons, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
+import type { LanDevice, LanScan, LanScanCompare, NetAdapter, PingResult, SpeedTestResult, StackLayer, StackReport, TraceHop } from '@fbrx/shared';
+import { Button, Callout, Card, CopyText, Empty, Field, Grid, Icons, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
 import { bridge, call, onEvent, pickFile } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
 import { DIGGER, IS_WINDOWS, navigate, routeArg } from '../app';
@@ -54,6 +54,7 @@ function Overview() {
           {verdict}
         </Callout>
       )}
+      <StackCheck />
       <Card title="Network interfaces" flush>
         <Table
           columns={[
@@ -72,6 +73,112 @@ function Overview() {
         </div>
       </Card>
     </>
+  );
+}
+
+const STEP_TONE = { ok: 'good', warn: 'warning', fail: 'critical', skipped: 'neutral' } as const;
+const OS_KEY = IS_WINDOWS ? 'windows' : bridge.platform === 'darwin' ? 'mac' : 'linux';
+
+/**
+ * The full network check: every layer from the adapter to secure websites, where it first breaks, what to do, and the
+ * commands that show each layer by hand. It needs no AI, so FBRX Digger has it too.
+ */
+function StackCheck() {
+  const [target, setTarget] = useState('');
+  const [report, setReport] = useState<StackReport | null>(null);
+  const [open, setOpen] = useState<StackLayer | null>(null);
+  const agent = useAgentName();
+  const ai = useContext(AiContext);
+  const { busy, run } = useAction();
+  const checking = busy === 'stack';
+  const check = () =>
+    void run('stack', async () => {
+      const r = await call('net.diagnose', target.trim() ? { target: target.trim() } : {});
+      setReport(r);
+      setOpen(r.breaksAt ?? r.steps.find((x) => x.status === 'warn')?.layer ?? null);
+    });
+  const tone = !report ? 'info' : report.breaksAt ? 'critical' : report.steps.some((x) => x.status === 'warn') ? 'warning' : 'good';
+  return (
+    <Card
+      title="Check every layer"
+      subtitle="Why isn’t the network working? From the cable or Wi-Fi up to secure websites, in order."
+      actions={
+        <div className="stack-check-ask">
+          <Input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="A site that won’t load (optional)" aria-label="A site that won’t load" />
+          <Button variant="primary" icon="activity" loading={checking} onClick={check}>
+            {report ? 'Check again' : 'Check now'}
+          </Button>
+        </div>
+      }
+    >
+      {!report && !checking && <p className="fx-muted">Seven layers in about ten seconds: the adapter, the link to the router, the address, routing, names (DNS), connections, and websites.</p>}
+      {checking && !report && (
+        <p className="fx-muted">
+          <Spinner /> Checking each layer…
+        </p>
+      )}
+      {report && (
+        <>
+          <Callout
+            tone={tone}
+            actions={
+              ai && report.breaksAt ? (
+                <Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent(`My network check says: ${report.summary} Help me fix it, one step at a time.`)}`)}>
+                  Fix it with {agent}
+                </Button>
+              ) : undefined
+            }
+          >
+            {report.summary}
+          </Callout>
+          <ol className="stack-steps">
+            {report.steps.map((st) => (
+              <li key={st.layer} className={`stack-step is-${st.status}`}>
+                <button type="button" className="stack-step-head" onClick={() => setOpen(open === st.layer ? null : st.layer)} aria-expanded={open === st.layer}>
+                  <Status tone={STEP_TONE[st.status]}>{st.title.split(':')[0]}</Status>
+                  <span className="stack-step-line">{st.headline}</span>
+                </button>
+                {open === st.layer && (
+                  <div className="stack-step-body">
+                    {st.found.length > 1 && (
+                      <ul>
+                        {st.found.map((f) => (
+                          <li key={f}>{f}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {st.fix.length > 0 && (
+                      <>
+                        <h4>Do first</h4>
+                        <ol>
+                          {st.fix.map((f) => (
+                            <li key={f}>{f}</li>
+                          ))}
+                        </ol>
+                      </>
+                    )}
+                    {st.status !== 'skipped' && (
+                      <>
+                        <h4>See it yourself</h4>
+                        {st.commands[OS_KEY].map((c) => (
+                          <CopyText key={c} value={c} />
+                        ))}
+                      </>
+                    )}
+                    {ai && st.next.length > 0 && (
+                      <p className="fx-muted">
+                        {agent} can look further with {st.next.map((n) => n.why).join('; ')}.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+          {report.localOnly && <p className="fx-muted">The internet was not checked: FBRX is kept off it here.</p>}
+        </>
+      )}
+    </Card>
   );
 }
 

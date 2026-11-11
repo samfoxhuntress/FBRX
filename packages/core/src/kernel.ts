@@ -1258,7 +1258,7 @@ export class Kernel {
             return a.agentMayConsult && a.request !== 'off' ? null : 'Mesh Assist does not let the agent consult other computers';
           }),
           ...helpdeskTools(this.helpdesk, () => (this.fleet.enrolled ? null : 'This computer is not part of an organization, so there is no help desk to send to')),
-          ...pcTools({ monitor: this.monitor, net: this.net, networkTools: () => this.networkTools(), alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined) }),
+          ...pcTools({ monitor: this.monitor, net: this.net, networkTools: () => this.networkTools(), alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined), hasTool: (n) => this.registry.get(n) != null }),
           ...createTools({
             output: this.output,
             renderer: () => this.platform.renderer ?? null,

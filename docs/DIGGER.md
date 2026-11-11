@@ -6,6 +6,9 @@ network tool FBRX has and nothing else. It runs on Windows, macOS and Linux, nex
 ## What it does
 
 * **Overview**: this computer, the router, internet latency and loss, the public address and a plain-language verdict.
+  **Check every layer** finds where a network stops working, from the adapter and Wi-Fi signal through the router,
+  the address, routing, names (DNS) and secure connections up to websites, with what to do first and the commands
+  that show each layer by hand.
 * **Devices**: scan the network (ping sweep, ARP, mDNS/Bonjour, UPnP, port fingerprints and the IEEE MAC registry
   name PCs, phones, printers, TVs, cameras, smart-home devices and NAS), save scans, **compare** two scans to see what
   joined and what left, and export them as CSV.

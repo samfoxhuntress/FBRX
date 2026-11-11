@@ -884,6 +884,35 @@ export interface DnsTest {
   addresses: string[];
   resolvers: Array<{ name: string; ip: string; ms: number | null; ok: boolean }>;
 }
+/** The layers a full network check looks at, from the cable or radio up to the site the person wants. */
+export const STACK_LAYERS = ['physical', 'link', 'ip', 'routing', 'dns', 'transport', 'application'] as const;
+export type StackLayer = (typeof STACK_LAYERS)[number];
+/** One layer of a full network check: what it found, how to look by hand, and what to do or call next. */
+export interface StackStep {
+  layer: StackLayer;
+  title: string;
+  status: 'ok' | 'warn' | 'fail' | 'skipped';
+  /** The layer in one line: what works, or what is wrong. */
+  headline: string;
+  found: string[];
+  /** What the person can type to see the same, on each system. */
+  commands: { windows: string[]; mac: string[]; linux: string[] };
+  /** What to do, first thing first; anything that changes the computer asks before it runs. */
+  fix: string[];
+  /** Tools that look further or fix what this layer found (only tools this FBRX has). */
+  next: Array<{ tool: string; why: string; input?: Record<string, unknown> }>;
+}
+export interface StackReport {
+  at: string;
+  /** The site or address the person asked about, when they named one. */
+  target: string | null;
+  /** The first layer that fails, or null when none does. */
+  breaksAt: StackLayer | null;
+  summary: string;
+  steps: StackStep[];
+  /** The internet was not reached: an offline chat or a policy. Only this computer and the router were checked. */
+  localOnly: boolean;
+}
 export interface NetAdapter {
   alias: string;
   description: string;
@@ -1266,6 +1295,7 @@ export interface ExtMethods {
   'net.printers': () => PrinterInfo[];
   'net.printerAction': (p: { name: string; action: (typeof PRINTER_ACTIONS)[number] }) => Ok;
   'net.dns': (p: { name: string }) => DnsTest;
+  'net.diagnose': (p: { target?: string }) => StackReport;
   'net.port': (p: { host: string; port: number }) => { open: boolean; ms: number | null };
   'net.adapters': () => NetAdapter[];
   'net.setIp': (p: { alias: string; mode: 'dhcp' | 'static' | 'secondary' | 'removeSecondary'; ip?: string; prefix?: number | string; gateway?: string; dns?: string[] }) => ElevatedResult;

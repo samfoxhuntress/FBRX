@@ -41,14 +41,110 @@ export const STARTER_SKILLS: Starter[] = [
     id: 'skill_troubleshoot',
     name: 'Troubleshoot the network',
     fix: true,
-    when: 'The person asks to troubleshoot the network, or the internet is down, slow or acting up for every device.',
-    keywords: ['troubleshoot', 'troubleshooting', 'network', 'internet', 'outage', 'gate', 'minidome', 'firewall', 'diagnose'],
+    when: 'The network or the internet is down, slow or acting up, or a website will not load, on this computer or every device.',
+    keywords: ['troubleshoot', 'troubleshooting', 'network', 'internet', 'outage', 'gate', 'minidome', 'firewall', 'diagnose', 'connection', 'online', 'website', 'websites', 'load', 'loading'],
     steps: [
-      'kit.check_the_internet: the router, the internet past it, then names (DNS), in that order. Where it first fails is where to look.',
-      "server.network_check, when an FBRX Server lets you look: FBRX Gate's internet side (link, address, router), a change waiting to be confirmed (it rolls back by itself), DNS and DHCP, problems it found; and MiniDome's sensors and worst open findings.",
-      'When names fail but addresses work: kit.dns_servers, then kit.look_up_a_name on the site in question.',
-      'Only this computer affected: kit.my_ip_address (no address or a 169.254 one means DHCP failed; offer kit.get_a_fresh_address) and, on Wi-Fi, net.wifi_channels.',
-      'Say where it breaks (this computer, the Wi-Fi, the gate, or the internet provider) and the one or two things to do first; any fix asks the person before it runs.',
+      'net.diagnose first (with target when the person named a site or address): every layer from the adapter and Wi-Fi signal up to secure websites, and where it first breaks. Tell the person that layer, what it found and the command that shows it.',
+      'Follow the next tools it gives for the layer that failed, and only that layer: the layers above a failure fail because of it. Its warnings (a weak signal, a proxy, a VPN, the clock) come after.',
+      "server.network_check, when an FBRX Server is the router: FBRX Gate's internet side (link, address, router), a change waiting to be confirmed (it rolls back by itself), DNS and DHCP, problems it found; and MiniDome's sensors and worst open findings.",
+      'Every layer works but one site does not: net.check_link on it, and say the problem is the site, not the connection.',
+      'Say where it breaks (this computer, the Wi-Fi, the router, the internet provider or the site) and the one or two things to do first; any fix asks the person before it runs.',
+    ],
+  },
+  {
+    id: 'skill_printer',
+    name: 'Printer not printing',
+    fix: true,
+    when: 'A printer will not print, prints the wrong thing, is missing, or jobs are stuck.',
+    keywords: ['printer', 'printers', 'print', 'printing', 'prints', 'spooler', 'toner', 'jam', 'jammed'],
+    steps: [
+      'pc.devices with kind printers: whether it is set up, its status, jobs waiting, which one is the default, its address.',
+      'A network printer: net.ping its address, then net.port_check on 9100 (direct printing) or 631 (IPP). No answer means it is off, asleep, or on another network or address.',
+      'Jobs stuck in the queue: on Windows, pc.run_fix spooler clears it (it asks first and needs administrator rights).',
+      'Printing to the wrong printer: say which one is the default and where to change it (the system settings, Printers).',
+      'Give the cause and the next step; reinstalling the printer or its driver is the last resort.',
+    ],
+  },
+  {
+    id: 'skill_sound',
+    name: 'No sound or microphone',
+    fix: true,
+    when: 'There is no sound, the wrong speakers or headphones play, or the microphone is not heard.',
+    keywords: ['sound', 'audio', 'speaker', 'speakers', 'headphone', 'headphones', 'headset', 'mic', 'microphone', 'volume', 'mute', 'muted', 'hear', 'echo'],
+    steps: [
+      'pc.devices with kind sound: the speakers, headphones and microphones, and which are the default.',
+      'Most often the sound goes to another device (a monitor, a dock, headphones not in use): say which is the default and how to pick the right one, and check mute and the app’s own volume.',
+      'Bluetooth headphones: pc.devices with kind bluetooth, and whether they are connected.',
+      'Still nothing on Windows: pc.event_errors for audio driver errors; pc.run_fix service with target Audiosrv restarts the sound service (it asks first).',
+      'Say what was wrong and what you changed or what to try next.',
+    ],
+  },
+  {
+    id: 'skill_bluetooth',
+    name: 'Bluetooth device will not connect',
+    fix: true,
+    when: 'Headphones, a keyboard, a mouse, a speaker or a controller will not pair or connect over Bluetooth.',
+    keywords: ['bluetooth', 'pair', 'pairing', 'paired', 'earbuds'],
+    steps: [
+      'pc.devices with kind bluetooth: the adapter, and each paired device, connected or not, with its battery.',
+      'No adapter: Bluetooth is off, airplane mode is on, or its driver is missing; say where to turn it on.',
+      'Paired but not connecting: turn the device off and on, charge it, then remove it and pair it again; a device paired to a phone nearby often grabs it first.',
+      'On Windows, pc.run_fix service with target bthserv restarts the Bluetooth service (it asks first).',
+      'Say what worked or the next step.',
+    ],
+  },
+  {
+    id: 'skill_screens',
+    name: 'Screen or second display problems',
+    fix: true,
+    when: 'A monitor or projector shows nothing, the wrong picture, the wrong size, or flickers.',
+    keywords: ['screen', 'screens', 'monitor', 'monitors', 'display', 'displays', 'hdmi', 'displayport', 'projector', 'resolution', 'flicker', 'flickering', 'blurry'],
+    steps: [
+      'pc.devices with kind screens: each display the computer sees, how it is connected, and its resolution.',
+      'Not listed: the cable, the port or the monitor’s input setting; try another cable or port, and the monitor’s input button.',
+      'Listed but black or mirrored: the display mode (on Windows the Windows key + P) and the system display settings.',
+      'Blurry or the wrong size: set its native resolution; flicker: its refresh rate and cable.',
+      'Still wrong after a restart: the graphics driver (pc.pending_updates on Windows), then pc.event_errors.',
+    ],
+  },
+  {
+    id: 'skill_crash',
+    name: 'An app keeps crashing',
+    fix: true,
+    when: 'A program crashes, closes by itself, will not open or stops responding.',
+    keywords: ['crash', 'crashes', 'crashing', 'crashed', 'closes', 'responding', 'open', 'opening', 'error'],
+    steps: [
+      'pc.event_errors on Windows: the app’s recent errors and what failed (the module named in them is the clue).',
+      'system.processes: whether it is still running in the background or something else takes the memory.',
+      'pc.storage_report: a full disk makes apps fail; pc.pending_updates: an update for it or the system.',
+      'Windows files damaged: pc.run_fix sfc checks and repairs them (it asks first and takes a while).',
+      'Say the likely cause and the fixes in order; reinstalling the app is the last resort.',
+    ],
+  },
+  {
+    id: 'skill_updates',
+    name: 'Updates stuck or failing',
+    fix: true,
+    when: 'System updates will not install, are stuck, or keep failing.',
+    keywords: ['update', 'updates', 'updating', 'upgrade', 'patch', 'stuck', 'pending'],
+    steps: [
+      'pc.pending_updates: what is waiting, and whether a restart is.',
+      'pc.storage_report: updates need free space; free some first (the Free up disk space skill).',
+      'Still failing on Windows: pc.run_fix wureset resets the update components (it asks first and needs administrator rights), then try again after a restart.',
+      'pc.event_errors for the error code, which says what is wrong.',
+    ],
+  },
+  {
+    id: 'skill_vpn',
+    name: 'VPN will not connect',
+    fix: true,
+    when: 'The VPN will not connect, connects but nothing works, or work sites will not load over it.',
+    keywords: ['vpn', 'tunnel', 'remote', 'work', 'office', 'corporate'],
+    steps: [
+      'net.diagnose: the internet itself first, and whether a VPN adapter is up (it shows under routing).',
+      'net.port_check on the VPN server’s address and port (443 for most): no answer means the server or this network blocks it.',
+      'Connected but nothing works: kit.routing_table, and whether names resolve (the DNS layer); the clock (the websites layer) breaks sign-ins.',
+      'Say what to tell whoever runs the VPN, with what the checks showed.',
     ],
   },
   {
@@ -216,7 +312,9 @@ export class SkillStore {
     // Only what the request asks: not a name in quotes, the content to save, or the subject of the person's notes.
     const asked = words(requestWords(text));
     if (!asked.size) return [];
-    const own = aboutOwnWork(text);
+    // A question about the person's own notes and tasks, or about what was said or decided before, is not a fault to
+    // fix: the fixing skills need more than a shared word for it.
+    const own = aboutOwnWork(text) || /\b(?:what did (?:we|i|you)|did we|you said|we (?:talked|decided|said|agreed)|last (?:time|week|month)|earlier|told you|remember when)\b/i.test(text);
     const keywords = new Map(STARTER_SKILLS.map((s) => [s.id, s.keywords]));
     const fixes = new Set(STARTER_SKILLS.filter((s) => s.fix).map((s) => s.id));
     const scored = this.list()

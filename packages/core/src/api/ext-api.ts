@@ -422,6 +422,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return { ok: true };
     },
     'net.dns': (p) => k.net.dnsTest(z.object({ name: z.string().min(1).max(253) }).parse(p).name),
+    'net.diagnose': (p) => k.net.diagnose({ target: z.object({ target: z.string().max(253).optional() }).parse(p ?? {}).target || undefined, online: true, has: (t) => k.registry.get(t) != null }),
     'net.port': (p) => {
       const q = z.object({ host: z.string().min(1).max(253), port: z.number().int() }).parse(p);
       return k.net.port(q.host, q.port);

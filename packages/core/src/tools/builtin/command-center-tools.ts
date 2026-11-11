@@ -1,6 +1,8 @@
+import si from 'systeminformation';
 import { TASK_PRIORITIES, TASK_STATUSES } from '@fbrx/shared';
 import type { AlertEngine } from '../../alerts/alert-engine';
 import type { NetDiag } from '../../network/netdiag';
+import { stackText } from '../../network/stack-check';
 import { checkLink } from '../../security/linkcheck';
 import { spaceHogs } from '../../system/space';
 import type { SystemMonitor } from '../../system/system-monitor';
@@ -196,6 +198,8 @@ export interface PcToolDeps {
   networkTools: () => boolean;
   alerts: AlertEngine;
   virustotalKey: () => string | undefined;
+  /** Whether a tool exists here, so the network check's next steps name only real ones. */
+  hasTool: (name: string) => boolean;
 }
 
 /** PC care and network diagnostics for the agent. */
@@ -243,6 +247,58 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       },
     }),
     tool({
+      name: 'pc.devices',
+      title: 'Devices',
+      description:
+        "This computer's devices of one kind, with their state: printers (status, waiting jobs, the default, its address), sound (speakers, headphones and microphones, which is the default), Bluetooth (the adapter and paired devices, connected or not), screens (each display, how it is connected, resolution) or USB. The first look for \"the printer won't print\", \"no sound\", \"my headphones won't connect\", \"the second screen is black\".",
+      risk: 'read',
+      timeoutMs: 60_000,
+      inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['printers', 'sound', 'bluetooth', 'screens', 'usb'] } }, required: ['kind'] },
+      async run(i) {
+        const lines: string[] = [];
+        let data: unknown;
+        switch (i.kind) {
+          case 'printers': {
+            const list = IS_WIN ? await d.net.printers() : ((await si.printer().catch(() => [])) as any[]).map((p) => ({ name: p.name, status: p.status, isDefault: !!p.default, port: p.uri ?? '', ip: null, jobs: 0, driver: p.model ?? '', shared: !!p.shared }));
+            data = list;
+            if (!list.length) lines.push('No printers are set up on this computer.');
+            for (const p of list) lines.push(`${p.name}${p.isDefault ? ' (default)' : ''}: ${p.status || 'status unknown'}${p.jobs ? `, ${p.jobs} job(s) waiting` : ''}${p.ip ? `, at ${p.ip}` : p.port ? `, port ${p.port}` : ''}${p.driver ? `, driver ${p.driver}` : ''}`);
+            break;
+          }
+          case 'sound': {
+            const list = (await si.audio().catch(() => [])) as any[];
+            data = list;
+            if (!list.length) lines.push('No sound devices were found (or this system does not report them).');
+            for (const a of list) lines.push(`${a.name}${a.default ? ' (default)' : ''}: ${[a.in ? 'input' : '', a.out ? 'output' : ''].filter(Boolean).join(' and ') || a.type || 'device'}${a.status ? `, ${a.status}` : ''}${a.interfaceType ? `, ${a.interfaceType}` : ''}`);
+            break;
+          }
+          case 'bluetooth': {
+            const b = await d.net.bluetooth();
+            data = b;
+            lines.push(b.adapters.length ? `Adapter: ${b.adapters.join(', ')}` : IS_WIN ? 'No Bluetooth adapter found: it may be off, disabled or missing a driver.' : 'Adapter: not reported here.');
+            if (!b.devices.length) lines.push('No paired devices.');
+            for (const x of b.devices) lines.push(`${x.name}: ${x.connected ? 'connected' : 'paired, not connected'}${x.battery != null ? `, battery ${x.battery}%` : ''} (${x.kind})`);
+            break;
+          }
+          case 'screens': {
+            const g = (await si.graphics().catch(() => ({ controllers: [], displays: [] }))) as any;
+            data = g;
+            for (const c of g.controllers ?? []) lines.push(`Graphics: ${c.model}${c.vram ? `, ${c.vram} MB` : ''}${c.driverVersion ? `, driver ${c.driverVersion}` : ''}`);
+            if (!(g.displays ?? []).length) lines.push('No displays are reported.');
+            for (const x of g.displays ?? []) lines.push(`Display ${x.model || x.deviceName || '?'}${x.main ? ' (main)' : ''}: ${x.connection || 'connection unknown'}, ${x.currentResX && x.currentResY ? `${x.currentResX}×${x.currentResY}` : 'resolution unknown'}${x.currentRefreshRate ? ` at ${x.currentRefreshRate} Hz` : ''}`);
+            break;
+          }
+          default: {
+            const list = (await si.usb().catch(() => [])) as any[];
+            data = list;
+            if (!list.length) lines.push('No USB devices are reported.');
+            for (const u of list.slice(0, 60)) lines.push(`${u.name || 'USB device'}${u.manufacturer ? ` (${u.manufacturer})` : ''}${u.type ? `: ${u.type}` : ''}`);
+          }
+        }
+        return { output: lines.join('\n'), data };
+      },
+    }),
+    tool({
       name: 'pc.clean_temp',
       title: 'Clean temporary files',
       description: 'Delete temporary files older than one day from the user temp folder.',
@@ -251,6 +307,19 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       async run() {
         const r = await storage.cleanTemp();
         return { output: `Freed ${gb(r.freed)}; ${r.skipped} item(s) skipped (in use or recent)`, data: r };
+      },
+    }),
+    tool({
+      name: 'net.diagnose',
+      title: 'Full network check',
+      description:
+        'Why the network or internet is not working, layer by layer: the adapter and Wi-Fi signal, the router, the IP address, the internet past the router, names (DNS), secure web traffic and proxies, then real websites (sign-in pages, the clock). Says where it first breaks, what to do first, the commands to see each layer by hand, and the next tool to call. Call it first for "my internet is down", "the network is not working", "websites will not load". Give target to check one site or address too.',
+      risk: 'network',
+      timeoutMs: 90_000,
+      inputSchema: { type: 'object', properties: { target: { type: 'string', description: 'A site or address the person cannot reach (optional)' } } },
+      async run(i) {
+        const r = await d.net.diagnose({ target: typeof i.target === 'string' && i.target.trim() ? i.target : undefined, online: true, has: d.hasTool });
+        return { output: stackText(r, IS_WIN ? 'windows' : process.platform === 'darwin' ? 'mac' : 'linux'), data: r };
       },
     }),
     tool({

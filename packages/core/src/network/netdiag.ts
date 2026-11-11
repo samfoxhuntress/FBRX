@@ -21,6 +21,7 @@ import {
   type PingResult,
   type PrinterInfo,
   type SpeedTestResult,
+  type StackReport,
   type TraceHop,
   type WifiAccessPoint,
   type WifiBand,
@@ -29,6 +30,7 @@ import {
 } from '@fbrx/shared';
 import type { VendorDb } from './vendors';
 import { bandOf, bandReport } from './wifi-channels';
+import { stackReport, type StackFacts } from './stack-check';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { Db } from '../storage/db';
@@ -176,6 +178,7 @@ export class NetDiag {
     const n = Math.max(1, Math.min(50, Math.round(count)));
     const args = IS_WIN ? ['-n', String(n), '-w', String(timeoutMs), host] : ['-c', String(n), '-W', String(Math.ceil(timeoutMs / 1000)), '-i', '0.2', host];
     const r = await exec('ping', args, { timeoutMs: n * (timeoutMs + 500) + 5000 });
+    if (!r.out.trim() && /ENOENT|not found|not recognized/i.test(r.err)) throw new CoreError('UNAVAILABLE', 'ping is not installed on this computer');
     const samples: Array<number | null> = [];
     let ip: string | null = validIp(host) ? host : null;
     for (const line of r.out.split('\n')) {
@@ -843,6 +846,98 @@ $def = (Get-CimInstance Win32_Printer -Filter 'Default=True' -ErrorAction Silent
     return { name, addresses, resolvers };
   }
 
+  // --------------------------------------------------------------------------------- full network check
+
+  /**
+   * The full network check, every layer from the adapter up to secure websites (see stack-check.ts). `online`: the
+   * internet may be reached (not in an offline chat); a policy that keeps FBRX off the internet also stops it there.
+   * `has`: which tools the next steps may name.
+   */
+  async diagnose(o: { target?: string; online: boolean; has?: (tool: string) => boolean }): Promise<StackReport> {
+    const f = await this.stackFacts(o);
+    return stackReport(f, o.has ?? (() => true));
+  }
+
+  async stackFacts(o: { target?: string; online: boolean }): Promise<StackFacts> {
+    const target = o.target ? checkHost(o.target.trim().replace(/^[a-z]+:\/\//i, '').replace(/[/?#].*$/, '').replace(/:\d+$/, '')) : null;
+    const [ifs, gw, conns] = await Promise.all([si.networkInterfaces().catch(() => []), si.networkGatewayDefault().catch(() => ''), si.wifiConnections().catch(() => [])]);
+    const list = (Array.isArray(ifs) ? ifs : [ifs]).filter((i) => !i.internal);
+    const vpnName = /^(tun|tap|utun|wg|ppp|ipsec|zt)\d*|vpn|wireguard|tailscale|zerotier|openvpn|anyconnect/i;
+    const interfaces = list.map((i) => ({
+      name: i.ifaceName || i.iface,
+      type: String(i.type ?? ''),
+      up: i.operstate === 'up' || !!i.ip4,
+      ip4: i.ip4 || null,
+      ip6: i.ip6 || null,
+      mac: i.mac,
+      speedMbps: i.speed && i.speed > 0 ? i.speed : null,
+      virtual: !!i.virtual || vpnName.test(`${i.iface} ${i.ifaceName}`) || /^(docker|br-|veth|virbr|vmnet|vboxnet|lo)/i.test(i.iface),
+      dhcp: typeof i.dhcp === 'boolean' ? i.dhcp : null,
+    }));
+    const vpn = list.find((i) => (i.operstate === 'up' || i.ip4) && vpnName.test(`${i.iface} ${i.ifaceName}`));
+    const c = (conns as any[])[0];
+    const wifi = c ? { ssid: String(c.ssid ?? ''), signalPct: typeof c.quality === 'number' ? c.quality : null, signalDbm: typeof c.signalLevel === 'number' && c.signalLevel < 0 ? c.signalLevel : null, band: !c.frequency ? '' : c.frequency >= 5900 ? '6 GHz' : c.frequency >= 4900 ? '5 GHz' : '2.4 GHz' } : null;
+    const gateway = gw && validIp(gw) ? gw : null;
+    const gatewayPing = gateway ? await this.ping(gateway, 3, 1000).catch(() => null) : null;
+    const gatewayMac = gateway ? ((await this.arpTable().catch(() => new Map<string, string>())).get(gateway) ?? null) : null;
+    const internetAllowed = o.online && this.d.internet();
+    const facts: StackFacts = {
+      os: IS_WIN ? 'windows' : process.platform === 'darwin' ? 'mac' : 'linux',
+      interfaces,
+      wifi,
+      gateway,
+      gatewayPing,
+      gatewayMac,
+      internetAllowed,
+      internetPing: null,
+      dnsServers: dns.getServers(),
+      dnsSystem: null,
+      dnsDirect: null,
+      tcp443: { byIp: null, byName: null },
+      proxy: await systemProxy(),
+      vpn: vpn ? vpn.ifaceName || vpn.iface : null,
+      web: null,
+      target: null,
+    };
+    if (!internetAllowed) return facts;
+    const name = target ?? 'example.com';
+    const timed = async (fn: () => Promise<unknown>) => {
+      const t0 = performance.now();
+      try {
+        await fn();
+        return { ok: true, ms: Math.round(performance.now() - t0) };
+      } catch {
+        return { ok: false, ms: null };
+      }
+    };
+    const direct = new dns.promises.Resolver({ timeout: 3000, tries: 1 });
+    direct.setServers(['1.1.1.1']);
+    const [internetPing, dnsSystem, dnsDirect, byIp, byName, web] = await Promise.all([
+      this.ping('1.1.1.1', 3, 1000).catch(() => null),
+      timed(() => withTimeout(dns.promises.lookup(name), 5000)),
+      timed(() => direct.resolve4(name)),
+      probePort('1.1.1.1', 443, 3000),
+      probePort('example.com', 443, 3000),
+      webCheck(),
+    ]);
+    Object.assign(facts, { internetPing, dnsSystem, dnsDirect, tcp443: { byIp, byName }, web });
+    if (target) {
+      const resolved = dnsSystem.ok || dnsDirect.ok;
+      const port443 = resolved ? await probePort(target, 443, 4000) : null;
+      let status: number | null = null;
+      let error: string | null = null;
+      if (port443) {
+        try {
+          status = (await fetch(`https://${target}/`, { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(8000) })).status;
+        } catch (e) {
+          error = fetchError(e);
+        }
+      }
+      facts.target = { name: target, resolved, port443, status, error };
+    }
+    return facts;
+  }
+
   // ---------------------------------------------------------------------------------------- adapters
 
   async adapters(): Promise<NetAdapter[]> {
@@ -899,4 +994,60 @@ Get-NetIPConfiguration -InterfaceAlias ${a} | Format-List InterfaceAlias,IPv4Add
     child.on('error', () => spawn('cmd.exe', ['/c', 'start', '""', 'ssh', '-p', String(p), target], { detached: true, stdio: 'ignore' }).unref());
     child.unref();
   }
+}
+
+/** A promise, or an error after `ms`. */
+function withTimeout<T>(p: Promise<T>, ms: number): Promise<T> {
+  return Promise.race([p, new Promise<T>((_r, reject) => setTimeout(() => reject(new Error('timed out')), ms))]);
+}
+
+/** A failed fetch in plain words: the certificate, a reset, a timeout. */
+function fetchError(e: unknown): string {
+  const err = e as { name?: string; message?: string; cause?: { code?: string; message?: string } };
+  const code = err.cause?.code ?? '';
+  if (/CERT|SELF_SIGNED|UNABLE_TO_VERIFY|ERR_TLS|SSL/i.test(code)) return `the secure connection was refused (${code}: the certificate is not trusted, or the clock is wrong)`;
+  if (err.name === 'TimeoutError' || /ETIMEDOUT|UND_ERR_CONNECT_TIMEOUT/.test(code)) return 'it timed out';
+  if (/ECONNRESET/.test(code)) return 'the connection was cut off (a filter or firewall often does that)';
+  if (/ECONNREFUSED/.test(code)) return 'the connection was refused';
+  if (/ENOTFOUND|EAI_AGAIN/.test(code)) return 'the name was not found';
+  return err.cause?.message ?? err.message ?? 'it failed';
+}
+
+/**
+ * A plain web page and a secure one: a sign-in page in the way (the plain page does not come back empty), whether
+ * secure pages load, and how far this computer's clock is from the server's.
+ */
+async function webCheck(): Promise<StackFacts['web']> {
+  let portal = false;
+  try {
+    const r = await fetch('http://cp.cloudflare.com/generate_204', { redirect: 'manual', signal: AbortSignal.timeout(5000) });
+    portal = r.status !== 204;
+  } catch {
+    /* no plain web: the secure check says more */
+  }
+  try {
+    const r = await fetch('https://example.com/', { method: 'HEAD', redirect: 'manual', signal: AbortSignal.timeout(8000) });
+    const date = Date.parse(r.headers.get('date') ?? '');
+    return { portal, status: r.status, error: null, clockSkewMin: Number.isFinite(date) ? Math.round((Date.now() - date) / 60_000) : null };
+  } catch (e) {
+    return { portal, status: null, error: fetchError(e), clockSkewMin: null };
+  }
+}
+
+/** The proxy this computer sends web traffic through, if one is set. */
+async function systemProxy(): Promise<string | null> {
+  const env = process.env.HTTPS_PROXY || process.env.https_proxy || process.env.HTTP_PROXY || process.env.http_proxy;
+  try {
+    if (IS_WIN) {
+      const r = await exec('netsh', ['winhttp', 'show', 'proxy'], { timeoutMs: 5000 });
+      const m = r.out.match(/Proxy Server\(s\)\s*:\s*(\S+)/i);
+      if (m) return m[1]!;
+    } else if (process.platform === 'darwin') {
+      const r = await exec('scutil', ['--proxy'], { timeoutMs: 5000 });
+      if (/HTTPSEnable\s*:\s*1/.test(r.out)) return `${r.out.match(/HTTPSProxy\s*:\s*(\S+)/)?.[1] ?? '?'}:${r.out.match(/HTTPSPort\s*:\s*(\d+)/)?.[1] ?? ''}`;
+    }
+  } catch {
+    /* no proxy tool: the environment says */
+  }
+  return env ? env.replace(/\/\/[^@/]*@/, '//') : null;
 }
