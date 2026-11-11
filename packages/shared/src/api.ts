@@ -18,7 +18,7 @@ import type { Bookmark, BrowserCheck, BrowserState, HistoryEntry } from './brows
 import type { MemoryCategory, MemoryEntry, MemoryStatus } from './memory';
 import type { Skill } from './skills';
 import type { ToolkitAction, ToolkitCommands, ToolkitInput, ToolkitSystem } from './toolkit';
-import type { SoulStatus } from './soul';
+import type { PersonalityStatus } from './personality';
 import type { Policy, PolicyAction, PolicyRule, RiskLevel } from './policy';
 import type { ThinkingBudget, ThinkingLevel } from './thinking';
 import type { ExtEvents, ExtMethods } from './ext';
@@ -228,11 +228,11 @@ export interface EffectiveInstructions {
   offline: boolean;
   system: string;
   sha256: string;
-  /** sha256 of FBRX's core principles (SOUL_CORE). */
+  /** sha256 of FBRX's core principles (CORE_PRINCIPLES). */
   coreSha256: string;
   /** The system prompt starts with the core principles, whole. */
   coreFirstAndWhole: boolean;
-  /** The persona as the AI reads it (soul.md, filtered and cut to its budget), or null. */
+  /** The persona as the AI reads it (personality.md, filtered and cut to its budget), or null. */
   persona: string | null;
   /** The tools the AI may use here (a small model on this computer is offered the ones a conversation is about). */
   tools: string[];
@@ -846,17 +846,17 @@ export interface CoreMethods extends ExtMethods {
   'toolkit.setEnabled': (p: { id: string; enabled: boolean }) => ToolkitAction;
   'toolkit.reset': (p: { id: string }) => ToolkitAction;
   'toolkit.remove': (p: { id: string }) => { removed: boolean };
-  /** The AI's soul (soul.md): who it is, its options, the commands the person can type (Settings → Soul). */
-  'soul.get': () => SoulStatus;
-  'soul.set': (p: { text: string }) => SoulStatus;
+  /** The AI's personality (personality.md): who it is, its options, the commands the person can type (Settings → Personality). */
+  'personality.get': () => PersonalityStatus;
+  'personality.set': (p: { text: string }) => PersonalityStatus;
   /** Back to FBRX's default (the version before is kept). */
-  'soul.reset': () => SoulStatus;
+  'personality.reset': () => PersonalityStatus;
   /** The version before the last change, back in place (the one it replaces is kept, so an undo can be undone). */
-  'soul.undo': () => SoulStatus;
-  /** The soul.md from before FBRX took its principles out (see SoulStatus.notice), or null. */
-  'soul.previous': () => { text: string | null };
+  'personality.undo': () => PersonalityStatus;
+  /** The personality.md from before FBRX took its principles out (see PersonalityStatus.notice), or null. */
+  'personality.previous': () => { text: string | null };
   /** The person has seen the notice. */
-  'soul.dismissNotice': () => SoulStatus;
+  'personality.dismissNotice': () => PersonalityStatus;
   'governance.folders': () => FolderAccessStatus;
   /** Lets the AI use a folder (picked by the person). */
   'governance.addFolder': (p: { path: string }) => FolderAccessStatus;
@@ -1005,8 +1005,8 @@ export interface CoreEvents extends ExtEvents {
   /** The AI's memory of the person changed (how many facts it holds now). */
   'memory.changed': { count: number };
   'skills.changed': { count: number };
-  /** soul.md changed (by the person, the AI with their yes, or FBRX's newer default). */
-  'soul.changed': { isDefault: boolean };
+  /** personality.md changed (by the person, the AI with their yes, or FBRX's newer default). */
+  'personality.changed': { isDefault: boolean };
   'toolkit.changed': { count: number };
   'plugins.changed': PluginInfo[];
   'connectors.changed': ConnectorInfo[];

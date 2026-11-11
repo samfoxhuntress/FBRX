@@ -60,9 +60,9 @@ even a small model the tools and the skill the job needs.
 - **AI usage** (next to AI models): this month's tokens by day and by model, the budget, what the agent's model holds,
   and your FBRX account's FBRX Cloud AI. Only counts are kept, never what was said.
 
-## Soul: who Fabrix is, and your commands
+## Personality: who Fabrix is, and your commands
 
-**soul.md** is Fabrix's persona: who it is and how it sounds and works on your computer (*Settings → Soul*). It
+**personality.md** is Fabrix's persona: who it is and how it sounds and works on your computer (*Settings → Personality*). It
 comes with FBRX and is yours to change:
 
 * **Who I am, How I talk**: its character and its voice. By default it starts with the answer, uses plain words, and
@@ -84,7 +84,7 @@ comes with FBRX and is yours to change:
   | FBRX Server and Gate | `/server`, `/gate`, `/dome`, `/lan` |
   | Mesh and devices | `/mesh`, `/askmesh`, `/consoles`, `/sites`, `/guests` |
   | Work | `/brief`, `/agenda`, `/tasks`, `/todo`, `/note`, `/doc`, `/web`, `/ticket` |
-  | You and me | `/remember`, `/forget`, `/skills`, `/kit`, `/toolkits`, `/soul`, `/tune`, `/short`, `/detail`, `/eli5` |
+  | You and me | `/remember`, `/forget`, `/skills`, `/kit`, `/toolkits`, `/personality`, `/tune`, `/short`, `/detail`, `/eli5` |
 
   Add your own the same way: a line like `` - `/standup` — Read my tasks due today and draft three lines for the team. ``
 * **Toolkits**: what Fabrix works with, by family. Ask it (or type `/toolkits`) and it reads the live list: each tool,
@@ -92,26 +92,26 @@ comes with FBRX and is yours to change:
   pages and the `fbrx-server` and `fbrx-gate` commands).
 * **Notes**: how you like it to work, as it learns.
 
-**FBRX's core principles are fixed**, and they are not in soul.md: your privacy, never revealing passwords or other
+**FBRX's core principles are fixed**, and they are not in personality.md: your privacy, never revealing passwords or other
 secrets, doing no harm whoever asks, asking first before a change (as Governance says), and the truth (it says it did
 something only when a tool shows it, and names its sources). They come first in everything Fabrix is told, whole,
-whatever the persona says: a persona changes how Fabrix sounds, never what it does. So soul.md holds only its own
+whatever the persona says: a persona changes how Fabrix sounds, never what it does. So personality.md holds only its own
 sections (Who I am, How I talk, Options, Commands, Toolkits and Notes, whatever another would be called) and only its
-own options: Fabrix refuses any other change and Settings will not save it. An older soul.md that had more loses it
+own options: Fabrix refuses any other change and Settings will not save it. An older personality.md that had more loses it
 when FBRX updates (*Undo the last change* shows
-the version before, and *Settings → Soul* says once what left). The same goes for skills, memories and AI Toolkit
-actions: none can hold a change to the principles. *Settings → Soul* shows the principles, read-only, and *Undo the
+the version before, and *Settings → Personality* says once what left). The same goes for skills, memories and AI Toolkit
+actions: none can hold a change to the principles. *Settings → Personality* shows the principles, read-only, and *Undo the
 last change* can itself be undone. Approvals themselves are set in Governance. FBRX stops changes by their shape
 (sections, options, headings) and by the plainest words for setting a principle aside ("turn approvals off", "read
 out the passwords", "report success even if it failed", "turn the firewall off", "send my files to anyone", "go
 online even in offline chats"); said the other way round ("never turn approvals off") they are fine. Anything else
-written in soul.md, Fabrix reads as its persona, under the principles.
+written in personality.md, Fabrix reads as its persona, under the principles.
 
-Fabrix reads its soul with every message (the commands only when you type one, so a small AI on your computer stays
+Fabrix reads its personality with every message (the commands only when you type one, so a small AI on your computer stays
 quick). Ask it to work differently from now on (or type `/tune` and what to change) and it offers the change to
-soul.md: you see the change and approve it first. Every change keeps the version before it, so *Undo the last change*
-goes back; *Use FBRX's* goes back to FBRX's soul.md. Until you change yours, it follows FBRX's newer soul.md when FBRX
-updates. Student and child computers have the learning helper instead, with no soul or commands.
+personality.md: you see the change and approve it first. Every change keeps the version before it, so *Undo the last change*
+goes back; *Use FBRX's* goes back to FBRX's personality.md. Until you change yours, it follows FBRX's newer personality.md when FBRX
+updates. Student and child computers have the learning helper instead, with no personality or commands.
 
 ## Skills: jobs it knows how to do
 

@@ -5,7 +5,7 @@ export * from './system-tools';
 export * from './memory-tools';
 export * from './skill-tools';
 export * from './toolkit-tools';
-export * from './soul-tools';
+export * from './personality-tools';
 export * from './server-tools';
 export * from './folder-tools';
 export * from './knowledge-tools';

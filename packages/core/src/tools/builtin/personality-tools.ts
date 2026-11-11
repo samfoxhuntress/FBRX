@@ -1,9 +1,9 @@
-import { SOUL_LIMITS, SOUL_OPTIONS, SOUL_SECTIONS, soulAllowedTitle, soulPersona, soulSection, withSoulSection } from '@fbrx/shared';
-import type { SoulStore } from '../../ai/soul';
+import { PERSONALITY_LIMITS, PERSONALITY_OPTIONS, PERSONALITY_SECTIONS, personalityAllowedTitle, personaOf, personalitySection, withPersonalitySection } from '@fbrx/shared';
+import type { PersonalityStore } from '../../ai/personality';
 import type { ToolSpec } from '../types';
 
 /**
- * The AI's own tools for itself: reading its soul (soul.md), changing it (a write: FBRX asks the person, who sees the
+ * The AI's own tools for itself: reading its personality (personality.md), changing it (a write: FBRX asks the person, who sees the
  * change), and reading every toolkit it has, by family, FBRX Server and FBRX Gate included.
  */
 
@@ -24,7 +24,7 @@ export const TOOL_FAMILIES: Family[] = [
   { id: 'server', title: 'FBRX Server and Gate', prefixes: ['server'], about: 'What the person’s FBRX Server sees of the network (FBRX Gate and MiniDome), read-only.' },
   { id: 'mesh', title: 'Mesh and devices', prefixes: ['mesh', 'device_console', 'network_env'], about: 'The person’s other computers, device consoles and network environments.' },
   { id: 'work', title: 'Work', prefixes: ['workspace', 'calendar', 'docs', 'image', 'web', 'finance', 'helpdesk'], about: 'Notes, tasks, projects, the calendar, documents, pictures, the web and the help desk.' },
-  { id: 'me', title: 'Me', prefixes: ['memory', 'skills', 'soul', 'toolkits'], about: 'What you remember, the skills you learned, your toolkits and your soul.' },
+  { id: 'me', title: 'Me', prefixes: ['memory', 'skills', 'personality', 'toolkits'], about: 'What you remember, the skills you learned, your toolkits and your personality.' },
 ];
 
 /** What the person (or you, through them) can use on an FBRX Server itself, beyond server.network_check. */
@@ -40,40 +40,40 @@ const familyOf = (name: string): Family | null => {
   return TOOL_FAMILIES.find((f) => f.prefixes.includes(prefix)) ?? null;
 };
 
-export function soulTools(soul: SoulStore, tools: () => ToolSpec[]): ToolSpec[] {
+export function personalityTools(personality: PersonalityStore, tools: () => ToolSpec[]): ToolSpec[] {
   return [
     {
-      name: 'soul.read',
-      title: 'Read your soul',
-      description: 'Read soul.md, the person’s file of your persona: who you are, how you talk, the options they set, their commands, your toolkits and notes. FBRX’s core principles are not in it: they are fixed. Optionally one section.',
+      name: 'personality.read',
+      title: 'Read your personality',
+      description: 'Read personality.md, the person’s file of your persona: who you are, how you talk, the options they set, their commands, your toolkits and notes. FBRX’s core principles are not in it: they are fixed. Optionally one section.',
       risk: 'read',
       source: 'builtin',
       sourceId: null,
       inputSchema: { type: 'object', properties: { section: { type: 'string', maxLength: 60, description: 'One section, like Options or Commands (optional)' } } },
       async run(i) {
         // What the AI may read as its own: the persona, never what FBRX keeps out of it (as in the prompt).
-        const text = soulPersona(soul.read());
-        if (i.section && !soulAllowedTitle(i.section)) return { output: `soul.md has no ${i.section} section: it holds only ${SOUL_SECTIONS.join(', ')}. FBRX’s core principles are fixed, not part of soul.md, and come first in your instructions.`, data: { section: null } };
+        const text = personaOf(personality.read());
+        if (i.section && !personalityAllowedTitle(i.section)) return { output: `personality.md has no ${i.section} section: it holds only ${PERSONALITY_SECTIONS.join(', ')}. FBRX’s core principles are fixed, not part of personality.md, and come first in your instructions.`, data: { section: null } };
         if (i.section) {
-          const s = soulSection(text, i.section);
-          return { output: s ? `## ${s.title}\n\n${s.body}` : `soul.md has no section called ${i.section}. Its sections: ${soul.status().sections.join(', ')}.`, data: { section: s?.title ?? null } };
+          const s = personalitySection(text, i.section);
+          return { output: s ? `## ${s.title}\n\n${s.body}` : `personality.md has no section called ${i.section}. Its sections: ${personality.status().sections.join(', ')}.`, data: { section: s?.title ?? null } };
         }
-        return { output: `${text}\n\n(FBRX’s core principles are not in soul.md: they are fixed, and come first in your instructions.)`, data: { path: soul.path, isDefault: soul.isDefault() } };
+        return { output: `${text}\n\n(FBRX’s core principles are not in personality.md: they are fixed, and come first in your instructions.)`, data: { path: personality.path, isDefault: personality.isDefault() } };
       },
     },
     {
-      name: 'soul.update',
-      title: 'Change your soul',
-      description: `Change one section of soul.md (your persona), when the person asks you to work differently (a new option, a command, a note on how they like things). Replace the section, or append lines to it (Notes, a command). The person approves the change first and can undo it in Settings → Soul. It changes how you sound and work, never FBRX’s core principles: its sections are ${SOUL_SECTIONS.join(', ')} (no others), and the options are ${SOUL_OPTIONS.join(', ')}. ${SOUL_LIMITS.change} characters at most, no # or ## headings inside.`,
+      name: 'personality.update',
+      title: 'Change your personality',
+      description: `Change one section of personality.md (your persona), when the person asks you to work differently (a new option, a command, a note on how they like things). Replace the section, or append lines to it (Notes, a command). The person approves the change first and can undo it in Settings → Personality. It changes how you sound and work, never FBRX’s core principles: its sections are ${PERSONALITY_SECTIONS.join(', ')} (no others), and the options are ${PERSONALITY_OPTIONS.join(', ')}. ${PERSONALITY_LIMITS.change} characters at most, no # or ## headings inside.`,
       risk: 'write',
       source: 'builtin',
       sourceId: null,
       inputSchema: {
         type: 'object',
         properties: {
-          section: { type: 'string', minLength: 2, maxLength: 60, description: `The section: ${SOUL_SECTIONS.join(', ')}` },
+          section: { type: 'string', minLength: 2, maxLength: 60, description: `The section: ${PERSONALITY_SECTIONS.join(', ')}` },
           mode: { type: 'string', enum: ['append', 'replace'], description: 'append adds lines at its end; replace sets the whole section' },
-          content: { type: 'string', minLength: 1, maxLength: SOUL_LIMITS.change, description: 'The lines to add, or the section’s new text' },
+          content: { type: 'string', minLength: 1, maxLength: PERSONALITY_LIMITS.change, description: 'The lines to add, or the section’s new text' },
           why: { type: 'string', maxLength: 300, description: 'What the person asked for, in a few words' },
         },
         required: ['section', 'mode', 'content', 'why'],
@@ -81,14 +81,14 @@ export function soulTools(soul: SoulStore, tools: () => ToolSpec[]): ToolSpec[] 
       // The approval card shows the change: the section as it is, and as it would be.
       note: (i: { section?: string; mode?: string; content?: string }) => {
         const title = String(i.section ?? '').trim();
-        const now = soulSection(soulPersona(soul.read()), title)?.body ?? '';
-        const next = soulSection(withSoulSection(soulPersona(soul.read()), title, String(i.content ?? ''), i.mode === 'replace' ? 'replace' : 'append'), title)?.body ?? '';
+        const now = personalitySection(personaOf(personality.read()), title)?.body ?? '';
+        const next = personalitySection(withPersonalitySection(personaOf(personality.read()), title, String(i.content ?? ''), i.mode === 'replace' ? 'replace' : 'append'), title)?.body ?? '';
         const cut = (t: string) => (t.length > 600 ? `${t.slice(0, 600)}…` : t) || '(nothing yet)';
-        return `Section ${title} of soul.md now:\n${cut(now)}\nAfter the change:\n${cut(next)}`;
+        return `Section ${title} of personality.md now:\n${cut(now)}\nAfter the change:\n${cut(next)}`;
       },
       async run(i) {
-        const s = soul.update({ section: i.section, content: i.content, mode: i.mode === 'replace' ? 'replace' : 'append' }, 'Fabrix');
-        return { output: `soul.md changed (${i.mode === 'replace' ? 'replaced' : 'added to'} ${i.section}). You follow it from the next message; the person can undo it in Settings → Soul.`, data: { sections: s.sections } };
+        const s = personality.update({ section: i.section, content: i.content, mode: i.mode === 'replace' ? 'replace' : 'append' }, 'Fabrix');
+        return { output: `personality.md changed (${i.mode === 'replace' ? 'replaced' : 'added to'} ${i.section}). You follow it from the next message; the person can undo it in Settings → Personality.`, data: { sections: s.sections } };
       },
     },
     {

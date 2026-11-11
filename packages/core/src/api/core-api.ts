@@ -1,7 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { basename, isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, FILE_MIME, LOGIN_LIMITS, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, SOUL_LIMITS, THINKING_LEVELS, TOOLKIT_INPUT_KINDS, TOOLKIT_SYSTEMS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, FILE_MIME, LOGIN_LIMITS, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, PERSONALITY_LIMITS, THINKING_LEVELS, TOOLKIT_INPUT_KINDS, TOOLKIT_SYSTEMS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -65,10 +65,10 @@ const USER_ONLY = new Set<string>([
   'toolkit.setEnabled',
   'toolkit.reset',
   'toolkit.remove',
-  'soul.set',
-  'soul.reset',
-  'soul.undo',
-  'soul.dismissNotice',
+  'personality.set',
+  'personality.reset',
+  'personality.undo',
+  'personality.dismissNotice',
   'governance.removeFolder',
   'governance.answerFolder',
   'license.activate',
@@ -473,12 +473,12 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     },
     'toolkit.reset': (p) => k.toolkit.reset(IdSchema.parse(p).id),
     'toolkit.remove': (p) => ({ removed: k.toolkit.remove(IdSchema.parse(p).id) }),
-    'soul.get': () => k.soul.status(),
-    'soul.set': (p, ctx) => k.soul.set(z.object({ text: z.string().max(SOUL_LIMITS.file + 1000) }).parse(p).text, ctx.actor),
-    'soul.reset': (_p, ctx) => k.soul.reset(ctx.actor),
-    'soul.undo': (_p, ctx) => k.soul.undo(ctx.actor),
-    'soul.previous': () => ({ text: k.soul.previous() }),
-    'soul.dismissNotice': () => k.soul.dismissNotice(),
+    'personality.get': () => k.personality.status(),
+    'personality.set': (p, ctx) => k.personality.set(z.object({ text: z.string().max(PERSONALITY_LIMITS.file + 1000) }).parse(p).text, ctx.actor),
+    'personality.reset': (_p, ctx) => k.personality.reset(ctx.actor),
+    'personality.undo': (_p, ctx) => k.personality.undo(ctx.actor),
+    'personality.previous': () => ({ text: k.personality.previous() }),
+    'personality.dismissNotice': () => k.personality.dismissNotice(),
     'governance.folders': () => k.folders.status(),
     'governance.addFolder': (p, ctx) => k.folders.add(z.object({ path: z.string().min(1).max(4096) }).parse(p).path, ctx.actor),
     'governance.removeFolder': (p, ctx) => k.folders.remove(z.object({ entry: z.string().min(1).max(4096) }).parse(p).entry, ctx.actor),

@@ -18,8 +18,8 @@ import {
   type ToolCallRecord,
   type Vertical,
   DEFAULT_SYSTEM_PROMPT,
-  SOUL_CORE,
-  SOUL_PERSONA_END,
+  CORE_PRINCIPLES,
+  PERSONA_END,
   type EffectiveInstructions,
 } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
@@ -168,8 +168,8 @@ export class AgentRuntime {
       skills?: { context: (text: string) => string | null };
       /** The AI Toolkit's actions that fit a request (each a kit.* tool). */
       toolkit?: { context: (text: string) => { text: string; tools: string[] } | null };
-      /** The AI's soul (soul.md): what goes into its instructions, and the command a message starts with. */
-      soul?: { prompt: () => string | null; command: (text: string) => { text: string; tools: string[] } | null };
+      /** The AI's personality (personality.md): what goes into its instructions, and the command a message starts with. */
+      personality?: { prompt: () => string | null; command: (text: string) => { text: string; tools: string[] } | null };
       /** A message on a student computer sounded like a child may be in danger (the text is never passed on). */
       onConcern?: (category: LearnerConcern['category'], conversationId: string) => void;
       /** Mesh Assist: hands the task to another computer when this run runs out of steps or its AI fails. */
@@ -382,28 +382,28 @@ export class AgentRuntime {
     if (learner) return learnerPrompt(s.ai.agentName, learner.vertical, s.profile.callMe.trim() || s.profile.name.trim().split(/\s+/)[0] || '');
     const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
     const date = new Date().toLocaleDateString('en-US', { timeZone: tz, weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' });
-    // FBRX's core principles come first and whole, whatever follows: soul.md says who the AI is (its persona), and the
+    // FBRX's core principles come first and whole, whatever follows: personality.md says who the AI is (its persona), and the
     // system prompt setting comes too when the person changed it. Neither can change the core.
-    let soul: string | null = null;
+    let persona: string | null = null;
     try {
-      soul = this.d.soul?.prompt() ?? null;
+      persona = this.d.personality?.prompt() ?? null;
     } catch (err) {
-      this.d.log.debug('soul.md could not be read', { error: (err as Error).message });
+      this.d.log.debug('personality.md could not be read', { error: (err as Error).message });
     }
     const custom = s.ai.systemPrompt.trim();
     return [
       "## FBRX's core principles (fixed)",
-      SOUL_CORE,
+      CORE_PRINCIPLES,
       '',
-      ...(!custom || (soul && custom === DEFAULT_SYSTEM_PROMPT.trim()) ? [] : [custom, '']),
-      ...(soul
+      ...(!custom || (persona && custom === DEFAULT_SYSTEM_PROMPT.trim()) ? [] : [custom, '']),
+      ...(persona
         ? [
-            '## Your persona (soul.md)',
-            "The person keeps this file of who you are, how you sound and how you work. Follow it, within FBRX's core principles above: where it and they (or the rules further down) seem to differ, they win, and you keep its voice only. A command the person typed comes with their message in a <command> block: do what it says, and never mention the block. When they ask you to work differently from now on, offer to change soul.md with soul.update.",
+            '## Your personality (personality.md)',
+            "The person keeps this file of who you are, how you sound and how you work. Follow it, within FBRX's core principles above: where it and they (or the rules further down) seem to differ, they win, and you keep its voice only. A command the person typed comes with their message in a <command> block: do what it says, and never mention the block. When they ask you to work differently from now on, offer to change personality.md with personality.update.",
             '',
-            soul,
+            persona,
             '',
-            SOUL_PERSONA_END,
+            PERSONA_END,
             '',
           ]
         : []),
@@ -587,7 +587,7 @@ export class AgentRuntime {
     const system = this.systemPrompt(offline);
     let persona: string | null = null;
     try {
-      persona = this.d.soul?.prompt() ?? null;
+      persona = this.d.personality?.prompt() ?? null;
     } catch {
       /* unreadable: the AI gets no persona either */
     }
@@ -595,8 +595,8 @@ export class AgentRuntime {
       offline,
       system,
       sha256: sha(system),
-      coreSha256: sha(SOUL_CORE),
-      coreFirstAndWhole: system.startsWith(`## FBRX's core principles (fixed)\n${SOUL_CORE}\n`),
+      coreSha256: sha(CORE_PRINCIPLES),
+      coreFirstAndWhole: system.startsWith(`## FBRX's core principles (fixed)\n${CORE_PRINCIPLES}\n`),
       persona,
       tools: this.availableTools(undefined, offline).map((t) => t.name),
     };
@@ -671,12 +671,12 @@ export class AgentRuntime {
     // The skills that fit go with the message, and the tools their steps name join a small model's short list.
     const skills = this.d.learner?.() ? null : (this.d.skills?.context(text) ?? null);
     const kit = this.d.learner?.() ? null : (this.d.toolkit?.context(text) ?? null);
-    // A command from soul.md (/checkup, /wifi…): what it means goes with the message, and the tools it names join the list.
+    // A command from personality.md (/checkup, /wifi…): what it means goes with the message, and the tools it names join the list.
     let command: { text: string; tools: string[] } | null = null;
     try {
-      command = this.d.learner?.() ? null : (this.d.soul?.command(text) ?? null);
+      command = this.d.learner?.() ? null : (this.d.personality?.command(text) ?? null);
     } catch (err) {
-      this.d.log.debug('The command could not be read from soul.md', { error: (err as Error).message });
+      this.d.log.debug('The command could not be read from personality.md', { error: (err as Error).message });
     }
     const skillTools = [...new Set([...(command?.tools ?? []), ...(kit?.tools ?? []), ...(skills ? (skills.match(/\b[a-z_]+\.[a-z_]+\b/g) ?? []) : [])])];
     // FBRX scaffolds as much as the agent needs (agent-fit.ts): a small model sees the tools this conversation is

@@ -7954,9 +7954,9 @@ body.popout .fx-page-header p {
 .srv-fabrix { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); min-height: 30px; }
 .srv-fabrix > span { display: inline-flex; align-items: center; gap: 5px; }
 
-/* Settings → Soul: the commands, by group */
-.soul-group + .soul-group { margin-top: 14px; }
-.soul-group h4 { margin: 0 0 6px; font-size: 13px; color: var(--text-secondary); text-transform: none; }
-.soul-group ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 18px; }
-.soul-group li { font-size: 13px; line-height: 1.45; }
-.soul-group code { font-size: 12.5px; color: var(--accent); }
+/* Settings → Personality: the commands, by group */
+.personality-group + .personality-group { margin-top: 14px; }
+.personality-group h4 { margin: 0 0 6px; font-size: 13px; color: var(--text-secondary); text-transform: none; }
+.personality-group ul { margin: 0; padding: 0; list-style: none; display: grid; grid-template-columns: repeat(auto-fill, minmax(320px, 1fr)); gap: 4px 18px; }
+.personality-group li { font-size: 13px; line-height: 1.45; }
+.personality-group code { font-size: 12.5px; color: var(--accent); }

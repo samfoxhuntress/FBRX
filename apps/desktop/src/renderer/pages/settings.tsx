@@ -52,7 +52,7 @@ import { SnippetSettings } from './settings-snippets';
 import { VoiceSettings } from './settings-voice';
 import { MemorySettings } from './settings-memory';
 import { SkillsSettings } from './settings-skills';
-import { SoulSettings } from './settings-soul';
+import { PersonalitySettings } from './settings-personality';
 import { AboutVersion, ReleasePanel } from '../release';
 import { AccountSettings, BuyButtons, useAccount } from '../account';
 import { EditionHint, trialLine, howToGet, useAtLeast, useChooseEdition, useEditionStatus, useLearner, useTier, useVertical } from '../edition';
@@ -65,7 +65,7 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'soul' | 'memory' | 'skills' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'browser' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'api' | 'logs';
+type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'personality' | 'memory' | 'skills' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'browser' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'api' | 'logs';
 /** FBRX Digger's settings: what applies to a network toolkit. */
 const DIGGER_TABS: readonly string[] = DIGGER_SETTINGS;
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean }> = [
@@ -74,7 +74,7 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: str
   { id: 'presenting', label: 'Presenting', icon: 'presentation', group: 'You', notEssentials: true },
   { id: 'messages', label: 'Messages', icon: 'message', group: 'You', notEssentials: true },
   { id: 'agent', label: 'Agent', icon: 'sparkles', group: 'You' },
-  { id: 'soul', label: 'Soul', icon: 'feather', group: 'You' },
+  { id: 'personality', label: 'Personality', icon: 'feather', group: 'You' },
   { id: 'memory', label: 'Memory', icon: 'brain', group: 'You' },
   { id: 'skills', label: 'Skills', icon: 'toolbox', group: 'You' },
   { id: 'voice', label: 'Voice', icon: 'mic', group: 'You' },
@@ -143,7 +143,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'presenting' && <PresentingSettings />}
           {tab === 'messages' && <MessagesSettings />}
           {tab === 'agent' && <AgentSettings />}
-          {tab === 'soul' && <SoulSettings />}
+          {tab === 'personality' && <PersonalitySettings />}
           {tab === 'memory' && <MemorySettings />}
           {tab === 'skills' && <SkillsSettings />}
           {tab === 'voice' && <VoiceSettings />}
