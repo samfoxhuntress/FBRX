@@ -1276,6 +1276,45 @@ pre,
 .fx-toast-title {
   font-weight: 600;
 }
+.fx-toast {
+  position: relative;
+  padding-right: 34px;
+}
+.fx-toast-close {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.fx-toast-close:hover {
+  background: var(--surface-2);
+  color: var(--text-primary);
+}
+.fx-toast-close:focus-visible {
+  outline: 2px solid var(--accent);
+}
+.fx-toasts-clear {
+  align-self: flex-end;
+  padding: 3px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border-strong);
+  background: var(--surface-1);
+  color: var(--text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  box-shadow: var(--shadow-pop);
+}
+.fx-toasts-clear:hover {
+  background: var(--surface-2);
+}
 .fx-toast-action {
   margin-top: 6px;
   padding: 3px 10px;

@@ -117,7 +117,7 @@ const OPERATIONAL: Record<string, Node> = {
             `Device name:  ${s.deviceName}`,
             `Install id:   ${sup.installId}`,
             `Edition:      ${TIER_NAMES[s.license.tier as Tier] ?? s.license.tier}`,
-            `License:      ${s.license.edition}${s.license.customer ? ` (${s.license.customer})` : ''}`,
+            ...(s.license.customer ? [`Licensed to:  ${s.license.customer}`] : []),
             `Support mode: ${sup.active ? `on until ${sup.until}` : 'off'}`,
             `Build:        ${s.devMode ? 'development' : 'release'}`,
           ].join('\n');
@@ -176,7 +176,7 @@ const OPERATIONAL: Record<string, Node> = {
         help: 'License details',
         run: async (_a, c) => {
           const l = await c.call('license.status');
-          return [`Edition:   ${l.edition}`, `Customer:  ${l.customer ?? '-'}`, `Expires:   ${l.expiresAt ?? 'never'}`, `Features:  ${(l.features ?? []).join(', ') || '-'}`].join('\n');
+          return [`Edition:      ${TIER_NAMES[l.tier as Tier] ?? l.tier}`, `Licensed to:  ${l.customer ?? '-'}`, `Expires:      ${l.expiresAt ?? 'never'}`, `Features:     ${(l.features ?? []).join(', ') || '-'}`].join('\n');
         },
       },
       ai: {

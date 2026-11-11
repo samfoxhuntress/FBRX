@@ -1,4 +1,4 @@
-import type { SystemStatus, AuditEntry } from '@fbrx/shared';
+import { TIER_NAMES, type SystemStatus, type AuditEntry } from '@fbrx/shared';
 import type { ToolSpec } from '../types';
 
 export interface FbrxToolDeps {
@@ -21,7 +21,7 @@ export function fbrxTools(d: FbrxToolDeps): ToolSpec[] {
         const s = await d.status();
         const lines = [
           `${s.product} ${s.version} on ${s.platform}/${s.arch} (${s.deviceName || s.hostname})`,
-          `License: ${s.license.edition} (${s.license.state})`,
+          `Edition: ${TIER_NAMES[s.license.tier] ?? s.license.tier} (license ${s.license.state})`,
           `Vault: ${s.vault.state}, ${s.vault.secretCount} secrets`,
           `Fleet: ${s.fleet.state}${s.fleet.tenantName ? ` — ${s.fleet.tenantName}` : ''}`,
           `Local runtime: ${s.runtime.state}${s.runtime.modelId ? ` (${s.runtime.modelId})` : ''}`,

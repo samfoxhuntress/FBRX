@@ -189,7 +189,7 @@ export class LicenseService {
 
   require(feature: Feature): void {
     if (!this.has(feature)) {
-      throw new CoreError('FEATURE_UNAVAILABLE', `"${FEATURES[feature]}" is not included in your ${this.status().edition} license`);
+      throw new CoreError('FEATURE_UNAVAILABLE', `"${FEATURES[feature]}" is not included in ${TIER_NAMES[this.status().tier] ?? 'this edition'}`);
     }
   }
 

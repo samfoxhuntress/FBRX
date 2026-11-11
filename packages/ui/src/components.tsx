@@ -751,18 +751,28 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const push = useCallback((t: Omit<ToastItem, 'id'>) => {
     const id = Date.now() + Math.random();
-    setItems((xs) => [...xs.slice(-4), { ...t, id }]);
+    // The same notice again replaces the one showing, so a repeated one does not stack.
+    setItems((xs) => [...xs.filter((x) => x.title !== t.title || x.body !== t.body).slice(-3), { ...t, id }]);
     setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), t.tone === 'critical' || t.action ? 9000 : 5000);
   }, []);
+  const close = (id: number) => setItems((xs) => xs.filter((x) => x.id !== id));
   return (
     <ToastCtx.Provider value={push}>
       {children}
       <div className="fx-toasts" aria-live="polite">
+        {items.length > 1 && (
+          <button type="button" className="fx-toasts-clear" onClick={() => setItems([])}>
+            Clear all
+          </button>
+        )}
         {items.map((t) => {
           const Ico = Icons[t.tone === 'good' ? 'checkCircle' : t.tone === 'critical' ? 'octagon' : t.tone === 'warning' ? 'alert' : 'info'];
           return (
             <div className="fx-toast" key={t.id}>
               {t.icon ?? <Ico size={18} style={{ color: t.tone === 'info' ? 'var(--accent)' : `var(--${t.tone})`, flex: 'none' }} />}
+              <button type="button" className="fx-toast-close" aria-label="Close this notification" title="Close" onClick={() => close(t.id)}>
+                <Icons.x size={14} />
+              </button>
               <div>
                 <div className="fx-toast-title">{t.title}</div>
                 {t.body && <div className="fx-secondary">{t.body}</div>}
