@@ -192,7 +192,7 @@ const RETIRED = /^[\s>*+\-•·–—\d.)\]\[]*[*_`~]*\s*(ask[\s-]*before[\s-]*c
 const VALUE_DENY = /\b(ask\w*|approv\w*|confirm\w*|passwords?|secrets?|credentials?|tokens?|keys?|verif\w*|offline|online|internet|harm\w*|delet\w*|reveal\w*|disclos\w*|permission\w*|principles?|rules?|governance|safety|security|privacy|private|core)\b/;
 /** What a principle-changing line can be about: protections that may not be turned off or worked around. */
 const GUARDS = 'approvals?|asking|ask first|confirmations?|approval prompts?|governance|guardian|the core|principles?';
-const PROTECTIONS = 'firewall|antivirus|anti-virus|defender|fbrx shield|shield|security|encryption|bitlocker|filevault|audit log|logging';
+const PROTECTIONS = 'firewall|antivirus|anti-virus|defender|fbrx shield|shield|security|encryption|bitlocker|filevault|(?:audit|security|event) log(?:s|ging)?';
 const SECRETS = '(?:saved |stored |their |the |his |her |my |your |all )*(?:passwords?|secrets?|credentials?|api keys?|tokens?|recovery (?:keys?|codes?|passwords?)|private keys?|keys? protectors?|sign-ins?|pins?|passcodes?|pass ?phrases?)';
 /** A few words in between ("turn off FBRX's approvals", "disable Windows Defender"). */
 const FEW = String.raw`(?:[\w'’-]+\s+){0,3}?`;
@@ -202,7 +202,7 @@ const FEW = String.raw`(?:[\w'’-]+\s+){0,3}?`;
  * governs it ("never delete anything without approval", "nothing is pre-approved"); otherwise only a negation right
  * before the match does ("never turn approvals off").
  */
-const PLAIN: Array<{ about: string; re: RegExp; clause?: true }> = [
+const PLAIN: Array<{ about: string; re: RegExp; clause?: true; consent?: true; secrets?: true }> = [
   // 4. Ask first.
   { about: 'asking first and FBRX’s principles are not for saved instructions to change', clause: true, re: new RegExp(String.raw`\b(skip|bypass|disable|ignore|override|drop|without|no need for|no need to|don'?t (?:ask|wait)|do not (?:ask|wait)|never (?:ask|wait))\b[^.\n]{0,40}?\b(approv\w*|${GUARDS}|confirm\w*|permission|polic(?:y|ies)|rules|safety)\b`, 'g') },
   { about: 'asking first is a core principle', clause: true, re: /\bwithout (?:waiting for |asking for |getting |a )?(?:a |their |my |the person’s |the person's )?yes\b/g },
@@ -210,48 +210,97 @@ const PLAIN: Array<{ about: string; re: RegExp; clause?: true }> = [
   { about: 'asking first is a core principle', clause: true, re: /\b(pre-?approved|approved in advance|approved ahead of time|already approved|blanket approval|assume (?:a |my |their )?(?:yes|approval|consent)|count(?:s)? as approved|treat\b[^.\n]{0,40}\bas approved)\b/g },
   { about: 'asking first is a core principle', re: new RegExp(String.raw`\b(?:turn|switch|shut)\s+off\s+${FEW}(?:${GUARDS})\b|\b(?:turn|switch|shut|keep|leave|set)\s+${FEW}(?:${GUARDS})\s+(?:off|disabled)\b|\b(?:disable|deactivate)\s+${FEW}(?:${GUARDS})\b`, 'g') },
   // 2. Secrets (not "how to reset a password", "whose passwords are old" or helping the person keep their own).
-  { about: 'FBRX never reveals secrets', re: new RegExp(String.raw`\b(reveal|show|print|display|send|share|disclose|paste|put|include|insert|read(?: out)?|say|tell|give(?: out)?|list|recite|spell out|dictate|copy|email|text|forward|expose|leak|dump|export|hand (?:over|out))\b[^.\n]{0,40}?\b${SECRETS}\b`, 'g') },
+  { about: 'FBRX never reveals secrets', secrets: true, re: new RegExp(String.raw`\b(reveal|show|print|display|send|share|disclose|paste|put|include|insert|read(?: out)?|say|tell|give(?: out)?|list|recite|spell out|dictate|copy|email|text|forward|expose|leak|dump|export|hand (?:over|out))\b[^.\n]{0,40}?\b${SECRETS}\b`, 'g') },
   // 5. The truth.
   { about: 'FBRX says it did something only when a tool shows it', re: /\b(report|say|tell|claim|pretend|answer|confirm)\b[^.\n]{0,50}?\b(success\w*|worked|it'?s done|done|fine|ok|okay)\b[^.\n]{0,40}?\b(even (?:if|when|though)|whether or not|regardless|no matter)\b/g },
   { about: 'FBRX says it did something only when a tool shows it', re: /\b(?:always|just)\s+(?:report|say|claim|tell\b[^.\n]{0,25}?)\s*(?:success|it worked|it'?s done|it succeeded|everything (?:worked|is fine))\b|\b(make up|invent|fabricate|fake)\b[^.\n]{0,20}?\b(results?|sources?|outputs?|answers?|facts?|success)\b|\bwhen\b[^.\n]{0,30}?\bfails?\b[^.\n]{0,20}?\b(?:say|report|tell|claim)\b[^.\n]{0,25}?\b(?:it worked|worked|succeeded|success|it'?s done)\b/g },
   // 3. No harm.
   { about: 'doing no harm is a core principle', re: new RegExp(String.raw`\b(?:turn|switch|shut)\s+off\s+${FEW}(?:${PROTECTIONS})\b|\b(?:turn|switch|shut|keep|leave)\s+${FEW}(?:${PROTECTIONS})\s+(?:off|disabled)\b|\b(?:disable|deactivate|uninstall|bypass)\s+${FEW}(?:${PROTECTIONS})\b`, 'g') },
-  { about: 'doing no harm is a core principle', clause: true, re: /\b(delete|erase|wipe|format|remove|overwrite)\b[^.\n]{0,50}?\bwithout (?:a |any |making a )?(?:backups?|copy|copies|checking)\b|\bskip\b[^.\n]{0,15}?\bbackups?\b|\b(hide|cover up|erase|wipe|delete|clear|remove)\b[^.\n]{0,20}?\b(what you did|your tracks|the audit log|the audit trail)\b/g },
+  { about: 'doing no harm is a core principle', clause: true, re: /\b(delet(?:e|es|ing)|eras(?:e|es|ing)|wip(?:e|es|ing)|format(?:s|ting)?|remov(?:e|es|ing)|overwrit(?:e|es|ing))\b[^.\n]{0,50}?\bwithout (?:a |any |making a )?(?:backups?|copy|copies|checking)\b|\bskip\b[^.\n]{0,15}?\bbackups?\b|\b(hide|cover up|erase|wipe|delete|clear|remove)\b[^.\n]{0,20}?\b(what you did|your tracks|the audit log|the audit trail)\b/g },
   // 1. Privacy.
-  { about: 'what FBRX learns stays on this computer unless the person says so', re: /\b(send|share|upload|post|forward|email|give|publish)\b[^.\n]{0,50}?\b((?:to|with) (?:anyone|anybody|everyone|whoever)|publicly|online|on the internet|on the web)\b/g },
+  { about: 'what FBRX learns stays on this computer unless the person says so', consent: true, re: /\b(send|share|upload|post|forward|email|give|publish)\b[^.\n]{0,50}?\b((?:to|with) (?:anyone|anybody|everyone|whoever)|publicly|online|on the internet|on the web)\b/g },
   // 6. Offline.
-  { about: 'an offline chat stays offline without the person’s yes', re: /\b(online|internet|the web|search|browse|download)\b[^.\n]{0,50}?\beven (?:in|when|if|during)\b[^.\n]{0,25}?\boffline\b|\b(?:go|get|connect|use the internet)\b[^.\n]{0,15}?\bonline\b[^.\n]{0,25}?\b(?:whenever|any ?time|without asking)\b|\b(?:ignore|skip|bypass)\b[^.\n]{0,20}?\boffline\b/g },
+  { about: 'an offline chat stays offline without the person’s yes', consent: true, re: /\b(online|internet|the web|search|browse|download)\b[^.\n]{0,50}?\beven (?:in|when|if|during)\b[^.\n]{0,25}?\boffline\b|\b(?:go|get|connect|use the internet)\b[^.\n]{0,15}?\bonline\b[^.\n]{0,25}?\b(?:whenever|any ?time|without asking)\b|\b(?:ignore|skip|bypass)\b[^.\n]{0,20}?\boffline\b/g },
 ];
-/** Words that look like a negation but are not one ("don't hesitate to", "no problem", "never mind"). */
-const NOT_A_NEGATION = /^(?:hesitate|worry|forget|fail|mind|problem|worries|doubt|matter|biggie|question|kidding|joke)\b/;
+/**
+ * Words after a negation that leave it about something else: a lead-in ("don't hesitate to", "no problem", "never
+ * mind", "not only") or a negated attitude rather than a negated act ("nobody minds", "no one cares", "nothing stops
+ * you", "don't bother").
+ */
+const NOT_A_NEGATION =
+  /^(?:hesitate|worry|forget|fail|mind|minds|minded|problem|worries|doubt|matter|matters|biggie|question|kidding|joke|only|cares?|cared|bother|bothers|objects?|stops?|stopped|prevents?|forbids?|blocks?|notices?|knows?|sees?|checks?|watches?|complains?|needs? to know|has to know|will know)\b/;
 const NEGATION = String.raw`(?:never|not|don'?t|do not|nothing|none|nobody|no one|neither|nor|without)`;
 /** Where a clause starts: a mark between clauses, or the start of the line. */
 const CLAUSE_BREAK = /[,:;!?.()–—]|\s-\s/;
+/** Words that start a clause of their own inside a sentence ("nobody minds if you …", "… unless you …"). */
+const SUBORDINATE = /\b(?:if|whether|because|unless|when|whenever|while|although|though|since|until|as long as|so that)\b/;
 
 /**
- * Whether a negation governs a match: right before it in the same clause ("never turn approvals off", "apply none
- * without a yes"), or, for the rules that allow it, at the start of the clause before its verb ("never delete anything
- * without approval"). A lead-in about something else ("no problem: …", "don't worry, …", "don't hesitate to …") does
- * not.
+ * Whether a negation governs a match: right before it in the same clause ("never turn approvals off", "not to email",
+ * "apply none without a yes"), or, for the rules that allow it, at the start of the clause before its verb ("never
+ * delete anything without approval"). A lead-in about something else ("no problem: …", "don't worry, …", "don't
+ * hesitate to …"), a question ("why not …") or a negated attitude ("nobody minds if you …") does not.
  */
 function negated(text: string, index: number, clause: boolean): boolean {
   const before = text.slice(0, index);
-  const parts = before.split(CLAUSE_BREAK);
-  const here = parts[parts.length - 1] ?? '';
-  const right = new RegExp(String.raw`\b${NEGATION}\s+(?:ever\s+|once\s+)?$`).exec(here);
-  if (right) return true;
+  const here = before.split(CLAUSE_BREAK).pop() ?? '';
+  const right = new RegExp(String.raw`\b${NEGATION}\s+(?:ever\s+|once\s+|to\s+)?$`).exec(here);
+  if (right) return !/\b(?:why|if|whether|or)\s+not\s+(?:ever\s+|once\s+|to\s+)?$/.test(here);
   if (!clause) return false;
-  const start = here.replace(/^[\s\-+•>]*(?:(?:and|but|so|then|also|please|i|you|we|it|fabrix|always)\s+)*/, '');
-  const m = new RegExp(String.raw`^(?:${NEGATION}|no\s+(\w+))\s+(?:ever\s+)?(\w+)`).exec(start);
+  const own = here.split(SUBORDINATE).pop() ?? '';
+  const start = own.replace(/^[\s\-+•>]*(?:(?:and|but|so|then|also|please|i|you|we|it|fabrix|always)\s+)*/, '');
+  const m = new RegExp(String.raw`^(?:${NEGATION}|no\s+(\w+))\s+(?:ever\s+)?(?:(?:will|would|could|can|should|is going to|has to)\s+)?(\w+(?:\s+to\s+know)?)`).exec(start);
   if (!m) return false;
   return !NOT_A_NEGATION.test(m[1] ?? '') && !NOT_A_NEGATION.test(m[2] ?? '');
 }
 
-/** "How to reset a password", "whose passwords are old", "help the person copy their codes": not handing one out. */
-function secretNotTheObject(text: string, m: RegExpMatchArray): boolean {
-  if (/\b(how|whose|which|where|why|when|what|if|whether|reset|change|update|rotate|set|create|renew|strength|policy|policies|manager|rules|expire\w*|older)\b/.test(m[0])) return true;
-  const before = text.slice(0, m.index);
-  return /\b(?:help|helps|helping|teach|let|walk)\s+(?:the person|them|me|him|her|you|people|users?)\s+(?:to\s+)?$/.test(before);
+/** "Without a yes, change nothing", "without approval, don't delete anything": the sentence goes on to a negated act. */
+function negatedAfter(text: string, m: RegExpMatchArray): boolean {
+  if (!/^without\b/.test(m[0])) return false;
+  const rest = text.slice(m.index! + m[0].length).split(/[.;!?]/)[0] ?? '';
+  return /^\s*,?\s*(?:(?:you|i|we|fabrix)\s+)?(?:(?:never|don'?t|do not|must not|mustn'?t|should not|shouldn'?t|cannot|can'?t|won'?t|will not)\b|\w+\s+(?:nothing|none|no)\b)/.test(rest);
+}
+
+/** "Upload the logs online only after the person says yes": the principle itself allows it with the person's yes. */
+function withTheirYes(text: string, m: RegExpMatchArray): boolean {
+  const rest = text.slice(m.index! + m[0].length).split(/[.;!?]/)[0] ?? '';
+  return /\b(?:only\s+)?(?:after|once|with|when|if)\s+(?:the person(?:'s)?\s+|they\s+|their\s+|you\s+(?:get|have)\s+)?(?:says?\s+yes|said\s+yes|yes|approv\w*|agrees?|agreed|consents?|consented|permission|confirms?|confirmed|okays?\s+it)\b/.test(rest);
+}
+
+/** What the AI says to the person about advice: "explain", "warn", "tell them", "show them how"… */
+const ADVICE = String.raw`(?:explain|explains|warn|warns|tell|tells|remind|reminds|show|shows|teach|teaches|describe|describes|say|says|mention|point out|suggest|offer|recommend|walk)`;
+
+/**
+ * "Explain how to turn the firewall off and why that is risky", "if the person wants to skip the backup, explain the
+ * risk first": the match is the person's own act, which the AI explains; the AI is not told to do it.
+ */
+function theirOwnAct(text: string, index: number): boolean {
+  const here = text.slice(0, index).split(CLAUSE_BREAK).pop() ?? '';
+  if (!/\b(?:how\s+(?:to|they can|the person can|you can)|(?:the person|they|someone|the user|people)\s+(?:\w+\s+)?(?:wants?|chooses?|decides?|prefers?|tries?|plans?|means?|would like|asks? how)\s+to)\s+$/.test(here)) return false;
+  const from = Math.max(text.lastIndexOf('.', index), text.lastIndexOf('!', index), text.lastIndexOf('?', index), text.lastIndexOf(';', index)) + 1;
+  const to = text.slice(index).search(/[.;!?]/);
+  const sentence = text.slice(from, to < 0 ? undefined : index + to);
+  return new RegExp(String.raw`(?:^[\s\-+•>]*|[,:]\s*|\b(?:then|and)\s+)(?:please\s+)?${ADVICE}\b`).test(sentence);
+}
+
+const SECRET_VERB = /\b(reveal|show|print|display|send|share|disclose|paste|put|include|insert|read(?: out)?|say|tell|give(?: out)?|list|recite|spell out|dictate|copy|email|text|forward|expose|leak|dump|export|hand (?:over|out))\b/g;
+
+/** In a secrets match, where the verb whose object the secret is starts: the last such verb before it. */
+function secretVerbAt(m: RegExpMatchArray): number {
+  let at = 0;
+  for (const v of m[0].matchAll(SECRET_VERB)) if (v.index! > 0 && v.index! + v[0].length < m[0].length - 1) at = v.index!;
+  return m.index! + at;
+}
+
+/**
+ * "How to reset a password", "whose passwords are old", "where they are kept", "their password will expire", "a new
+ * temporary password", "help the person copy their codes": not handing a secret out.
+ */
+function secretNotTheObject(text: string, at: number, end: number): boolean {
+  const span = text.slice(at, end);
+  if (/\b(how|whose|which|where|why|whether|reset|change|update|rotate|set|create|renew|strength|policy|policies|manager|rules|expire\w*|older|new|temporary|temp|one-time|random|generated)\b/.test(span)) return true;
+  if (/^\s+(?:will|is|are|has|have|was|were|must|needs?|should)\s+(?:\w+\s+){0,2}?(?:expire\w*|weak|old|older|short|reused|compromised|leaked|breached|changed|reset|locked|rotated|due|stale|too\s+\w+)\b/.test(text.slice(end))) return true;
+  return /\b(?:help|helps|helping|teach|let|walk)\s+(?:the person|them|me|him|her|you|people|users?)\s+(?:to\s+)?$/.test(text.slice(0, at));
 }
 
 /**
@@ -266,11 +315,13 @@ export function principleProblem(line: string): string | null {
   if (IMITATION.test(n)) return 'a line that reads like FBRX’s own core principles';
   const retired = RETIRED.exec(normalText(line));
   if (retired) return `the option "${retired[1]!.replace(/\s+/g, '-')}" (approvals are set in Governance, and checking, the internet and sources are core principles)`;
-  for (const { about, re, clause } of PLAIN) {
+  for (const { about, re, clause, consent, secrets } of PLAIN) {
     for (const m of n.matchAll(re)) {
-      if (negated(n, m.index!, !!clause)) continue;
-      if (about.includes('secrets') && secretNotTheObject(n, m)) continue;
-      return `"${m[0].trim()}" (${about})`;
+      const at = secrets ? secretVerbAt(m) : m.index!;
+      if (negated(n, at, !!clause) || negatedAfter(n, m)) continue;
+      if (secrets ? secretNotTheObject(n, at, m.index! + m[0].length) : theirOwnAct(n, m.index!)) continue;
+      if (consent && withTheirYes(n, m)) continue;
+      return `"${n.slice(at, m.index! + m[0].length).trim()}" (${about})`;
     }
   }
   return null;
