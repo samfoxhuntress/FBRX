@@ -33,6 +33,12 @@ network tool. **Any change to the network tooling is a change to Digger**: the N
 4. Raise `DIGGER_VERSION` and release Digger (the **FBRX Digger** workflow, `digger-v<version>`) alongside the FBRX OS
    release that carries the change; then add or update the `digger` entry in `release.json`.
 
+## Roadmap
+
+The plan of record is the **FBRX Roadmap and Architecture** doc (link in `internal/ROADMAP.md`). Read it before planning,
+and with every change that adds, finishes, moves or drops planned work, update it in the same session: the status in
+"Now", the release it sits in, and a row in its change log.
+
 ## Releases
 
 * `release.json` on the default branch is live: FBRX OS installs read it. Commit it only after the release it
