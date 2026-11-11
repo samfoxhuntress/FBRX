@@ -182,11 +182,13 @@ export class PersonalityStore {
     const text = personaOf(this.read());
     const kept = personalitySections(text).filter((s) => !PERSONALITY_PROMPT_SKIP.includes(s.title.trim().toLowerCase()) && s.body.trim());
     if (!kept.length) return null;
-    const names = personalityCommands(text).map((c) => `/${c.name}`);
+    // The commands' names are not sent with every request (they were a tenth of the instructions): a typed one comes
+    // with its message, /help lists them, and personality.read has them all.
+    const hasCommands = personalityCommands(text).length > 0;
     // The options come with FBRX's own line ahead of them, not the file's.
     let out = kept.map((s) => `### ${s.title}\n${s.title.trim().toLowerCase() === 'options' ? `${PERSONALITY_OPTIONS_INTRO}\n` : ''}${s.body}`).join('\n\n');
     if (out.length > PERSONALITY_LIMITS.prompt) out = `${out.slice(0, PERSONALITY_LIMITS.prompt)}\n[…the rest of personality.md is longer than the AI reads with every request: personality.read has all of it]`;
-    if (names.length) out += `\n\n### Commands\nThe person can start a message with one of these: ${names.join(' ')}. When they do, what it means comes with the message.`;
+    if (hasCommands) out += '\n\n### Commands\nThe person can start a message with a command (/help lists them); what it means comes with the message.';
     return out;
   }
 

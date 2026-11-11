@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
-import { PERSONALITY_LIMITS, personalityCommands } from '@fbrx/shared';
-import { Badge, Button, Card, TextArea, timeAgo, useAction, useConfirm } from '@fbrx/ui';
+import { PERSONALITY_LIMITS, PERSONALITY_OPTIONS, PERSONALITY_OPTION_VALUE_MAX, personalityCommands, personalitySection, withPersonalitySection, type EffectiveInstructions } from '@fbrx/shared';
+import { Badge, Button, Card, Field, Input, Select, Status, TextArea, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { call } from '../client';
 import { useAgentName, useCore } from '../hooks';
 
@@ -54,6 +54,7 @@ export function PersonalitySettings() {
         </Card>
       )}
       <PersonaPicker onUsed={(t) => setText(t)} disabled={changed} />
+      <OptionsEditor text={saved} onSaved={(t) => setText(t)} disabled={changed} />
       <Card
         title="Personality"
         subtitle={`Who ${name} is and how it sounds and works on this computer: personality.md, its persona. It follows the options from your next message, and a command when you start a message with one (/help lists them). ${name} changes it only when you say yes.`}
@@ -113,6 +114,7 @@ export function PersonalitySettings() {
         ))}
         {!commands.length && <p className="fx-muted">No commands: add a Commands section with lines like “- `/name what` — what it does”.</p>}
       </Card>
+      <WhatAiReads />
       {dialog}
     </>
   );
@@ -163,6 +165,107 @@ function PersonaPicker({ onUsed, disabled }: { onUsed: (text: string) => void; d
             {disabled && !shown.current && <span className="fx-muted">Save or undo your edits below first.</span>}
           </div>
         </div>
+      )}
+    </Card>
+  );
+}
+
+/** The options as fields: each `- key: value` line of the Options section, and one to add. */
+function OptionsEditor({ text, onSaved, disabled }: { text: string; onSaved: (text: string) => void; disabled: boolean }) {
+  const name = useAgentName();
+  const { run, busy } = useAction();
+  const lines = (personalitySection(text, 'Options')?.body ?? '').split('\n');
+  const read = () => {
+    const out: Array<[string, string]> = [];
+    for (const l of lines) {
+      const m = /^-\s*([a-z-]+)\s*:\s*(.*)$/i.exec(l.trim());
+      if (m && (PERSONALITY_OPTIONS as readonly string[]).includes(m[1]!.toLowerCase())) out.push([m[1]!.toLowerCase(), m[2]!]);
+    }
+    return out;
+  };
+  const [values, setValues] = useState<Array<[string, string]>>(read);
+  const [adding, setAdding] = useState('');
+  useEffect(() => setValues(read()), [text]); // eslint-disable-line react-hooks/exhaustive-deps
+  const unused = PERSONALITY_OPTIONS.filter((k) => !values.some(([v]) => v === k));
+  const dirty = JSON.stringify(values) !== JSON.stringify(read());
+  const save = () =>
+    void run(
+      'options',
+      () => {
+        const kept = lines.filter((l) => !/^-\s*[a-z-]+\s*:/i.test(l.trim()) || !(PERSONALITY_OPTIONS as readonly string[]).includes((/^-\s*([a-z-]+)/i.exec(l.trim())?.[1] ?? '').toLowerCase()));
+        const body = [...kept.filter((l) => l.trim()), ...values.filter(([, v]) => v.trim()).map(([k, v]) => `- ${k}: ${v.trim()}`)].join('\n');
+        return call('personality.set', { text: withPersonalitySection(text, 'Options', body, 'replace') }).then((st) => onSaved(st.text));
+      },
+      'Options saved',
+    );
+  return (
+    <Card title="Options" subtitle={`How ${name} sounds and works, one value each. They change its voice and habits, never what it may do; ${name} follows them from your next message.`}>
+      <div className="options-grid">
+        {values.map(([k, v], i) => (
+          <Field key={k} label={k}>
+            <div className="options-row">
+              <Input value={v} maxLength={PERSONALITY_OPTION_VALUE_MAX} onChange={(e) => setValues(values.map((x, j) => (j === i ? [k, e.target.value] : x)))} />
+              <Button size="sm" variant="ghost" icon="x" aria-label={`Remove ${k}`} onClick={() => setValues(values.filter((_x, j) => j !== i))} />
+            </div>
+          </Field>
+        ))}
+      </div>
+      <div className="fx-actions" style={{ marginTop: 10 }}>
+        {unused.length > 0 && (
+          <Select
+            value={adding}
+            aria-label="Add an option"
+            options={[{ value: '', label: 'Add an option…' }, ...unused.map((k) => ({ value: k, label: k }))]}
+            onChange={(e) => {
+              const k = e.target.value;
+              if (k) setValues([...values, [k, '']]);
+              setAdding('');
+            }}
+          />
+        )}
+        <Button variant="primary" disabled={!dirty || disabled} loading={busy === 'options'} onClick={save}>
+          Save options
+        </Button>
+        {disabled && <span className="fx-muted">Save or undo your edits below first.</span>}
+      </div>
+    </Card>
+  );
+}
+
+/** What the AI reads before every answer: FBRX's core principles first, then the persona and the rest, as sent. */
+function WhatAiReads() {
+  const name = useAgentName();
+  const { run, busy } = useAction();
+  const [offline, setOffline] = useState(false);
+  const [r, setR] = useState<EffectiveInstructions | null>(null);
+  const load = (off: boolean) => void run('explain', () => call('ai.explain', { offline: off }).then(setR));
+  return (
+    <Card
+      title={`What ${name} reads`}
+      subtitle={`Everything ${name} is told before each answer, exactly as it is sent: FBRX’s core principles first and whole, then this personality, then how it works and its tools.`}
+      actions={
+        <Button loading={busy === 'explain'} onClick={() => load(offline)}>
+          {r ? 'Refresh' : 'Show it'}
+        </Button>
+      }
+    >
+      {r && (
+        <>
+          <div className="fx-actions" style={{ marginBottom: 8, flexWrap: 'wrap' }}>
+            <Status tone={r.coreFirstAndWhole ? 'good' : 'critical'}>{r.coreFirstAndWhole ? 'Core principles first and whole' : 'Core principles not first: report this'}</Status>
+            <span className="fx-muted">
+              {r.system.length.toLocaleString()} characters · {r.tools.length} tools · <span className="mono">sha256 {r.sha256.slice(0, 12)}…</span>
+            </span>
+            <div className="seg" role="group" aria-label="Online or offline chat">
+              {[false, true].map((o) => (
+                <button type="button" key={String(o)} className={offline === o ? 'on' : ''} onClick={() => { setOffline(o); load(o); }}>
+                  {o ? 'Offline chat' : 'Online chat'}
+                </button>
+              ))}
+            </div>
+          </div>
+          <TextArea code rows={16} value={r.system} readOnly aria-label={`What ${name} reads`} />
+        </>
       )}
     </Card>
   );

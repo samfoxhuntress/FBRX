@@ -88,7 +88,9 @@ describe('personality.md', () => {
       expect(system.startsWith(`## FBRX's core principles (fixed)\n${CORE_PRINCIPLES}\n`)).toBe(true);
       expect(system).toContain('## Your personality (personality.md)');
       expect(system).toContain('### How I talk');
-      expect(system).toContain('/checkup');
+      // Commands come on demand: the prompt says they exist, not each name.
+      expect(system).toContain('start a message with a command (/help lists them)');
+      expect(system).not.toContain('/checkup');
       expect(system).not.toContain('### Toolkits');
       expect(system).not.toContain('You are the built-in operations agent');
       expect(first.messages.at(-1).content).toMatch(/<command>\nThe person typed the command \/ip\. From personality\.md, it means: This computer's addresses/);

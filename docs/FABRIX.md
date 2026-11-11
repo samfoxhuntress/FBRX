@@ -71,6 +71,12 @@ comes with FBRX and is yours to change:
   *Network engineer*, *Help desk*, *Patient teacher*, *Developer*, *Focused planner* and *Study buddy*. Picking one
   changes Who I am, How I talk and the options it sets; your commands, toolkits and notes stay, and *Undo* brings back
   the one before. FBRX's core principles are the same in every one.
+* **Options as fields** (*Settings → Personality → Options*): each option's value in its own box, a menu to add one,
+  and *Save options*. Editing the file below does the same.
+* **What Fabrix reads** (*Settings → Personality*, at the bottom): *Show it* shows everything Fabrix is told before
+  each answer, exactly as it is sent, for an online or an offline chat: FBRX's core principles first and whole (it
+  says so), then your personality, then how it works and its tools, with the length and the number of tools.
+  Commands are not in it: their names come only when you type one (and */help* lists them).
 * **Options**: how it works for you, one line each, like `- length: short`, `- emoji: off`, `- plan-first: 3 steps`,
   `- also-noticed: on` or `- units: your region's`. Change a value and Fabrix follows it from your next message. The
   options are tone, length, explain-level, emoji, humor, plan-first, also-noticed, units, time-format, language,
