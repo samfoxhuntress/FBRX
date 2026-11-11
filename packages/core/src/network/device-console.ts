@@ -5,7 +5,10 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { StringDecoder } from 'node:string_decoder';
 import { Client, type ClientChannel, type ConnectConfig } from 'ssh2';
-import { deviceProfile, newId, type ConsoleBookmark, type ConsoleConnectInput, type ConsoleConnectResult, type ConsoleLogin, type ConsoleProtocol, type ConsoleSession } from '@fbrx/shared';
+import { deviceProfile, newId, type ConsoleBookmark, type ConsoleConnectInput, type ConsoleConnectResult, type ConsoleLogin, type ConnectionProtocol, type ConsoleProtocol, type ConsoleSession } from '@fbrx/shared';
+
+/** Each kind of saved connection's usual port. */
+const DEFAULT_PORTS: Record<ConnectionProtocol, number> = { ssh: 22, telnet: 23, rdp: 3389, vnc: 5900 };
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { MetaStore } from '../storage/meta';
@@ -246,10 +249,10 @@ export class DeviceConsoles {
       .sort((a, b) => (b.lastConnectedAt ?? b.createdAt).localeCompare(a.lastConnectedAt ?? a.createdAt));
   }
 
-  saveBookmark(input: { id?: string; label?: string; host: string; port?: number; protocol: ConsoleProtocol; username?: string | null; profileId?: string | null; vendor?: string | null; notes?: string; connected?: boolean }): ConsoleBookmark {
+  saveBookmark(input: { id?: string; label?: string; host: string; port?: number; protocol: ConnectionProtocol; username?: string | null; profileId?: string | null; vendor?: string | null; notes?: string; connected?: boolean }): ConsoleBookmark {
     const host = input.host.trim();
     if (!/^[A-Za-z0-9.:_-]{1,253}$/.test(host)) throw new CoreError('INVALID_ARGUMENT', 'Enter an IP address or host name');
-    const port = input.port ?? (input.protocol === 'telnet' ? 23 : 22);
+    const port = input.port ?? DEFAULT_PORTS[input.protocol];
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new CoreError('INVALID_ARGUMENT', 'Port must be 1-65535');
     const username = input.username?.trim() || null;
     if (username && !/^[^\s:@]{1,64}$/.test(username)) throw new CoreError('INVALID_ARGUMENT', 'Invalid user name');

@@ -1,5 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
+import { openRemote, remoteViewers } from '../network/remote-desktop';
 import { z } from 'zod';
 import {
   ALERT_CHANNELS,
@@ -770,13 +771,23 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
             label: z.string().max(200).optional(),
             host: z.string().min(1).max(253),
             port: z.number().int().min(1).max(65535).optional(),
-            protocol: z.enum(['ssh', 'telnet']),
+            protocol: z.enum(['ssh', 'telnet', 'rdp', 'vnc']),
             username: z.string().max(64).nullable().optional(),
             profileId: z.string().max(40).nullable().optional(),
             notes: z.string().max(2000).optional(),
           })
           .parse(p),
       ),
+    'remote.viewers': () => remoteViewers(),
+    'remote.open': async (p) => {
+      const q = z
+        .object({ protocol: z.enum(['rdp', 'vnc']), host: z.string().min(1).max(253), port: z.number().int().min(1).max(65535).optional(), username: z.string().max(64).optional(), label: z.string().max(200).optional() })
+        .parse(p);
+      const r = await openRemote(q, join(k.paths.root, 'tmp', 'remote'));
+      const bookmark = k.consoles.saveBookmark({ host: q.host, port: q.port, protocol: q.protocol, username: q.username ?? null, label: q.label, connected: true });
+      k.audit.append({ category: 'network', action: 'remote.open', actor: 'user', target: `${q.protocol}://${q.host}${q.port ? `:${q.port}` : ''}`, outcome: 'success', details: { viewer: r.viewer } });
+      return { viewer: r.viewer, bookmark };
+    },
     'console.removeBookmark': (p) => {
       const q = z.object({ id: z.string().min(1).max(64), forgetPassword: z.boolean().optional() }).parse(p);
       k.consoles.removeBookmark(q.id, q.forgetPassword);

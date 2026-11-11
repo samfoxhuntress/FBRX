@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
-import { DEVICE_PROFILES, commandSearchUrl, deviceProfile, matchDeviceProfile, type ConsoleBookmark, type ConsoleProtocol, type ConsoleSession, type DeviceProfile } from '@fbrx/shared';
+import { DEVICE_PROFILES, commandSearchUrl, deviceProfile, matchDeviceProfile, type ConnectionProtocol, type ConsoleBookmark, type ConsoleProtocol, type ConsoleSession, type DeviceProfile, type RemoteProtocol } from '@fbrx/shared';
 import { Button, Callout, Empty, Field, Icons, InfoTip, Input, Modal, Select, Status, TextArea, Toggle, timeAgo, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call, onEvent } from './client';
 import { useAgentName, useConsoleSessions, useCore } from './hooks';
@@ -39,7 +39,7 @@ export interface ConnectTarget {
   vendor?: string | null;
   model?: string | null;
   ports?: number[];
-  protocol?: ConsoleProtocol;
+  protocol?: ConnectionProtocol;
   /** From Saved connections: its port, user, guide and name. */
   port?: number;
   username?: string | null;
@@ -48,12 +48,124 @@ export interface ConnectTarget {
   auto?: boolean;
 }
 
-/** Log in to a device over SSH or Telnet, confirming its identity (host key) the first time. */
+/** How each kind of connection is named, and its usual port. */
+const KIND: Record<ConnectionProtocol, { label: string; port: number }> = { ssh: { label: 'SSH', port: 22 }, telnet: { label: 'Telnet', port: 23 }, rdp: { label: 'Remote desktop', port: 3389 }, vnc: { label: 'Screen sharing', port: 5900 } };
+const isRemote = (p: ConnectionProtocol | undefined): p is RemoteProtocol => p === 'rdp' || p === 'vnc';
+
+/**
+ * Connect to a device or a computer: a console (SSH or Telnet) here in FBRX, or remote desktop (RDP) and screen
+ * sharing (VNC) in this computer's own viewer.
+ */
 export function ConnectDialog({ target, onClose, onConnected }: { target?: ConnectTarget; onClose: () => void; onConnected: (s: ConsoleSession) => void }) {
+  const [kind, setKind] = useState<ConnectionProtocol>(target?.protocol ?? (target?.ports && !target.ports.includes(22) && !target.ports.includes(23) ? (target.ports.includes(3389) ? 'rdp' : target.ports.includes(5900) ? 'vnc' : 'ssh') : target?.ports && !target.ports.includes(22) && target.ports.includes(23) ? 'telnet' : 'ssh'));
+  return isRemote(kind) ? (
+    <RemoteDialog key={kind} target={target} protocol={kind} onKind={setKind} onClose={onClose} />
+  ) : (
+    <ConsoleConnect key="console" target={{ ...target, protocol: kind }} onKind={setKind} onClose={onClose} onConnected={onConnected} />
+  );
+}
+
+/** The four ways to connect, as one switch. */
+function KindSwitch({ value, onChange, disabled }: { value: ConnectionProtocol; onChange: (p: ConnectionProtocol) => void; disabled?: boolean }) {
+  return (
+    <div className="seg" role="group" aria-label="Connect with">
+      {(['ssh', 'telnet', 'rdp', 'vnc'] as const).map((p) => (
+        <button type="button" key={p} className={value === p ? 'on' : ''} disabled={disabled} onClick={() => onChange(p)}>
+          {KIND[p].label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+/** Remote desktop or screen sharing: FBRX opens this computer's viewer, which asks for the password. */
+function RemoteDialog({ target, protocol, onKind, onClose }: { target?: ConnectTarget; protocol: RemoteProtocol; onKind: (p: ConnectionProtocol) => void; onClose: () => void }) {
+  const viewers = useCore('remote.viewers');
+  const v = viewers.data?.find((x) => x.protocol === protocol);
+  const toast = useToast();
+  const [host, setHost] = useState(target?.host ?? '');
+  const [port, setPort] = useState(target?.port && target.port !== KIND[protocol].port ? String(target.port) : '');
+  const [user, setUser] = useState(target?.username ?? '');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const open = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      const r = await call('remote.open', { protocol, host: host.trim(), port: Number(port) || undefined, username: user.trim() || undefined, label: target?.name ?? undefined });
+      toast.success(`Opened in ${r.viewer}`, 'It asks for the password; it is kept in Saved connections.');
+      onClose();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const autoTried = useRef(false);
+  useEffect(() => {
+    if (!target?.auto || autoTried.current || !v?.available || !host.trim()) return;
+    autoTried.current = true;
+    void open();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [v?.available]);
+  return (
+    <Modal
+      title={target?.name ? `Connect to ${target.name}` : protocol === 'rdp' ? 'Remote desktop' : 'Screen sharing'}
+      description={protocol === 'rdp' ? 'See and use another computer’s desktop (RDP).' : 'See and control another computer’s screen (VNC).'}
+      onClose={onClose}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button variant="primary" icon="external" loading={busy} disabled={!host.trim() || !v?.available} onClick={() => void open()}>
+            Open
+          </Button>
+        </>
+      }
+    >
+      <div className="fx-form">
+        <Field label="Connect with">
+          <KindSwitch value={protocol} onChange={onKind} />
+        </Field>
+        <div className="fx-row">
+          <Field label="Address">
+            <Input value={host} onChange={(e) => setHost(e.target.value)} placeholder="192.168.1.20" autoFocus={!target?.host} onKeyDown={(e) => e.key === 'Enter' && host.trim() && v?.available && void open()} />
+          </Field>
+          <Field label="Port">
+            <Input type="number" value={port} placeholder={String(KIND[protocol].port)} onChange={(e) => setPort(e.target.value)} style={{ width: 90 }} />
+          </Field>
+        </div>
+        {protocol === 'rdp' && (
+          <Field label="User name" help="Optional: the viewer asks for it and the password.">
+            <Input value={user} onChange={(e) => setUser(e.target.value)} placeholder="name, or DOMAIN\name" />
+          </Field>
+        )}
+        {v && !v.available ? (
+          <Callout tone="warning" title={protocol === 'rdp' ? 'No remote desktop app here' : 'No screen sharing viewer here'}>
+            {v.hint}
+          </Callout>
+        ) : v ? (
+          <Callout tone="info">
+            Opens in {v.viewer}, which asks for the password: FBRX keeps none. {protocol === 'rdp' ? 'The other computer must allow remote desktop (on Windows: Settings → System → Remote Desktop).' : 'The other computer must allow screen sharing, and its owner can see you are connected.'}
+          </Callout>
+        ) : null}
+        {error && (
+          <Callout tone="critical" title="Could not open it">
+            {error}
+          </Callout>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+/** Log in to a device over SSH or Telnet, confirming its identity (host key) the first time. */
+function ConsoleConnect({ target, onClose, onConnected, onKind }: { target?: ConnectTarget; onClose: () => void; onConnected: (s: ConsoleSession) => void; onKind: (p: ConnectionProtocol) => void }) {
   const matched = target ? matchDeviceProfile({ vendor: target.vendor, name: target.name, model: target.model, ports: target.ports }) : null;
   const logins = useCore('console.logins');
   const [host, setHost] = useState(target?.host ?? '');
-  const [protocol, setProtocol] = useState<ConsoleProtocol>(target?.protocol ?? (target?.ports && !target.ports.includes(22) && target.ports.includes(23) ? 'telnet' : 'ssh'));
+  const [protocol, setProtocol] = useState<ConsoleProtocol>(target?.protocol === 'telnet' ? 'telnet' : 'ssh');
   const [profileId, setProfileId] = useState(target?.profileId ?? matched?.id ?? '');
   const profile = deviceProfile(profileId);
   const defaultPort = protocol === 'telnet' ? 23 : (profile?.sshPort ?? 22);
@@ -163,18 +275,12 @@ export function ConnectDialog({ target, onClose, onConnected }: { target?: Conne
         )
       ) : (
         <div className="fx-form">
+          <Field label="Connect with">
+            <KindSwitch value={protocol} onChange={(p) => (isRemote(p) ? onKind(p) : setProtocol(p))} />
+          </Field>
           <div className="fx-row">
             <Field label="Address">
               <Input value={host} onChange={(e) => setHost(e.target.value)} placeholder="192.168.1.1" autoFocus={!target?.host} />
-            </Field>
-            <Field label="Connect with">
-              <div className="seg" role="group">
-                {(['ssh', 'telnet'] as const).map((p) => (
-                  <button key={p} className={protocol === p ? 'on' : ''} onClick={() => setProtocol(p)}>
-                    {p === 'ssh' ? 'SSH' : 'Telnet'}
-                  </button>
-                ))}
-              </div>
             </Field>
             <Field label="Port">
               <Input type="number" value={port} placeholder={String(defaultPort)} onChange={(e) => setPort(e.target.value)} style={{ width: 90 }} />
@@ -605,7 +711,7 @@ function ForgetToggle({ value }: { value: { current: boolean } }) {
 function BookmarkEditor({ bookmark, onClose, onSaved }: { bookmark: ConsoleBookmark | null; onClose: () => void; onSaved: () => void }) {
   const [label, setLabel] = useState(bookmark?.label ?? '');
   const [host, setHost] = useState(bookmark?.host ?? '');
-  const [protocol, setProtocol] = useState<ConsoleProtocol>(bookmark?.protocol ?? 'ssh');
+  const [protocol, setProtocol] = useState<ConnectionProtocol>(bookmark?.protocol ?? 'ssh');
   const [port, setPort] = useState(bookmark ? String(bookmark.port) : '');
   const [username, setUsername] = useState(bookmark?.username ?? '');
   const [profileId, setProfileId] = useState(bookmark?.profileId ?? '');
@@ -643,21 +749,15 @@ function BookmarkEditor({ bookmark, onClose, onSaved }: { bookmark: ConsoleBookm
         <Field label="Name">
           <Input value={label} onChange={(e) => setLabel(e.target.value)} placeholder="Core switch" autoFocus />
         </Field>
+        <Field label="Connect with">
+          <KindSwitch value={protocol} onChange={setProtocol} disabled={!!bookmark} />
+        </Field>
         <div className="fx-row">
           <Field label="Address">
             <Input value={host} onChange={(e) => setHost(e.target.value)} placeholder="192.168.1.2" disabled={!!bookmark} />
           </Field>
-          <Field label="Connect with">
-            <div className="seg" role="group">
-              {(['ssh', 'telnet'] as const).map((p) => (
-                <button key={p} className={protocol === p ? 'on' : ''} disabled={!!bookmark} onClick={() => setProtocol(p)}>
-                  {p === 'ssh' ? 'SSH' : 'Telnet'}
-                </button>
-              ))}
-            </div>
-          </Field>
           <Field label="Port">
-            <Input type="number" value={port} placeholder={protocol === 'telnet' ? '23' : '22'} onChange={(e) => setPort(e.target.value)} disabled={!!bookmark} style={{ width: 90 }} />
+            <Input type="number" value={port} placeholder={String(KIND[protocol].port)} onChange={(e) => setPort(e.target.value)} disabled={!!bookmark} style={{ width: 90 }} />
           </Field>
         </div>
         <div className="fx-row">

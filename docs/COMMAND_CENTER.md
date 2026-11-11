@@ -565,6 +565,14 @@ hotspot guest network) for visitors, substitutes or parent night. The key is kep
 network (*which access points are offline? where is the Room 12 TV connected?*), and asks before it restarts anything
 or makes codes. Essentials and Pro do not show environments.
 
+### Remote desktop and screen sharing (Ultra)
+
+*New connection* (Terminal → Device consoles) and a scanned device with port 3389 or 5900 open offer **Remote
+desktop** (RDP) and **Screen sharing** (VNC) next to SSH and Telnet. FBRX opens this computer's own viewer with the
+address and user name filled in: Remote Desktop Connection on Windows, a remote desktop app or Screen Sharing on a
+Mac, FreeRDP, Remmina or a VNC viewer on Linux. The viewer asks for the password; FBRX keeps none. When no viewer is
+installed, FBRX says what to install. The connection is kept in Saved connections, where one click opens it again.
+
 ### Device consoles (advanced)
 
 A device with SSH (22, or 4118 for WatchGuard) or Telnet (23) open gets a **Connect** button. The console opens in

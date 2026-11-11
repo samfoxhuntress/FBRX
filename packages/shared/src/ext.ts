@@ -699,6 +699,18 @@ export interface MacLookup {
 // ----------------------------------------------------------------------------------- device console
 
 export type ConsoleProtocol = 'ssh' | 'telnet';
+/** Remote desktop (RDP) and screen sharing (VNC): opened in this computer's own viewer. */
+export type RemoteProtocol = 'rdp' | 'vnc';
+/** A saved connection is a device console or a remote desktop. */
+export type ConnectionProtocol = ConsoleProtocol | RemoteProtocol;
+export interface RemoteViewer {
+  protocol: RemoteProtocol;
+  available: boolean;
+  /** What opens it, in plain words. */
+  viewer: string | null;
+  /** When it cannot: what to install. */
+  hint: string;
+}
 export interface ConsoleSession {
   id: string;
   host: string;
@@ -754,7 +766,7 @@ export interface ConsoleBookmark {
   label: string;
   host: string;
   port: number;
-  protocol: ConsoleProtocol;
+  protocol: ConnectionProtocol;
   username: string | null;
   /** Device guide (see DEVICE_PROFILES). */
   profileId: string | null;
@@ -1296,6 +1308,10 @@ export interface ExtMethods {
   'net.printerAction': (p: { name: string; action: (typeof PRINTER_ACTIONS)[number] }) => Ok;
   'net.dns': (p: { name: string }) => DnsTest;
   'net.diagnose': (p: { target?: string }) => StackReport;
+  /** How this computer opens remote desktop (RDP) and screen sharing (VNC). */
+  'remote.viewers': () => RemoteViewer[];
+  /** Opens one in this computer's viewer (which asks for the password); it is saved with the connections. */
+  'remote.open': (p: { protocol: RemoteProtocol; host: string; port?: number; username?: string; label?: string }) => { viewer: string; bookmark: ConsoleBookmark };
   'net.port': (p: { host: string; port: number }) => { open: boolean; ms: number | null };
   'net.adapters': () => NetAdapter[];
   'net.setIp': (p: { alias: string; mode: 'dhcp' | 'static' | 'secondary' | 'removeSecondary'; ip?: string; prefix?: number | string; gateway?: string; dns?: string[] }) => ElevatedResult;
@@ -1390,7 +1406,7 @@ export interface ExtMethods {
   /** Saved connections, most recently used first. */
   'console.bookmarks': () => ConsoleBookmark[];
   /** Adds a device to Saved connections, or changes one (id). */
-  'console.saveBookmark': (p: { id?: string; label?: string; host: string; port?: number; protocol: ConsoleProtocol; username?: string | null; profileId?: string | null; notes?: string }) => ConsoleBookmark;
+  'console.saveBookmark': (p: { id?: string; label?: string; host: string; port?: number; protocol: ConnectionProtocol; username?: string | null; profileId?: string | null; notes?: string }) => ConsoleBookmark;
   /** Removes one; forgetPassword also deletes its saved password. */
   'console.removeBookmark': (p: { id: string; forgetPassword?: boolean }) => Ok;
   'console.forgetLogin': (p: { host: string; port: number; username: string }) => Ok;

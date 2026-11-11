@@ -99,7 +99,7 @@ async function reverse(ip: string, ms = 1500): Promise<string | null> {
 }
 
 /** 23 Telnet, 8443 UniFi / web admin, 4444 Sophos admin, 8291 MikroTik Winbox, 4118 WatchGuard SSH. */
-const FINGERPRINT_PORTS = [80, 443, 22, 23, 445, 3389, 9100, 631, 515, 554, 8009, 62078, 5000, 5001, 8080, 8443, 4444, 8291, 4118, 1883, 548, 7000];
+const FINGERPRINT_PORTS = [80, 443, 22, 23, 445, 3389, 5900, 9100, 631, 515, 554, 8009, 62078, 5000, 5001, 8080, 8443, 4444, 8291, 4118, 1883, 548, 7000];
 const MDNS_SERVICES = ['_ipp._tcp.local', '_ipps._tcp.local', '_printer._tcp.local', '_pdl-datastream._tcp.local', '_scanner._tcp.local', '_airplay._tcp.local', '_raop._tcp.local', '_googlecast._tcp.local', '_smb._tcp.local', '_device-info._tcp.local', '_companion-link._tcp.local', '_hap._tcp.local', '_spotify-connect._tcp.local', '_sonos._tcp.local', '_workstation._tcp.local', '_ssh._tcp.local', '_http._tcp.local', '_fbrx._tcp.local'];
 
 /**

@@ -1,5 +1,5 @@
 import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
-import type { LanDevice, LanScan, LanScanCompare, NetAdapter, PingResult, SpeedTestResult, StackLayer, StackReport, TraceHop } from '@fbrx/shared';
+import type { ConnectionProtocol, LanDevice, LanScan, LanScanCompare, NetAdapter, PingResult, SpeedTestResult, StackLayer, StackReport, TraceHop } from '@fbrx/shared';
 import { Button, Callout, Card, CopyText, Empty, Field, Grid, Icons, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
 import { bridge, call, onEvent, pickFile } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
@@ -301,7 +301,7 @@ function Devices({ advanced }: { advanced: boolean }) {
     if (!scan && scans.data?.[0]) void call('net.scanGet', { id: scans.data[0].id }).then(setScan);
   }, [scans.data, scan]);
   const hasCli = (d: LanDevice) => d.ports.some((p) => p === 22 || p === 23 || p === 4118);
-  const target = (d: LanDevice, protocol?: 'ssh' | 'telnet'): ConnectTarget => ({ host: d.ip, name: d.name, vendor: d.vendor, model: d.model, ports: d.ports, protocol });
+  const target = (d: LanDevice, protocol?: ConnectionProtocol): ConnectTarget => ({ host: d.ip, name: d.name, vendor: d.vendor, model: d.model, ports: d.ports, protocol });
   const start = async () => {
     const reqId = newReqId();
     setProgress({ phase: 'Starting', pct: 0 });
@@ -464,6 +464,16 @@ function Devices({ advanced }: { advanced: boolean }) {
                       </Button>
                     )}
                   </>
+                )}
+                {!detail.isSelf && detail.ports.includes(3389) && (
+                  <Button icon="monitor" disabled={!advanced} title={advanced ? 'Open its desktop in this computer’s remote desktop app' : 'Remote desktop comes with Endpoint Ultra'} onClick={() => setConnect(target(detail, 'rdp'))}>
+                    Remote desktop
+                  </Button>
+                )}
+                {!detail.isSelf && detail.ports.includes(5900) && (
+                  <Button icon="monitor" disabled={!advanced} title={advanced ? 'See and control its screen (VNC)' : 'Screen sharing comes with Endpoint Ultra'} onClick={() => setConnect(target(detail, 'vnc'))}>
+                    Screen sharing
+                  </Button>
                 )}
                 {web && (
                   <Button icon="external" onClick={() => bridge.openExternal?.(`${[80, 8080, 5000].includes(web) ? 'http' : 'https'}://${detail.ip}${web === 80 || web === 443 ? '' : `:${web}`}`)}>
