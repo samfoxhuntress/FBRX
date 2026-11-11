@@ -236,7 +236,7 @@ describe('FBRX accounts and what they buy', () => {
   it('publishes the price list and the ways to pay', async () => {
     const plans = await ok('GET', '/v1/plans');
     expect(plans).toMatchObject({ publicSignup: true, payments: { stripe: true, apple: true, google: true }, command: { monthly: 5499 }, server: { available: false } });
-    expect(plans.editions.ultra).toMatchObject({ monthly: 1199, tenantMonthly: 959, productId: 'fbrx_ultra_monthly' });
+    expect(plans.editions.ultra).toMatchObject({ monthly: 2499, tenantMonthly: 1999, productId: 'fbrx_ultra_monthly' });
   });
 
   it('makes an account, signs in, and signs computers up to nothing until something is bought', async () => {
@@ -412,7 +412,7 @@ describe('FBRX accounts and what they buy', () => {
     expect(lic).toMatchObject({ state: 'valid', tier: 'blackhole', edition: 'enterprise' });
     // The plan counts the computers by itself: Ultra at 20% off, Black Hole Edition at full price, Essentials free.
     await new Promise((r) => setTimeout(r, 300));
-    expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).plan).toMatchObject({ active: true, computers: { essentials: 1, basic: 0, ultra: 1, blackhole: 1 }, bill: { total: 5499 + 959 + 2499 } });
+    expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).plan).toMatchObject({ active: true, computers: { essentials: 1, basic: 0, ultra: 1, blackhole: 1 }, bill: { total: 5499 + 1999 + 4999 } });
     const items = stripe.subscriptions.get('sub_t').items.data.map((i: any) => `${i.price.lookup_key}=${i.quantity}`);
     expect(items.sort()).toEqual(['fbrx_blackhole_tenant_monthly=1', 'fbrx_command_tenant_monthly=1', 'fbrx_ultra_tenant_monthly=1']);
     await ok('PATCH', `/v1/admin/devices/${devices[2]!.deviceId}`, { tier: 'ultra' }, admin);
@@ -471,13 +471,13 @@ describe('FBRX accounts and what they buy', () => {
 
     // Not sold yet: the computers are counted, nothing is charged for them.
     const before = (await ok('POST', '/v1/admin/billing/sync', {}, admin)).plan;
-    expect(before).toMatchObject({ bill: { total: 5499 + 959 }, mdm: { available: false, perEndpoint: 400, managed: 2 } });
+    expect(before).toMatchObject({ bill: { total: 5499 + 1999 }, mdm: { available: false, perEndpoint: 400, managed: 2 } });
     expect(items()).not.toContain('fbrx_mdm_tenant_monthly=2');
 
     // The operator sells it at $3.50: both computers, Ultra and Essentials alike, at $3.50 each.
     await ok('POST', '/v1/admin/pricing', { mdm: { available: true, perEndpoint: 350 } }, op);
     expect((await ok('GET', '/v1/plans')).mdm).toEqual({ available: true, perEndpoint: 350 });
-    expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).plan).toMatchObject({ bill: { total: 5499 + 959 + 2 * 350 }, mdm: { available: true, managed: 2 } });
+    expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).plan).toMatchObject({ bill: { total: 5499 + 1999 + 2 * 350 }, mdm: { available: true, managed: 2 } });
     expect(items()).toContain('fbrx_mdm_tenant_monthly=2');
     // Stripe charges $4 while the operator asks $3.50: the Pricing page says so.
     expect((await ok('GET', '/v1/admin/pricing', undefined, op)).stripe.fbrx_mdm_tenant_monthly.unitAmount).toBe(400);
@@ -487,7 +487,7 @@ describe('FBRX accounts and what they buy', () => {
     expect((await ok('POST', '/v1/admin/billing/sync', {}, admin)).changed).toEqual(['fbrx_mdm_tenant_monthly=1']);
     await ok('POST', '/v1/admin/pricing', { mdm: { available: false } }, op);
     const after = await ok('POST', '/v1/admin/billing/sync', {}, admin);
-    expect(after.plan.bill.total).toBe(5499 + 959);
+    expect(after.plan.bill.total).toBe(5499 + 1999);
     expect(items()).toContain('fbrx_mdm_tenant_monthly=0');
     // Every change of price is in the audit log.
     expect(cp.ctx.db.all<{ action: string }>("SELECT action FROM audit_log WHERE action = 'pricing.mdm'")).toHaveLength(2);
@@ -549,7 +549,7 @@ describe('FBRX accounts and what they buy', () => {
     const { token: op } = await ok('POST', '/v1/auth/login', { email: 'op@fbrx.example', password: PASSWORD });
     // Until the operator sets one, the price list is the one in plans.ts; Stripe charges $4 for everything here.
     const first = await ok('GET', '/v1/admin/pricing', undefined, op);
-    expect(first.book).toMatchObject({ personal: { basic: 499, ultra: 1199 }, seats: { ultra: 959 }, volume: [], fees: { base: 5499, large: null, home: null } });
+    expect(first.book).toMatchObject({ personal: { basic: 499, ultra: 2499 }, seats: { ultra: 1999 }, volume: [], fees: { base: 5499, large: null, home: null } });
     expect(first.stripe.fbrx_ultra_tenant_monthly).toMatchObject({ found: true, unitAmount: 400 });
 
     const book = {
@@ -654,8 +654,8 @@ describe('FBRX accounts and what they buy', () => {
   it('lets an organization pay yearly, everything on its plan alike, and move to monthly', async () => {
     const { token: op } = await ok('POST', '/v1/auth/login', { email: 'op@fbrx.example', password: PASSWORD });
     const book = {
-      personal: { basic: 499, ultra: 1199 },
-      seats: { basic: 399, ultra: 959, blackhole: 2499 },
+      personal: { basic: 499, ultra: 2499 },
+      seats: { basic: 399, ultra: 1999, blackhole: 4999 },
       computers: { included: { basic: 2, ultra: 5, blackhole: 15 }, extra: { basic: 199, ultra: 299, blackhole: 499 } },
       volume: [{ from: 2, percentOff: 10 }],
       fees: { base: 5499, large: null, home: null },
@@ -678,8 +678,8 @@ describe('FBRX accounts and what they buy', () => {
 
     // Before it starts, the bill shows both ways to pay; yearly, each price is ten months' (the discount rounded on
     // each line, as Stripe does).
-    const month = 5499 + Math.round(959 * 2 * 0.9);
-    const year = 54990 + Math.round(9590 * 2 * 0.9);
+    const month = 5499 + Math.round(1999 * 2 * 0.9);
+    const year = 54990 + Math.round(19990 * 2 * 0.9);
     const preview = (await ok('GET', '/v1/admin/billing?interval=year', undefined, admin)).plan;
     expect(preview).toMatchObject({ active: false, interval: 'year', totals: { month, year }, yearlyMonths: 10, bill: { interval: 'year', total: year } });
     expect(preview.bill.lines[0].productId).toBe('fbrx_command_tenant_yearly');

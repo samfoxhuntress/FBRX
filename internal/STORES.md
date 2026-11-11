@@ -72,7 +72,7 @@ and test them on a Mac and an Android device before each upload.
 The product ids come from the price list (`packages/shared/src/plans.ts`) and are the same everywhere.
 
 **App Store Connect**: one auto-renewable subscription group with `fbrx_standard_monthly` ($4.99) and
-`fbrx_ultra_monthly` ($11.99), Ultra ranked above Pro so a change between them is an upgrade or a downgrade. Turn
+`fbrx_ultra_monthly` ($24.99), Ultra ranked above Pro so a change between them is an upgrade or a downgrade. Turn
 on the **In-App Purchase** capability for the app id (Xcode → Signing & Capabilities). Set up the server side as in
 [ACCOUNTS.md → App Store](PAYMENTS.md#app-store).
 

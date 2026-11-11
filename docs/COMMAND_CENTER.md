@@ -56,7 +56,7 @@ and its pages slide out beside it. Counts (unread alerts, waiting approvals) sho
 
 ### Version names
 
-FBRX 2.x is the Beta (1.x was the Alpha): versions read **FBRX Endpoint Ultra Beta 2.3.3** (or Essentials, Pro or
+FBRX 2.x is the Beta (1.x was the Alpha): versions read **FBRX Endpoint Ultra Beta 2.4.0** (or Essentials, Pro or
 Black Hole Edition). FBRX is made by **Fox Huntress Labs**, as **Settings → Logs & about** says under the version. Versions also carry a codename from cloth, fiber to fabric, shown in **Settings → Logs & about**: 1.8
 *Spindle*, 1.9 *Bobbin*, 2.0 *Loom*, 2.1 *Warp*, and 2.2 *Weft*, which stays for the rest of 2.x. From now on a
 codename changes only with a major version: 3.0 *Selvedge*, 4.0 *Tapestry*.
@@ -69,7 +69,7 @@ saved goes away), up to what the computer may run. Prices are in US dollars, per
 
 | | **Essentials** | **Pro** | **Ultra** | **Black Hole Edition** |
 | --- | --- | --- | --- | --- |
-| Price | Free, and free in an organization | $4.99 after a free 7-day trial, or $3.99 through FBRX Command | $11.99, or $9.59 through FBRX Command | $24.99 per computer, only through FBRX Command |
+| Price | Free, and free in an organization | $4.99 after a free 7-day trial, or $3.99 through FBRX Command | $24.99, or $19.99 through FBRX Command | $49.99 per computer, only through FBRX Command |
 | How you get it | Where every new computer starts | Bought on your FBRX account or with a license key, or through your organization's FBRX Command | The same | Only as an add-on in an organization's FBRX Command: for the people who run it and its FBRX Servers |
 | Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, Governance, the help desk (in an organization) and Settings. **Home** is the split-flap board and a few notes from FBRX: tips, the AI models, and what Pro and Ultra add (no dashboard) | Everything in Essentials, plus Dash, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Pro | Everything in Ultra, plus the FBRX Server page |
 | How much the AI does on a task | **Thinking**: Quick, Everyday or Thorough (see *Thinking* below), and whether it shows what it is doing | The same, each part on its own (steps per task, longest answer, how much the built-in and Ollama models keep in mind), and unloading the local model when idle | The same, and the temperature | The same |

@@ -75,8 +75,8 @@ export const EDITION_PLANS: Record<Tier, EditionPlan> = {
   },
   ultra: {
     tier: 'ultra',
-    monthly: 1199,
-    tenantMonthly: tenantPrice(1199),
+    monthly: 2499,
+    tenantMonthly: tenantPrice(2499),
     sold: 'personal',
     productId: 'fbrx_ultra_monthly',
     tenantProductId: 'fbrx_ultra_tenant_monthly',
@@ -86,7 +86,7 @@ export const EDITION_PLANS: Record<Tier, EditionPlan> = {
   blackhole: {
     tier: 'blackhole',
     monthly: null,
-    tenantMonthly: 2499,
+    tenantMonthly: 4999,
     sold: 'tenant',
     productId: null,
     tenantProductId: 'fbrx_blackhole_tenant_monthly',

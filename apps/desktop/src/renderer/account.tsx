@@ -241,7 +241,7 @@ export function LocalAccountLock() {
 export const yearlyLabel = (book: PriceBook) => (book.yearlyMonths < 12 ? `Pay yearly (${12 - book.yearlyMonths} ${12 - book.yearlyMonths === 1 ? 'month' : 'months'} free)` : 'Pay yearly');
 
 /**
- * "Get Ultra, $11.99 a month" (or "$119.90 a year", as chosen beside them): opens the checkout in the browser. Only the
+ * "Get Ultra, $24.99 a month" (or "$249.90 a year", as chosen beside them): opens the checkout in the browser. Only the
  * editions above what the account has. `short`, on an edition's card: "Get Ultra" (monthly) and "or yearly".
  */
 export function BuyButtons({ account, only, short }: { account: AccountStatus; only?: Tier[]; short?: boolean }) {

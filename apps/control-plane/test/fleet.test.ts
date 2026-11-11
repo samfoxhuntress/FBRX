@@ -268,7 +268,7 @@ describe('control plane ⇄ device fleet', () => {
       await k.start();
       // A new computer on its own: Essentials, free (Pro and Ultra are bought).
       expect(k.license.status()).toMatchObject({ tier: 'essentials', ceiling: 'essentials', ceilingReason: 'standalone' });
-      await expect(k.call('edition.choose', { tier: 'ultra' }, USER)).rejects.toThrow(/\$11\.99 a month/);
+      await expect(k.call('edition.choose', { tier: 'ultra' }, USER)).rejects.toThrow(/\$24\.99 a month/);
       const st = (await k.call('license.activate', { key: lic.key }, USER)) as any;
       // In the organization, Ultra is there to turn on (the person still chooses).
       expect(st).toMatchObject({ state: 'valid', tier: 'essentials', ceiling: 'ultra', commandUrl: base });

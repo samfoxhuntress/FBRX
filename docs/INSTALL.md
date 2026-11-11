@@ -70,7 +70,7 @@ On Windows you can also make one for them: open a Command Prompt in your FBRX fo
 `"Install FBRX OS.cmd" --share`. Enter their name to build a trial license into the installer (30 days by default:
 Ultra, then the free features), or leave it blank to send an update to someone who is already
 set up (`--for "Alex" --days 30 --yes` skips the questions). The result is one file in the `Share` folder, for example
-`Share\FBRX-OS-Setup-2.3.3-for-Alex.exe`, plus a short *How to install* note to send along.
+`Share\FBRX-OS-Setup-2.4.0-for-Alex.exe`, plus a short *How to install* note to send along.
 
 On their PC they double-click it. A new install opens FBRX OS straight to the chat while its AI downloads. If FBRX OS
 is already there, Setup opens on a choice instead:

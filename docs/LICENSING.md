@@ -51,8 +51,8 @@ Stripe follow.
 | --- | --- | --- | --- |
 | **Essentials** | Free | Free | — |
 | **Pro** | $4.99 | $3.99 per computer (20% off) | `fbrx_standard_monthly`, `fbrx_standard_tenant_monthly` |
-| **Ultra** | $11.99 | $9.59 per computer (20% off) | `fbrx_ultra_monthly`, `fbrx_ultra_tenant_monthly` |
-| **Black Hole Edition** | — | $24.99 per computer (full price, an add-on) | `fbrx_blackhole_tenant_monthly` |
+| **Ultra** | $24.99 | $19.99 per computer (20% off) | `fbrx_ultra_monthly`, `fbrx_ultra_tenant_monthly` |
+| **Black Hole Edition** | — | $49.99 per computer (full price, an add-on) | `fbrx_blackhole_tenant_monthly` |
 | **FBRX Command tenant** | — | $54.99 | `fbrx_command_tenant_monthly` |
 | **MDM add-on** (not sold yet) | — | $4 per managed computer, whatever its edition (Essentials included); the operator sets it | `fbrx_mdm_tenant_monthly` |
 | **FBRX Server** (coming soon) | Free while in beta; not on sale yet | The same | `fbrx_server_iso` |

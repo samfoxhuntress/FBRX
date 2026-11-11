@@ -69,12 +69,12 @@ describe('editions and prices', () => {
     expect(['Black Hole', 'Standard', 'basic', 'FBRX Endpoint Pro'].map(parseTier)).toEqual(['blackhole', 'basic', 'basic', 'basic']);
   });
 
-  it('carries the price list: Pro $4.99, Ultra $11.99, Black Hole Edition $24.99 per computer in a tenant, FBRX Command $54.99', () => {
-    expect([priceOf('essentials', 'personal'), priceOf('basic', 'personal'), priceOf('ultra', 'personal'), priceOf('blackhole', 'personal')]).toEqual([0, 499, 1199, null]);
+  it('carries the price list: Pro $4.99, Ultra $24.99, Black Hole Edition $49.99 per computer in a tenant, FBRX Command $54.99', () => {
+    expect([priceOf('essentials', 'personal'), priceOf('basic', 'personal'), priceOf('ultra', 'personal'), priceOf('blackhole', 'personal')]).toEqual([0, 499, 2499, null]);
     // 20% off Pro and Ultra in a tenant; Black Hole Edition always full price; Essentials free everywhere.
-    expect([priceOf('essentials', 'tenant'), priceOf('basic', 'tenant'), priceOf('ultra', 'tenant'), priceOf('blackhole', 'tenant')]).toEqual([0, 399, 959, 2499]);
+    expect([priceOf('essentials', 'tenant'), priceOf('basic', 'tenant'), priceOf('ultra', 'tenant'), priceOf('blackhole', 'tenant')]).toEqual([0, 399, 1999, 4999]);
     expect(COMMAND_PLAN.monthly).toBe(5499);
-    expect(tenantMonthlyTotal({ essentials: 40, basic: 10, ultra: 2, blackhole: 1 })).toBe(5499 + 3990 + 1918 + 2499);
+    expect(tenantMonthlyTotal({ essentials: 40, basic: 10, ultra: 2, blackhole: 1 })).toBe(5499 + 3990 + 3998 + 4999);
     expect(SERVER_OFFER).toMatchObject({ available: false });
     expect(SERVER_OFFER).not.toHaveProperty('price');
     expect([0, 499, 1199, 10000].map(formatPrice)).toEqual(['Free', '$4.99', '$11.99', '$100']);

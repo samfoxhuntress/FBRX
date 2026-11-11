@@ -207,7 +207,7 @@ function EditionCard() {
   );
 }
 
-/** "$4.99 a month or $49.90 a year", "Free", "$24.99 a month a person, through FBRX Command", at the account's prices. */
+/** "$4.99 a month or $49.90 a year", "Free", "$49.99 a month a person, through FBRX Command", at the account's prices. */
 function priceLine(t: Tier, book: PriceBook): ReactNode {
   if (t === 'essentials') return 'Free';
   if (t === 'blackhole') return <>{formatPrice(book.seats.blackhole)} <small>a month a person, through FBRX Command</small></>;
