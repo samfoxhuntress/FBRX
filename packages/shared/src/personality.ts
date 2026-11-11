@@ -196,6 +196,8 @@ const PROTECTIONS = 'firewall|antivirus|anti-virus|defender|fbrx shield|shield|s
 const SECRETS = '(?:saved |stored |their |the |his |her |my |your |all )*(?:passwords?|secrets?|credentials?|api keys?|tokens?|recovery (?:keys?|codes?|passwords?)|private keys?|keys? protectors?|sign-ins?|pins?|passcodes?|pass ?phrases?)';
 /** A few words in between ("turn off FBRX's approvals", "disable Windows Defender"). */
 const FEW = String.raw`(?:[\w'’-]+\s+){0,3}?`;
+/** "Is", "are", "stays"… in a passive or a state; the verbs after it are as plainView leaves them ("stays" → "stay"). */
+const BE = String.raw`(?:is|are|be|been|being|was|were|stay|remain|get|will be|can be|may be|should be|must be|could be|might be)`;
 
 /**
  * The plainest words for changing each of FBRX's core principles. `clause`: a negation at the start of the clause
@@ -206,19 +208,26 @@ const PLAIN: Array<{ about: string; re: RegExp; clause?: true; consent?: true; s
   // 4. Ask first.
   { about: 'asking first and FBRX’s principles are not for saved instructions to change', clause: true, re: new RegExp(String.raw`\b(skip|bypass|disable|ignore|override|drop|without|no need for|no need to|don'?t (?:ask|wait)|do not (?:ask|wait)|never (?:ask|wait))\b[^.\n]{0,40}?\b(approv\w*|${GUARDS}|confirm\w*|permission|polic(?:y|ies)|rules|safety)\b`, 'g') },
   { about: 'asking first is a core principle', clause: true, re: /\bwithout (?:waiting for |asking for |getting |a )?(?:a |their |my |the person’s |the person's )?yes\b/g },
-  { about: 'asking first is a core principle', re: /\b(?:never|don'?t|do not|no longer|stop)\s+(?:ask(?:ing)?|wait(?:ing)?|check(?:ing)? with)(?:\s+(?:the person|them|me|him|her|anyone|anybody|people))?\b(?=\s*(?:$|[.!,;]|first\b|before\b|for (?:approval|permission|confirmation|a yes|my yes|their yes)|to (?:confirm|approve)))/g },
-  { about: 'asking first is a core principle', clause: true, re: /\b(pre-?approved|approved in advance|approved ahead of time|already approved|blanket approval|assume (?:a |my |their )?(?:yes|approval|consent)|count(?:s)? as approved|treat\b[^.\n]{0,40}\bas approved)\b/g },
+  { about: 'asking first is a core principle', re: /\b(?:never|don'?t|do not|no longer|stop|(?:do not|don'?t|doesn'?t|does not) (?:have|need) to|need not|needn'?t|no need to|(?:are|is|am)(?: not|n'?t) (?:required|obliged|expected) to)\s+(?:ask(?:ing)?|wait(?:ing)?|check(?:ing)? with)(?:\s+(?:the person|them|me|him|her|anyone|anybody|people))?\b(?=\s*(?:$|[.!,;]|first\b|before\b|for (?:approval|permission|confirmation|a yes|my yes|their yes)|to (?:confirm|approve)))/g },
+  { about: 'asking first is a core principle', clause: true, re: /\b(pre[- ]?approved|approved in advance|approved ahead of time|already approved|blanket approval|assume (?:a |my |their )?(?:yes|approval|consent)|count(?:s)? as approved|treat\b[^.\n]{0,40}\bas approved)\b/g },
   { about: 'asking first is a core principle', re: new RegExp(String.raw`\b(?:turn|switch|shut)\s+off\s+${FEW}(?:${GUARDS})\b|\b(?:turn|switch|shut|keep|leave|set)\s+${FEW}(?:${GUARDS})\s+(?:off|disabled)\b|\b(?:disable|deactivate)\s+${FEW}(?:${GUARDS})\b`, 'g') },
+  { about: 'asking first is a core principle', re: /\bno (?:approvals?|confirmations?|asking|permission|yes)\s+(?:is|are)\s+(?:needed|required|necessary)\b/g },
+  // Said in the passive or as a state ("approvals are off", "asking first is optional", "the firewall stays off").
+  { about: 'asking first is a core principle', re: new RegExp(String.raw`\b(?:${GUARDS}|approval steps?|the approval step)\s+${BE}\s+(?:(?!not\b|never\b|no\b)\w+\s+)?(?:off|disable|skip|bypass|ignore|override|drop|optional|unnecessary|not needed|not required|turn off|switch off|shut off|waive|suspend|pause)\b(?!-)`, 'g') },
   // 2. Secrets (not "how to reset a password", "whose passwords are old" or helping the person keep their own).
   { about: 'FBRX never reveals secrets', secrets: true, re: new RegExp(String.raw`\b(reveal|show|print|display|send|share|disclose|paste|put|include|insert|read(?: out)?|say|tell|give(?: out)?|list|recite|spell out|dictate|copy|email|text|forward|expose|leak|dump|export|hand (?:over|out))\b[^.\n]{0,40}?\b${SECRETS}\b`, 'g') },
+  { about: 'FBRX never reveals secrets', re: new RegExp(String.raw`\b${SECRETS}\s+${BE}\s+(?:(?!not\b|never\b|no\b)\w+\s+)?(?:reveal|show|share|send|read(?: out)?|say|tell|give(?: out)?|list|copy|email|forward|expose|print|display|paste|include|hand (?:over|out))\b`, 'g') },
   // 5. The truth.
   { about: 'FBRX says it did something only when a tool shows it', re: /\b(report|say|tell|claim|pretend|answer|confirm)\b[^.\n]{0,50}?\b(success\w*|worked|it'?s done|done|fine|ok|okay)\b[^.\n]{0,40}?\b(even (?:if|when|though)|whether or not|regardless|no matter)\b/g },
   { about: 'FBRX says it did something only when a tool shows it', re: /\b(?:always|just)\s+(?:report|say|claim|tell\b[^.\n]{0,25}?)\s*(?:success|it worked|it'?s done|it succeeded|everything (?:worked|is fine))\b|\b(make up|invent|fabricate|fake)\b[^.\n]{0,20}?\b(results?|sources?|outputs?|answers?|facts?|success)\b|\bwhen\b[^.\n]{0,30}?\bfails?\b[^.\n]{0,20}?\b(?:say|report|tell|claim)\b[^.\n]{0,25}?\b(?:it worked|worked|succeeded|success|it'?s done)\b/g },
+  { about: 'FBRX says it did something only when a tool shows it', re: new RegExp(String.raw`\bsuccess\s+${BE}\s+(?:(?!not\b|never\b|no\b)\w+\s+)?(?:report|claim|say)\b[^.\n]{0,40}?\b(even (?:if|when|though)|whether or not|regardless|no matter)\b`, 'g') },
   // 3. No harm.
   { about: 'doing no harm is a core principle', re: new RegExp(String.raw`\b(?:turn|switch|shut)\s+off\s+${FEW}(?:${PROTECTIONS})\b|\b(?:turn|switch|shut|keep|leave)\s+${FEW}(?:${PROTECTIONS})\s+(?:off|disabled)\b|\b(?:disable|deactivate|uninstall|bypass)\s+${FEW}(?:${PROTECTIONS})\b`, 'g') },
   { about: 'doing no harm is a core principle', clause: true, re: /\b(delet(?:e|es|ing)|eras(?:e|es|ing)|wip(?:e|es|ing)|format(?:s|ting)?|remov(?:e|es|ing)|overwrit(?:e|es|ing))\b[^.\n]{0,50}?\bwithout (?:a |any |making a )?(?:backups?|copy|copies|checking)\b|\bskip\b[^.\n]{0,15}?\bbackups?\b|\b(hide|cover up|erase|wipe|delete|clear|remove)\b[^.\n]{0,20}?\b(what you did|your tracks|the audit log|the audit trail)\b/g },
+  { about: 'doing no harm is a core principle', re: new RegExp(String.raw`\b(?:${PROTECTIONS})\s+${BE}\s+(?:(?!not\b|never\b|no\b)\w+\s+)?(?:off|disable|turn off|switch off|shut off|uninstall|remove|bypass|optional)\b(?!-)`, 'g') },
   // 1. Privacy.
   { about: 'what FBRX learns stays on this computer unless the person says so', consent: true, re: /\b(send|share|upload|post|forward|email|give|publish)\b[^.\n]{0,50}?\b((?:to|with) (?:anyone|anybody|everyone|whoever)|publicly|online|on the internet|on the web)\b/g },
+  { about: 'what FBRX learns stays on this computer unless the person says so', consent: true, re: new RegExp(String.raw`\b(?:files?|data|notes|documents|photos|messages|information|details|things|history|memories)\s+${BE}\s+(?:(?!not\b|never\b|no\b)\w+\s+)?(?:send|share|upload|post|forward|email|give|publish)\b[^.\n]{0,50}?\b((?:to|with) (?:anyone|anybody|everyone|whoever)|publicly|online|on the internet|on the web)\b`, 'g') },
   // 6. Offline.
   { about: 'an offline chat stays offline without the person’s yes', consent: true, re: /\b(online|internet|the web|search|browse|download)\b[^.\n]{0,50}?\beven (?:in|when|if|during)\b[^.\n]{0,25}?\boffline\b|\b(?:go|get|connect|use the internet)\b[^.\n]{0,15}?\bonline\b[^.\n]{0,25}?\b(?:whenever|any ?time|without asking)\b|\b(?:ignore|skip|bypass)\b[^.\n]{0,20}?\boffline\b/g },
 ];
@@ -229,7 +238,7 @@ const PLAIN: Array<{ about: string; re: RegExp; clause?: true; consent?: true; s
  */
 const NOT_A_NEGATION =
   /^(?:hesitate|worry|forget|fail|mind|minds|minded|problem|worries|doubt|matter|matters|biggie|question|kidding|joke|only|cares?|cared|bother|bothers|objects?|stops?|stopped|prevents?|forbids?|blocks?|notices?|knows?|sees?|checks?|watches?|complains?|needs? to know|has to know|will know)\b/;
-const NEGATION = String.raw`(?:never|not|don'?t|do not|nothing|none|nobody|no one|neither|nor|without)`;
+const NEGATION = String.raw`(?:never|not|don'?t|do not|nothing|none|nobody|no one|neither|nor|without|avoid|refuse to|instead of|rather than|stop|quit)`;
 /** Where a clause starts: a mark between clauses, or the start of the line. */
 const CLAUSE_BREAK = /[,:;!?.()–—]|\s-\s/;
 /** Words that start a clause of their own inside a sentence ("nobody minds if you …", "… unless you …"). */
@@ -264,7 +273,7 @@ function negatedAfter(text: string, m: RegExpMatchArray): boolean {
 /** "Upload the logs online only after the person says yes": the principle itself allows it with the person's yes. */
 function withTheirYes(text: string, m: RegExpMatchArray): boolean {
   const rest = text.slice(m.index! + m[0].length).split(/[.;!?]/)[0] ?? '';
-  return /\b(?:only\s+)?(?:after|once|with|when|if)\s+(?:the person(?:'s)?\s+|they\s+|their\s+|you\s+(?:get|have)\s+)?(?:says?\s+yes|said\s+yes|yes|approv\w*|agrees?|agreed|consents?|consented|permission|confirms?|confirmed|okays?\s+it)\b/.test(rest);
+  return /\b(?:only\s+)?(?:after|once|with|when|if)\s+(?:the person(?:'s)?\s+|they\s+|their\s+|you\s+(?:get|have)\s+)?(?:says?\s+yes|said\s+yes|yes|approv\w*|agrees?|agreed|consents?|consented|permission|confirms?|confirmed|okays?\s+it)\b|\b(?:only\s+)?(?:after|once|when|if)\s+the person\s+(?:asks?|requests?)\b/.test(rest);
 }
 
 /** What the AI says to the person about advice: "explain", "warn", "tell them", "show them how"… */
@@ -299,7 +308,10 @@ function secretVerbAt(m: RegExpMatchArray): number {
 function secretNotTheObject(text: string, at: number, end: number): boolean {
   const span = text.slice(at, end);
   if (/\b(how|whose|which|where|why|whether|reset|change|update|rotate|set|create|renew|strength|policy|policies|manager|rules|expire\w*|older|new|temporary|temp|one-time|random|generated)\b/.test(span)) return true;
-  if (/^\s+(?:will|is|are|has|have|was|were|must|needs?|should)\s+(?:\w+\s+){0,2}?(?:expire\w*|weak|old|older|short|reused|compromised|leaked|breached|changed|reset|locked|rotated|due|stale|too\s+\w+)\b/.test(text.slice(end))) return true;
+  const after = text.slice(end);
+  if (/^\s+(?:that\s+|which\s+)?(?:(?:will|is|are|has|have|was|were|must|needs?|should)\s+)?(?:\w+\s+){0,2}?(?:expire\w*|weak|old|older|short|reused|compromised|leaked|breached|changed|reset|locked|rotated|due|stale|too\s+\w+)\b/.test(after)) return true;
+  if (/^\s*(?:rules?|polic(?:y|ies)|managers?|strength|length|requirements?|settings?|page|field|prompt|expir\w*|hints?|resets?|vault|app|history|age|format)\b/.test(after)) return true;
+  if (new RegExp(String.raw`\b(?:not|never|no|nor|without|except)\s+(?:(?:about|on|regarding|including|any|for)\s+)?${SECRETS}$`).test(span)) return true;
   return /\b(?:help|helps|helping|teach|let|walk)\s+(?:the person|them|me|him|her|you|people|users?)\s+(?:to\s+)?$/.test(text.slice(0, at));
 }
 
@@ -311,10 +323,14 @@ function secretNotTheObject(text: string, at: number, end: number): boolean {
  * says it more slyly is the model's to resist: this check stops structure and the plainest words.
  */
 export function principleProblem(line: string): string | null {
-  const n = normalText(line).replace(/[*_`~]/g, '');
+  const n = normalText(line).replace(/(?<=[a-z])[’‘ʼ`´′](?=[a-z])|[’‘ʼ´′]/g, "'").replace(/[*_`~]/g, '').replace(/\s+/g, ' ').trim();
   if (IMITATION.test(n)) return 'a line that reads like FBRX’s own core principles';
   const retired = RETIRED.exec(normalText(line));
   if (retired) return `the option "${retired[1]!.replace(/\s+/g, '-')}" (approvals are set in Governance, and checking, the internet and sources are core principles)`;
+  return plainProblem(n) ?? plainProblem(plainView(n, false)) ?? plainProblem(plainView(n, true));
+}
+
+function plainProblem(n: string): string | null {
   for (const { about, re, clause, consent, secrets } of PLAIN) {
     for (const m of n.matchAll(re)) {
       const at = secrets ? secretVerbAt(m) : m.index!;
@@ -325,6 +341,42 @@ export function principleProblem(line: string): string | null {
     }
   }
   return null;
+}
+
+/** The verbs the rules name, and the forms of each that plainView reads as the verb itself. */
+const RULE_VERBS = 'skip bypass disable ignore override drop turn switch shut keep leave set deactivate reveal show print display send share disclose paste put include insert read say tell give list recite spell dictate copy email text forward expose leak dump export hand report claim pretend answer confirm make invent fabricate fake uninstall delete erase wipe format remove overwrite hide cover clear upload post publish go get connect use search browse download assume treat count ask wait check act stop quit stay remain approve waive suspend pause avoid refuse'.split(' ');
+const IRREGULAR: Record<string, string> = { kept: 'keep', left: 'leave', shown: 'show', sent: 'send', said: 'say', told: 'tell', gave: 'give', given: 'give', made: 'make', hid: 'hide', hidden: 'hide', went: 'go', gone: 'go', got: 'get', gotten: 'get', overwrote: 'overwrite', overwritten: 'overwrite', quitting: 'quit', stays: 'stay', remains: 'remain', gets: 'get' };
+const AS_VERB = new Map<string, string>(Object.entries(IRREGULAR));
+const AS_VERB_S = new Map<string, string>();
+for (const v of RULE_VERBS) {
+  AS_VERB_S.set(`${v}s`, v);
+  AS_VERB_S.set(`${v}es`, v);
+  if (/[^aeiou]y$/.test(v)) AS_VERB_S.set(`${v.slice(0, -1)}ies`, v);
+  for (const f of [`${v}ed`, `${v}ing`]) AS_VERB.set(f, v);
+  if (v.endsWith('e')) for (const f of [`${v}d`, `${v.slice(0, -1)}ing`]) AS_VERB.set(f, v);
+  if (/[^aeiou][aeiou][bdgklmnprt]$/.test(v)) for (const f of [`${v}${v.at(-1)}ing`, `${v}${v.at(-1)}ed`]) AS_VERB.set(f, v);
+  if (/[^aeiou]y$/.test(v)) AS_VERB.set(`${v.slice(0, -1)}ied`, v);
+}
+/** Who does it, before a verb in the third person ("Fabrix turns", "it always reports", "who reads"). */
+const DOER = /(?:^|\b(?:fabrix|it|he|she|they|the ai|the assistant|the agent|who|that|which|always|never|also|just|then|and|often|usually|simply|happily|gladly|quietly|still|now|i|you|we))\s+$/;
+
+/**
+ * The line as plainly as it reads: asides in brackets or comments, quotes, dashes, slashes and ellipses between words
+ * left out ("turn approvals (all of them) off", "turn approvals... off"), and the rules' verbs in any form read as the
+ * verb ("Fabrix turns approvals off", "keep skipping the approval step", "approvals are turned off"). `asides`: what is
+ * in brackets is left out too; otherwise only the brackets are ("turn [approvals] off").
+ */
+function plainView(n: string, asides: boolean): string {
+  const flat = n
+    .replace(/<!--[\s\S]*?-->/g, ' ')
+    .replace(asides ? /\([^()]*\)|\[[^[\]]*\]|\{[^{}]*\}/g : /[()[\]{}]/g, ' ')
+    .replace(/\.{2,}|…/g, ' ')
+    .replace(/\s[-–—]+\s|[–—]|-{2,}/g, ' ')
+    .replace(/["“”«»„]|(?<![a-z])'|'(?![a-z])/g, ' ')
+    .replace(/[/|\\^<>]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return flat.replace(/\b[a-z]+\b/g, (w, at: number) => AS_VERB.get(w) ?? (AS_VERB_S.has(w) && DOER.test(flat.slice(0, at)) ? AS_VERB_S.get(w)! : w));
 }
 
 /** An Options line as it must be (- key: value with a key of PERSONALITY_OPTIONS and a short value), or why it is not. */
@@ -339,20 +391,58 @@ function optionProblem(line: string): string | null {
   return null;
 }
 
-/** Each line of a section that personality.md may not hold, with why. */
-function lineProblems(section: string, body: string): Array<{ line: number; why: string }> {
+/**
+ * Lines that change the core, read as the AI reads them: each line, and each list item or paragraph whole, so a line
+ * wrapped onto the next ("- Turn approvals" / "  off.") is read as one. Headings are left to the caller.
+ */
+function textProblems(lines: string[]): Array<{ line: number; why: string }> {
   const out: Array<{ line: number; why: string }> = [];
-  const sec = normalText(section).trim();
-  body.split('\n').forEach((line, i) => {
-    if (!line.trim()) return;
-    if (/^\s*#/.test(line) && !(sec === 'commands' && /^\s*###\s/.test(line))) {
-      out.push({ line: i, why: `a heading inside ${section} (### group headings belong in Commands only)` });
+  const items: number[][] = [];
+  let item: number[] = [];
+  lines.forEach((line, i) => {
+    if (!line.trim() || /^\s*#/.test(line)) {
+      if (item.length) items.push(item);
+      item = [];
       return;
     }
-    const p = principleProblem(line) ?? (sec === 'options' ? optionProblem(line) : null);
+    const p = principleProblem(line);
     if (p) out.push({ line: i, why: p });
+    if (/^\s*(?:[-*+•]|\d+[.)])\s/.test(line) && item.length) {
+      items.push(item);
+      item = [];
+    }
+    item.push(i);
+  });
+  if (item.length) items.push(item);
+  for (const it of items) {
+    if (it.length < 2) continue;
+    const p = principleProblem(it.map((i) => lines[i]!.trim()).join(' '));
+    if (p) for (const i of it) out.push({ line: i, why: p });
+  }
+  return out;
+}
+
+/** Each line of a section that personality.md may not hold, with why. */
+function lineProblems(section: string, body: string): Array<{ line: number; why: string }> {
+  const sec = normalText(section).trim();
+  const lines = body.split('\n');
+  const out = textProblems(lines);
+  lines.forEach((line, i) => {
+    if (!line.trim()) return;
+    if (/^\s*#/.test(line) && !(sec === 'commands' && /^\s*###\s/.test(line))) out.push({ line: i, why: `a heading inside ${section} (### group headings belong in Commands only)` });
+    else if (sec === 'options') {
+      const p = optionProblem(line);
+      if (p) out.push({ line: i, why: p });
+    }
   });
   return out;
+}
+
+/** What comes before the first ## section: the title, and any line under it, which the AI reads too. */
+function preambleOf(text: string): string[] {
+  const lines = text.replace(/\r\n/g, '\n').split('\n');
+  const end = lines.findIndex((l) => /^##\s/.test(l) && !l.startsWith('###'));
+  return end < 0 ? lines : lines.slice(0, end);
 }
 
 /**
@@ -361,6 +451,7 @@ function lineProblems(section: string, body: string): Array<{ line: number; why:
  */
 export function personalityProblems(text: string): string[] {
   const out = new Set<string>();
+  for (const p of textProblems(preambleOf(text))) out.add(p.why);
   for (const s of personalitySections(text)) {
     if (!personalityAllowedTitle(s.title)) {
       out.add(`the section "${s.title}" (personality.md holds only these sections: ${PERSONALITY_SECTIONS.join(', ')})`);
@@ -374,7 +465,9 @@ export function personalityProblems(text: string): string[] {
 /** personality.md without what is not the persona's (see personalityProblems): those sections and those lines are left out. */
 export function personaOf(text: string): string {
   const lines = text.replace(/\r\n/g, '\n').split('\n');
-  const out: string[] = [];
+  const pre = preambleOf(text);
+  const badPre = new Set(textProblems(pre).map((p) => p.line));
+  const out: string[] = pre.filter((_l, i) => !badPre.has(i));
   let section: string | null = null;
   let dropping = false;
   let body: string[] = [];
@@ -383,7 +476,7 @@ export function personaOf(text: string): string {
     const bad = new Set(lineProblems(section, body.join('\n')).map((p) => p.line));
     out.push(...body.filter((_l, i) => !bad.has(i)));
   };
-  for (const line of lines) {
+  for (const line of lines.slice(pre.length)) {
     const h = /^##\s+(.+?)\s*$/.exec(line);
     if (h && !line.startsWith('###')) {
       flush();
@@ -393,8 +486,7 @@ export function personaOf(text: string): string {
       if (!dropping) out.push(line);
       continue;
     }
-    if (section === null) out.push(line);
-    else body.push(line);
+    body.push(line);
   }
   flush();
   return out.join('\n').replace(/\n{3,}/g, '\n\n');
