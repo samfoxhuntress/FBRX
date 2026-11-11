@@ -102,7 +102,9 @@ when FBRX updates (*Undo the last change* shows
 the version before, and *Settings → Soul* says once what left). The same goes for skills, memories and AI Toolkit
 actions: none can hold a change to the principles. *Settings → Soul* shows the principles, read-only, and *Undo the
 last change* can itself be undone. Approvals themselves are set in Governance. FBRX stops changes by their shape
-(sections, options, headings) and by the plainest words ("skip the approval", "show the passwords"); anything else
+(sections, options, headings) and by the plainest words for setting a principle aside ("turn approvals off", "read
+out the passwords", "report success even if it failed", "turn the firewall off", "send my files to anyone", "go
+online even in offline chats"); said the other way round ("never turn approvals off") they are fine. Anything else
 written in soul.md, Fabrix reads as its persona, under the principles.
 
 Fabrix reads its soul with every message (the commands only when you type one, so a small AI on your computer stays

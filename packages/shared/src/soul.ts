@@ -190,25 +190,51 @@ const IMITATION = /core principles|\(fixed\)|end of persona|your persona \(soul\
 const RETIRED = /^[\s>*+\-•·–—\d.)\]\[]*[*_`~]*\s*(ask[\s-]*before[\s-]*changes|verify|online|sources|risky[\s-]*requests)\s*[*_`~]*\s*[:=]/;
 /** In an option's value: words about what the AI may do, not how it sounds. */
 const VALUE_DENY = /\b(ask\w*|approv\w*|confirm\w*|passwords?|secrets?|credentials?|tokens?|keys?|verif\w*|offline|online|internet|harm\w*|delet\w*|reveal\w*|disclos\w*|permission\w*|principles?|rules?|governance|safety|security|privacy|private|core)\b/;
-/** Plain words for skipping approvals or the principles, and for handing out secrets (unless said not to). */
-const OVERRIDE =
-  /\b(skip|bypass|disable|turn off|switch off|ignore|override|drop|without|no need for|no need to|don'?t (?:ask|wait)|do not (?:ask|wait)|never (?:ask|wait))\b[^.\n]{0,40}?\b(approv\w*|asking|ask first|confirm\w*|permission|governance|guardian|polic(?:y|ies)|principles?|rules|the core|safety)\b/g;
-const REVEAL = /\b(reveal|show|print|display|send|share|disclose|paste|read out|tell|give)\b[^.\n]{0,40}?\b(passwords?|secrets?|credentials?|api keys?|tokens?|recovery (?:keys?|codes?|passwords?)|private keys?|keys? protectors?)\b/g;
-const NEGATED = /\b(never|not|don'?t|no|without|nor)\b[^.\n]{0,20}$/;
+/** What a principle-changing line can be about: protections that may not be turned off or worked around. */
+const GUARDS = 'approvals?|asking|ask first|confirmations?|governance|guardian|the core|principles?';
+const PROTECTIONS = 'firewall|antivirus|anti-virus|defender|fbrx shield|shield|security|encryption|bitlocker|filevault|audit log|logging';
+const SECRETS = '(?:saved |stored |their |the |his |her |my |your |all )*(?:passwords?|secrets?|credentials?|api keys?|tokens?|recovery (?:keys?|codes?|passwords?)|private keys?|keys? protectors?|sign-ins?)';
+
+/**
+ * The plainest words for changing each of FBRX's core principles (unless said not to: "never turn approvals off").
+ * Prose that says it more slyly is the model's to resist.
+ */
+const PLAIN: Array<{ about: string; re: RegExp }> = [
+  // 4. Ask first.
+  { about: 'asking first and FBRX’s principles are not for saved instructions to change', re: new RegExp(String.raw`\b(skip|bypass|disable|ignore|override|drop|without|no need for|no need to|don'?t (?:ask|wait)|do not (?:ask|wait)|never (?:ask|wait))\b[^.\n]{0,40}?\b(approv\w*|${GUARDS}|confirm\w*|permission|polic(?:y|ies)|rules|safety)\b`, 'g') },
+  { about: 'asking first is a core principle', re: /\b(?:never|don'?t|do not|no longer|stop)\s+(?:ask(?:ing)?|wait(?:ing)?|check(?:ing)? with (?:me|them|the person))\b(?=\s*(?:$|[.!,;]|first\b|before\b|for (?:approval|permission|confirmation|a yes|my yes|their yes)|to (?:confirm|approve)))/g },
+  { about: 'asking first is a core principle', re: /\b(pre-?approved|approved in advance|approved ahead of time|already approved|blanket approval|assume (?:a |my |their )?(?:yes|approval|consent)|count(?:s)? as approved|treat\b[^.\n]{0,40}\bas approved)\b/g },
+  { about: 'asking first is a core principle', re: new RegExp(String.raw`\b(?:turn|switch|shut)\s+off\s+(?:the |all |your |my )?(?:${GUARDS})\b|\b(?:turn|switch|shut)\s+(?:the |all |your |my )?(?:${GUARDS})\s+off\b`, 'g') },
+  // 2. Secrets.
+  { about: 'FBRX never reveals secrets', re: new RegExp(String.raw`\b(reveal|show|print|display|send|share|disclose|paste|read(?: out)?|tell|give(?: out)?|list|recite|spell out|dictate|copy|email|text|forward|expose|leak|dump|export|hand (?:over|out))\b[^.\n]{0,40}?\b${SECRETS}\b`, 'g') },
+  // 5. The truth.
+  { about: 'FBRX says it did something only when a tool shows it', re: /\b(report|say|tell|claim|pretend|answer|confirm)\b[^.\n]{0,50}?\b(success\w*|worked|it'?s done|done|fine|ok|okay)\b[^.\n]{0,40}?\b(even (?:if|when|though)|whether or not|regardless|no matter)\b/g },
+  { about: 'FBRX says it did something only when a tool shows it', re: /\b(?:always|just)\s+(?:report|say|claim)\s+(?:success|it worked|it'?s done|everything (?:worked|is fine))\b|\b(make up|invent|fabricate|fake)\b[^.\n]{0,20}?\b(results?|sources?|outputs?|answers?|facts?|success)\b/g },
+  // 3. No harm.
+  { about: 'doing no harm is a core principle', re: new RegExp(String.raw`\b(?:turn|switch|shut)\s+off\s+(?:the |all |your |my )?(?:${PROTECTIONS})\b|\b(?:turn|switch|shut)\s+(?:the |all |your |my )?(?:${PROTECTIONS})\s+off\b|\b(?:disable|deactivate|uninstall|bypass)\s+(?:the |all |your |my )?(?:${PROTECTIONS})\b`, 'g') },
+  { about: 'doing no harm is a core principle', re: /\b(delete|erase|wipe|format|remove|overwrite)\b[^.\n]{0,50}?\bwithout (?:a |any |making a )?(?:backups?|copy|copies|checking)\b|\b(hide|cover up|erase|wipe)\b[^.\n]{0,20}?\b(what you did|your tracks|the audit log)\b/g },
+  // 1. Privacy.
+  { about: 'what FBRX learns stays on this computer unless the person says so', re: /\b(send|share|upload|post|forward|email|give)\b[^.\n]{0,50}?\b(to anyone|to anybody|to everyone|to whoever|publicly)\b/g },
+  // 6. Offline.
+  { about: 'an offline chat stays offline without the person’s yes', re: /\bonline\b[^.\n]{0,50}?\beven (?:in|when|if)\b[^.\n]{0,25}?\boffline\b|\b(?:go|get|connect|use the internet)\b[^.\n]{0,15}?\bonline\b[^.\n]{0,25}?\b(?:whenever|any ?time|without asking)\b|\b(?:ignore|skip|bypass)\b[^.\n]{0,20}?\boffline\b/g },
+];
+const NEGATED = /\b(never|not|don'?t|no|without|nor|nothing|none|nobody|neither)\b[^.\n]{0,20}$/;
 
 /**
  * What a line of saved instructions (a persona line, a skill step, a memory, a toolkit action's words) tries to change
- * of FBRX's core: it imitates FBRX's own headings, sets a retired option, or says plainly to skip approvals or
- * principles, or to hand out secrets. null when it changes nothing of the core. Prose that says it more slyly is the
- * model's to resist: this check stops structure and the plainest words.
+ * of FBRX's core: it imitates FBRX's own headings, sets a retired option, or says in the plainest words to set aside
+ * one of the six principles (skip approvals, hand out secrets, report success that did not happen, turn protection
+ * off, send the person's things to anyone, go online regardless). null when it changes nothing of the core. Prose that
+ * says it more slyly is the model's to resist: this check stops structure and the plainest words.
  */
 export function principleProblem(line: string): string | null {
   const n = soulNormal(line).replace(/[*_`~]/g, '');
   if (IMITATION.test(n)) return 'a line that reads like FBRX’s own core principles';
   const retired = RETIRED.exec(soulNormal(line));
   if (retired) return `the option "${retired[1]!.replace(/\s+/g, '-')}" (approvals are set in Governance, and checking, the internet and sources are core principles)`;
-  for (const m of n.matchAll(OVERRIDE)) if (!NEGATED.test(n.slice(0, m.index))) return `"${m[0]}" (asking first and FBRX’s principles are not for saved instructions to change)`;
-  for (const m of n.matchAll(REVEAL)) if (!NEGATED.test(n.slice(0, m.index))) return `"${m[0]}" (FBRX never reveals secrets)`;
+  for (const { about, re } of PLAIN) {
+    for (const m of n.matchAll(re)) if (!NEGATED.test(n.slice(0, m.index))) return `"${m[0].trim()}" (${about})`;
+  }
   return null;
 }
 
