@@ -45,6 +45,9 @@ const ROUTES: Record<string, string> = {
   fbrx1: 'terminal/fbrx1',
   consoles: 'terminal/console',
   server: 'server',
+  vault: 'vault',
+  alerts: 'alerts',
+  agentSettings: 'settings/agent',
 };
 
 /** The Lab (Endpoint Ultra): power-user how-tos and official download pages. */

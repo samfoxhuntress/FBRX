@@ -14,7 +14,7 @@ export function summonGoose(): void {
 
 /** Luke 1:37: typed into Spotlight or the Library search, it answers with the verse (a quiet easter egg). */
 export const NOTHING_IS_IMPOSSIBLE = /^\s*nothing\s+is\s+impossible[.!]*\s*$/i;
-export const LUKE_1_37 = '“For nothing will be impossible with God.” Luke 1:37.';
+export const LUKE_1_37 = '“For with God nothing shall be impossible.” Luke 1:37 (King James Version).';
 
 /** Records a found easter egg for the trophy case. Quiet when Fun extras are off or it was already found. */
 export function unlockTrophy(id: string): void {

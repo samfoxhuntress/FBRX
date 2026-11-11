@@ -22,21 +22,11 @@ const COLORS: Record<string, [string, string]> = {
   teapot: ['#6cc5c7', '#2a7d80'],
   edge: ['#e3e6ea', '#8a9099'],
   nat20: ['#ee6a5f', '#9e2a21'],
-  jigowatts: ['#6fb3ff', '#1f5fbf'],
-  stapler: ['#f06058', '#a3201a'],
   loose: ['#b9bec7', '#5f6570'],
   flaps: ['#5c6270', '#22252c'],
   golden: ['#ffd95a', '#b8860b'],
   chicken: ['#ffe9a8', '#c9962b'],
-  pcload: ['#d7dde4', '#6c7682'],
-  chewie: ['#7fb7e8', '#2a4f7a'],
-  fuzzball: ['#d9a46c', '#7a4f26'],
-  father: ['#9a6cf0', '#3d1f7a'],
-  wookiee: ['#a9784c', '#4e3018'],
   mirror: ['#d14b8f', '#5a1f73'],
-  synergy: ['#5fb0c9', '#1f5d73'],
-  wingman: ['#3fcf9a', '#0f5b48'],
-  topwing: ['#f2c14e', '#8a5a00'],
   operator: ['#5ad1e6', '#17606f'],
 };
 
@@ -159,24 +149,6 @@ function Glyph({ id }: { id: string }): ReactNode {
           <text x="32" y="32" textAnchor="middle" fontSize="9" fontWeight="800" fill="#7a1d16">20</text>
         </g>
       );
-    case 'jigowatts':
-      return (
-        <g>
-          <circle cx="32" cy="33" r="16" fill="#1d2433" stroke="#9fb4d6" strokeWidth="1.4" />
-          <path d="M32 21 V33 L40 37" stroke="#bfe3ff" strokeWidth="2.6" strokeLinecap="round" fill="none" />
-          <circle cx="32" cy="33" r="2" fill="#fff" />
-          <path d="M44 12 l-6 9 h5 l-4 8" stroke="#ffd34d" strokeWidth="2" fill="none" strokeLinejoin="round" strokeLinecap="round" />
-        </g>
-      );
-    case 'stapler':
-      return (
-        <g>
-          <rect x="14" y="40" width="36" height="6" rx="2" fill="#3a3a3a" />
-          <path d="M14 38 Q14 28 24 28 H48 Q52 28 52 32 V36 H14 Z" fill="#e0262b" stroke="#8c1410" strokeWidth="1.2" />
-          <circle cx="18" cy="38" r="2" fill="#bbb" />
-          <path d="M26 31h20" stroke="#ff8a85" strokeWidth="1.5" strokeLinecap="round" />
-        </g>
-      );
     case 'loose':
       return (
         <g>
@@ -210,57 +182,6 @@ function Glyph({ id }: { id: string }): ReactNode {
           <path d="M30 50 v5 M37 50 v5" stroke="#f08c00" strokeWidth="2" strokeLinecap="round" />
         </g>
       );
-    case 'pcload':
-      return (
-        <g>
-          <rect x="16" y="26" width="32" height="15" rx="3" fill="#3a3f47" />
-          <rect x="22" y="15" width="20" height="12" fill="#fff" stroke="#999" strokeWidth="1" />
-          <rect x="21" y="38" width="22" height="12" fill="#fff" stroke="#999" strokeWidth="1" />
-          <rect x="34" y="29" width="10" height="4" rx="1" fill="#9be38f" />
-          <text x="32" y="47" textAnchor="middle" fontSize="5.4" fontWeight="800" fill="#c62828">LETTER?</text>
-        </g>
-      );
-    case 'chewie':
-      return (
-        <g>
-          <path d="M32 10 Q42 18 42 34 L38 42 H26 L22 34 Q22 18 32 10 Z" fill="#eef2f6" stroke="#5b4a3a" strokeWidth="1.3" />
-          <circle cx="32" cy="27" r="4" fill="#6fb3ff" stroke="#5b4a3a" strokeWidth="1.1" />
-          <path d="M22 34 L15 43 L24 41 Z M42 34 L49 43 L40 41 Z" fill="#c08a5a" stroke="#5b4a3a" strokeWidth="1" />
-          <path d="M28 43 Q32 54 36 43 Z" fill="#ffb347" />
-        </g>
-      );
-    case 'fuzzball':
-      return (
-        <g>
-          <circle cx="32" cy="33" r="15" fill="#8a5a2b" />
-          {Array.from({ length: 14 }, (_, i) => {
-            const a = (i / 14) * Math.PI * 2;
-            return <path key={i} d={`M${32 + Math.cos(a) * 13} ${33 + Math.sin(a) * 13} l${Math.cos(a) * 5} ${Math.sin(a) * 5}`} stroke="#8a5a2b" strokeWidth="2.4" strokeLinecap="round" />;
-          })}
-          <circle cx="27" cy="29" r="2" fill="#1b1b1b" />
-          <circle cx="37" cy="29" r="2" fill="#1b1b1b" />
-          <path d="M25 36 q7 8 14 0 z" fill="#3a1d0b" />
-        </g>
-      );
-    case 'father':
-      return (
-        <g>
-          <path d="M18 22 Q32 12 44 22 Q52 30 42 36 Q32 42 24 36 Q16 30 26 26 Q34 22 38 30" stroke="#fff" strokeWidth="3.4" fill="none" strokeLinecap="round" />
-          <path d="M36 27 L39 32 L33 33 Z" fill="#fff" />
-          <text x="32" y="52" textAnchor="middle" fontSize="11" fontWeight="900" fill="#fff">?!</text>
-        </g>
-      );
-    case 'wookiee':
-      return (
-        <g>
-          <path d="M18 22 Q20 10 32 10 Q44 10 46 22 L48 44 Q40 54 32 54 Q24 54 16 44 Z" fill="#7a4f26" />
-          <path d="M22 26 Q32 20 42 26 L41 42 Q32 48 23 42 Z" fill="#a8774a" />
-          <circle cx="27" cy="31" r="2" fill="#1b1b1b" />
-          <circle cx="37" cy="31" r="2" fill="#1b1b1b" />
-          <path d="M28 40 q4 3 8 0" stroke="#3a1d0b" strokeWidth="1.6" fill="none" strokeLinecap="round" />
-          <path d="M30 35 h4 l-2 2z" fill="#2a1508" />
-        </g>
-      );
     case 'mirror':
       return (
         <g>
@@ -275,37 +196,6 @@ function Glyph({ id }: { id: string }): ReactNode {
             </g>
           ))}
           <text x="32" y="50" textAnchor="middle" fontSize="7" fontWeight="800" fill="#fff">YOU?</text>
-        </g>
-      );
-    case 'synergy':
-      return (
-        <g>
-          <rect x="13" y="14" width="38" height="28" rx="3" fill="#fff" stroke="#2c4a57" strokeWidth="1.3" />
-          <path d="M18 36 L26 29 L32 33 L45 20" stroke="#e0262b" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M40 19 L46 19 L46 25" stroke="#e0262b" strokeWidth="2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-          <path d="M31 42 L27 52 M33 42 L37 52" stroke="#2c4a57" strokeWidth="1.6" strokeLinecap="round" />
-          <text x="32" y="22" textAnchor="middle" fontSize="5" fontWeight="800" fill="#2c4a57">Q3</text>
-        </g>
-      );
-    case 'wingman':
-      return (
-        <g>
-          <circle cx="32" cy="33" r="18" fill="#0d2a22" stroke="#9ff0c8" strokeWidth="1.4" />
-          <circle cx="32" cy="33" r="11" fill="none" stroke="#3fcf9a" strokeWidth="0.9" opacity="0.7" />
-          <path d="M32 15 V51 M14 33 H50" stroke="#3fcf9a" strokeWidth="0.7" opacity="0.6" />
-          <path d="M32 33 L45 21 A18 18 0 0 1 50 33 Z" fill="#3fcf9a" opacity="0.45" />
-          <circle cx="41" cy="27" r="2" fill="#d9fff0" />
-          <circle cx="24" cy="39" r="1.5" fill="#d9fff0" opacity="0.7" />
-        </g>
-      );
-    case 'topwing':
-      return (
-        <g>
-          <path d="M32 26 Q22 22 10 23 Q14 27 20 28 Q14 29 12 31 Q20 32 26 31 Q22 33 20 35 Q27 35 32 32 Z" fill="#ffe08a" stroke="#8a5a00" strokeWidth="1" />
-          <path d="M32 26 Q42 22 54 23 Q50 27 44 28 Q50 29 52 31 Q44 32 38 31 Q42 33 44 35 Q37 35 32 32 Z" fill="#ffe08a" stroke="#8a5a00" strokeWidth="1" />
-          <circle cx="32" cy="30" r="5.5" fill="#f2c14e" stroke="#8a5a00" strokeWidth="1.2" />
-          <path d="M32 27 l1 2 2 .2 -1.6 1.3 .6 2 -2 -1.1 -2 1.1 .6 -2 -1.6 -1.3 2 -.2z" fill="#8a5a00" />
-          <path d="M24 44 h16" stroke="#fff" strokeWidth="2.2" strokeLinecap="round" opacity="0.8" />
         </g>
       );
     case 'operator':

@@ -1,12 +1,10 @@
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROVIDERS, TROPHIES, type AgentEvent, type CliResult } from '@fbrx/shared';
-import { generateSigningKeyPair, signLicense } from '@fbrx/shared/node';
+import { DEFAULT_PROVIDERS, TROPHIES, type CliResult } from '@fbrx/shared';
 import { makeKernel, waitFor, USER } from './helpers';
 import { mockOpenAI } from './mock-llm';
 import { AiCoordination } from '../src/aicoord/aicoord';
 import { words } from '../src/cli/fbrx1';
-import { chatEgg } from '../src/fun/chat-eggs';
 import { resourcePlan } from '../src/ai/resources';
 import { constants } from 'node:os';
 
@@ -80,40 +78,6 @@ describe('emergency stop', () => {
   });
 });
 
-describe('the stapler', () => {
-  it('answers at once, then the conversation is canned corporate jargon (no model) until PC load letter', async () => {
-    const { kernel, cleanup } = await makeKernel();
-    const llm = await mockOpenAI(() => ({ text: 'Your disk has 120 GB free.' }));
-    try {
-      kernel.settings.update({ appearance: { funUnlocked: true } });
-      kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
-      const events: AgentEvent[] = [];
-      kernel.events.on('agent', (e) => events.push(e));
-      const first = (await kernel.call('ai.chat', { message: 'Has anyone seen my stapler?' }, USER)) as any;
-      const reply = events.find((e) => e.type === 'message.completed') as any;
-      expect(reply.message.content).toMatch(/stapler[\s\S]*That would be great\.$/);
-      expect(kernel.trophies.has('stapler')).toBe(true);
-
-      await kernel.call('ai.chat', { conversationId: first.conversationId, message: 'How much disk space is free?' }, USER);
-      const last = kernel.conversations.get(first.conversationId).messages.at(-1)!;
-      expect(last.content).toMatch(/That would be great\.$/);
-      expect(last.content).not.toMatch(/120 GB/);
-      expect(llm.requests).toHaveLength(0);
-
-      await kernel.call('ai.chat', { conversationId: first.conversationId, message: 'PC load better' }, USER);
-      expect(kernel.conversations.get(first.conversationId).messages.at(-1)!.content).toMatch(/The stapler stays in storage\.$/);
-      expect(kernel.trophies.has('pcload')).toBe(true);
-      await kernel.call('ai.chat', { conversationId: first.conversationId, message: 'And now?' }, USER);
-      await waitFor(() => events.filter((e) => e.type === 'run.completed').length >= 4);
-      expect(llm.requests).toHaveLength(1);
-      expect(kernel.conversations.get(first.conversationId).messages.at(-1)!.content).toBe('Your disk has 120 GB free.');
-    } finally {
-      await llm.close();
-      await cleanup();
-    }
-  });
-});
-
 describe('FBRX/1', () => {
   it('shows, configures with commit, pipes and completes', async () => {
     const { kernel, cleanup } = await makeKernel();
@@ -175,99 +139,19 @@ describe('AI coordination link test', () => {
   }, 40_000);
 });
 
-describe('chat eggs', () => {
-  it('turns on jargon mode for the stapler sayings, with random answers unrelated to the question', () => {
-    // Every answer says where the stapler went, whichever one comes up.
-    for (const r of [0, 0.4, 0.99]) expect(chatEgg('Where is my stapler?', null, () => r)!.reply).toMatch(/^[^\n]*stapler[\s\S]*That would be great\.$/);
-    for (const q of ['Have you seen my stapler?', 'Where is my stapler?', 'Has anyone seen my stapler?', "Where's my stapler?", 'where’s my stapler', 'Has anybody seen my red stapler', 'stapler', 'Stapler?']) {
-      expect(chatEgg(q, null)).toMatchObject({ persona: 'jargon:0', trophies: ['stapler'] });
-    }
-    expect(chatEgg('Write a 2,000 word essay on the history of office supplies, including the humble stapler and the paper clip, with sources and footnotes please', null)).toBeNull();
-    expect(chatEgg('How do I fix a jammed stapler?', null)).toBeNull();
-    expect(chatEgg('How much disk space is free?', null)).toBeNull();
-
-    // Every answer is jargon, signed off the same way, and never about the question.
-    const seen = new Set<string>();
-    let persona = 'jargon:0';
-    for (let i = 0; i < 6; i++) {
-      const r = chatEgg('How much disk space is free?', persona)!;
-      expect(r.reply).toMatch(/That would be great\.$/);
-      expect(r.reply).not.toMatch(/disk/i);
-      seen.add(r.reply);
-      persona = r.persona!;
-    }
-    expect(persona).toBe('jargon:6');
-    expect(seen.size).toBeGreaterThan(1);
-    expect(chatEgg('still there?', 'jargon:4')!.trophies).toEqual(['synergy']);
-    // Conversations from before keep their manager.
-    expect(chatEgg('hello', 'lumbergh')).toMatchObject({ persona: 'jargon:1' });
-
-    expect(chatEgg('PC load letter', 'jargon:2')).toMatchObject({ persona: null, trophies: ['pcload'] });
-    expect(chatEgg('pc load better', 'lumbergh')).toMatchObject({ persona: null, trophies: ['pcload'] });
-    expect(chatEgg('PC load letter', null)).toMatchObject({ persona: undefined, trophies: ['pcload'] });
-    for (const q of ['I quit', 'normal mode', 'no more jargon']) expect(chatEgg(q, 'jargon:3')).toMatchObject({ persona: null, trophies: [] });
-  });
-
-  it('puts your wingman on the radio on "Talk to me, Goose" until wheels down', () => {
-    for (const q of ['Talk to me, Goose', 'talk to me goose!', 'Talk to me, Goose.']) expect(chatEgg(q, null)).toMatchObject({ persona: 'wingman:0', trophies: ['wingman'] });
-    expect(chatEgg('Talk to me about geese', null)).toBeNull();
-    let persona = 'wingman:0';
-    const seen = new Set<string>();
-    for (let i = 0; i < 5; i++) {
-      const r = chatEgg('What is my IP address?', persona)!;
-      expect(r.reply).toMatch(/^📻 .* Over\.$/s);
-      expect(r.reply).not.toMatch(/IP address/i);
-      seen.add(r.reply);
-      persona = r.persona!;
-    }
-    expect(persona).toBe('wingman:5');
-    expect(seen.size).toBeGreaterThan(1);
-    expect(chatEgg('roger', 'wingman:4')!.trophies).toEqual(['topwing']);
-    // The stapler still finds the manager, even mid-flight.
-    expect(chatEgg('Has anyone seen my stapler?', persona)).toMatchObject({ persona: 'jargon:0', trophies: ['stapler'] });
-    for (const q of ["That's a copy", 'that’s a copy.', 'That is a copy!', 'Wheels down', 'return to base', 'land the plane', 'normal mode']) expect(chatEgg(q, persona)).toMatchObject({ persona: null, trophies: [] });
-    expect(chatEgg("That's a copy", persona)!.reply).toBe('📻 Wheels down, canopy up. Nice flying, partner.');
-  });
-
-  it('turns Wookiee on "Chewie, we\'re home" until "Laugh it up, fuzzball", with the father line on Nooo', () => {
-    const r = () => 0.3;
-    const on = chatEgg("Chewie, we're home", null, r)!;
-    expect(on).toMatchObject({ persona: 'wookiee:0', trophies: ['chewie'] });
-    let persona = on.persona!;
-    const growl = chatEgg('How much disk space is free?', persona, r)!;
-    expect(growl.reply).toMatch(/^[A-Z]r|^R|^A|^U|^G|^H|^W/);
-    expect(growl.reply).not.toMatch(/disk/i);
-    persona = growl.persona!;
-    expect(chatEgg('Nooo!', persona, r)).toMatchObject({ reply: 'No, I am your father.', trophies: ['father'] });
-    expect(chatEgg('Noo', persona, r)!.trophies).toEqual([]);
-    for (let i = 0; i < 4; i++) persona = chatEgg('hello?', persona, r)!.persona!;
-    expect(persona).toBe('wookiee:5');
-    expect(chatEgg('still there?', 'wookiee:4', r)!.trophies).toEqual(['wookiee']);
-    expect(chatEgg('Laugh it up, fuzzball', persona, r)).toMatchObject({ persona: null, trophies: ['fuzzball'] });
-  });
-
-  it('stays out of the way in every edition until 418 unlocks it, then works in all of them', async () => {
-    const keys = generateSigningKeyPair();
-    const { kernel, cleanup } = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem] });
+describe('chat with fun extras on', () => {
+  it('has no canned answers that quote films: the lines that used to start one go to the AI like any other message', async () => {
+    const { kernel, cleanup } = await makeKernel();
     const llm = await mockOpenAI(() => ({ text: 'Plain answer.' }));
     try {
-      kernel.settings.update({ ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
-      const events: AgentEvent[] = [];
-      kernel.events.on('agent', (e) => events.push(e));
-      // Not Ultra: a computer that never joined FBRX Command.
-      expect(kernel.license.status().tier).not.toBe('ultra');
-      await kernel.call('ai.chat', { message: "Chewie, we're home" }, USER);
-      await waitFor(() => events.some((e) => e.type === 'run.completed'));
-      expect(llm.requests).toHaveLength(1);
-      kernel.settings.update({ appearance: { funUnlocked: true } });
-      const r = (await kernel.call('ai.chat', { message: "Chewie, we're home" }, USER)) as any;
-      expect(kernel.conversations.get(r.conversationId).messages.at(-1)!.content).toMatch(/^Rrrrrrr-ghghghghgh!/);
-      expect(kernel.trophies.has('chewie')).toBe(true);
-      expect(llm.requests).toHaveLength(1);
-      // Switched off again (or locked off by an organization): back to plain answers.
-      kernel.settings.update({ appearance: { easterEggs: false } });
-      await kernel.call('ai.chat', { message: "Chewie, we're home" }, USER);
-      await waitFor(() => llm.requests.length === 2);
+      kernel.settings.update({ appearance: { funUnlocked: true }, ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } });
+      const lines = ["Chewie, we're home", 'Talk to me, Goose', 'Have you seen my stapler?', 'PC load letter'];
+      for (const message of lines) {
+        const r = (await kernel.call('ai.chat', { message }, USER)) as any;
+        await waitFor(() => kernel.conversations.get(r.conversationId).messages.at(-1)?.content === 'Plain answer.');
+      }
+      expect(llm.requests.filter((q) => q.path?.endsWith('/chat/completions'))).toHaveLength(lines.length);
+      expect(Object.keys(((await kernel.call('fun.trophies', undefined, USER)) as any).unlocked)).toEqual([]);
     } finally {
       await llm.close();
       await cleanup();

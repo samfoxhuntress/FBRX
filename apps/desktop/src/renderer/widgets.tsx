@@ -205,7 +205,7 @@ export async function saveProfile(p: { name: string; callMe: string }, fun: bool
   if (fun && /^chicken$/i.test(p.callMe.trim())) {
     cluck();
     unlockTrophy('chicken');
-    toast.info('Nobody calls me chicken!', '…but if you insist. Bawk.');
+    toast.info('Bawk bawk!', 'Chicken it is, if you insist.');
   }
 }
 

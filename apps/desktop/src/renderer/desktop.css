@@ -987,27 +987,6 @@
   letter-spacing: 0.08em;
   text-transform: uppercase;
 }
-.speedo.flux .speedo-face {
-  fill: #0d2a52;
-}
-.speedo.flux {
-  filter: drop-shadow(0 0 24px rgba(111, 179, 255, 0.85));
-}
-.speedo.flux .speedo-value {
-  fill: #dff1ff;
-}
-.speedo.flux .speedo-label {
-  fill: #ffd34d;
-}
-.speedo-bolts {
-  filter: drop-shadow(0 0 6px #9fd0ff);
-  animation: speedo-flicker 0.12s steps(2) infinite;
-}
-@keyframes speedo-flicker {
-  50% {
-    opacity: 0.35;
-  }
-}
 
 /* ------------------------------------------------------------------ mesh */
 .perm-grid {

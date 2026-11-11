@@ -38,7 +38,6 @@ import type { ProviderManager } from './provider-manager';
 import type { ProviderImage, ProviderMessage, ProviderTool, ProviderToolCall } from './providers/types';
 import type { AttachmentStore } from './attachments';
 import { formatBytes } from '../util/misc';
-import { chatEgg, type ChatEgg } from '../fun/chat-eggs';
 import { learnerConcern, learnerPrompt, type LearnerConcern } from './learner';
 import { briefDescription, shortlistTools } from './tool-shortlist';
 import { agentFit } from './agent-fit';
@@ -179,12 +178,6 @@ export class AgentRuntime {
         canHandoff: (trigger: 'steps' | 'provider') => boolean;
         handoff: (h: { trigger: 'steps' | 'provider'; task: string; digest: string; error?: string; signal?: AbortSignal; onStatus: (text: string) => void }) => Promise<{ ok: true; peerName: string; answer: string } | { ok: false; reason: string }>;
       };
-      /** Easter eggs (Settings → Appearance → Fun extras). */
-      fun?: {
-        enabled: () => boolean;
-        trophy: (id: string) => void;
-        persona: { get: (conversationId: string) => string | null; set: (conversationId: string, persona: string | null) => void };
-      };
     },
   ) {}
 
@@ -217,13 +210,11 @@ export class AgentRuntime {
     if (learner) {
       const concern = learnerConcern(text, learner.vertical);
       if (concern) {
-        const run = this.cannedRun(p, text, { reply: concern.reply, trophies: [] }, 'learning helper');
+        const run = this.cannedRun(p, text, concern.reply, 'learning helper');
         this.d.onConcern?.(concern.category, run.conversationId);
         return run;
       }
     }
-    const egg = learner || attached.length ? null : this.easterEgg(text, p.conversationId);
-    if (egg) return this.cannedRun(p, text, egg);
     // Resolve the provider first so configuration errors surface synchronously to the caller.
     const resolved = this.d.providers.resolve(p.providerId, p.model);
     this.checkBudget(resolved.config);
@@ -263,17 +254,8 @@ export class AgentRuntime {
     return n;
   }
 
-  // ------------------------------------------------------------------------------------ easter eggs
-
-  /** A chat easter egg (see fun/chat-eggs.ts), or null for a normal answer. */
-  private easterEgg(text: string, conversationId?: string): ChatEgg | null {
-    const fun = this.d.fun;
-    if (!fun?.enabled()) return null;
-    return chatEgg(text, conversationId ? fun.persona.get(conversationId) : null);
-  }
-
-  /** A reply that needs no model: stored and streamed like a normal run. */
-  private cannedRun(p: ChatParams, text: string, egg: Pick<ChatEgg, 'reply' | 'trophies'> & { persona?: ChatEgg['persona'] }, model = 'easter egg'): { runId: string; conversationId: string; done: Promise<RunResult> } {
+  /** A reply that needs no model (the learning helper's): stored and streamed like a normal run. */
+  private cannedRun(p: ChatParams, text: string, reply: string, model: string): { runId: string; conversationId: string; done: Promise<RunResult> } {
     let conversationId = p.conversationId;
     if (conversationId) {
       if (!this.d.store.exists(conversationId)) throw new CoreError('NOT_FOUND', 'Conversation not found');
@@ -282,9 +264,6 @@ export class AgentRuntime {
     }
     const runId = newId('run');
     const convId = conversationId;
-    const reply = egg.reply;
-    if (egg.persona !== undefined) this.d.fun!.persona.set(convId, egg.persona);
-    for (const t of egg.trophies) this.d.fun!.trophy(t);
     this.d.store.append(convId, { role: 'user', content: text });
     this.emit({ type: 'run.started', runId, conversationId: convId, providerId: 'fbrx', model });
     const assistant = this.d.store.append(convId, { id: newId('msg'), role: 'assistant', content: reply });

@@ -49,7 +49,7 @@ function easterEgg(command: string): string | 'honk' | 'matrix' | null {
   if (c === 'sudo make me a sandwich') return 'Okay.';
   if (c === 'make me a sandwich') return 'What? Make it yourself.';
   if (c === 'honk' || c === 'goose') return 'honk';
-  if (c === 'matrix' || c === 'wake up neo') return 'matrix';
+  if (c === 'rain' || c === 'make it rain') return 'matrix';
   if (c === 'make coffee' || c === 'coffee') return "418 I'm a teapot. Try the kitchen.";
   if (c === 'hello' || c === 'hi' || c === 'hello fabrix') return 'Hello! I run your commands, Fabrix explains them. Try the reference panel on the right.';
   if (c === 'exit' || c === 'quit') return 'There is no exit. Only other pages. (Each command already runs in its own fresh shell.)';
@@ -57,7 +57,7 @@ function easterEgg(command: string): string | 'honk' | 'matrix' | null {
   return null;
 }
 
-/** Green rain for a few seconds (the "matrix" easter egg). */
+/** Green code rain for a few seconds (the "rain" easter egg). */
 function MatrixRain({ onDone }: { onDone: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {

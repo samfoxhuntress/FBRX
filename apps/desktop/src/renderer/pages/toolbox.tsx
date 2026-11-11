@@ -469,7 +469,7 @@ function bumpFlips(reset = false): number {
   }
 }
 
-const GOOSE_ANSWERS = ['Honk.', 'Absolutely. Honk.', 'Ask again after a nap.', 'The goose says no.', 'Signs point to honk.', 'Without a doubt.', 'Very doubtful.', 'Outlook good, if you back up first.', 'The goose is busy. Try later.', 'Yes, but wear safety goggles.'];
+const GOOSE_ANSWERS = ['Honk.', 'Absolutely. Honk.', 'Maybe after a nap.', 'The goose says no.', 'Every feather says honk.', 'Yes. Obviously.', 'Hmm. Not a chance.', 'Looks good, if you back up first.', 'The goose is busy. Try later.', 'Yes, but wear safety goggles.'];
 
 function DecideTool({ seed, fun }: { seed: Example | null; fun: boolean }) {
   const [list, setList] = useState(seed?.input ?? '');

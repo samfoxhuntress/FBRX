@@ -1,4 +1,4 @@
-import { useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useContext, useEffect, useState, type ReactNode } from 'react';
 import type { ConnectionProtocol, LanDevice, LanScan, LanScanCompare, NetAdapter, PingResult, SpeedTestResult, StackLayer, StackReport, TraceHop } from '@fbrx/shared';
 import { Button, Callout, Card, CopyText, Empty, Field, Grid, Icons, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
 import { bridge, call, onEvent, pickFile } from '../client';
@@ -7,7 +7,6 @@ import { DIGGER, IS_WINDOWS, navigate, routeArg } from '../app';
 import { AiContext, AskButton, askAgent } from '../widgets';
 import { ConnectDialog, DeviceConsolesPanel, consoleRoute, type ConnectTarget } from '../consoles';
 import { Speedometer, speedFraction } from '../speedometer';
-import { unlockTrophy } from '../fun';
 import { commandSearchUrl, matchDeviceProfile } from '@fbrx/shared';
 import { EditionHint } from '../edition';
 import { Environments } from './network-environments';
@@ -568,35 +567,12 @@ function Devices({ advanced }: { advanced: boolean }) {
   );
 }
 
-/** The 88 mph sequence: needle position (0…1), readout, unit, remark, lightning; then back to zero. */
-const JIGOWATTS: Array<[number, { f?: number; value?: string; unit?: string; label?: string; flux?: boolean }]> = [
-  [0, { f: 0.3, value: '30', unit: 'mph', label: 'Roads? Where we\'re going…' }],
-  [380, { f: 0.62, value: '62' }],
-  [760, { f: 0.41, value: '41' }],
-  [1140, { f: 0.8, value: '80' }],
-  [1500, { f: 0.57, value: '57' }],
-  [1880, { f: 0.88, value: '88', label: 'Hold on tight!' }],
-  [2220, { f: 0.79, value: '84' }],
-  [2520, { f: 0.9, value: '88' }],
-  [2820, { f: 0.85, value: '87' }],
-  [3120, { f: 0.88, value: '1.21', unit: 'gigawatts', label: '88 mph', flux: true }],
-  [3260, { flux: false }],
-  [3400, { flux: true }],
-  [3560, { flux: false }],
-  [3700, { flux: true }],
-  [5600, { f: 0, value: '0.0', unit: 'Mbps', label: '', flux: false }],
-];
-
-function Speed({ easterEggs }: { easterEggs: boolean }) {
+function Speed() {
   const hist = useCore('net.speedHistory');
   const [live, setLive] = useState<{ phase: string; mbps: number } | null>(null);
   const [last, setLast] = useState<SpeedTestResult | null>(null);
   const [testing, setTesting] = useState(false);
-  const [egg, setEgg] = useState<{ f: number; value: string; unit: string; label: string; flux: boolean } | null>(null);
-  const clicks = useRef<number[]>([]);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const toast = useToast();
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const start = async () => {
     const reqId = newReqId();
     setTesting(true);
@@ -615,36 +591,13 @@ function Speed({ easterEggs }: { easterEggs: boolean }) {
       setTesting(false);
     }
   };
-  const timeTravel = () => {
-    unlockTrophy('jigowatts');
-    let state = { f: 0, value: '0.0', unit: 'mph', label: '', flux: false };
-    for (const [t, patch] of JIGOWATTS) {
-      timers.current.push(
-        setTimeout(() => {
-          state = { ...state, ...patch };
-          setEgg(state);
-        }, t),
-      );
-    }
-    // Back to normal, as if nothing happened.
-    timers.current.push(setTimeout(() => setEgg(null), 6700));
-  };
   const onRun = () => {
-    const now = Date.now();
-    clicks.current = [...clicks.current.filter((t) => now - t < 4000), now];
-    if (easterEggs && !egg && clicks.current.length >= 8) {
-      clicks.current = [];
-      timeTravel();
-      return;
-    }
-    if (!testing && !egg) void start();
+    if (!testing) void start();
   };
   const h = [...(hist.data ?? [])].reverse();
   const shown = last ?? hist.data?.[0];
   const phaseName = (p: string) => (p ? p[0].toUpperCase() + p.slice(1) : 'Measuring');
-  const dial = egg
-    ? { fraction: egg.f, value: egg.value, unit: egg.unit, label: egg.label, flux: egg.flux }
-    : live
+  const dial = live
       ? { fraction: speedFraction(live.mbps), value: live.mbps.toFixed(1), unit: 'Mbps', label: phaseName(live.phase) }
       : testing
         ? { fraction: 0, value: '…', unit: 'Mbps', label: 'Connecting' }
@@ -656,7 +609,7 @@ function Speed({ easterEggs }: { easterEggs: boolean }) {
       <Card
         title="Internet speed"
         subtitle="Measured against Cloudflare's nearest server. Uses about 100 MB of data."
-        actions={shown && !live && !egg ? <AskButton label="Is this good?" prompt="Here are my internet speed test results (newest first). Is this good for what most people do (video calls, streaming, gaming, large downloads)? If something looks wrong, how do I fix it?" context={(hist.data ?? []).slice(0, 8)} /> : undefined}
+        actions={shown && !live ? <AskButton label="Is this good?" prompt="Here are my internet speed test results (newest first). Is this good for what most people do (video calls, streaming, gaming, large downloads)? If something looks wrong, how do I fix it?" context={(hist.data ?? []).slice(0, 8)} /> : undefined}
       >
         <div className="speed-panel">
           <div className="speed-dial">
@@ -945,7 +898,7 @@ function Adapters() {
 
 const NET_TABS: Tab[] = ['overview', 'environments', 'trace', 'devices', 'speed', 'wifi', 'bluetooth', 'printers', 'tools', 'adapters', 'consoles'];
 
-export function NetworkPage({ advanced, everything, easterEggs }: { advanced: boolean; everything: boolean; easterEggs: boolean }) {
+export function NetworkPage({ advanced, everything }: { advanced: boolean; everything: boolean }) {
   // network/speed, network/printers… open that tab directly.
   const first = () => (routeArg() ?? '').split('/')[0] as Tab;
   const [tab, setTab] = useState<Tab>(() => (NET_TABS.includes(first()) ? first() : 'overview'));
@@ -989,7 +942,7 @@ export function NetworkPage({ advanced, everything, easterEggs }: { advanced: bo
       {shown === 'environments' && <Environments />}
       {shown === 'trace' && <Trace />}
       {shown === 'devices' && <Devices advanced={advanced} />}
-      {shown === 'speed' && <Speed easterEggs={easterEggs} />}
+      {shown === 'speed' && <Speed />}
       {shown === 'wifi' && <Wifi />}
       {shown === 'bluetooth' && <Bluetooth />}
       {shown === 'printers' && <Printers />}

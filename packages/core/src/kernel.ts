@@ -481,14 +481,6 @@ export class Kernel {
         canHandoff: (trigger) => this.assist.canHandoff(trigger),
         handoff: (h) => this.assist.handoff(h),
       },
-      fun: {
-        enabled: () => funEnabled(this.settings.get(), this.license.status().tier),
-        trophy: (id) => void this.trophies.unlock(id),
-        persona: {
-          get: (c) => this.meta.get<string>(`agent.persona.${c}`),
-          set: (c, v) => (v ? this.meta.set(`agent.persona.${c}`, v) : this.meta.delete(`agent.persona.${c}`)),
-        },
-      },
     });
     this.learning = new ComputerLearning({
       events: this.events,

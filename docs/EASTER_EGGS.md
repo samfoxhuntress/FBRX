@@ -19,7 +19,7 @@ Every easter egg has a badge in **Settings → Trophy case** (also in Spotlight:
 count in the sidebar footer). Badges you haven't found are greyed out with a hint; found ones are in color with how and
 when you earned them. A toast with **See trophy case** pops up the moment you find one.
 
-Find all 26 and you unlock the **Golden Goose**: from then on the goose arrives wearing a golden egg with a red **#1**
+Find all 16 and you unlock the **Golden Goose**: from then on the goose arrives wearing a golden egg with a red **#1**
 ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `show trophies` in FBRX/1 lists it.
 
 | Badge | How to earn it |
@@ -31,30 +31,20 @@ ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `
 | Safety First | Open **Library → The Lab** |
 | Storyteller | Search the Library for "tell me a story" (or "story time", "once upon a time") |
 | Operator Mode | Talk to the Library search like a switch: `show commands`, `enable`, `configure terminal` or `fbrx help`. It unlocks **FBRX commands** in the Library (Ultra) |
-| Digital Rain | Type `matrix` in the Terminal |
-| Sandwich Artist | Type `sudo make me a sandwich` in the Terminal |
+| Code Rain | Type `rain` in the Terminal |
+| Superuser Snack | Type `sudo make me a sandwich` in the Terminal |
 | I'm a Teapot | Type `coffee` in the Terminal |
 | On the Edge | Flip coins in **Toolbox → Decision maker** until one lands on its edge |
 | Natural 20 | Roll a 20 on the Decision maker's d20 |
-| Time Traveler | Click **Run test** in **Network Center → Speed** eight times in a row |
-| My Stapler | Ask Fabrix "Have you seen my stapler?" (or "Where is…", "Has anyone seen…") |
-| Synergy Achieved | Keep the jargon manager talking for five answers |
-| Back-Seat Radar | Say "Talk to me, Goose" to Fabrix |
-| Wingman for Life | Keep your wingman on the radio for five messages |
 | Loose Screw | Click the loose **Tip** tile on Dash until it falls off |
 | Flap Happy | Run your mouse across twenty letters of the split-flap board on Dash |
-| Nobody Calls Me Chicken | Set "What should FBRX call you?" to `chicken` (Settings → General). Bawk. |
-| PC Load Letter | Say "PC load letter" (or "PC load better") to Fabrix |
-| Home Sweet Ship | Tell Fabrix you're home, calling your furry co-pilot by name (you'll know the line) |
-| Laugh It Up | Say "Laugh it up, fuzzball" while Fabrix is growling |
-| Plot Twist | Say "Nooo" (three o's or more) while Fabrix is growling |
-| Growl Whisperer | Keep talking to your furry co-pilot for five messages |
+| Bawk Bawk | Set "What should FBRX call you?" to `chicken` (Settings → General). Bawk. |
 | Who's Who? | On **Mesh & phone**, ping the same computer three times in a row (no other computer? click your own address three times) |
 | **Golden Goose** | Find all of the above |
 
 ## The Silly Goose
 
-Our own desktop goose, with one signature look: brass-rimmed aviator goggles pushed up on his head. A goose waddles
+Our own goose, with one signature look: brass-rimmed aviator goggles pushed up on his head. A goose waddles
 across the screen FBRX OS is on for about a minute and a half, then leaves by itself. It eases into and out of its
 walks, waddles in step with its feet and turns around with a little pivot. While it is around it:
 
@@ -83,7 +73,7 @@ How to summon it:
 
 | Where | What |
 | --- | --- |
-| Anywhere in FBRX | The classic cheat code: ↑ ↑ ↓ ↓ ← → ← → B A ("Cheat code accepted: 30 extra lives. Also, a goose.") |
+| Anywhere in FBRX | The classic cheat code: ↑ ↑ ↓ ↓ ← → ← → B A ("Cheat code accepted. You get one goose.") |
 | Spotlight (Alt+Space) | Type `honk` or `goose` → *Release the goose* |
 | Terminal | Type `honk` |
 | Tray menu | *Release the goose* |
@@ -91,42 +81,10 @@ How to summon it:
 | Settings → Trophy case | *Show off the egg* (after the Golden Goose) |
 | April 1 | It drops by on its own, once |
 
-## Have you seen my stapler?
-
-Ask Fabrix "Have you seen my stapler?", "Where is my stapler?" or "Has anyone seen my stapler?" (or just "stapler").
-It answers at once, without asking a model, with where the stapler went (storage, in the basement, most likely), and
-from then on that conversation is run by a middle manager in full office-comedy mode. Like the furry co-pilot below,
-every answer is made up on the spot from a big pile of corporate jargon (circling back, synergy, bandwidth, cover
-sheets, decks about decks…), has very little to do with what you asked, and ends with "That would be great." Keep him
-talking for five answers for a trophy. Say "PC load letter" (or "PC load better") to get the normal Fabrix back and
-another trophy; "I quit", "normal mode" or "no more jargon" work too. New conversations are always normal.
-
-## Talk to me, Goose
-
-Say "Talk to me, Goose" to Fabrix and your wingman gets on the radio from the back seat (and the Silly Goose flies in
-on your screen). For the rest of that conversation every answer is radio chatter: bogeys that turn out to be clouds,
-volleyball at 1600 hours, a very firm "no" from the tower. Random, and mostly unrelated to what you said. Say "wheels
-down", "That's a copy", "return to base", "land the plane" or "normal mode" to land. Two trophies: one for getting him on the radio,
-one for keeping him there for five messages. The Library's Story time has a matching how-to, *How to be a great
-wingman*.
-
-## Home sweet ship
-
-Tell Fabrix you're home the way a certain space smuggler tells his furry co-pilot, and Fabrix answers only in
-growls (with the occasional stage direction) for the rest of that conversation. Say "Nooo" (with at least three o's)
-for a family secret before it goes back to growling. "Laugh it up, fuzzball" brings plain English back. Four trophies
-hide in here.
-
 ## Nothing is impossible
 
-Type "nothing is impossible" into Spotlight or the Library search and it answers with Luke 1:37 ("For nothing will be
-impossible with God."). No trophy; it's a quiet one.
-
-## 88 miles per hour
-
-In **Network Center → Speed**, click **Run test** eight times in quick succession. The needle swings back and forth,
-climbs to 88 (mph), the dial lights up blue with lightning, and the readout lands on **1.21 gigawatts**. A few seconds
-later everything drops back to zero as if nothing happened. (A real test you started keeps running underneath.)
+Type "nothing is impossible" into Spotlight or the Library search and it answers with Luke 1:37 ("For with God nothing shall be
+impossible.", in the King James Version). No trophy; it's a quiet one.
 
 ## Who's who?
 
@@ -148,14 +106,12 @@ crisis. Click anywhere to make them stop.
 ## Story time
 
 Search the Library for "tell me a story" and a **Story time** chip appears (and stays): how-tos nobody needed, each
-winking at a film, book or game, with a riddle-like hint at the end. They are written in our own words: no titles,
-character names, trademarks or famous lines, so guessing is the fun. *How to fly (sort of)*, *How to wait for a
-download that is stuck at 99%*, *How to call home from very far away*, *How not to panic*, *How to get back to the eighties* (which
-hints at the speed test), *How to build a snowman*, *How to get home in three clicks* (home is 127.0.0.1), *How to fix
-a printer with a mind trick*, *How to deal with a haunted computer*, *How to take a very long walk to return some
-jewelry*, *How to design a superhero outfit* (skip the cape), *How to stop worrying about your computer*, *How to
-shrink things without shrinking the kids*, *How to find what you are looking for*, *How to fix the same problem every
-single day*, *How to be a great wingman* (which tells you what to say to Fabrix) and *How to befriend a dragon*. Several end with a button to the FBRX page that actually helps.
+retelling a tale that belongs to everyone (Aesop's fables, old fairy and folk tales, classic books), in our own words,
+with a hint at the end. *How to find the setting that is just right*, *How to build a house the wolf cannot blow down*,
+*How to win a race by going slowly*, *How not to cry wolf*, *How to take a twenty-year nap*, *How to find your way
+back*, *How to deal with something that grew overnight*, *How to tell the emperor about his new clothes*, *How to go
+around the world in eighty milliseconds*, *How to keep a name nobody can guess* and *How to get home in three clicks*
+(home is 127.0.0.1). Most end with a button to the FBRX page that actually helps.
 
 ## Toolbox → Decision maker
 
@@ -163,8 +119,8 @@ single day*, *How to be a great wingman* (which tells you what to say to Fabrix)
   day off." Patience pays: by flip 150 it is guaranteed. The flip count shows under the result so you can tell you're
   getting closer.
 - **Roll a d20.** A 20 is announced as a natural 20 (critical success); a 1 gets a sympathetic "Oof."
-- **Ask the goose.** Type a yes-or-no question and the goose answers like a fortune-telling toy: "Signs point to honk.",
-  "Outlook good, if you back up first.", "Yes, but wear safety goggles."…
+- **Ask the goose.** Type a yes-or-no question and the goose answers like a fortune-telling toy: "Every feather says honk.",
+  "Looks good, if you back up first.", "Yes, but wear safety goggles."…
 
 ## Elsewhere
 
@@ -172,7 +128,7 @@ single day*, *How to be a great wingman* (which tells you what to say to Fabrix)
 | --- | --- |
 | Library | **The Lab**: power-user how-tos, a hazard-striped banner and "Safety goggles recommended (sold separately)", with a dry remark for every section of downloads |
 | Dash | A line under the board at special moments: after midnight, on Friday afternoons ("Maybe don't deploy anything"), after 14 days without a restart ("Have you tried turning it off and on again?"), when the battery is nearly empty, on Halloween and on April Fools' Day |
-| Terminal | `matrix` makes it rain green code; `sudo make me a sandwich` → "Okay."; `make me a sandwich` → "What? Make it yourself."; `coffee` → 418 I'm a teapot; `xyzzy` → "Nothing happens."; `hello`; `exit`. And `rm -rf /`, `format c:` and friends are refused: "Fabrix hid the sharp objects." |
+| Terminal | `rain` makes it rain green code; `sudo make me a sandwich` → "Okay."; `make me a sandwich` → "What? Make it yourself."; `coffee` → 418 I'm a teapot; `xyzzy` → "Nothing happens."; `hello`; `exit`. And `rm -rf /`, `format c:` and friends are refused: "Fabrix hid the sharp objects." |
 | FBRX/1 | `request goose release` |
 | Toolbox → Base64 | Decode the sample |
 | Settings → Logs & about | Read the small print |

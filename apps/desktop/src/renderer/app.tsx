@@ -359,7 +359,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     useCallback(() => {
       summonGoose();
       unlockTrophy('konami');
-      toast.success('Cheat code accepted', '30 extra lives. Also, a goose.');
+      toast.success('Cheat code accepted', 'You get one goose.');
     }, [toast]),
   );
   // Seven quick clicks on the logo: the loom spins.
@@ -541,7 +541,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     if (DIGGER) {
       if (route === 'settings') return <SettingsPage onRerunSetup={() => setForceOnboarding(true)} />;
       if (route === 'agent' && diggerAi) return <AgentPage agentName={agentName} />;
-      return <NetworkPage advanced everything easterEggs={false} />;
+      return <NetworkPage advanced everything />;
     }
     // Essentials Home: the split-flap board and a few notes from FBRX (no dashboard).
     if (simple && route === 'home') return <EssentialsHome status={status} agentName={agentName} who={addressAs(s)} />;
@@ -590,7 +590,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'lab':
         return ultra ? <LabPage /> : ultraOnly('The virtual lab', 'Test machines in Hyper-V or Windows Sandbox, with capacity gauges and one-click starts.');
       case 'network':
-        return <NetworkPage advanced={ultra || DIGGER} everything={blackhole || DIGGER} easterEggs={fun && !DIGGER} />;
+        return <NetworkPage advanced={ultra || DIGGER} everything={blackhole || DIGGER} />;
       case 'files':
         return <FilesPage />;
       case 'processes':

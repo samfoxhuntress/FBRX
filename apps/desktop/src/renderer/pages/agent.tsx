@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { AgentEvent, ApprovalRequest, AttachmentInfo, ChatMessage, ProviderStatus, StarterAiStatus, ToolCallRecord } from '@fbrx/shared';
-import { NATURAL_PREFIX, addressAs, funEnabled, modelSeesImages } from '@fbrx/shared';
+import { NATURAL_PREFIX, addressAs, modelSeesImages } from '@fbrx/shared';
 import { Button, Callout, Card, FbrxMark, Icons, Markdown, Modal, Select, Status, TextArea, useAction, useConfirm, type IconName } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
 import { useCore, useStarterAi } from '../hooks';
@@ -14,8 +14,7 @@ import { acknowledgement } from '../voice/acknowledge';
 import { startThinkingSound, stopThinkingSound } from '../voice/thinking-sound';
 import { useVoiceChat } from '../voice/use-voice-chat';
 import { ModelDownload } from './settings-voice';
-import { summonGoose } from '../fun';
-import { useLearner, useTier } from '../edition';
+import { useLearner } from '../edition';
 import { ChatHistory, type ChatFilter } from '../chat-history';
 import { AttachmentTray, CreatedFiles, MessageAttachments, useAttachments } from '../attachments';
 import { ContextGauge, useContextReading } from '../context-gauge';
@@ -248,7 +247,6 @@ export function AgentPage({ agentName }: { agentName: string }) {
   const providers = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed']);
   const settings = useCore('settings.get', undefined, ['settings.changed']);
   const starter = useStarterAi();
-  const tier = useTier();
   // Student computers: just the conversation (the school picks the model; the helper has no internet tools).
   const learner = useLearner();
   const [selected, setSelected] = useState<string | null>(null);
@@ -501,8 +499,6 @@ export function AgentPage({ agentName }: { agentName: string }) {
     if (!again) pending.clear();
     try {
       const r = await call('ai.chat', { conversationId: selected ?? undefined, message, providerId: providerId || undefined, model: model || undefined, offline: selected ? undefined : offline, ...(attached.length ? { attachments: attached.map((a) => a.id) } : {}) });
-      // Your wingman shows up in person, too.
-      if (/^talk\s+to\s+me,?\s+goose\W*$/i.test(message) && funEnabled(settings.data?.settings, tier)) summonGoose();
       // The chat as it is now, with the agent already at work in it (a new chat gets its id here).
       await openChat(r.conversationId);
       // Messages queued while a new chat was being made belong to it.
