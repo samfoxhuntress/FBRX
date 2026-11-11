@@ -42,9 +42,9 @@ section to open its pages (one at a time; the section of the page you are on ope
 
 | Section | Pages |
 | --- | --- |
-| **Glass** | Dash, Fabrix, Alerts |
+| **Home** | Dash, Fabrix, AI Toolkit, Alerts, Messages |
 | **Studio** | Calendar, Tasks, Notes, Projects, Snippets |
-| **Pit Stop** | Storage, Security, Updates, Bug catcher, Network Center |
+| **Pit Stop** | This PC, Storage, Security, Updates, Bug catcher, Network Center |
 | **Workbench** | Files, Task Manager, Clipboard, Copy & migrate, Toolbox, Library |
 | **Orbit** | Mesh & phone, FBRX VPN, AI models, AI coordination, Connections, Tools & plugins |
 | **Stronghold** | FBRX Shield (antivirus), Approvals, Credentials, Governance, Backup & restore |

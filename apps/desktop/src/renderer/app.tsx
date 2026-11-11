@@ -973,7 +973,7 @@ const STANDARD_WHAT: Partial<Record<Route, string>> = {
 };
 
 const SECTIONS: Array<{ id: string; section: string; label: string; hint: string; basicHint?: string; learnerHint?: string; icon: IconName }> = [
-  { id: 'glass', section: 'Command', label: 'Glass', hint: 'Dash, agent, messages, alerts', learnerHint: 'Home, helper, messages', icon: 'compass' },
+  { id: 'glass', section: 'Command', label: 'Home', hint: 'Dash, agent, messages, alerts', learnerHint: 'Home, helper, messages', icon: 'compass' },
   { id: 'studio', section: 'Workspace', label: 'Studio', hint: 'Calendar, tasks, notes, automations', learnerHint: 'Calendar, notes and to-dos', icon: 'layers' },
   { id: 'pitstop', section: 'PC care', label: 'Pit Stop', hint: 'Storage, security, repairs', icon: 'wrench' },
   { id: 'workbench', section: 'Utilities', label: 'Workbench', hint: 'Files, tools, clipboard', learnerHint: 'Tools and stories', icon: 'toolbox' },
