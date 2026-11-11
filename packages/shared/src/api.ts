@@ -26,6 +26,7 @@ import type { Settings } from './settings';
 import type { UpdateChannel } from './constants';
 import type { ReleaseCheck } from './release';
 import type { EditionStatus, Vertical } from './editions';
+import type { LearningStatus } from './learning';
 
 export type DeepPartial<T> = T extends (infer U)[] ? U[] : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
 
@@ -822,6 +823,14 @@ export interface CoreMethods extends ExtMethods {
   'ai.starter': () => StarterAiStatus;
   /** Gets it ready now (again, after a failure, or after it was turned down). */
   'ai.prepareStarter': () => StarterAiStatus;
+  /** Learning your computer: what FBRX is doing to get the AI ready for this computer, or did last. */
+  'learning.status': () => LearningStatus;
+  /** Learns the computer now, on the full screen: at the end of setup, or again (Settings). */
+  'learning.start': (p?: { reason?: 'setup' | 'manual' }) => LearningStatus;
+  /** Goes on learning without the full screen (the person wants to get on). */
+  'learning.background': () => LearningStatus;
+  /** What the AI knows about this computer: the profile a model here reads, and the one a cloud AI reads. */
+  'learning.profile': () => { learnedAt: string | null; agent: string | null; local: string | null; cloud: string | null };
 
   'tools.list': () => ToolInfo[];
   'tools.setEnabled': (p: { name: string; enabled: boolean }) => ToolInfo;
@@ -1007,6 +1016,7 @@ export interface CoreEvents extends ExtEvents {
   'runtime.changed': RuntimeStatus;
   'runtime.download': DownloadProgress;
   'ai.starter': StarterAiStatus;
+  'learning.changed': LearningStatus;
   'settings.changed': EffectiveSettings;
   'policy.changed': EffectivePolicy;
   'governance.folderRequest': FolderRequest & { state: 'open' | 'closed' };

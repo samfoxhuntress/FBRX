@@ -51,3 +51,4 @@ export * from './vpn';
 export * from './cloud-ai';
 export * from './sse';
 export * from './inventory';
+export * from './learning';

@@ -399,6 +399,18 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     },
     'runtime.useModel': async (p) => k.useLocalModel(z.object({ modelId: z.string() }).parse(p).modelId),
     'ai.starter': () => k.starter.status(),
+    'learning.status': () => k.learning.status(),
+    'learning.start': (p) => {
+      const { reason } = z.object({ reason: z.enum(['setup', 'manual']).optional() }).parse(p ?? {});
+      void k.learning.start(reason ?? 'manual', true);
+      return k.learning.status();
+    },
+    'learning.background': () => k.learning.background(),
+    'learning.profile': () => {
+      const local = k.learning.profile(false);
+      const cloud = k.learning.profile(true);
+      return { learnedAt: local?.at ?? null, agent: k.learning.status().agent?.label ?? null, local: local?.text ?? null, cloud: cloud?.text ?? null };
+    },
     'ai.prepareStarter': () => {
       void k.starter.prepare({ auto: false });
       return k.starter.status();

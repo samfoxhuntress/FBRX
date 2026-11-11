@@ -36,7 +36,11 @@ import {
   type SystemStatus,
   type UpdateStatus,
   type OrgMeshRoster,
+  type ComputerFacts,
+  type LearningAgent,
 } from '@fbrx/shared';
+import { ComputerLearning } from './ai/learning';
+import { systemInventory } from './system/inventory';
 import { CoreError, errorMessage, toCoreError } from './errors';
 import { EventBus } from './events';
 import { LogSink, Logger } from './logger';
@@ -244,6 +248,9 @@ export class Kernel {
   readonly runtime: LocalRuntime;
   readonly providers: ProviderManager;
   readonly agent: AgentRuntime;
+  /** Learning your computer: what the AI knows about it, learned after setup and for each new AI. */
+  readonly learning: ComputerLearning;
+  private learningTimer: NodeJS.Timeout | null = null;
   readonly plugins: PluginHost;
   readonly connectors: ConnectorHub;
   readonly backup: BackupService;
@@ -469,6 +476,7 @@ export class Kernel {
       skills: { context: (text) => this.skills.context(text) },
       toolkit: { context: (text) => this.toolkit.context(text) },
       personality: { prompt: () => this.personality.prompt(), command: (text) => this.personality.command(text) },
+      computer: (cloud) => this.learning?.profile(cloud) ?? null,
       assist: {
         canHandoff: (trigger) => this.assist.canHandoff(trigger),
         handoff: (h) => this.assist.handoff(h),
@@ -481,6 +489,22 @@ export class Kernel {
           set: (c, v) => (v ? this.meta.set(`agent.persona.${c}`, v) : this.meta.delete(`agent.persona.${c}`)),
         },
       },
+    });
+    this.learning = new ComputerLearning({
+      events: this.events,
+      log: L('learning'),
+      meta: this.meta,
+      agent: () => this.learningAgent(),
+      // The desktop app once set up; FBRX Server and FBRX Digger have no persona or setup to learn after.
+      enabled: () => this.platform.shell === 'desktop' && !this.server && !this.digger && this.settings.get().general.onboardingComplete,
+      read: {
+        inventory: () => systemInventory(true),
+        network: () => this.learnNetwork(),
+        fbrx: () => this.learnFbrx(),
+        user: () => userInfo().username || null,
+      },
+      prepare: (agent, report, signal) => this.prepareAgent(agent, report, signal),
+      warm: (report, signal) => this.agent.warmUp({ signal, onReading: (read, of) => of > 0 && report(`Reading its instructions and tools (${Math.min(100, Math.round((read / of) * 100))}%)`) }),
     });
     this.automations = new AutomationService({
       db: this.db,
@@ -1440,11 +1464,127 @@ export class Kernel {
     void this.attachments.sweep().catch((err) => this.log.warn('Could not tidy old attachments', { error: errorMessage(err) }));
   }
 
+  /** Looks at what needs learning a moment after a change (a model choice is often several settings at once). */
+  private learnSoon(ms = 800) {
+    if (this.learningTimer) clearTimeout(this.learningTimer);
+    this.learningTimer = setTimeout(() => {
+      this.learningTimer = null;
+      if (this.started) this.learning.check();
+    }, ms);
+    this.learningTimer.unref?.();
+  }
+
+  /** The AI the agent uses now, for Learning your computer (null when there is none yet). */
+  private learningAgent(): LearningAgent | null {
+    const ai = this.settings.get().ai;
+    let r: ReturnType<ProviderManager['resolve']>;
+    try {
+      r = this.providers.resolve();
+    } catch {
+      // The built-in runtime with no model yet, while the starter downloads it: learning waits for it.
+      const cfg = ai.providers.find((p) => p.id === ai.defaultProvider);
+      const st = this.starter.status();
+      return cfg?.type === 'local-runtime' && st.state === 'preparing' ? { key: `${cfg.id}:starter`, providerId: cfg.id, model: '', label: st.modelName, where: 'this computer', cloud: false } : null;
+    }
+    const { config, model } = r;
+    const near = (url?: string) => /^https?:\/\/(localhost|127\.|\[?::1)/i.test(url ?? '');
+    const where: LearningAgent['where'] = config.cloud ? 'the cloud' : config.type === 'local-runtime' ? 'this computer' : config.type === 'mesh' ? 'another of your computers' : near(config.baseUrl) ? 'this computer' : 'your network';
+    const label = config.type === 'local-runtime' ? (this.models.get(model)?.name ?? model) : model && config.type !== 'mesh' ? `${model} (${config.name})` : config.name;
+    // A new agent is another AI or another persona: either way the AI is learned for again.
+    let persona: string | null = null;
+    try {
+      const p = this.personality.personas().find((x) => x.current);
+      persona = p?.name ?? 'your own';
+    } catch {
+      /* unreadable: no persona */
+    }
+    return { key: `${config.id}:${model}|${persona ?? ''}`, providerId: config.id, model, label, where, cloud: !!config.cloud, persona };
+  }
+
+  /** Gets the AI ready to answer, for Learning your computer: the starter model downloaded, the model started, or one elsewhere answering. */
+  private async prepareAgent(agent: LearningAgent, report: (detail: string) => void, signal: AbortSignal): Promise<LearningAgent | null> {
+    const cfg = this.providers.config(agent.providerId);
+    if (cfg.type === 'local-runtime') {
+      if (this.starter.status().state === 'preparing') {
+        const line = (st: ReturnType<StarterAi['status']>) =>
+          st.step === 'model' && st.totalBytes ? `Downloading ${st.modelName} (${Math.round((st.receivedBytes / st.totalBytes) * 100)}%)` : st.step === 'runtime' ? 'Getting the AI runtime' : `Starting ${st.modelName}`;
+        report(line(this.starter.status()));
+        const off = this.events.on('ai.starter', (st) => report(line(st)));
+        try {
+          await this.starter.prepare({ auto: true });
+        } finally {
+          off();
+        }
+        const after = this.starter.status();
+        if (after.state === 'failed') throw new Error(after.message ?? 'The AI could not be downloaded');
+      }
+      if (signal.aborted) return null;
+      if (!this.runtime.isRunning) {
+        report('Starting the model on this computer (the first time takes a little while)');
+        const st = await this.runtime.start();
+        if (st.state !== 'running') throw new Error(st.message ?? 'The model did not start');
+      }
+    } else {
+      report(`Checking that ${agent.label} answers`);
+      const h = await this.providers.resolve().provider.health(signal);
+      if (!h.ok) throw new Error(h.message ?? `${agent.label} did not answer`);
+    }
+    return this.learningAgent();
+  }
+
+  /** This computer's network, for Learning your computer: read here only (nothing is sent to find it out). */
+  private async learnNetwork(): Promise<ComputerFacts['network']> {
+    const ctx = await this.net.context();
+    const primary = ctx.interfaces.find((i) => i.ip === ctx.ip) ?? ctx.interfaces.find((i) => i.up);
+    const wifi = primary && /wireless|wi-?fi|wlan/i.test(`${primary.type} ${primary.name}`);
+    let ssid: string | null = null;
+    if (wifi) {
+      const w = await Promise.race([this.net.wifi().catch(() => null), new Promise<null>((r) => setTimeout(() => r(null), 8000).unref?.())]);
+      ssid = w?.connection?.ssid ?? null;
+    }
+    return {
+      kind: !primary ? 'none' : wifi ? 'wifi' : /wired|ethernet/i.test(`${primary.type} ${primary.name}`) ? 'ethernet' : 'other',
+      connected: !!primary?.up && !!ctx.ip,
+      ssid,
+      ip: ctx.ip,
+      gateway: ctx.gateway,
+      dns: ctx.dns,
+      adapters: ctx.interfaces.filter((i) => i.up).length,
+      vpn: ctx.interfaces.some((i) => i.up && /\b(tun|tap|wg|ppp|utun|vpn|wireguard|tailscale)/i.test(i.name)),
+    };
+  }
+
+  /** FBRX's own setup, for Learning your computer. */
+  private learnFbrx(): ComputerFacts['fbrx'] {
+    const s = this.settings.get();
+    const kits = [...new Set(this.toolkit.list().filter((a) => a.enabled && a.source === 'library').map((a) => a.kit))];
+    let persona: string | null = null;
+    try {
+      persona = this.personality.personas().find((p) => p.current)?.name ?? 'your own';
+    } catch {
+      /* unreadable: left out */
+    }
+    return {
+      version: this.platform.appVersion,
+      edition: this.edition().productName,
+      mode: s.general.mode === 'advanced' ? 'advanced' : 'simple',
+      persona,
+      kits,
+      tools: this.agent.explain().tools.length,
+      newChatsOffline: s.ai.newChatsOffline,
+    };
+  }
+
   /** What FBRX Endpoint (and FBRX Server) start besides the services; FBRX Digger runs none of it. */
   private startEndpoint() {
     // A new computer's AI, ready before the first question (the starter model, picked up or downloaded once); a
     // server's, the best model it runs well.
     if (this.server || (this.platform.shell === 'desktop' && this.starterAiWanted())) void this.starter.prepare({ auto: true });
+    // Learning your computer: at once when nothing was learned yet (or for another AI), after the start settles when
+    // it is only old; and again whenever another AI is picked.
+    const need = this.learning.needed();
+    this.learnSoon(need && !need.screen ? 120_000 : 1500);
+    this.disposers.push(this.events.on('settings.changed', () => this.learnSoon()), this.events.on('personality.changed', () => this.learnSoon()));
     // FBRX Digger on this computer finds this AI through its link.
     void this.diggerLink?.start().catch((err) => this.log.warn('The link for FBRX Digger did not start', { error: errorMessage(err) }));
     this.messages.start();
@@ -1534,6 +1674,8 @@ export class Kernel {
       return;
     }
     this.started = false;
+    if (this.learningTimer) clearTimeout(this.learningTimer);
+    this.learning.stop();
     await this.diggerLink?.stop();
     this.release.stop();
     this.account.stop();
