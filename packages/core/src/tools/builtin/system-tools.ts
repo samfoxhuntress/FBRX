@@ -1,4 +1,5 @@
-import { arch, cpus, freemem, hostname, loadavg, networkInterfaces, platform, release, totalmem, uptime, userInfo, version } from 'node:os';
+import { inventoryText, systemInventory } from '../../system/inventory';
+import { freemem, loadavg, totalmem, userInfo } from 'node:os';
 import { statfs } from 'node:fs/promises';
 import type { ToolSpec } from '../types';
 import { runShell } from './shell-tools';
@@ -32,33 +33,15 @@ export function systemTools(d: SystemDeps): ToolSpec[] {
     {
       name: 'system.info',
       title: 'System information',
-      description: 'Operating system, CPU, memory, disk and network overview of this workstation.',
+      description: "This computer: its make, model and serial number, the system and BIOS, the processor, the memory (each module's size, type and speed), each drive (kind, size, health), graphics, screens, network adapters and the battery.",
       risk: 'read',
       source: 'builtin',
       sourceId: null,
       inputSchema: { type: 'object', properties: {} },
       async run() {
-        const c = cpus();
-        const nets = Object.entries(networkInterfaces())
-          .flatMap(([name, addrs]) => (addrs ?? []).filter((a) => !a.internal).map((a) => `${name}: ${a.address} (${a.family})`));
-        const info = {
-          hostname: hostname(),
-          user: userInfo().username,
-          os: `${platform()} ${release()} (${version()})`,
-          arch: arch(),
-          cpu: `${c[0]?.model ?? 'unknown'} × ${c.length}`,
-          load: loadavg().map((l) => l.toFixed(2)).join(' '),
-          memory: `${((totalmem() - freemem()) / 1024 ** 3).toFixed(1)} / ${(totalmem() / 1024 ** 3).toFixed(1)} GB used`,
-          diskFreeGb: await diskFreeGb(d.workspace),
-          uptimeHours: Math.round(uptime() / 360) / 10,
-          network: nets,
-        };
-        return {
-          output: Object.entries(info)
-            .map(([k, v]) => `${k}: ${Array.isArray(v) ? v.join(', ') : v}`)
-            .join('\n'),
-          data: info,
-        };
+        const inv = await systemInventory();
+        const extra = [`User: ${userInfo().username}`, `Memory in use: ${((totalmem() - freemem()) / 1024 ** 3).toFixed(1)} of ${(totalmem() / 1024 ** 3).toFixed(1)} GB`, `Load: ${loadavg().map((l) => l.toFixed(2)).join(' ')}`];
+        return { output: `${inventoryText(inv)}\n${extra.join('\n')}`, data: inv };
       },
     },
     {

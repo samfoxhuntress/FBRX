@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { openRemote, remoteViewers } from '../network/remote-desktop';
+import { systemInventory } from '../system/inventory';
 import { z } from 'zod';
 import {
   ALERT_CHANNELS,
@@ -423,6 +424,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return { ok: true };
     },
     'net.dns': (p) => k.net.dnsTest(z.object({ name: z.string().min(1).max(253) }).parse(p).name),
+    'pc.inventory': (p) => systemInventory(!!(p as { fresh?: boolean } | undefined)?.fresh),
     'net.diagnose': (p) => k.net.diagnose({ target: z.object({ target: z.string().max(253).optional() }).parse(p ?? {}).target || undefined, online: true, has: (t) => k.registry.get(t) != null }),
     'net.port': (p) => {
       const q = z.object({ host: z.string().min(1).max(253), port: z.number().int() }).parse(p);

@@ -50,3 +50,4 @@ export * from './essentials-home';
 export * from './vpn';
 export * from './cloud-ai';
 export * from './sse';
+export * from './inventory';

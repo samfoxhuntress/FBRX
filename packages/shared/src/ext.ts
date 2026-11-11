@@ -896,6 +896,28 @@ export interface DnsTest {
   addresses: string[];
   resolvers: Array<{ name: string; ip: string; ms: number | null; ok: boolean }>;
 }
+/** This PC: what the computer is made of (the This PC page, system.info). null where the system does not say. */
+export interface SystemInventory {
+  at: string;
+  system: { manufacturer: string | null; model: string | null; version: string | null; serial: string | null; sku: string | null; kind: string | null; virtual: boolean };
+  bios: { vendor: string | null; version: string | null; date: string | null };
+  board: { manufacturer: string | null; model: string | null; serial: string | null };
+  os: { name: string; version: string | null; build: string | null; arch: string | null; hostname: string; uptimeHours: number };
+  cpu: { name: string; cores: number | null; threads: number | null; baseGHz: number | null; maxGHz: number | null; socket: string | null; virtualization: boolean | null };
+  memory: {
+    totalBytes: number;
+    usedBytes: number;
+    modules: Array<{ slot: string | null; bytes: number; type: string | null; mhz: number | null; formFactor: string | null; manufacturer: string | null; part: string | null }>;
+    slots: number | null;
+  };
+  drives: Array<{ name: string; kind: string | null; bytes: number; interface: string | null; vendor: string | null; serial: string | null; health: string | null; temperatureC: number | null }>;
+  volumes: Array<{ mount: string; fs: string | null; bytes: number; usedBytes: number }>;
+  graphics: Array<{ name: string; vramMB: number | null; driver: string | null }>;
+  displays: Array<{ name: string; main: boolean; connection: string | null; width: number | null; height: number | null; hz: number | null }>;
+  network: Array<{ name: string; kind: string; mac: string; speedMbps: number | null; connected: boolean; ip: string | null }>;
+  battery: { percent: number | null; charging: boolean; healthPct: number | null; cycles: number | null; designWh: number | null } | null;
+}
+
 /** The layers a full network check looks at, from the cable or radio up to the site the person wants. */
 export const STACK_LAYERS = ['physical', 'link', 'ip', 'routing', 'dns', 'transport', 'application'] as const;
 export type StackLayer = (typeof STACK_LAYERS)[number];
@@ -1307,6 +1329,8 @@ export interface ExtMethods {
   'net.printers': () => PrinterInfo[];
   'net.printerAction': (p: { name: string; action: (typeof PRINTER_ACTIONS)[number] }) => Ok;
   'net.dns': (p: { name: string }) => DnsTest;
+  /** This PC: model, serial, processor, memory modules, drives, graphics, screens, adapters, battery. */
+  'pc.inventory': (p: { fresh?: boolean }) => SystemInventory;
   'net.diagnose': (p: { target?: string }) => StackReport;
   /** How this computer opens remote desktop (RDP) and screen sharing (VNC). */
   'remote.viewers': () => RemoteViewer[];

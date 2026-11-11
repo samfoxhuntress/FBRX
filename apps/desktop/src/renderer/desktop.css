@@ -7996,3 +7996,14 @@ body.popout .fx-page-header p {
 .options-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 4px 14px; }
 .options-row { display: flex; gap: 4px; align-items: center; }
 .options-row .fx-input, .options-row input { flex: 1; min-width: 0; }
+
+/* This PC. */
+.thispc-hero { display: flex; justify-content: space-between; gap: 24px; align-items: flex-start; flex-wrap: wrap; }
+.thispc-model { font-size: 22px; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 4px; }
+.thispc-hero .fx-badge { margin: 0 6px; }
+.thispc-hero .fx-kv { min-width: 280px; }
+.thispc-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(440px, 1fr)); gap: 14px; margin-top: 14px; }
+.thispc-volumes { display: grid; gap: 10px; margin-top: 12px; }
+.thispc-volume-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; margin-bottom: 4px; }
+.thispc-links { display: flex; flex-wrap: wrap; gap: 4px; }
+@media (max-width: 760px) { .thispc-grid { grid-template-columns: 1fr; } }

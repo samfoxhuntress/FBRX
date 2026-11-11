@@ -54,6 +54,7 @@ const EssentialsHome = lazy(() => import('./pages/essentials-home').then((m) => 
 const LibraryPage = lazy(() => import('./pages/library').then((m) => ({ default: m.LibraryPage })));
 const AlertsPage = lazy(() => import('./pages/alerts').then((m) => ({ default: m.AlertsPage })));
 const StoragePage = lazy(() => import('./pages/storage').then((m) => ({ default: m.StoragePage })));
+const ThisPcPage = lazy(() => import('./pages/this-pc').then((m) => ({ default: m.ThisPcPage })));
 const NetworkPage = lazy(() => import('./pages/network').then((m) => ({ default: m.NetworkPage })));
 const SecurityPage = lazy(() => import('./pages/security').then((m) => ({ default: m.SecurityPage })));
 const ShieldPage = lazy(() => import('./pages/shield').then((m) => ({ default: m.ShieldPage })));
@@ -81,6 +82,7 @@ export type Route =
   | 'calendar'
   | 'snippets'
   | 'automations'
+  | 'thispc'
   | 'storage'
   | 'security'
   | 'shield'
@@ -419,6 +421,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'projects', label: 'Projects', icon: 'layers', section: 'Workspace' },
     { id: 'snippets', label: 'Snippets', icon: 'code', section: 'Workspace' },
     { id: 'automations', label: 'Automations', icon: 'repeat', section: 'Workspace' },
+    { id: 'thispc', label: 'This PC', icon: 'monitor', section: 'PC care' },
     { id: 'storage', label: 'Storage', icon: 'drive', section: 'PC care' },
     { id: 'security', label: 'Security', icon: 'lock', section: 'PC care' },
     { id: 'updates', label: 'Updates', icon: 'download', section: 'PC care' },
@@ -570,6 +573,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return <SnippetsPage />;
       case 'automations':
         return <AutomationsPage />;
+      case 'thispc':
+        return <ThisPcPage />;
       case 'storage':
         return <StoragePage advanced={ultra} />;
       case 'shield':
@@ -951,6 +956,7 @@ const STANDARD_WHAT: Partial<Record<Route, string>> = {
   projects: 'Group notes, tasks and chats by project.',
   snippets: 'Text you type again and again, a shortcut away.',
   automations: 'Jobs the AI does by itself on a schedule (watch listings, check stocks, a morning brief) and tells you what it found.',
+  thispc: 'What this computer is made of (model, serial number, processor, memory, drives, graphics, battery), with where to look after each part.',
   storage: 'See what fills your disk and clear out what you don’t need, safely.',
   security: 'Windows and macOS security settings, checked and explained.',
   updates: 'Keeps this computer’s apps and system up to date.',

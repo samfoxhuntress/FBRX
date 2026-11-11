@@ -504,6 +504,17 @@ Quiet hours hold back desktop and e-mail alerts that are not critical; a cooldow
 
 Presenter-safe mode still holds notifications back while you present.
 
+## This PC
+
+**This PC** (first in PC care) shows what the computer is made of, like a system-information tool: the make and model,
+serial number and computer name; the system and its build; the processor (cores, threads, speeds, socket,
+virtualization); the memory and each module (slot, size, type, speed, maker); each drive (kind, size, health,
+temperature) and how full each volume is; graphics and every screen (resolution, refresh rate, connection); the
+network adapters; the battery (charge, health against new, charge cycles); and the motherboard and BIOS. Each part
+links to the page that looks after it (Task Manager, Storage, Network Center, Updates…). **Copy all** puts the whole
+list on the clipboard as text, for a ticket or a message, and **Ask Fabrix** has Fabrix read it and say how the
+computer is doing and what is worth upgrading first. Fabrix reads the same list with `system.info`.
+
 ## PC care (Windows)
 
 | Page | What it does |
