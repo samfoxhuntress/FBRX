@@ -99,6 +99,7 @@ export class PersonalityStore {
     const renamed = text
       .replace(/\bsoul\.read\b/g, 'personality.read')
       .replace(/\bsoul\.update\b/g, 'personality.update')
+      .replace(/\bsoul\.\*/g, 'personality.*')
       .replace(/\bsoul\.md\b/g, 'personality.md')
       .replace(/`\/soul`/g, '`/personality`')
       .replace(/Settings → Soul/g, 'Settings → Personality')
