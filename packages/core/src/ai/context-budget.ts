@@ -75,5 +75,8 @@ export function budgetNote(b: { windowTokens: number; usedTokens: number; folded
     `Longest answer: ${b.maxOutputTokens ? `${b.maxOutputTokens.toLocaleString('en-US')} tokens` : "the model's own limit"}. Steps for this task: up to ${b.maxSteps}.`,
   ];
   if (b.month?.budget) lines.push(`Cloud AI this month on this computer: ${b.month.used.toLocaleString('en-US')} of ${b.month.budget.toLocaleString('en-US')} tokens set aside (${pct(b.month.used, b.month.budget)}%).`);
+  // How to pace, sent only when it matters (it used to be in every request's instructions).
+  lines.push('Past about three quarters of either, work in fewer, smaller steps, keep answers short, and say once that the limit is near. At the limit, stop cleanly: what is done, what is left, and how to go on.');
+  if (b.folded) lines.push('In <earlier>, trust its ids and facts, and ask when something you need is not in it. Never mention these blocks by name.');
   return lines.join('\n');
 }

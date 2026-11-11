@@ -24,6 +24,9 @@ import type { MetaStore } from '../storage/meta';
 import { DEFAULT_PERSONALITY } from './personality-default';
 import { PERSONAS, personaList, withPersona } from './personas';
 
+/** The Notes section's first line in FBRX's default: for the person, not the AI. */
+const NOTES_INTRO = 'How you like me to work, as I learn it. I add to this with /tune, and you approve each change.';
+
 /**
  * The AI's personality (personality.md in FBRX's data folder, see @fbrx/shared personality.ts): its persona. Its sections (who it is, how
  * it talks, the options, the notes) go into the AI's instructions on every request, after FBRX's fixed core principles
@@ -180,7 +183,11 @@ export class PersonalityStore {
    */
   prompt(): string | null {
     const text = personaOf(this.read());
-    const kept = personalitySections(text).filter((s) => !PERSONALITY_PROMPT_SKIP.includes(s.title.trim().toLowerCase()) && s.body.trim());
+    // Notes go without their own intro line (it is for the person reading the file): with no notes, there is no section.
+    const kept = personalitySections(text)
+      .filter((s) => !PERSONALITY_PROMPT_SKIP.includes(s.title.trim().toLowerCase()))
+      .map((s) => (s.title.trim().toLowerCase() === 'notes' ? { ...s, body: s.body.split('\n').filter((l) => l.trim() !== NOTES_INTRO).join('\n').trim() } : s))
+      .filter((s) => s.body.trim());
     if (!kept.length) return null;
     // The commands' names are not sent with every request (they were a tenth of the instructions): a typed one comes
     // with its message, /help lists them, and personality.read has them all.
