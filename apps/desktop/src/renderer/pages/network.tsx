@@ -897,7 +897,7 @@ function Adapters() {
   );
 }
 
-const NET_TABS: Tab[] = ['overview', 'environments', 'trace', 'devices', 'speed', 'wifi', 'bluetooth', 'printers', 'tools', 'adapters', 'consoles', 'digger'];
+const NET_TABS: Tab[] = ['overview', 'trace', 'devices', 'speed', 'wifi', 'bluetooth', 'printers', 'tools', 'adapters', 'consoles', 'digger', 'environments'];
 
 export function NetworkPage({ advanced, everything }: { advanced: boolean; everything: boolean }) {
   // network/speed, network/printers… open that tab directly.
@@ -918,8 +918,6 @@ export function NetworkPage({ advanced, everything }: { advanced: boolean; every
   // environments (network controllers).
   const all: Array<{ id: Tab; label: ReactNode; need?: 'ultra' | 'blackhole' }> = [
     { id: 'overview', label: 'Overview' },
-    // FBRX Digger has every tab, so it marks none of them with an edition.
-    { id: 'environments', label: DIGGER ? 'Environments' : advancedLabel('Environments', true), need: 'blackhole' },
     { id: 'trace', label: 'Ping & trace', need: 'ultra' },
     { id: 'devices', label: 'Devices', need: 'ultra' },
     { id: 'speed', label: 'Speed' },
@@ -932,6 +930,8 @@ export function NetworkPage({ advanced, everything }: { advanced: boolean; every
     ...(DIGGER ? [{ id: 'consoles' as const, label: 'Consoles' }] : []),
     // FBRX Digger, the Network Center on its own: open it, get it, or the edition it needs (not in Digger itself).
     ...(DIGGER ? [] : [{ id: 'digger' as const, label: 'Digger' }]),
+    // Network environments come last. FBRX Digger has every tab, so it marks none of them with an edition.
+    { id: 'environments', label: DIGGER ? 'Environments' : advancedLabel('Environments', true), need: 'blackhole' },
   ];
   const tabs = all.filter((t) => !t.need || (t.need === 'ultra' ? advanced : everything)).map(({ need: _n, ...t }) => t);
   const shown = tabs.some((t) => t.id === tab) ? tab : 'overview';

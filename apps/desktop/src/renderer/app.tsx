@@ -197,6 +197,17 @@ function Splash({ tier }: { tier: Tier | undefined }) {
     return () => document.removeEventListener('visibilitychange', onChange);
   }, [visible]);
   if (gone || !visible) return null;
+  // FBRX Digger has no editions: its mole and its own name.
+  if (DIGGER)
+    return (
+      <div className="splash" aria-hidden>
+        <div>
+          <DiggerMark size={116} className="splash-logo splash-mole" />
+          <div className="splash-word">FBRX Digger</div>
+          <div className="splash-sub">Every network tool</div>
+        </div>
+      </div>
+    );
   const { frame } = FBRX_MARK;
   return (
     <div className="splash" aria-hidden>

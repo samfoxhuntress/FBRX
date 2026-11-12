@@ -27,10 +27,10 @@ network tool FBRX has and nothing else. It runs on Windows, macOS and Linux, nex
 * **Consoles**: SSH and Telnet to routers, switches, firewalls and servers, straight from a scan or the Consoles tab,
   with SSH host keys pinned on first use and the session open right there. A refused login says why in the connect
   box, ready for another try.
-* **Network environments**: attach a network controller (UniFi) to see its sites, devices and clients.
+* **Network environments** (the last tab): attach a network controller (UniFi) to see its sites, devices and clients.
 * A router's or device's own page opens in your computer's browser.
 
-Everything is included, always: Digger has no editions, and its Settings never mention them. It is the network tools of
+Everything is included, always: Digger has no editions, and its start screen and Settings never mention them. It is the network tools of
 FBRX Endpoint, on their own.
 
 ## On its own
