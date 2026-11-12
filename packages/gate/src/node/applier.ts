@@ -268,11 +268,12 @@ export class LinuxApplier implements GateApplier {
       for (const f of r.networkd) this.write(join(this.networkdDir, f.name), f.content, f.mode);
       // systemd-networkd reads the VPN key file as its own user.
       if (c.vpn.enabled) await this.run('chgrp', ['systemd-network', join(this.o.paths.etcDir, 'wg-fbrx.key')]);
-      // A virtual switch taken away is deleted here (systemd-networkd leaves links it no longer has files for), which
-      // frees its port; a port joining a switch gives its address up to it.
-      const bridges = (rr: GateRendered | null) => new Set((rr?.networkd ?? []).map((f) => /^10-fbrx-(br-[a-z0-9-]+)\.netdev$/.exec(f.name)?.[1]).filter((b): b is string => !!b));
-      const nowBridges = bridges(r);
-      for (const b of bridges(previous)) if (!nowBridges.has(b)) await this.run('ip', ['link', 'del', 'dev', b]);
+      // A virtual switch, VLAN or tunnel taken away (a VLAN whose tag changed is a new one) is deleted here:
+      // systemd-networkd leaves links it no longer has files for. That frees a switch's port; a port joining a switch
+      // gives its address up to it.
+      const netdevs = (rr: GateRendered | null) => new Set((rr?.networkd ?? []).map((f) => /^10-fbrx-([A-Za-z0-9._-]+)\.netdev$/.exec(f.name)?.[1]).filter((b): b is string => !!b));
+      const nowNetdevs = netdevs(r);
+      for (const b of netdevs(previous)) if (!nowNetdevs.has(b)) await this.run('ip', ['link', 'del', 'dev', b]);
       for (const n of c.networks) if (n.vmSwitch) await this.run('ip', ['-4', 'addr', 'flush', 'dev', n.interface, 'scope', 'global']);
       await this.must('networkctl', ['reload'], 'systemd-networkd');
       const names = [...new Set(r.networkd.map((f) => f.name.replace(/^10-fbrx-/, '').replace(/\.(network|netdev)$/, '')))];

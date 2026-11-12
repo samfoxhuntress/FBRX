@@ -224,7 +224,10 @@ function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig
   });
   const [net, setNet] = useState<GateNetwork>(start.net);
   const [vlanId, setVlanId] = useState(start.vlanId);
-  const currentIface = isNew ? null : config.interfaces.find((i) => i.name === net.interface);
+  const currentIface = isNew ? null : config.interfaces.find((i) => i.name === start.net.interface);
+  /** An existing network on a VLAN: its tag can change (the VLAN becomes <port>.<tag>; rules follow the network's name). */
+  const [tag, setTag] = useState(currentIface?.kind === 'vlan' ? (currentIface.vlanId ?? 0) : 0);
+  const tagTaken = !!currentIface && currentIface.kind === 'vlan' && tag !== currentIface.vlanId && config.interfaces.some((i) => i.kind === 'vlan' && i.parent === currentIface.parent && i.vlanId === tag);
   const [jumbo, setJumbo] = useState(isNew ? false : (currentIface?.mtu ?? 1500) >= JUMBO_MTU);
   const [res, setRes] = useState({ mac: '', address: '', name: '' });
   const set = (patch: Partial<GateNetwork>) => setNet((n) => ({ ...n, ...patch }));
@@ -267,6 +270,13 @@ function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig
       d.networks.push(n);
       if (n.purpose === 'mesh' && !d.qos.preferMesh.networks.includes(n.name)) d.qos.preferMesh.networks.push(n.name);
     } else {
+      // A new VLAN tag: the VLAN is renamed for it, and the network moves with it.
+      if (currentIface?.kind === 'vlan' && currentIface.parent && tag !== currentIface.vlanId && tag >= 1 && tag <= 4094) {
+        const v = d.interfaces.find((x) => x.name === currentIface.name);
+        iface = `${currentIface.parent}.${tag}`;
+        if (v) Object.assign(v, { name: iface, vlanId: tag });
+        n.interface = iface;
+      }
       d.networks[index] = n;
       const i = d.interfaces.find((x) => x.name === iface);
       if (i) i.mtu = jumbo ? Math.max(i.mtu, JUMBO_MTU) : Math.min(i.mtu, 1500);
@@ -280,7 +290,7 @@ function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig
   const { next, iface } = compose();
   const idx = isNew ? next.networks.length - 1 : index;
   const issues = draftIssues(next, (p) => inItem('networks', idx, net.name)(p) || p.startsWith(`interfaces.${iface}`) || p === `interfaces.${idx}` || p.startsWith('qos.preferMesh'));
-  const canSave = issues.shapeOk && (!isNew || (placement === 'vlan' ? !!parent && vlanId >= 1 && vlanId <= 4094 : !!ownPort));
+  const canSave = issues.shapeOk && (!isNew || (placement === 'vlan' ? !!parent && vlanId >= 1 && vlanId <= 4094 : !!ownPort)) && (isNew || currentIface?.kind !== 'vlan' || (tag >= 1 && tag <= 4094 && !tagTaken));
   const onVlan = isNew ? placement === 'vlan' : currentIface?.kind === 'vlan';
   const parentPort = config.interfaces.find((i) => i.name === (isNew ? (placement === 'vlan' ? parent : ownPort) : currentIface?.kind === 'vlan' ? currentIface.parent : currentIface?.name));
   const untaggedOnParent = onVlan ? config.networks.find((n) => n.interface === parentPort?.name) : null;
@@ -332,6 +342,20 @@ function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig
             </Field>
             <Field label="VLAN tag" help={`1 to 4094; set the same on your switch. It will be ${parent}.${vlanId}.`}>
               <Input type="number" min={1} max={4094} value={vlanId} onChange={(e) => setVlanId(Number(e.target.value))} />
+            </Field>
+          </Grid>
+        )}
+        {!isNew && currentIface?.kind === 'vlan' && (
+          <Grid cols={2}>
+            <Field label="On the port">
+              <Input value={currentIface.parent ?? ''} disabled className="mono" />
+            </Field>
+            <Field
+              label="VLAN tag"
+              error={tagTaken ? `${currentIface.parent} already has VLAN ${tag}` : undefined}
+              help={tag !== currentIface.vlanId ? `It becomes ${currentIface.parent}.${tag} at the commit. Change the tag on your switch too, or devices on this network lose it until you do.` : '1 to 4094, the same as on your switch.'}
+            >
+              <Input type="number" min={1} max={4094} value={tag} onChange={(e) => setTag(Number(e.target.value))} />
             </Field>
           </Grid>
         )}

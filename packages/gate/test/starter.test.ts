@@ -1,8 +1,8 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { checkConfig, dhcpRange, pickLanAddress, renumberNetwork, starterConfig } from '../src/index';
+import { checkConfig, dhcpRange, pickLanAddress, render, renumberNetwork, starterConfig } from '../src/index';
 import { LinuxApplier, type Runner } from '../src/node/index';
 
 describe('a new gate behind a router', () => {
@@ -109,5 +109,36 @@ describe('the gate’s live view on a server', () => {
     expect(l.problems.join('\n')).toMatch(/dnsmasq\) are not running: sudo systemctl enable --now dnsmasq/);
     expect(l.problems.join('\n')).toMatch(/systemd-networkd is not running/);
     expect(l.problems.filter((x) => x.includes('/etc/network/interfaces'))).toEqual([expect.stringContaining('sets up eno1')]);
+  });
+});
+
+describe('a VLAN whose tag changes', () => {
+  it('takes the old VLAN away and writes the new one', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'fbrx-gate-vlan-'));
+    try {
+      const paths = { varDir: join(root, 'var'), logDir: join(root, 'log'), etcDir: join(root, 'etc') };
+      const before = starterConfig({ wan: 'eno1', lan: 'eno2', lanAddress: '192.168.1.1/24' });
+      before.interfaces.push({ name: 'eno2.20', kind: 'vlan', parent: 'eno2', vlanId: 20, mtu: 1500, description: 'Guests' });
+      before.networks.push({ name: 'guest', purpose: 'guest', interface: 'eno2.20', address: '192.168.20.1/24', access: 'internet', manage: false, dhcp: { enabled: true, start: '192.168.20.50', end: '192.168.20.250', leaseHours: 4, reservations: [] }, description: '', vmSwitch: false });
+      const after: typeof before = JSON.parse(JSON.stringify(before));
+      Object.assign(after.interfaces[2], { name: 'eno2.25', vlanId: 25 });
+      after.networks[1].interface = 'eno2.25';
+      expect(checkConfig(after).errors).toEqual([]);
+
+      const ran: string[] = [];
+      const run: Runner = async (cmd, args) => {
+        ran.push(`${cmd} ${args.join(' ')}`);
+        return { code: 0, out: '', err: '' };
+      };
+      const applier = new LinuxApplier({ paths, mode: 'networkd', root, run, restartDns: async () => {} });
+      await applier.apply(render(after, paths), render(before, paths), after);
+      expect(ran).toContain('ip link del dev eno2.20');
+      expect(ran).not.toContain('ip link del dev eno2.25');
+      expect(ran).toContain('networkctl reconfigure eno2.25');
+      expect(existsSync(join(root, 'etc/systemd/network/10-fbrx-eno2.25.netdev'))).toBe(true);
+      expect(existsSync(join(root, 'etc/systemd/network/10-fbrx-eno2.20.netdev'))).toBe(false);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
   });
 });

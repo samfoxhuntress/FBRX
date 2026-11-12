@@ -123,7 +123,9 @@ devices may **manage the gate** (console and SSH), and DHCP with reserved addres
 port; firewall rules add exceptions either way.
 
 **VLANs** carry several networks on one cable: *New network → A VLAN on a port* picks a tag (guests 20, mesh 30, …);
-set the same tag on your switch's ports. A VLAN on the internet port works but is flagged.
+set the same tag on your switch's ports. A VLAN on the internet port works but is flagged. To change a network's tag,
+open it and edit **VLAN tag**: at the commit its VLAN becomes `<port>.<tag>` and the old one is taken away, and its
+firewall rules follow the network. Change the tag on your switch too.
 
 **Jumbo frames** (MTU 9000) suit a mesh or storage network whose switch and computers all take them. A VLAN's port must
 be at least as large, and an untagged network on that port would get jumbo frames too, so the console only offers them
