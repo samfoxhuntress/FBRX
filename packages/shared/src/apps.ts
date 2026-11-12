@@ -15,8 +15,10 @@ export type AppId = (typeof APP_IDS)[number];
 
 export interface FbrxAppInfo {
   id: AppId;
-  /** Its full name, as on its window, installer and data folder. */
+  /** Its full name, as on its window and installer. */
   name: string;
+  /** Its data folder's name, beside the other apps' (FBRX Endpoint's is still "FBRX OS"). */
+  folder: string;
   /** Its short name on buttons ("Open Digger"). */
   short: string;
   /** One line on what it is for. */
@@ -45,7 +47,8 @@ export interface FbrxAppInfo {
 export const FBRX_APPS: Record<AppId, FbrxAppInfo> = {
   os: {
     id: 'os',
-    name: PRODUCT_NAME,
+    name: 'FBRX Endpoint',
+    folder: PRODUCT_NAME,
     short: 'FBRX Endpoint',
     what: 'Your AI, your computer and your day: Fabrix, This PC, the dashboard, calendar, tasks and notes, and everyday network checks.',
     edition: 'essentials',
@@ -60,6 +63,7 @@ export const FBRX_APPS: Record<AppId, FbrxAppInfo> = {
   digger: {
     id: 'digger',
     name: DIGGER_NAME,
+    folder: DIGGER_NAME,
     short: 'Digger',
     what: 'Every network tool: scans and their comparison, consoles, remote desktop, the Wi-Fi channel planner and network environments.',
     edition: 'ultra',
@@ -74,6 +78,7 @@ export const FBRX_APPS: Record<AppId, FbrxAppInfo> = {
   reach: {
     id: 'reach',
     name: 'FBRX Reach',
+    folder: 'FBRX Reach',
     short: 'Reach',
     what: 'Remote desktop: terminals, SSH, RDP and VNC inside the app, saved connections, logins in the vault and FBRX Server.',
     edition: 'ultra',
@@ -88,6 +93,7 @@ export const FBRX_APPS: Record<AppId, FbrxAppInfo> = {
   browser: {
     id: 'browser',
     name: 'FBRX Browser',
+    folder: 'FBRX Browser',
     short: 'Browser',
     what: 'The web browser with its passwords and AI, as its own install.',
     edition: 'essentials',
@@ -102,6 +108,7 @@ export const FBRX_APPS: Record<AppId, FbrxAppInfo> = {
   shield: {
     id: 'shield',
     name: 'FBRX Shield',
+    folder: 'FBRX Shield',
     short: 'Shield',
     what: 'Protection as a background service, so scans keep running when the Endpoint is closed.',
     edition: 'basic',
@@ -116,6 +123,7 @@ export const FBRX_APPS: Record<AppId, FbrxAppInfo> = {
   sandbox: {
     id: 'sandbox',
     name: 'FBRX Sandbox',
+    folder: 'FBRX Sandbox',
     short: 'Sandbox',
     what: 'The virtual lab and the coding lab, connected to Fabrix.',
     edition: 'ultra',

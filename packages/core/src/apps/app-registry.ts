@@ -57,7 +57,7 @@ export class AppRegistry {
   presence(id: AppId): AppPresence | null {
     if (!this.d.appsDir || id === this.d.self) return null;
     try {
-      const raw = JSON.parse(readFileSync(join(this.d.appsDir, FBRX_APPS[id].name, PRESENCE_FILE), 'utf8')) as Partial<AppPresence>;
+      const raw = JSON.parse(readFileSync(join(this.d.appsDir, FBRX_APPS[id].folder, PRESENCE_FILE), 'utf8')) as Partial<AppPresence>;
       if (raw.id !== id || typeof raw.exec !== 'string' || typeof raw.version !== 'string') return null;
       if (!looksLike(id, raw.exec) || !existsSync(raw.exec)) return null;
       return { id, version: raw.version.slice(0, 40), exec: raw.exec, at: String(raw.at ?? '') };
