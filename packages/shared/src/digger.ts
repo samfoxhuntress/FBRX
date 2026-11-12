@@ -4,10 +4,12 @@ import type { ProviderConfig } from './settings';
  * FBRX Digger: FBRX's Network Center on its own, as a small app for anyone who works on networks. It is built from the
  * same code as FBRX OS (the desktop app's "digger" flavor), so every network tool FBRX OS gets, Digger gets too:
  * device scans and their comparison, ping and trace route, the speed test, the Wi-Fi channel planner, DNS and port
- * checks, device consoles (SSH, Telnet) and network environments. All of them, whatever the edition.
+ * checks, device consoles (SSH, Telnet) and network environments, all of them.
  *
- * It runs on its own: no edition, no FBRX account, no AI of its own and none of FBRX Endpoint's background work. When
- * FBRX Endpoint runs on the same computer, Digger's agent thinks with Endpoint's AI (DIGGER_AI_PROVIDER).
+ * It comes with Endpoint Ultra: it runs at the edition FBRX Endpoint's license gives the computer (LicenseService
+ * borrowFrom, from the license Endpoint shares in its data folder). It has no AI of its own and none of FBRX Endpoint's
+ * background work; when FBRX Endpoint runs on the same computer, Digger's agent thinks with Endpoint's AI
+ * (DIGGER_AI_PROVIDER).
  */
 
 export const DIGGER_NAME = 'FBRX Digger';

@@ -1,9 +1,10 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FBRX_APPS, appUnlocked, handoffFor, type Tier } from '@fbrx/shared';
-import { AppRegistry } from '../src/apps/app-registry';
+import { generateSigningKeyPair, signLicense } from '@fbrx/shared/node';
+import { AppRegistry, SHARED_LICENSE_FILE, looksLike } from '../src/apps/app-registry';
 import { makeKernel, USER } from './helpers';
 
 const dirs: string[] = [];
@@ -80,6 +81,59 @@ describe('the FBRX app family', () => {
     writeFileSync(join(mac, 'FBRX Digger'), '');
     writeFileSync(join(c.digger, 'app.json'), JSON.stringify({ id: 'digger', version: '1.3.0', exec: join(mac, 'FBRX Digger'), at: '' }));
     expect(os.installed()).toEqual(['digger']);
+  });
+
+  it('knows each app by its program, however it was installed', () => {
+    for (const exec of ['C:\\Program Files\\FBRX OS\\FBRX OS.exe', '/opt/FBRX OS/fbrx-os', '/Applications/FBRX OS.app/Contents/MacOS/FBRX OS', '/home/sam/FBRX-OS-2.5.0-x86_64.AppImage']) expect(looksLike('os', exec)).toBe(true);
+    for (const exec of ['/opt/FBRX Digger/fbrx-digger', '/home/sam/FBRX-Digger-1.3.0-arm64.AppImage', 'C:\\Users\\sam\\AppData\\Local\\Programs\\FBRX Digger\\FBRX Digger.exe']) expect(looksLike('digger', exec)).toBe(true);
+    for (const exec of ['/usr/bin/calc', '/home/sam/FBRX-OS-evil.AppImage', '/opt/FBRX OS/fbrx-digger']) expect(looksLike('os', exec)).toBe(false);
+  });
+
+  it('runs FBRX Digger at the edition FBRX Endpoint’s license gives this computer, checked again in Digger', async () => {
+    const keys = generateSigningKeyPair();
+    const sign = (tier: 'basic' | 'ultra', privateKeyPem = keys.privateKeyPem) =>
+      signLicense({ v: 1, lid: `lic_${tier}`, tenantId: 't', customer: 'Sam', edition: 'pro', seats: 0, features: [], issuedAt: new Date().toISOString(), expiresAt: null, maxMajorVersion: null, tier }, privateKeyPem);
+    const c = computer();
+    const endpoint = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem] });
+    const digger = await makeKernel({ devMode: false, licensePublicKeys: [keys.publicKeyPem], platform: { flavor: 'digger' } });
+    try {
+      const osExec = join(c.apps, 'fbrx-os');
+      writeFileSync(osExec, '');
+      const os = new AppRegistry({ self: 'os', dataDir: c.os, appsDir: c.apps, version: '2.5.0', exec: osExec, tier: () => endpoint.kernel.license.status().tier, releases: () => ({}) });
+      const reader = new AppRegistry({ self: 'digger', dataDir: c.digger, appsDir: c.apps, version: '1.3.0', exec: c.exec, tier: () => 'essentials', releases: () => ({}) });
+      const check = () => {
+        digger.kernel.license.borrowFrom(() => reader.endpointLicense());
+        return digger.kernel.license.status().tier;
+      };
+      // No FBRX Endpoint on this computer: Digger's network tools are locked.
+      expect(check()).toBe('essentials');
+      expect(digger.kernel.networkTools()).toBe(false);
+      // Endpoint runs the FBRX account's Ultra and shares it: Digger opens.
+      endpoint.kernel.license.applyAccount(sign('ultra'));
+      endpoint.kernel.license.choose('ultra');
+      os.announce();
+      os.shareLicense(endpoint.kernel.license.shared());
+      expect(check()).toBe('ultra');
+      expect(digger.kernel.networkTools()).toBe(true);
+      // Pro is not enough.
+      endpoint.kernel.license.applyAccount(sign('basic'));
+      os.shareLicense(endpoint.kernel.license.shared());
+      expect(check()).toBe('basic');
+      expect(digger.kernel.networkTools()).toBe(false);
+      // A shared file edited to claim more, or a key someone else signed, counts for nothing.
+      const file = join(c.os, SHARED_LICENSE_FILE);
+      writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), 'license.account': sign('ultra', generateSigningKeyPair().privateKeyPem), 'edition.chosen': 'blackhole' }));
+      expect(check()).toBe('essentials');
+      // Endpoint uninstalled (its program gone): its leftover license does not count.
+      endpoint.kernel.license.applyAccount(sign('ultra'));
+      os.shareLicense(endpoint.kernel.license.shared());
+      expect(check()).toBe('ultra');
+      rmSync(osExec);
+      expect(check()).toBe('essentials');
+    } finally {
+      await endpoint.cleanup();
+      await digger.cleanup();
+    }
   });
 
   it('lists the family through the API, and only the person at the computer opens an app', async () => {

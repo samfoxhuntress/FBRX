@@ -1,7 +1,8 @@
 # FBRX Digger
 
 FBRX Digger is the FBRX **Network Center on its own**: a small app for anyone who looks after networks, with every
-network tool FBRX has and nothing else. It runs on Windows, macOS and Linux, next to FBRX OS or without it.
+network tool FBRX has and nothing else. It runs on Windows, macOS and Linux, beside FBRX Endpoint, and comes with
+**Endpoint Ultra** (and Black Hole Edition).
 
 ## What it does
 
@@ -30,14 +31,21 @@ network tool FBRX has and nothing else. It runs on Windows, macOS and Linux, nex
 * **Network environments** (the last tab): attach a network controller (UniFi) to see its sites, devices and clients.
 * A router's or device's own page opens in your computer's browser.
 
-Everything is included, always: Digger has no editions, and its start screen and Settings never mention them. It is the network tools of
-FBRX Endpoint, on their own.
+Every tool is included: Digger has no editions of its own, and its start screen and Settings never mention them. It
+is the network tools of FBRX Endpoint, on their own.
 
-## On its own
+## With FBRX Endpoint
 
-Digger needs nothing else: no FBRX account, no edition and no FBRX OS. It keeps its own data folder and settings, runs
-none of FBRX Endpoint's background work (no AI of its own, no backups, antivirus or organization), and leaves the
-keyboard alone (no global shortcuts), so it never gets in the way of FBRX OS on the same computer.
+**One license.** Digger runs at the edition FBRX Endpoint has on the same computer: install FBRX Endpoint and sign in
+to your FBRX account with Ultra (or get Black Hole Edition through your organization), and Digger opens. Until then
+it says what it needs, and it looks again every few seconds, so a purchase or a sign-in in FBRX Endpoint opens it by
+itself (or press **Check again**). With Pro or Essentials, Digger stays closed. Digger checks Endpoint's license
+itself, so the edition cannot be changed by editing a file, and a license left behind by an uninstalled FBRX Endpoint
+does not count.
+
+Otherwise Digger keeps to itself. It keeps its own data folder and settings, runs none of FBRX Endpoint's background
+work (no AI of its own, no backups, antivirus or organization), and leaves the keyboard alone (no global shortcuts),
+so it never gets in the way of FBRX Endpoint.
 
 **Fabrix, while FBRX Endpoint runs.** When FBRX Endpoint is running on the same computer, Digger finds its AI by
 itself: **FBRX Endpoint's AI** shows at the top, with **Ask Fabrix**, *Diagnose with Fabrix* and the other ask buttons

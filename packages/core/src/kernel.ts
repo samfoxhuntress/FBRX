@@ -820,6 +820,8 @@ export class Kernel {
       releases: () => this.release.apps(),
       log: (msg, meta) => L('apps').info(msg, meta),
     });
+    // One license: FBRX Digger runs at the edition FBRX Endpoint's license gives this computer (Digger comes with Ultra).
+    if (this.digger) this.license.borrowFrom(() => this.apps.endpointLicense());
     // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
     this.cli = new Fbrx1Cli({
       call: (method, params) => this.call(method, params ?? {}, { origin: 'user', actor: 'fbrx1' }),
@@ -1466,7 +1468,14 @@ export class Kernel {
     // Look for new versions in the FBRX repository (the desktop app only; servers and tests don't).
     if (this.platform.shell === 'desktop') this.release.start();
     // The other FBRX apps on this computer learn that this one is installed, and how to open it.
-    if (this.platform.shell === 'desktop') this.apps.announce();
+    if (this.platform.shell === 'desktop') {
+      this.apps.announce();
+      // FBRX Endpoint shares its license with them, now and whenever it changes.
+      if (!this.digger) {
+        this.apps.shareLicense(this.license.shared());
+        this.disposers.push(this.events.on('license.changed', () => this.apps.shareLicense(this.license.shared())));
+      }
+    }
     // FBRX Digger leaves out what is FBRX Endpoint's (its AI, messages, organization, account, support, automations).
     if (!this.digger) this.startEndpoint();
     this.audit.prune(365);
@@ -2173,7 +2182,7 @@ export class Kernel {
 
   /** Every network tool, whatever the edition: on Endpoint Ultra, and always in FBRX Digger. */
   networkTools(): boolean {
-    return this.platform.flavor === 'digger' || !this.ultraOnly('Network tools');
+    return !this.ultraOnly('Network tools');
   }
 
   /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Essentials or Pro), or null. */

@@ -3,9 +3,12 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { APP_IDS, FBRX_APPS, appUnlocked, type AppId, type AppPresence, type AppStatus, type Tier } from '@fbrx/shared';
 import { CoreError } from '../errors';
+import type { SharedLicense } from '../license/license-service';
 
 /** Where an app's own record goes, in its data folder. */
 export const PRESENCE_FILE = 'app.json';
+/** Where FBRX Endpoint shares its license with the other FBRX apps, in its data folder (see SharedLicense). */
+export const SHARED_LICENSE_FILE = 'apps-license.json';
 
 export interface AppRegistryDeps {
   /** The app running now. */
@@ -25,13 +28,21 @@ export interface AppRegistryDeps {
   log?: (msg: string, meta?: Record<string, unknown>) => void;
 }
 
-/** The program name an app's record may name: its own app's, so a record cannot point the Endpoint at anything else. */
-function looksLike(id: AppId, exec: string): boolean {
-  const want = FBRX_APPS[id].name.toLowerCase().replace(/[^a-z0-9]/g, '');
-  const name = basename(exec).toLowerCase().replace(/\.(exe|appimage)$/, '').replace(/[^a-z0-9]/g, '');
+const plain = (x: string) => x.toLowerCase().replace(/[^a-z0-9]/g, '');
+
+/**
+ * The program name an app's record may name: its own app's, so a record cannot point the Endpoint at anything else.
+ * An app's program carries its name or its data folder's ("FBRX OS.exe", fbrx-os, "FBRX Digger.app"); an AppImage
+ * adds its version and machine ("FBRX-Digger-1.3.0-x86_64.AppImage").
+ */
+export function looksLike(id: AppId, exec: string): boolean {
+  const names = new Set([plain(FBRX_APPS[id].name), plain(FBRX_APPS[id].folder)]);
+  const file = basename(exec.replace(/\\/g, '/'));
+  const name = plain(file.replace(/\.(exe|appimage)$/i, ''));
+  const appImage = /\.appimage$/i.test(file) && [...names].some((n) => new RegExp(`^${n}\\d[0-9a-z]*$`).test(name));
   // On a Mac the program sits inside "FBRX Digger.app/Contents/MacOS/".
-  const bundle = /\/([^/]+)\.app\/contents\/macos\/[^/]+$/i.exec(exec.replace(/\\/g, '/'))?.[1]?.toLowerCase().replace(/[^a-z0-9]/g, '');
-  return name === want || bundle === want || (id === 'digger' && name === 'fbrxdigger');
+  const bundle = /\/([^/]+)\.app\/contents\/macos\/[^/]+$/i.exec(exec.replace(/\\/g, '/'))?.[1];
+  return names.has(name) || appImage || (!!bundle && names.has(plain(bundle)));
 }
 
 /**
@@ -61,6 +72,27 @@ export class AppRegistry {
       if (raw.id !== id || typeof raw.exec !== 'string' || typeof raw.version !== 'string') return null;
       if (!looksLike(id, raw.exec) || !existsSync(raw.exec)) return null;
       return { id, version: raw.version.slice(0, 40), exec: raw.exec, at: String(raw.at ?? '') };
+    } catch {
+      return null;
+    }
+  }
+
+  /** FBRX Endpoint: shares its license with the other FBRX apps on this computer (FBRX Digger runs at its edition). */
+  shareLicense(license: SharedLicense): void {
+    if (this.d.self !== 'os' || !this.d.appsDir) return;
+    try {
+      writeFileSync(join(this.d.dataDir, SHARED_LICENSE_FILE), `${JSON.stringify(license, null, 2)}\n`, { mode: 0o600 });
+    } catch (err) {
+      this.d.log?.('could not share the license with the other FBRX apps', { error: (err as Error).message });
+    }
+  }
+
+  /** Another app: FBRX Endpoint's license, when Endpoint is installed on this computer (null otherwise). */
+  endpointLicense(): SharedLicense | null {
+    if (this.d.self === 'os' || !this.d.appsDir || !this.presence('os')) return null;
+    try {
+      const raw = JSON.parse(readFileSync(join(this.d.appsDir, FBRX_APPS.os.folder, SHARED_LICENSE_FILE), 'utf8')) as unknown;
+      return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as SharedLicense) : null;
     } catch {
       return null;
     }

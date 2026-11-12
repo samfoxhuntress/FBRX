@@ -11,8 +11,22 @@ const TRIAL_KEY = 'edition.trial';
  * Offline license verification. Keys are Ed25519-signed by the vendor's control plane; the public key is
  * embedded in each build, so licenses cannot be forged by running a private server.
  */
+/**
+ * What FBRX Endpoint shares of its license with the other FBRX apps on the computer (FBRX Digger): its keys, which are
+ * signed and checked again by the app reading them, and how they count there (the computer's install id, its
+ * organization's edition, the edition chosen).
+ */
+export const SHARED_LICENSE_KEYS = ['license.managed', 'license.local', 'license.account', 'install.id', 'fleet.edition', 'fleet.deviceId', 'edition.chosen'] as const;
+export type SharedLicense = Partial<Record<(typeof SHARED_LICENSE_KEYS)[number], unknown>>;
+
+/** How long FBRX Digger trusts what it last read of FBRX Endpoint's license before reading it again. */
+const BORROWED_FOR_MS = 15_000;
+
 export class LicenseService {
   private cached: LicenseStatus | null = null;
+  private cachedAt = 0;
+  /** FBRX Digger: FBRX Endpoint's license on this computer, in place of one of its own (null: no Endpoint here). */
+  private borrow: (() => SharedLicense | null) | null = null;
 
   /** While a support pass is active, SupportService sets this so the computer runs fully for troubleshooting. */
   private supportElevation: (() => { tier: Tier; until: string | null } | null) | null = null;
@@ -34,6 +48,22 @@ export class LicenseService {
     this.cached = null;
   }
 
+  /** FBRX Digger runs at the edition FBRX Endpoint's license gives this computer: the FBRX account's, one license. */
+  borrowFrom(fn: () => SharedLicense | null): void {
+    this.borrow = fn;
+    this.cached = null;
+  }
+
+  /** What FBRX Endpoint writes for the other FBRX apps on this computer (see SHARED_LICENSE_KEYS). */
+  shared(): SharedLicense {
+    const out: SharedLicense = {};
+    for (const k of SHARED_LICENSE_KEYS) {
+      const v = this.meta.get<unknown>(k);
+      if (v !== undefined && v !== null) out[k] = v;
+    }
+    return out;
+  }
+
   status(): LicenseStatus {
     // Support mode wins over everything else while its pass is valid (it ends on its own at the pass's expiry).
     const support = this.supportElevation?.();
@@ -53,13 +83,20 @@ export class LicenseService {
       };
     }
     // The Pro trial ends by itself: look again once it is over.
-    if (this.cached && !(this.cached.trialUntil && Date.parse(this.cached.trialUntil) <= Date.now())) return this.cached;
+    // FBRX Digger reads FBRX Endpoint's license again every little while, so it follows a purchase or a sign-out.
+    const stale = !!this.borrow && Date.now() - this.cachedAt > BORROWED_FOR_MS;
+    if (this.cached && !stale && !(this.cached.trialUntil && Date.parse(this.cached.trialUntil) <= Date.now())) return this.cached;
+    this.cachedAt = Date.now();
+    // FBRX Digger counts FBRX Endpoint's keys as Endpoint does (they are signed, and checked again here); anything
+    // missing counts as nothing bought.
+    const borrowed = this.borrow ? (this.borrow() ?? {}) : null;
+    const get = <T>(key: string): T | null => (borrowed ? (((borrowed as Record<string, unknown>)[key] as T | undefined) ?? null) : this.meta.get<T>(key));
     const major = parseSemver(this.appVersion)?.major ?? 1;
-    const managed = this.meta.get<string>('license.managed');
-    const local = this.meta.get<string>('license.local');
-    const account = this.meta.get<string>('license.account');
+    const managed = get<string>('license.managed');
+    const local = get<string>('license.local');
+    const account = get<string>('license.account');
     // A key an FBRX account made for one of its computers works on that one only.
-    const install = this.meta.get<string>('install.id');
+    const install = get<string>('install.id');
     // The organization's license wins; otherwise (or when it does not count here) the fuller of a key typed in and the
     // FBRX account's.
     let status = managed ? licenseStatusFrom(managed, this.publicKeys, 'managed', major, install) : licenseStatusFrom(local, this.publicKeys, 'local', major, install);
@@ -91,12 +128,12 @@ export class LicenseService {
     //   there. Black Hole Edition comes only through an organization.
     // - On its own, a computer may try Pro free for STANDARD_TRIAL_DAYS, once (startTrial).
     // Student and child computers always run the learner edition, on Pro (LEARNER_TIER).
-    const ed = this.meta.get<DeviceEdition>('fleet.edition');
-    const enrolled = !!this.meta.get<string>('fleet.deviceId');
+    const ed = get<DeviceEdition>('fleet.edition');
+    const enrolled = !!get<string>('fleet.deviceId');
     let ceiling: Tier = status.tier;
     let reason: CeilingReason = 'license';
     let trialUntil: string | null = null;
-    const trial = this.meta.get<{ until: string }>(TRIAL_KEY);
+    const trial = borrowed ? undefined : this.meta.get<{ until: string }>(TRIAL_KEY);
     if (status.source === 'development') reason = 'development';
     else if (!enrolled) {
       const bought = status.state === 'valid' && !status.commandUrl;
@@ -115,9 +152,9 @@ export class LicenseService {
     }
     if (ed && isLearner(ed.audience)) return (this.cached = { ...status, tier: LEARNER_TIER, chosen: LEARNER_TIER, ceiling: LEARNER_TIER, ceilingReason: 'learner', trialUntil: null, trialAvailable: false, problem });
     // What the person chose (Essentials on a new computer; see Kernel's first start), never above the ceiling.
-    const chosen = this.meta.get<Tier>('edition.chosen') ?? (this.devMode ? (tryTier ?? 'blackhole') : 'essentials');
+    const chosen = get<Tier>('edition.chosen') ?? (this.devMode ? (tryTier ?? 'blackhole') : 'essentials');
     // The trial is there for a computer on its own with nothing bought, until it has had it.
-    const trialAvailable = reason === 'standalone' && !trial;
+    const trialAvailable = reason === 'standalone' && !trial && !borrowed;
     this.cached = { ...status, tier: minTier(chosen, ceiling), chosen, ceiling, ceilingReason: reason, trialUntil, trialAvailable, problem: status.state === 'development' ? null : problem };
     return this.cached;
   }
