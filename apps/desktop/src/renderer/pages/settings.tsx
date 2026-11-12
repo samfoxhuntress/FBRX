@@ -43,7 +43,7 @@ import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { DIGGER, IS_WINDOWS, navigate, routeArg } from '../app';
-import { PRESETS, TEXTURE_NAMES, playStartupSound, resolvedMode, resolvedTexture, textureImage, themeAccent } from '../theme';
+import { PRESETS, TEXTURE_NAMES, playStartupSound, presetAllowed, resolvedMode, resolvedTexture, textureImage, themeAccent } from '../theme';
 import { BrucePreview, peekBruce, seasonNow } from '../fun';
 import { TrophyBadge, TrophyCase } from '../trophies';
 import { AskButton, EmergencyStop, ProfileFields, saveProfile } from '../widgets';
@@ -493,6 +493,7 @@ function NavIconsCard() {
 function Appearance() {
   const { s, locked, patch } = useSettings();
   const ultra = useAtLeast('ultra');
+  const tier = useTier();
   if (!s) return null;
   const a = s.appearance;
   const mode = resolvedMode(s.general.theme);
@@ -517,8 +518,10 @@ function Appearance() {
             {PRESETS.map((p) => {
               const [page, side, accent, glow] = mode === 'dark' ? p.dark : p.light;
               const tex = textureImage(p.texture, mode, 100, accent);
+              // An edition's own theme (Black Hole's) shows to everyone, and is picked with that edition.
+              const own = presetAllowed(p.id, tier);
               return (
-                <button key={p.id} className={`swatch${a.preset === p.id ? ' selected' : ''}`} disabled={L('appearance.preset')} onClick={() => void patch({ appearance: { preset: p.id } })} aria-pressed={a.preset === p.id}>
+                <button key={p.id} className={`swatch${a.preset === p.id ? ' selected' : ''}`} disabled={L('appearance.preset') || !own} title={own ? undefined : 'Comes with Black Hole Edition'} onClick={() => void patch({ appearance: { preset: p.id } })} aria-pressed={a.preset === p.id}>
                   <div className="swatch-preview">
                     <div style={{ background: [tex, glow ? `linear-gradient(170deg, color-mix(in srgb, ${glow} 45%, ${side}), ${side} 75%)` : side].filter(Boolean).join(', ') }} />
                     <div style={{ background: page }}>
@@ -527,7 +530,11 @@ function Appearance() {
                       <div className="swatch-bar" style={{ background: mode === 'dark' ? 'rgba(255,255,255,0.12)' : 'rgba(0,0,0,0.08)', width: '55%' }} />
                     </div>
                   </div>
-                  <div className="swatch-label">{p.name}{p.id === 'tropical' ? ' (default)' : ''}</div>
+                  <div className="swatch-label">
+                    {p.name}
+                    {p.id === 'tropical' ? ' (default)' : ''}
+                    {p.edition && <span className={`swatch-tag${own ? '' : ' locked'}`}>{own ? 'Your edition’s' : 'Black Hole Edition'}</span>}
+                  </div>
                 </button>
               );
             })}

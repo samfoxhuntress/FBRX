@@ -1521,3 +1521,164 @@
     var(--accent-fill) bottom / 100% 2px no-repeat,
     linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--accent) 13%, transparent) 100%);
 }
+
+/* ------------------------------------------------------------------------------- Black Hole (Black Hole Edition) */
+/*
+ * Black Hole Edition's own theme. Deep space with a violet light; a starfield behind the pages, and in the lower
+ * right of the window a black hole: a black core in a thin gold photon ring, with its glowing accretion disk turning
+ * slowly across the front of it (hot gold to magenta to violet). The light version keeps the hole, on a pale sky.
+ */
+:root[data-preset='blackhole'] {
+  --page: #f6f4fb;
+  --surface-1: #ffffff;
+  --surface-2: #f1eef9;
+  --surface-3: #e5e0f3;
+  --sidebar: #f9f8fd;
+  --text-primary: #15111f;
+  --text-secondary: #4d4566;
+  --text-muted: #7d7598;
+  --border: rgba(60, 30, 120, 0.12);
+  --border-strong: rgba(60, 30, 120, 0.2);
+  --grid: #e4dff2;
+  --axis: #c3bbdc;
+  --accent: #6d28d9;
+  --accent-hover: #5b21b6;
+  --accent-ink: #ffffff;
+  --accent-wash: rgba(109, 40, 217, 0.1);
+  --focus: rgba(109, 40, 217, 0.4);
+  --glow: #b79cff;
+  --glow-2: #ff9a4d;
+  --bh-ring: 0.85;
+}
+:root[data-preset='blackhole'][data-theme='dark'] {
+  --page: #050409;
+  --surface-1: #0d0b15;
+  --surface-2: #14111f;
+  --surface-3: #1d192d;
+  --sidebar: #07060d;
+  --text-primary: #f2effc;
+  --text-secondary: #bfb8d8;
+  --text-muted: #8a83a8;
+  --border: rgba(167, 139, 250, 0.14);
+  --border-strong: rgba(167, 139, 250, 0.24);
+  --grid: #1d192d;
+  --axis: #2e2846;
+  --accent: #a78bfa;
+  --accent-hover: #c0aafc;
+  --accent-ink: #12082a;
+  --accent-wash: rgba(167, 139, 250, 0.14);
+  --focus: rgba(167, 139, 250, 0.5);
+  --glow: #5b2fd6;
+  --glow-2: #ff8a3d;
+  --bh-ring: 1;
+}
+/* Filled things carry the disk's light: hot gold into violet (beats the general rule for every theme but Tropical). */
+:root[data-preset='blackhole']:not([data-preset='tropical']) {
+  --accent-from: #7f56e3;
+  --accent-to: #d4434f;
+  /* Main buttons and other filled things: violet into FBRX's orange and red, softly (white text stays readable). */
+  --accent-fill: linear-gradient(105deg, #7f56e3 0%, #b6508f 34%, #d8613a 68%, #d4434f 100%);
+  --accent-fill-ink: #ffffff;
+  --accent-gradient: linear-gradient(135deg, #ffb45a 0%, #ff5fa2 50%, #8b5cf6 100%);
+}
+:root[data-preset='blackhole'][data-theme='dark'] {
+  --accent-from: #b9a3ff;
+  --accent-to: #ff8f97;
+  /* In the dark, the same colors as a pastel glow with dark text: easy on the eyes. */
+  --accent-fill: linear-gradient(105deg, #b9a3ff 0%, #e6a2d0 34%, #ffb38a 68%, #ff8f97 100%);
+  --accent-fill-ink: #1a0b1f;
+}
+:root[data-preset='blackhole'] .fx-btn.primary {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 18px -6px rgba(216, 97, 58, 0.55);
+}
+:root[data-preset='blackhole'][data-theme='dark'] .fx-card {
+  border-color: rgba(167, 139, 250, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(196, 176, 255, 0.07),
+    0 0 26px -12px rgba(139, 92, 246, 0.45);
+}
+:root[data-preset='blackhole'][data-theme='dark'] .fx-page-header h1 {
+  background: linear-gradient(90deg, #ffffff 0%, #d9ccff 55%, #ffb45a 130%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+:root[data-preset='blackhole'] .fx-sidebar {
+  border-right: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* The black hole: fixed to the lower right of the window, behind the pages, and never in the way of a click. */
+@property --bh-spin {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+:root[data-preset='blackhole'] .fx-main {
+  position: relative;
+}
+:root[data-preset='blackhole'] .fx-main > * {
+  position: relative;
+  z-index: 1;
+}
+:root[data-preset='blackhole'] .fx-main::before,
+:root[data-preset='blackhole'] .fx-main::after {
+  content: '';
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 50%;
+}
+/* The shadow and its photon ring, with a violet halo. */
+:root[data-preset='blackhole'] .fx-main::before {
+  width: 230px;
+  height: 230px;
+  right: -25px;
+  bottom: -35px;
+  opacity: var(--bh-ring);
+  background: radial-gradient(circle, #000 0 49%, rgba(255, 226, 170, 0.95) 51.5%, rgba(255, 150, 80, 0.6) 54%, rgba(190, 100, 255, 0.28) 60%, rgba(120, 70, 255, 0.08) 68%, transparent 72%);
+  box-shadow: 0 0 90px 24px rgba(110, 60, 255, 0.16);
+}
+/* The accretion disk, tilted and turning; its near side crosses in front of the shadow and is brighter. */
+:root[data-preset='blackhole'] .fx-main::after {
+  width: 640px;
+  height: 640px;
+  right: calc(90px - 320px);
+  bottom: calc(80px - 320px);
+  opacity: calc(var(--bh-ring) * 0.95);
+  background: conic-gradient(
+    from var(--bh-spin),
+    rgba(255, 200, 120, 0.15),
+    rgba(255, 190, 110, 0.85) 12%,
+    rgba(255, 110, 150, 0.55) 30%,
+    rgba(150, 100, 255, 0.25) 48%,
+    rgba(255, 170, 90, 0.12) 62%,
+    rgba(255, 210, 140, 0.7) 82%,
+    rgba(255, 200, 120, 0.15)
+  );
+  -webkit-mask-image: radial-gradient(circle, transparent 0 19%, #000 21.5%, #000 31%, rgba(0, 0, 0, 0.35) 40%, transparent 50%);
+  mask-image: radial-gradient(circle, transparent 0 19%, #000 21.5%, #000 31%, rgba(0, 0, 0, 0.35) 40%, transparent 50%);
+  transform: rotate(-16deg) scaleY(0.24);
+  filter: blur(0.6px);
+  animation: bh-spin 48s linear infinite;
+}
+@keyframes bh-spin {
+  to {
+    --bh-spin: 360deg;
+  }
+}
+:root[data-motion='reduce'][data-preset='blackhole'] .fx-main::after {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-preset='blackhole'] .fx-main::after {
+    animation: none;
+  }
+}
+/* Light effects: the disk stays (it is only a gradient), still and sharp. */
+:root[data-effects='light'][data-preset='blackhole'] .fx-main::after {
+  display: block !important;
+  animation: none;
+  filter: none;
+}

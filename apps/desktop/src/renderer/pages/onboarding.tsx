@@ -3,7 +3,7 @@ import { STANDARD_TRIAL_DAYS, type Settings, type SnapshotHeader, type SystemSta
 import { Button, Card, Field, Input, Status, useAction, FbrxMark } from '@fbrx/ui';
 import { call, pickFile } from '../client';
 import { useAgentName, useCore, useStarterAi } from '../hooks';
-import { PRESETS, resolvedMode } from '../theme';
+import { PRESETS, presetAllowed, resolvedMode } from '../theme';
 import { RestoreModal } from './backup';
 import { JoinForm } from '../join';
 import { AccountSignInForm } from '../account';
@@ -152,7 +152,7 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
                     ))}
                   </div>
                   <div className="swatches onboard-swatches">
-                    {PRESETS.map((p) => {
+                    {PRESETS.filter((p) => presetAllowed(p.id, status.license.tier)).map((p) => {
                       const [page, side, accent] = shade === 'dark' ? p.dark : p.light;
                       const on = settings?.appearance.preset === p.id;
                       return (

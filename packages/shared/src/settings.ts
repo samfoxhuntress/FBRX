@@ -10,10 +10,10 @@ import { DEFAULT_OUTPUT_FOLDER, IMAGE_GENERATORS, IMAGE_SIZES, WEB_SEARCH_ENGINE
 import { DEFAULT_SNAPSHOT_FOLDER, SNAPSHOT_AFTER } from './snapshots';
 
 /** Built-in color themes (see the desktop theme studio). "fabrics" is the FBRX OS brand look. */
-export const THEME_PRESETS = ['fabrics', 'tropical', 'neon', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast'] as const;
+export const THEME_PRESETS = ['fabrics', 'tropical', 'neon', 'ember', 'midnight', 'graphite', 'ocean', 'forest', 'orchid', 'paper', 'contrast', 'blackhole'] as const;
 export type ThemePreset = (typeof THEME_PRESETS)[number];
 /** Background textures. "theme" uses each theme's own (palms for Tropical, weave for Honey, …). */
-export const TEXTURES = ['theme', 'none', 'weave', 'linen', 'grain', 'grid', 'dots', 'carbon', 'waves', 'palms'] as const;
+export const TEXTURES = ['theme', 'none', 'weave', 'linen', 'grain', 'grid', 'dots', 'carbon', 'waves', 'palms', 'stars'] as const;
 export type Texture = (typeof TEXTURES)[number];
 export const AI_RESOURCES = ['light', 'balanced', 'full'] as const;
 export type AiResources = (typeof AI_RESOURCES)[number];

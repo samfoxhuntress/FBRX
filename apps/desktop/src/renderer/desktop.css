@@ -7903,3 +7903,14 @@ body.popout .fx-page-header p {
 .thispc-volume-head { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; margin-bottom: 4px; }
 .thispc-links { display: flex; flex-wrap: wrap; gap: 4px; }
 @media (max-width: 760px) { .thispc-grid { grid-template-columns: 1fr; } }
+
+/* An edition's own theme in the theme picker (Black Hole's). */
+.swatch-tag {
+  display: block;
+  margin-top: 2px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: #8a6cff;
+}
+.swatch-tag.locked { color: var(--text-muted); }

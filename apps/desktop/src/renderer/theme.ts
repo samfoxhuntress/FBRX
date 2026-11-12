@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { atLeast, type Settings, type Texture, type ThemePreset, type Tier } from '@fbrx/shared';
 
 /** Swatch colors for the preset picker: [page, sidebar, accent, glow] for light and dark. */
-export const PRESETS: Array<{ id: ThemePreset; name: string; light: [string, string, string, string?]; dark: [string, string, string, string?]; texture: Exclude<Texture, 'theme'> }> = [
+export const PRESETS: Array<{ id: ThemePreset; name: string; light: [string, string, string, string?]; dark: [string, string, string, string?]; texture: Exclude<Texture, 'theme'>; edition?: Tier }> = [
   { id: 'tropical', name: 'Tropical', light: ['#f5f5f3', '#fafaf8', '#c8410e', '#ffb547'], dark: ['#0f1013', '#121316', '#ffa23a', '#ff4d5e'], texture: 'palms' },
   { id: 'fabrics', name: 'Honey', light: ['#f6f2ea', '#fbf7f0', '#946000', '#e6c06a'], dark: ['#0d1015', '#10141a', '#f4b942', '#a87614'], texture: 'weave' },
   { id: 'neon', name: 'Neon Grid', light: ['#eef6fa', '#f3f9fc', '#0090b8', '#5ccfff'], dark: ['#03060c', '#050a12', '#00e5ff', '#0066ff'], texture: 'grid' },
@@ -14,7 +14,15 @@ export const PRESETS: Array<{ id: ThemePreset; name: string; light: [string, str
   { id: 'orchid', name: 'Orchid', light: ['#f6f0f8', '#fbf7fc', '#9333ea', '#e2b3f2'], dark: ['#120c16', '#1c1422', '#d07af0', '#5a1f7a'], texture: 'grain' },
   { id: 'paper', name: 'Paper', light: ['#f1eadb', '#f7f0e1', '#8a5a2b', '#d9b98c'], dark: ['#1a1611', '#231e17', '#d9a066', '#5c3e1f'], texture: 'grain' },
   { id: 'contrast', name: 'High contrast', light: ['#ffffff', '#ffffff', '#0040c0'], dark: ['#000000', '#0a0a0a', '#ffd400'], texture: 'none' },
+  // Black Hole Edition's own: a starfield, and a black hole with a glowing disk in the corner of every page.
+  { id: 'blackhole', name: 'Black Hole', light: ['#f6f4fb', '#f9f8fd', '#6d28d9', '#ff8a3d'], dark: ['#050409', '#07060d', '#a78bfa', '#ff8a3d'], texture: 'stars', edition: 'blackhole' },
 ];
+
+/** Whether this edition has the theme (Black Hole has its own). */
+export const presetAllowed = (id: ThemePreset | undefined, tier: Tier | undefined) => {
+  const need = PRESETS.find((p) => p.id === id)?.edition;
+  return !need || (!!tier && atLeast(tier, need));
+};
 
 export const TEXTURE_NAMES: Record<Exclude<Texture, 'theme'>, string> = {
   none: 'None',
@@ -26,7 +34,21 @@ export const TEXTURE_NAMES: Record<Exclude<Texture, 'theme'>, string> = {
   carbon: 'Carbon fiber',
   waves: 'Waves',
   palms: 'Palms',
+  stars: 'Stars',
 };
+
+/** A starfield tile: faint dust, a few brighter stars and two with a glint, always in the same places. */
+function starsSvg(star: (a: number) => string, tint: (a: number) => string): string {
+  let seed = 7;
+  const rand = () => ((seed = (seed * 16807) % 2147483647) - 1) / 2147483646;
+  const S = 240;
+  let dust = '';
+  for (let i = 0; i < 70; i++) dust += `<circle cx="${(rand() * S).toFixed(1)}" cy="${(rand() * S).toFixed(1)}" r="${(0.35 + rand() * 0.55).toFixed(2)}" fill="${star(0.12 + rand() * 0.18)}"/>`;
+  let bright = '';
+  for (let i = 0; i < 9; i++) bright += `<circle cx="${(rand() * S).toFixed(1)}" cy="${(rand() * S).toFixed(1)}" r="${(0.9 + rand() * 0.7).toFixed(2)}" fill="${i % 3 ? star(0.5) : tint(0.55)}"/>`;
+  const glint = (x: number, y: number) => `<path d="M${x - 4} ${y}H${x + 4}M${x} ${y - 4}V${y + 4}" stroke="${star(0.4)}" stroke-width=".6"/><circle cx="${x}" cy="${y}" r="1.3" fill="${star(0.7)}"/>`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="${S}" height="${S}">${dust}${bright}${glint(58, 172)}${glint(196, 44)}</svg>`;
+}
 
 /** Palm fronds: leaflets along two curved stems (one tile). */
 function palmsPath(): string {
@@ -119,6 +141,9 @@ export function textureImage(t: Exclude<Texture, 'theme'>, mode: 'light' | 'dark
     case 'palms':
       svg = `<svg xmlns="http://www.w3.org/2000/svg" width="190" height="190"><path d="${palmsPath()}" fill="none" stroke="${ink(0.06)}" stroke-width="1.6" stroke-linecap="round"/></svg>`;
       break;
+    case 'stars':
+      svg = starsSvg(mode === 'dark' ? (a) => `rgba(255,255,255,${Math.min(1, a * k).toFixed(3)})` : neon, neon);
+      break;
   }
   return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
@@ -180,7 +205,9 @@ export function resolvedMode(theme: Settings['general']['theme']): 'light' | 'da
 export function useAppearance(settings: Settings | undefined, tier: Tier | undefined) {
   const theme = settings?.general.theme ?? 'dark';
   const basic = !!tier && !atLeast(tier, 'ultra');
-  const a = settings && basic ? { ...settings.appearance, texture: 'none' as const, navIcons: settings.appearance.navIcons === 'custom' ? ('accent' as const) : settings.appearance.navIcons } : settings?.appearance;
+  // A theme of another edition (Black Hole's, after a computer moves down) falls back to the default.
+  const own = settings && !presetAllowed(settings.appearance.preset, tier) ? { ...settings.appearance, preset: 'tropical' as const } : settings?.appearance;
+  const a = own && basic ? { ...own, texture: 'none' as const, navIcons: own.navIcons === 'custom' ? ('accent' as const) : own.navIcons } : own;
   useEffect(() => {
     // Wait for the license, so a texture never flashes on where it is not part of the edition.
     if (!tier) return;
