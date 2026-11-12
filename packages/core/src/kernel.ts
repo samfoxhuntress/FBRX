@@ -39,6 +39,7 @@ import {
   type ComputerFacts,
   type LearningAgent,
 } from '@fbrx/shared';
+import { AppRegistry } from './apps/app-registry';
 import { ComputerLearning } from './ai/learning';
 import { systemInventory } from './system/inventory';
 import { CoreError, errorMessage, toCoreError } from './errors';
@@ -287,6 +288,8 @@ export class Kernel {
   readonly codelab: CodeLab;
   readonly voice: VoiceModels;
   readonly release: ReleaseChecker;
+  /** The FBRX app family on this computer: which apps are installed, which the edition unlocks, opening one. */
+  readonly apps: AppRegistry;
   readonly cli: Fbrx1Cli;
   readonly mesh: MeshService;
   /** FBRX Sync: projects, tasks, notes, snippets and calendar events between two paired computers, over the mesh. */
@@ -806,6 +809,16 @@ export class Kernel {
       notify: (title, body, version) => this.alerts.fire('update_available', title, body, { key: version }),
       flavor: this.platform.flavor,
       quiet: () => !this.presenterStatus().active && this.agent.activeCount === 0 && this.idleSeconds() >= 300,
+    });
+    this.apps = new AppRegistry({
+      self: this.platform.flavor === 'digger' ? 'digger' : 'os',
+      dataDir: this.paths.root,
+      appsDir: this.platform.shell === 'desktop' ? (this.platform.appsDir ?? null) : null,
+      version: this.platform.appVersion,
+      exec: this.platform.shell === 'desktop' ? (this.platform.appExec ?? null) : null,
+      tier: () => this.license.status().tier,
+      releases: () => this.release.apps(),
+      log: (msg, meta) => L('apps').info(msg, meta),
     });
     // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
     this.cli = new Fbrx1Cli({
@@ -1450,6 +1463,8 @@ export class Kernel {
     this.applyLicenseFile();
     // Look for new versions in the FBRX repository (the desktop app only; servers and tests don't).
     if (this.platform.shell === 'desktop') this.release.start();
+    // The other FBRX apps on this computer learn that this one is installed, and how to open it.
+    if (this.platform.shell === 'desktop') this.apps.announce();
     // FBRX Digger leaves out what is FBRX Endpoint's (its AI, messages, organization, account, support, automations).
     if (!this.digger) this.startEndpoint();
     this.audit.prune(365);

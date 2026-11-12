@@ -48,6 +48,8 @@ export interface ReleaseCheckerDeps {
 
 export class ReleaseChecker {
   private state: ReleaseCheck;
+  /** The other apps' latest releases from the last check, for "Get" (only Digger has its own so far). */
+  private others: { digger?: { version: string; download: string } } = {};
   private timer: NodeJS.Timeout | null = null;
   private busy: Promise<ReleaseCheck> | null = null;
 
@@ -79,6 +81,11 @@ export class ReleaseChecker {
     this.autoTimer = null;
   }
 
+  /** The other apps' latest releases, as the last check read them. */
+  apps(): { digger?: { version: string; download: string } } {
+    return this.others;
+  }
+
   status(): ReleaseCheck {
     const off = !this.d.settings().updates.checkRepo && this.state.state === 'idle';
     return { ...this.state, state: off ? 'off' : this.state.state, skipped: !!this.state.latest && this.d.settings().updates.skipVersion === this.state.latest.version, canInstall: !!this.installRoot() };
@@ -103,6 +110,7 @@ export class ReleaseChecker {
       if (!res.ok) throw new Error(`The release list answered ${res.status}`);
       // What is new in FBRX Command is for FBRX Command; FBRX Digger reads its own entry.
       const { command: _command, digger, ...os } = ReleaseManifestSchema.parse(await res.json());
+      this.others = digger ? { digger: { version: digger.version, download: digger.download } } : {};
       const latest: ReleaseInfo | null = this.d.flavor === 'digger' ? (digger ? { ...digger, stage: '', codename: '', importance: 'recommended' } : null) : os;
       const newer = !!latest && compareSemver(latest.version, this.d.appVersion) > 0;
       this.set({ state: newer ? 'available' : 'current', latest, checkedAt: new Date().toISOString(), message: null });

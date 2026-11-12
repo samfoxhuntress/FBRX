@@ -6,6 +6,7 @@
  * method is validated and audited by the core before it runs.
  */
 import type { LicenseStatus } from './license';
+import type { AppId, AppStatus } from './apps';
 import type { AccountDevice, AccountStatus, InvitationPreview, LocalAccountStatus } from './accounts';
 import type { CloudAiUsage, PromoRedeemed } from './cloud-ai';
 import type { AttachmentInfo } from './attachments';
@@ -824,6 +825,10 @@ export interface CoreMethods extends ExtMethods {
   /** Gets it ready now (again, after a failure, or after it was turned down). */
   'ai.prepareStarter': () => StarterAiStatus;
   /** Learning your computer: what FBRX is doing to get the AI ready for this computer, or did last. */
+  /** The FBRX app family on this computer: installed or not, unlocked by the edition or not, where to get each. */
+  'apps.list': () => AppStatus[];
+  /** Opens an installed FBRX app (the person at the computer only). */
+  'apps.open': (p: { id: AppId }) => { opened: AppId };
   'learning.status': () => LearningStatus;
   /** Learns the computer now, on the full screen: at the end of setup, or again (Settings). */
   'learning.start': (p?: { reason?: 'setup' | 'manual' }) => LearningStatus;

@@ -2,7 +2,7 @@ import { SETUP_USES } from '../ai/personas';
 import { readFile } from 'node:fs/promises';
 import { basename, isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, FILE_MIME, LOGIN_LIMITS, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, PERSONALITY_LIMITS, THINKING_LEVELS, TOOLKIT_INPUT_KINDS, TOOLKIT_SYSTEMS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, FILE_MIME, LOGIN_LIMITS, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, PERSONALITY_LIMITS, THINKING_LEVELS, APP_IDS, TOOLKIT_INPUT_KINDS, TOOLKIT_SYSTEMS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -17,6 +17,7 @@ type Handler = (params: any, ctx: CallContext) => unknown | Promise<unknown>;
 
 /** Methods that only a person at the workstation may call (never the Local API or a remote command). */
 const USER_ONLY = new Set<string>([
+  'apps.open',
   'vault.reveal',
   'vault.initialize',
   'vault.changeRecovery',
@@ -399,6 +400,8 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     },
     'runtime.useModel': async (p) => k.useLocalModel(z.object({ modelId: z.string() }).parse(p).modelId),
     'ai.starter': () => k.starter.status(),
+    'apps.list': () => k.apps.list(),
+    'apps.open': (p) => k.apps.open(z.object({ id: z.enum(APP_IDS) }).parse(p).id),
     'learning.status': () => k.learning.status(),
     'learning.start': (p) => {
       const { reason } = z.object({ reason: z.enum(['setup', 'manual']).optional() }).parse(p ?? {});
