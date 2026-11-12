@@ -841,6 +841,7 @@ export class Kernel {
     });
     this.mesh = new MeshService(this.db, this.events, L('mesh'), {
       appVersion: this.platform.appVersion,
+      ultra: () => !this.ultraOnly('Mesh extras'),
       deviceName: () => this.deviceName(),
       settings: () => this.settings.get().mesh,
       keyPair: () => this.meshKeyPair(),
@@ -969,6 +970,7 @@ export class Kernel {
     this.assistLog.interrupted();
     this.assist = new MeshAssist({
       settings: () => this.settings.get().mesh.assist,
+      ultra: () => !this.ultraOnly('Mesh controllers'),
       modelLine: () => {
         const { capacity: _c, ...st } = this.modelLine.status();
         return st;

@@ -44,6 +44,8 @@ export interface RunHandle {
 
 export interface AssistDeps {
   settings: () => AssistSettings;
+  /** Ultra or fuller: a controller (the command permission) hands out work only there. Borrowing an AI is Pro. */
+  ultra?: () => boolean;
   /** The line in front of this computer's own model (this computer's requests first), for the queue view. */
   modelLine?: () => NonNullable<AssistQueue['model']>;
   meshRunning: () => boolean;
@@ -195,10 +197,11 @@ export class MeshAssist {
   /** How a request from this peer would be treated: off (and why), ask the person here, or go ahead. */
   acceptance(peer: MeshDevice, admin: boolean): { mode: AssistMode; reason: string | null; maxPriority: AssistPriority } {
     const s = this.d.settings();
-    const controller = peer.permissions.command && admin;
+    const command = peer.permissions.command && this.d.ultra?.() !== false;
+    const controller = command && admin;
     const maxPriority: AssistPriority = controller ? 'urgent' : 'high';
     if (s.offer === 'off') return { mode: 'off', reason: 'This computer does not lend its AI', maxPriority };
-    if (!peer.permissions.assist && !peer.permissions.command) return { mode: 'off', reason: `${peer.name} may not ask this computer for help`, maxPriority };
+    if (!peer.permissions.assist && !command) return { mode: 'off', reason: `${peer.name} may not ask this computer for help`, maxPriority };
     if (!this.d.agentReady().ready) return { mode: 'off', reason: 'This computer has no AI ready', maxPriority };
     if (controller) return { mode: 'auto', reason: null, maxPriority };
     return { mode: s.offer, reason: null, maxPriority };
@@ -261,7 +264,7 @@ export class MeshAssist {
     if (a.mode === 'off') throw new CoreError('FORBIDDEN', a.reason ?? 'This computer does not help right now');
     const s = this.d.settings();
     const priority = lowerPriority(p.priority, a.maxPriority);
-    const controller = peer.permissions.command && p.admin;
+    const controller = peer.permissions.command && p.admin && this.d.ultra?.() !== false;
 
     if (p.followUp) {
       const prev = this.mine(peer, p.followUp);

@@ -94,3 +94,22 @@ describe('the FBRX app family', () => {
     }
   });
 });
+
+describe('Mesh by edition (2.5.0)', () => {
+  it('lets a paired device do the Pro things anywhere, and approve, lock or hand out work only on Ultra', async () => {
+    const pro = await makeKernel({ devMode: false });
+    const full = await makeKernel();
+    try {
+      const phone = { permissions: { status: true, chat: true, ask: true, approve: true, workspace: true, alerts: true, control: true, assist: false, command: true, network: false, sync: false } };
+      expect(pro.kernel.license.status().tier).not.toBe('ultra');
+      for (const p of ['status', 'chat', 'ask', 'workspace', 'alerts'] as const) expect(pro.kernel.mesh.may(phone, p)).toBe(true);
+      for (const p of ['approve', 'control', 'command'] as const) expect(pro.kernel.mesh.may(phone, p)).toBe(false);
+      expect(full.kernel.license.status().tier).toBe('blackhole');
+      for (const p of ['approve', 'control', 'command'] as const) expect(full.kernel.mesh.may(phone, p)).toBe(true);
+      expect(full.kernel.mesh.may({ permissions: { ...phone.permissions, approve: false } }, 'approve')).toBe(false);
+    } finally {
+      await pro.cleanup();
+      await full.cleanup();
+    }
+  });
+});

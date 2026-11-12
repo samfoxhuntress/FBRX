@@ -46,6 +46,9 @@ import {
 export const MOBILE_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: true, approve: true, workspace: true, alerts: true, control: false, assist: false, command: false, network: false, sync: false };
 // Computers may ask each other's AI for help (each computer's Mesh Assist settings still decide); controllers and FBRX
 // Sync are chosen by hand.
+/** What a paired device may do only on Ultra and fuller (MeshHost.ultra). */
+export const ULTRA_MESH_PERMISSIONS: ReadonlyArray<keyof MeshPermissions> = ['approve', 'control', 'command'];
+
 export const DESKTOP_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false, network: false, sync: false };
 const PERMISSION_KEYS = Object.keys(MOBILE_PERMISSIONS) as Array<keyof MeshPermissions>;
 const NO_PERMISSIONS = Object.fromEntries(PERMISSION_KEYS.map((k) => [k, false])) as unknown as MeshPermissions;
@@ -92,6 +95,11 @@ type OutboxItem =
   | { type: 'locate' };
 
 export interface MeshHost {
+  /**
+   * Whether this computer runs Ultra or fuller. Mesh comes with Pro: pairing, status, messages, alerts, notes and asking
+   * Fabrix. Approving from another device, lock and sleep, and handing out work as a controller come with Ultra.
+   */
+  ultra?: () => boolean;
   appVersion: string;
   deviceName: () => string;
   settings: () => {
@@ -956,9 +964,16 @@ export class MeshService {
     return { nonce: out.nonce, box: out.box };
   }
 
+  /** Whether a device may do something here: its permission, and for the Ultra ones (ULTRA_MESH_PERMISSIONS) the edition. */
+  may(d: Pick<MeshDevice, 'permissions'>, perm: keyof MeshPermissions): boolean {
+    if (!d.permissions[perm]) return false;
+    return !ULTRA_MESH_PERMISSIONS.includes(perm) || this.host.ultra?.() !== false;
+  }
+
   private async dispatch(d: MeshDevice, method: string, p: any): Promise<unknown> {
     const need = (perm: keyof MeshPermissions) => {
       if (!d.permissions[perm]) throw new CoreError('FORBIDDEN', `${d.name} is not allowed to do this (${perm})`);
+      if (!this.may(d, perm)) throw new CoreError('FEATURE_UNAVAILABLE', `Doing this from another device comes with FBRX Endpoint Ultra (${perm})`);
     };
     const actor = `mesh:${d.name}`;
     switch (method) {
@@ -974,7 +989,7 @@ export class MeshService {
           name: this.host.deviceName(),
           permissions: d.permissions,
           items: items.filter((i) => (i.type === 'alert' ? d.permissions.alerts : i.type === 'message' ? d.permissions.chat : true)),
-          approvals: d.permissions.approve ? this.approvalsFor(d.id) : [],
+          approvals: this.may(d, 'approve') ? this.approvalsFor(d.id) : [],
           jobs: [...this.jobs.values()].filter((j) => j.deviceId === d.id).map(publicJob),
           home: this.host.home ? await this.host.home() : null,
         };
