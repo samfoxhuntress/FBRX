@@ -1,5 +1,5 @@
 import si from 'systeminformation';
-import { TASK_PRIORITIES, TASK_STATUSES } from '@fbrx/shared';
+import { REPORTED_NAMES_NOTE, TASK_PRIORITIES, TASK_STATUSES, cleanName, quoteName } from '@fbrx/shared';
 import type { AlertEngine } from '../../alerts/alert-engine';
 import type { NetDiag } from '../../network/netdiag';
 import { stackText } from '../../network/stack-check';
@@ -262,39 +262,41 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
             const list = IS_WIN ? await d.net.printers() : ((await si.printer().catch(() => [])) as any[]).map((p) => ({ name: p.name, status: p.status, isDefault: !!p.default, port: p.uri ?? '', ip: null, jobs: 0, driver: p.model ?? '', shared: !!p.shared }));
             data = list;
             if (!list.length) lines.push('No printers are set up on this computer.');
-            for (const p of list) lines.push(`${p.name}${p.isDefault ? ' (default)' : ''}: ${p.status || 'status unknown'}${p.jobs ? `, ${p.jobs} job(s) waiting` : ''}${p.ip ? `, at ${p.ip}` : p.port ? `, port ${p.port}` : ''}${p.driver ? `, driver ${p.driver}` : ''}`);
+            for (const p of list) lines.push(`${quoteName(p.name)}${p.isDefault ? ' (default)' : ''}: ${cleanName(p.status) || 'status unknown'}${p.jobs ? `, ${p.jobs} job(s) waiting` : ''}${p.ip ? `, at ${cleanName(p.ip)}` : p.port ? `, port ${quoteName(p.port)}` : ''}${p.driver ? `, driver ${quoteName(p.driver)}` : ''}`);
             break;
           }
           case 'sound': {
             const list = (await si.audio().catch(() => [])) as any[];
             data = list;
             if (!list.length) lines.push('No sound devices were found (or this system does not report them).');
-            for (const a of list) lines.push(`${a.name}${a.default ? ' (default)' : ''}: ${[a.in ? 'input' : '', a.out ? 'output' : ''].filter(Boolean).join(' and ') || a.type || 'device'}${a.status ? `, ${a.status}` : ''}${a.interfaceType ? `, ${a.interfaceType}` : ''}`);
+            for (const a of list) lines.push(`${quoteName(a.name)}${a.default ? ' (default)' : ''}: ${[a.in ? 'input' : '', a.out ? 'output' : ''].filter(Boolean).join(' and ') || cleanName(a.type) || 'device'}${a.status ? `, ${cleanName(a.status)}` : ''}${a.interfaceType ? `, ${cleanName(a.interfaceType)}` : ''}`);
             break;
           }
           case 'bluetooth': {
             const b = await d.net.bluetooth();
             data = b;
-            lines.push(b.adapters.length ? `Adapter: ${b.adapters.join(', ')}` : IS_WIN ? 'No Bluetooth adapter found: it may be off, disabled or missing a driver.' : 'Adapter: not reported here.');
+            lines.push(b.adapters.length ? `Adapter: ${b.adapters.map((x) => quoteName(x)).join(', ')}` : IS_WIN ? 'No Bluetooth adapter found: it may be off, disabled or missing a driver.' : 'Adapter: not reported here.');
             if (!b.devices.length) lines.push('No paired devices.');
-            for (const x of b.devices) lines.push(`${x.name}: ${x.connected ? 'connected' : 'paired, not connected'}${x.battery != null ? `, battery ${x.battery}%` : ''} (${x.kind})`);
+            for (const x of b.devices) lines.push(`${quoteName(x.name)}: ${x.connected ? 'connected' : 'paired, not connected'}${x.battery != null ? `, battery ${x.battery}%` : ''} (${cleanName(x.kind)})`);
             break;
           }
           case 'screens': {
             const g = (await si.graphics().catch(() => ({ controllers: [], displays: [] }))) as any;
             data = g;
-            for (const c of g.controllers ?? []) lines.push(`Graphics: ${c.model}${c.vram ? `, ${c.vram} MB` : ''}${c.driverVersion ? `, driver ${c.driverVersion}` : ''}`);
+            for (const c of g.controllers ?? []) lines.push(`Graphics: ${quoteName(c.model)}${c.vram ? `, ${c.vram} MB` : ''}${c.driverVersion ? `, driver ${cleanName(c.driverVersion)}` : ''}`);
             if (!(g.displays ?? []).length) lines.push('No displays are reported.');
-            for (const x of g.displays ?? []) lines.push(`Display ${x.model || x.deviceName || '?'}${x.main ? ' (main)' : ''}: ${x.connection || 'connection unknown'}, ${x.currentResX && x.currentResY ? `${x.currentResX}×${x.currentResY}` : 'resolution unknown'}${x.currentRefreshRate ? ` at ${x.currentRefreshRate} Hz` : ''}`);
+            for (const x of g.displays ?? []) lines.push(`Display ${x.model || x.deviceName ? quoteName(x.model || x.deviceName) : '?'}${x.main ? ' (main)' : ''}: ${cleanName(x.connection) || 'connection unknown'}, ${x.currentResX && x.currentResY ? `${x.currentResX}×${x.currentResY}` : 'resolution unknown'}${x.currentRefreshRate ? ` at ${x.currentRefreshRate} Hz` : ''}`);
             break;
           }
           default: {
             const list = (await si.usb().catch(() => [])) as any[];
             data = list;
             if (!list.length) lines.push('No USB devices are reported.');
-            for (const u of list.slice(0, 60)) lines.push(`${u.name || 'USB device'}${u.manufacturer ? ` (${u.manufacturer})` : ''}${u.type ? `: ${u.type}` : ''}`);
+            for (const u of list.slice(0, 60)) lines.push(`${u.name ? quoteName(u.name) : 'USB device'}${u.manufacturer ? ` (made by ${quoteName(u.manufacturer)})` : ''}${u.type ? `: ${cleanName(u.type)}` : ''}`);
           }
         }
+        // Every kind but screens can carry a name someone nearby (or a device) chose.
+        if (lines.some((l) => l.includes('"'))) lines.push(REPORTED_NAMES_NOTE);
         return { output: lines.join('\n'), data };
       },
     }),
@@ -369,7 +371,7 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       async run(i) {
         const r = await d.net.traceroute(i.host, `tool-${Date.now()}`);
         return {
-          output: r.hops.map((h) => `${h.hop}. ${h.ip ?? '*'} ${h.name ? `(${h.name}) ` : ''}${h.avg != null ? `${h.avg} ms ` : ''}[${h.role}]${h.org ? ` ${h.org}` : ''}${h.location ? `, ${h.location}` : ''}`).join('\n') || 'No hops',
+          output: r.hops.map((h) => `${h.hop}. ${h.ip ?? '*'} ${h.name ? `(${quoteName(h.name)}) ` : ''}${h.avg != null ? `${h.avg} ms ` : ''}[${h.role}]${h.org ? ` ${quoteName(h.org)}` : ''}${h.location ? `, ${cleanName(h.location)}` : ''}`).join('\n') || 'No hops',
           data: r,
         };
       },
@@ -406,7 +408,7 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       async run() {
         const s = await d.net.scan(`tool-${Date.now()}`, undefined, 'Scan by Fabrix');
         return {
-          output: `${s.devices.length} devices on ${s.subnet}:\n${s.devices.map((x) => `- ${x.ip} ${x.typeLabel}${x.name ? ` "${x.name}"` : ''}${x.vendor ? ` (${x.vendor})` : ''}${x.ports.length ? ` ports ${x.ports.join(',')}` : ''}`).join('\n')}`,
+          output: `${s.devices.length} devices on ${s.subnet}:\n${s.devices.map((x) => `- ${x.ip} ${x.typeLabel}${x.name ? ` ${quoteName(x.name)}` : ''}${x.vendor ? ` (made by ${quoteName(x.vendor)})` : ''}${x.ports.length ? ` ports ${x.ports.join(',')}` : ''}`).join('\n')}${s.devices.some((x) => x.name || x.vendor) ? `\n${REPORTED_NAMES_NOTE}` : ''}`,
           data: s,
         };
       },
@@ -445,10 +447,11 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
         const r = await d.net.wifiChannels({ ultra: d.networkTools() });
         const c = r.connected;
         const lines = [
-          c ? `Connected to "${c.ssid}" on channel ${c.channel ?? '?'} (${c.band ?? '?'})${c.signalDbm !== null ? `, signal ${c.signalDbm} dBm` : ''}` : 'Not connected to Wi-Fi',
+          c ? `Connected to ${quoteName(c.ssid)} on channel ${c.channel ?? '?'} (${c.band ?? '?'})${c.signalDbm !== null ? `, signal ${c.signalDbm} dBm` : ''}` : 'Not connected to Wi-Fi',
           `${r.points.length} access points around`,
           ...r.bands.flatMap((b) => [`${b.band}: ${b.mine !== null ? `yours on ${b.mine}` : 'not used by you'}; best ${b.best?.channel ?? '—'}${b.width ? `; width ${b.width.mhz} MHz` : ''}`, ...b.advice.map((a) => `  - ${a}`)]),
           r.router ? `Router settings: http://${r.router}` : '',
+          c ? REPORTED_NAMES_NOTE : '',
         ];
         return { output: lines.filter(Boolean).join('\n'), data: { connected: r.connected, bands: r.bands.map(({ channels: _c, ...b }) => b), router: r.router } };
       },

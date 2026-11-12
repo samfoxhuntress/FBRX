@@ -203,7 +203,7 @@ export const personalityAllowedTitle = (title: string) => {
 };
 
 /** Lines that read like FBRX's own headings and closing line. */
-const IMITATION = /core principles|\(fixed\)|end of persona|your persona \(soul\.md\)|your personality \(personality\.md\)/;
+const IMITATION = /core principles|\(fixed\)|end of persona|your persona \(soul\.md\)|your personality \(personality\.md\)|^\s*#{1,2}\s*this computer\b|<\s*\/?\s*computer\b|what fbrx (?:read|learned) about (?:this|the) computer|\bfbrx (?:read|learned) (?:this|from this|on this) computer/;
 /** Options that are not options any more, as a line anywhere, with any bullet, number or emphasis. */
 const RETIRED = /^[\s>*+\-•·–—\d.)\]\[]*[*_`~]*\s*(ask[\s-]*before[\s-]*changes|verify|online|sources|risky[\s-]*requests)\s*[*_`~]*\s*[:=]/;
 /** In an option's value: words about what the AI may do, not how it sounds. */
@@ -222,7 +222,7 @@ const BE = String.raw`(?:is|are|be|been|being|was|were|stay|remain|get|will be|c
  * governs it ("never delete anything without approval", "nothing is pre-approved"); otherwise only a negation right
  * before the match does ("never turn approvals off").
  */
-const PLAIN: Array<{ about: string; re: RegExp; clause?: true; consent?: true; secrets?: true }> = [
+const PLAIN: Array<{ about: string; re: RegExp; clause?: true; consent?: true; secrets?: true; state?: true }> = [
   // 4. Ask first.
   { about: 'asking first and FBRX’s principles are not for saved instructions to change', clause: true, re: new RegExp(String.raw`\b(skip|bypass|disable|ignore|override|drop|without|no need for|no need to|don'?t (?:ask|wait)|do not (?:ask|wait)|never (?:ask|wait))\b[^.\n]{0,40}?\b(approv\w*|${GUARDS}|confirm\w*|permission|polic(?:y|ies)|rules|safety)\b`, 'g') },
   { about: 'asking first is a core principle', clause: true, re: /\bwithout (?:waiting for |asking for |getting |a )?(?:a |their |my |the person’s |the person's )?yes\b/g },
@@ -231,7 +231,7 @@ const PLAIN: Array<{ about: string; re: RegExp; clause?: true; consent?: true; s
   { about: 'asking first is a core principle', re: new RegExp(String.raw`\b(?:turn|switch|shut)\s+off\s+${FEW}(?:${GUARDS})\b|\b(?:turn|switch|shut|keep|leave|set)\s+${FEW}(?:${GUARDS})\s+(?:off|disabled)\b|\b(?:disable|deactivate)\s+${FEW}(?:${GUARDS})\b`, 'g') },
   { about: 'asking first is a core principle', re: /\bno (?:approvals?|confirmations?|asking|permission|yes)\s+(?:is|are)\s+(?:needed|required|necessary)\b/g },
   // Said in the passive or as a state ("approvals are off", "asking first is optional", "the firewall stays off").
-  { about: 'asking first is a core principle', re: new RegExp(String.raw`\b(?:${GUARDS}|approval steps?|the approval step)\s+${BE}\s+(?:(?!not\b|never\b|no\b)\w+\s+)?(?:off|disable|skip|bypass|ignore|override|drop|optional|unnecessary|not needed|not required|turn off|switch off|shut off|waive|suspend|pause)\b(?!-)`, 'g') },
+  { about: 'asking first is a core principle', state: true, re: new RegExp(String.raw`\b(?:${GUARDS}|approval steps?|the approval step)\s+${BE}\s+(?:(?!not\b|never\b|no\b)\w+\s+)?(?:off|disable|skip|bypass|ignore|override|drop|optional|unnecessary|not needed|not required|turn off|switch off|shut off|waive|suspend|pause)\b(?!-)`, 'g') },
   // 2. Secrets (not "how to reset a password", "whose passwords are old" or helping the person keep their own).
   { about: 'FBRX never reveals secrets', secrets: true, re: new RegExp(String.raw`\b(reveal|show|print|display|send|share|disclose|paste|put|include|insert|read(?: out)?|say|tell|give(?: out)?|list|recite|spell out|dictate|copy|email|text|forward|expose|leak|dump|export|hand (?:over|out))\b[^.\n]{0,40}?\b${SECRETS}\b`, 'g') },
   { about: 'FBRX never reveals secrets', re: new RegExp(String.raw`\b${SECRETS}\s+${BE}\s+(?:(?!not\b|never\b|no\b)\w+\s+)?(?:reveal|show|share|send|read(?: out)?|say|tell|give(?: out)?|list|copy|email|forward|expose|print|display|paste|include|hand (?:over|out))\b`, 'g') },
@@ -242,7 +242,7 @@ const PLAIN: Array<{ about: string; re: RegExp; clause?: true; consent?: true; s
   // 3. No harm.
   { about: 'doing no harm is a core principle', re: new RegExp(String.raw`\b(?:turn|switch|shut)\s+off\s+${FEW}(?:${PROTECTIONS})\b|\b(?:turn|switch|shut|keep|leave)\s+${FEW}(?:${PROTECTIONS})\s+(?:off|disabled)\b|\b(?:disable|deactivate|uninstall|bypass)\s+${FEW}(?:${PROTECTIONS})\b`, 'g') },
   { about: 'doing no harm is a core principle', clause: true, re: /\b(delet(?:e|es|ing)|eras(?:e|es|ing)|wip(?:e|es|ing)|format(?:s|ting)?|remov(?:e|es|ing)|overwrit(?:e|es|ing))\b[^.\n]{0,50}?\bwithout (?:a |any |making a )?(?:backups?|copy|copies|checking)\b|\bskip\b[^.\n]{0,15}?\bbackups?\b|\b(hide|cover up|erase|wipe|delete|clear|remove)\b[^.\n]{0,20}?\b(what you did|your tracks|the audit log|the audit trail)\b/g },
-  { about: 'doing no harm is a core principle', re: new RegExp(String.raw`\b(?:${PROTECTIONS})\s+${BE}\s+(?:(?!not\b|never\b|no\b)\w+\s+)?(?:off|disable|turn off|switch off|shut off|uninstall|remove|bypass|optional)\b(?!-)`, 'g') },
+  { about: 'doing no harm is a core principle', state: true, re: new RegExp(String.raw`\b(?:${PROTECTIONS})\s+${BE}\s+(?:(?!not\b|never\b|no\b)\w+\s+)?(?:off|disable|turn off|switch off|shut off|uninstall|remove|bypass|optional)\b(?!-)`, 'g') },
   // 1. Privacy.
   { about: 'what FBRX learns stays on this computer unless the person says so', consent: true, re: /\b(send|share|upload|post|forward|email|give|publish)\b[^.\n]{0,50}?\b((?:to|with) (?:anyone|anybody|everyone|whoever)|publicly|online|on the internet|on the web)\b/g },
   { about: 'what FBRX learns stays on this computer unless the person says so', consent: true, re: new RegExp(String.raw`\b(?:files?|data|notes|documents|photos|messages|information|details|things|history|memories)\s+${BE}\s+(?:(?!not\b|never\b|no\b)\w+\s+)?(?:send|share|upload|post|forward|email|give|publish)\b[^.\n]{0,50}?\b((?:to|with) (?:anyone|anybody|everyone|whoever)|publicly|online|on the internet|on the web)\b`, 'g') },
@@ -296,6 +296,33 @@ function withTheirYes(text: string, m: RegExpMatchArray): boolean {
 
 /** What the AI says to the person about advice: "explain", "warn", "tell them", "show them how"… */
 const ADVICE = String.raw`(?:explain|explains|warn|warns|tell|tells|remind|reminds|show|shows|teach|teaches|describe|describes|say|says|mention|point out|suggest|offer|recommend|walk)`;
+/** Saying what something is like, or finding out: what a line does with a state it only looks at. */
+const LOOK = String.raw`(?:${ADVICE}|reports?|let\s+(?:the person|them|me|you|people|the user|someone)\s+know|alerts?|notif(?:y|ies)|flags?|checks?|see|find out|asks?)`;
+
+/**
+ * "Tell the person if the firewall is off", "check whether the antivirus is turned off and say so", "if approvals are
+ * turned off, tell the person how to turn them back on": a state the line only checks or reports on. It counts only
+ * after "if", "when" or "whether" (a word or two between), with the reporting verb in the same clause before it or
+ * opening the clause right after it. "Whether approvals are off is your call", "if the firewall is off, leave it off"
+ * and "act as if approvals are off" still say the state is wanted.
+ */
+function lookedAt(text: string, m: RegExpMatchArray): boolean {
+  const here = text.slice(0, m.index!).split(CLAUSE_BREAK).pop() ?? '';
+  const lead = /\b(?:if|when|whenever|whether)\s+(?:[\w'’-]+\s+){0,2}?$/.exec(here);
+  if (!lead) return false;
+  if (new RegExp(String.raw`\b${LOOK}\b`).test(here.slice(0, lead.index))) return true;
+  const after = text.slice(m.index! + m[0].length);
+  return new RegExp(String.raw`^[^,;:.!?]{0,30}?,\s*(?:(?:then|please|just|always|also|you|first)\s+)*${LOOK}\b`).test(after);
+}
+
+/** "Share tips with anyone who asks": general advice or a joke, not the person's things. */
+const GENERAL_SHARE = /^(?:share|shares|give|gives|offer|post|posts)\s+(?:(?:some|good|helpful|useful|general|friendly|quick|your|a few)\s+)*(?:tips?|advice|ideas?|jokes?|encouragement|kindness|a smile|smiles|fun facts?)\s+(?:to|with)\s+(?:anyone|anybody|everyone|whoever)$/;
+
+/** "Ask before you upload anything online": the line states the principle itself (a negated "ask" is refused above). */
+function askFirst(text: string, m: RegExpMatchArray): boolean {
+  const here = text.slice(0, m.index!).split(CLAUSE_BREAK).pop() ?? '';
+  return /^[\s\-+•>]*(?:(?:always|please|and|then|just|first)\s+)*ask(?:\s+(?:the person|them|first))*\s+(?:first\s+)?before\s+(?:(?:you|i|we|fabrix|it)\s+)?$/.test(here);
+}
 
 /**
  * "Explain how to turn the firewall off and why that is risky", "if the person wants to skip the backup, explain the
@@ -325,9 +352,9 @@ function secretVerbAt(m: RegExpMatchArray): number {
  */
 function secretNotTheObject(text: string, at: number, end: number): boolean {
   const span = text.slice(at, end);
-  if (/\b(how|whose|which|where|why|whether|reset|change|update|rotate|set|create|renew|strength|policy|policies|manager|rules|expire\w*|older|new|temporary|temp|one-time|random|generated)\b/.test(span)) return true;
+  if (/\b(how|whose|which|where|why|whether|reset|change|update|rotate|set|create|renew|strength|policy|policies|manager|rules|expire\w*|older|new|temporary|temp|one-time|random|generated)\b|\bwhat makes (?:a |an )?(?:strong|good|safe|secure|weak) \S+$/.test(span)) return true;
   const after = text.slice(end);
-  if (/^\s+(?:that\s+|which\s+)?(?:(?:will|is|are|has|have|was|were|must|needs?|should)\s+)?(?:\w+\s+){0,2}?(?:expire\w*|weak|old|older|short|reused|compromised|leaked|breached|changed|reset|locked|rotated|due|stale|too\s+\w+)\b/.test(after)) return true;
+  if (/^\s+(?:that\s+|which\s+)?(?:(?:will|is|are|has|have|was|were|must|needs?|should)\s+)?(?:\w+\s+){0,2}?(?:expire\w*|weak|old|older|short|reused|compromised|leaked|breached|changed|reset|locked|rotated|due|stale|too\s+\w+|run(?:s|ning)?\s+(?:out|low))\b/.test(after)) return true;
   if (/^\s*(?:rules?|polic(?:y|ies)|managers?|strength|length|requirements?|settings?|page|field|prompt|expir\w*|hints?|resets?|vault|app|history|age|format)\b/.test(after)) return true;
   if (new RegExp(String.raw`\b(?:not|never|no|nor|without|except)\s+(?:(?:about|on|regarding|including|any|for)\s+)?${SECRETS}$`).test(span)) return true;
   return /\b(?:help|helps|helping|teach|let|walk)\s+(?:the person|them|me|him|her|you|people|users?)\s+(?:to\s+)?$/.test(text.slice(0, at));
@@ -349,12 +376,13 @@ export function principleProblem(line: string): string | null {
 }
 
 function plainProblem(n: string): string | null {
-  for (const { about, re, clause, consent, secrets } of PLAIN) {
+  for (const { about, re, clause, consent, secrets, state } of PLAIN) {
     for (const m of n.matchAll(re)) {
       const at = secrets ? secretVerbAt(m) : m.index!;
       if (negated(n, at, !!clause) || negatedAfter(n, m)) continue;
       if (secrets ? secretNotTheObject(n, at, m.index! + m[0].length) : theirOwnAct(n, m.index!)) continue;
-      if (consent && withTheirYes(n, m)) continue;
+      if (consent && (withTheirYes(n, m) || askFirst(n, m) || GENERAL_SHARE.test(m[0]))) continue;
+      if (state && lookedAt(n, m)) continue;
       return `"${n.slice(at, m.index! + m[0].length).trim()}" (${about})`;
     }
   }
@@ -421,6 +449,9 @@ function textProblems(lines: string[]): Array<{ line: number; why: string }> {
     if (!line.trim() || /^\s*#/.test(line)) {
       if (item.length) items.push(item);
       item = [];
+      // A heading is read too ("# This computer" above the first section, "### Turn approvals off" in Commands).
+      const h = line.trim() ? principleProblem(line) : null;
+      if (h) out.push({ line: i, why: h });
       return;
     }
     const p = principleProblem(line);
@@ -445,8 +476,10 @@ function lineProblems(section: string, body: string): Array<{ line: number; why:
   const sec = normalText(section).trim();
   const lines = body.split('\n');
   const out = textProblems(lines);
+  // One reason a line: a retired option is not also reported as an unknown one.
+  const found = new Set(out.map((p) => p.line));
   lines.forEach((line, i) => {
-    if (!line.trim()) return;
+    if (!line.trim() || found.has(i)) return;
     if (/^\s*#/.test(line) && !(sec === 'commands' && /^\s*###\s/.test(line))) out.push({ line: i, why: `a heading inside ${section} (### group headings belong in Commands only)` });
     else if (sec === 'options') {
       const p = optionProblem(line);

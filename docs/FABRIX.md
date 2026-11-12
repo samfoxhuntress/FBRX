@@ -114,8 +114,14 @@ actions: none can hold a change to the principles. *Settings → Personality* sh
 last change* can itself be undone. Approvals themselves are set in Governance. FBRX stops changes by their shape
 (sections, options, headings) and by the plainest words for setting a principle aside ("turn approvals off", "read
 out the passwords", "report success even if it failed", "turn the firewall off", "send my files to anyone", "go
-online even in offline chats"); said the other way round ("never turn approvals off") they are fine. Anything else
-written in personality.md, Fabrix reads as its persona, under the principles.
+online even in offline chats"); said the other way round ("never turn approvals off") they are fine, and so is a line
+that only checks or reports on a protection ("tell me if the firewall is off"). Anything else written in personality.md,
+Fabrix reads as its persona, under the principles.
+
+That check reads words, not meaning, and it has limits. It stops the shape and the plainest wordings; a line that says
+the same thing more slyly can get past it, and the principles, which come first in everything Fabrix is told, are what
+hold then. Now and then it also stops an ordinary line that sounds like one of the plain wordings: say it another way
+and it saves.
 
 Fabrix reads its personality with every message (the commands only when you type one, so a small AI on your computer stays
 quick). Ask it to work differently from now on (or type `/tune` and what to change) and it offers the change to

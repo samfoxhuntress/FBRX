@@ -1,4 +1,6 @@
 import type { SystemInventory } from './ext';
+import { INVISIBLE_CHARS } from './names';
+import { normalText } from './personality';
 
 /**
  * Learning your computer: after setup, and each time someone picks a new AI, FBRX reads what the AI needs to know
@@ -98,9 +100,15 @@ export const PROFILE_VERSION = 1;
 /** A profile older than this is learned again, quietly, at a start. */
 export const PROFILE_MAX_AGE_DAYS = 7;
 
-/** A name that reads like an instruction to the AI rather than a name: left out of the profile. */
+/** A profile is never longer than this (most are under 900 characters); what does not fit is cut, a line at a time. */
+export const PROFILE_MAX_CHARS = 1500;
+
+/**
+ * A name that reads like an instruction to the AI rather than a name, or like FBRX's own headings and notices: left out
+ * of the profile. It is read as FBRX's checks read text (look-alike letters as Latin, invisible characters out).
+ */
 const INSTRUCTION_LIKE =
-  /\b(ignore|disregard|forget|override)\b|\byou (are|must|should|will|can)\b|\b(instructions?|prompts?|approv(e|al|als)|jailbreak)\b|\b(system|assistant|user|developer)\s*:|\b(run|execute|call|open|send|delete)\s+(this|the|a|all|it|now|pc\.|net\.|fs\.|fbrx\.)|\b[a-z]+\.[a-z_]+\s*\(|https?:\/\//i;
+  /core principles|\(fixed\)|end of persona|guardian notice|fbrx note|this computer|#{2,}|\b(ignore|disregard|forget|override)\b|\byou (are|must|should|will|can)\b|\b(instructions?|prompts?|approv(e|al|als)|jailbreak)\b|\b(system|assistant|user|developer)\s*:|\b(run|execute|call|open|send|delete)\s+(this|the|a|all|it|now|pc\.|net\.|fs\.|fbrx\.)|\b[a-z]+\.[a-z_]+\s*\(|https?:\/\//i;
 
 /**
  * A name from the hardware or the network, made safe to put in the AI's instructions: one short line of plain
@@ -111,12 +119,12 @@ export function profileName(v: unknown, max = 40): string | null {
   const s = String(v ?? '')
     .normalize('NFKC')
     // Control, zero-width and direction-changing characters, and what could open or close a block.
-    .replace(/[\u0000-\u001f\u007f-\u009f\u200b-\u200f\u2028-\u202e\u2060-\u206f\ufeff]/g, ' ')
+    .replace(INVISIBLE_CHARS, ' ')
     .replace(/[<>{}[\]`"\\|]/g, '')
     .replace(/\s+/g, ' ')
     .trim();
   if (!s) return null;
-  if (INSTRUCTION_LIKE.test(s)) return '(left out: it reads like an instruction)';
+  if (INSTRUCTION_LIKE.test(s) || INSTRUCTION_LIKE.test(normalText(s))) return '(left out: it reads like an instruction)';
   return s.length > max ? `${s.slice(0, max - 1).trimEnd()}…` : s;
 }
 
@@ -145,10 +153,10 @@ export function computerProfile(f: ComputerFacts, o: { cloud: boolean }): string
     lines.push(`- Processor: ${list([q(i.cpu.name, 60), i.cpu.cores && `${i.cpu.cores} cores`, i.cpu.threads && `${i.cpu.threads} threads`, i.cpu.maxGHz && `up to ${i.cpu.maxGHz} GHz`])}`);
     const mods = i.memory.modules;
     lines.push(`- Memory: ${size(i.memory.totalBytes)}${mods.length ? ` (${list([`${mods.length}${i.memory.slots ? ` of ${i.memory.slots}` : ''} slots used`, profileName(mods[0]?.type, 12), mods[0]?.mhz && `${mods[0].mhz} MHz`])})` : ''}`);
-    const screens = i.displays.map((x) => list([x.width && x.height && `${x.width}×${x.height}`, x.hz && `at ${x.hz} Hz`, x.main && '(main)'], ' ')).filter(Boolean);
+    const screens = i.displays.slice(0, 4).map((x) => list([x.width && x.height && `${x.width}×${x.height}`, x.hz && `at ${x.hz} Hz`, x.main && '(main)'], ' ')).filter(Boolean);
     const shown = i.displays.length ? `${i.displays.length} screen${i.displays.length === 1 ? '' : 's'}${screens.length ? `: ${screens.join(', ')}` : ''}` : 'no screens reported';
-    lines.push(`- Graphics: ${list([...i.graphics.map((g) => list([q(g.name, 48), g.vramMB && size(g.vramMB * 1024 ** 2)], ' ')), shown])}`);
-    const drives = i.drives.map((d) => list([size(d.bytes), profileName(d.kind, 16), d.health && `(health ${profileName(d.health, 16)})`], ' '));
+    lines.push(`- Graphics: ${list([...i.graphics.slice(0, 3).map((g) => list([q(g.name, 48), g.vramMB && size(g.vramMB * 1024 ** 2)], ' ')), shown])}`);
+    const drives = i.drives.slice(0, 6).map((d) => list([size(d.bytes), profileName(d.kind, 16), d.health && `(health ${profileName(d.health, 16)})`], ' '));
     const volumes = i.volumes.slice(0, 6).map((v) => `${profileName(v.mount, 24)} had ${size(v.bytes - v.usedBytes)} free of ${size(v.bytes)}`);
     lines.push(`- Storage: ${list([drives.length ? drives.join(', ') : null, volumes.length ? `when learned, ${volumes.join(', ')}` : null], '; ') || 'not reported'}`);
     lines.push(`- Battery: ${i.battery ? list([i.battery.healthPct && `health ${i.battery.healthPct}% of new`, i.battery.cycles && `${i.battery.cycles} cycles`]) || 'yes' : 'none (runs on mains power)'}`);
@@ -174,7 +182,13 @@ export function computerProfile(f: ComputerFacts, o: { cloud: boolean }): string
     lines.push(`- FBRX: ${list([`FBRX OS ${x.version}`, x.edition, x.mode === 'advanced' ? 'the Advanced menu' : 'the Simple menu', x.persona && `persona ${q(x.persona, 40)}`, x.kits.length && `toolkits ${x.kits.slice(0, 6).join(', ')}`, `${x.tools} tools`, x.newChatsOffline && 'new chats start offline'])}`);
   }
   if (f.agent) lines.push(`- You: ${list([q(f.agent.label, 48), `running on ${f.agent.where}`], ' ')}`);
-  return lines.join('\n');
+  // Within PROFILE_MAX_CHARS, whatever the hardware reports: whole lines, the last ones left out first.
+  const kept: string[] = [];
+  for (const l of lines) {
+    if ([...kept, l].join('\n').length > PROFILE_MAX_CHARS - 2) break;
+    kept.push(l);
+  }
+  return kept.length < lines.length ? `${kept.join('\n')}\n…` : kept.join('\n');
 }
 
 /** One line about the computer, for the person: "A Dell XPS 13 laptop with Windows 11, 16 GB of memory and 120 GB free, on Wi-Fi." */

@@ -1,4 +1,4 @@
-import type { PingResult, StackLayer, StackReport, StackStep } from '@fbrx/shared';
+import { cleanName, quoteName, type PingResult, type StackLayer, type StackReport, type StackStep } from '@fbrx/shared';
 
 /**
  * The full network check ("why is my network not working?"): every layer from the cable or radio up to the site the
@@ -129,7 +129,7 @@ export function stackReport(f: StackFacts, has: (tool: string) => boolean, at = 
     if (f.wifi && primary && wireless(primary)) {
       const dbm = f.wifi.signalDbm;
       const pct = f.wifi.signalPct;
-      found.push(`Wi-Fi: joined "${f.wifi.ssid}"${f.wifi.band ? ` (${f.wifi.band})` : ''}${dbm != null ? `, signal ${dbm} dBm (${signalWord(dbm)})` : pct != null ? `, signal ${pct}%` : ''}.`);
+      found.push(`Wi-Fi: joined ${quoteName(f.wifi.ssid)}${f.wifi.band ? ` (${f.wifi.band})` : ''}${dbm != null ? `, signal ${dbm} dBm (${signalWord(dbm)})` : pct != null ? `, signal ${pct}%` : ''}. The name in quotes is as the network reports it.`);
       if ((dbm != null && dbm < -75) || (dbm == null && pct != null && pct < 35)) {
         status = 'warn';
         found.push('The signal is weak: too far from the router, or walls and appliances in the way. Drops and slow pages follow.');
@@ -138,20 +138,20 @@ export function stackReport(f: StackFacts, has: (tool: string) => boolean, at = 
       }
     }
     for (const i of up.filter((x) => !wireless(x))) {
-      found.push(`${i.name}: connected${i.speedMbps ? ` at ${i.speedMbps >= 1000 ? `${i.speedMbps / 1000} Gbps` : `${i.speedMbps} Mbps`}` : ''}.`);
+      found.push(`${cleanName(i.name)}: connected${i.speedMbps ? ` at ${i.speedMbps >= 1000 ? `${i.speedMbps / 1000} Gbps` : `${i.speedMbps} Mbps`}` : ''}.`);
       if (i.speedMbps != null && i.speedMbps > 0 && i.speedMbps <= 100) {
         status = 'warn';
-        found.push(`${i.name} runs at ${i.speedMbps} Mbps: a damaged cable, a loose plug or an old port often does that.`);
+        found.push(`${cleanName(i.name)} runs at ${i.speedMbps} Mbps: a damaged cable, a loose plug or an old port often does that.`);
         fix.push('Try another cable and another port on the router or switch.');
       }
     }
-    if (!found.length) found.push(`${primary?.name ?? 'An adapter'} is connected.`);
+    if (!found.length) found.push(`${primary ? cleanName(primary.name) : 'An adapter'} is connected.`);
     step('physical', { status, found, fix, next, headline: status === 'warn' ? found.find((x) => /weak|runs at/.test(x)) : undefined });
   }
 
   // 2. Link: the router within reach on the local network.
   if (!f.gateway) {
-    step('link', { status: 'ok', found: [`Joined the network on ${primary?.name ?? 'an adapter'}; there is no router address to check yet (the address step says why).`], fix: [] });
+    step('link', { status: 'ok', found: [`Joined the network on ${primary ? cleanName(primary.name) : 'an adapter'}; there is no router address to check yet (the address step says why).`], fix: [] });
   } else if (f.gatewayMac || (f.gatewayPing?.received ?? 0) > 0) {
     step('link', { status: 'ok', found: [`The router (${f.gateway}) answers on the local network${f.gatewayMac ? ` (its hardware address ${f.gatewayMac})` : ''}.`], fix: [] });
   } else {

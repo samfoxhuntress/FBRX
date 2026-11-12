@@ -1,4 +1,4 @@
-import { newId, type GuardianFinding, type ToolInvokeResult } from '@fbrx/shared';
+import { cleanToolText, newId, type GuardianFinding, type ToolInvokeResult } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { AuditLog } from '../audit/audit-log';
 import type { Logger } from '../logger';
@@ -153,7 +153,8 @@ export class ToolGate {
         runId: ctx.runId ?? null,
         signal: controller.signal,
       });
-      const redacted = this.d.redactor.redact(out.output);
+      // Invisible and direction-changing characters go, and text dressed as FBRX's own notice is marked as the output's.
+      const redacted = this.d.redactor.redact(cleanToolText(out.output));
       const outputFindings = this.d.guardian.scanOutput(redacted.text);
       const durationMs = Date.now() - started;
       this.d.audit.append({

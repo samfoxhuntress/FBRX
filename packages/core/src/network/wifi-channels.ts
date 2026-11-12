@@ -1,4 +1,4 @@
-import type { WifiAccessPoint, WifiBand, WifiBandReport, WifiChannelLoad } from '@fbrx/shared';
+import { quoteName, type WifiAccessPoint, type WifiBand, type WifiBandReport, type WifiChannelLoad } from '@fbrx/shared';
 
 /**
  * The Wi-Fi channel planner: how busy each channel is with the networks around you, which channel your network
@@ -65,8 +65,8 @@ export function bandReport(band: WifiBand, points: WifiAccessPoint[], o: { ultra
     const off24 = band === '2.4 GHz' && !CLEAR24.includes(mine.channel);
     if (off24) advice.push(`Channel ${mine.channel} overlaps its neighbors on both sides. Use 1, 6 or 11: they are the only 2.4 GHz channels that do not overlap.`);
     if (now && best.channel !== mine.channel && (off24 || now.load - best.load >= 0.3)) {
-      advice.push(`Move "${mine.ssid}" from channel ${mine.channel} to ${best.channel}: ${best.networks ? `${plural(best.networks, 'network')} there` : 'nobody else is there'}, against ${plural(now.networks, 'network')} on ${mine.channel}${now.load > 1 ? ', several of them loud' : ''}.`);
-    } else if (now) advice.push(`Channel ${mine.channel} is a good choice for "${mine.ssid}": no channel nearby is clearly quieter.`);
+      advice.push(`Move ${quoteName(mine.ssid)} from channel ${mine.channel} to ${best.channel}: ${best.networks ? `${plural(best.networks, 'network')} there` : 'nobody else is there'}, against ${plural(now.networks, 'network')} on ${mine.channel}${now.load > 1 ? ', several of them loud' : ''}.`);
+    } else if (now) advice.push(`Channel ${mine.channel} is a good choice for ${quoteName(mine.ssid)}: no channel nearby is clearly quieter.`);
     if (mine.signalDbm < -70) advice.push(`Your signal is weak here (${mine.signalDbm} dBm): moving closer to the router, or a mesh node or access point nearer this room, helps more than any channel.`);
   } else if (best) advice.push(`If you have a ${band} network, channel ${best.channel} is the quietest here.`);
   if (band === '2.4 GHz' && mine && points.some((p) => p.mine && p.band !== '2.4 GHz')) {

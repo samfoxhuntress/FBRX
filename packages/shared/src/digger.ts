@@ -12,7 +12,7 @@ import type { ProviderConfig } from './settings';
 
 export const DIGGER_NAME = 'FBRX Digger';
 /** Digger's own version: its releases are tagged digger-v<version>. */
-export const DIGGER_VERSION = '1.2.0';
+export const DIGGER_VERSION = '1.2.1';
 
 export type AppFlavor = 'os' | 'digger';
 

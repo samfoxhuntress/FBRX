@@ -39,6 +39,8 @@ const INJECTION_MARKERS = [
   /<\s*\/?\s*system\s*>/i,
   /reveal (your|the) (system prompt|instructions|api key|secrets?)/i,
   /exfiltrate|send (the|all) (secrets|credentials|passwords) to/i,
+  // FBRX's own notice to the AI, or a note claiming to be FBRX's, inside what a tool read.
+  /\[\s*(?:text in this output that calls itself an )?fbrx (?:guardian )?notice|\(\s*fbrx note\s*:/i,
 ];
 
 export type ModelReviewer = (tool: ToolSpec, input: unknown) => Promise<GuardianFinding[]>;

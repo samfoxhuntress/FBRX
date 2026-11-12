@@ -8,7 +8,8 @@ design assumes the model can be wrong or manipulated and puts every action behin
 | Boundary | Control |
 | --- | --- |
 | Model → workstation | Every tool call passes the governance pipeline: license, schema validation, rate limit, policy (hard constraints → rules → risk defaults), guardian, human approval, redaction, audit |
-| Untrusted content → model | Tool output (files, web pages, API responses) is scanned for prompt-injection language and handed to the model explicitly marked as untrusted data; any tool call whose input carries such language, or any other guardian warning, requires human approval with the finding shown |
+| Untrusted content → model | Tool output (files, web pages, API responses) is scanned for prompt-injection language and handed to the model explicitly marked as untrusted data; any tool call whose input carries such language, or any other guardian warning, requires human approval with the finding shown. Before the model reads any tool output, invisible and direction-changing characters are removed, and text dressed as FBRX's own notice to the AI is marked as the output's |
+| Names someone else sets → model | Bluetooth, sound, USB, screen and printer names, devices found on the network, Wi-Fi network names and the names of routers in a trace are printed cleaned (no control characters, line breaks or direction marks), cut to 64 characters and always in quotes with their own quote marks escaped, with a line saying anyone nearby can set them |
 | Plugin → workstation | Separate process, Node permission model (files, processes, addons), network and process-control modules removed, all capabilities brokered and permission-checked ([details](PLUGINS.md#sandbox)) |
 | Renderer → core | Sandboxed, context-isolated renderer with a strict CSP; only the `window.fbrx` bridge, which routes through the same API and origin checks as everything else |
 | Local scripts → core | Local API on 127.0.0.1 only (remote opt-in), bearer tokens (full / agent-scoped), Host-header checks against DNS rebinding |
@@ -80,9 +81,6 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
 * **FBRX/1** (`cli.exec`, `cli.complete`) is reserved for the person at the computer. It calls the same core methods
   as the app (so policy, locks, validation and audit all apply) and validates configuration commits against the
   settings schema and the organization's locked paths before applying them.
-* The Silly Goose's pointer grab on Windows runs a small PowerShell helper (started with the goose, ended when it
-  leaves) that only moves the mouse pointer to coordinates sent by the goose's own window, for at most about three
-  seconds per grab. It is never started when Fun extras are off.
 
 ## Copy & migrate
 
