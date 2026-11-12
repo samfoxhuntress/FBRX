@@ -275,6 +275,8 @@ function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig
         const v = d.interfaces.find((x) => x.name === currentIface.name);
         iface = `${currentIface.parent}.${tag}`;
         if (v) Object.assign(v, { name: iface, vlanId: tag });
+        // Every network on that VLAN moves with it.
+        for (const other of d.networks) if (other.interface === currentIface.name) other.interface = iface;
         n.interface = iface;
       }
       d.networks[index] = n;

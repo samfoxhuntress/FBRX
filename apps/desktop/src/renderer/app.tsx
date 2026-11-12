@@ -307,6 +307,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const [forceOnboarding, setForceOnboarding] = useState(false);
   // Learning your computer, on the full screen after setup and for each new AI.
   const learningScreen = useLearningScreen();
+  // FBRX Digger follows FBRX Endpoint's edition while open too: it locks again if Endpoint drops below Ultra.
+  const diggerLicense = useCore('license.status', undefined, ['license.changed'], DIGGER ? 15_000 : undefined);
   // The Essentials walkthrough: closed for this window once finished or skipped; it waits for the start-up animation.
   const [tourClosed, setTourClosed] = useState(false);
   const [tourReady, setTourReady] = useState(false);
@@ -446,7 +448,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const s = settings.settings;
   const showSplash = firstStart && s.appearance.splash;
   // FBRX Digger, without Endpoint Ultra on this computer: what it needs.
-  if (DIGGER && !atLeast(tier, 'ultra')) return <DiggerLocked />;
+  if (DIGGER && !atLeast(diggerLicense.data?.tier ?? tier, 'ultra')) return <DiggerLocked />;
   if (!DIGGER && (!s.general.onboardingComplete || forceOnboarding)) {
     return <Onboarding status={status} onDone={() => setForceOnboarding(false)} />;
   }

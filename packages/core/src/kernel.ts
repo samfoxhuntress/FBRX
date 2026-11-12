@@ -3,6 +3,8 @@ import { cpus, freemem, hostname, loadavg, userInfo, platform as osPlatform, arc
 import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
+  APP_IDS,
+  FBRX_APPS,
   LICENSE_FILE_NAME,
   decodeLicenseUnverified,
   PRODUCT_NAME,
@@ -347,7 +349,13 @@ export class Kernel {
     this.passwords = new Passwords(this.db, this.vault);
     this.policy = new PolicyEngine(
       this.db,
-      () => ({ ...this.platform.specialDirs(), workspace: this.paths.workspace, data: this.paths.root }),
+      () => ({
+        ...this.platform.specialDirs(),
+        workspace: this.paths.workspace,
+        data: this.paths.root,
+        // The other FBRX apps' data folders, beside this one's.
+        appData: this.platform.shell === 'desktop' && this.platform.appsDir ? APP_IDS.map((id) => join(this.platform.appsDir!, FBRX_APPS[id].folder)) : [],
+      }),
       this.events,
     );
     this.approvals = new ApprovalQueue(this.events);

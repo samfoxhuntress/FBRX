@@ -18,6 +18,7 @@ type Handler = (params: any, ctx: CallContext) => unknown | Promise<unknown>;
 /** Methods that only a person at the workstation may call (never the Local API or a remote command). */
 const USER_ONLY = new Set<string>([
   'apps.open',
+  'learning.start',
   'vault.reveal',
   'vault.initialize',
   'vault.changeRecovery',

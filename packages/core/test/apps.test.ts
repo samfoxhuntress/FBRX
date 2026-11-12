@@ -167,3 +167,16 @@ describe('Mesh by edition (2.5.0)', () => {
     }
   });
 });
+
+describe('the FBRX apps’ own data, out of the AI’s reach', () => {
+  it('keeps file tools out of every FBRX app’s data folder, but not out of the workspace', async () => {
+    const { checkPath } = await import('../src/governance/path-guard');
+    const c = computer();
+    const opts = { roots: [c.apps], denyPatterns: [], readOnly: false, dataDir: c.os, appDataDirs: [c.os, c.digger, join(c.apps, 'FBRX Reach')] };
+    expect(checkPath(join(c.digger, 'app.json'), 'write', opts).ok).toBe(false);
+    expect(checkPath(join(c.os, 'apps-license.json'), 'write', opts).ok).toBe(false);
+    expect(checkPath(join(c.apps, 'FBRX Reach', 'app.json'), 'read', opts).ok).toBe(false);
+    expect(checkPath(join(c.os, 'workspace', 'notes.txt'), 'write', opts).ok).toBe(true);
+    expect(checkPath(join(c.apps, 'Other app', 'file.txt'), 'write', opts).ok).toBe(true);
+  });
+});
