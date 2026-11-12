@@ -1,18 +1,19 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
-import type { LanDevice, LanScan, LanScanCompare, NetAdapter, PingResult, SpeedTestResult, TraceHop } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Grid, Icons, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
+import { useContext, useEffect, useState, type ReactNode } from 'react';
+import type { ConnectionProtocol, LanDevice, LanScan, LanScanCompare, NetAdapter, PingResult, SpeedTestResult, StackLayer, StackReport, TraceHop } from '@fbrx/shared';
+import { Button, Callout, Card, CopyText, Empty, Field, Grid, Icons, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
 import { bridge, call, onEvent, pickFile } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
-import { IS_WINDOWS, navigate, routeArg } from '../app';
-import { AskButton, askAgent } from '../widgets';
-import { ConnectDialog, type ConnectTarget } from '../consoles';
+import { AppHandoffCard } from '../apps';
+import { DIGGER, IS_WINDOWS, navigate, routeArg } from '../app';
+import { AiContext, AskButton, askAgent } from '../widgets';
+import { ConnectDialog, DeviceConsolesPanel, consoleRoute, type ConnectTarget } from '../consoles';
 import { Speedometer, speedFraction } from '../speedometer';
-import { unlockTrophy } from '../fun';
 import { commandSearchUrl, matchDeviceProfile } from '@fbrx/shared';
-import { UltraHint } from '../edition';
+import { EditionHint } from '../edition';
 import { Environments } from './network-environments';
+import { WifiChannelPlanner } from './wifi-channels';
 
-type Tab = 'overview' | 'environments' | 'trace' | 'devices' | 'speed' | 'wifi' | 'bluetooth' | 'printers' | 'tools' | 'adapters';
+type Tab = 'overview' | 'environments' | 'trace' | 'devices' | 'speed' | 'wifi' | 'bluetooth' | 'printers' | 'tools' | 'adapters' | 'consoles' | 'digger';
 
 const ROLE: Record<TraceHop['role'], { label: string; tone: 'good' | 'info' | 'neutral' | 'warning' | 'busy' }> = {
   'this-pc': { label: 'This PC', tone: 'info' },
@@ -34,6 +35,7 @@ function Overview() {
   const [gw, setGw] = useState<PingResult | null>(null);
   const [web, setWeb] = useState<PingResult | null>(null);
   const agent = useAgentName();
+  const ai = useContext(AiContext);
   useEffect(() => {
     if (ctx.data?.gateway) void call('net.ping', { host: ctx.data.gateway, count: 4 }).then(setGw).catch(() => undefined);
     void call('net.ping', { host: '1.1.1.1', count: 4 }).then(setWeb).catch(() => undefined);
@@ -48,10 +50,11 @@ function Overview() {
         <StatTile label="Public address" value={pub.data?.ip ?? '—'} foot={pub.data?.isp ?? pub.error ?? ''} />
       </Grid>
       {verdict && (
-        <Callout tone={web?.received ? 'good' : 'warning'} actions={<Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent('Diagnose my network connection step by step and explain any problem in plain language.')}`)}>Diagnose with {agent}</Button>}>
+        <Callout tone={web?.received ? 'good' : 'warning'} actions={ai && <Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent('Diagnose my network connection step by step and explain any problem in plain language.')}`)}>Diagnose with {agent}</Button>}>
           {verdict}
         </Callout>
       )}
+      <StackCheck />
       <Card title="Network interfaces" flush>
         <Table
           columns={[
@@ -70,6 +73,112 @@ function Overview() {
         </div>
       </Card>
     </>
+  );
+}
+
+const STEP_TONE = { ok: 'good', warn: 'warning', fail: 'critical', skipped: 'neutral' } as const;
+const OS_KEY = IS_WINDOWS ? 'windows' : bridge.platform === 'darwin' ? 'mac' : 'linux';
+
+/**
+ * The full network check: every layer from the adapter to secure websites, where it first breaks, what to do, and the
+ * commands that show each layer by hand. It needs no AI, so FBRX Digger has it too.
+ */
+function StackCheck() {
+  const [target, setTarget] = useState('');
+  const [report, setReport] = useState<StackReport | null>(null);
+  const [open, setOpen] = useState<StackLayer | null>(null);
+  const agent = useAgentName();
+  const ai = useContext(AiContext);
+  const { busy, run } = useAction();
+  const checking = busy === 'stack';
+  const check = () =>
+    void run('stack', async () => {
+      const r = await call('net.diagnose', target.trim() ? { target: target.trim() } : {});
+      setReport(r);
+      setOpen(r.breaksAt ?? r.steps.find((x) => x.status === 'warn')?.layer ?? null);
+    });
+  const tone = !report ? 'info' : report.breaksAt ? 'critical' : report.steps.some((x) => x.status === 'warn') ? 'warning' : 'good';
+  return (
+    <Card
+      title="Check every layer"
+      subtitle="Why isn’t the network working? From the cable or Wi-Fi up to secure websites, in order."
+      actions={
+        <div className="stack-check-ask">
+          <Input value={target} onChange={(e) => setTarget(e.target.value)} placeholder="A site that won’t load (optional)" aria-label="A site that won’t load" />
+          <Button variant="primary" icon="activity" loading={checking} onClick={check}>
+            {report ? 'Check again' : 'Check now'}
+          </Button>
+        </div>
+      }
+    >
+      {!report && !checking && <p className="fx-muted">Seven layers in about ten seconds: the adapter, the link to the router, the address, routing, names (DNS), connections, and websites.</p>}
+      {checking && !report && (
+        <p className="fx-muted">
+          <Spinner /> Checking each layer…
+        </p>
+      )}
+      {report && (
+        <>
+          <Callout
+            tone={tone}
+            actions={
+              ai && report.breaksAt ? (
+                <Button size="sm" icon="sparkles" onClick={() => navigate(`agent/ask/${encodeURIComponent(`My network check says: ${report.summary} Help me fix it, one step at a time.`)}`)}>
+                  Fix it with {agent}
+                </Button>
+              ) : undefined
+            }
+          >
+            {report.summary}
+          </Callout>
+          <ol className="stack-steps">
+            {report.steps.map((st) => (
+              <li key={st.layer} className={`stack-step is-${st.status}`}>
+                <button type="button" className="stack-step-head" onClick={() => setOpen(open === st.layer ? null : st.layer)} aria-expanded={open === st.layer}>
+                  <Status tone={STEP_TONE[st.status]}>{st.title.split(':')[0]}</Status>
+                  <span className="stack-step-line">{st.headline}</span>
+                </button>
+                {open === st.layer && (
+                  <div className="stack-step-body">
+                    {st.found.length > 1 && (
+                      <ul>
+                        {st.found.map((f) => (
+                          <li key={f}>{f}</li>
+                        ))}
+                      </ul>
+                    )}
+                    {st.fix.length > 0 && (
+                      <>
+                        <h4>Do first</h4>
+                        <ol>
+                          {st.fix.map((f) => (
+                            <li key={f}>{f}</li>
+                          ))}
+                        </ol>
+                      </>
+                    )}
+                    {st.status !== 'skipped' && (
+                      <>
+                        <h4>See it yourself</h4>
+                        {st.commands[OS_KEY].map((c) => (
+                          <CopyText key={c} value={c} />
+                        ))}
+                      </>
+                    )}
+                    {ai && st.next.length > 0 && (
+                      <p className="fx-muted">
+                        {agent} can look further with {st.next.map((n) => n.why).join('; ')}.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ol>
+          {report.localOnly && <p className="fx-muted">The internet was not checked: FBRX is kept off it here.</p>}
+        </>
+      )}
+    </Card>
   );
 }
 
@@ -192,7 +301,7 @@ function Devices({ advanced }: { advanced: boolean }) {
     if (!scan && scans.data?.[0]) void call('net.scanGet', { id: scans.data[0].id }).then(setScan);
   }, [scans.data, scan]);
   const hasCli = (d: LanDevice) => d.ports.some((p) => p === 22 || p === 23 || p === 4118);
-  const target = (d: LanDevice, protocol?: 'ssh' | 'telnet'): ConnectTarget => ({ host: d.ip, name: d.name, vendor: d.vendor, model: d.model, ports: d.ports, protocol });
+  const target = (d: LanDevice, protocol?: ConnectionProtocol): ConnectTarget => ({ host: d.ip, name: d.name, vendor: d.vendor, model: d.model, ports: d.ports, protocol });
   const start = async () => {
     const reqId = newReqId();
     setProgress({ phase: 'Starting', pct: 0 });
@@ -356,6 +465,16 @@ function Devices({ advanced }: { advanced: boolean }) {
                     )}
                   </>
                 )}
+                {!detail.isSelf && detail.ports.includes(3389) && (
+                  <Button icon="monitor" disabled={!advanced} title={advanced ? 'Open its desktop in this computer’s remote desktop app' : 'Remote desktop comes with Endpoint Ultra'} onClick={() => setConnect(target(detail, 'rdp'))}>
+                    Remote desktop
+                  </Button>
+                )}
+                {!detail.isSelf && detail.ports.includes(5900) && (
+                  <Button icon="monitor" disabled={!advanced} title={advanced ? 'See and control its screen (VNC)' : 'Screen sharing comes with Endpoint Ultra'} onClick={() => setConnect(target(detail, 'vnc'))}>
+                    Screen sharing
+                  </Button>
+                )}
                 {web && (
                   <Button icon="external" onClick={() => bridge.openExternal?.(`${[80, 8080, 5000].includes(web) ? 'http' : 'https'}://${detail.ip}${web === 80 || web === 443 ? '' : `:${web}`}`)}>
                     {profile ? 'Web admin' : 'Open web page'}
@@ -400,7 +519,7 @@ function Devices({ advanced }: { advanced: boolean }) {
           onConnected={(s) => {
             setConnect(null);
             setDetail(null);
-            navigate(`terminal/console/${s.id}`);
+            navigate(consoleRoute(s.id));
           }}
         />
       )}
@@ -449,35 +568,12 @@ function Devices({ advanced }: { advanced: boolean }) {
   );
 }
 
-/** The 88 mph sequence: needle position (0…1), readout, unit, remark, lightning; then back to zero. */
-const JIGOWATTS: Array<[number, { f?: number; value?: string; unit?: string; label?: string; flux?: boolean }]> = [
-  [0, { f: 0.3, value: '30', unit: 'mph', label: 'Roads? Where we\'re going…' }],
-  [380, { f: 0.62, value: '62' }],
-  [760, { f: 0.41, value: '41' }],
-  [1140, { f: 0.8, value: '80' }],
-  [1500, { f: 0.57, value: '57' }],
-  [1880, { f: 0.88, value: '88', label: 'Hold on tight!' }],
-  [2220, { f: 0.79, value: '84' }],
-  [2520, { f: 0.9, value: '88' }],
-  [2820, { f: 0.85, value: '87' }],
-  [3120, { f: 0.88, value: '1.21', unit: 'gigawatts', label: '88 mph', flux: true }],
-  [3260, { flux: false }],
-  [3400, { flux: true }],
-  [3560, { flux: false }],
-  [3700, { flux: true }],
-  [5600, { f: 0, value: '0.0', unit: 'Mbps', label: '', flux: false }],
-];
-
-function Speed({ easterEggs }: { easterEggs: boolean }) {
+function Speed() {
   const hist = useCore('net.speedHistory');
   const [live, setLive] = useState<{ phase: string; mbps: number } | null>(null);
   const [last, setLast] = useState<SpeedTestResult | null>(null);
   const [testing, setTesting] = useState(false);
-  const [egg, setEgg] = useState<{ f: number; value: string; unit: string; label: string; flux: boolean } | null>(null);
-  const clicks = useRef<number[]>([]);
-  const timers = useRef<ReturnType<typeof setTimeout>[]>([]);
   const toast = useToast();
-  useEffect(() => () => timers.current.forEach(clearTimeout), []);
   const start = async () => {
     const reqId = newReqId();
     setTesting(true);
@@ -496,36 +592,13 @@ function Speed({ easterEggs }: { easterEggs: boolean }) {
       setTesting(false);
     }
   };
-  const timeTravel = () => {
-    unlockTrophy('jigowatts');
-    let state = { f: 0, value: '0.0', unit: 'mph', label: '', flux: false };
-    for (const [t, patch] of JIGOWATTS) {
-      timers.current.push(
-        setTimeout(() => {
-          state = { ...state, ...patch };
-          setEgg(state);
-        }, t),
-      );
-    }
-    // Back to normal, as if nothing happened.
-    timers.current.push(setTimeout(() => setEgg(null), 6700));
-  };
   const onRun = () => {
-    const now = Date.now();
-    clicks.current = [...clicks.current.filter((t) => now - t < 4000), now];
-    if (easterEggs && !egg && clicks.current.length >= 8) {
-      clicks.current = [];
-      timeTravel();
-      return;
-    }
-    if (!testing && !egg) void start();
+    if (!testing) void start();
   };
   const h = [...(hist.data ?? [])].reverse();
   const shown = last ?? hist.data?.[0];
   const phaseName = (p: string) => (p ? p[0].toUpperCase() + p.slice(1) : 'Measuring');
-  const dial = egg
-    ? { fraction: egg.f, value: egg.value, unit: egg.unit, label: egg.label, flux: egg.flux }
-    : live
+  const dial = live
       ? { fraction: speedFraction(live.mbps), value: live.mbps.toFixed(1), unit: 'Mbps', label: phaseName(live.phase) }
       : testing
         ? { fraction: 0, value: '…', unit: 'Mbps', label: 'Connecting' }
@@ -537,7 +610,7 @@ function Speed({ easterEggs }: { easterEggs: boolean }) {
       <Card
         title="Internet speed"
         subtitle="Measured against Cloudflare's nearest server. Uses about 100 MB of data."
-        actions={shown && !live && !egg ? <AskButton label="Is this good?" prompt="Here are my internet speed test results (newest first). Is this good for what most people do (video calls, streaming, gaming, large downloads)? If something looks wrong, how do I fix it?" context={(hist.data ?? []).slice(0, 8)} /> : undefined}
+        actions={shown && !live ? <AskButton label="Is this good?" prompt="Here are my internet speed test results (newest first). Is this good for what most people do (video calls, streaming, gaming, large downloads)? If something looks wrong, how do I fix it?" context={(hist.data ?? []).slice(0, 8)} /> : undefined}
       >
         <div className="speed-panel">
           <div className="speed-dial">
@@ -576,7 +649,6 @@ function Speed({ easterEggs }: { easterEggs: boolean }) {
 function Wifi() {
   const wifi = useCore('net.wifi', undefined, [], 15_000);
   const c = wifi.data?.connection;
-  const channels = Object.entries(wifi.data?.channels ?? {}).sort((a, b) => Number(a[0]) - Number(b[0]));
   return (
     <>
       {c ? (
@@ -589,36 +661,20 @@ function Wifi() {
       ) : (
         <Callout tone="info">Not connected to Wi-Fi (or Wi-Fi details are unavailable).</Callout>
       )}
-      <Grid cols={2}>
-        <Card title="Nearby networks" flush>
-          <Table
-            columns={[
-              { key: 'ssid', header: 'Network', render: (n) => n.ssid },
-              { key: 'sig', header: 'Signal', render: (n) => <Meter value={n.signalPct} label={`${n.ssid} signal`} />, width: 120 },
-              { key: 'ch', header: 'Channel', render: (n) => `${n.channel ?? '—'} · ${n.band}`, width: 120 },
-              { key: 'sec', header: 'Security', render: (n) => <span className="fx-muted">{n.security}</span> },
-            ]}
-            rows={wifi.data?.networks ?? []}
-            rowKey={(n) => `${n.ssid}${n.channel}`}
-            empty={<Empty title="No networks found" />}
-          />
-        </Card>
-        <Card title="Channel congestion" subtitle="How many networks share each channel. Fewer is better.">
-          {channels.length ? (
-            <div className="fx-grid" style={{ gap: 6 }}>
-              {channels.map(([ch, n]) => (
-                <div key={ch} style={{ display: 'grid', gridTemplateColumns: '60px 1fr 30px', gap: 8, alignItems: 'center', fontSize: 13 }}>
-                  <span>Ch {ch}</span>
-                  <Meter value={n} max={Math.max(...channels.map(([, x]) => x))} label={`Channel ${ch}`} />
-                  <span className="fx-muted">{n}</span>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <Empty title="No data" />
-          )}
-        </Card>
-      </Grid>
+      <WifiChannelPlanner />
+      <Card title="Nearby networks" flush>
+        <Table
+          columns={[
+            { key: 'ssid', header: 'Network', render: (n) => n.ssid },
+            { key: 'sig', header: 'Signal', render: (n) => <Meter value={n.signalPct} label={`${n.ssid} signal`} />, width: 120 },
+            { key: 'ch', header: 'Channel', render: (n) => `${n.channel ?? '—'} · ${n.band}`, width: 120 },
+            { key: 'sec', header: 'Security', render: (n) => <span className="fx-muted">{n.security}</span> },
+          ]}
+          rows={wifi.data?.networks ?? []}
+          rowKey={(n) => `${n.ssid}${n.channel}`}
+          empty={<Empty title="No networks found" />}
+        />
+      </Card>
     </>
   );
 }
@@ -754,7 +810,7 @@ function Tools({ advanced }: { advanced: boolean }) {
           onClose={() => setConsole(null)}
           onConnected={(s) => {
             setConsole(null);
-            navigate(`terminal/console/${s.id}`);
+            navigate(consoleRoute(s.id));
           }}
         />
       )}
@@ -841,35 +897,56 @@ function Adapters() {
   );
 }
 
-const NET_TABS: Tab[] = ['overview', 'environments', 'trace', 'devices', 'speed', 'wifi', 'bluetooth', 'printers', 'tools', 'adapters'];
+const NET_TABS: Tab[] = ['overview', 'trace', 'devices', 'speed', 'wifi', 'bluetooth', 'printers', 'tools', 'adapters', 'consoles', 'digger', 'environments'];
 
-export function NetworkPage({ advanced, easterEggs }: { advanced: boolean; easterEggs: boolean }) {
+export function NetworkPage({ advanced, everything }: { advanced: boolean; everything: boolean }) {
   // network/speed, network/printers… open that tab directly.
-  const [tab, setTab] = useState<Tab>(() => (NET_TABS.includes(routeArg() as Tab) ? (routeArg() as Tab) : 'overview'));
-  // Endpoint Basic keeps the everyday tabs; Ultra adds the IT ones and the network environments.
-  const all: Array<{ id: Tab; label: ReactNode; ultra?: boolean }> = [
+  const first = () => (routeArg() ?? '').split('/')[0] as Tab;
+  const [tab, setTab] = useState<Tab>(() => (NET_TABS.includes(first()) ? first() : 'overview'));
+  // FBRX Digger: a console opened from a scan (network/consoles/<id>) shows here, Digger having no Terminal page.
+  const [consoleId, setConsoleId] = useState<string | null>(() => (first() === 'consoles' ? (routeArg() ?? '').split('/')[1] || null : null));
+  useEffect(() => {
+    const on = () => {
+      if (first() !== 'consoles') return;
+      setTab('consoles');
+      setConsoleId((routeArg() ?? '').split('/')[1] || null);
+    };
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, []);
+  // Endpoint Essentials and Pro keep the everyday tabs; Ultra adds the IT ones, Black Hole Edition the network
+  // environments (network controllers).
+  const all: Array<{ id: Tab; label: ReactNode; need?: 'ultra' | 'blackhole' }> = [
     { id: 'overview', label: 'Overview' },
-    { id: 'environments', label: advancedLabel('Environments'), ultra: true },
-    { id: 'trace', label: 'Ping & trace', ultra: true },
-    { id: 'devices', label: 'Devices', ultra: true },
+    { id: 'trace', label: 'Ping & trace', need: 'ultra' },
+    { id: 'devices', label: 'Devices', need: 'ultra' },
     { id: 'speed', label: 'Speed' },
     { id: 'wifi', label: 'Wi-Fi' },
     { id: 'bluetooth', label: 'Bluetooth' },
     { id: 'printers', label: 'Printers' },
-    { id: 'tools', label: 'Tools', ultra: true },
-    ...(IS_WINDOWS ? [{ id: 'adapters' as const, label: advancedLabel('Adapters'), ultra: true }] : []),
+    { id: 'tools', label: 'Tools', need: 'ultra' },
+    ...(IS_WINDOWS ? [{ id: 'adapters' as const, label: DIGGER ? 'Adapters' : advancedLabel('Adapters'), need: 'ultra' as const }] : []),
+    // FBRX OS has them in Terminal → Device consoles.
+    ...(DIGGER ? [{ id: 'consoles' as const, label: 'Consoles' }] : []),
+    // FBRX Digger, the Network Center on its own: open it, get it, or the edition it needs (not in Digger itself).
+    ...(DIGGER ? [] : [{ id: 'digger' as const, label: 'Digger' }]),
+    // Network environments come last. FBRX Digger has every tab, so it marks none of them with an edition.
+    { id: 'environments', label: DIGGER ? 'Environments' : advancedLabel('Environments', true), need: 'blackhole' },
   ];
-  const tabs = all.filter((t) => advanced || !t.ultra);
+  const tabs = all.filter((t) => !t.need || (t.need === 'ultra' ? advanced : everything)).map(({ need: _n, ...t }) => t);
   const shown = tabs.some((t) => t.id === tab) ? tab : 'overview';
   return (
     <Page title="Network Center" description={advanced ? 'See how this PC connects, what else is on your network, and what is slowing things down.' : 'See how this computer connects and what is slowing things down.'}>
       <Tabs tabs={tabs} active={shown} onChange={setTab} />
-      {!advanced && shown === 'overview' && <UltraHint>Network scans, device consoles and attaching your school or office network (UniFi) come with Endpoint Ultra.</UltraHint>}
+      {!advanced && shown === 'overview' && <EditionHint>Network scans and device consoles come with Endpoint Ultra.</EditionHint>}
+      {advanced && !everything && shown === 'overview' && <EditionHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole Edition, through your organization’s FBRX Command.</EditionHint>}
       {shown === 'overview' && <Overview />}
+      {shown === 'consoles' && <DeviceConsolesPanel selected={consoleId} onSelect={setConsoleId} />}
+      {shown === 'digger' && <AppHandoffCard page="network/digger" />}
       {shown === 'environments' && <Environments />}
       {shown === 'trace' && <Trace />}
       {shown === 'devices' && <Devices advanced={advanced} />}
-      {shown === 'speed' && <Speed easterEggs={easterEggs} />}
+      {shown === 'speed' && <Speed />}
       {shown === 'wifi' && <Wifi />}
       {shown === 'bluetooth' && <Bluetooth />}
       {shown === 'printers' && <Printers />}

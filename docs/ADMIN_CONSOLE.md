@@ -3,10 +3,13 @@
 FBRX Command is the team tenant controller: the console served by the control plane at its public URL. It is the place
 to watch, configure, update and support every FBRX Endpoint computer in real time, with RMM-style tooling (remote
 commands, packages, credentials, updates, backups and audit). A license issued here can enroll computers by itself:
-paste the key into FBRX Endpoint Basic and it joins the tenant (see [LICENSING.md](LICENSING.md#joining-fbrx-command)). Development: `npm run dev:console` (proxies the API on :8787).
+paste the key into FBRX Endpoint and it joins the tenant (see [LICENSING.md](LICENSING.md#joining-fbrx-command)).
 
 To run it on a computer of your own (a family, a school, a small office), double-click **Install FBRX Command** in
-the FBRX folder; it opens the first-run page when it is done. Hosted setups: [DEPLOYMENT.md](DEPLOYMENT.md#2-control-plane).
+the FBRX folder; it opens the first-run page when it is done. It looks for new versions of itself and shows them on
+**Releases**, where **Update now** installs one in place
+([DEPLOYMENT.md](DEPLOYMENT.md#fbrx-command-on-a-computer-of-your-own)). Hosted setups:
+[DEPLOYMENT.md](DEPLOYMENT.md#2-control-plane).
 
 ## Work, School or Home
 
@@ -14,8 +17,8 @@ Every tenant has a **kind**, picked before anything else, both at first-run setu
 
 | Kind | For | Computers | Quick setup makes | Help goes to |
 | --- | --- | --- | --- | --- |
-| **Work** | A business, nonprofit or team | Staff on FBRX Endpoint Basic, IT on Endpoint Ultra | **Staff** (held to Basic) and **IT** | The IT computer you mark as a receiver |
-| **School** | A school or co-op | Teachers on Basic in classroom mode, IT on Ultra, students on **FBRX OS Education** | **Teachers**, **IT** and **Students** | The IT computer you mark as a receiver |
+| **Work** | A business, nonprofit or team | Staff up to FBRX Endpoint Pro, IT up to Endpoint Ultra | **Staff** (up to Pro) and **IT** | The IT computer you mark as a receiver |
+| **School** | A school or co-op | Teachers up to Pro in classroom mode, IT up to Ultra, students on **FBRX OS Education** | **Teachers**, **IT** and **Students** | The IT computer you mark as a receiver |
 | **Home** | A family | Parents on FBRX Endpoint, children on **FBRX OS Home** | **Parents** and **Children** | Every parent's computer, automatically |
 
 The kind sets the wording in FBRX Command and on the computers, the groups **quick setup** makes (each with its own
@@ -30,19 +33,23 @@ license with a kind also sets it. Unattended installs can pick the first tenant'
 | Section | Page | What it is for |
 | --- | --- | --- |
 | Fleet | **Overview** | Online/offline/alerting devices, agent runs, tool calls, policy denials and errors over 24 h, version and platform mix, recent alerts |
-| | **Devices** | Search and filter the fleet (student and child computers and help desk receivers are marked); select devices for bulk commands (sync, update, back up, restart service, notify, …); **Update everyone now** |
+| | **Devices** | Search and filter the fleet (student and child computers and help desk receivers are marked); select devices for bulk commands (sync, update, back up, restart service, notify, …); **Update everyone now**. A device's **Configuration** tab sets who uses it, whether it receives help desk tickets, its **Edition** (*Essentials only*, *Up to Pro*, *Up to Ultra*, or its group's: Ultra only ever comes from here) and its overrides; its header shows the edition it runs |
 | | Device detail | Live health and services, metrics charts, installed plugins, versions, audit chain head; run any command and watch its result; move to a group; set update channel or pin; who uses it (staff or student; parent or child at home); whether it receives help desk tickets; per-device overrides; its backups; retire |
 | | **Alerts & events** | Service failures, circuit breaks, policy denials, student and child safety alerts and other device events; acknowledge them |
 | | **Help desk** | Every ticket sent from the organization's computers, its conversation and the computer's details; answer, take, change status and priority; which computers receive tickets |
 | | **Messages** | The *Everyone* conversation every computer sees in Messages: post to it, remove what does not belong ([MESSAGES.md](MESSAGES.md)) |
-| Configuration | **Profiles & groups** | Organization defaults: the kind (Work, School, Home), *New versions* (install automatically, tell people, off), the help desk on or off, Messages on or off, default profile and channel. **Quick setup** for the tenant's kind (Set up for work, for a school, for a family) until its groups exist. Profiles hold managed settings, governance policy and *locks* (paths users cannot change). Groups attach a profile, who uses the computers (staff or student; parent or child), the edition (hold to Basic), *New versions*, an update channel and a pinned version |
-| | **Deploy & enroll** | The address computers join at (and, for FBRX Command with its own certificate, the fingerprint they check); download the latest installers; create enrollment tokens (group, who uses the computers, usage limit, expiry, template snapshot); download the matching `fbrx-provision.json`, a **Mac profile** (.mobileconfig for Jamf, Mosyle, Kandji, Intune…) and a **Windows script** (Intune Win32 app) |
+| Configuration | **Profiles & groups** | Organization defaults: the kind (Work, School, Home), *New versions* (install automatically, tell people, off), the help desk on or off, Messages on or off, default profile and channel. **Quick setup** for the tenant's kind (Set up for work, for a school, for a family) until its groups exist. Profiles hold managed settings, governance policy and *locks* (paths users cannot change). Groups attach a profile, who uses the computers (staff or student; parent or child), the edition (*Essentials only*, *Up to Pro* or *Up to Ultra*: computers open in Essentials and their people switch up to it), *New versions*, an update channel and a pinned version. **FBRX Mesh**: the organization's computers mesh together without pairing codes, and the **hive** (which groups may use the AI of servers with the ai role), with the servers in it ([MESH.md](MESH.md#organizations)) |
+| | **Governance** | What the AI may do on the organization's computers: each profile's policy (tool rules, the folders it may use, the web, the shell, AI providers, approvals) as JSON, checked before it is saved and pushed within seconds. Computers show it read-only |
+| | **Deploy & enroll** | The address computers join at (and, for FBRX Command with its own certificate, the fingerprint they check); download the latest installers (the newest stable release uploaded under Releases, or the current FBRX OS from FBRX's downloads when nothing as new was uploaded); create enrollment tokens (group, who uses the computers, usage limit, expiry, template snapshot); download the matching `fbrx-provision.json`, a **Mac profile** (.mobileconfig for Jamf, Mosyle, Kandji, Intune…) and a **Windows script** (Intune Win32 app) |
 | | **Credentials** | Organization secrets scoped to the tenant, a group or a single device; pushed into device vaults as read-only managed secrets; rotate or delete centrally |
 | | **Plugins** | Upload plugin packages (manifest and permissions shown), deploy to devices or groups |
 | | **Backups** | Snapshots uploaded by devices; download, mark as an enrollment template, delete |
-| Platform | **Releases** | Upload installers (or let CI do it), publish to `stable`/`beta`/`dev`, staged rollout percentage |
-| | **Licenses** | Issue and revoke signed licenses per tenant: the product (Endpoint Basic or Ultra), the kind (Work, School or Home, which also sets the tenant's kind), seats and expiry, and whether computers that activate the key join the tenant automatically; copy keys for offline activation |
+| Platform | **Releases** | FBRX Command's own version and new versions of it (**Update now**, **Skip this version**, automatic checks on or off); upload FBRX OS installers (or let CI do it), publish to `stable`/`beta`/`dev`, staged rollout percentage |
+| | **Licenses** | Issue and revoke signed licenses per tenant: the most the computers may run (up to Endpoint Pro or Ultra), the kind (Work, School or Home, which also sets the tenant's kind), seats and expiry, and whether computers that activate the key join the tenant automatically; copy keys for offline activation |
 | | **Tenants** | (superadmin) Create tenants (pick Work, School or Home first, then run its quick setup), see each one's kind, change it, suspend them |
+| | **FBRX accounts** | (superadmin) Everyone with an FBRX account here, the edition their purchases give them and their organizations; give one an edition (support, a promotion), disable one ([ACCOUNTS.md](ACCOUNTS.md)) |
+| | **Cloud AI** | (superadmin) FBRX Cloud AI: the month so far against the service's budget, each edition's tokens a month, every account's use (its own limit, extra tokens, the limit lifted for the month, turned off) and promo codes ([CLOUD_AI.md](CLOUD_AI.md)) |
+| | **Pricing** | (superadmin) The price list ([LICENSING.md](LICENSING.md#prices)): Pro and Ultra on their own; the organization fee, with another for larger organizations from a size and for Home ones; each person's price in an organization (it also covers a shared computer nobody pays for), how many computers each edition includes and each further one's price; the volume discount in steps (from so many seats, so much off); what a year costs paying yearly, in months' price; example bills, a month and a year, before saving. **Stripe** shows, for every lookup key, whether Stripe charges the same, and **Update Stripe** brings it in step. The MDM add-on: on sale or not, its price per managed computer (the same whatever the computer's edition), and what it earns after card fees and the cost of a managed computer. Organizations' bills follow at once (**Billing**); organizations turn MDM on per group (**Profiles & groups → Device management**). Every change is in the audit log |
 | Access | **Users & API keys** | Invite users with a role, reset access, create API keys for automation |
 | | **Webhooks** | Signed outgoing webhooks for fleet events |
 | | **Audit log** | Every admin action and device enrollment, hash-chained and verifiable |
@@ -53,7 +60,7 @@ license with a kind also sets it. Unattended installs can pick the first tenant'
 A profile (and a single device's overrides) is built from:
 
 * **Ready-made** bundles, one click each and one click to take out again: **No Fun Extras** (no easter eggs, jokes,
-  goose or start-up sound), **Private by default** (AI on the computer, chats start offline, no usage statistics or
+  Bruce the Goose or start-up sound), **Private by default** (AI on the computer, chats start offline, no usage statistics or
   clipboard history), **Locked down** (no mesh, no Local API, no sharing AI), **No chatting** (Messages off),
   **Strong protection**, **Daily backups**,
   **Meeting-room safe**, **Calm and quick** and **Share AI across computers**. They combine; the profiles table shows

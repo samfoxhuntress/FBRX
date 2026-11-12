@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { cidrsOverlap, hostRange, intToIPv4, ipv4ToInt, isCidr, JUMBO_MTU, networkOf, parseCidr } from '@fbrx/shared';
-import { bridgeName, NETWORK_PRESETS, PURPOSES, type GateConfig, type GateInterface, type GateNetwork, type NetworkPurpose } from '@fbrx/gate';
+import { cidrsOverlap, isCidr, JUMBO_MTU, networkOf } from '@fbrx/shared';
+import { bridgeName, dhcpRange, NETWORK_PRESETS, PURPOSES, type GateConfig, type GateInterface, type GateNetwork, type NetworkPurpose } from '@fbrx/gate';
 import { Button, Card, ChoiceCards, Empty, Field, Grid, Input, KeyValue, Modal, Select, Status, Table, Toggle, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { draftIssues, inItem, useGate } from '../gate-state';
@@ -29,16 +29,7 @@ function useSystemInterfaces() {
 const VLAN_FOR: Record<NetworkPurpose, number> = { lan: 10, guest: 20, mesh: 30, servers: 40, iot: 50, management: 99, other: 60 };
 
 /** Addresses handed out in a network: .100 to .199 in a /24, a fair share of anything else. */
-function autoRange(cidr: string): { start: string; end: string } {
-  const c = parseCidr(cidr);
-  if (!c || c.family !== 4 || c.prefix > 30) return { start: '', end: '' };
-  const r = hostRange(networkOf(cidr));
-  const base = cidr.split('/')[0].split('.').slice(0, 3).join('.');
-  if (c.prefix === 24) return { start: `${base}.100`, end: `${base}.199` };
-  const first = ipv4ToInt(r.first);
-  const last = ipv4ToInt(r.last);
-  return { start: intToIPv4(first + Math.max(1, Math.floor((last - first + 1) / 4))), end: intToIPv4(last - 1) };
-}
+const autoRange = dhcpRange;
 
 /** A name, VLAN tag and addresses for a new network that do not clash with what is there. */
 function suggest(c: GateConfig, purpose: NetworkPurpose, parent: string): { name: string; vlanId: number; address: string } {
@@ -233,7 +224,10 @@ function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig
   });
   const [net, setNet] = useState<GateNetwork>(start.net);
   const [vlanId, setVlanId] = useState(start.vlanId);
-  const currentIface = isNew ? null : config.interfaces.find((i) => i.name === net.interface);
+  const currentIface = isNew ? null : config.interfaces.find((i) => i.name === start.net.interface);
+  /** An existing network on a VLAN: its tag can change (the VLAN becomes <port>.<tag>; rules follow the network's name). */
+  const [tag, setTag] = useState(currentIface?.kind === 'vlan' ? (currentIface.vlanId ?? 0) : 0);
+  const tagTaken = !!currentIface && currentIface.kind === 'vlan' && tag !== currentIface.vlanId && config.interfaces.some((i) => i.kind === 'vlan' && i.parent === currentIface.parent && i.vlanId === tag);
   const [jumbo, setJumbo] = useState(isNew ? false : (currentIface?.mtu ?? 1500) >= JUMBO_MTU);
   const [res, setRes] = useState({ mac: '', address: '', name: '' });
   const set = (patch: Partial<GateNetwork>) => setNet((n) => ({ ...n, ...patch }));
@@ -276,6 +270,15 @@ function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig
       d.networks.push(n);
       if (n.purpose === 'mesh' && !d.qos.preferMesh.networks.includes(n.name)) d.qos.preferMesh.networks.push(n.name);
     } else {
+      // A new VLAN tag: the VLAN is renamed for it, and the network moves with it.
+      if (currentIface?.kind === 'vlan' && currentIface.parent && tag !== currentIface.vlanId && tag >= 1 && tag <= 4094) {
+        const v = d.interfaces.find((x) => x.name === currentIface.name);
+        iface = `${currentIface.parent}.${tag}`;
+        if (v) Object.assign(v, { name: iface, vlanId: tag });
+        // Every network on that VLAN moves with it.
+        for (const other of d.networks) if (other.interface === currentIface.name) other.interface = iface;
+        n.interface = iface;
+      }
       d.networks[index] = n;
       const i = d.interfaces.find((x) => x.name === iface);
       if (i) i.mtu = jumbo ? Math.max(i.mtu, JUMBO_MTU) : Math.min(i.mtu, 1500);
@@ -289,7 +292,7 @@ function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig
   const { next, iface } = compose();
   const idx = isNew ? next.networks.length - 1 : index;
   const issues = draftIssues(next, (p) => inItem('networks', idx, net.name)(p) || p.startsWith(`interfaces.${iface}`) || p === `interfaces.${idx}` || p.startsWith('qos.preferMesh'));
-  const canSave = issues.shapeOk && (!isNew || (placement === 'vlan' ? !!parent && vlanId >= 1 && vlanId <= 4094 : !!ownPort));
+  const canSave = issues.shapeOk && (!isNew || (placement === 'vlan' ? !!parent && vlanId >= 1 && vlanId <= 4094 : !!ownPort)) && (isNew || currentIface?.kind !== 'vlan' || (tag >= 1 && tag <= 4094 && !tagTaken));
   const onVlan = isNew ? placement === 'vlan' : currentIface?.kind === 'vlan';
   const parentPort = config.interfaces.find((i) => i.name === (isNew ? (placement === 'vlan' ? parent : ownPort) : currentIface?.kind === 'vlan' ? currentIface.parent : currentIface?.name));
   const untaggedOnParent = onVlan ? config.networks.find((n) => n.interface === parentPort?.name) : null;
@@ -341,6 +344,20 @@ function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig
             </Field>
             <Field label="VLAN tag" help={`1 to 4094; set the same on your switch. It will be ${parent}.${vlanId}.`}>
               <Input type="number" min={1} max={4094} value={vlanId} onChange={(e) => setVlanId(Number(e.target.value))} />
+            </Field>
+          </Grid>
+        )}
+        {!isNew && currentIface?.kind === 'vlan' && (
+          <Grid cols={2}>
+            <Field label="On the port">
+              <Input value={currentIface.parent ?? ''} disabled className="mono" />
+            </Field>
+            <Field
+              label="VLAN tag"
+              error={tagTaken ? `${currentIface.parent} already has VLAN ${tag}` : undefined}
+              help={tag !== currentIface.vlanId ? `It becomes ${currentIface.parent}.${tag} at the commit. Change the tag on your switch too, or devices on this network lose it until you do.` : '1 to 4094, the same as on your switch.'}
+            >
+              <Input type="number" min={1} max={4094} value={tag} onChange={(e) => setTag(Number(e.target.value))} />
             </Field>
           </Grid>
         )}

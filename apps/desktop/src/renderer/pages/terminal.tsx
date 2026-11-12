@@ -2,12 +2,14 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { Note, ProjectSummary, Snippet, TerminalShell } from '@fbrx/shared';
 import { Button, Card, Empty, Input, Page, Select, Status, Tabs, TextArea, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
-import { navigate, routeArg } from '../app';
+import { POPOUT, navigate, routeArg } from '../app';
 import { useConsoleSessions, useCore } from '../hooks';
 import { AskButton, askAgent } from '../widgets';
 import { COMMAND_GROUPS, type LibraryCommand } from '../command-library';
+import { addToMacros } from '../macro-add';
+import { menuFor } from '../context-menu';
 import { DeviceConsolesPanel } from '../consoles';
-import { summonGoose, unlockTrophy } from '../fun';
+import { peekBruce, unlockTrophy } from '../fun';
 import { Fbrx1Panel } from '../fbrx1';
 import { useSlashMenu } from '../slash-menu';
 import { WhatIfButton } from '../quick-ai';
@@ -25,6 +27,11 @@ interface Block {
 }
 
 const SHELL_KEY = 'fbrx.terminal.shell';
+
+/** Ctrl+C alone (not Cmd+C on a Mac, which copies, and not with Shift or Alt). */
+function isInterrupt(e: KeyboardEvent): boolean {
+  return e.ctrlKey && !e.metaKey && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'c';
+}
 const IS_WIN = bridge.platform === 'win32';
 
 /** Code blocks and inline code in a note: the parts worth pasting into a terminal. */
@@ -42,7 +49,7 @@ function easterEgg(command: string): string | 'honk' | 'matrix' | null {
   if (c === 'sudo make me a sandwich') return 'Okay.';
   if (c === 'make me a sandwich') return 'What? Make it yourself.';
   if (c === 'honk' || c === 'goose') return 'honk';
-  if (c === 'matrix' || c === 'wake up neo') return 'matrix';
+  if (c === 'rain' || c === 'make it rain') return 'matrix';
   if (c === 'make coffee' || c === 'coffee') return "418 I'm a teapot. Try the kitchen.";
   if (c === 'hello' || c === 'hi' || c === 'hello fabrix') return 'Hello! I run your commands, Fabrix explains them. Try the reference panel on the right.';
   if (c === 'exit' || c === 'quit') return 'There is no exit. Only other pages. (Each command already runs in its own fresh shell.)';
@@ -50,7 +57,7 @@ function easterEgg(command: string): string | 'honk' | 'matrix' | null {
   return null;
 }
 
-/** Green rain for a few seconds (the "matrix" easter egg). */
+/** Green code rain for a few seconds (the "rain" easter egg). */
 function MatrixRain({ onDone }: { onDone: () => void }) {
   const canvas = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
@@ -98,7 +105,16 @@ function Reference({ onInsert, onRun, lastCommand }: { onInsert: (cmd: string) =
   const noteList = (notes.data ?? []).filter((n: Note) => (!project || n.projectId === project) && match(n.title, n.content));
 
   const row = (key: string, title: string, sub: string, cmd: string, extra?: { admin?: boolean; changes?: boolean }) => (
-    <div key={key} className="ref-item">
+    <div
+      key={key}
+      className="ref-item"
+      onContextMenu={menuFor([
+        { label: extra?.changes ? 'Run (asks first)' : 'Run', icon: 'play', onSelect: () => onRun(cmd, extra?.changes) },
+        { label: 'Put it in the command box', icon: 'terminal', onSelect: () => onInsert(cmd) },
+        { label: 'Add to macros…', icon: 'zap', onSelect: () => addToMacros({ name: title, text: cmd, slash: true }) },
+        { label: 'Explain it', icon: 'sparkles', onSelect: () => askAgent(`Explain this ${IS_WIN ? 'PowerShell' : 'shell'} command line by line in plain language: what it does, whether it changes anything, and anything to watch out for.\n\n${cmd}`) },
+      ])}
+    >
       <button className="ref-text" onClick={() => onInsert(cmd)} title="Put it in the command box">
         <span className="ref-title">
           {title}
@@ -109,6 +125,7 @@ function Reference({ onInsert, onRun, lastCommand }: { onInsert: (cmd: string) =
       </button>
       <div className="ref-actions">
         <Button size="sm" variant="ghost" icon="play" aria-label="Run" title={extra?.changes ? 'Run (asks first)' : 'Run'} onClick={() => onRun(cmd, extra?.changes)} />
+        <Button size="sm" variant="ghost" icon="zap" aria-label={`Add ${title} to macros`} title="Add to macros" onClick={() => addToMacros({ name: title, text: cmd, slash: true })} />
         <AskButton iconOnly label="Explain this command" prompt={`Explain this ${IS_WIN ? 'PowerShell' : 'shell'} command line by line in plain language: what it does, whether it changes anything, and anything to watch out for.\n\n${cmd}`} />
       </div>
     </div>
@@ -284,8 +301,8 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
     if (easterEggs) {
       const egg = easterEgg(command);
       if (egg === 'honk') {
-        summonGoose();
-        return local(command, 'HONK. (Look at your screen.)');
+        peekBruce();
+        return local(command, 'HONK. (Bruce is hiding somewhere around here. Look behind the buttons.)');
       }
       if (egg === 'matrix') {
         setMatrix(true);
@@ -320,6 +337,30 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
     setTimeout(() => box.current?.focus(), 0);
   };
   const running = blocks.filter((b) => b.code === undefined);
+  /**
+   * Ctrl+C, as in any terminal: stops the newest command still running (its whole process tree), and shows ^C under
+   * it. Says whether there was one to stop. (With text selected, Ctrl+C copies instead; on a Mac, Cmd+C copies.)
+   */
+  const interrupt = (): boolean => {
+    const last = [...blocks].reverse().find((b) => b.code === undefined && !b.id.startsWith('local-'));
+    if (!last) return false;
+    setBlocks((bs) => bs.map((b) => (b.id === last.id ? { ...b, out: [...b.out, { stream: 'err', text: '^C\n' }] } : b)));
+    void call('terminal.kill', { sessionId: last.id });
+    return true;
+  };
+  const interruptRef = useRef(interrupt);
+  interruptRef.current = interrupt;
+  // Anywhere on the page (the output, a button), not only in the command box.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isInterrupt(e) || e.target === box.current) return;
+      const sel = window.getSelection();
+      if (sel && !sel.isCollapsed && sel.toString()) return;
+      if (interruptRef.current()) e.preventDefault();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
   const shellName = shell?.name ?? (IS_WIN ? 'PowerShell' : 'shell');
   const examples = useMemo(() => (IS_WIN ? ['Get-ComputerInfo | Select-Object OsName, OsVersion', '? find the 10 biggest files in Downloads'] : ['uname -a']), []);
 
@@ -334,6 +375,13 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
             : tab === 'code'
               ? 'Write code with Fabrix beside you. Sandboxed: JavaScript runs with no network or file access, PowerShell and batch only in Windows Sandbox, everything else is explained, not run.'
             : 'Command lines of switches, firewalls, access points and servers, over SSH or Telnet, with the maker\'s guide alongside.'
+      }
+      actions={
+        bridge.popOut && !POPOUT ? (
+          <Button size="sm" variant="ghost" icon="external" title="Open the Terminal in its own window, to keep it beside FBRX" onClick={() => void bridge.popOut?.(location.hash.replace(/^#\/?/, '') || 'terminal')}>
+            Pop out
+          </Button>
+        ) : undefined
       }
     >
       <Tabs
@@ -350,7 +398,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
         ]}
       />
       {tab === 'fbrx1' ? (
-        <Fbrx1Panel />
+        <Fbrx1Panel prefill={arg.startsWith('fbrx1/') ? decodeURIComponent(arg.slice(6)) : undefined} />
       ) : tab === 'code' ? (
         <Suspense fallback={<div className="fx-muted" style={{ padding: 24 }}>Loading the code lab…</div>}>
           <CodeLabPanel />
@@ -404,7 +452,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
                   <div className="term-cmd">
                     <span className="term-prompt">❯</span> {b.command}
                     {b.code === undefined ? (
-                      <Button size="sm" variant="ghost" icon="stop" aria-label="Stop" onClick={() => void call('terminal.kill', { sessionId: b.id })} />
+                      <Button size="sm" variant="ghost" icon="stop" aria-label="Stop" title="Stop (Ctrl+C)" onClick={() => void call('terminal.kill', { sessionId: b.id })} />
                     ) : (
                       <>
                         <span className={b.code === 0 ? 'term-ok' : 'term-err'}>{b.code === null ? 'stopped' : `exit ${b.code}`}</span>
@@ -449,6 +497,13 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
                 onChange={(e) => setCmd(e.target.value)}
                 onKeyDown={(e) => {
                   if (slash.onKeyDown(e)) return;
+                  // Ctrl+C with nothing selected in the box: stop the running command, or (none running) drop the line.
+                  if (isInterrupt(e.nativeEvent) && e.currentTarget.selectionStart === e.currentTarget.selectionEnd) {
+                    e.preventDefault();
+                    if (!interrupt()) setCmd('');
+                    setHIdx(-1);
+                    return;
+                  }
                   if (e.key === 'Enter' && !e.shiftKey) {
                     e.preventDefault();
                     void exec();

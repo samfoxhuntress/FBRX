@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { compareSemver, deepMerge, isPathLocked, satisfies, newId, decodeLicenseUnverified, parseVertical, productNameFor, resolveAudience, KIND_GROUPS, VERTICALS, VERTICAL_AUDIENCES, type LicensePayload } from '../src';
+import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, SERVER_OFFER, TIERS, atLeast, editionPoints, formatPrice, maxTier, organizationBill, parseTier, personalPlan, priceBookProducts, priceOf, productById, productFor, productInterval, tenantMonthlyTotal, type PriceBook } from '../src';
+import { DEFAULT_POLICY, DEFAULT_SETTINGS, THINKING_BUDGETS, thinkingBudget, thinkingLevelOf } from '../src';
 import { generateSigningKeyPair, hashPassword, licenseStatusFrom, openString, sealString, signLicense, verifyLicense, verifyPassword } from '../src/node';
 import { randomBytes } from 'node:crypto';
 
@@ -47,6 +49,115 @@ describe('licensing', () => {
     expect(expired.edition).toBe('community');
     const capped = licenseStatusFrom(signLicense(payload({ maxMajorVersion: 1 }), keys.privateKeyPem), [keys.publicKeyPem], 'local', 2);
     expect(capped.state).toBe('invalid');
+    // A key an FBRX account made for one of its computers counts on that one only.
+    const mine = signLicense(payload({ installId: 'inst_a' }), keys.privateKeyPem);
+    expect(licenseStatusFrom(mine, [keys.publicKeyPem], 'account', 1, 'inst_a').state).toBe('valid');
+    expect(licenseStatusFrom(mine, [keys.publicKeyPem], 'account', 1, 'inst_b')).toMatchObject({ state: 'invalid', message: 'This license is for another computer' });
+  });
+});
+
+describe('editions and prices', () => {
+  it('orders the four editions, Black Hole Edition having everything', () => {
+    expect(TIERS).toEqual(['essentials', 'basic', 'ultra', 'blackhole']);
+    expect(atLeast('blackhole', 'ultra')).toBe(true);
+    expect(atLeast('ultra', 'blackhole')).toBe(false);
+    expect(atLeast('basic', 'basic')).toBe(true);
+    expect(atLeast(null, 'essentials')).toBe(false);
+    expect(maxTier('basic', 'ultra')).toBe('ultra');
+    expect(['Black Hole Edition', 'black-hole', 'blackhole', 'Pro', 'ESSENTIALS'].map(parseTier)).toEqual(['blackhole', 'blackhole', 'blackhole', 'basic', 'essentials']);
+    // The old names still work (settings, environment variables and scripts written before the rename).
+    expect(['Black Hole', 'Standard', 'basic', 'FBRX Endpoint Pro'].map(parseTier)).toEqual(['blackhole', 'basic', 'basic', 'basic']);
+  });
+
+  it('carries the price list: Pro $4.99, Ultra $24.99, Black Hole Edition $49.99 per computer in a tenant, FBRX Command $54.99', () => {
+    expect([priceOf('essentials', 'personal'), priceOf('basic', 'personal'), priceOf('ultra', 'personal'), priceOf('blackhole', 'personal')]).toEqual([0, 499, 2499, null]);
+    // 20% off Pro and Ultra in a tenant; Black Hole Edition always full price; Essentials free everywhere.
+    expect([priceOf('essentials', 'tenant'), priceOf('basic', 'tenant'), priceOf('ultra', 'tenant'), priceOf('blackhole', 'tenant')]).toEqual([0, 399, 1999, 4999]);
+    expect(COMMAND_PLAN.monthly).toBe(5499);
+    expect(tenantMonthlyTotal({ essentials: 40, basic: 10, ultra: 2, blackhole: 1 })).toBe(5499 + 3990 + 3998 + 4999);
+    expect(SERVER_OFFER).toMatchObject({ available: false });
+    expect(SERVER_OFFER).not.toHaveProperty('price');
+    expect([0, 499, 1199, 10000].map(formatPrice)).toEqual(['Free', '$4.99', '$11.99', '$100']);
+    // Every paid edition has a product id for Stripe and the stores, and Black Hole Edition is sold only in a tenant.
+    for (const t of TIERS) expect(EDITION_PLANS[t].tenantProductId === null).toBe(t === 'essentials');
+    expect(EDITION_PLANS.blackhole).toMatchObject({ sold: 'tenant', productId: null });
+  });
+
+  it('bills an organization per person: each covers its computers up to its edition, further ones cost extra', () => {
+    // Until the operator changes it, the price list is the prices above: 10 shared Pro computers in a school.
+    expect(organizationBill(DEFAULT_PRICE_BOOK, { kind: 'education', counts: { people: [], shared: { basic: 10 }, computers: 10 } }).total).toBe(5499 + 3990);
+    const book: PriceBook = {
+      personal: { basic: 1200, ultra: 2900 },
+      seats: { basic: 1200, ultra: 2900, blackhole: 9900 },
+      computers: { included: { basic: 2, ultra: 5, blackhole: 15 }, extra: { basic: 199, ultra: 299, blackhole: 499 } },
+      volume: [
+        { from: 25, percentOff: 10 },
+        { from: 100, percentOff: 15 },
+        { from: 250, percentOff: 20 },
+      ],
+      fees: { base: 5000, large: { from: 100, monthly: 10000 }, home: 1499 },
+      yearlyMonths: 10,
+    };
+    const people = (n: number, tier: 'basic' | 'ultra' | 'blackhole', computers = 1) => Array.from({ length: n }, () => ({ tier, computers }));
+    const bill = (kind: 'business' | 'education' | 'home', counts: { people: ReturnType<typeof people>; shared?: Record<string, number>; computers: number }) => organizationBill(book, { kind, counts: { shared: {}, ...counts } });
+    // The examples on the price sheet, now people: 20 Pro and 10 Ultra; 120 and 30; 300 and 100.
+    expect(bill('business', { people: [...people(20, 'basic'), ...people(10, 'ultra')], computers: 30 })).toMatchObject({ total: 52700, fee: 'base', paid: 30, percentOff: 10 });
+    expect(bill('education', { people: [...people(120, 'basic'), ...people(30, 'ultra')], computers: 150 })).toMatchObject({ total: 206350, fee: 'large', percentOff: 15 });
+    expect(bill('education', { people: [...people(300, 'basic'), ...people(100, 'ultra')], computers: 400 })).toMatchObject({ total: 530000, fee: 'large', percentOff: 20 });
+
+    // A Pro person on 3 computers, an Ultra one on 7, a Black Hole Edition one on 15, and one on none: each pays once; past
+    // what the edition includes, each computer costs extra, never discounted.
+    const team = bill('business', { people: [...people(1, 'basic', 3), ...people(1, 'ultra', 7), ...people(1, 'blackhole', 15), ...people(1, 'basic', 0)], computers: 25 });
+    expect(team.lines.filter((l) => l.item === 'extra').map((l) => [l.tier, l.quantity, l.total])).toEqual([
+      ['basic', 1, 199],
+      ['ultra', 2, 598],
+      ['blackhole', 0, 0],
+    ]);
+    expect(team.lines.find((l) => l.item === 'seats' && l.tier === 'basic')).toMatchObject({ quantity: 2, people: 2, shared: 0, total: 2400 });
+    expect(team.total).toBe(5000 + 2400 + 2900 + 9900 + 199 + 598);
+
+    // Shared computers nobody pays for take a seat each and count toward the discount; Essentials computers count toward
+    // the fee's size only.
+    expect(bill('business', { people: people(20, 'basic'), shared: { basic: 5 }, computers: 115 })).toMatchObject({ paid: 25, percentOff: 10, fee: 'large', total: 10000 + 25 * 1080 });
+    // Home organizations pay their own fee, at any size; MDM is charged per managed computer, never discounted.
+    const home = organizationBill(book, { kind: 'home', counts: { people: people(3, 'basic'), shared: {}, computers: 3 }, mdm: { managed: 3, pricing: { available: true, perEndpoint: 400 } } });
+    expect(home.lines.map((l) => [l.item, l.productId, l.total])).toEqual([
+      ['fee', 'fbrx_command_home_monthly', 1499],
+      ['seats', 'fbrx_standard_tenant_monthly', 3600],
+      ['seats', 'fbrx_ultra_tenant_monthly', 0],
+      ['seats', 'fbrx_blackhole_tenant_monthly', 0],
+      ['extra', 'fbrx_standard_extra_computer_monthly', 0],
+      ['extra', 'fbrx_ultra_extra_computer_monthly', 0],
+      ['extra', 'fbrx_blackhole_extra_computer_monthly', 0],
+      ['mdm', 'fbrx_mdm_tenant_monthly', 1200],
+    ]);
+    // Each organization fee is an FBRX Command plan to Stripe; extra computers are their own product.
+    expect(['fbrx_command_tenant_monthly', 'fbrx_command_large_monthly', 'fbrx_command_home_monthly'].map((id) => productById(id)?.kind)).toEqual(['command', 'command', 'command']);
+    expect(productById('fbrx_ultra_extra_computer_monthly')).toEqual({ kind: 'extra', tier: 'ultra' });
+
+    // Paying yearly: every line at its yearly product, a year costing 10 months' price, the volume discount as before.
+    const monthly = bill('business', { people: [...people(20, 'basic'), ...people(9, 'ultra'), ...people(1, 'ultra', 7)], computers: 36 });
+    const yearly = organizationBill(book, { kind: 'business', counts: { people: [...people(20, 'basic'), ...people(9, 'ultra'), ...people(1, 'ultra', 7)], shared: {}, computers: 36 }, interval: 'year' });
+    expect(yearly).toMatchObject({ interval: 'year', fee: 'base', paid: 30, percentOff: 10 });
+    expect(yearly.lines.filter((l) => l.quantity > 0).map((l) => [l.productId, l.each, l.total])).toEqual([
+      ['fbrx_command_tenant_yearly', 50000, 50000],
+      ['fbrx_standard_tenant_yearly', 12000, 216000],
+      ['fbrx_ultra_tenant_yearly', 29000, 261000],
+      ['fbrx_ultra_extra_computer_yearly', 2990, 5980],
+    ]);
+    expect(yearly.total).toBe(monthly.total * 10);
+    // A yearly product sells what its monthly one does; FBRX Server is bought once, at no interval.
+    expect(productById('fbrx_command_large_yearly')).toEqual({ kind: 'command' });
+    expect(productById('fbrx_blackhole_tenant_yearly')).toEqual({ kind: 'edition', tier: 'blackhole', tenant: true });
+    expect([productInterval('fbrx_mdm_tenant_yearly'), productInterval('fbrx_mdm_tenant_monthly')]).toEqual(['year', 'month']);
+    expect([productFor('fbrx_mdm_tenant_yearly', 'month'), productFor(SERVER_OFFER.productId, 'year')]).toEqual(['fbrx_mdm_tenant_monthly', 'fbrx_server_iso']);
+    // Stripe gets a yearly price for each price on the list, a person's own Pro and Ultra included.
+    const products = priceBookProducts(book, { available: true, perEndpoint: 400 });
+    expect(products.find((p) => p.productId === 'fbrx_command_home_yearly')).toMatchObject({ interval: 'year', amount: 14990 });
+    expect(products.find((p) => p.productId === 'fbrx_mdm_tenant_yearly')).toMatchObject({ interval: 'year', amount: 4000 });
+    expect(products.find((p) => p.productId === 'fbrx_ultra_yearly')).toMatchObject({ interval: 'year', amount: 29000, label: 'Ultra on its own, paid yearly' });
+    expect(personalPlan(book, 'basic', 'year')).toEqual({ productId: 'fbrx_standard_yearly', amount: 12000 });
+    expect(productById('fbrx_standard_yearly')).toEqual({ kind: 'edition', tier: 'basic', tenant: false });
   });
 });
 
@@ -122,5 +233,21 @@ describe('kinds of tenant (Work, School, Home)', () => {
       for (const g of KIND_GROUPS[v]) expect(VERTICAL_AUDIENCES[v]).toContain(g.audience);
     }
     expect(KIND_GROUPS.home.map((g) => g.name)).toEqual(['Parents', 'Children']);
+  });
+});
+
+describe('thinking levels and the editions list', () => {
+  it('starts every computer at Everyday, and tells a fine-tuned budget apart', () => {
+    expect(thinkingLevelOf(thinkingBudget(DEFAULT_POLICY, DEFAULT_SETTINGS))).toBe('everyday');
+    expect(thinkingLevelOf({ ...THINKING_BUDGETS.thorough, steps: 61 })).toBe('custom');
+    // Each level asks a little more than the one before.
+    expect(THINKING_BUDGETS.quick.steps).toBeLessThan(THINKING_BUDGETS.everyday.steps);
+    expect(THINKING_BUDGETS.everyday.steps).toBeLessThan(THINKING_BUDGETS.thorough.steps);
+  });
+
+  it('lists each edition as everything in the one before, then what it adds', () => {
+    expect(editionPoints('essentials')).toEqual(EDITION_PLANS.essentials.highlights);
+    expect(editionPoints('ultra')).toEqual(['Everything in Pro', ...EDITION_PLANS.ultra.highlights]);
+    expect(editionPoints('blackhole')[0]).toBe('Everything in Ultra');
   });
 });

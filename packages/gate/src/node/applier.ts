@@ -2,8 +2,8 @@ import { execFile } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { inCidr, intToIPv4, ipv4ToInt } from '@fbrx/shared';
-import { bridgeName, type GateConfig } from '../model';
+import { inCidr, intToIPv4, ipv4ToInt, networkOf } from '@fbrx/shared';
+import { bridgeName, pickLanAddress, type GateConfig } from '../model';
 import { linkNames, type GateRendered } from '../render/index';
 import { NFT_TABLE, WG_IFACE } from '../render/nftables';
 import type { GatePaths } from '../render/paths';
@@ -139,6 +139,9 @@ export class SimulatedApplier implements GateApplier {
 
 // ------------------------------------------------------------------------------------------------ Linux
 
+/** Where wg may read a key on Ubuntu 26.04 (its AppArmor profile allows nowhere else). */
+const WG_KEY_DIR = '/etc/wireguard';
+
 export interface LinuxApplierOptions {
   paths: GatePaths;
   /** "networkd" (FBRX Server: kept across restarts) or "iproute" (applied directly; tests and systems without it). */
@@ -175,6 +178,12 @@ export class LinuxApplier implements GateApplier {
     const r = await this.run(cmd, args);
     if (r.code !== 0) throw new Error(`${what}: ${(r.err || r.out).trim().split('\n').slice(-3).join(' ').slice(0, 400) || `${cmd} failed`}`);
     return r;
+  }
+
+  /** A system service the gate relies on: switched on for the next start, and running now. */
+  private async ensureService(unit: string, what: string): Promise<void> {
+    if ((await this.run('systemctl', ['is-enabled', '--quiet', unit])).code !== 0) await this.run('systemctl', ['enable', unit]);
+    if ((await this.run('systemctl', ['is-active', '--quiet', unit])).code !== 0) await this.must('systemctl', ['start', unit], what);
   }
 
   private write(file: string, content: string, mode = 0o644) {
@@ -251,17 +260,20 @@ export class LinuxApplier implements GateApplier {
 
     // Ports, VLANs and addresses.
     if (this.o.mode === 'networkd') {
+      // systemd-networkd runs the ports: on, and kept on (Debian installs it switched off).
+      await this.ensureService('systemd-networkd', 'systemd-networkd did not start');
       mkdirSync(this.networkdDir, { recursive: true });
       const keep = new Set(r.networkd.map((f) => f.name));
       for (const f of readdirSync(this.networkdDir)) if (f.startsWith('10-fbrx-') && !keep.has(f)) rmSync(join(this.networkdDir, f));
       for (const f of r.networkd) this.write(join(this.networkdDir, f.name), f.content, f.mode);
       // systemd-networkd reads the VPN key file as its own user.
       if (c.vpn.enabled) await this.run('chgrp', ['systemd-network', join(this.o.paths.etcDir, 'wg-fbrx.key')]);
-      // A virtual switch taken away is deleted here (systemd-networkd leaves links it no longer has files for), which
-      // frees its port; a port joining a switch gives its address up to it.
-      const bridges = (rr: GateRendered | null) => new Set((rr?.networkd ?? []).map((f) => /^10-fbrx-(br-[a-z0-9-]+)\.netdev$/.exec(f.name)?.[1]).filter((b): b is string => !!b));
-      const nowBridges = bridges(r);
-      for (const b of bridges(previous)) if (!nowBridges.has(b)) await this.run('ip', ['link', 'del', 'dev', b]);
+      // A virtual switch, VLAN or tunnel taken away (a VLAN whose tag changed is a new one) is deleted here:
+      // systemd-networkd leaves links it no longer has files for. That frees a switch's port; a port joining a switch
+      // gives its address up to it.
+      const netdevs = (rr: GateRendered | null) => new Set((rr?.networkd ?? []).map((f) => /^10-fbrx-([A-Za-z0-9._-]+)\.netdev$/.exec(f.name)?.[1]).filter((b): b is string => !!b));
+      const nowNetdevs = netdevs(r);
+      for (const b of netdevs(previous)) if (!nowNetdevs.has(b)) await this.run('ip', ['link', 'del', 'dev', b]);
       for (const n of c.networks) if (n.vmSwitch) await this.run('ip', ['-4', 'addr', 'flush', 'dev', n.interface, 'scope', 'global']);
       await this.must('networkctl', ['reload'], 'systemd-networkd');
       const names = [...new Set(r.networkd.map((f) => f.name.replace(/^10-fbrx-/, '').replace(/\.(network|netdev)$/, '')))];
@@ -285,10 +297,16 @@ export class LinuxApplier implements GateApplier {
     this.write(nft, r.nftables, 0o640);
     await this.must('nft', ['-f', nft], 'The firewall rules');
 
-    // DHCP and DNS.
+    // The firewall is loaded again at every start, before the network comes up.
+    if (this.o.mode === 'networkd') await this.run('systemctl', ['enable', 'fbrx-gate-firewall.service']);
+
+    // DHCP and DNS (switched on for the next start too).
     this.write(this.dnsmasqConf, r.dnsmasq);
     if (this.o.restartDns) await this.o.restartDns(this.dnsmasqConf);
-    else await this.must('systemctl', ['restart', 'dnsmasq'], 'dnsmasq');
+    else {
+      await this.run('systemctl', ['enable', 'dnsmasq']);
+      await this.must('systemctl', ['restart', 'dnsmasq'], 'dnsmasq');
+    }
 
     // Traffic shaping.
     notes.push(...(await this.qos(r, previous)));
@@ -313,10 +331,14 @@ export class LinuxApplier implements GateApplier {
   private async wireguardIproute(c: GateConfig): Promise<string[]> {
     const add = await this.run('ip', ['link', 'add', 'dev', WG_IFACE, 'type', 'wireguard']);
     if (add.code !== 0 && !/File exists/.test(add.err)) return [`VPN: this kernel has no WireGuard (${add.err.trim()})`];
-    const key = join(this.o.paths.etcDir, 'wg-fbrx.key');
+    // wg reads the private key from a file, and Ubuntu 26.04's AppArmor lets it read only below /etc/wireguard: the key
+    // is there, readable by root alone, for just as long as wg takes to read it.
+    mkdirSync(WG_KEY_DIR, { recursive: true, mode: 0o700 });
+    const key = join(WG_KEY_DIR, `${WG_IFACE}.key`);
+    this.write(key, readFileSync(join(this.o.paths.etcDir, 'wg-fbrx.key'), 'utf8'), 0o600);
     const args = ['set', WG_IFACE, 'private-key', key, 'listen-port', String(c.vpn.port)];
     for (const p of c.vpn.peers) args.push('peer', p.publicKey, 'allowed-ips', `${p.address}/32`, ...(p.keepalive ? ['persistent-keepalive', String(p.keepalive)] : []));
-    const wg = await this.run('wg', args);
+    const wg = await this.run('wg', args).finally(() => rmSync(key, { force: true }));
     if (wg.code !== 0) return [`VPN: ${wg.err.trim() || 'wg failed'} (install wireguard-tools)`];
     await this.run('ip', ['addr', 'replace', c.vpn.address, 'dev', WG_IFACE]);
     await this.run('ip', ['link', 'set', 'dev', WG_IFACE, 'up']);
@@ -419,6 +441,15 @@ export class LinuxApplier implements GateApplier {
       const routes = (await json<Array<{ gateway?: string; dev?: string }>>('ip', ['-j', 'route', 'show', 'default'])) ?? [];
       live.wan.gateway = routes.find((r) => r.dev === c.wan.interface)?.gateway ?? routes[0]?.gateway ?? null;
       if (!live.wan.address) live.problems.push('The internet port has no address yet');
+      // Behind a router that hands out the same addresses as one of the gate's networks, nothing gets through.
+      const wanCidr = live.interfaces.find((i) => i.name === c.wan.interface)?.addresses[0];
+      const clash = live.wan.address ? c.networks.find((n) => inCidr(live.wan.address!, n.address)) : undefined;
+      if (clash && wanCidr) {
+        const free = pickLanAddress([wanCidr, ...c.networks.filter((n) => n !== clash).map((n) => n.address), ...(c.vpn.enabled ? [c.vpn.address] : [])]);
+        live.problems.push(
+          `The internet port got ${live.wan.address}, inside your network ${clash.name} (${networkOf(clash.address)}): the router in front of the gate uses the same addresses. Move ${clash.name}, like sudo fbrx-gate renumber ${clash.name} ${free} (or under Networks), then commit.`,
+        );
+      }
     }
     try {
       live.leases = parseLeases(readFileSync(join(this.o.paths.varDir, 'dnsmasq.leases'), 'utf8'), c);
@@ -440,6 +471,24 @@ export class LinuxApplier implements GateApplier {
       if (!rootQ) live.problems.push('Traffic shaping is on but not in place');
     }
     live.dns.running = (await this.run('pgrep', ['-x', 'dnsmasq'])).code === 0;
+    if (c && this.o.mode === 'networkd') {
+      if (!live.dns.running) live.problems.push('DHCP and DNS (dnsmasq) are not running: sudo systemctl enable --now dnsmasq (journalctl -u dnsmasq says why it stopped)');
+      if ((await this.run('systemctl', ['is-active', '--quiet', 'systemd-networkd'])).code !== 0) live.problems.push('systemd-networkd is not running, so the ports keep no settings: sudo systemctl enable --now systemd-networkd');
+      try {
+        if (readFileSync('/proc/sys/net/ipv4/ip_forward', 'utf8').trim() === '0') live.problems.push('Routing is off in the kernel (net.ipv4.ip_forward): commit again, or sudo sysctl -w net.ipv4.ip_forward=1');
+      } catch {
+        /* not Linux */
+      }
+      // The system's own network settings must leave the gate's ports alone, or two programs fight over them.
+      try {
+        const ifaces = readFileSync(join(this.root, 'etc/network/interfaces'), 'utf8');
+        for (const i of c.interfaces.filter((x) => x.kind === 'ethernet')) {
+          if (new RegExp(`^\\s*iface\\s+${i.name.replace(/[.]/g, '\\.')}(\\s|$)`, 'm').test(ifaces)) live.problems.push(`/etc/network/interfaces still sets up ${i.name}, which the gate runs: put a # before its lines (auto, iface, address…) and restart`);
+        }
+      } catch {
+        /* no ifupdown */
+      }
+    }
     try {
       live.conntrack = Number(readFileSync('/proc/sys/net/netfilter/nf_conntrack_count', 'utf8').trim());
     } catch {

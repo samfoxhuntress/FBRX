@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
 import { POLICY_ACTIONS, RISK_LEVELS, type AuditEntry, type Policy } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Grid, Input, JsonEditor, Modal, Page, Select, Status, Table, Tabs, TextArea, Toggle, formatDate, useAction } from '@fbrx/ui';
+import { Button, Callout, Card, Empty, Field, Grid, Input, Modal, Page, Select, Status, Table, Tabs, TextArea, Toggle, formatDate, useAction } from '@fbrx/ui';
 import { call } from '../client';
 import { useCore } from '../hooks';
+import { FoldersCard } from './governance-folders';
 
 const ACTION_LABEL = { allow: 'Run freely', ask: 'Ask me first', deny: 'Block' } as const;
 
@@ -18,9 +19,8 @@ export function GovernancePage() {
 
 function PolicyTab() {
   const eff = useCore('governance.policy', undefined, ['policy.changed']);
+  const { data: license } = useCore('license.status', undefined, ['license.changed']);
   const [draft, setDraft] = useState<Policy | null>(null);
-  const [json, setJson] = useState<string | null>(null);
-  const [jsonOk, setJsonOk] = useState(true);
   const { run, busy } = useAction();
   useEffect(() => {
     if (eff.data) setDraft(structuredClone(eff.data.policy));
@@ -33,13 +33,15 @@ function PolicyTab() {
     fn(next);
     setDraft(next);
   };
-  const dirty = JSON.stringify(p) !== JSON.stringify(eff.data.policy);
-  const save = (policy: Policy) => run('save', () => call('governance.updatePolicy', { policy }), 'Policy saved');
+  const dirty = JSON.stringify({ ...p, filesystem: null }) !== JSON.stringify({ ...eff.data.policy, filesystem: null });
+  // Folders are saved on their own (Folders your AI can use); the rest of the policy is saved here.
+  const save = (policy: Policy) => run('save', () => call('governance.updatePolicy', { policy: { ...policy, filesystem: { ...policy.filesystem, allowedRoots: eff.data!.policy.filesystem.allowedRoots, readOnly: eff.data!.policy.filesystem.readOnly } } }), 'Policy saved');
   const lines = (v: string[]) => v.join('\n');
   const parse = (v: string) => v.split('\n').map((x) => x.trim()).filter(Boolean);
   return (
     <>
-      {managed && <Callout tone="info" title="Managed by your organization">This policy comes from your control plane and can only be changed by an administrator.</Callout>}
+      {managed && <Callout tone="info" title="Managed by your organization">This policy comes from FBRX Command and can only be changed by an administrator there (FBRX Command → Governance).</Callout>}
+      <FoldersCard />
       <Grid cols={2}>
         <Card title="Defaults by risk" subtitle="What happens when no specific rule matches">
           <div className="fx-form">
@@ -53,12 +55,8 @@ function PolicyTab() {
             ))}
           </div>
         </Card>
-        <Card title="Files, network and shell">
+        <Card title="Network and shell">
           <div className="fx-form">
-            <Field label="Folders the agent may use" help="One per line. ${HOME}, ${DOCUMENTS}, ${DESKTOP}, ${DOWNLOADS}, ${WORKSPACE} expand per machine">
-              <TextArea code rows={3} disabled={managed} value={lines(p.filesystem.allowedRoots)} onChange={(e) => upd((x) => (x.filesystem.allowedRoots = parse(e.target.value)))} />
-            </Field>
-            <Toggle disabled={managed} checked={p.filesystem.readOnly} onChange={(v) => upd((x) => (x.filesystem.readOnly = v))} label="Read-only filesystem" />
             <Field label="Allowed web domains" help="One per line; * allows all, *.example.com allows subdomains">
               <TextArea code rows={2} disabled={managed} value={lines(p.network.allowedDomains)} onChange={(e) => upd((x) => (x.network.allowedDomains = parse(e.target.value)))} />
             </Field>
@@ -72,7 +70,12 @@ function PolicyTab() {
         <Card title="AI and approvals">
           <div className="fx-form">
             <Toggle disabled={managed} checked={p.ai.allowCloudProviders} onChange={(v) => upd((x) => (x.ai.allowCloudProviders = v))} label="Allow cloud AI providers" />
-            <Toggle disabled={managed} checked={p.ai.guardianModelReview} onChange={(v) => upd((x) => (x.ai.guardianModelReview = v))} label="Guardian also asks an AI model to review risky calls" />
+            <Toggle
+              disabled={managed || !license?.features.includes('guardian.model')}
+              checked={p.ai.guardianModelReview && !!license?.features.includes('guardian.model')}
+              onChange={(v) => upd((x) => (x.ai.guardianModelReview = v))}
+              label={license?.features.includes('guardian.model') ? 'Guardian also asks an AI model to review risky calls' : 'Guardian also asks an AI model to review risky calls (Black Hole Edition)'}
+            />
             <Toggle disabled={managed} checked={p.data.redactSecrets} onChange={(v) => upd((x) => (x.data.redactSecrets = v))} label="Redact credentials from tool output" />
             <Toggle disabled={managed} checked={p.approvals.allowRemember} onChange={(v) => upd((x) => (x.approvals.allowRemember = v))} label='Allow "Always allow" on approvals' />
             <div className="fx-row">
@@ -88,7 +91,7 @@ function PolicyTab() {
             </div>
           </div>
         </Card>
-        <Card title="Rules" subtitle="Evaluated first, top to bottom" actions={!managed && <Button size="sm" onClick={() => setJson(JSON.stringify(p, null, 2))}>Edit as JSON</Button>} flush>
+        <Card title="Rules" subtitle="Evaluated first, top to bottom. Organizations write their own in FBRX Command → Governance." flush>
           <Table
             rows={[...p.rules, ...eff.data.rememberedRules]}
             rowKey={(r) => r.id}
@@ -115,23 +118,6 @@ function PolicyTab() {
             Discard changes
           </Button>
         </div>
-      )}
-      {json !== null && (
-        <Modal
-          wide
-          title="Edit policy JSON"
-          onClose={() => setJson(null)}
-          footer={
-            <>
-              <Button onClick={() => setJson(null)}>Cancel</Button>
-              <Button variant="primary" disabled={!jsonOk} onClick={async () => (await save(JSON.parse(json))) && setJson(null)}>
-                Save
-              </Button>
-            </>
-          }
-        >
-          <JsonEditor value={json} onChange={setJson} rows={24} onValidity={setJsonOk} />
-        </Modal>
       )}
     </>
   );

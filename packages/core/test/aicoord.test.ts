@@ -1,6 +1,7 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { Client } from '@modelcontextprotocol/sdk/client/index.js';
 import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js';
 import { makeKernel, waitFor, USER } from './helpers';
@@ -62,6 +63,39 @@ describe('AI coordination', () => {
     expect(new AiCoordination({ shim: () => null, localApiRunning: () => false }).bridge()).toMatchObject({ ready: false });
     expect(new AiCoordination({ shim: () => ({ command: 'x', args: [], env: {} }), localApiRunning: () => false }).bridge().reason).toMatch(/Local API/);
   });
+
+  it("connects Hermes Agent through its YAML config, keeping the person's own servers", async () => {
+    const home = mkdtempSync(join(tmpdir(), 'fbrx-hermes-'));
+    // The home folder comes from HOME, and from USERPROFILE on Windows.
+    const before = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+    const config = join(home, '.hermes', 'config.yaml');
+    const own = 'model:\n  default: m\n\nmcp_servers:\n  files:\n    command: npx\n';
+    mkdirSync(join(home, '.hermes'));
+    writeFileSync(config, own);
+    try {
+      Object.assign(process.env, { HOME: home, USERPROFILE: home });
+      vi.resetModules();
+      const { AiCoordination: Fresh } = await import('../src/aicoord/aicoord');
+      const co = new Fresh({ shim: () => ({ command: process.execPath, args: ['fbrx-mcp.mjs'], env: { FBRX_DATA_DIR: '/data' } }), localApiRunning: () => true });
+      expect((await co.detect()).find((a) => a.id === 'hermes')).toMatchObject({ found: true, mcp: true, bridged: false });
+
+      const r = await co.install('hermes');
+      expect(r.message).toMatch(/\/reload-mcp/);
+      expect(readFileSync(`${config}.fbrx-backup`, 'utf8')).toBe(own);
+      expect(readFileSync(config, 'utf8')).toBe(`${own}  fbrx: {"command": ${JSON.stringify(process.execPath)}, "args": ["fbrx-mcp.mjs"], "env": {"FBRX_DATA_DIR": "/data"}}\n`);
+      expect((await co.detect()).find((a) => a.id === 'hermes')?.bridged).toBe(true);
+
+      await co.remove('hermes');
+      expect(readFileSync(config, 'utf8')).toBe(own);
+    } finally {
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+      vi.resetModules();
+      rmSync(home, { recursive: true, force: true });
+    }
+  }, 90_000); // on Windows each look also reads the Start menu and installed programs
 
   it('is reachable from the core API', async () => {
     const { kernel, cleanup } = await makeKernel();

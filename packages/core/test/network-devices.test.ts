@@ -3,7 +3,7 @@ import { createServer, type AddressInfo, type Socket } from 'node:net';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { Server, utils } from 'ssh2';
-import { matchDeviceProfile, type ConsoleConnectResult } from '@fbrx/shared';
+import { matchDeviceProfile, type ConsoleBookmark, type ConsoleConnectResult } from '@fbrx/shared';
 import { encodeVendorDb, parseIeeeCsv, tidyVendor, VendorDb } from '../src/network/vendors';
 import { fingerprintOf, stripAnsi } from '../src/network/device-console';
 import { makeKernel, tempDir, USER, waitFor } from './helpers';
@@ -64,12 +64,26 @@ describe('device guides', () => {
     expect(matchDeviceProfile({ vendor: null, name: 'USW-Lite-8-PoE' })?.id).toBe('ubiquiti');
     expect(matchDeviceProfile({ vendor: 'Some Maker', ports: [22, 80] })?.id).toBe('linux');
     expect(matchDeviceProfile({ vendor: 'Some Maker', ports: [80] })).toBeNull();
+    // FBRX's own servers get FBRX's commands, whoever made the hardware.
+    expect(matchDeviceProfile({ vendor: 'Dell Inc.', name: 'fbrx-server-1', ports: [22, 9443] })?.id).toBe('fbrx-server');
+    expect(matchDeviceProfile({ vendor: 'Dell Inc.', name: 'FBRX-Gate' })?.id).toBe('fbrx-gate');
   });
 
   it('strips terminal escape codes and applies backspaces', () => {
     expect(stripAnsi('\x1b[1;32mswitch\x1b[0m# shwo\b \b\b \bow ver\r\n')).toBe('switch# show ver\n');
   });
 });
+
+/**
+ * The fake switch's host key. ssh2's own generator makes an ed25519 key that ssh2 then cannot read about once in 250
+ * tries ("Malformed OpenSSH private key"), so keep the first one it can.
+ */
+function hostKey() {
+  for (;;) {
+    const key = utils.generateKeyPairSync('ed25519');
+    if (!(utils.parseKey(key.private) instanceof Error)) return key;
+  }
+}
 
 /** A tiny SSH "switch": user admin / secret, prints a banner and answers `show version`. */
 function sshDevice(hostKey: string) {
@@ -105,7 +119,7 @@ function sshDevice(hostKey: string) {
 
 describe('device console', () => {
   it('pins the SSH host key, logs in, types commands and lets the agent read and send', async () => {
-    const key = utils.generateKeyPairSync('ed25519');
+    const key = hostKey();
     const dev = await sshDevice(key.private);
     const { kernel, cleanup } = await makeKernel();
     try {
@@ -139,6 +153,18 @@ describe('device console', () => {
       const again = (await kernel.call('console.connect', { ...base, password: undefined, useSaved: true }, USER)) as ConsoleConnectResult;
       expect('session' in again).toBe(true);
 
+      // Saved connections: the device is kept once, with its guide and saved password, and can be renamed or removed.
+      const saved = (await kernel.call('console.bookmarks', undefined, USER)) as ConsoleBookmark[];
+      expect(saved).toHaveLength(1);
+      expect(saved[0]).toMatchObject({ host: '127.0.0.1', port: dev.port, protocol: 'ssh', username: 'admin', profileId: 'cisco', passwordSaved: true, label: 'admin@127.0.0.1' });
+      expect(saved[0].lastConnectedAt).toBeTruthy();
+      const renamed = (await kernel.call('console.saveBookmark', { id: saved[0].id, label: 'Core switch', host: '127.0.0.1', port: dev.port, protocol: 'ssh', username: 'admin', notes: 'Rack 2' }, USER)) as ConsoleBookmark;
+      expect(renamed).toMatchObject({ id: saved[0].id, label: 'Core switch', notes: 'Rack 2', profileId: 'cisco' });
+      const added = (await kernel.call('console.saveBookmark', { host: '10.0.0.2', protocol: 'telnet', profileId: 'linux' }, USER)) as ConsoleBookmark;
+      expect(added).toMatchObject({ port: 23, username: null, passwordSaved: false, label: '10.0.0.2' });
+      expect(((await kernel.call('console.bookmarks', undefined, USER)) as ConsoleBookmark[]).map((b) => b.label)).toEqual(['10.0.0.2', 'Core switch']);
+      await expect(kernel.call('console.bookmarks', undefined, { origin: 'api', actor: 'localapi:full' })).rejects.toThrow();
+
       // A different key for the same address is refused until confirmed.
       kernel.meta.set('console.knownHosts', { [`127.0.0.1:${dev.port}`]: { fingerprint: 'SHA256:somethingelse', keyType: 'ssh-ed25519', addedAt: '' } });
       const changed = (await kernel.call('console.connect', base, USER)) as ConsoleConnectResult;
@@ -146,6 +172,10 @@ describe('device console', () => {
 
       await kernel.call('console.close', { id: ok.session.id }, USER);
       expect(((await kernel.call('console.list', undefined, USER)) as any[]).find((s) => s.id === ok.session.id)).toBeUndefined();
+      // Removing it can also forget its password.
+      await kernel.call('console.removeBookmark', { id: renamed.id, forgetPassword: true }, USER);
+      expect(((await kernel.call('console.bookmarks', undefined, USER)) as ConsoleBookmark[]).map((b) => b.label)).toEqual(['10.0.0.2']);
+      expect((await kernel.call('console.logins', undefined, USER)) as any[]).toEqual([]);
       // Consoles are for the person at the workstation only.
       await expect(kernel.call('console.list', undefined, { origin: 'api', actor: 'localapi:full' })).rejects.toThrow();
     } finally {

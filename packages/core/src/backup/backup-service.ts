@@ -58,7 +58,7 @@ export class BackupService {
     }
   }
 
-  async create(o: { passphrase?: string; label?: string; includeModels?: boolean; actor: string; scheduled?: boolean }): Promise<SnapshotInfo> {
+  async create(o: { passphrase?: string; label?: string; includeModels?: boolean; actor: string; scheduled?: boolean; withoutMemory?: boolean }): Promise<SnapshotInfo> {
     if (this.busy) throw new CoreError('CONFLICT', 'A backup is already running');
     const passphrase = o.passphrase || this.scheduledPassphrase();
     if (!passphrase) {
@@ -81,6 +81,7 @@ export class BackupService {
         vaultKey: this.d.vault.isUnlocked ? this.d.vault.exportKeyForSnapshot() : null,
         appVersion: this.d.appVersion,
         device: this.d.device(),
+        withoutMemory: o.withoutMemory,
       });
       this.d.meta.set('backup.last', info.header!.createdAt);
       this.d.audit.append({

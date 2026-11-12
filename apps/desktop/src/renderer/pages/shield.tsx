@@ -1,10 +1,11 @@
 import { useEffect, useState } from 'react';
-import type { DeepPartial, ProtectionStatus, ScanJob, ScanType, Settings, ShieldDetection } from '@fbrx/shared';
+import { nextScanDue, SCAN_TIME_PATTERN, WEEKDAYS, type DeepPartial, type ProtectionStatus, type ScanJob, type ScanSchedule, type ScanType, type Settings, type ShieldDetection } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, Card, ChoiceCards, Empty, Field, Grid, Input, Page, Select, Spinner, StatTile, Status, Table, Tabs, Toggle, formatBytes, formatDate, timeAgo, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { call, onEvent, pickFile } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { IS_WINDOWS, navigate } from '../app';
 import { AskButton } from '../widgets';
+import { menuFor } from '../context-menu';
 
 /**
  * Stronghold → FBRX Shield: FBRX's antivirus, and the choice of what protects this computer (FBRX Shield, Microsoft
@@ -252,8 +253,29 @@ function Findings({ agentName }: { agentName: string }) {
   const list = useCore('shield.detections', { limit: 500 }, ['shield.detected', 'protection.changed', 'protection.scan']);
   const { run, busy } = useAction();
   const { confirm, dialog } = useConfirm();
+  const toast = useToast();
   const all = list.data ?? [];
   const rows = view === 'waiting' ? all.filter((d) => d.action === 'open') : view === 'quarantine' ? all.filter((d) => d.action === 'quarantined') : all;
+  const waiting = all.filter((d) => d.action === 'open');
+  const suspicious = waiting.filter((d) => d.kind !== 'malware').length;
+  const parentOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('\\'), path.lastIndexOf('/'))) || path;
+  const trustMany = async (o: { folder?: string }) => {
+    const where = o.folder ? ` in ${o.folder}` : '';
+    const ok = await confirm({
+      title: o.folder ? `Trust everything suspicious in ${fileName(o.folder)}?` : `Trust all ${suspicious.toLocaleString()} suspicious files?`,
+      body: `FBRX Shield leaves them where they are and stops reporting them${where}. Anything it calls malware still waits for you, one by one.`,
+      confirmLabel: 'Trust them',
+    });
+    if (!ok) return;
+    const r = await run('allowMany', () => call('shield.allowMany', o));
+    if (r) toast.success(`Trusted ${r.allowed.toLocaleString()} ${r.allowed === 1 ? 'file' : 'files'}`);
+    list.reload();
+  };
+  const recheck = async () => {
+    const r = await run('recheck', () => call('shield.recheck'));
+    if (r) toast.info(r.cleared || r.gone ? `Cleared ${(r.cleared + r.gone).toLocaleString()} from the list` : 'Nothing to clear', r.cleared ? 'FBRX Shield no longer flags them (FBRX’s own files, installed packages).' : r.gone ? 'Their files are gone.' : 'Every file still waiting is still flagged.');
+    list.reload();
+  };
   const act = async (d: ShieldDetection, action: 'quarantine' | 'restore' | 'delete' | 'allow') => {
     if (action === 'delete' && !(await confirm({ title: `Delete ${fileName(d.path)}?`, body: 'It is deleted for good.', danger: true, confirmLabel: 'Delete' }))) return;
     if (action === 'restore' && d.kind !== 'suspicious' && !(await confirm({ title: `Put ${fileName(d.path)} back?`, body: `FBRX Shield thinks this is ${d.kind === 'test' ? 'the antivirus test file' : 'malware'}. Restore it only if you are sure it is safe; FBRX Shield will trust it from now on.`, danger: true, confirmLabel: 'Restore' }))) return;
@@ -278,6 +300,20 @@ function Findings({ agentName }: { agentName: string }) {
       }
       flush
     >
+      {view === 'waiting' && waiting.length > 1 && (
+        <div className="shield-bulk">
+          <span className="fx-muted">{waiting.length.toLocaleString()} waiting</span>
+          {suspicious > 0 && (
+            <Button size="sm" icon="check" loading={busy === 'allowMany'} onClick={() => void trustMany({})}>
+              Trust all suspicious ({suspicious.toLocaleString()})
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" icon="refresh" loading={busy === 'recheck'} onClick={() => void recheck()} title="Look at them again with today's rules">
+            Check the list again
+          </Button>
+          <span className="fx-muted shield-bulk-tip">Right-click a file to trust its whole folder.</span>
+        </div>
+      )}
       <Table
         columns={[
           {
@@ -294,7 +330,14 @@ function Findings({ agentName }: { agentName: string }) {
             key: 'f',
             header: 'File',
             render: (d) => (
-              <div className="shield-file">
+              <div
+                className="shield-file"
+                onContextMenu={menuFor(() =>
+                  d.action === 'open' && d.kind !== 'malware'
+                    ? [{ label: `Trust everything suspicious in ${fileName(parentOf(d.path))}`, icon: 'check', onSelect: () => void trustMany({ folder: parentOf(d.path) }) }]
+                    : [],
+                )}
+              >
                 <span className="mono private" title={d.path}>
                   {d.path}
                 </span>
@@ -340,6 +383,66 @@ function Findings({ agentName }: { agentName: string }) {
   );
 }
 
+type ShieldSettingsValue = Settings['protection']['shield'];
+const SCHEDULE_OPTIONS: Array<{ value: ScanSchedule; label: string }> = [
+  { value: 'off', label: 'Off' },
+  { value: 'daily', label: 'Quick scan every day' },
+  { value: 'weekly', label: 'Quick scan every week' },
+];
+/** "21:30" the way this computer shows times ("9:30 PM"). */
+const clock = (hhmm: string) => {
+  const [h, m] = hhmm.split(':').map(Number);
+  return new Date(2000, 0, 1, h, m).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+};
+
+/**
+ * The scheduled quick scan, in every edition. With Endpoint Ultra, choosing one asks when: the time of day, and the day
+ * for a weekly scan. A computer that is off at that time scans when it is next on.
+ */
+function ScanSchedule({ sh, ultra, L, patch }: { sh: ShieldSettingsValue; ultra: boolean; L: (p: string) => boolean; patch: (p: DeepPartial<ShieldSettingsValue>) => void }) {
+  const [time, setTime] = useState(sh.scheduleTime);
+  useEffect(() => setTime(sh.scheduleTime), [sh.scheduleTime]);
+  const next = nextScanDue(sh.schedule, sh.scheduleTime, sh.scheduleDay, new Date());
+  const when = sh.schedule === 'weekly' ? `${WEEKDAYS[sh.scheduleDay]}s at ${clock(sh.scheduleTime)}` : `every day at ${clock(sh.scheduleTime)}`;
+  return (
+    <div className="shield-schedule">
+      <div className="shield-row">
+        <span>Scheduled scan</span>
+        <div style={{ width: 220 }}>
+          <Select value={sh.schedule} disabled={L('schedule')} aria-label="Scheduled scan" onChange={(e) => patch({ schedule: e.target.value as ScanSchedule })} options={SCHEDULE_OPTIONS} />
+        </div>
+      </div>
+      {sh.schedule !== 'off' && ultra && (
+        <div className="shield-when">
+          <Field label="At what time?">
+            <Input
+              type="time"
+              value={time}
+              disabled={L('scheduleTime')}
+              aria-label="Scan time"
+              style={{ width: 150 }}
+              onChange={(e) => setTime(e.target.value)}
+              onBlur={() => SCAN_TIME_PATTERN.test(time) && time !== sh.scheduleTime && patch({ scheduleTime: time })}
+              onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+            />
+          </Field>
+          {sh.schedule === 'weekly' && (
+            <Field label="On which day?">
+              <Select value={String(sh.scheduleDay)} disabled={L('scheduleDay')} aria-label="Scan day" onChange={(e) => patch({ scheduleDay: Number(e.target.value) })} options={WEEKDAYS.map((d, i) => ({ value: String(i), label: d }))} />
+            </Field>
+          )}
+        </div>
+      )}
+      {next && (
+        <p className="fx-muted shield-note">
+          Runs {when}; next on {next.toLocaleDateString([], { weekday: 'long', month: 'short', day: 'numeric' })} at {clock(sh.scheduleTime)}. If the computer is off then, it scans when it is next on.
+          {!ultra && ' FBRX Endpoint Ultra lets you choose the time and day.'}
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ShieldSettings({ st, ultra }: { st: ProtectionStatus; ultra: boolean }) {
   const s = useCore('settings.get', undefined, ['settings.changed']);
   const { run, busy } = useAction();
@@ -365,27 +468,12 @@ function ShieldSettings({ st, ultra }: { st: ProtectionStatus; ultra: boolean })
         </div>
         {st.shield.signaturesError && <Callout tone="warning">{st.shield.signaturesError}</Callout>}
 
+        <ScanSchedule sh={sh} ultra={ultra} L={L} patch={patch} />
+
         <div className="shield-ultra">
-          <div className="shield-row">
-            <span>
-              Scheduled scan <AdvancedTag />
-            </span>
-            <div style={{ width: 200 }}>
-              <Select
-                value={sh.schedule}
-                disabled={!ultra || L('schedule')}
-                onChange={(e) => patch({ schedule: e.target.value as 'off' | 'daily' | 'weekly' })}
-                options={[
-                  { value: 'off', label: 'Off' },
-                  { value: 'daily', label: 'Quick scan every day' },
-                  { value: 'weekly', label: 'Quick scan every week' },
-                ]}
-              />
-            </div>
-          </div>
           <Toggle checked={sh.useClamAV} disabled={!ultra || L('useClamAV')} onChange={(v) => patch({ useClamAV: v })} label={<>Also scan with ClamAV {st.products.some((p) => p.id === 'clamav') ? '(installed)' : '(when installed)'} <AdvancedTag /></>} />
           <Toggle checked={sh.useVirusTotal} disabled={!ultra || L('useVirusTotal')} onChange={(v) => patch({ useVirusTotal: v })} label={<>Ask VirusTotal about suspicious files {vt ? '' : '(add a VIRUSTOTAL_API_KEY in Credentials)'} <AdvancedTag /></>} />
-          {!ultra && <p className="fx-muted shield-note">FBRX Endpoint Ultra adds scheduled scans and second engines. Everything else in FBRX Shield is in every edition.</p>}
+          {!ultra && <p className="fx-muted shield-note">FBRX Endpoint Ultra adds second engines and chooses when the scheduled scan runs. Everything else in FBRX Shield is in every edition.</p>}
         </div>
 
         <Field label="Skip these folders" help="FBRX Shield does not scan or watch them. Use sparingly.">

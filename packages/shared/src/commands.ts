@@ -17,6 +17,8 @@ export const CommandPayloadSchemas = {
       upload: z.boolean().default(true),
     })
     .default({ upload: true }),
+  /** A whole-computer image now (FBRX Time), where the computer is set up to make them. */
+  'backup.image': z.object({}).default({}),
   'plugin.install': z.object({ packageId: z.string(), url: z.string(), sha256: z.string().length(64) }),
   'plugin.setEnabled': z.object({ id: z.string(), enabled: z.boolean() }),
   'plugin.uninstall': z.object({ id: z.string() }),
@@ -35,6 +37,8 @@ export const CommandPayloadSchemas = {
     action: z.enum(['diagnostics', 'ask', 'run']),
     text: z.string().max(8000).default(''),
   }),
+  /** A support pass this organization made for the computer (docs/SUPPORT.md): support mode starts without pasting. */
+  'support.start': z.object({ pass: z.string().min(10).max(4000) }),
 } as const;
 
 export type CommandType = keyof typeof CommandPayloadSchemas;
@@ -46,6 +50,7 @@ export const COMMAND_DESCRIPTIONS: Record<CommandType, string> = {
   'update.check': 'Check the update feed for a newer version',
   'update.install': 'Download and install the newest assigned version (from FBRX Command or the repository)',
   'backup.create': 'Create an encrypted snapshot (optionally uploaded to the control plane)',
+  'backup.image': 'Make a whole-computer image now (FBRX Time; Windows computers with image backups set up)',
   'plugin.install': 'Install a plugin package from the control plane',
   'plugin.setEnabled': 'Enable or disable a plugin',
   'plugin.uninstall': 'Remove a plugin',
@@ -56,6 +61,7 @@ export const COMMAND_DESCRIPTIONS: Record<CommandType, string> = {
   'vault.lock': 'Lock the credential vault on the device',
   'app.restart': 'Restart the FBRX OS application',
   'helpdesk.assist': 'A help desk receiver works on the computer for a ticket it sent (diagnostics, ask its AI, run a command)',
+  'support.start': 'Start support mode with a support pass made for this computer (full access for a few hours)',
 };
 
 export const COMMAND_STATUSES = ['queued', 'sent', 'running', 'succeeded', 'failed', 'expired', 'cancelled'] as const;

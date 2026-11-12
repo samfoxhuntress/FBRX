@@ -33,7 +33,14 @@ export interface ToolSpec {
   feature?: Feature;
   /** While this returns a reason, the tool is hidden from the agent and refused (e.g. it needs Endpoint Ultra). */
   unavailable?: () => string | null;
+  /**
+   * It sends traffic beyond this computer although its risk says otherwise (an AI Toolkit action that asks first and
+   * pings, say). An offline chat asks before it runs, as for any `network` tool.
+   */
+  network?: boolean;
   timeoutMs?: number;
+  /** For the approval card, in plain words: what saying yes does (an action that will run without asking, a change). */
+  note?(input: any): string | null;
   resources?(input: any): ToolResources | Promise<ToolResources>;
   run(input: any, ctx: ToolExecContext): Promise<ToolOutcome>;
 }
@@ -43,4 +50,9 @@ export interface InvocationContext {
   actor: string;
   runId?: string | null;
   signal?: AbortSignal;
+}
+
+/** Whether a tool reaches beyond this computer: an offline chat asks before it runs one. */
+export function sendsTraffic(spec: Pick<ToolSpec, 'risk' | 'source' | 'network'>): boolean {
+  return spec.risk === 'network' || spec.network === true || spec.source === 'connector';
 }

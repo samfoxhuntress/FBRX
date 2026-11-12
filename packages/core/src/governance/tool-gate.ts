@@ -1,4 +1,4 @@
-import { newId, type GuardianFinding, type ToolInvokeResult } from '@fbrx/shared';
+import { cleanToolText, newId, type GuardianFinding, type ToolInvokeResult } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { AuditLog } from '../audit/audit-log';
 import type { Logger } from '../logger';
@@ -100,7 +100,14 @@ export class ToolGate {
     const needsApproval = decision.action === 'ask' || findings.some((f) => f.severity === 'warning');
     // A person invoking a tool directly from the UI is the approval.
     if (needsApproval && ctx.origin !== 'user') {
-      const reason = decision.action === 'ask' ? decision.reason : `Guardian: ${findings.map((f) => f.message).join('; ')}`;
+      let note: string | null = null;
+      try {
+        note = tool.note?.(input) ?? null;
+      } catch {
+        /* the card goes without it */
+      }
+      const why = decision.action === 'ask' ? decision.reason : `Guardian: ${findings.map((f) => f.message).join('; ')}`;
+      const reason = note ? `${why}. ${note}` : why;
       hooks.onAwaitingApproval?.({ findings, reason });
       const policy = this.d.policy.policy;
       const answer = await this.d.approvals.request(
@@ -146,7 +153,8 @@ export class ToolGate {
         runId: ctx.runId ?? null,
         signal: controller.signal,
       });
-      const redacted = this.d.redactor.redact(out.output);
+      // Invisible and direction-changing characters go, and text dressed as FBRX's own notice is marked as the output's.
+      const redacted = this.d.redactor.redact(cleanToolText(out.output));
       const outputFindings = this.d.guardian.scanOutput(redacted.text);
       const durationMs = Date.now() - started;
       this.d.audit.append({

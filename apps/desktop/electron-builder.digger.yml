@@ -1,0 +1,91 @@
+# FBRX Digger packaging: the Network Center on its own, from the same build as FBRX OS (scripts/package.mjs --digger).
+# The app's package.json gets fbrxFlavor: digger, so it opens as Digger (src/main/flavor.ts) with its own name, data
+# folder and single-instance lock; the version is DIGGER_VERSION (packages/shared/src/digger.ts). No local AI runtime
+# and no FBRX Server bundle: Digger is the network tools alone.
+appId: com.fbrx.digger
+productName: FBRX Digger
+copyright: Copyright © 2026 FBRX
+extraMetadata:
+  name: fbrx-digger
+  productName: FBRX Digger
+  description: FBRX Digger, the FBRX Network Center on its own
+  desktopName: fbrx-digger.desktop
+  fbrxFlavor: digger
+# Linux packages get normal file modes (Electron's own files arrive world-writable): scripts/after-pack.cjs.
+afterPack: scripts/after-pack.cjs
+directories:
+  output: release/digger-${version}
+  buildResources: build
+files:
+  - dist/**
+  - package.json
+  - "!**/*.map"
+asarUnpack:
+  # Forked as a separate (sandboxed) Node process; must live on the real filesystem.
+  - dist/main/plugin-worker.mjs
+  - dist/main/fbrx-mcp.mjs
+  - dist/main/mobile/**
+  # The IEEE MAC vendor registry, read from the unpacked folder next to the other runtime files.
+  - dist/main/oui-vendors.tsv.gz
+icon: build/digger-icon.png
+# The same fuses as FBRX OS (electron-builder.yml).
+electronFuses:
+  runAsNode: true
+  enableCookieEncryption: true
+  enableNodeOptionsEnvironmentVariable: false
+  enableNodeCliInspectArguments: false
+  onlyLoadAppFromAsar: true
+  enableEmbeddedAsarIntegrityValidation: true
+  resetAdHocDarwinSignature: true
+protocols: []
+publish:
+  # New versions of Digger are offered from release.json (its digger entry) and downloaded from its release page.
+  - provider: generic
+    url: https://updates.invalid/fbrx-digger
+mac:
+  category: public.app-category.developer-tools
+  artifactName: FBRX-Digger-${version}-${arch}.${ext}
+  target:
+    - target: dmg
+      arch: [arm64, x64]
+    - target: zip
+      arch: [arm64, x64]
+  hardenedRuntime: true
+  gatekeeperAssess: false
+  entitlements: build/entitlements.mac.plist
+  entitlementsInherit: build/entitlements.mac.plist
+  notarize: false
+dmg:
+  sign: false
+win:
+  target:
+    - target: nsis
+      arch: [x64, arm64]
+  signtoolOptions:
+    publisherName: FBRX
+nsis:
+  oneClick: false
+  perMachine: false
+  allowElevation: true
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: FBRX Digger
+  artifactName: FBRX-Digger-Setup-${version}.${ext}
+linux:
+  executableName: fbrx-digger
+  syncDesktopName: true
+  target:
+    - target: AppImage
+      arch: [x64]
+    - target: deb
+      arch: [x64]
+  artifactName: FBRX-Digger-${version}-${arch}.${ext}
+  category: Network
+  synopsis: The FBRX Network Center on its own
+  maintainer: FBRX
+  vendor: FBRX
+deb:
+  # electron-builder's after-install script plus a repair of older installs' file modes.
+  afterInstall: build/linux/after-install.tpl
+  depends: [libgtk-3-0, libnotify4, libnss3, libxss1, libxtst6, xdg-utils, libatspi2.0-0, libuuid1, libsecret-1-0]

@@ -1,9 +1,10 @@
 import { useState } from 'react';
-import { TIER_NAMES, codenameFor, displayVersion, type ReleaseCheck } from '@fbrx/shared';
-import { Button, Callout, Card, Icons, KeyValue, Modal, Status, Toggle, timeAgo, useAction } from '@fbrx/ui';
-import { call, openExternal } from './client';
+import { DIGGER_NAME, TIER_NAMES, codenameFor, displayVersion, type ReleaseCheck } from '@fbrx/shared';
+import { Button, Callout, Card, Icons, KeyValue, LabsMark, Modal, Status, Toggle, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
+import { bridge, call, openExternal } from './client';
 import { useCore } from './hooks';
 import { useTier } from './edition';
+import { DIGGER } from './app';
 
 /**
  * New versions published in the FBRX repository: a pill in the top bar, a dialog with what's new, and the panel in
@@ -109,6 +110,8 @@ const PHASE: Record<NonNullable<ReleaseCheck['installing']>['phase'], string> = 
 export function ReleasePanel({ checkRepo, locked, onToggle, autoInstall }: { checkRepo: boolean; locked: boolean; onToggle: (v: boolean) => void; autoInstall?: { on: boolean; locked: boolean; onChange: (v: boolean) => void } }) {
   const r = useRelease().data;
   const { run, busy } = useAction();
+  const { confirm, dialog } = useConfirm();
+  const toast = useToast();
   const [open, setOpen] = useState(false);
   if (!r) return null;
   const tone = r.state === 'available' ? 'warning' : r.state === 'current' ? 'good' : r.state === 'error' ? 'critical' : r.state === 'checking' ? 'busy' : 'neutral';
@@ -134,6 +137,21 @@ export function ReleasePanel({ checkRepo, locked, onToggle, autoInstall }: { che
               {r.skipped ? `See ${r.latest.version} anyway` : `See what's new in ${r.latest.version}`}
             </Button>
           )}
+          {/* macOS and Linux, installed from an FBRX folder: removing it is one click too (Windows: Settings → Apps). */}
+          {r.canInstall && bridge.platform !== 'win32' && (
+            <Button
+              variant="ghost"
+              icon="trash"
+              loading={busy === 'u'}
+              onClick={async () => {
+                if (!(await confirm({ title: 'Uninstall FBRX OS?', body: 'The uninstaller opens in a terminal window and asks once more before it removes anything. Your data (chats, notes, settings, the vault) is kept unless you choose to erase it there.', confirmLabel: 'Open the uninstaller', danger: true }))) return;
+                const done = await run('u', () => call('release.uninstall'));
+                if (done) toast.info('Uninstall', done.message);
+              }}
+            >
+              Uninstall FBRX OS
+            </Button>
+          )}
         </div>
         <Toggle checked={checkRepo} disabled={locked} onChange={onToggle} label="Check for new versions automatically (every few hours)" />
         {autoInstall && (
@@ -146,25 +164,32 @@ export function ReleasePanel({ checkRepo, locked, onToggle, autoInstall }: { che
         )}
       </div>
       {open && <ReleaseDialog release={r} onClose={() => setOpen(false)} />}
+      {dialog}
     </Card>
   );
 }
 
 /** The version, as shown in Settings → About. */
 export function AboutVersion({ version }: { version: string }) {
-  const code = codenameFor(version);
+  const tier = useTier();
+  // FBRX Digger has its own versions (DIGGER_VERSION) and no editions or codenames.
+  const code = DIGGER ? null : codenameFor(version);
   return (
     <div className="about-version">
       <div className="about-version-name">
-        {TIER_NAMES[useTier()]} <b>{displayVersion(version)}</b>
+        {DIGGER ? DIGGER_NAME : TIER_NAMES[tier]} <b>{DIGGER ? version : displayVersion(version)}</b>
       </div>
-      <div className="fx-muted" style={{ fontSize: 12 }}>Built on FBRX OS, the Fabrics Operating System.</div>
+      <div className="fx-muted" style={{ fontSize: 12 }}>Built on FBRX OS.</div>
       {code && (
         <div className="about-codename">
           <span className="about-codename-chip">“{code.name}”</span>
           <span className="fx-muted">{code.meaning}.</span>
         </div>
       )}
+      <div className="about-maker">
+        <span className="fx-muted">Made by</span>
+        <LabsMark width={150} />
+      </div>
     </div>
   );
 }

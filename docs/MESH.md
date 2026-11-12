@@ -19,11 +19,13 @@ Each device gets its own permissions on *this* computer, changeable at any time 
 | Borrow its AI (Mesh Assist, below) | — | ✔ |
 | Controller (Mesh Assist, below) | — | |
 | Network protection (a gate's FBRX MiniDome, below) | | |
+| Sync (FBRX Sync, below) | — | |
 
 Each device card offers one choice, **What it may do here**: *The usual* (the defaults above), *Full trust* (everything
 but the two special permissions), *Messages only* or *Paused* (stays paired, can do nothing). **Choose one by one**
 opens every permission, each with an (i) that explains it; **Network protection** and **Controller** are special and
-never part of a preset. *Message* (opens the conversation with it in **Messages**, see [MESSAGES.md](MESSAGES.md)),
+never part of a preset, and neither is **Sync**, which a computer's card also offers as *Turn on Sync*. *Message*
+(opens the conversation with it in **Messages**, see [MESSAGES.md](MESSAGES.md)),
 *Ask its agent* and *How is it doing?* are on the card; *Send a ping*, *Find my
 phone*, *Lock it*, *Put it to sleep* and *Remove* are under **More**.
 
@@ -35,6 +37,40 @@ under this computer's policy: each risky tool call still waits for an approval.
 **FBRX Mobile** is a small web app the computer serves to paired phones at `http://<computer>:47800/m/`. Add it to
 the home screen. It shows status, alerts, tasks, messages and waiting approvals, lets you ask the agent, and can
 make the phone ring (*Find my phone*). It refreshes while open; phones are not woken in the background.
+
+When the computer runs **Endpoint Essentials**, FBRX Mobile is as simple as the computer: **Home** is the split-flap
+board (a greeting, the date, whether the AI is ready) and a few notes from FBRX: tips and tricks (each can be
+dismissed), **AI models** (the models on the computer, and *Use* to switch to one, for a phone that may ask the AI)
+and what Pro and Ultra add. Its tabs are Home, Ask, AI (and Approve when something waits). The notes are the
+same ones as on the computer's Home (`packages/shared/src/essentials-home.ts`).
+
+## FBRX Sync: the same projects, tasks, notes and calendar on your computers
+
+FBRX Sync keeps your **projects, tasks, notes, snippets and FBRX calendar events** the same on two of your computers.
+It goes straight from one computer to the other over the mesh, every request and reply sealed for that one computer
+(below), so **no FBRX server ever holds or sees any of it**: FBRX only provides the way for your computers to do it.
+And it happens only when you ask: nothing syncs in the background.
+
+1. Pair the two computers (*Add a device*, below), on the same network or any network where they can reach each other.
+2. On **both** computers, the other one's card: **Turn on Sync** (or *Choose one by one → Sync*). Each computer decides
+   for itself; until both have, *Sync now* says which one still has to.
+3. **Sync now** on either computer's card. Both end up with everything either had; the card says when they last
+   synced and what moved (*3 here, 2 there*), on both computers.
+
+How it decides:
+
+* **Newer wins.** Every item carries the time it last changed, and the newer copy goes to the other computer (so both
+  computers' clocks should be right).
+* **Deleting** an item deletes it on the other computer at the next sync, unless it was changed there after you
+  deleted it: then it comes back. Deleting a project keeps what was in it, in no project, on both.
+* **Changed on both** since the two last synced: the newer one wins, and a note or snippet keeps the other version
+  beside it as *(copy from …)*, so no writing is lost.
+* With three computers, sync each pair you use; deletions and edits pass along through whichever computer has them.
+
+What does not sync (yet): chats, memory and skills, settings, Vault passwords, and calendars from other services
+(Outlook / Microsoft 365, calendar links), which every computer reads from the service itself. Sync is for your own
+computers: phones see the computer's tasks and notes instead, and a computer your organization introduced syncs only
+when the organization allows it.
 
 ## Mesh Assist: computers lending each other their AI
 
@@ -48,7 +84,8 @@ it through. It also lets one computer (typically a server) hand work out to the 
 * **The AI provider stopped answering.** Out of credits, over a quota or rate limit, a billing problem, an outage or a
   network failure: the same handover, instead of an error.
 * **The agent asks.** Mid-task, the agent can look at who could help (`mesh.helpers`) and consult another computer's
-  agent (`mesh.consult`), with follow-up questions in the same conversation on the helper.
+  agent (`mesh.consult`), with follow-up questions in the same conversation on the helper. The question leaves this
+  computer, so in an offline chat the agent asks to put the chat online first.
 * **A person or a controller sends work** to the best helper, to every computer, or to one, with a priority.
 
 **Who helps.** The asking computer asks each paired computer what it can do right now (its AI and model, whether it
@@ -66,6 +103,7 @@ right away before one that asks its person, a ready AI, a free slot, a light loa
 | While helping, the agent here may | Look things up | Think and answer only, read-only tools, or anything its policy allows. |
 | Help at the same time / steps per request | 1 / 12 | The rest waits in a queue, highest priority first. |
 | Urgent work from a controller may stop lower-priority help | On | The stopped help is told why. |
+| This computer's own requests go first | On | The AI on this computer answers one request at a time: your own start before help for other computers (Mesh Assist, a lent model). Help that already started finishes first. |
 
 The **Help with AI** permission decides which paired computers may ask at all (on by default between computers, never
 for phones).
@@ -76,6 +114,27 @@ that should obey it. A controller's requests (when FBRX runs as administrator th
 console's administrators made it a controller) run without the helper's person being asked, may be urgent, and may
 stop lower-priority help that is running. Without the Controller permission a computer treats it like any other.
 
+**One server, many people: the work queue.** Point the computers of a school, business or home at one FBRX Server (on
+site, or in the cloud) and its agent takes their requests one after another: as many at once as its Mesh Assist
+settings allow, the rest waiting their turn, most important first, then first come. Each request carries the computer
+it came from (proven by the mesh pairing) and the person who asked, as that computer tells it: the name and email of
+the FBRX account signed in there, and the system user. A computer sees its place in line (*3rd in line*) and who
+stopped a request.
+
+On the server, *Mesh & AI*:
+
+* **Work queue:** what runs and what waits, with who asked and what. Operators run a request next, change its
+  priority, or cancel it (running or waiting, whoever asked); administrators pause the queue, so what runs finishes and
+  nothing new starts.
+* **Log** (administrators): every request, kept 180 days, with the computer, the person, the priority, how it ended, who
+  cancelled it and how long it took, tallied by person and by computer; filter by either, by status or by words, and
+  export it as CSV. What was asked is kept; the answer stays in the server's conversation, and the log notes only its
+  length. Each computer keeps the same log of what it asked (*Help asked from here*).
+
+The queue, the log and its controls are for the people who run the computer (its console, or someone at it), never for
+its agent, plugins or the Local API. A restart cuts off what was waiting or running: the log says so, and the computer
+that asked sees it failed.
+
 **What never changes:**
 
 * Help runs under the **helping** computer's policy and Guardian: every risky tool call there still needs its usual
@@ -83,6 +142,26 @@ stop lower-priority help that is running. Without the Controller permission a co
 * Help is never passed along twice: a helper cannot bring a third computer in.
 * Everything is in both computers' audit logs (`assist.*`, `run.handoff`), and either side can stop a request.
 * Requests travel over the same sealed, authenticated mesh connection as everything else.
+
+## Think with your FBRX Server's AI
+
+Mesh Assist hands a task to another computer's agent. A paired computer can also lend just its **AI model**: the agent
+here keeps working here (its tools, files, memory, approvals and audit log stay on this computer) and only the thinking
+happens there. A laptop that runs a small model, or none, gets the answers of your FBRX Server's big one.
+
+* **On this computer:** *AI models → Your other computers' AI* lists the paired computers that would lend the AI they
+  run themselves; **Use for chats** makes one your default (it is an AI provider like any other, so it can also be
+  chosen per chat, or set up by hand with type *mesh*). Each answer in a chat shows the model, the computer, and how
+  long it took, so you can compare it with the AI on this computer.
+* **On the server:** the same setting lends it as Mesh Assist (*Lend the agent to other computers*, or *Mesh & AI* in
+  the server console) and the same **Help with AI** permission. With *Ask me first*, its person is asked once per
+  computer (until FBRX restarts there); a "no" holds for ten minutes.
+* **Only an AI it runs itself.** A computer whose AI is a cloud provider does not lend it, so a conversation never
+  leaves your computers this way. The server's own *Thinking* setting decides whether its model thinks first.
+* **How it travels:** the conversation goes to the server over the sealed mesh connection (up to 1 MiB a request, so
+  about 160,000 characters of conversation; pictures stay here), and the answer streams back as the model writes it.
+  Stopping the answer here stops the model there. From away, connect [FBRX VPN](VPN.md) first: the server is reached at
+  its address at home.
 
 ## Prefer Mesh
 
@@ -118,7 +197,8 @@ allow it, per paired server.
 
 1. **Mesh & phone → Add a device → Show a code on this computer** shows a QR code and a 20-character one-time code (100 bits), valid for five
    minutes.
-2. A phone scans the QR code (it contains the computer's address, the code and the computer's key fingerprint);
+2. A phone scans the QR code (it contains the computer's address, the code and the computer's key fingerprint), with
+   the camera (FBRX Mobile opens in the browser) or with **Scan the code** in the FBRX app;
    another computer uses **Add a device → Enter a code from another computer** (or **Join** beside it under *FBRX
    computers nearby*) and types the code.
 3. The joining device creates its own X25519 key pair and sends its public key with
@@ -144,7 +224,8 @@ the phone's browser storage for the FBRX Mobile page.
 ## Limits to know about
 
 * **Local network only.** The mesh is meant for your home or office network. To reach your devices from elsewhere,
-  use a VPN into that network rather than forwarding the port.
+  connect with **FBRX VPN** to your FBRX Gate ([VPN.md](VPN.md)) rather than forwarding the port: the mesh then works
+  through the tunnel, your FBRX Server's AI included.
 * **The phone app arrives over plain HTTP.** Requests are end-to-end encrypted, but the web page itself is served
   unencrypted by your computer, so someone actively attacking your local network at the moment you open FBRX
   Mobile could tamper with the page. Pair and use the phone app on networks you trust. (A future native app removes
@@ -154,6 +235,28 @@ the phone's browser storage for the FBRX Mobile page.
 
 ## Organizations
 
-The mesh is per person. Administrators can switch it off for a tenant or group by locking `mesh.enabled` to `false`
-in managed settings (and Mesh Assist on its own with the `mesh.assist.*` settings); device pairing, requests and
-permission changes are written to the audit log (`category: mesh`).
+**An organization's computers mesh by themselves.** Every computer enrolled in FBRX Command reports its mesh key,
+port, addresses and server roles in its heartbeat. FBRX Command hands each computer a roster of the organization's
+other computers, and because it vouches for their keys over the enrolled connection, they trust each other without
+pairing codes. FBRX Mesh turns itself on at each computer (unless a profile locks `mesh.enabled` off). The roster
+comes again whenever a computer joins, moves or changes roles (FBRX Command nudges every online computer), when a
+computer reconnects, and every ten minutes.
+
+What the organization's computers may do on each other is the organization's choice, not each computer's:
+
+| | |
+| --- | --- |
+| See each other and message | Always (messages only while Messages is on for the organization) |
+| Borrow a server's AI (Mesh Assist) | On a server with the **ai** role, for the groups the **hive** allows (every group by default) |
+| Network protection | A server with the **minidome** role may warn the others about threats it sees |
+| The agent, approvals, tasks, control, controller | Never through the organization; pair by hand for those |
+
+In FBRX Command: *Profiles & groups → FBRX Mesh*: the computers mesh together (on or off), and *Who may use the
+servers' AI*: every group, or the groups chosen. Changes reach online computers at once. On each computer the
+organization's computers show *from your organization* on the Mesh page; they cannot be removed or given more
+rights there, and leaving the organization (or the organization turning its mesh off) forgets them. Computers and
+phones paired by hand stay as they are.
+
+The mesh is otherwise per person. Administrators can switch it off for a tenant or group by locking `mesh.enabled` to
+`false` in managed settings (and Mesh Assist on its own with the `mesh.assist.*` settings); device pairing, the
+organization's introductions, requests and permission changes are written to the audit log (`category: mesh`).

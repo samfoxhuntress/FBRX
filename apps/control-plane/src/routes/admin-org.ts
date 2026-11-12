@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AUTO_UPDATE_MODES, UPDATE_CHANNELS, VERTICALS, compareSemver } from '@fbrx/shared';
+import { AUTO_UPDATE_MODES, UPDATE_CHANNELS, VERTICALS, compareSemver, decodeLicenseUnverified, tierFor, type Edition } from '@fbrx/shared';
 import { hashPassword, randomToken, sha256Hex } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
@@ -37,7 +37,7 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
       .all<any>(`SELECT e.*, d.name AS device_name FROM device_events e JOIN devices d ON d.id = e.device_id ${tenant ? 'WHERE e.tenant_id = ?' : ''} ORDER BY e.ts DESC LIMIT 15`, ...args)
       .map((e) => ({ id: e.id, deviceId: e.device_id, deviceName: e.device_name, ts: e.ts, kind: e.kind, severity: e.severity, message: e.message }));
     const lic = tenant
-      ? ctx.db.get<any>('SELECT edition, seats, expires_at FROM licenses WHERE tenant_id = ? AND revoked_at IS NULL ORDER BY issued_at DESC LIMIT 1', tenant)
+      ? ctx.db.get<any>('SELECT edition, seats, expires_at, key_text FROM licenses WHERE tenant_id = ? AND revoked_at IS NULL ORDER BY issued_at DESC LIMIT 1', tenant)
       : null;
     return {
       devices: {
@@ -62,7 +62,7 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
       },
       commands24h: Object.fromEntries(commands.map((c) => [c.status, Number(c.n)])),
       recentEvents: events,
-      license: lic ? { edition: lic.edition, seats: Number(lic.seats), used: active.length, expiresAt: lic.expires_at } : null,
+      license: lic ? { edition: lic.edition, tier: tierFor(lic.edition as Edition, decodeLicenseUnverified(lic.key_text)?.tier), seats: Number(lic.seats), used: active.length, expiresAt: lic.expires_at } : null,
       tenants: tenant ? undefined : Number(ctx.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM tenants')?.n ?? 0),
     };
   });

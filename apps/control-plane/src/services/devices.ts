@@ -1,6 +1,7 @@
 import { HeartbeatSchema, newId, type Heartbeat } from '@fbrx/shared';
 import type { AppContext } from '../context';
 import { parseJson } from '../routes/util';
+import { meshIdentityChanged } from '../routes/mesh';
 
 export function deviceView(ctx: AppContext, d: any) {
   const hb = parseJson<Heartbeat | null>(d.heartbeat, null);
@@ -19,6 +20,8 @@ export function deviceView(ctx: AppContext, d: any) {
     arch: d.arch,
     osVersion: d.os_version,
     appVersion: d.app_version,
+    /** What a support pass for it is made for (as it last reported; older versions did not say). */
+    installId: hb?.facts.installId ?? null,
     status: d.status,
     online,
     realtime: ctx.realtime.isOnline(d.id),
@@ -32,6 +35,10 @@ export function deviceView(ctx: AppContext, d: any) {
     pinnedVersion: d.pinned_version,
     audience: d.audience ?? null,
     helpdeskReceiver: Number(d.helpdesk_receiver ?? 0) === 1,
+    /** The most it may run, set for this computer (null = its group's). */
+    tier: d.tier ?? null,
+    /** What it runs now, as it last reported (the person's choice under that). */
+    editionTier: s?.editionTier ?? null,
     settingsOverride: parseJson<Record<string, unknown>>(d.settings_override, {}),
     lockedOverride: parseJson<string[]>(d.locked_override, []),
     policyOverride: parseJson<unknown>(d.policy_override, null),
@@ -59,6 +66,7 @@ export function deviceView(ctx: AppContext, d: any) {
           uptimeSeconds: s.uptimeSeconds,
           services: s.services,
           protection: s.protection ?? null,
+          imageBackup: s.imageBackup ?? null,
         }
       : null,
   };
@@ -96,6 +104,8 @@ export function processHeartbeat(ctx: AppContext, deviceId: string, raw: unknown
   if (d.audit_head_seq !== null && hb.status.auditHead.seq < Number(d.audit_head_seq)) {
     recordDeviceEvent(ctx, d, 'audit.rollback', 'warning', `Device audit log went backwards (#${d.audit_head_seq} → #${hb.status.auditHead.seq}); expected after a restore, otherwise investigate`);
   }
+  // A computer joined the organization's mesh or moved: the others fetch their roster again.
+  if (meshIdentityChanged(prev, hb)) ctx.realtime.broadcastToTenantDevices(d.tenant_id, { type: 'mesh.roster' });
   const prevFailed = new Set((prev?.status.services ?? []).filter((s) => s.state === 'failed').map((s) => s.name));
   for (const s of hb.status.services) {
     if (s.state === 'failed' && !prevFailed.has(s.name)) recordDeviceEvent(ctx, d, 'service.failed', 'critical', `Service ${s.name} failed: ${s.message ?? 'no details'}`);
@@ -147,7 +157,8 @@ export function commandView(c: any) {
     tenantId: c.tenant_id,
     deviceId: c.device_id,
     type: c.type,
-    payload: parseJson(c.payload, {}),
+    // A support pass works as a key to its computer for a few hours: it goes to the computer, never back to a list.
+    payload: c.type === 'support.start' ? { pass: 'FBRXSUP1.…' } : parseJson(c.payload, {}),
     status: c.status,
     createdBy: c.created_by,
     createdAt: c.created_at,

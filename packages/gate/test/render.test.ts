@@ -70,7 +70,7 @@ describe('what a configuration turns into', () => {
     expect(nft.indexOf('rule:smtp')).toBeLessThan(nft.indexOf('internet:guest'));
     expect(nft).toContain('iifname "eno2.20" oifname "eno1" tcp dport { 25, 465, 587 } log prefix "fbrx-gate smtp: " level info counter reject with icmpx type admin-prohibited comment "rule:smtp"');
     // Management only from networks that may.
-    expect(nft).toContain('iifname "eno2" tcp dport { 22, 9443 } accept comment "manage:lan"');
+    expect(nft).toContain('iifname "eno2" tcp dport { 22, 9443, 47800 } accept comment "manage:lan"');
     expect(nft).not.toContain('manage:guest');
     // The WAN keeps its DHCP lease; NAT and the port forward.
     expect(nft).toContain('iifname "eno1" udp sport 67 udp dport 68 accept');

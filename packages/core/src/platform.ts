@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { openBytes, sealString } from '@fbrx/shared/node';
-import type { NotificationEvent, UpdateStatus, UpdateChannel } from '@fbrx/shared';
+import type { AppFlavor, NotificationEvent, UpdateStatus, UpdateChannel } from '@fbrx/shared';
 
 /**
  * Protects the vault's data-encryption key with something bound to this machine/user:
@@ -48,6 +48,21 @@ export interface SpecialDirs {
   documents: string;
   desktop: string;
   downloads: string;
+  pictures: string;
+}
+
+/** Turns what the agent writes into finished files with a browser engine, offline (nothing is loaded from the web). */
+export interface DocumentRenderer {
+  /** A web page printed to a Letter-size PDF. */
+  printPdf(html: string): Promise<Buffer>;
+  /** An SVG picture drawn as a PNG of the given size. */
+  rasterizeSvg(svg: string, width: number, height: number): Promise<Buffer>;
+}
+
+/** Picture work done with the app's graphics engine (desktop only). */
+export interface ImageTools {
+  /** A small JPEG of a picture, at most `side` pixels wide and high. */
+  thumbnail(data: Buffer, side: number): Buffer;
 }
 
 export interface PlatformAdapter {
@@ -65,6 +80,8 @@ export interface PlatformAdapter {
   licensePublicKeys: string[];
   /** Microsoft app (client) ID for signing in to Outlook / Microsoft 365 calendars. Embedded at build time, if any. */
   microsoftClientId?: string | null;
+  /** The FBRX Command FBRX accounts live on (FBRX's cloud), embedded at build time; without one, the sign-in asks. */
+  accountServer?: string | null;
   /** Run plugins under the Node permission model. Disable only for debugging. */
   sandboxPlugins: boolean;
   updates: UpdateController | null;
@@ -74,7 +91,23 @@ export interface PlatformAdapter {
   vendorDbFile?: string | null;
   /** How AI apps start the FBRX MCP bridge (the app executable in Node mode plus the bridge script). */
   mcpShim?: { command: string; args: string[]; env?: Record<string, string> } | null;
+  /** The app's browser engine, for what the agent makes (desktop only; FBRX on a server has its own PDF writer). */
+  renderer?: DocumentRenderer | null;
+  /** Thumbnails of screen snapshots (without it the pictures themselves are shown). */
+  images?: ImageTools | null;
+  /** Which app this is: FBRX OS, or FBRX Digger (the Network Center on its own, every network tool included). */
+  flavor?: AppFlavor;
+  /** FBRX Digger: FBRX Endpoint's data folder on this computer, where Digger finds Endpoint's AI. */
+  endpointDataDir?: string | null;
+  /** The folder that holds every FBRX app's data folder (each named after its app), where the apps find each other. */
+  appsDir?: string | null;
+  /** The program that starts this app, which it writes down so the other FBRX apps can open it (packaged builds only). */
+  appExec?: string | null;
+  /** Moves a file or folder to the Trash (Recycle Bin); the desktop app has it, a headless core does not. */
+  trash?(path: string): Promise<void>;
   specialDirs(): SpecialDirs;
+  /** FBRX's own folders outside its data folder (where it is installed, its update cache): never scanned. */
+  ownDirs?(): string[];
   notify(n: NotificationEvent): void;
   /** Ask the shell to restart the core (after restore, update, remote `app.restart`). */
   requestRestart(reason: string): void;
@@ -142,5 +175,6 @@ export function defaultSpecialDirs(): SpecialDirs {
     documents: join(home, 'Documents'),
     desktop: join(home, 'Desktop'),
     downloads: join(home, 'Downloads'),
+    pictures: join(home, 'Pictures'),
   };
 }

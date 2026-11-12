@@ -13,6 +13,7 @@ export function expandPathVars(p: string, dirs: SpecialDirs & { workspace: strin
     .replace(/\$\{DOCUMENTS\}/g, dirs.documents)
     .replace(/\$\{DESKTOP\}/g, dirs.desktop)
     .replace(/\$\{DOWNLOADS\}/g, dirs.downloads)
+    .replace(/\$\{PICTURES\}/g, dirs.pictures)
     .replace(/\$\{WORKSPACE\}/g, dirs.workspace)
     .replace(/\$\{DATA\}/g, dirs.data);
   return normalize(out);
@@ -57,7 +58,7 @@ export interface PathCheck {
 export function checkPath(
   path: string,
   access: 'read' | 'write',
-  opts: { roots: string[]; denyPatterns: string[]; readOnly: boolean; dataDir: string },
+  opts: { roots: string[]; denyPatterns: string[]; readOnly: boolean; dataDir: string; appDataDirs?: string[] },
 ): PathCheck {
   if (!isAbsolute(path)) return { ok: false, resolved: path, reason: `Path must be absolute: ${path}` };
   const resolved = canonicalPath(path);
@@ -67,6 +68,11 @@ export function checkPath(
   // The FBRX data directory (vault database, keys, plugins) is never reachable through tools.
   if (isWithin(resolved, canonicalPath(opts.dataDir)) && !isWithin(resolved, canonicalPath(`${opts.dataDir}${sep}workspace`))) {
     return { ok: false, resolved, reason: 'FBRX OS internal data is not accessible to tools' };
+  }
+  // Nor are the other FBRX apps' data folders beside it (what each app says about itself, the license Endpoint shares).
+  const workspace = canonicalPath(`${opts.dataDir}${sep}workspace`);
+  if (!isWithin(resolved, workspace) && (opts.appDataDirs ?? []).some((d) => isWithin(resolved, canonicalPath(d)))) {
+    return { ok: false, resolved, reason: 'The FBRX apps\' own data is not accessible to tools' };
   }
   const roots = opts.roots.map((r) => canonicalPath(r));
   if (!roots.some((r) => isWithin(resolved, r))) {

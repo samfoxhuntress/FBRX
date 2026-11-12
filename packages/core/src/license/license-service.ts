@@ -1,15 +1,35 @@
-import { ALL_FEATURES, FEATURES, isLearner, parseSemver, type DeviceEdition, type Feature, type LicenseStatus } from '@fbrx/shared';
-import { licenseStatusFrom, verifyLicense } from '@fbrx/shared/node';
+import { ALL_FEATURES, EDITION_PLANS, FEATURES, LEARNER_TIER, STANDARD_TRIAL_DAYS, formatPrice, isLearner, licenseEditionFor, maxTier, minTier, narrowTier, parseSemver, parseTier, TIER_NAMES, TIER_SHORT, tierRank, type CeilingReason, type DeviceEdition, type Feature, type LicenseStatus, type Tier } from '@fbrx/shared';
+import { UNTRUSTED_LICENSE, licenseStatusFrom, verifyLicense } from '@fbrx/shared/node';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
 import type { EventBus } from '../events';
+
+/** Where this computer keeps its Pro trial: until when it runs (kept after it ends, so it is had once). */
+const TRIAL_KEY = 'edition.trial';
 
 /**
  * Offline license verification. Keys are Ed25519-signed by the vendor's control plane; the public key is
  * embedded in each build, so licenses cannot be forged by running a private server.
  */
+/**
+ * What FBRX Endpoint shares of its license with the other FBRX apps on the computer (FBRX Digger): its keys, which are
+ * signed and checked again by the app reading them, and how they count there (the computer's install id, its
+ * organization's edition, the edition chosen).
+ */
+export const SHARED_LICENSE_KEYS = ['license.managed', 'license.local', 'license.account', 'install.id', 'fleet.edition', 'fleet.deviceId', 'edition.chosen'] as const;
+export type SharedLicense = Partial<Record<(typeof SHARED_LICENSE_KEYS)[number], unknown>>;
+
+/** How long FBRX Digger trusts what it last read of FBRX Endpoint's license before reading it again. */
+const BORROWED_FOR_MS = 15_000;
+
 export class LicenseService {
   private cached: LicenseStatus | null = null;
+  private cachedAt = 0;
+  /** FBRX Digger: FBRX Endpoint's license on this computer, in place of one of its own (null: no Endpoint here). */
+  private borrow: (() => SharedLicense | null) | null = null;
+
+  /** While a support pass is active, SupportService sets this so the computer runs fully for troubleshooting. */
+  private supportElevation: (() => { tier: Tier; until: string | null } | null) | null = null;
 
   constructor(
     private readonly meta: MetaStore,
@@ -19,31 +39,180 @@ export class LicenseService {
     private readonly events?: EventBus,
   ) {}
 
+  /**
+   * SupportService wires this; when it returns an elevation, the computer runs at that edition with everything on
+   * (`until` null: the developer unlock, which has no end time).
+   */
+  setSupportElevation(fn: () => { tier: Tier; until: string | null } | null): void {
+    this.supportElevation = fn;
+    this.cached = null;
+  }
+
+  /** FBRX Digger runs at the edition FBRX Endpoint's license gives this computer: the FBRX account's, one license. */
+  borrowFrom(fn: () => SharedLicense | null): void {
+    this.borrow = fn;
+    this.cached = null;
+  }
+
+  /** What FBRX Endpoint writes for the other FBRX apps on this computer (see SHARED_LICENSE_KEYS). */
+  shared(): SharedLicense {
+    const out: SharedLicense = {};
+    for (const k of SHARED_LICENSE_KEYS) {
+      const v = this.meta.get<unknown>(k);
+      if (v !== undefined && v !== null) out[k] = v;
+    }
+    return out;
+  }
+
   status(): LicenseStatus {
-    if (this.cached) return this.cached;
+    // Support mode wins over everything else while its pass is valid (it ends on its own at the pass's expiry).
+    const support = this.supportElevation?.();
+    if (support) {
+      return {
+        ...licenseStatusFrom(null, this.publicKeys, 'none', 1),
+        state: 'valid',
+        edition: licenseEditionFor(support.tier),
+        tier: support.tier,
+        chosen: support.tier,
+        ceiling: support.tier,
+        ceilingReason: 'support',
+        features: [...ALL_FEATURES],
+        source: 'support',
+        support: true,
+        message: support.until ? `Support mode: running as ${TIER_NAMES[support.tier]} until ${new Date(support.until).toLocaleString()}` : `${TIER_NAMES[support.tier]}, unlocked on this computer`,
+      };
+    }
+    // The Pro trial ends by itself: look again once it is over.
+    // FBRX Digger reads FBRX Endpoint's license again every little while, so it follows a purchase or a sign-out.
+    const stale = !!this.borrow && Date.now() - this.cachedAt > BORROWED_FOR_MS;
+    if (this.cached && !stale && !(this.cached.trialUntil && Date.parse(this.cached.trialUntil) <= Date.now())) return this.cached;
+    this.cachedAt = Date.now();
+    // FBRX Digger counts FBRX Endpoint's keys as Endpoint does (they are signed, and checked again here); anything
+    // missing counts as nothing bought.
+    const borrowed = this.borrow ? (this.borrow() ?? {}) : null;
+    const get = <T>(key: string): T | null => (borrowed ? (((borrowed as Record<string, unknown>)[key] as T | undefined) ?? null) : this.meta.get<T>(key));
     const major = parseSemver(this.appVersion)?.major ?? 1;
-    const managed = this.meta.get<string>('license.managed');
-    const local = this.meta.get<string>('license.local');
-    let status = managed
-      ? licenseStatusFrom(managed, this.publicKeys, 'managed', major)
-      : licenseStatusFrom(local, this.publicKeys, 'local', major);
-    // Development builds run as Ultra with everything on, unless FBRX_EDITION=basic asks to try Endpoint Basic.
-    if (this.devMode && status.state !== 'valid' && process.env.FBRX_EDITION !== 'basic') {
+    const managed = get<string>('license.managed');
+    const local = get<string>('license.local');
+    const account = get<string>('license.account');
+    // A key an FBRX account made for one of its computers works on that one only.
+    const install = get<string>('install.id');
+    // The organization's license wins; otherwise (or when it does not count here) the fuller of a key typed in and the
+    // FBRX account's.
+    let status = managed ? licenseStatusFrom(managed, this.publicKeys, 'managed', major, install) : licenseStatusFrom(local, this.publicKeys, 'local', major, install);
+    let problem = managed && status.state !== 'valid' ? unusable('organization', status) : null;
+    if (account && (!managed || status.state !== 'valid')) {
+      const fromAccount = licenseStatusFrom(account, this.publicKeys, 'account', major, install);
+      if (fromAccount.state === 'valid' && (status.state !== 'valid' || tierRank(fromAccount.tier) > tierRank(status.tier))) status = fromAccount;
+      else if (fromAccount.state !== 'valid') problem ??= unusable('account', fromAccount);
+    }
+    // Development builds may run Black Hole Edition with everything on, unless FBRX_EDITION asks to try a lighter edition
+    // (then they start there, like a computer on its own that may run it).
+    const asked = this.devMode ? parseTier(process.env.FBRX_EDITION) : null;
+    const tryTier = asked === 'blackhole' ? null : asked;
+    if (this.devMode && status.state !== 'valid' && !tryTier) {
       status = {
         ...status,
         state: 'development',
         edition: 'enterprise',
-        tier: 'ultra',
+        tier: 'blackhole',
         features: [...ALL_FEATURES],
         source: 'development',
         message: 'Development build: all features unlocked',
       };
     }
-    // FBRX Command can hold a group to Endpoint Basic, and student computers always run the learner edition on Basic.
-    const ed = this.meta.get<DeviceEdition>('fleet.edition');
-    if (ed && status.tier === 'ultra' && (ed.tier === 'basic' || isLearner(ed.audience))) status = { ...status, tier: 'basic' };
-    this.cached = status;
-    return status;
+    // The most this computer may run.
+    // - In an organization: what its license allows, held lower by FBRX Command for the computer or its group.
+    // - On its own: Essentials, unless something was bought: a license key (or a purchase on the person's FBRX
+    //   account) goes up to Ultra. A license that belongs to an organization (it names its FBRX Command) counts only
+    //   there. Black Hole Edition comes only through an organization.
+    // - On its own, a computer may try Pro free for STANDARD_TRIAL_DAYS, once (startTrial).
+    // Student and child computers always run the learner edition, on Pro (LEARNER_TIER).
+    const ed = get<DeviceEdition>('fleet.edition');
+    const enrolled = !!get<string>('fleet.deviceId');
+    let ceiling: Tier = status.tier;
+    let reason: CeilingReason = 'license';
+    let trialUntil: string | null = null;
+    const trial = borrowed ? undefined : this.meta.get<{ until: string }>(TRIAL_KEY);
+    if (status.source === 'development') reason = 'development';
+    else if (!enrolled) {
+      const bought = status.state === 'valid' && !status.commandUrl;
+      ceiling = bought ? minTier(status.tier, 'ultra') : 'essentials';
+      reason = bought ? 'license' : 'standalone';
+      if (trial && Date.parse(trial.until) > Date.now() && tierRank(ceiling) < tierRank('basic')) {
+        ceiling = 'basic';
+        reason = 'trial';
+        trialUntil = trial.until;
+      }
+      if (tryTier) ceiling = maxTier(ceiling, tryTier);
+    }
+    if (ed?.tier && tierRank(ed.tier) < tierRank(ceiling)) {
+      ceiling = narrowTier(ceiling, ed.tier);
+      reason = 'organization';
+    }
+    if (ed && isLearner(ed.audience)) return (this.cached = { ...status, tier: LEARNER_TIER, chosen: LEARNER_TIER, ceiling: LEARNER_TIER, ceilingReason: 'learner', trialUntil: null, trialAvailable: false, problem });
+    // What the person chose (Essentials on a new computer; see Kernel's first start), never above the ceiling.
+    const chosen = get<Tier>('edition.chosen') ?? (this.devMode ? (tryTier ?? 'blackhole') : 'essentials');
+    // The trial is there for a computer on its own with nothing bought, until it has had it.
+    const trialAvailable = reason === 'standalone' && !trial && !borrowed;
+    this.cached = { ...status, tier: minTier(chosen, ceiling), chosen, ceiling, ceilingReason: reason, trialUntil, trialAvailable, problem: status.state === 'development' ? null : problem };
+    return this.cached;
+  }
+
+  /** Pro, free, for STANDARD_TRIAL_DAYS: once, on a computer on its own with nothing bought. Turns it on. */
+  startTrial(): LicenseStatus {
+    if (!this.status().trialAvailable) throw new CoreError('FORBIDDEN', 'The Pro trial is for a computer on its own, once, before anything is bought');
+    this.meta.set(TRIAL_KEY, { until: new Date(Date.now() + STANDARD_TRIAL_DAYS * 86_400_000).toISOString() });
+    if (tierRank(this.meta.get<Tier>('edition.chosen') ?? 'essentials') < tierRank('basic')) this.meta.set('edition.chosen', 'basic');
+    return this.changed();
+  }
+
+  /**
+   * What to tell the person about the Pro trial, once each: its last day has come (`ending`), or it is over with
+   * nothing bought (`ended`, and the pages it had close). Null when there is nothing new.
+   */
+  takeTrialNotice(now = Date.now()): 'ending' | 'ended' | null {
+    const trial = this.meta.get<{ until: string; told?: 'ending' | 'ended' }>(TRIAL_KEY);
+    if (!trial) return null;
+    const left = Date.parse(trial.until) - now;
+    const reason = this.status().ceilingReason;
+    const notice = reason === 'trial' && left < 86_400_000 ? 'ending' : left <= 0 && reason === 'standalone' ? 'ended' : null;
+    if (!notice || trial.told === notice) return null;
+    this.meta.set(TRIAL_KEY, { ...trial, told: notice });
+    if (notice === 'ended') this.changed();
+    return notice;
+  }
+
+  /**
+   * From 2.0, Pro is bought. A computer that ran FBRX before starts its Pro trial by itself the first time it
+   * starts 2.0, so what it used does not go away without notice (the same trial every computer may take, once).
+   */
+  beginV2(setUpBefore: boolean): void {
+    if (this.meta.get<boolean>('edition.v2')) return;
+    this.meta.set('edition.v2', true);
+    this.cached = null;
+    if (setUpBefore && this.status().trialAvailable) this.startTrial();
+  }
+
+  /** The edition the person wants (Settings → Edition): anything up to what this computer may run. */
+  choose(tier: Tier): LicenseStatus {
+    const now = this.status();
+    if (now.ceilingReason === 'learner') throw new CoreError('FORBIDDEN', 'This computer runs the learner edition chosen by your organization');
+    if (now.ceiling && tierRank(tier) > tierRank(now.ceiling)) throw new CoreError('FORBIDDEN', this.whyNot(tier, now));
+    this.meta.set('edition.chosen', tier);
+    return this.changed();
+  }
+
+  /** Why this computer cannot run `tier`, and how it could. */
+  private whyNot(tier: Tier, now: LicenseStatus): string {
+    const ceiling = now.ceiling ?? now.tier;
+    if (now.ceilingReason === 'organization') return `Your organization holds this computer to ${TIER_NAMES[ceiling]} (in FBRX Command)`;
+    const enrolled = !!this.meta.get<string>('fleet.deviceId');
+    if (enrolled) return `Your organization's license allows up to ${TIER_NAMES[ceiling]}`;
+    const plan = EDITION_PLANS[tier];
+    if (plan.monthly == null) return `${TIER_NAMES[tier]} comes only through an organization's FBRX Command: once it adds this computer and gives it ${TIER_SHORT[tier]}, it unlocks here`;
+    const trial = tier === 'basic' && now.trialAvailable ? `, or try it free for ${STANDARD_TRIAL_DAYS} days` : '';
+    return `${TIER_NAMES[tier]} is ${formatPrice(plan.monthly)} a month on your FBRX account (or with a license key in Settings → License)${trial}`;
   }
 
   /** Re-reads the license and edition (after FBRX Command changed what this computer is). */
@@ -57,7 +226,7 @@ export class LicenseService {
 
   require(feature: Feature): void {
     if (!this.has(feature)) {
-      throw new CoreError('FEATURE_UNAVAILABLE', `"${FEATURES[feature]}" is not included in your ${this.status().edition} license`);
+      throw new CoreError('FEATURE_UNAVAILABLE', `"${FEATURES[feature]}" is not included in ${TIER_NAMES[this.status().tier] ?? 'this edition'}`);
     }
   }
 
@@ -74,6 +243,13 @@ export class LicenseService {
     return this.changed();
   }
 
+  /** The license the person's FBRX account gives this computer (null when they sign out or bought nothing). */
+  applyAccount(key: string | null): LicenseStatus {
+    if (key) this.meta.set('license.account', key);
+    else this.meta.delete('license.account');
+    return this.changed();
+  }
+
   applyManaged(key: string | null): LicenseStatus {
     if (key) this.meta.set('license.managed', key);
     else this.meta.delete('license.managed');
@@ -86,4 +262,14 @@ export class LicenseService {
     this.events?.emit('license.changed', s);
     return s;
   }
+}
+
+/** Why the organization's (FBRX Command's) or the FBRX account's license does not count on this computer. */
+function unusable(whose: 'organization' | 'account', s: LicenseStatus): string {
+  const what = whose === 'organization' ? 'The editions your FBRX Command gives' : 'Your FBRX account’s edition';
+  if (s.message === UNTRUSTED_LICENSE) {
+    return `${what} cannot reach this computer: this copy of FBRX OS was built to trust another license signing key than ${whose === 'organization' ? 'your FBRX Command' : 'the FBRX Command your account is on'}. Install FBRX OS again with FBRX Command's key (--signing-key) and ${whose === 'organization' ? 'they' : 'it'} will.`;
+  }
+  if (s.state === 'expired') return whose === 'organization' ? 'Your organization’s license has expired: FBRX Command renews it with its plan.' : 'Your FBRX account’s license has expired: it renews when this computer signs in again.';
+  return `${what} cannot be used here: ${s.message ?? 'its license is not valid'}.`;
 }

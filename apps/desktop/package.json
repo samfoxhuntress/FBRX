@@ -1,12 +1,13 @@
 {
   "name": "@fbrx/desktop",
   "productName": "FBRX OS",
-  "version": "1.9.5",
+  "version": "2.4.0",
   "private": true,
-  "description": "FBRX OS — the Fabrics Operating System desktop super-tool with a governed, local-first AI agent",
+  "description": "FBRX OS — the desktop super-tool with a governed, local-first AI agent",
   "author": "FBRX",
   "license": "UNLICENSED",
   "homepage": "https://fbrx.example",
+  "desktopName": "fbrx-os.desktop",
   "type": "module",
   "main": "dist/main/index.mjs",
   "scripts": {
@@ -16,7 +17,8 @@
     "package": "node scripts/package.mjs",
     "package:mac": "node scripts/package.mjs --mac",
     "package:win": "node scripts/package.mjs --win",
-    "package:linux": "node scripts/package.mjs --linux"
+    "package:linux": "node scripts/package.mjs --linux",
+    "package:digger": "node scripts/package.mjs --digger"
   },
   "dependencies": {
     "electron-updater": "^6.8.9"
@@ -44,7 +46,7 @@
     "@vitejs/plugin-react": "^6.1.1",
     "@xterm/addon-fit": "^0.11.0",
     "@xterm/xterm": "^6.0.0",
-    "electron": "44.5.1",
+    "electron": "44.10.1",
     "electron-builder": "^26.15.3",
     "oui-data": "^2.1.33",
     "qrcode": "^1.5.4",

@@ -121,10 +121,16 @@ describe('Prefer Mesh: reaching paired computers', () => {
     kb = B.kernel;
     ka.settings.update({ mesh: { enabled: true, port: 47861 }, general: { deviceName: 'server-a' } });
     kb.settings.update({ mesh: { enabled: true, port: 47862, assist: { roles: ['gate', 'minidome'] } }, general: { deviceName: 'server-b' } });
-    await waitFor(() => ka.mesh.running && kb.mesh.running);
+    // A mesh that could not start (its port busy for a moment, a service it needs still starting) is started again by
+    // the services watchdog 15 seconds later: allow for that once, and say what was wrong if it never comes up.
+    await waitFor(() => {
+      const down = [ka, kb].filter((k) => !k.mesh.running).map((k) => `${k.settings.get().general.deviceName}: ${JSON.stringify(k.services.get('mesh'))}`);
+      if (down.length) throw new Error(down.join('; '));
+      return true;
+    }, 40_000);
     const pairing = (await kb.call('mesh.startPairing', undefined, USER)) as { code: string };
     bOnA = ((await ka.call('mesh.pair', { code: pairing.code, host: '127.0.0.1:47862' }, USER)) as { id: string }).id;
-  }, 60_000);
+  }, 90_000);
   afterAll(async () => {
     await B?.cleanup();
     await A?.cleanup();

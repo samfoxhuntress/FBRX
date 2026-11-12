@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { MeshDevice, MeshJob, MeshPermissions } from '@fbrx/shared';
-import { funEnabled } from '@fbrx/shared';
-import { useTier } from '../edition';
+import type { MeshDevice, MeshJob, MeshPermissions, SyncPeer, SyncResult } from '@fbrx/shared';
+import { SYNC_KIND_NAMES, SYNC_KINDS, funEnabled } from '@fbrx/shared';
+import { EditionHint, useTier } from '../edition';
 import { Button, Callout, Card, ChoiceCards, Empty, Field, Grid, Icons, InfoTip, Input, KeyValue, MenuButton, Modal, More, Page, Select, Status, Tabs, TextArea, Toggle, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { navigate } from '../app';
 import { call, onEvent } from '../client';
@@ -24,6 +24,7 @@ const PERMS: Array<{ key: keyof MeshPermissions; label: string; help: string }> 
 const SPECIAL: Array<{ key: keyof MeshPermissions; label: string; help: string }> = [
   { key: 'network', label: 'Network protection', help: 'Only matters when the other device is an FBRX Server running as your network gate with FBRX MiniDome: it tells this computer about threats it sees coming from it, and sees how this computer is protected (antivirus on or off).' },
   { key: 'command', label: 'Controller', help: 'Lets the other computer hand out AI work that runs here without asking, may be urgent, and may stop less important help. Meant for one main computer you run as administrator. This computer’s policy still applies.' },
+  { key: 'sync', label: 'Sync', help: 'FBRX Sync: keep projects, tasks, notes, snippets and FBRX calendar events the same on both computers, whenever either of you chooses Sync now. It goes straight between the two computers, sealed so only they can read it; no FBRX server ever holds it. Turn it on for each other on both computers.' },
 ];
 const relevant = (d: MeshDevice) => PERMS.filter((p) => d.kind === 'desktop' || p.key !== 'assist');
 
@@ -80,7 +81,7 @@ function Pairing({ onClose }: { onClose: () => void }) {
           {p.qrDataUrl && <img src={p.qrDataUrl} alt="Pairing QR code" width={220} height={220} />}
           <div className="pair-steps">
             <p>
-              <strong>Phone:</strong> on the same Wi-Fi, scan the code with the camera and open the link. FBRX Mobile opens and pairs itself.
+              <strong>Phone:</strong> on the same Wi-Fi, scan the code with the FBRX app (Scan the code), or with the camera and open the link. It pairs itself.
             </p>
             <p>
               <strong>Another FBRX computer:</strong> open Mesh &amp; phone there, choose <em>Add a device → Enter a code</em>, and type:
@@ -219,7 +220,44 @@ function PeerStatus({ info, onClose }: { info: any; onClose: () => void }) {
   );
 }
 
-function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => void }) {
+/** What a sync did, in a few words. */
+function syncSummary(r: SyncResult): string {
+  const t = r.total;
+  const parts = [t.received && `${t.received} here`, t.sent && `${t.sent} there`, t.deleted && `${t.deleted} deleted`, t.conflicts && `${t.conflicts} changed on both`].filter(Boolean);
+  return parts.length ? `${parts.join(', ')}` : 'already the same';
+}
+
+/** FBRX Sync with a paired computer: when it last synced, and Sync now (only when both allow it). */
+function SyncLine({ d, peer }: { d: MeshDevice; peer?: SyncPeer }) {
+  const { run, busy } = useAction();
+  const toast = useToast();
+  const last = peer?.last ?? null;
+  return (
+    <div className="sync-line">
+      <Icons.repeat size={15} />
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div>{last ? `Synced ${timeAgo(last.at)}: ${syncSummary(last)}` : `Not synced with ${d.name} yet`}</div>
+        {last && (
+          <div className="fx-muted" style={{ fontSize: 11.5 }}>
+            {SYNC_KINDS.filter((k) => last.kinds[k].received + last.kinds[k].sent + last.kinds[k].deleted > 0).map((k) => SYNC_KIND_NAMES[k]).join(', ') || 'Projects, tasks, notes, snippets and calendar events'}
+          </div>
+        )}
+      </div>
+      <Button
+        size="sm"
+        icon="repeat"
+        loading={busy === 'sync'}
+        disabled={!d.online && !!d.lastSeen}
+        title={!d.online ? `${d.name} needs to be on and reachable` : 'Straight between the two computers, sealed for them alone'}
+        onClick={() => void run('sync', () => call('sync.now', { id: d.id }).then((r) => toast.success(`Synced with ${d.name}`, syncSummary(r))))}
+      >
+        Sync now
+      </Button>
+    </div>
+  );
+}
+
+function DeviceCard({ d, sync, onPing, advanced = true }: { d: MeshDevice; sync?: SyncPeer; onPing?: (d: MeshDevice) => void; advanced?: boolean }) {
   const { run, busy } = useAction();
   const { confirm, dialog } = useConfirm();
   const [ask, setAsk] = useState(false);
@@ -227,6 +265,8 @@ function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => 
   const agent = useAgentName();
   const toast = useToast();
   const access = accessOf(d);
+  // Introduced by the organization (FBRX Command), which also decides what it may do here.
+  const org = d.source === 'org';
   const preset = ACCESS.find((a) => a.id === access);
   const setPerms = (permissions: Partial<MeshPermissions>) => void run('perm', () => call('mesh.setPermissions', { id: d.id, permissions }));
   const remove = async () => {
@@ -243,10 +283,24 @@ function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => 
           {d.name}
         </span>
       }
-      subtitle={`${d.kind === 'mobile' ? 'Phone' : d.platform || 'Computer'}${d.version ? ` · FBRX ${d.version}` : ''} · paired ${timeAgo(d.pairedAt)}`}
+      subtitle={`${d.kind === 'mobile' ? 'Phone' : d.platform || 'Computer'}${d.version ? ` · FBRX ${d.version}` : ''} · ${org ? 'from your organization' : `paired ${timeAgo(d.pairedAt)}`}`}
       actions={<Status tone={d.online ? 'good' : 'neutral'}>{d.online ? 'online' : d.lastSeen ? `seen ${timeAgo(d.lastSeen)}` : 'offline'}</Status>}
     >
       <div className="fx-grid" style={{ gap: 12 }}>
+        {org ? (
+          <div className="fx-muted" style={{ fontSize: 12.5 }}>
+            Your organization introduced this computer and decides what it may do here: {(['status', 'chat', 'assist', 'network'] as const).filter((k) => d.permissions[k]).map((k) => PERMS.concat(SPECIAL).find((p) => p.key === k)?.label.toLowerCase() ?? k).join(', ') || 'nothing yet'}.
+          </div>
+        ) : !advanced ? (
+          // Pro: status, messages, alerts, notes and asking Fabrix; choosing per device comes with Ultra.
+          <div className="fx-grid" style={{ gap: 6 }}>
+            <div className="fx-muted" style={{ fontSize: 12.5 }}>
+              {d.name} may {d.kind === 'mobile' ? 'see how this computer is doing, send messages, show alerts, tasks and notes, and ask the agent' : 'see how this computer is doing, send messages and borrow its AI when stuck'}.
+            </div>
+            <EditionHint>Choosing what each device may do, approving from your phone, and lock and sleep come with Ultra.</EditionHint>
+          </div>
+        ) : (
+        <>
         <Field
           label={`What ${d.name} may do here`}
           info="Pick a level of trust. You can change it at any time, and Choose one by one lets you set each permission yourself."
@@ -279,6 +333,24 @@ function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => 
             Fingerprint <span className="mono">{fingerprint(d.fingerprint)}</span>
           </div>
         </More>
+        </>
+        )}
+        {d.kind === 'desktop' &&
+          (d.permissions.sync ? (
+            <SyncLine d={d} peer={sync} />
+          ) : (
+            !org && (
+              <div className="sync-line">
+                <Icons.repeat size={15} />
+                <div className="fx-muted" style={{ flex: 1 }}>
+                  FBRX Sync keeps projects, tasks, notes, snippets and the calendar the same on both computers, straight between them.
+                </div>
+                <Button size="sm" loading={busy === 'perm'} onClick={() => setPerms({ sync: true })}>
+                  Turn on Sync
+                </Button>
+              </div>
+            )
+          ))}
         <div className="fx-actions">
           <Button size="sm" icon="message" onClick={() => navigate(`messages/mesh:${d.id}`)}>
             Message
@@ -306,7 +378,7 @@ function DeviceCard({ d, onPing }: { d: MeshDevice; onPing?: (d: MeshDevice) => 
               d.kind === 'mobile' && { label: 'Find my phone', icon: 'phone', hint: 'It rings when FBRX Mobile is open', onSelect: () => void run('loc', () => call('mesh.action', { id: d.id, action: 'locate' }), 'Your phone will ring when FBRX Mobile is open') },
               d.kind === 'desktop' && { label: 'Lock it', icon: 'lock', hint: 'Needs Lock and sleep on that computer', onSelect: () => void run('lock', () => call('mesh.action', { id: d.id, action: 'lock' }), 'Lock sent') },
               d.kind === 'desktop' && { label: 'Put it to sleep', icon: 'moon', hint: 'Needs Lock and sleep on that computer', onSelect: () => void run('sleep', () => call('mesh.action', { id: d.id, action: 'sleep' }), 'Sleep sent') },
-              { label: 'Remove', icon: 'trash', danger: true, hint: 'Unpair it from this computer', onSelect: () => void remove() },
+              !org && { label: 'Remove', icon: 'trash', danger: true, hint: 'Unpair it from this computer', onSelect: () => void remove() },
             ]}
           />
         </div>
@@ -356,7 +428,7 @@ function AskPeer({ device, onClose, agentName }: { device: MeshDevice; onClose: 
 
 type MeshTab = 'devices' | 'ai' | 'network';
 
-export function MeshPage() {
+export function MeshPage({ advanced = true }: { advanced?: boolean }) {
   const status = useCore('mesh.status', undefined, ['mesh.changed']);
   const settings = useCore('settings.get', undefined, ['settings.changed']);
   const [adding, setAdding] = useState(false);
@@ -367,6 +439,7 @@ export function MeshPage() {
   const { run, busy } = useAction();
   const toast = useToast();
   const agent = useAgentName();
+  const peers = useCore('sync.peers', undefined, ['sync.done', 'mesh.changed']);
   const s = status.data;
   const incoming = settings.data?.settings.mesh.incoming ?? 'ask';
   // Easter egg: three pings in a row to the same computer (or to yourself) and the two start pointing fingers.
@@ -490,7 +563,7 @@ export function MeshPage() {
           {s.devices.length > 0 ? (
             <Grid cols={2}>
               {s.devices.map((d) => (
-                <DeviceCard key={d.id} d={d} onPing={(x) => triple(x.id)} />
+                <DeviceCard advanced={advanced} key={d.id} d={d} sync={peers.data?.find((p) => p.deviceId === d.id)} onPing={(x) => triple(x.id)} />
               ))}
             </Grid>
           ) : (

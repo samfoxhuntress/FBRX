@@ -24,6 +24,20 @@ Everything the gate does is **one configuration**. You never change the network 
 3. **Commit** — checked again (`nft -c`, `dnsmasq --test`), then applied. If applying fails, the previous configuration
    is put back at once and nothing changed.
 
+**What if?** Before you commit, *Changes* works out what the change would do to traffic, from the firewall itself and
+before anything changes on the network:
+
+- **Every kind of connection**: each network to the internet, to the other networks and to the gate (this console,
+  SSH, DNS, DHCP), the VPN, and the internet to the console and to each port forward, now and after the change, with
+  the reason (the rule that decides it, or the gate's default). What changes comes first: cut off, then newly opened.
+- **You**: whether you can still reach this console from where you are. When a change would cut you off, it says so in
+  red, and committing asks again (on trial, the old configuration comes back by itself if you cannot reach the console
+  to keep it).
+- **What really happened**: the connections the gate saw in the last hour (FBRX MiniDome keeps them) replayed against
+  the change: "56 of 56 recent connections would be cut off" is a change to look at again.
+- **Ask the AI** (with the ai role): this server's AI reads all of the above and explains the change, what could go
+  wrong, and whether to commit it on trial or change something first.
+
 **Trial commits** (on by default, 5 minutes): the commit undoes itself unless you press **Keep it** in time. If a change
 cuts you off (a wrong port, a rule that blocks the console), wait: the old configuration comes back by itself. A gate
 that restarts during a trial also goes back. Every commit is kept; *Changes → History* goes back to any of them (as a
@@ -36,23 +50,46 @@ On FBRX Server (the ISO installs the virtual and ai roles; add the gate afterwar
 ```bash
 sudo /opt/fbrx-installer/install.sh --roles virtual,ai,gate --gate-wan eno1 --gate-lan eno2
 # or, a dedicated gate with MiniDome:
-sudo bash fbrx-server-0.1.0/install.sh --roles gate,minidome,ai --gate-wan eno1 --gate-lan eno2
+sudo bash fbrx-server-1.0.0/install.sh --roles gate,minidome,ai --gate-wan eno1 --gate-lan eno2
 ```
 
 | Option | |
 | --- | --- |
 | `--gate-wan <port>` | The port your modem or provider's box plugs into. |
-| `--gate-lan <port>` | The port to your network. It becomes **192.168.1.1/24** and hands out 192.168.1.100–199. |
+| `--gate-lan <port>` | The port to your network. It becomes **192.168.1.1/24** and hands out 192.168.1.100–199, unless the internet side already uses 192.168.1.x (a home router in front of the gate, say): then the next free one of 192.168.10.1, 192.168.50.1, 192.168.88.1, 10.10.0.1 and 172.20.0.1. The installer says which. |
+| `--gate-lan-address <cidr>` | Your network's addresses, chosen yourself (`192.168.50.1/24`). |
+| `--gate-wan-address <cidr>` `--gate-wan-gateway <ip>` | A fixed internet address (`203.0.113.2/29` via `203.0.113.1`). When the internet port already has a fixed address in `/etc/network/interfaces`, the gate keeps it without these. Otherwise DHCP from the modem or router. |
 | `--gate-manage <cidr\|none>` | A private network on the internet side that may still reach the console and SSH. By default the network the internet port is on during the install (if private), so installing over it does not shut you out. |
+| `--reboot` | Restart at the end when the takeover waits for it (run interactively, the installer asks instead). |
 
 The installer adds nftables, dnsmasq, WireGuard tools and systemd-networkd; moves the two ports from the system's own
 network settings (`/etc/network/interfaces`, kept as `interfaces.fbrx-backup`) to systemd-networkd; loads the firewall
 before the network comes up at every boot (`fbrx-gate-firewall.service`); points the server's own name lookups at the
-gate; and, at the first start, commits the **starter configuration**: the internet by DHCP, your network on the LAN
-port, nothing reachable from the internet. On a running server the takeover waits for a restart.
+gate; switches systemd-networkd, dnsmasq and the firewall service on for every start; and, at the first start, commits
+the **starter configuration**: the internet by DHCP (or the fixed address), your network on the LAN port, nothing
+reachable from the internet. On a running server the takeover waits for a restart (the installer offers it).
 
-Then plug a computer into the LAN port: it gets an address. Open `https://192.168.1.1:9443` and sign in with the setup
-code (`sudo fbrx-server setup-code`).
+Then plug a computer into the LAN port: it gets an address. Open `https://<the gate's address>:9443` (192.168.1.1, or
+the one the installer named; the server's login screen shows it) and sign in with the setup code
+(`sudo fbrx-server setup-code`).
+
+### When something does not work
+
+```bash
+sudo fbrx-server doctor          # every service the roles need: on for the next start, and running now
+sudo fbrx-server doctor --fix    # switches on and starts whatever is off
+sudo fbrx-gate status            # the gate's own view, problems last
+```
+
+Every commit also switches systemd-networkd, dnsmasq and the firewall service on, so a gate keeps working after a
+restart. The problems `fbrx-gate status` (and the Gate page) name, with what to do:
+
+| Problem | |
+| --- | --- |
+| *The internet port got 192.168.1.37, inside your network lan* | The router in front of the gate hands out the same addresses as your network, so nothing gets through. `sudo fbrx-gate renumber lan 192.168.10.1/24` (or change the address under Networks), then `sudo fbrx-gate commit`. Devices get new addresses as their leases renew (restart them to hurry it). |
+| *DHCP and DNS (dnsmasq) are not running* / *systemd-networkd is not running* | `sudo fbrx-server doctor --fix`; `journalctl -u dnsmasq` says why it stopped. |
+| */etc/network/interfaces still sets up eno1* | The system's own network settings and the gate fight over the port. Put a `#` before its lines (auto, iface, address…) and restart. |
+| *The internet port has no address yet* | Cable, modem, or the provider's DHCP; for a fixed address `sudo fbrx-gate wan static <address/size> <gateway>`. |
 
 ## The console
 
@@ -86,7 +123,9 @@ devices may **manage the gate** (console and SSH), and DHCP with reserved addres
 port; firewall rules add exceptions either way.
 
 **VLANs** carry several networks on one cable: *New network → A VLAN on a port* picks a tag (guests 20, mesh 30, …);
-set the same tag on your switch's ports. A VLAN on the internet port works but is flagged.
+set the same tag on your switch's ports. A VLAN on the internet port works but is flagged. To change a network's tag,
+open it and edit **VLAN tag**: at the commit its VLAN becomes `<port>.<tag>` and the old one is taken away, and its
+firewall rules follow the network. Change the tag on your switch too.
 
 **Jumbo frames** (MTU 9000) suit a mesh or storage network whose switch and computers all take them. A VLAN's port must
 be at least as large, and an untagged network on that port would get jumbo frames too, so the console only offers them
@@ -136,7 +175,9 @@ log** (on by default) is what FBRX MiniDome reads; it is rotated daily and kept 
 Your phone or laptop reaches home from anywhere (uses WireGuard). *DNS & VPN → Add a device*: the gate makes the
 device's keys and settings and shows them **once**, as a QR code for the WireGuard app and as a settings file. The
 device's private key is not kept anywhere. Choose whether everything goes through home (safer on public Wi-Fi) or only
-your networks. Behind another router, forward UDP 51820 to the gate.
+your networks. Behind another router, forward UDP 51820 to the gate. On an FBRX computer, paste the settings into
+**FBRX VPN** ([VPN.md](VPN.md)): it connects from FBRX, and the gate lets a device with full access reach its console,
+SSH and FBRX Mesh (the server's own AI), as it does for the networks that may manage it.
 
 ## Traffic priority and Prefer Mesh
 
@@ -177,6 +218,8 @@ fbrx-gate commit confirmed 5 comment Guest VLAN
 fbrx-gate confirm                        keep it
 fbrx-gate rollback now                   undo the commit on trial
 fbrx-gate rollback 12                    go back to commit 12
+fbrx-gate renumber lan 192.168.50.1/24   move a network: its range, reservations, forwards, rules and names follow
+fbrx-gate wan static 203.0.113.2/29 203.0.113.1    a fixed internet address (wan dhcp: back to DHCP)
 fbrx-gate reset                          throw the edits away
 fbrx-gate history | leases | preview nftables|dnsmasq|networkd
 ```
@@ -205,17 +248,7 @@ Under `/v1` on the console's port (see [SERVER.md](SERVER.md#api)):
 | --- | --- |
 | `GET /gate`, `GET /gate/live`, `GET /gate/interfaces` | The state (running, candidate, changes, problems, trial), live status, the server's ports (viewers) |
 | `PUT /gate/candidate`, `POST /gate/candidate/reset`, `GET /gate/preview` | Edit, throw away, preview (administrators) |
+| `GET /gate/whatif`, `POST /gate/whatif/explain` | What the change being edited would do to traffic (viewers); the server's AI explains it (operators) |
 | `POST /gate/commit` `{ comment, confirmMinutes }`, `POST /gate/confirm`, `POST /gate/confirm/undo`, `POST /gate/rollback` `{ to, confirmMinutes }` | Commit, keep, undo the trial, go back |
 | `GET /gate/history`, `GET /gate/history/:id` | Commits |
 | `POST /gate/vpn/peers` `{ name, endpoint?, fullTunnel }` | A new VPN device: its settings and QR code, once |
-
-## Development
-
-```bash
-FBRX_V_ROLES=gate,minidome FBRX_V_GATE=simulated npm run dev:virtual   # a pretend gate (nothing on this computer changes)
-npx vitest run packages/gate apps/virtual/test/gate.test.ts
-sudo -E env "PATH=$PATH" npx vitest run packages/gate/test/netns.integration.test.ts   # a real router in namespaces
-```
-
-The code is in `packages/gate` (the configuration, its checks, what it turns into; the engine and the Linux applier in
-`src/node`), `apps/virtual/src/routes/gate.ts` and `gate-cli.ts`, and the console's `pages/gate-*.tsx`.

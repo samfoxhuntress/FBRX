@@ -71,8 +71,8 @@ export const PROFILE_SETTINGS: ProfileSetting[] = [
   { path: 'ai.showThinking', area: 'ai', kind: 'toggle', label: 'Show what the agent is doing', help: 'Shows the agent’s steps and reasoning while it works, so people see why it does what it does.' },
   { path: 'ai.agentName', area: 'ai', kind: 'text', label: 'The agent’s name', help: 'What the agent is called throughout the app (Fabrix unless you change it).' },
   // Fun and look
-  { path: 'appearance.easterEggs', area: 'fun', kind: 'toggle', label: 'Easter eggs, jokes and the goose', help: 'Hidden extras, jokes from the agent, trophies and the Silly Goose. Off keeps work strictly work.' },
-  { path: 'appearance.gooseVisits', area: 'fun', kind: 'toggle', label: 'The goose drops by on its own', help: 'Now and then the Silly Goose walks across the screen without being asked.' },
+  { path: 'appearance.easterEggs', area: 'fun', kind: 'toggle', label: 'Easter eggs, jokes and Bruce the Goose', help: 'Hidden extras, jokes from the agent, trophies and Bruce the Goose. Off keeps work strictly work.' },
+  { path: 'appearance.gooseVisits', area: 'fun', kind: 'toggle', label: 'Bruce peeks out on his own', help: 'Now and then Bruce the Goose peeks out from behind a card or button in the FBRX window, without being asked.' },
   { path: 'appearance.splash', area: 'fun', kind: 'toggle', label: 'Start-up animation', help: 'The FBRX logo is stitched in when the app opens.' },
   { path: 'appearance.splashSound', area: 'fun', kind: 'toggle', label: 'Start-up sound', help: 'A short chime when the app opens.' },
   {

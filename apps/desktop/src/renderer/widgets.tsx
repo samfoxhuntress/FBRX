@@ -99,10 +99,13 @@ export function askAgent(prompt: string, context?: unknown): void {
 
 /** The agent's name for buttons deep in the page tree (provided by the main app). */
 export const AgentNameContext = createContext('Fabrix');
+/** Whether there is an AI to ask: always in FBRX OS; in FBRX Digger, while FBRX Endpoint's AI is there. */
+export const AiContext = createContext(true);
 
 /** A sparkle button that hands an item to the agent for analysis. */
 export function AskButton({ prompt, context, label = 'Analyze', iconOnly = false, variant }: { prompt: string; context?: unknown; label?: string; iconOnly?: boolean; variant?: 'primary' | 'ghost' }) {
   const agent = useContext(AgentNameContext);
+  if (!useContext(AiContext)) return null;
   return (
     <Button size="sm" variant={variant} className={variant ? undefined : 'ask-btn'} icon="sparkles" title={`${label} with ${agent}`} aria-label={`${label} with ${agent}`} onClick={() => askAgent(prompt, context)}>
       {iconOnly ? null : label}
@@ -202,7 +205,7 @@ export async function saveProfile(p: { name: string; callMe: string }, fun: bool
   if (fun && /^chicken$/i.test(p.callMe.trim())) {
     cluck();
     unlockTrophy('chicken');
-    toast.info('Nobody calls me chicken!', '…but if you insist. Bawk.');
+    toast.info('Bawk bawk!', 'Chicken it is, if you insist.');
   }
 }
 
@@ -220,7 +223,7 @@ export function ProfileFields({ name, callMe, onChange, autoFocus }: { name: str
   );
 }
 
-/** On FBRX Glass, once: asks for a name when none is set (people who set FBRX up before it asked). */
+/** On Dash, once: asks for a name when none is set (people who set FBRX up before it asked). */
 export function NamePrompt({ fun }: { fun: boolean }) {
   const { data } = useCore('settings.get', undefined, ['settings.changed']);
   const toast = useToast();
@@ -248,7 +251,7 @@ export function NamePrompt({ fun }: { fun: boolean }) {
         Nice to meet you
       </div>
       <div className="fx-secondary" style={{ fontSize: 13, margin: '6px 0 10px' }}>
-        What's your name? FBRX Glass and {data.settings.ai.agentName} will greet you by it. You can change it any time in Settings → General.
+        What's your name? Dash and {data.settings.ai.agentName} will greet you by it. You can change it any time in Settings → General.
       </div>
       <ProfileFields name={p.name} callMe={p.callMe} onChange={setP} />
       <div className="fx-actions" style={{ marginTop: 10 }}>

@@ -117,3 +117,64 @@ describe('FBRX MiniDome on FBRX Server', () => {
     expect((await req('GET', '/v1/auth/me', viewer)).body.roles).toEqual(['gate', 'minidome', 'ai']);
   });
 });
+
+describe('Fabrix on a computer looks at the network through the server', () => {
+  it('gets read-only access from an administrator, sees the gate and MiniDome, and can give its access up', async () => {
+    expect((await req('POST', '/v1/auth/app-tokens', operator, { name: 'Fabrix on sam-laptop' })).status).toBe(403);
+    const t = (await req('POST', '/v1/auth/app-tokens', admin, { name: 'Fabrix on sam-laptop' })).body;
+    expect(t.token).toMatch(/^fbvapp_/);
+    expect((await req('GET', '/v1/auth/app-tokens', admin)).body.tokens).toEqual([expect.objectContaining({ id: t.id, name: 'Fabrix on sam-laptop', createdBy: 'sam' })]);
+    // A viewer: it reads, never changes.
+    expect((await req('GET', '/v1/auth/me', t.token)).body.user).toMatchObject({ username: 'app:Fabrix on sam-laptop', role: 'viewer' });
+    expect((await req('PUT', '/v1/gate/candidate', t.token, { config: {} })).status).toBe(403);
+    expect((await req('GET', '/v1/auth/app-tokens', t.token)).status).toBe(403);
+
+    sensor.emit({ type: 'dns', at: Date.now(), client: '192.168.1.120', name: `again.${DOME_TEST_DOMAIN}`, qtype: 'A' });
+    await wait(30);
+    const r = (await req('GET', '/v1/troubleshoot', t.token)).body;
+    expect(r.server).toMatchObject({ roles: ['gate', 'minidome', 'ai'], warnings: expect.any(Array) });
+    expect(r.gate).toMatchObject({ mode: 'simulated', committed: true, wan: { interface: 'eno1' }, dns: { blocking: expect.any(Boolean) }, problems: expect.any(Array) });
+    expect(r.gate.networks[0]).toMatchObject({ interface: expect.any(String), address: expect.stringMatching(/\/\d+$/), dhcp: true });
+    expect(r.dome).toMatchObject({ mode: 'simulated', sensors: [{ name: 'test', ok: true }] });
+    expect(r.dome.findings[0]).toMatchObject({ severity: 'serious', title: expect.stringContaining('known-bad name'), device: 'sam-phone' });
+    // Nothing secret goes out.
+    expect(JSON.stringify(r)).not.toMatch(/privateKey|password|psk/i);
+
+    // The app gives its own access up; then the token is worthless.
+    expect((await req('DELETE', `/v1/auth/app-tokens/${t.id}`, t.token)).body).toEqual({ ok: true });
+    expect((await req('GET', '/v1/troubleshoot', t.token)).status).toBe(401);
+    const audit = (await req('GET', '/v1/audit', admin)).body.entries.map((e: { action: string }) => e.action);
+    expect(audit).toEqual(expect.arrayContaining(['app-token.create', 'app-token.revoke']));
+  });
+});
+
+describe('FBRX Gate What If', () => {
+  it('replays what the gate saw against a change, warns about the console, and has the AI explain it', async () => {
+    const st = (await req('GET', '/v1/gate', viewer)).body.state;
+    const lan = st.running.networks[0];
+    const host = lan.dhcp.start as string;
+    // Devices on lan used the web and the gate's console in the last hour.
+    sensor.emit({ type: 'flow', at: Date.now(), proto: 'tcp', src: host, dst: '142.250.1.1', dport: 443 });
+    sensor.emit({ type: 'flow', at: Date.now(), proto: 'tcp', src: host, dst: '142.250.1.1', dport: 443 });
+    // The change: lan loses the internet and may no longer manage the gate.
+    const next = structuredClone(st.candidate);
+    next.networks[0].access = 'isolated';
+    next.networks[0].manage = false;
+    expect((await req('PUT', '/v1/gate/candidate', admin, { config: next })).status).toBe(200);
+
+    const r = await s.app.inject({ method: 'GET', url: '/v1/gate/whatif', headers: { authorization: `Bearer ${viewer}` }, remoteAddress: host });
+    const w = r.json();
+    expect(w.you).toMatchObject({ address: host, from: 'lan', before: { verdict: 'allowed' }, after: { verdict: 'blocked' } });
+    expect(w.summary).toMatchObject({ youCutOff: true, flowsCutOff: 1 });
+    expect(w.flows[0]).toMatchObject({ src: host, dst: '142.250.1.1', port: 443, count: 2, before: { verdict: 'allowed' }, after: { verdict: 'blocked' } });
+    expect(w.matrix.find((m: { from: string; to: string }) => m.from === 'lan' && m.to === 'wan')).toMatchObject({ after: { verdict: 'blocked' } });
+
+    expect((await req('POST', '/v1/gate/whatif/explain', viewer)).status).toBe(403);
+    const ex = await req('POST', '/v1/gate/whatif/explain', operator);
+    expect(ex.status).toBe(200);
+    const prompt = calls.filter((c) => c.method === 'ai.quick').at(-1)!.params.prompt as string;
+    expect(prompt).toContain('lan → the internet (web): now allowed');
+    expect(prompt).toMatch(/1 would be cut off/);
+    await req('POST', '/v1/gate/candidate/reset', admin, {});
+  });
+});

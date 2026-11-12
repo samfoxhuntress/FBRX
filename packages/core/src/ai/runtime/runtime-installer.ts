@@ -1,5 +1,5 @@
-import { chmodSync, createWriteStream, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { join } from 'node:path';
+import { chmodSync, copyFileSync, createWriteStream, existsSync, lstatSync, mkdirSync, readdirSync, rmSync, statSync, symlinkSync } from 'node:fs';
+import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import * as tar from 'tar';
@@ -67,6 +67,50 @@ function findBinary(dir: string, exe: string, depth = 4): string | null {
   return null;
 }
 
+/**
+ * Unpacks a llama.cpp .tar.gz. Its libraries come as chains of links (libmtmd.dylib → libmtmd.0.dylib →
+ * libmtmd.0.0.1.dylib), which the tar library refuses to write through a link already unpacked, so the links are made
+ * here afterwards: only relative ones that stay inside the folder (on Windows, which needs rights for links, as copies).
+ */
+export async function extractRuntimeTarball(file: string, target: string): Promise<void> {
+  const links: Array<{ path: string; linkpath: string }> = [];
+  await tar.x({
+    file,
+    cwd: target,
+    strict: true,
+    filter: (path, entry) => {
+      if (!('type' in entry) || entry.type !== 'SymbolicLink') return true;
+      links.push({ path, linkpath: String(entry.linkpath ?? '') });
+      return false;
+    },
+  });
+  const root = resolve(target);
+  const inside = (p: string) => p.startsWith(root + sep);
+  const linkAt = new Map(links.map((l) => [resolve(root, l.path), l.linkpath]));
+  // Where a chain of links ends (for copies).
+  const real = (p: string, hops = 0): string => (linkAt.has(p) && hops < 16 ? real(resolve(dirname(p), linkAt.get(p)!), hops + 1) : p);
+  for (const [at, linkpath] of linkAt) {
+    const to = resolve(dirname(at), linkpath);
+    if (!linkpath || isAbsolute(linkpath) || !inside(at) || !inside(to)) continue;
+    if (lstatExists(at)) continue;
+    mkdirSync(dirname(at), { recursive: true });
+    if (process.platform !== 'win32') symlinkSync(linkpath, at);
+    else {
+      const src = real(at);
+      if (src !== at && inside(src) && existsSync(src) && statSync(src).isFile()) copyFileSync(src, at);
+    }
+  }
+}
+
+function lstatExists(p: string): boolean {
+  try {
+    lstatSync(p);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 /** Downloads and installs llama.cpp's `llama-server` for the current (or given) platform. */
 export async function installLlamaRuntime(o: RuntimeInstallOptions): Promise<{ binary: string; tag: string; asset: string }> {
   const platform = o.platform ?? process.platform;
@@ -110,7 +154,7 @@ export async function installLlamaRuntime(o: RuntimeInstallOptions): Promise<{ b
     rmSync(target, { recursive: true, force: true });
     mkdirSync(target, { recursive: true });
     if (asset.name.endsWith('.zip')) unzip(tmp, target);
-    else await tar.x({ file: tmp, cwd: target, strict: true });
+    else await extractRuntimeTarball(tmp, target);
     const binary = findBinary(target, EXE(platform));
     if (!binary || statSync(binary).size < 1024) throw new Error('llama-server was not found in the downloaded archive');
     if (platform !== 'win32') chmodSync(binary, 0o755);
