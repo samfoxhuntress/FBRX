@@ -438,7 +438,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     { id: 'migrate', label: 'Copy & migrate', icon: 'copy', section: 'Utilities', need: 'ultra' },
     { id: 'toolbox', label: 'Toolbox', icon: 'toolbox', section: 'Utilities' },
     { id: 'library', label: 'Library', icon: 'book', section: 'Utilities' },
-    { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect', need: 'ultra' },
+    { id: 'mesh', label: 'Mesh & phone', icon: 'phone', section: 'Connect', need: 'basic' },
     { id: 'vpn', label: 'FBRX VPN', icon: 'lock', section: 'Connect', need: 'ultra' },
     { id: 'runtime', label: 'AI models', icon: 'cpu', section: 'Connect' },
     { id: 'ai-usage', label: 'AI usage', icon: 'gauge', section: 'Connect' },
@@ -614,7 +614,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'library':
         return <LibraryPage agentName={agentName} everything={blackhole} easterEggs={fun} />;
       case 'mesh':
-        return ultra ? <MeshPage /> : ultraOnly('Mesh & phone', 'Link your computers and your phone over an encrypted mesh, and reach FBRX from anywhere.');
+        return atLeast(tier, 'basic') ? <MeshPage advanced={ultra} /> : <StandardOnly title="Mesh & phone" what="Link your computers and your phone over an encrypted mesh, and reach FBRX from anywhere." />;
       case 'vpn':
         return ultra ? <VpnPage /> : ultraOnly('FBRX VPN', 'Reach home from anywhere through your FBRX Gate: your FBRX Server, its AI and your network.');
       case 'aicoord':

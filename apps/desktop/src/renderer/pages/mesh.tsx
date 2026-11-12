@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { MeshDevice, MeshJob, MeshPermissions, SyncPeer, SyncResult } from '@fbrx/shared';
 import { SYNC_KIND_NAMES, SYNC_KINDS, funEnabled } from '@fbrx/shared';
-import { useTier } from '../edition';
+import { EditionHint, useTier } from '../edition';
 import { Button, Callout, Card, ChoiceCards, Empty, Field, Grid, Icons, InfoTip, Input, KeyValue, MenuButton, Modal, More, Page, Select, Status, Tabs, TextArea, Toggle, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { navigate } from '../app';
 import { call, onEvent } from '../client';
@@ -257,7 +257,7 @@ function SyncLine({ d, peer }: { d: MeshDevice; peer?: SyncPeer }) {
   );
 }
 
-function DeviceCard({ d, sync, onPing }: { d: MeshDevice; sync?: SyncPeer; onPing?: (d: MeshDevice) => void }) {
+function DeviceCard({ d, sync, onPing, advanced = true }: { d: MeshDevice; sync?: SyncPeer; onPing?: (d: MeshDevice) => void; advanced?: boolean }) {
   const { run, busy } = useAction();
   const { confirm, dialog } = useConfirm();
   const [ask, setAsk] = useState(false);
@@ -290,6 +290,14 @@ function DeviceCard({ d, sync, onPing }: { d: MeshDevice; sync?: SyncPeer; onPin
         {org ? (
           <div className="fx-muted" style={{ fontSize: 12.5 }}>
             Your organization introduced this computer and decides what it may do here: {(['status', 'chat', 'assist', 'network'] as const).filter((k) => d.permissions[k]).map((k) => PERMS.concat(SPECIAL).find((p) => p.key === k)?.label.toLowerCase() ?? k).join(', ') || 'nothing yet'}.
+          </div>
+        ) : !advanced ? (
+          // Pro: status, messages, alerts, notes and asking Fabrix; choosing per device comes with Ultra.
+          <div className="fx-grid" style={{ gap: 6 }}>
+            <div className="fx-muted" style={{ fontSize: 12.5 }}>
+              {d.name} may {d.kind === 'mobile' ? 'see how this computer is doing, send messages, show alerts, tasks and notes, and ask the agent' : 'see how this computer is doing, send messages and borrow its AI when stuck'}.
+            </div>
+            <EditionHint>Choosing what each device may do, approving from your phone, and lock and sleep come with Ultra.</EditionHint>
           </div>
         ) : (
         <>
@@ -420,7 +428,7 @@ function AskPeer({ device, onClose, agentName }: { device: MeshDevice; onClose: 
 
 type MeshTab = 'devices' | 'ai' | 'network';
 
-export function MeshPage() {
+export function MeshPage({ advanced = true }: { advanced?: boolean }) {
   const status = useCore('mesh.status', undefined, ['mesh.changed']);
   const settings = useCore('settings.get', undefined, ['settings.changed']);
   const [adding, setAdding] = useState(false);
@@ -555,7 +563,7 @@ export function MeshPage() {
           {s.devices.length > 0 ? (
             <Grid cols={2}>
               {s.devices.map((d) => (
-                <DeviceCard key={d.id} d={d} sync={peers.data?.find((p) => p.deviceId === d.id)} onPing={(x) => triple(x.id)} />
+                <DeviceCard advanced={advanced} key={d.id} d={d} sync={peers.data?.find((p) => p.deviceId === d.id)} onPing={(x) => triple(x.id)} />
               ))}
             </Grid>
           ) : (

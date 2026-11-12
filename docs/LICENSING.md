@@ -13,10 +13,12 @@ The desktop app is **FBRX Endpoint**, in four editions (see COMMAND_CENTER.md fo
   and Settings, where it works Quick, Everyday or Thorough), Governance (what the AI may do, and the audit log) and a
   walkthrough. It joins an organization's FBRX Command for free.
 * **FBRX Endpoint Pro** (`basic` in licenses and the API) — the everyday tools, the AI's work budget part by part
-  (steps, answer length, how much it keeps in mind) and unloading the local model when idle. Each computer on its own
-  may try it free for 7 days, once (`STANDARD_TRIAL_DAYS`).
+  (steps, answer length, how much it keeps in mind), unloading the local model when idle, and Mesh: pairing your
+  computers and phone, their status, messages, alerts, tasks and notes, and asking Fabrix on another computer. Each
+  computer on its own may try it free for 7 days, once (`STANDARD_TRIAL_DAYS`).
 * **FBRX Endpoint Ultra** — expert tool sets (Terminal, FBRX/1, virtual lab, disks and partitions, Defender settings,
-  adapters, device consoles, developer tools, the Local API), Mesh and AI coordination, connections, tools and
+  adapters, device consoles, developer tools, the Local API), Mesh's extras (choosing what each device may do,
+  approving from your phone, lock and sleep, controllers) and AI coordination, connections, tools and
   plugins, the theme studio with its gradients and textures, deep space maps with duplicate files and
   what grew, and the Wi-Fi channel planner's history and band-by-band advice.
 * **FBRX Endpoint Black Hole Edition** (`blackhole`) — everything: Ultra plus the whole Library (The Lab and the FBRX command
