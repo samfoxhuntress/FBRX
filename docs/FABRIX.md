@@ -126,6 +126,10 @@ else in it acts on one ("tell me if the firewall is off" passes; "…and leave i
 stops an ordinary line that sounds like one of the plain wordings ("turn off security notifications", "share their
 screen with anyone"): say it another way and it saves.
 
+Anything Fabrix should always know ("I teach 4th grade; keep answers short.") goes in **Settings → Agent → Fabrix's
+instructions**, read in every conversation after the core principles and the personality; Ultra adds the creativity
+slider there.
+
 Fabrix reads its personality with every message (the commands only when you type one, so a small AI on your computer stays
 quick). Ask it to work differently from now on (or type `/tune` and what to change) and it offers the change to
 personality.md: you see the change and approve it first. Every change keeps the version before it, so *Undo the last change*

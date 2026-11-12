@@ -38,6 +38,7 @@ import {
   type ThinkingLevel,
   type Tier,
   type WebSearchEngine,
+  DEFAULT_SYSTEM_PROMPT,
 } from '@fbrx/shared';
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
@@ -397,23 +398,15 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
           </div>
         </Card>
       )}
-      {!learner && <Card title={`${s.ai.agentName}'s behavior`}>
-        <div className="fx-form">
-          {ultra && (
-            <Field label={<>Creativity (temperature): {s.ai.temperature} <Locked show={L('ai.temperature')} /></>} help="Lower is more precise. Ignored by models that manage this themselves.">
-              <input type="range" min={0} max={1} step={0.05} disabled={L('ai.temperature')} value={s.ai.temperature} onChange={(e) => void patch({ ai: { temperature: Number(e.target.value) } })} />
-            </Field>
-          )}
-          <Field label={<>Agent instructions <Locked show={L('ai.systemPrompt')} /></>} help={ultra ? 'Standing instructions included in every conversation' : 'Included in every conversation. Add anything it should always know, such as "I teach 4th grade; keep answers short."'}>
-            <TextArea rows={8} disabled={L('ai.systemPrompt')} defaultValue={s.ai.systemPrompt} onBlur={(e) => e.target.value !== s.ai.systemPrompt && void patch({ ai: { systemPrompt: e.target.value } })} />
-          </Field>
+      {!learner && (
+        <Card title="First-time setup" subtitle={`What you use FBRX for, ${s.ai.agentName}'s persona and toolkits, the theme and the menu. ${s.ai.agentName}'s instructions are in Settings → Agent.`}>
           <div>
             <Button size="sm" onClick={onRerunSetup}>
               Run first-time setup again
             </Button>
           </div>
-        </div>
-      </Card>}
+        </Card>
+      )}
     </Grid>
   );
 }
@@ -777,10 +770,32 @@ function AgentSettings() {
   const [name, setName] = useState<string | null>(null);
   // Unloading the local model when idle comes with Pro (Thinking, in every edition, is a card of its own).
   const standard = useAtLeast('basic');
+  const ultra = useAtLeast('ultra');
   if (!s) return null;
   const L = (p: string) => isLocked(locked, p);
+  // FBRX's old built-in instructions (before the core principles and personality.md): the AI no longer reads them, so
+  // they show as empty here; only what the person adds is theirs.
+  const instructions = s.ai.systemPrompt.trim() === DEFAULT_SYSTEM_PROMPT.trim() ? '' : s.ai.systemPrompt;
   return (
     <Grid cols={2}>
+      <Card title={`${s.ai.agentName}'s instructions`} subtitle="What you add here is read in every conversation, after FBRX's core principles and the personality.">
+        <div className="fx-form">
+          <Field label={<>Instructions <Locked show={L('ai.systemPrompt')} /></>} help={`Who ${s.ai.agentName} is and how it sounds are in Settings → Personality; this is for what it should always know.`}>
+            <TextArea
+              rows={6}
+              disabled={L('ai.systemPrompt')}
+              placeholder={`Anything ${s.ai.agentName} should always know, such as "I teach 4th grade; keep answers short."`}
+              defaultValue={instructions}
+              onBlur={(e) => e.target.value.trim() !== instructions.trim() && void patch({ ai: { systemPrompt: e.target.value } })}
+            />
+          </Field>
+          {ultra && (
+            <Field label={<>Creativity (temperature): {s.ai.temperature} <Locked show={L('ai.temperature')} /></>} help="Lower is more precise. Ignored by models that manage this themselves.">
+              <input type="range" min={0} max={1} step={0.05} disabled={L('ai.temperature')} value={s.ai.temperature} onChange={(e) => void patch({ ai: { temperature: Number(e.target.value) } })} />
+            </Field>
+          )}
+        </div>
+      </Card>
       <Card title="Your agent">
         <div className="fx-form">
           <Field label={<>Name <Locked show={L('ai.agentName')} /></>} help="Used throughout FBRX and in how the agent introduces itself">
