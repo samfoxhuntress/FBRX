@@ -182,6 +182,43 @@ export function DiggerMark({ size = 30, className = 'fx-brand-mark' }: { size?: 
   return <span className={`${className} digger-mark`} style={{ width: size, height: size }} role="img" aria-label="FBRX Digger" dangerouslySetInnerHTML={{ __html: DIGGER_ICON_SVG }} />;
 }
 
+/**
+ * FBRX Digger comes with Endpoint Ultra. It runs at the edition FBRX Endpoint's license gives this computer, so until
+ * that is Ultra it says what it needs, and looks again every few seconds: a purchase or a sign-in in FBRX Endpoint
+ * opens Digger by itself.
+ */
+function DiggerLocked() {
+  const license = useCore('license.status', undefined, ['license.changed'], 10_000);
+  const tier = license.data?.tier;
+  useEffect(() => {
+    if (tier && atLeast(tier, 'ultra')) location.reload();
+  }, [tier]);
+  const pro = tier === 'basic';
+  return (
+    <div className="digger-locked">
+      <div className="digger-locked-card">
+        <DiggerMark size={72} className="digger-locked-mark" />
+        <h1>FBRX Digger comes with {TIER_NAMES.ultra}</h1>
+        <p>
+          {pro
+            ? `FBRX Endpoint on this computer runs ${TIER_SHORT.basic}. Digger opens with ${TIER_SHORT.ultra} or ${TIER_SHORT.blackhole}: change your edition in FBRX Endpoint (Settings → Edition) and Digger opens by itself.`
+            : `Digger runs at the edition of FBRX Endpoint on this computer. Install FBRX Endpoint and sign in to your FBRX account with ${TIER_SHORT.ultra} (or get ${TIER_SHORT.blackhole} through your organization), and Digger opens by itself.`}
+        </p>
+        <div className="digger-locked-actions">
+          {!pro && (
+            <Button variant="primary" icon="download" onClick={() => openExternal('https://github.com/samfoxhuntress/FBRX/releases')}>
+              Get FBRX Endpoint
+            </Button>
+          )}
+          <Button variant="ghost" icon="refresh" onClick={() => license.reload()}>
+            Check again
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 /** Start-up animation: the logo's frame is stitched in like a thread, then the letters appear. */
 function Splash({ tier }: { tier: Tier | undefined }) {
   // A window started in the tray (at sign-in) shows the animation when it is first opened.
@@ -408,6 +445,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   }
   const s = settings.settings;
   const showSplash = firstStart && s.appearance.splash;
+  // FBRX Digger, without Endpoint Ultra on this computer: what it needs.
+  if (DIGGER && !atLeast(tier, 'ultra')) return <DiggerLocked />;
   if (!DIGGER && (!s.general.onboardingComplete || forceOnboarding)) {
     return <Onboarding status={status} onDone={() => setForceOnboarding(false)} />;
   }

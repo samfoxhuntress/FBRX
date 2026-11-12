@@ -8126,3 +8126,35 @@ body.popout .fx-page-header p {
   margin-top: 3px;
   color: var(--good, #16a34a);
 }
+
+/* FBRX Digger without Endpoint Ultra on this computer: what it needs (app.tsx, DiggerLocked). */
+.digger-locked {
+  position: fixed;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: var(--page);
+}
+.digger-locked-card {
+  max-width: 460px;
+  text-align: center;
+}
+.digger-locked-mark {
+  margin: 0 auto 18px;
+}
+.digger-locked-card h1 {
+  margin: 0 0 10px;
+  font-size: 22px;
+}
+.digger-locked-card p {
+  margin: 0 0 20px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+}
+.digger-locked-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
