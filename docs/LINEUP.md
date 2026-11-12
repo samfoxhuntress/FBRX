@@ -18,6 +18,28 @@ product is built on. It comes in two forms, and as an app for the computers you 
 | **FBRX Time** | Whole-machine image backups that prove they work: FBRX Server backs up its virtual machines and keeps the images computers send it, and checks each one by starting it as a throwaway machine with no network; FBRX Endpoint makes images of the computer on a schedule; FBRX Command starts one on any computer. The time role of FBRX Server. [TIME.md](TIME.md) | 1.0 |
 | **FBRX MiniDome** | Watches the network through FBRX Gate (names asked, connections, devices) for threats, working hand in hand with FBRX Shield on each endpoint: a computer that allows it hears what the network saw coming from it, and the network sees how the computer is protected. AI explains findings; blocking is one click on the gate. The minidome role of FBRX Server. [MINIDOME.md](MINIDOME.md) | First stage |
 
+## FBRX apps
+
+From 2.5.0 the pro tools move out of FBRX Endpoint into apps of their own, one new app per release. They are one
+family: one FBRX account and edition unlocks them, and Fabrix (which runs in FBRX Endpoint), your vault and your
+saved connections are shared between them.
+
+| App | Edition | Arrives |
+| --- | --- | --- |
+| **FBRX Endpoint** | Every edition | Now |
+| **FBRX Digger**: every network tool | Ultra | 2.5.0 |
+| **FBRX Reach**: remote desktop and FBRX Server | Ultra | 2.6.0 |
+| **FBRX Browser** | Every edition | 2.7.0 |
+| **FBRX Shield**, as a background service | Pro | 2.7.0 |
+| **FBRX Sandbox**: the virtual and coding labs | Ultra | 2.8.0 |
+
+**Settings → FBRX apps** in FBRX Endpoint lists them. For each it shows whether it is installed (and its version),
+with **Open**; **Get** when your edition includes it and it is not installed yet; and the edition it needs otherwise.
+A page whose tools moved to an app hands off the same way: the Network Center's **Digger** tab opens FBRX Digger, or
+offers it, and the Network Center keeps the everyday checks (the full network check, Wi-Fi and speed).
+
+FBRX Endpoint knows an app is installed once it has started on this computer at least once.
+
 ## How they fit
 
 ```

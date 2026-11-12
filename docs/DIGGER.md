@@ -49,6 +49,9 @@ Its icon is a mole in a miner's helmet, lamp lit, drawn in honey and red on blac
 
 Digger is FBRX OS's own Network Center, so every network tool FBRX OS gets, Digger gets too, in the same release.
 
+FBRX Endpoint's Network Center has a **Digger** tab: **Open Digger** when it is installed, **Get Digger** when it is not.
+Digger shows up in **Settings → FBRX apps** too, once it has started on the computer.
+
 ## Install
 
 Download it from the repository's releases: the release named **FBRX Digger** (tagged `digger-v<version>`).

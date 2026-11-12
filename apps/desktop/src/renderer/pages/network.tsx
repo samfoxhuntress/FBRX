@@ -3,6 +3,7 @@ import type { ConnectionProtocol, LanDevice, LanScan, LanScanCompare, NetAdapter
 import { Button, Callout, Card, CopyText, Empty, Field, Grid, Icons, Input, KeyValue, LineChart, Meter, Modal, Page, Select, Spinner, StatTile, Status, Tabs, formatDate, useAction, useConfirm, useToast, type Column, Table, advancedLabel } from '@fbrx/ui';
 import { bridge, call, onEvent, pickFile } from '../client';
 import { newReqId, useAgentName, useCore } from '../hooks';
+import { AppHandoffCard } from '../apps';
 import { DIGGER, IS_WINDOWS, navigate, routeArg } from '../app';
 import { AiContext, AskButton, askAgent } from '../widgets';
 import { ConnectDialog, DeviceConsolesPanel, consoleRoute, type ConnectTarget } from '../consoles';
@@ -12,7 +13,7 @@ import { EditionHint } from '../edition';
 import { Environments } from './network-environments';
 import { WifiChannelPlanner } from './wifi-channels';
 
-type Tab = 'overview' | 'environments' | 'trace' | 'devices' | 'speed' | 'wifi' | 'bluetooth' | 'printers' | 'tools' | 'adapters' | 'consoles';
+type Tab = 'overview' | 'environments' | 'trace' | 'devices' | 'speed' | 'wifi' | 'bluetooth' | 'printers' | 'tools' | 'adapters' | 'consoles' | 'digger';
 
 const ROLE: Record<TraceHop['role'], { label: string; tone: 'good' | 'info' | 'neutral' | 'warning' | 'busy' }> = {
   'this-pc': { label: 'This PC', tone: 'info' },
@@ -896,7 +897,7 @@ function Adapters() {
   );
 }
 
-const NET_TABS: Tab[] = ['overview', 'environments', 'trace', 'devices', 'speed', 'wifi', 'bluetooth', 'printers', 'tools', 'adapters', 'consoles'];
+const NET_TABS: Tab[] = ['overview', 'environments', 'trace', 'devices', 'speed', 'wifi', 'bluetooth', 'printers', 'tools', 'adapters', 'consoles', 'digger'];
 
 export function NetworkPage({ advanced, everything }: { advanced: boolean; everything: boolean }) {
   // network/speed, network/printers… open that tab directly.
@@ -929,6 +930,8 @@ export function NetworkPage({ advanced, everything }: { advanced: boolean; every
     ...(IS_WINDOWS ? [{ id: 'adapters' as const, label: DIGGER ? 'Adapters' : advancedLabel('Adapters'), need: 'ultra' as const }] : []),
     // FBRX OS has them in Terminal → Device consoles.
     ...(DIGGER ? [{ id: 'consoles' as const, label: 'Consoles' }] : []),
+    // FBRX Digger, the Network Center on its own: open it, get it, or the edition it needs (not in Digger itself).
+    ...(DIGGER ? [] : [{ id: 'digger' as const, label: 'Digger' }]),
   ];
   const tabs = all.filter((t) => !t.need || (t.need === 'ultra' ? advanced : everything)).map(({ need: _n, ...t }) => t);
   const shown = tabs.some((t) => t.id === tab) ? tab : 'overview';
@@ -939,6 +942,7 @@ export function NetworkPage({ advanced, everything }: { advanced: boolean; every
       {advanced && !everything && shown === 'overview' && <EditionHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole Edition, through your organization’s FBRX Command.</EditionHint>}
       {shown === 'overview' && <Overview />}
       {shown === 'consoles' && <DeviceConsolesPanel selected={consoleId} onSelect={setConsoleId} />}
+      {shown === 'digger' && <AppHandoffCard page="network/digger" />}
       {shown === 'environments' && <Environments />}
       {shown === 'trace' && <Trace />}
       {shown === 'devices' && <Devices advanced={advanced} />}

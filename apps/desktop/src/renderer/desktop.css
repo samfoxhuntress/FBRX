@@ -8028,3 +8028,101 @@ body.popout .fx-page-header p {
 :root[data-motion='reduce'] .learn-ring,
 :root[data-motion='reduce'] .learn-spin,
 :root[data-motion='reduce'] .learn-quip { animation: none; }
+
+/* ------------------------------------------------------------------------------------------ FBRX apps */
+.app-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  border-radius: 22%;
+  overflow: hidden;
+}
+.app-icon svg {
+  width: 100%;
+  height: 100%;
+}
+.app-icon.tile {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+  background: var(--accent-fill);
+}
+.app-icon.tile.os {
+  background: #0b0b0c;
+  color: #ffb547;
+}
+.app-list {
+  display: flex;
+  flex-direction: column;
+}
+.app-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 0;
+  border-top: 1px solid var(--border);
+}
+.app-row:first-child {
+  border-top: 0;
+  padding-top: 2px;
+}
+.app-row.planned .app-icon {
+  opacity: 0.55;
+  filter: saturate(0.6);
+}
+.app-row-text {
+  flex: 1;
+  min-width: 0;
+}
+.app-row-name {
+  font-weight: 650;
+}
+.app-row-edition {
+  margin-left: 8px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 650;
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 12%, transparent);
+}
+.app-row-what {
+  font-size: 12.5px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.app-row-action {
+  flex: none;
+}
+.app-handoff {
+  display: flex;
+  gap: 22px;
+  align-items: flex-start;
+}
+.app-handoff-text h3 {
+  margin: 4px 0 6px;
+  font-size: 19px;
+}
+.app-handoff-text p {
+  margin: 0 0 12px;
+  max-width: 640px;
+}
+.app-handoff-list {
+  list-style: none;
+  margin: 0 0 14px;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+  max-width: 680px;
+}
+.app-handoff-list li {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 13.5px;
+}
+.app-handoff-list li svg {
+  flex: none;
+  margin-top: 3px;
+  color: var(--good, #16a34a);
+}
