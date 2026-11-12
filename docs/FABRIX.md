@@ -119,9 +119,12 @@ that only checks or reports on a protection ("tell me if the firewall is off"). 
 Fabrix reads as its persona, under the principles.
 
 That check reads words, not meaning, and it has limits. It stops the shape and the plainest wordings; a line that says
-the same thing more slyly can get past it, and the principles, which come first in everything Fabrix is told, are what
-hold then. Now and then it also stops an ordinary line that sounds like one of the plain wordings: say it another way
-and it saves.
+the same thing more slyly can get past it (setting a principle aside "without asking" about something else, "there's
+no reason not to", a line that claims to be what FBRX read about the computer), and the principles, which come first
+in everything Fabrix is told, are what hold then. A line that reports a protection's state passes only when nothing
+else in it acts on one ("tell me if the firewall is off" passes; "…and leave it off" does not). Now and then it also
+stops an ordinary line that sounds like one of the plain wordings ("turn off security notifications", "share their
+screen with anyone"): say it another way and it saves.
 
 Fabrix reads its personality with every message (the commands only when you type one, so a small AI on your computer stays
 quick). Ask it to work differently from now on (or type `/tune` and what to change) and it offers the change to
