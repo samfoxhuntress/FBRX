@@ -7923,3 +7923,108 @@ body.popout .fx-page-header p {
   color: #8a6cff;
 }
 .swatch-tag.locked { color: var(--text-muted); }
+
+/* ------------------------------------------------------------------ Learning your computer (learning-screen.tsx) */
+.learn-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 99990;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: auto;
+  background:
+    radial-gradient(circle at 50% 18%, color-mix(in srgb, var(--accent) 16%, transparent), transparent 55%),
+    color-mix(in srgb, var(--page) 92%, #000);
+  backdrop-filter: blur(6px);
+}
+.learn-card {
+  width: min(520px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 30px 30px 22px;
+  border-radius: var(--radius-lg);
+  background: var(--surface-1);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-pop);
+  text-align: center;
+}
+.learn-orbit {
+  position: relative;
+  width: 104px;
+  height: 104px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 4px;
+}
+.learn-ring {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top-color: var(--accent);
+  border-right-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  animation: learn-turn 1.9s linear infinite;
+}
+.learn-ring.two {
+  inset: 12px;
+  border-width: 2px;
+  border-top-color: transparent;
+  border-bottom-color: color-mix(in srgb, var(--accent) 70%, var(--text-secondary));
+  border-left-color: color-mix(in srgb, var(--accent) 30%, transparent);
+  animation-duration: 3.1s;
+  animation-direction: reverse;
+}
+.learn-screen.ready .learn-ring { animation: none; border-color: color-mix(in srgb, var(--good) 70%, transparent); }
+.learn-screen.ready .learn-ring.two { border-color: transparent; }
+@keyframes learn-turn { to { transform: rotate(360deg); } }
+.learn-title { margin: 0; font-size: 22px; font-weight: 650; letter-spacing: -0.01em; }
+.learn-who { margin: 0; color: var(--text-secondary); font-size: 13.5px; line-height: 1.45; }
+.learn-quip {
+  margin: 4px 0 2px;
+  min-height: 1.5em;
+  font-size: 16px;
+  font-weight: 560;
+  color: var(--accent);
+  animation: learn-quip 2.8s ease-in-out both;
+}
+@keyframes learn-quip {
+  0% { opacity: 0; transform: translateY(6px); }
+  12%, 85% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-4px); }
+}
+.learn-bar { width: 100%; height: 6px; border-radius: 999px; background: var(--surface-3); overflow: hidden; }
+.learn-bar > span { display: block; height: 100%; border-radius: inherit; background: var(--accent-gradient, var(--accent)); transition: width 0.6s ease; }
+.learn-steps { list-style: none; margin: 6px 0 0; padding: 0; width: 100%; display: grid; gap: 6px; text-align: left; }
+.learn-step { display: grid; grid-template-columns: 20px 1fr; column-gap: 8px; align-items: center; font-size: 13.5px; color: var(--text-muted); }
+.learn-step.running, .learn-step.done { color: var(--text-primary); }
+.learn-step-mark { width: 20px; height: 20px; display: grid; place-items: center; }
+.learn-step-mark svg { width: 16px; height: 16px; }
+.learn-step.done .learn-step-mark { color: var(--good); }
+.learn-step.failed .learn-step-mark { color: var(--warning); }
+.learn-step-detail { grid-column: 2; font-size: 12px; color: var(--text-secondary); overflow-wrap: anywhere; }
+.learn-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--border-strong); }
+.learn-spin { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--surface-3); border-top-color: var(--accent); animation: learn-turn 0.8s linear infinite; }
+.learn-message { margin: 4px 0 0; font-size: 13px; color: var(--warning-text); }
+.learn-actions { display: flex; gap: 8px; justify-content: center; margin-top: 8px; }
+.learn-note { margin: 2px 0 0; font-size: 12px; color: var(--text-muted); }
+.learn-profile {
+  margin: 10px 0 0;
+  padding: 10px 12px;
+  max-height: 260px;
+  overflow: auto;
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .learn-ring, .learn-spin, .learn-quip { animation: none; }
+}
+:root[data-motion='reduce'] .learn-ring,
+:root[data-motion='reduce'] .learn-spin,
+:root[data-motion='reduce'] .learn-quip { animation: none; }

@@ -48,6 +48,7 @@ import { PRESETS, TEXTURE_NAMES, playStartupSound, presetAllowed, resolvedMode, 
 import { BrucePreview, peekBruce, seasonNow } from '../fun';
 import { TrophyBadge, TrophyCase } from '../trophies';
 import { AskButton, EmergencyStop, ProfileFields, saveProfile } from '../widgets';
+import { ComputerKnowledge } from '../learning-screen';
 import { KeyRecorder, MacroSettings } from './settings-macros';
 import { SnippetSettings } from './settings-snippets';
 import { VoiceSettings } from './settings-voice';
@@ -834,6 +835,7 @@ function AgentSettings() {
           </Field>}
         </div>
       </Card>
+      <ComputerKnowledge />
       <div style={{ gridColumn: '1 / -1' }}>
         <Thinking />
       </div>

@@ -14,6 +14,7 @@ import { SnapOverlay } from './snap-overlay';
 import { TrophyBadge } from './trophies';
 import { DashboardPage } from './pages/dashboard';
 import { Onboarding } from './pages/onboarding';
+import { LearningScreen, useLearningScreen } from './learning-screen';
 import { VaultStartPrompt } from './vault-lock';
 import { UpdatePill } from './release';
 import { SpotlightView } from './pages/spotlight';
@@ -256,6 +257,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   // FBRX Shield's number: findings waiting for a decision.
   const shieldCount = useCore('protection.status', undefined, ['protection.changed', 'shield.detected'], 300_000).data?.shield.open ?? 0;
   const [forceOnboarding, setForceOnboarding] = useState(false);
+  // Learning your computer, on the full screen after setup and for each new AI.
+  const learningScreen = useLearningScreen();
   // The Essentials walkthrough: closed for this window once finished or skipped; it waits for the start-up animation.
   const [tourClosed, setTourClosed] = useState(false);
   const [tourReady, setTourReady] = useState(false);
@@ -531,7 +534,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       ),
     },
   ];
-  const showTour = !POPOUT && !DIGGER && essentials && !tourClosed && status.edition?.tourDone === false && tourReady;
+  const showTour = !POPOUT && !DIGGER && essentials && !tourClosed && status.edition?.tourDone === false && tourReady && !learningScreen.visible;
   // Terminal and chat in their own windows (Ultra has the Terminal; the chat is in every edition).
   ownWindows = POPOUT ? {} : { terminal: ultra && s.windows.terminal, agent: s.windows.agent };
 
@@ -739,6 +742,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       {fun && s.appearance.easterEggs && !presenter?.active && !DIGGER && <Bruce route={route} visits={s.appearance.gooseVisits} golden={!!trophies?.unlocked.golden} season={s.appearance.gooseSeason === 'auto' ? seasonNow() : s.appearance.gooseSeason} />}
       <VaultStartPrompt />
       {hosts}
+      {!POPOUT && !DIGGER && learningScreen.visible && learningScreen.status && <LearningScreen status={learningScreen.status} onClose={learningScreen.close} />}
       {showTour && (
         <Tour
           steps={tourSteps}

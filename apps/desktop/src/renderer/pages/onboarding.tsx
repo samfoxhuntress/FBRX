@@ -39,6 +39,8 @@ export function Onboarding({ status, onDone }: { status: SystemStatus; onDone: (
       // What it will be used for: the persona and the AI Toolkit kits that fit (Settings changes either later).
       await call('setup.apply', { uses }).catch(() => undefined);
       await call('settings.update', { patch: { general: { onboardingComplete: true, mode }, ...(n ? { profile: { name: n, callMe: '' } } : {}) } });
+      // Learning your computer starts now (the persona is picked), on the full screen, before the chat.
+      await call('learning.start', { reason: 'setup' }).catch(() => undefined);
       location.hash = '#/agent';
       onDone();
     });
