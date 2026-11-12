@@ -9,7 +9,7 @@ import { COMMAND_GROUPS, type LibraryCommand } from '../command-library';
 import { addToMacros } from '../macro-add';
 import { menuFor } from '../context-menu';
 import { DeviceConsolesPanel } from '../consoles';
-import { summonGoose, unlockTrophy } from '../fun';
+import { peekBruce, unlockTrophy } from '../fun';
 import { Fbrx1Panel } from '../fbrx1';
 import { useSlashMenu } from '../slash-menu';
 import { WhatIfButton } from '../quick-ai';
@@ -301,8 +301,8 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
     if (easterEggs) {
       const egg = easterEgg(command);
       if (egg === 'honk') {
-        summonGoose();
-        return local(command, 'HONK. (Look at your screen.)');
+        peekBruce();
+        return local(command, 'HONK. (Bruce is hiding somewhere around here. Look behind the buttons.)');
       }
       if (egg === 'matrix') {
         setMatrix(true);

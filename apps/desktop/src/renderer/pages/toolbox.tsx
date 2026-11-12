@@ -21,7 +21,7 @@ type Tool = { id: string; name: string; hint: string; advanced?: boolean; exampl
 
 const jwtSample = () => {
   const enc = (o: unknown) => b64enc(JSON.stringify(o)).replace(/=+$/, '').replace(/\+/g, '-').replace(/\//g, '_');
-  return `${enc({ alg: 'HS256', typ: 'JWT' })}.${enc({ sub: 'goose-42', name: 'Silly Goose', role: 'honker', iat: 1767225600, exp: 1767312000 })}.not-a-real-signature`;
+  return `${enc({ alg: 'HS256', typ: 'JWT' })}.${enc({ sub: 'bruce-42', name: 'Bruce the Goose', role: 'honker', iat: 1767225600, exp: 1767312000 })}.not-a-real-signature`;
 };
 
 const TOOLS: Tool[] = [
@@ -469,7 +469,7 @@ function bumpFlips(reset = false): number {
   }
 }
 
-const GOOSE_ANSWERS = ['Honk.', 'Absolutely. Honk.', 'Maybe after a nap.', 'The goose says no.', 'Every feather says honk.', 'Yes. Obviously.', 'Hmm. Not a chance.', 'Looks good, if you back up first.', 'The goose is busy. Try later.', 'Yes, but wear safety goggles.'];
+const GOOSE_ANSWERS = ['Honk.', 'Absolutely. Honk.', 'Maybe after a nap.', 'Bruce says no.', 'Every feather says honk.', 'Yes. Obviously.', 'Hmm. Not a chance.', 'Looks good, if you back up first.', 'The goose is busy. Try later.', 'Yes, but wear safety goggles.'];
 
 function DecideTool({ seed, fun }: { seed: Example | null; fun: boolean }) {
   const [list, setList] = useState(seed?.input ?? '');
@@ -529,9 +529,9 @@ function DecideTool({ seed, fun }: { seed: Example | null; fun: boolean }) {
         </Button>
         {fun && (
           <>
-            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask the goose a yes-or-no question" style={{ maxWidth: 320 }} />
+            <Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Ask Bruce a yes-or-no question" style={{ maxWidth: 320 }} />
             <Button icon="feather" disabled={!q.trim()} onClick={() => setOut({ big: GOOSE_ANSWERS[rnd(GOOSE_ANSWERS.length)], small: `"${q.trim()}"` })}>
-              Ask the goose
+              Ask Bruce
             </Button>
           </>
         )}

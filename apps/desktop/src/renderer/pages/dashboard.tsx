@@ -207,7 +207,7 @@ function LooseTip({ fun }: { fun: boolean }) {
           <div className="loose-stripes" aria-hidden />
           <div className="loose-found">
             <b>Behind the panel you find:</b>
-            <span>a lost sock (so that's where it went), a shiny coin, and a note in goose handwriting: “Honk. Someone should tighten these.”</span>
+            <span>a lost sock (so that's where it went), a shiny coin, and a note in Bruce’s handwriting: “Honk. Someone should tighten these. — Bruce”</span>
           </div>
           {state === 'off' && (
             <Button
@@ -294,7 +294,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
     m.push([status.aiHalt ? 'AI ON EMERGENCY STOP' : aiReady ? `${agentName} READY` : `${agentName} NEEDS A MODEL`, `HEALTH ${health.score} · ${health.label}`]);
     m.push([now.toLocaleDateString(undefined, { weekday: 'long' }), now.toLocaleDateString(undefined, { month: 'short', day: '2-digit', year: 'numeric' })]);
     m.push(['UPTIME', formatDuration(cur?.uptime ?? status.uptimeSeconds)]);
-    if (easterEggs) m.push(Math.random() < 0.5 ? ['FBRX DASH', 'NOW 40% MORE SHINY'] : ['HONK', 'THE GOOSE SAYS HI']);
+    if (easterEggs) m.push(Math.random() < 0.5 ? ['FBRX DASH', 'NOW 40% MORE SHINY'] : ['HONK', 'BRUCE SAYS HI']);
     return m;
     // Rebuilt every half minute (and when the big things change) so the board isn't restarted on every sample.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -361,7 +361,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
         />
         <Insight icon="bell" title="Alerts" value={counts.data?.critical ? `${counts.data.critical} critical` : counts.data?.unread ? `${counts.data.unread} unread` : 'Quiet'} foot={status.pendingApprovals ? `${status.pendingApprovals} approval${status.pendingApprovals > 1 ? 's' : ''} waiting` : 'No approvals waiting'} onClick={() => navigate(status.pendingApprovals ? 'approvals' : 'alerts')} />
         {easterEggs ? (
-          <Insight icon="trophy" title="Trophy case" value={`${found} of ${TROPHIES.length}`} foot={found === TROPHIES.length ? 'The goose is very proud' : 'Easter eggs found'} onClick={() => navigate('settings/trophies')} />
+          <Insight icon="trophy" title="Trophy case" value={`${found} of ${TROPHIES.length}`} foot={found === TROPHIES.length ? 'Bruce is very proud' : 'Easter eggs found'} onClick={() => navigate('settings/trophies')} />
         ) : (
           <Insight icon="clock" title="Uptime" value={formatDuration(cur?.uptime ?? status.uptimeSeconds)} foot={`${status.stats.errors24h} errors logged today`} onClick={() => navigate('bugs')} />
         )}

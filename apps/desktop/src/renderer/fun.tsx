@@ -1,15 +1,22 @@
 import { useEffect, useRef, useState } from 'react';
-import { bridge, call } from './client';
+import { call } from './client';
 
 /**
- * Easter eggs and the Silly Goose: a goose in aviator goggles that waddles across the screen, honks, drops a loose
- * feather now and then, boops your mouse pointer and drags in notes. It lives in a transparent,
- * click-through window over the desktop (see the main process) and leaves on its own after a minute and a half.
- * Everything here is switched off by Settings → Appearance → Fun extras (and an organization can lock that off).
+ * Easter eggs and Bruce the Goose: a goose in aviator goggles who lives inside the FBRX window and plays hide-and-seek
+ * behind its cards and buttons (see bruce.tsx). Everything here is switched off by Settings → Appearance → Fun extras
+ * (and an organization can lock that off).
  */
 
-export function summonGoose(): void {
-  bridge.goose?.('summon');
+/** The window event that asks Bruce to peek out. */
+export const BRUCE_EVENT = 'fbrx:bruce';
+export interface BrucePeek {
+  /** With a honk (called from Spotlight, the Terminal or Settings). */
+  honk?: boolean;
+}
+
+/** Asks Bruce to peek out from behind something in this window (he lives in the main window only). */
+export function peekBruce(o: BrucePeek = { honk: true }): void {
+  window.dispatchEvent(new CustomEvent<BrucePeek>(BRUCE_EVENT, { detail: o }));
 }
 
 /** Luke 1:37: typed into Spotlight or the Library search, it answers with the verse (a quiet easter egg). */
@@ -59,7 +66,7 @@ export function useKonami(enabled: boolean, onUnlock: () => void) {
 export function dashboardQuip(o: { uptimeSeconds: number; battery: { percent: number; charging: boolean } | null; now?: Date }): string | null {
   const now = o.now ?? new Date();
   const h = now.getHours();
-  if (now.getMonth() === 3 && now.getDate() === 1) return 'Honk. (Happy April Fools\' Day. The goose may drop by.)';
+  if (now.getMonth() === 3 && now.getDate() === 1) return 'Honk. (Happy April Fools\' Day. Bruce is hiding somewhere.)';
   if (now.getMonth() === 9 && now.getDate() === 31) return 'Spooky reminder: unpatched software is scarier than ghosts.';
   if (o.uptimeSeconds > 14 * 86400) return `Up ${Math.floor(o.uptimeSeconds / 86400)} days. Have you tried turning it off and on again?`;
   if (o.battery && !o.battery.charging && o.battery.percent <= 15) return 'Battery is getting peckish. Snack time (find the charger).';
@@ -111,41 +118,10 @@ export function honk(volume = 0.22): void {
   }
 }
 
-// ------------------------------------------------------------------------------------------ goose
-
-const NOTES = [
-  'I am a goose. Honk.',
-  'Have you backed up today?\n— G',
-  'Your files are fine.\nProbably.',
-  'Fabrix said I could come in.',
-  'This note is legally binding.',
-  'Drink some water.\nThen update your drivers.',
-  'I ate your Wi-Fi password.\nIt was delicious.',
-  'Ctrl+K opens Spotlight.\nYou\'re welcome.',
-  'Restart once in a while.\nI do. (It\'s called a nap.)',
-  'Honk if you love FBRX.',
-  'Strong passwords only.\n"password123" is not one.',
-];
+// ------------------------------------------------------------------------------------------ Bruce
 
 const GOOSE_W = 120;
 const GOOSE_H = 110;
-const VISIT_MS = 95_000;
-
-type Mode = 'enter' | 'walk' | 'chase' | 'carry' | 'fetch-out' | 'fetch-in' | 'pause' | 'leave';
-interface Feather {
-  id: number;
-  x: number;
-  y: number;
-  a: number;
-  at: number;
-}
-interface Note {
-  id: number;
-  x: number;
-  y: number;
-  text: string;
-  kind: 'note' | 'portrait' | 'postcard';
-}
 
 export type Season = 'winter' | 'spring' | 'summer' | 'fall';
 
@@ -197,10 +173,36 @@ function Leaf() {
   );
 }
 
-/** The goose, drawn facing left. Aviator goggles pushed up on his head, dressed for the season; once every trophy is
+/**
+ * A blink every two to six seconds, now and then a double one; none when the person asked for less motion.
+ */
+function useBlink(): boolean {
+  const [closed, setClosed] = useState(false);
+  useEffect(() => {
+    if (document.documentElement.dataset.motion === 'reduce') return;
+    let t = 0;
+    const shut = (ms: number, then: () => void) => {
+      setClosed(true);
+      t = window.setTimeout(() => {
+        setClosed(false);
+        then();
+      }, ms);
+    };
+    const next = () => {
+      t = window.setTimeout(() => shut(130, () => (Math.random() < 0.22 ? (t = window.setTimeout(() => shut(110, next), 170)) : next())), 2000 + Math.random() * 4000);
+    };
+    next();
+    return () => clearTimeout(t);
+  }, []);
+  return closed;
+}
+
+/** Bruce, his body drawn facing left; his head turned to look at you (`look` front) or in profile (side). Aviator goggles pushed up on his head, dressed for the season; once every trophy is
  * found he carries a golden egg with a #1 ribbon on his back. `flipped` keeps the ribbon's text readable. */
-function GooseSvg({ walking, honking, golden = false, flipped = false, fast = false, season = null }: { walking: boolean; honking: boolean; golden?: boolean; flipped?: boolean; fast?: boolean; season?: Season | null }) {
+export function GooseSvg({ walking, honking, golden = false, flipped = false, fast = false, season = null, look = 'front' }: { walking: boolean; honking: boolean; golden?: boolean; flipped?: boolean; fast?: boolean; season?: Season | null; look?: 'front' | 'side' }) {
   const winter = season === 'winter';
+  const front = look === 'front';
+  const blinking = useBlink();
   return (
     <svg width={GOOSE_W} height={GOOSE_H} viewBox="0 0 92 84" overflow="visible" className={`goose-svg${walking ? ' walking' : ''}${fast ? ' fast' : ''}`} aria-hidden>
       <defs>
@@ -240,31 +242,80 @@ function GooseSvg({ walking, honking, golden = false, flipped = false, fast = fa
         </g>
       )}
       <g className="goose-neck">
-        <path d="M30 46 Q22 30 26 14" stroke="#f7f7f2" strokeWidth="10" strokeLinecap="round" fill="none" />
-        <path d="M30 46 Q22 30 26 14" stroke="#cfcfc6" strokeWidth="11.5" strokeLinecap="round" fill="none" opacity="0.35" />
+        <path d={front ? 'M30 46 Q23 33 27 21' : 'M30 46 Q22 30 26 14'} stroke="#f7f7f2" strokeWidth="10" strokeLinecap="round" fill="none" />
+        <path d={front ? 'M30 46 Q23 33 27 21' : 'M30 46 Q22 30 26 14'} stroke="#cfcfc6" strokeWidth="11.5" strokeLinecap="round" fill="none" opacity="0.35" />
         {(season === 'winter' || season === 'fall') && <Scarf season={season} />}
-        <circle cx="27" cy="13" r="8.5" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="1.2" />
-        {/* Flight goggles pushed up on the head: a leather strap round the back, two brass-rimmed lenses on top. */}
-        <path d="M19.6 8.6 Q27 3.8 35.6 9.4" stroke="#6b4a1f" strokeWidth="2.8" strokeLinecap="round" fill="none" />
-        <path d="M20.4 8 Q27 3.6 34.8 8.6" stroke="#8a6230" strokeWidth="0.8" strokeLinecap="round" fill="none" />
-        <circle cx="27.4" cy="3.6" r="3.2" fill="url(#goose-lens)" stroke="#b8862b" strokeWidth="1.5" />
-        <path d="M22.6 4.8 h1.6" stroke="#6b4a1f" strokeWidth="1.4" strokeLinecap="round" />
-        <circle cx="21.2" cy="5.4" r="3.5" fill="url(#goose-lens)" stroke="#c9952f" strokeWidth="1.6" />
-        <path d="M19.6 3.9 l1.3 -0.8" stroke="#ffffff" strokeWidth="1" strokeLinecap="round" />
-        {/* His eye, now that the goggles are up. */}
-        <circle cx="23.4" cy="11.6" r="1.7" fill="#1b1b1b" />
-        <circle cx="22.9" cy="11" r="0.55" fill="#ffffff" />
-        <g className={honking ? 'goose-beak open' : 'goose-beak'}>
-          <path d="M19 12 L6 14 L19 16 Z" fill="#f08c00" />
-          <path className="goose-jaw" d="M19 15 L8 16.5 L19 18 Z" fill="#d97800" />
-        </g>
+        {front ? (
+          <g key="front" className="goose-head front">
+            {/* His head, turned to look straight at you: round, a little big for him, on purpose. */}
+            <circle cx="27" cy="13.6" r="10.2" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="1.2" />
+            {/* Flight goggles pushed up on his forehead: the leather strap round his head, two brass-rimmed lenses. */}
+            <path d="M17 10.2 Q27 1.6 37 10.2" stroke="#6b4a1f" strokeWidth="2.6" strokeLinecap="round" fill="none" />
+            <path d="M17.8 9.4 Q27 1.6 36.2 9.4" stroke="#8a6230" strokeWidth="0.7" strokeLinecap="round" fill="none" />
+            <path d="M26 5.4 h2" stroke="#6b4a1f" strokeWidth="1.3" strokeLinecap="round" />
+            <circle cx="23" cy="5.4" r="3.1" fill="url(#goose-lens)" stroke="#c9952f" strokeWidth="1.4" />
+            <circle cx="31" cy="5.4" r="3.1" fill="url(#goose-lens)" stroke="#b8862b" strokeWidth="1.4" />
+            <path d="M21.5 4 l1.1 -0.7 M29.5 4 l1.1 -0.7" stroke="#ffffff" strokeWidth="0.9" strokeLinecap="round" />
+            {/* Rosy cheeks. */}
+            <ellipse cx="19.9" cy="17" rx="2.1" ry="1.25" fill="#ff8fa3" opacity="0.42" />
+            <ellipse cx="34.1" cy="17" rx="2.1" ry="1.25" fill="#ff8fa3" opacity="0.42" />
+            {/* His eyes, looking right at you; now and then a blink (two little arcs). */}
+            {blinking ? (
+              <g className="goose-eyes closed">
+                <path d="M21.3 12.9 Q23.2 14.4 25.1 12.9 M28.9 12.9 Q30.8 14.4 32.7 12.9" stroke="#1b1b1b" strokeWidth="0.95" strokeLinecap="round" fill="none" />
+              </g>
+            ) : (
+              <g className="goose-eyes">
+                <ellipse cx="23.2" cy="12.5" rx="1.95" ry="2.45" fill="#1b1b1b" />
+                <ellipse cx="30.8" cy="12.5" rx="1.95" ry="2.45" fill="#1b1b1b" />
+                <circle cx="22.55" cy="11.5" r="0.78" fill="#ffffff" />
+                <circle cx="30.15" cy="11.5" r="0.78" fill="#ffffff" />
+                <circle cx="23.75" cy="13.5" r="0.36" fill="#ffffff" />
+                <circle cx="31.35" cy="13.5" r="0.36" fill="#ffffff" />
+              </g>
+            )}
+            {/* His beak, seen from the front; a honk opens it. */}
+            <g className={honking ? 'goose-beak front open' : 'goose-beak front'}>
+              <ellipse className="goose-mouth" cx="27" cy="20.4" rx="2.9" ry="1.5" fill="#6b2412" />
+              <path className="goose-jaw" d="M23.7 19.2 Q27 22.2 30.3 19.2 Q29.9 22 27 23 Q24.1 22 23.7 19.2 Z" fill="#d97800" />
+              <path d="M22.4 17.2 Q27 15.3 31.6 17.2 Q31.2 19.9 27 20.9 Q22.8 19.9 22.4 17.2 Z" fill="#f08c00" />
+              <circle cx="25.7" cy="17.5" r="0.42" fill="#a85a00" />
+              <circle cx="28.3" cy="17.5" r="0.42" fill="#a85a00" />
+            </g>
+          </g>
+        ) : (
+          <g key="side" className="goose-head side">
+            {/* His head in profile, looking off to the side. */}
+            <circle cx="27" cy="13" r="8.5" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="1.2" />
+            <path d="M19.6 8.6 Q27 3.8 35.6 9.4" stroke="#6b4a1f" strokeWidth="2.8" strokeLinecap="round" fill="none" />
+            <path d="M20.4 8 Q27 3.6 34.8 8.6" stroke="#8a6230" strokeWidth="0.8" strokeLinecap="round" fill="none" />
+            <circle cx="27.4" cy="3.6" r="3.2" fill="url(#goose-lens)" stroke="#b8862b" strokeWidth="1.5" />
+            <path d="M22.6 4.8 h1.6" stroke="#6b4a1f" strokeWidth="1.4" strokeLinecap="round" />
+            <circle cx="21.2" cy="5.4" r="3.5" fill="url(#goose-lens)" stroke="#c9952f" strokeWidth="1.6" />
+            <path d="M19.6 3.9 l1.3 -0.8" stroke="#ffffff" strokeWidth="1" strokeLinecap="round" />
+            <ellipse cx="25.6" cy="15.8" rx="1.9" ry="1.15" fill="#ff8fa3" opacity="0.42" />
+            {blinking ? (
+              <path className="goose-eyes closed" d="M21.8 11.9 Q23.4 13.2 25 11.9" stroke="#1b1b1b" strokeWidth="0.9" strokeLinecap="round" fill="none" />
+            ) : (
+              <g className="goose-eyes">
+                <ellipse cx="23.4" cy="11.6" rx="1.75" ry="2.1" fill="#1b1b1b" />
+                <circle cx="22.85" cy="10.8" r="0.62" fill="#ffffff" />
+                <circle cx="23.85" cy="12.5" r="0.3" fill="#ffffff" />
+              </g>
+            )}
+            <g className={honking ? 'goose-beak side open' : 'goose-beak side'}>
+              <path d="M19 12 L6 14 L19 16 Z" fill="#f08c00" />
+              <path className="goose-jaw" d="M19 15 L8 16.5 L19 18 Z" fill="#d97800" />
+            </g>
+          </g>
+        )}
       </g>
     </svg>
   );
 }
 
-/** A butterfly that keeps the goose company in spring. */
-function Butterfly() {
+/** A butterfly that keeps Bruce company in spring. */
+export function Butterfly() {
   return (
     <svg className="goose-butterfly" width="22" height="18" viewBox="0 0 22 18" aria-hidden>
       <g className="goose-butterfly-wings">
@@ -276,7 +327,7 @@ function Butterfly() {
   );
 }
 
-/** A beach umbrella he plants beside him in summer to sit in the shade for a moment. */
+/** A beach umbrella for the summer wardrobe. */
 function BeachUmbrella() {
   return (
     <svg className="goose-umbrella" width="96" height="104" viewBox="0 0 96 104" aria-hidden>
@@ -289,335 +340,21 @@ function BeachUmbrella() {
   );
 }
 
-/** A postcard from the beach, starring the goose. */
-function Postcard({ golden }: { golden: boolean }) {
-  return (
-    <>
-      <span className="goose-postcard-art">
-        <svg width="190" height="104" viewBox="0 0 190 104" aria-hidden>
-          <defs>
-            <linearGradient id="pc-sky" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stopColor="#7cc6f0" />
-              <stop offset="1" stopColor="#d6f0ff" />
-            </linearGradient>
-          </defs>
-          <rect width="190" height="104" fill="url(#pc-sky)" />
-          <circle cx="160" cy="22" r="13" fill="#ffd34d" />
-          <path d="M0 56 Q48 50 95 56 T190 54 V74 H0 Z" fill="#2a9fd6" />
-          <path d="M0 60 q12 -3 24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0 t24 0" stroke="#e6f7ff" strokeWidth="1.5" fill="none" />
-          <path d="M0 72 Q95 62 190 72 V104 H0 Z" fill="#f2d49b" />
-          <g transform="translate(118 28) scale(0.55)">
-            <path d="M50 30 L44 100" stroke="#8a6a46" strokeWidth="4" strokeLinecap="round" />
-            <path d="M6 34 Q48 -10 92 34 Z" fill="#fff" />
-            <path d="M6 34 Q14 14 30 7 Q30 22 22 34 Z M49 2 Q58 6 64 12 Q60 26 62 34 L44 34 Q46 16 49 2 Z M78 16 Q88 24 92 34 L76 34 Q80 24 78 16 Z" fill="#e63946" />
-          </g>
-        </svg>
-        <span className="goose-postcard-goose">
-          <GooseSvg walking={false} honking={false} golden={golden} season="summer" />
-        </span>
-      </span>
-      <span className="goose-postcard-text">
-        <b>Greetings from the beach!</b>
-        <span>Wish you were here. The Wi-Fi is terrible. — G</span>
-      </span>
-      <span className="goose-postcard-stamp" aria-hidden>
-        🪶
-      </span>
-    </>
-  );
-}
-
-/** The goose as he is dressed right now, for the Fun extras settings. */
-export function GoosePreview({ season, postcard }: { season: Season; postcard?: boolean }) {
+/** Bruce as he is dressed right now, for the Fun extras settings. */
+export function BrucePreview({ season, golden = false }: { season: Season; golden?: boolean }) {
+  // He looks at you, then off to the side now and then, so both of his looks show.
+  const [look, setLook] = useState<'front' | 'side'>('front');
+  useEffect(() => {
+    const t = window.setInterval(() => setLook((l) => (l === 'front' ? 'side' : 'front')), 3200);
+    return () => clearInterval(t);
+  }, []);
   return (
     <div className={`goose-preview season-${season}`}>
       <div className="goose-preview-stage">
         {season === 'summer' && <BeachUmbrella />}
         {season === 'spring' && <Butterfly />}
-        <GooseSvg walking={false} honking={false} season={season} />
+        <GooseSvg walking={false} honking={false} golden={golden} season={season} look={look} />
       </div>
-      {postcard && season === 'summer' && (
-        <div className="goose-postcard static">
-          <Postcard golden={false} />
-        </div>
-      )}
-    </div>
-  );
-}
-
-/** The goose's own window (route goose-overlay): transparent and click-through except over the goose and notes. */
-export function GooseOverlay() {
-  const [, force] = useState(0);
-  const st = useRef({
-    x: -GOOSE_W,
-    y: 300,
-    tx: 200,
-    ty: 300,
-    /** Velocity in px/ms; the goose eases into and out of every walk instead of snapping to full speed. */
-    vx: 0,
-    vy: 0,
-    facing: 1,
-    mode: 'enter' as Mode,
-    until: 0,
-    walking: false,
-    fast: false,
-    honking: false,
-    bubble: '' as string,
-    cursor: { x: -1000, y: -1000 },
-    carrying: null as Note | null,
-    /** Loose feathers drifting down behind him now and then. */
-    feathers: [] as Feather[],
-    nextFeather: Date.now() + 2500,
-    /** Where he booped the pointer, for the little ring. */
-    boop: null as { id: number; x: number; y: number } | null,
-    notes: [] as Note[],
-    clicks: 0,
-    started: Date.now(),
-    interactive: false,
-    leaving: false,
-    golden: false,
-    season: seasonNow() as Season,
-    /** Summer: sitting in the shade of his beach umbrella. */
-    umbrella: false,
-  });
-  const ids = useRef(1);
-
-  useEffect(() => {
-    document.documentElement.classList.add('goose-mode');
-    const W = () => window.innerWidth;
-    const H = () => window.innerHeight;
-    const s = st.current;
-    // A visit earns the first badge; a goose that found them all wears its golden egg.
-    unlockTrophy('goose');
-    void call('fun.trophies')
-      .then((t) => (s.golden = !!t.unlocked.golden))
-      .catch(() => undefined);
-    void call('settings.get')
-      .then((r) => {
-        const pick = r.settings.appearance.gooseSeason;
-        if (pick !== 'auto') s.season = pick;
-      })
-      .catch(() => undefined);
-    // Enter from a random side.
-    const fromLeft = Math.random() < 0.5;
-    s.x = fromLeft ? -GOOSE_W : W();
-    s.y = H() * (0.35 + Math.random() * 0.4);
-    s.tx = W() * (0.25 + Math.random() * 0.5);
-    s.ty = s.y + GOOSE_H / 2;
-    s.facing = fromLeft ? 1 : -1;
-    const say = (text: string, ms = 1200) => {
-      s.bubble = text;
-      s.honking = true;
-      honk();
-      setTimeout(() => {
-        s.honking = false;
-        s.bubble = '';
-      }, ms);
-    };
-    const wander = () => {
-      s.mode = 'walk';
-      s.tx = 100 + Math.random() * (W() - 200);
-      s.ty = 110 + Math.random() * (H() - 220);
-    };
-    const pick = () => {
-      if (Date.now() - s.started > VISIT_MS || s.leaving) {
-        s.mode = 'leave';
-        s.tx = s.x < W() / 2 ? -GOOSE_W * 1.5 : W() + GOOSE_W * 1.5;
-        s.ty = s.y + GOOSE_H / 2;
-        return;
-      }
-      const r = Math.random();
-      if (r < 0.32) wander();
-      else if (r < 0.55) s.mode = 'chase';
-      else if (r < 0.78 && s.notes.length < 4) {
-        s.mode = 'fetch-out';
-        s.tx = s.x < W() / 2 ? -GOOSE_W * 1.2 : W() + GOOSE_W * 1.2;
-        s.ty = 140 + Math.random() * (H() - 300);
-      } else if (s.season === 'summer' && Math.random() < 0.55) {
-        // Summer: plant the beach umbrella and enjoy the shade for a moment.
-        s.mode = 'pause';
-        s.umbrella = true;
-        s.until = Date.now() + 4200;
-        say(Math.random() < 0.5 ? 'ahh. ☀' : 'beach day.', 1700);
-      } else {
-        s.mode = 'pause';
-        s.until = Date.now() + 1400;
-        say(Math.random() < 0.7 ? 'HONK!' : 'honk.');
-      }
-    };
-    /** Where the tip of the beak is, in window coordinates. */
-    const beak = () => ({ x: s.facing > 0 ? s.x + GOOSE_W - 7.8 : s.x + 7.8, y: s.y + 18.5 });
-    let last = performance.now();
-    let raf = 0;
-    const step = (now: number) => {
-      const dt = Math.min(40, now - last);
-      last = now;
-      const maxSpeed = s.mode === 'chase' ? 0.34 : s.mode === 'leave' ? 0.22 : 0.15;
-      if (s.mode === 'chase') {
-        // The pointer is on another screen (or hasn't moved yet): wander instead.
-        if (s.cursor.x < 0 || s.cursor.y < 0 || s.cursor.x > W() || s.cursor.y > H()) wander();
-        else {
-          // Aim so the beak, not the middle of the goose, ends up on the pointer.
-          const side = s.cursor.x > s.x + GOOSE_W / 2 ? 1 : -1;
-          s.tx = s.cursor.x - side * (GOOSE_W / 2 - 8);
-          s.ty = s.cursor.y + GOOSE_H / 2 - 18;
-        }
-      }
-      const cx = s.x + GOOSE_W / 2;
-      const cy = s.y + GOOSE_H / 2;
-      const dx = s.tx - cx;
-      const dy = s.ty - cy;
-      const dist = Math.hypot(dx, dy);
-      // Steering: ease toward the wanted velocity (about a seventh of a second to change pace), slowing down over
-      // the last stretch so it settles instead of stopping dead. Chasing is a lunge: no slowing down.
-      let wantX = 0;
-      let wantY = 0;
-      if (s.mode !== 'pause' && dist > 0.5) {
-        const pace = maxSpeed * (s.mode === 'chase' ? 1 : Math.max(0.3, Math.min(1, dist / 80)));
-        wantX = (dx / dist) * pace;
-        wantY = (dy / dist) * pace;
-      }
-      const k = 1 - Math.exp(-dt / (s.mode === 'pause' ? 90 : 150));
-      s.vx += (wantX - s.vx) * k;
-      s.vy += (wantY - s.vy) * k;
-      s.x += s.vx * dt;
-      s.y += s.vy * dt;
-      const speed = Math.hypot(s.vx, s.vy);
-      s.walking = speed > 0.025;
-      s.fast = speed > 0.24;
-      // Turn around only when clearly heading the other way, so it doesn't flicker on vertical walks.
-      if (s.vx > 0.04) s.facing = 1;
-      else if (s.vx < -0.04) s.facing = -1;
-      // Now and then a loose feather drifts down behind him.
-      if (s.walking && Date.now() > s.nextFeather) {
-        s.nextFeather = Date.now() + 3000 + Math.random() * 5000;
-        s.feathers.push({ id: ids.current++, x: s.x + GOOSE_W / 2 - s.facing * 26, y: s.y + 40, a: Math.random() * 60 - 30, at: Date.now() });
-        s.feathers = s.feathers.filter((f) => Date.now() - f.at < 6000);
-      }
-      if (s.mode === 'pause') {
-        if (Date.now() > s.until) {
-          s.umbrella = false;
-          pick();
-        }
-      } else if (dist < (s.mode === 'chase' ? 14 : 6)) {
-        if (s.mode === 'chase') {
-          // Caught up with the pointer: a friendly boop on it, and off he goes. (It stays yours.)
-          const b = beak();
-          s.boop = { id: ids.current++, x: b.x, y: b.y };
-          say(Math.random() < 0.5 ? 'boop.' : 'tag. you\'re it.', 1300);
-          s.mode = 'pause';
-          s.until = Date.now() + 1100;
-        } else if (s.mode === 'carry') {
-          if (s.carrying) {
-            s.notes.push({ ...s.carrying, x: s.x + (s.facing > 0 ? GOOSE_W - 10 : -150), y: s.y - 20 });
-            s.carrying = null;
-            say('honk', 900);
-          }
-          s.mode = 'pause';
-          s.until = Date.now() + 1200;
-        } else if (s.mode === 'fetch-out') {
-          // Off screen: come back with a note or a portrait.
-          const r = Math.random();
-          const kind: Note['kind'] = s.season === 'summer' && r < 0.4 ? 'postcard' : r < 0.3 ? 'portrait' : 'note';
-          s.carrying = { id: ids.current++, x: 0, y: 0, text: kind === 'note' ? NOTES[Math.floor(Math.random() * NOTES.length)] : '', kind };
-          s.mode = 'carry';
-          s.tx = W() * (0.2 + Math.random() * 0.6);
-          s.ty = H() * (0.25 + Math.random() * 0.5);
-        } else if (s.mode === 'leave') {
-          cancelAnimationFrame(raf);
-          // Notes it brought stay a little longer so you can read them.
-          setTimeout(() => bridge.goose?.('leave'), s.notes.length ? 20_000 : 300);
-          return;
-        } else {
-          if (s.mode === 'enter') say(s.golden ? 'HONK! (#1)' : 'HONK!', 1300);
-          s.mode = 'pause';
-          s.until = Date.now() + 700 + Math.random() * 1600;
-        }
-      }
-      force((n) => (n + 1) % 1_000_000);
-      raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-
-    const hit = (x: number, y: number) => {
-      if (x >= s.x && x <= s.x + GOOSE_W && y >= s.y && y <= s.y + GOOSE_H) return true;
-      return s.notes.some((n) => x >= n.x && x <= n.x + (n.kind === 'portrait' ? 150 : n.kind === 'postcard' ? 220 : 170) && y >= n.y && y <= n.y + (n.kind === 'portrait' ? 170 : n.kind === 'postcard' ? 190 : 140));
-    };
-    const off = bridge.onGoose?.((e) => {
-      if (e.type === 'cursor') {
-        s.cursor = { x: e.x, y: e.y };
-        const over = hit(e.x, e.y);
-        if (over !== s.interactive) {
-          s.interactive = over;
-          bridge.goose?.('interactive', over);
-        }
-      } else if (e.type === 'honk') say('HONK!');
-      else if (e.type === 'shoo') {
-        s.leaving = true;
-        s.notes = [];
-        pick();
-      }
-    });
-    return () => {
-      cancelAnimationFrame(raf);
-      off?.();
-    };
-  }, []);
-
-  const s = st.current;
-  const clickGoose = () => {
-    s.clicks++;
-    s.bubble = s.clicks >= 3 ? 'Fine. FINE.' : 'HONK?!';
-    honk(0.3);
-    setTimeout(() => (s.bubble = ''), 1100);
-    if (s.clicks >= 3) {
-      s.leaving = true;
-      s.notes = [];
-      unlockTrophy('shoo');
-    }
-    s.mode = 'walk';
-    s.tx = s.x < window.innerWidth / 2 ? s.x + 380 : s.x - 260;
-    s.ty = s.y + GOOSE_H / 2 + (Math.random() - 0.5) * 200;
-  };
-  const flipped = s.facing > 0;
-  return (
-    <div className="goose-stage">
-      {s.feathers.map((f) => (
-        <svg key={f.id} className="goose-feather" style={{ left: f.x, top: f.y, ['--a' as string]: `${f.a}deg` }} width="16" height="28" viewBox="0 0 16 28" aria-hidden>
-          <path d="M8 1 Q15 9 10 20 Q8 24 8 27 Q8 24 6 20 Q1 9 8 1 Z" fill="#fbfbf7" stroke="#cfcfc6" strokeWidth="0.8" />
-          <path d="M8 4 V27" stroke="#d9d9d0" strokeWidth="0.7" />
-        </svg>
-      ))}
-      {s.boop && <span key={s.boop.id} className="goose-boop" style={{ left: s.boop.x, top: s.boop.y }} />}
-      {s.notes.map((n) => (
-        <button key={n.id} className={`goose-${n.kind}`} style={{ left: n.x, top: n.y }} onClick={() => (s.notes = s.notes.filter((x) => x.id !== n.id))} title="Click to put it away">
-          {n.kind === 'postcard' ? (
-            <Postcard golden={s.golden} />
-          ) : n.kind === 'portrait' ? (
-            <>
-              <span className="goose-portrait-art">
-                <GooseSvg walking={false} honking={false} golden={s.golden} season={s.season} />
-              </span>
-              <span className="goose-portrait-label">{s.golden ? 'Portrait of the #1 Goose · gold leaf on canvas' : 'Portrait of a Goose · oil on canvas'}</span>
-            </>
-          ) : (
-            n.text
-          )}
-        </button>
-      ))}
-      <div className="goose" style={{ transform: `translate3d(${s.x}px, ${s.y}px, 0)` }} onClick={clickGoose}>
-        {s.umbrella && <BeachUmbrella />}
-        {s.season === 'spring' && <Butterfly />}
-        <div className="goose-flip" style={{ transform: `scaleX(${-s.facing})` }}>
-          <GooseSvg walking={s.walking} honking={s.honking} golden={s.golden} flipped={flipped} fast={s.fast} season={s.season} />
-          {s.carrying && <span className={`goose-carry ${s.carrying.kind}`}>{s.carrying.kind === 'note' ? '✉' : s.carrying.kind === 'postcard' ? '📮' : '🖼'}</span>}
-        </div>
-      </div>
-      {s.bubble && (
-        <div className="goose-bubble" style={{ left: s.x + (s.facing > 0 ? GOOSE_W - 10 : -40), top: s.y - 34 }}>
-          {s.bubble}
-        </div>
-      )}
     </div>
   );
 }

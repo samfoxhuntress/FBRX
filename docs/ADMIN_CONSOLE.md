@@ -60,7 +60,7 @@ license with a kind also sets it. Unattended installs can pick the first tenant'
 A profile (and a single device's overrides) is built from:
 
 * **Ready-made** bundles, one click each and one click to take out again: **No Fun Extras** (no easter eggs, jokes,
-  goose or start-up sound), **Private by default** (AI on the computer, chats start offline, no usage statistics or
+  Bruce the Goose or start-up sound), **Private by default** (AI on the computer, chats start offline, no usage statistics or
   clipboard history), **Locked down** (no mesh, no Local API, no sharing AI), **No chatting** (Messages off),
   **Strong protection**, **Daily backups**,
   **Meeting-room safe**, **Calm and quick** and **Share AI across computers**. They combine; the profiles table shows

@@ -79,7 +79,7 @@ export const FBRX1_LIBRARY: Array<{ id: string; name: string; items: Fbrx1Recipe
       { title: 'Back to the default look', what: 'Tropical, without a texture', lines: ['configure', 'set appearance preset tropical', 'set appearance texture none', 'commit', 'exit'] },
       { title: 'Offline-first agent', what: 'New chats ask before using the internet', lines: ['configure', 'set ai newChatsOffline true', 'commit', 'exit'] },
       { title: 'Try before you commit', what: 'Make a change, compare, then throw it away', lines: ['configure', 'set appearance density compact', 'show | compare', 'rollback', 'exit'] },
-      { title: 'No goose visits', what: 'The goose only comes when called', lines: ['configure', 'set appearance gooseVisits false', 'commit', 'exit'] },
+      { title: 'Bruce stays hidden', what: 'Bruce only peeks out when called', lines: ['configure', 'set appearance gooseVisits false', 'commit', 'exit'] },
     ],
   },
   {

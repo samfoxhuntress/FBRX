@@ -252,7 +252,7 @@ across updates) and computers **pin** it:
 
 While it is on, the core drops desktop notifications (an `error` one becomes a content-free "needs your attention"),
 the renderer suppresses toasts and blurs elements marked private, the clipboard history window masks entries, and the
-goose cannot appear. It hides things from an audience; it is not access control.
+Bruce the Goose stays hidden. It hides things from an audience; it is not access control.
 
 ## Help desk
 

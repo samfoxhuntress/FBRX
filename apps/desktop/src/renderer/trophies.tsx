@@ -2,7 +2,7 @@ import type { ReactNode } from 'react';
 import { GOLDEN_TROPHY, TROPHIES, type TrophyInfo } from '@fbrx/shared';
 import { Button, Callout, Card, formatDate } from '@fbrx/ui';
 import { useCore } from './hooks';
-import { summonGoose } from './fun';
+import { peekBruce } from './fun';
 
 /**
  * The trophy case (Settings → Trophy case): one badge per easter egg. Found badges are in color with how they were
@@ -281,9 +281,9 @@ export function TrophyCase({ enabled, onEnable }: { enabled: boolean; onEnable: 
             <TrophyBadge id="golden" found={!!golden} size={88} />
             <div>
               <div className="trophy-name">{GOLDEN_TROPHY.name}</div>
-              <div className="trophy-text">{golden ? GOLDEN_TROPHY.how : `Find all ${TROPHIES.length} badges below. The goose will be very proud.`}</div>
+              <div className="trophy-text">{golden ? GOLDEN_TROPHY.how : `Find all ${TROPHIES.length} badges below. Bruce will be very proud.`}</div>
               {golden ? (
-                <Button size="sm" icon="feather" disabled={!enabled} onClick={summonGoose}>
+                <Button size="sm" icon="feather" disabled={!enabled} onClick={() => peekBruce()}>
                   Show off the egg
                 </Button>
               ) : null}

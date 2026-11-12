@@ -40,16 +40,12 @@ interface Bridge {
   popOutWindow?(action: 'pin' | 'tile' | 'main', on?: boolean): Promise<boolean>;
   /** Edit commands on what has the focus (the right-click menu). */
   edit?(action: 'cut' | 'copy' | 'paste' | 'pasteAsText' | 'selectAll' | 'undo' | 'redo'): Promise<boolean>;
-  /** The Silly Goose overlay window (Electron only). */
-  goose?(action: 'summon' | 'leave' | 'interactive', on?: boolean): Promise<unknown> | void;
   /** Open or focus the FBRX Browser window (Electron only). */
   openBrowser?(url?: string): void;
   /** A URL to open as a new tab in the browser window. */
   onBrowserOpen?(cb: (url: string, o?: { background?: boolean; priv?: boolean; search?: boolean }) => void): () => void;
   onBrowserCertificate?(cb: (problem: BrowserCertificateProblem) => void): () => void;
   trustBrowserCertificate?(host: string, fingerprint: string): Promise<boolean>;
-  /** The pointer's position (the click-through overlay can't see it), honks and shoos, for the goose. */
-  onGoose?(cb: (e: { type: 'cursor'; x: number; y: number } | { type: 'honk' } | { type: 'shoo' }) => void): () => void;
   /** Clipboard history, kept in memory by the desktop app (Electron only). */
   clip?(action: 'list' | 'read' | 'copy' | 'remove' | 'pin' | 'clear', id?: number, on?: boolean): Promise<unknown>;
   onClips?(cb: (entries: unknown) => void): () => void;

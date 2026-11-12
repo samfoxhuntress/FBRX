@@ -2010,188 +2010,164 @@ body.spotlight-body {
   gap: 4px;
 }
 
-/* --------------------------------------------------------------------------------------- the goose */
-html.goose-mode,
-html.goose-mode body,
-html.goose-mode #root {
-  background: transparent !important;
-  overflow: hidden;
-}
-.goose-stage {
+/* ----------------------------------------------------------------------------- Bruce the Goose */
+/* Bruce peeks out of a hole whose bottom edge is the top of a card or button: what is below it is clipped, so he
+   looks as if he were standing behind it. Only Bruce himself takes clicks. */
+.bruce-layer {
   position: fixed;
   inset: 0;
+  pointer-events: none;
+  z-index: 40;
   overflow: hidden;
-  user-select: none;
 }
-.goose {
+.bruce-hole {
   position: absolute;
-  left: 0;
-  top: 0;
-  width: 120px;
-  height: 110px;
-  cursor: pointer;
-  will-change: transform;
-  filter: drop-shadow(0 6px 4px rgba(0, 0, 0, 0.25));
+  overflow: hidden;
 }
-/* Turning around is a quick pivot rather than an instant mirror. */
-.goose-flip {
-  position: relative;
+.bruce {
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  transform: translate(var(--hide, 0px, 80px));
+  transition: transform 0.38s cubic-bezier(0.34, 1.4, 0.64, 1);
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.18));
+}
+.bruce.out {
+  transform: translate(0, 0);
+}
+/* Round a side he leans out a little, head first (mirrored about his middle when he faces right). */
+.bruce.side-left .bruce-flip {
+  transform: rotate(-6deg);
+  transform-origin: 50% 95%;
+}
+.bruce.side-right .bruce-flip {
+  transform: scaleX(-1) rotate(-6deg) !important;
+  transform-origin: 50% 95%;
+}
+.bruce:not(.out) {
+  transition-timing-function: cubic-bezier(0.5, 0, 0.75, 0);
+  transition-duration: 0.3s;
+}
+.bruce-flip {
   width: 100%;
   height: 100%;
-  transition: transform 0.2s ease-in-out;
+}
+.bruce-scale {
+  width: 120px;
+  height: 110px;
+  transform-origin: 0 0;
+}
+/* While he is out he looks around: a slow tilt of the head and neck. */
+.bruce.out .goose-neck {
+  animation: bruce-look 3.4s ease-in-out 0.5s infinite;
+  transform-origin: 30px 46px;
+}
+@keyframes bruce-look {
+  0%, 100% {
+    transform: rotate(0deg);
+  }
+  30% {
+    transform: rotate(-6deg);
+  }
+  60% {
+    transform: rotate(4deg);
+  }
 }
 .goose-svg {
   transform-origin: 50% 92%;
 }
-/* A waddle: the body rocks side to side in step with the feet. */
-.goose-svg.walking {
-  animation: goose-waddle 0.34s ease-in-out infinite alternate;
+/* His beak from the front: the lower half tucked up under the top until he honks. */
+.goose-beak.front .goose-jaw {
+  transform: translateY(-2.2px);
+  transition: transform 0.08s ease-out;
 }
-.goose-svg.walking .goose-leg-a {
-  animation: goose-step 0.34s ease-in-out infinite alternate;
-  transform-origin: 44px 62px;
+.goose-beak.front .goose-mouth {
+  opacity: 0;
 }
-.goose-svg.walking .goose-leg-b {
-  animation: goose-step 0.34s ease-in-out infinite alternate-reverse;
-  transform-origin: 54px 62px;
+.goose-beak.front.open .goose-jaw {
+  transform: translateY(0.6px);
 }
-.goose-svg.walking .goose-neck {
-  animation: goose-bob 0.34s ease-in-out infinite alternate;
+.goose-beak.front.open .goose-mouth {
+  opacity: 1;
 }
-.goose-svg.walking.fast,
-.goose-svg.walking.fast .goose-leg-a,
-.goose-svg.walking.fast .goose-leg-b,
-.goose-svg.walking.fast .goose-neck {
-  animation-duration: 0.22s;
-}
-@keyframes goose-waddle {
-  from {
-    transform: rotate(-2.5deg) translateY(0);
-  }
-  to {
-    transform: rotate(2.5deg) translateY(-1.5px);
-  }
-}
-.goose-beak.open .goose-jaw {
+/* In profile the lower beak drops open. */
+.goose-beak.side.open .goose-jaw {
   transform: translateY(2.5px) rotate(-6deg);
   transform-origin: 19px 16px;
 }
-@keyframes goose-step {
+/* Turning his head: a quick swing about its middle. */
+.goose-head {
+  animation: goose-turn 0.2s ease-out;
+  transform-origin: 27px 13px;
+}
+@keyframes goose-turn {
   from {
-    transform: rotate(-16deg);
-  }
-  to {
-    transform: rotate(16deg);
+    transform: scaleX(0.55);
+    opacity: 0.4;
   }
 }
-@keyframes goose-bob {
-  to {
-    transform: translate(-1.5px, 1.5px);
+:root[data-motion='reduce'] .goose-head {
+  animation: none;
+}
+.bruce-bubble {
+  position: absolute;
+  padding: 3px 9px;
+  border-radius: 10px 10px 10px 2px;
+  background: #fff;
+  color: #111;
+  font: 800 13px/1.2 system-ui, sans-serif;
+  box-shadow: 0 3px 10px rgba(0, 0, 0, 0.22);
+  white-space: nowrap;
+  transform: translateY(-100%);
+  animation: bruce-pop 0.18s ease-out;
+}
+.bruce-bubble.right {
+  border-radius: 10px 10px 2px 10px;
+}
+@keyframes bruce-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-80%) scale(0.85);
   }
 }
-/* A loose feather: drifts down, swaying, and fades. */
+.bruce-butterfly {
+  position: absolute;
+  width: 0;
+  height: 0;
+}
+.bruce-butterfly .goose-butterfly {
+  left: 0;
+  top: 0;
+}
+/* A loose feather when he gives up: drifts down, swaying, and fades. */
 .goose-feather {
   position: absolute;
   pointer-events: none;
-  animation: goose-feather 5.5s ease-in forwards;
-  transform: rotate(var(--a, 0deg));
+  animation: goose-feather 3.2s ease-in forwards;
 }
 @keyframes goose-feather {
   20% {
-    transform: translate(10px, 18px) rotate(calc(var(--a, 0deg) + 25deg));
+    transform: translate(10px, 18px) rotate(25deg);
   }
   45% {
-    transform: translate(-8px, 40px) rotate(calc(var(--a, 0deg) - 20deg));
+    transform: translate(-8px, 40px) rotate(-20deg);
   }
   70% {
-    transform: translate(8px, 58px) rotate(calc(var(--a, 0deg) + 15deg));
+    transform: translate(8px, 58px) rotate(15deg);
     opacity: 0.9;
   }
   to {
-    transform: translate(-2px, 72px) rotate(var(--a, 0deg));
+    transform: translate(-2px, 72px) rotate(0deg);
     opacity: 0;
   }
 }
-/* The boop: a little ring where his beak tapped the pointer. */
-.goose-boop {
-  position: absolute;
-  width: 26px;
-  height: 26px;
-  margin: -13px 0 0 -13px;
-  border-radius: 50%;
-  border: 2px solid #f08c00;
-  pointer-events: none;
-  animation: goose-boop 0.6s ease-out forwards;
+:root[data-motion='reduce'] .bruce,
+:root[data-motion='reduce'] .bruce-bubble {
+  transition: none;
+  animation: none;
 }
-@keyframes goose-boop {
-  from {
-    transform: scale(0.3);
-    opacity: 1;
-  }
-  to {
-    transform: scale(1.8);
-    opacity: 0;
-  }
-}
-.goose-bubble {
-  position: absolute;
-  padding: 4px 10px;
-  border-radius: 12px;
-  background: #fff;
-  color: #111;
-  font: 800 15px/1.2 system-ui, sans-serif;
-  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-  pointer-events: none;
-  white-space: nowrap;
-}
-.goose-note {
-  position: absolute;
-  width: 170px;
-  min-height: 120px;
-  padding: 16px 14px;
-  background: linear-gradient(180deg, #fff59d, #ffe96b);
-  color: #3b3000;
-  border: 0;
-  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.3);
-  font: 600 14px/1.35 'Segoe Print', 'Comic Sans MS', system-ui, sans-serif;
-  white-space: pre-line;
-  text-align: left;
-  transform: rotate(-3deg);
-  cursor: pointer;
-  animation: goose-drop 0.35s ease-out;
-}
-.goose-portrait {
-  position: absolute;
-  width: 150px;
-  padding: 10px;
-  background: #fbf6ea;
-  border: 8px solid #b8860b;
-  border-image: linear-gradient(135deg, #f4d06f, #a87512, #f4d06f) 1;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  transform: rotate(2deg);
-  animation: goose-drop 0.35s ease-out;
-}
-.goose-portrait-label {
-  font: italic 11px/1.2 Georgia, serif;
-  color: #5b4a2a;
-  text-align: center;
-}
-@keyframes goose-drop {
-  from {
-    transform: scale(0.6) rotate(-12deg);
-    opacity: 0;
-  }
-}
-.goose-carry {
-  position: absolute;
-  left: -14px;
-  top: 4px;
-  font-size: 22px;
+:root[data-motion='reduce'] .bruce.out .goose-neck {
+  animation: none;
 }
 
 /* ------------------------------------------------------------------------------------------- the lab */
@@ -4927,61 +4903,6 @@ body.popout .srv-browser:not(.full) {
     transform: translate(0, 0) rotate(-8deg);
   }
 }
-.goose-postcard {
-  position: absolute;
-  width: 214px;
-  padding: 10px 10px 12px;
-  border: 0;
-  border-radius: 4px;
-  background: #fffdf6;
-  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.35);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  cursor: pointer;
-  text-align: left;
-  transform: rotate(-2.5deg);
-  animation: goose-drop 0.35s ease-out;
-}
-.goose-postcard-art {
-  position: relative;
-  display: block;
-  height: 104px;
-  overflow: hidden;
-  border-radius: 2px;
-}
-.goose-postcard-goose {
-  position: absolute;
-  left: 34px;
-  top: 30px;
-  transform: scale(0.6) scaleX(-1);
-  transform-origin: 0 0;
-}
-.goose-postcard-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  font: 600 12px/1.3 'Segoe Print', 'Comic Sans MS', system-ui, sans-serif;
-  color: #3a3226;
-  padding-right: 34px;
-}
-.goose-postcard-text b {
-  font: 800 13.5px/1.2 Georgia, serif;
-  color: #c2410c;
-}
-.goose-postcard-stamp {
-  position: absolute;
-  right: 12px;
-  bottom: 12px;
-  width: 28px;
-  height: 32px;
-  display: grid;
-  place-items: center;
-  font-size: 16px;
-  background: #ffe8a3;
-  outline: 2px dashed #d9a520;
-  outline-offset: -3px;
-}
 :root[data-motion='reduce'] .goose-butterfly,
 :root[data-motion='reduce'] .goose-butterfly-wings,
 :root[data-motion='reduce'] .goose-svg.walking .goose-scarf-tails {
@@ -5031,10 +4952,6 @@ body.popout .srv-browser:not(.full) {
 .goose-preview .goose-butterfly {
   left: 52px;
   top: 30px;
-}
-.goose-postcard.static {
-  position: relative;
-  animation: none;
 }
 
 /* Network Center → Environments: guest Wi-Fi codes */

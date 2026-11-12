@@ -22,7 +22,7 @@ Virtual lab, printers, adapters) say so on other systems; the rest works everywh
 | Text and interface size | 85–130 % |
 | Motion and start-up | Reduce motion; start-up animation (the FBRX logo stitched in) and start-up sound (from the FBRX intro, on by default, with a Listen button) |
 | Effects | Auto, Full or Lite. Lite turns off frosted glass, glows and decorative animation; Auto picks Lite on computers with four or fewer processor threads or 4 GB of memory |
-| Fun extras | Every edition, once unlocked (see [EASTER_EGGS.md](EASTER_EGGS.md), spoilers): easter eggs and jokes, the Silly Goose's occasional visits, a *Release the goose* button and the **Trophy case**. An organization can lock fun extras off |
+| Fun extras | Every edition, once unlocked (see [EASTER_EGGS.md](EASTER_EGGS.md), spoilers): easter eggs and jokes, Bruce the Goose (who peeks out from behind the app's cards and buttons now and then), a *Find Bruce* button and the **Trophy case**. An organization can lock fun extras off |
 
 **Dark mode: a cool page, color on the elements.** In dark mode every theme keeps the page itself cool and quiet
 (slate neutrals, also in the warm themes: Tropical, Honey, Ember and Paper keep their accent and glow but not a
@@ -77,7 +77,7 @@ saved goes away), up to what the computer may run. Prices are in US dollars, per
 | Connect | AI models | AI models | Mesh & phone, FBRX VPN, AI coordination, connections, tools and plugins | The same |
 | Governance | What the AI may do on its own and what it asks first, the folders it may use, and the audit log | The same | The same | The same, and a second AI model reviewing risky calls |
 | Look | The themes (light, dark or follow the computer) and an accent color | The same | The same, plus textures (with a strength slider) and a sidebar icon color of your own | The same |
-| Fun | Easter eggs, the Silly Goose and the trophy case, once unlocked with the secret key (see EASTER_EGGS.md, spoilers) | The same | The same | The same |
+| Fun | Easter eggs, Bruce the Goose and the trophy case, once unlocked with the secret key (see EASTER_EGGS.md, spoilers) | The same | The same | The same |
 
 **The walkthrough.** On a new computer, after setup, Essentials dims the window and lights up one page at a time:
 Fabrix, AI models and Settings (memory, voice, and the edition for when you want more), ending with the Spotlight
@@ -630,7 +630,7 @@ Presenting**). While it is on:
 * notifications stay quiet (an urgent one only says that something needs a look), in the app and from the system;
 * the clipboard history shows dots instead of your copies (they still paste);
 * chat history, alerts, credentials and help desk tickets are blurred;
-* the Silly Goose stays home and approvals wait in the top bar.
+* Bruce the Goose stays hidden and approvals wait in the top bar.
 
 Turn it on with **Ctrl+Alt+P** (a macro you can change), the tray menu, or **Turn on now**; the top bar says
 **Presenting** while it is on (click it to turn it off). **Turn on by itself while a projector or second screen is

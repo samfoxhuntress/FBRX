@@ -554,8 +554,8 @@ while ($true) {
       ];
     }
     const out: SpotlightItem[] = [];
-    if (this.d.easterEggs?.() && /^(honk|goose|silly goose|release the goose|untitled goose)$/i.test(q)) {
-      out.push({ id: 'egg:goose', kind: 'command', title: 'Release the goose', subtitle: 'You were warned. Honk.', action: { type: 'nav', route: 'goose' }, score: 500 });
+    if (this.d.easterEggs?.() && /^(honk|goose|bruce|bruce the goose|find bruce|where('?s| is) bruce\??|silly goose|release the goose)$/i.test(q)) {
+      out.push({ id: 'egg:goose', kind: 'command', title: 'Find Bruce', subtitle: 'Bruce the Goose is hiding in FBRX. Honk.', action: { type: 'nav', route: 'goose' }, score: 500 });
     }
     const c = calc(q.replace(/^=/, ''));
     if (c != null) out.push({ id: 'calc', kind: 'calc', title: `= ${fmtNum(c)}`, subtitle: `${q} · Enter to copy`, action: { type: 'copy', text: String(+c.toPrecision(12)) }, score: 200 });

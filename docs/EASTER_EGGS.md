@@ -2,7 +2,7 @@
 
 ## Unlocking them: 418
 
-The easter eggs, the Silly Goose and the trophy case come with every edition of FBRX Endpoint (Essentials, Pro and
+The easter eggs, Bruce the Goose and the trophy case come with every edition of FBRX Endpoint (Essentials, Pro and
 Ultra), but they stay hidden until someone enters **418** as a license key (**Settings → License**). It is not a
 license: it is HTTP status 418, *I'm a teapot*. The locked trophy case in Settings drops the only hint: "The key is
 short and stout." Some eggs live on pages a lighter edition does not show (the Terminal's are in Ultra, Dash's in
@@ -19,14 +19,14 @@ Every easter egg has a badge in **Settings → Trophy case** (also in Spotlight:
 count in the sidebar footer). Badges you haven't found are greyed out with a hint; found ones are in color with how and
 when you earned them. A toast with **See trophy case** pops up the moment you find one.
 
-Find all 16 and you unlock the **Golden Goose**: from then on the goose arrives wearing a golden egg with a red **#1**
-ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `show trophies` in FBRX/1 lists it.
+Find all 16 and you unlock the **Golden Goose**: from then on Bruce peeks out with a golden egg and a red **#1** ribbon
+on his back (and says "HONK! (#1)"). The record lives on this computer; `show trophies` in FBRX/1 lists it.
 
 | Badge | How to earn it |
 | --- | --- |
-| Goose Wrangler | Release the Silly Goose (see below) |
-| Shoo! | Click the goose three times until it gives up and goes home |
-| Cheat Code | Type the classic cheat code anywhere in FBRX: ↑ ↑ ↓ ↓ ← → ← → B A |
+| Peekaboo | Catch Bruce the Goose peeking out (see below) |
+| Hide and Seek | Catch Bruce three times in a row, until he gives up hiding |
+| Cheat Code | Type the classic cheat code anywhere in FBRX: ↑ ↑ ↓ ↓ ← → ← → B A. It earns the badge and nothing else |
 | Master Weaver | Click the FBRX logo (top left) seven times quickly: the loom spins |
 | Safety First | Open **Library → The Lab** |
 | Storyteller | Search the Library for "tell me a story" (or "story time", "once upon a time") |
@@ -42,44 +42,39 @@ ribbon on its back (and says "HONK! (#1)"). The record lives on this computer; `
 | Who's Who? | On **Mesh & phone**, ping the same computer three times in a row (no other computer? click your own address three times) |
 | **Golden Goose** | Find all of the above |
 
-## The Silly Goose
+## Bruce the Goose
 
-Our own goose, with one signature look: brass-rimmed aviator goggles pushed up on his head. A goose waddles
-across the screen FBRX OS is on for about a minute and a half, then leaves by itself. It eases into and out of its
-walks, waddles in step with its feet and turns around with a little pivot. While it is around it:
+Our own goose, Bruce, with one signature look: brass-rimmed aviator goggles pushed up on his head. He looks right at you
+with big, blinking eyes and rosy cheeks, and now and then turns his head to look off to the side. He lives inside the
+FBRX window and nowhere else, and he plays hide-and-seek. Now and then he peeks out from behind a card or a button (over
+its top edge, as if he were standing behind it), looks around for a few seconds and ducks back down. Behind a button
+he is small; behind a card, a bit bigger. He only peeks into empty space, never over what you are reading, ducks the
+moment you scroll or go to another page, and stays hidden while you present.
 
-- honks (a synthesized honk, with a speech bubble),
-- drops a loose feather now and then, which drifts down and fades away,
-- chases your mouse pointer, and when it catches up gives it a friendly boop ("boop." or "tag. you're it.") and
-  waddles off. Your pointer always stays yours,
-- runs off the edge of the screen and comes back dragging a sticky note ("I ate your Wi-Fi password. It was
-  delicious.") or a framed *Portrait of a Goose, oil on canvas*. Click a note to put it away.
+Click him and he ducks ("HONK?!") and pops up behind something else a moment later ("missed me."). Catch him three
+times in a row and he gives up ("Fine. FINE. You win."), leaving a loose feather drifting down. The Dash's loose Tip
+tile hides a note in his handwriting, so now you know who has been back there.
 
 He dresses for the season where you are (the southern hemisphere is worked out from your time zone), or the one you
-pick under *The goose's wardrobe* in Settings → Appearance → Fun extras, which shows him in it:
+pick under *Bruce's wardrobe* in Settings → Appearance → Fun extras, which shows him in it:
 
 | Season | What changes |
 | --- | --- |
-| Winter | A red striped scarf whose ends flap as he walks, and green snow boots with fluffy cuffs |
+| Winter | A red striped scarf, and green snow boots with fluffy cuffs |
 | Fall | An orange scarf, and a leaf that blew onto his back |
-| Spring | Nothing on him; a butterfly keeps him company |
-| Summer | Now and then he plants a beach umbrella and enjoys the shade ("ahh. ☀"), and his trips off screen sometimes come back with a postcard of himself at the beach ("Wish you were here. The Wi-Fi is terrible. — G") |
+| Spring | A butterfly keeps him company |
+| Summer | A beach umbrella (in the wardrobe preview; he leaves it behind when he hides) |
 
-It lives in a transparent, always-on-top window: clicks go straight through it to your apps, except on the goose and
-its notes. Click the goose and it flees; click it three times and it leaves ("Fine. FINE."). The tray menu has
-**Shoo the goose**.
-
-How to summon it:
+How to make him peek out:
 
 | Where | What |
 | --- | --- |
-| Anywhere in FBRX | The classic cheat code: ↑ ↑ ↓ ↓ ← → ← → B A ("Cheat code accepted. You get one goose.") |
-| Spotlight (Alt+Space) | Type `honk` or `goose` → *Release the goose* |
+| Spotlight (Alt+Space) | Type `honk`, `goose`, `bruce` or `where's bruce` → *Find Bruce* |
 | Terminal | Type `honk` |
-| Tray menu | *Release the goose* |
-| Settings → Appearance → Fun extras | *Release the goose*, or *Let the goose drop by now and then* (about once every two hours while you are at the computer) |
+| FBRX/1 | `request goose release` says where to look |
+| Settings → Appearance → Fun extras | *Find Bruce*, or *Let Bruce peek out now and then* (on by default: about every quarter of an hour while you use FBRX) |
 | Settings → Trophy case | *Show off the egg* (after the Golden Goose) |
-| April 1 | It drops by on its own, once |
+| April 1 | He peeks out by himself, once, soon after FBRX opens |
 
 ## Nothing is impossible
 
@@ -99,9 +94,9 @@ crisis. Click anywhere to make them stop.
   letters and they riffle (with a faint clack).
 - **The loose tile.** The **Tip** tile is a little crooked and one of its screws is backing out. Click it: it rattles
   ("Hm. That rattled." … "Please stop. It's hanging by one screw."). On the sixth click it swings off its last screw
-  and falls, revealing what was behind it: a lost sock, a shiny coin and a note in goose handwriting. **Screw it
+  and falls, revealing what was behind it: a lost sock, a shiny coin and a note in Bruce's handwriting. **Screw it
   back on** puts it back.
-- Now and then the board says "FBRX DASH / NOW 40% MORE SHINY" or "HONK / THE GOOSE SAYS HI".
+- Now and then the board says "FBRX DASH / NOW 40% MORE SHINY" or "HONK / BRUCE SAYS HI".
 
 ## Story time
 
@@ -119,7 +114,7 @@ around the world in eighty milliseconds*, *How to keep a name nobody can guess* 
   day off." Patience pays: by flip 150 it is guaranteed. The flip count shows under the result so you can tell you're
   getting closer.
 - **Roll a d20.** A 20 is announced as a natural 20 (critical success); a 1 gets a sympathetic "Oof."
-- **Ask the goose.** Type a yes-or-no question and the goose answers like a fortune-telling toy: "Every feather says honk.",
+- **Ask Bruce.** Type a yes-or-no question and Bruce answers like a fortune-telling toy: "Every feather says honk.",
   "Looks good, if you back up first.", "Yes, but wear safety goggles."…
 
 ## Elsewhere
@@ -129,6 +124,5 @@ around the world in eighty milliseconds*, *How to keep a name nobody can guess* 
 | Library | **The Lab**: power-user how-tos, a hazard-striped banner and "Safety goggles recommended (sold separately)", with a dry remark for every section of downloads |
 | Dash | A line under the board at special moments: after midnight, on Friday afternoons ("Maybe don't deploy anything"), after 14 days without a restart ("Have you tried turning it off and on again?"), when the battery is nearly empty, on Halloween and on April Fools' Day |
 | Terminal | `rain` makes it rain green code; `sudo make me a sandwich` → "Okay."; `make me a sandwich` → "What? Make it yourself."; `coffee` → 418 I'm a teapot; `xyzzy` → "Nothing happens."; `hello`; `exit`. And `rm -rf /`, `format c:` and friends are refused: "Fabrix hid the sharp objects." |
-| FBRX/1 | `request goose release` |
 | Toolbox → Base64 | Decode the sample |
 | Settings → Logs & about | Read the small print |

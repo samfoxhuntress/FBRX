@@ -1,7 +1,7 @@
 /**
  * The trophy case: one trophy per easter egg. Found ones show their badge in color with how they were earned;
- * the rest stay greyed out with a hint. Finding them all unlocks the Golden Goose (the goose then carries a golden
- * egg with a #1 ribbon on every visit).
+ * the rest stay greyed out with a hint. Finding them all unlocks the Golden Goose (Bruce then peeks out with a golden
+ * egg and a #1 ribbon).
  */
 export interface TrophyInfo {
   id: string;
@@ -13,8 +13,8 @@ export interface TrophyInfo {
 }
 
 export const TROPHIES: TrophyInfo[] = [
-  { id: 'goose', name: 'Goose Wrangler', hint: 'Something honks in Spotlight.', how: 'Released the Silly Goose.' },
-  { id: 'shoo', name: 'Shoo!', hint: 'Even geese have limits.', how: 'Clicked the goose three times until it gave up and went home.' },
+  { id: 'goose', name: 'Peekaboo', hint: 'Someone hides behind the buttons. Spotlight knows a word that brings him out.', how: 'Caught Bruce the Goose peeking out from behind something.' },
+  { id: 'shoo', name: 'Hide and Seek', hint: 'Bruce is good at hiding. Are you better at seeking?', how: 'Caught Bruce three times in a row, until he gave up hiding.' },
   { id: 'konami', name: 'Cheat Code', hint: 'Up, up, down, down…', how: 'Typed the classic cheat code: ↑ ↑ ↓ ↓ ← → ← → B A.' },
   { id: 'loom', name: 'Master Weaver', hint: 'The logo likes attention.', how: 'Clicked the FBRX logo seven times in a row.' },
   { id: 'goggles', name: 'Safety First', hint: 'The Library has a lab with a dress code.', how: 'Opened The Lab in the Library (safety goggles sold separately).' },
@@ -32,7 +32,7 @@ export const TROPHIES: TrophyInfo[] = [
 ];
 
 /** Unlocked by itself once every other trophy is found. */
-export const GOLDEN_TROPHY: TrophyInfo = { id: 'golden', name: 'Golden Goose', hint: 'Find every other trophy.', how: 'Found every easter egg. The goose now wears a golden egg with a #1 ribbon.' };
+export const GOLDEN_TROPHY: TrophyInfo = { id: 'golden', name: 'Golden Goose', hint: 'Find every other trophy.', how: 'Found every easter egg. Bruce now peeks out with a golden egg and a #1 ribbon.' };
 
 export const TROPHY_IDS = [...TROPHIES.map((t) => t.id), GOLDEN_TROPHY.id];
 

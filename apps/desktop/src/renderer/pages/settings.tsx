@@ -44,7 +44,7 @@ import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { DIGGER, IS_WINDOWS, navigate, routeArg } from '../app';
 import { PRESETS, TEXTURE_NAMES, playStartupSound, resolvedMode, resolvedTexture, textureImage, themeAccent } from '../theme';
-import { GoosePreview, seasonNow, summonGoose } from '../fun';
+import { BrucePreview, peekBruce, seasonNow } from '../fun';
 import { TrophyBadge, TrophyCase } from '../trophies';
 import { AskButton, EmergencyStop, ProfileFields, saveProfile } from '../widgets';
 import { KeyRecorder, MacroSettings } from './settings-macros';
@@ -592,21 +592,21 @@ function Appearance() {
           </div>
         </Card>
       </Grid>
-      {a.funUnlocked && <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and the Silly Goose. Nothing here touches your files or settings.">
+      {a.funUnlocked && <Card title={<>Fun extras <Locked show={L('appearance.easterEggs')} /></>} subtitle="Jokes, easter eggs and Bruce the Goose. Nothing here touches your files or settings.">
         <div className="fx-form">
           <Toggle checked={a.easterEggs} disabled={L('appearance.easterEggs')} onChange={(v) => void patch({ appearance: { easterEggs: v } })} label="Easter eggs and jokes" />
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
-            <Toggle checked={a.gooseVisits} disabled={!a.easterEggs || L('appearance.gooseVisits')} onChange={(v) => void patch({ appearance: { gooseVisits: v } })} label="Let the goose drop by now and then" />
-            <Button size="sm" icon="feather" disabled={!a.easterEggs} onClick={summonGoose}>
-              Release the goose
+            <Toggle checked={a.gooseVisits} disabled={!a.easterEggs || L('appearance.gooseVisits')} onChange={(v) => void patch({ appearance: { gooseVisits: v } })} label="Let Bruce peek out now and then" />
+            <Button size="sm" icon="feather" disabled={!a.easterEggs} onClick={() => peekBruce()}>
+              Find Bruce
             </Button>
             <Button size="sm" icon="trophy" variant="ghost" onClick={() => navigate('settings/trophies')}>
               Trophy case
             </Button>
           </div>
           <div className="goose-wardrobe">
-            <Field label="The goose's wardrobe" help="Flight goggles all year. Scarf and boots in winter, a scarf in the fall, a butterfly for company in spring, and a beach umbrella (and postcards) in summer. By season follows where you are.">
-              <div className="seg" role="group" aria-label="The goose's wardrobe">
+            <Field label="Bruce's wardrobe" help="Flight goggles all year. A scarf and snow boots in winter, a scarf and a stray leaf in the fall, a butterfly for company in spring and a beach umbrella in summer. By season follows where you are.">
+              <div className="seg" role="group" aria-label="Bruce's wardrobe">
                 {(['auto', 'winter', 'spring', 'summer', 'fall'] as const).map((x) => (
                   <button key={x} className={a.gooseSeason === x ? 'on' : ''} disabled={!a.easterEggs} onClick={() => void patch({ appearance: { gooseSeason: x } })}>
                     {x === 'auto' ? `By season (${seasonNow()})` : x[0].toUpperCase() + x.slice(1)}
@@ -614,10 +614,10 @@ function Appearance() {
                 ))}
               </div>
             </Field>
-            <GoosePreview season={a.gooseSeason === 'auto' ? seasonNow() : a.gooseSeason} />
+            <BrucePreview season={a.gooseSeason === 'auto' ? seasonNow() : a.gooseSeason} />
           </div>
           <p className="fx-muted" style={{ margin: 0, fontSize: 12.5 }}>
-            The goose waddles across your screen for about a minute and a half, honks, drops the odd feather, boops your mouse pointer and leaves notes. Clicks go straight through it to your apps. Click the goose three times, or choose Shoo the goose in the tray menu, to send it home. Other surprises are hidden around the app; every one you find earns a badge in the Trophy case.
+            Bruce the Goose lives in this window. He hides behind cards and buttons, and now and then peeks out to see what you are up to, only ever into empty space, and ducks the moment you scroll. Click him and he ducks and hides somewhere else; catch him three times and he gives up. He never leaves FBRX and stays hidden while you present. Other surprises are hidden around the app; every one you find earns a badge in the Trophy case.
           </p>
         </div>
       </Card>}
@@ -687,7 +687,7 @@ function PresentingSettings() {
           <Toggle checked={p.hideNotifications} disabled={L('hideNotifications')} onChange={(v) => void patch({ presenter: { hideNotifications: v } })} label="Keep notifications quiet (urgent ones only say that something needs a look)" />
           <Toggle checked={p.maskClipboard} disabled={L('maskClipboard')} onChange={(v) => void patch({ presenter: { maskClipboard: v } })} label="Show clipboard history as dots" />
           <Toggle checked={p.blurPrivate} disabled={L('blurPrivate')} onChange={(v) => void patch({ presenter: { blurPrivate: v } })} label="Blur chat history, alerts, credentials and help desk tickets" />
-          <p className="fx-muted" style={{ margin: 0, fontSize: 12.5 }}>The Silly Goose stays home and approvals wait quietly in the top bar.</p>
+          <p className="fx-muted" style={{ margin: 0, fontSize: 12.5 }}>Bruce the Goose stays hidden and approvals wait quietly in the top bar.</p>
         </div>
       </Card>
       <Card title="Good to know">
@@ -1258,7 +1258,7 @@ function License() {
       void patch({ appearance: { funUnlocked: true, easterEggs: true } }).then(() =>
         toast.custom({
           title: '418 I\'m a teapot',
-          body: 'Short and stout, and now unlocked: easter eggs, the Silly Goose and the Trophy case. Have fun.',
+          body: 'Short and stout, and now unlocked: easter eggs, Bruce the Goose and the Trophy case. Have fun.',
           icon: <TrophyBadge id="teapot" found size={36} />,
           action: { label: 'Open the trophy case', onClick: () => navigate('settings/trophies') },
         }),
@@ -1441,7 +1441,7 @@ function Logs() {
             ['Started', formatDate(status.data?.startedAt)],
           ]}
         />
-        <p className="fx-muted" style={{ margin: '10px 0 0', fontSize: 12.5, fontStyle: 'italic' }}>Woven from thread, coffee and one very determined goose.</p>
+        <p className="fx-muted" style={{ margin: '10px 0 0', fontSize: 12.5, fontStyle: 'italic' }}>Woven from thread, coffee and one very determined goose named Bruce.</p>
       </Card>
       {ultra && <LogTail />}
     </>

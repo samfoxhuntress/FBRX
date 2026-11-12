@@ -204,11 +204,11 @@ export const SettingsSchema = z.object({
     reduceMotion: z.boolean(),
     splash: z.boolean(),
     splashSound: z.boolean(),
-    /** Easter eggs, jokes and the Silly Goose. An organization can turn them off. */
+    /** Easter eggs, jokes and Bruce the Goose. An organization can turn them off. */
     easterEggs: z.boolean(),
-    /** The Silly Goose drops by now and then on its own. */
+    /** Bruce the Goose peeks out from behind the FBRX window's cards and buttons now and then, on his own. */
     gooseVisits: z.boolean(),
-    /** What the goose wears: dressed for the season where you are (auto), or a season you pick. */
+    /** What Bruce wears: dressed for the season where you are (auto), or a season you pick. */
     gooseSeason: z.enum(['auto', 'winter', 'spring', 'summer', 'fall']),
     /** Fun extras stay hidden until someone enters 418 as a license key, Ultra or not (see funEnabled). */
     funUnlocked: z.boolean(),
@@ -300,7 +300,7 @@ export const SettingsSchema = z.object({
   }),
   /**
    * Presenter-safe mode, for when the screen is on a projector or shared in a meeting: notifications stay quiet,
-   * clipboard history is masked, private lists (chats, alerts, credentials, tickets) are blurred, and the goose stays home.
+   * clipboard history is masked, private lists (chats, alerts, credentials, tickets) are blurred, and Bruce stays hidden.
    */
   presenter: z.object({
     /** Turned on by hand (Settings, the tray, the top bar or its shortcut). */
@@ -639,7 +639,7 @@ export const DEFAULT_SETTINGS: Settings = {
     splash: true,
     splashSound: true,
     easterEggs: true,
-    gooseVisits: false,
+    gooseVisits: true,
     gooseSeason: 'auto',
     funUnlocked: false,
     effects: 'auto',

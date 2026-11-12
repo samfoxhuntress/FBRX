@@ -8,7 +8,8 @@ import { useConsoleSessions, useCore } from './hooks';
 import { playStartupSound, useAppearance } from './theme';
 import { AgentNameContext, AiContext, EmergencyStop } from './widgets';
 import { LocalAccountLock } from './account';
-import { GooseOverlay, summonGoose, unlockTrophy, useKonami } from './fun';
+import { peekBruce, seasonNow, unlockTrophy, useKonami } from './fun';
+import { Bruce } from './bruce';
 import { SnapOverlay } from './snap-overlay';
 import { TrophyBadge } from './trophies';
 import { DashboardPage } from './pages/dashboard';
@@ -117,7 +118,6 @@ export type Route =
   | 'spotlight'
   | 'clips'
   | 'goose'
-  | 'goose-overlay'
   | 'snap-overlay';
 
 /** This window shows one page on its own, beside the main window (opened with "Open in a new window"). */
@@ -234,7 +234,6 @@ export function App() {
       </>
     );
   if (route === 'clips') return <ClipPicker />;
-  if (route === 'goose-overlay') return <GooseOverlay />;
   if (route === 'snap-overlay') return <SnapOverlay />;
   return <MainApp route={route} settings={settings} />;
 }
@@ -340,7 +339,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       onEvent('fun.trophy', (t) =>
         toast.custom({
           title: t.golden ? 'Golden Goose unlocked!' : `Trophy unlocked: ${t.name}`,
-          body: t.golden ? 'You found every easter egg. From now on the goose wears a golden egg with a #1 ribbon.' : 'It is in your Trophy case (Settings → Trophy case).',
+          body: t.golden ? 'You found every easter egg. From now on Bruce peeks out with a golden egg and a #1 ribbon.' : 'It is in your Trophy case (Settings → Trophy case).',
           icon: <TrophyBadge id={t.id} found size={36} />,
           action: { label: 'See trophy case', onClick: () => navigate('settings/trophies') },
         }),
@@ -357,10 +356,10 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   useKonami(
     fun,
     useCallback(() => {
-      summonGoose();
+      // Just the trophy. The first time its own toast says so; after that, a nod.
+      if (trophies?.unlocked.konami) toast.info('Cheat code accepted', 'You already have the trophy for this one.');
       unlockTrophy('konami');
-      toast.success('Cheat code accepted', 'You get one goose.');
-    }, [toast]),
+    }, [toast, trophies]),
   );
   // Seven quick clicks on the logo: the loom spins.
   const [weaving, setWeaving] = useState(false);
@@ -378,11 +377,12 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       unlockTrophy('loom');
     }
   };
-  // "goose" (from Spotlight or a link) releases the goose and goes back to where you were.
+  // "goose" (from Spotlight or a link): back to where you were, and Bruce peeks out there once the page has settled.
   useEffect(() => {
     if (route !== 'goose') return;
-    summonGoose();
     window.history.back();
+    const t = setTimeout(() => peekBruce(), 700);
+    return () => clearTimeout(t);
   }, [route]);
 
   if (!settings || !status) {
@@ -736,6 +736,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
           <ErrorBoundary resetKey={route}>{page}</ErrorBoundary>
         </Suspense>
       </Shell>
+      {fun && s.appearance.easterEggs && !presenter?.active && !DIGGER && <Bruce route={route} visits={s.appearance.gooseVisits} golden={!!trophies?.unlocked.golden} season={s.appearance.gooseSeason === 'auto' ? seasonNow() : s.appearance.gooseSeason} />}
       <VaultStartPrompt />
       {hosts}
       {showTour && (

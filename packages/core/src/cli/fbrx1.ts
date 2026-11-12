@@ -296,7 +296,7 @@ const OPERATIONAL: Record<string, Node> = {
         },
       },
       alerts: { help: 'Alert actions', children: { 'mark-read': { help: 'Mark every alert read', run: async (_a, c) => ((l: any[]) => Promise.all(l.filter((a) => !a.read).map((a) => c.call('alerts.markRead', { id: a.id }))).then((r) => `Marked ${r.length} alert(s) read.`))(await c.call('alerts.inbox', { limit: 200 })) } } },
-      goose: { help: 'Easter-egg department', children: { release: { help: 'You know what this does', run: async (_a, c) => (funEnabled((await c.call('settings.get')).settings, (await c.call('license.status')).tier) ? 'HONK. (Releasing the goose is a desktop-app thing: use Spotlight and type "honk".)' : 'Fun extras are off.') } } },
+      goose: { help: 'Easter-egg department', children: { release: { help: 'Ask Bruce to come out', run: async (_a, c) => (funEnabled((await c.call('settings.get')).settings, (await c.call('license.status')).tier) ? 'HONK. (Bruce hides in the FBRX window: type "honk" in Spotlight and look behind the buttons.)' : 'Fun extras are off.') } } },
     },
   },
   ping: {
