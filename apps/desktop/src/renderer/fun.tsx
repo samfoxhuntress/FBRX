@@ -242,8 +242,8 @@ export function GooseSvg({ walking, honking, golden = false, flipped = false, fa
         </g>
       )}
       <g className="goose-neck">
-        <path d={front ? 'M30 46 Q23 33 27 21' : 'M30 46 Q22 30 26 14'} stroke="#f7f7f2" strokeWidth="10" strokeLinecap="round" fill="none" />
-        <path d={front ? 'M30 46 Q23 33 27 21' : 'M30 46 Q22 30 26 14'} stroke="#cfcfc6" strokeWidth="11.5" strokeLinecap="round" fill="none" opacity="0.35" />
+        <path d="M30 46 Q23 33 27 21" stroke="#f7f7f2" strokeWidth="10" strokeLinecap="round" fill="none" />
+        <path d="M30 46 Q23 33 27 21" stroke="#cfcfc6" strokeWidth="11.5" strokeLinecap="round" fill="none" opacity="0.35" />
         {(season === 'winter' || season === 'fall') && <Scarf season={season} />}
         {front ? (
           <g key="front" className="goose-head front">
@@ -285,27 +285,33 @@ export function GooseSvg({ walking, honking, golden = false, flipped = false, fa
           </g>
         ) : (
           <g key="side" className="goose-head side">
-            {/* His head in profile, looking off to the side. */}
-            <circle cx="27" cy="13" r="8.5" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="1.2" />
-            <path d="M19.6 8.6 Q27 3.8 35.6 9.4" stroke="#6b4a1f" strokeWidth="2.8" strokeLinecap="round" fill="none" />
-            <path d="M20.4 8 Q27 3.6 34.8 8.6" stroke="#8a6230" strokeWidth="0.8" strokeLinecap="round" fill="none" />
-            <circle cx="27.4" cy="3.6" r="3.2" fill="url(#goose-lens)" stroke="#b8862b" strokeWidth="1.5" />
-            <path d="M22.6 4.8 h1.6" stroke="#6b4a1f" strokeWidth="1.4" strokeLinecap="round" />
-            <circle cx="21.2" cy="5.4" r="3.5" fill="url(#goose-lens)" stroke="#c9952f" strokeWidth="1.6" />
-            <path d="M19.6 3.9 l1.3 -0.8" stroke="#ffffff" strokeWidth="1" strokeLinecap="round" />
-            <ellipse cx="25.6" cy="15.8" rx="1.9" ry="1.15" fill="#ff8fa3" opacity="0.42" />
+            {/* His head in profile, looking off to the side: drawn like his face (the same head, eyes, cheeks, goggles and
+                beak), just turned. */}
+            <circle cx="27" cy="13.6" r="10.2" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="1.2" />
+            {/* The goggles from the side: the strap round his head, the far lens peeking out behind the near one. */}
+            <path d="M18.2 9.6 Q26 1.4 37 10.6" stroke="#6b4a1f" strokeWidth="2.6" strokeLinecap="round" fill="none" />
+            <path d="M19 8.9 Q26 1.6 36.2 9.8" stroke="#8a6230" strokeWidth="0.7" strokeLinecap="round" fill="none" />
+            <circle cx="19.6" cy="6.3" r="2.5" fill="url(#goose-lens)" stroke="#b8862b" strokeWidth="1.2" />
+            <circle cx="23.6" cy="5" r="3.1" fill="url(#goose-lens)" stroke="#c9952f" strokeWidth="1.4" />
+            <path d="M22.1 3.6 l1.1 -0.7" stroke="#ffffff" strokeWidth="0.9" strokeLinecap="round" />
+            {/* His rosy cheek. */}
+            <ellipse cx="23.4" cy="17.2" rx="2.1" ry="1.25" fill="#ff8fa3" opacity="0.42" />
+            {/* His eye, the same as when he looks at you; a blink is the same little arc. */}
             {blinking ? (
-              <path className="goose-eyes closed" d="M21.8 11.9 Q23.4 13.2 25 11.9" stroke="#1b1b1b" strokeWidth="0.9" strokeLinecap="round" fill="none" />
+              <path className="goose-eyes closed" d="M19.6 12.9 Q21.5 14.4 23.4 12.9" stroke="#1b1b1b" strokeWidth="0.95" strokeLinecap="round" fill="none" />
             ) : (
               <g className="goose-eyes">
-                <ellipse cx="23.4" cy="11.6" rx="1.75" ry="2.1" fill="#1b1b1b" />
-                <circle cx="22.85" cy="10.8" r="0.62" fill="#ffffff" />
-                <circle cx="23.85" cy="12.5" r="0.3" fill="#ffffff" />
+                <ellipse cx="21.5" cy="12.5" rx="1.95" ry="2.45" fill="#1b1b1b" />
+                <circle cx="20.85" cy="11.5" r="0.78" fill="#ffffff" />
+                <circle cx="22.05" cy="13.5" r="0.36" fill="#ffffff" />
               </g>
             )}
+            {/* His beak from the side: short and round like the front one; a honk drops the lower half. */}
             <g className={honking ? 'goose-beak side open' : 'goose-beak side'}>
-              <path d="M19 12 L6 14 L19 16 Z" fill="#f08c00" />
-              <path className="goose-jaw" d="M19 15 L8 16.5 L19 18 Z" fill="#d97800" />
+              <path className="goose-mouth" d="M17.6 17.6 L11.2 18.2 L17.6 19.4 Z" fill="#6b2412" />
+              <path className="goose-jaw" d="M17.8 17.7 C15.2 18.3 12.9 18.5 11 18.3 C12.6 19.9 15.3 20.3 17.8 19.7 Z" fill="#d97800" />
+              <path d="M17.8 14.9 C14.7 14.5 11.7 15.3 10.2 17.2 C12.2 18.3 15 18.5 17.9 18.1 Z" fill="#f08c00" />
+              <circle cx="15.3" cy="16" r="0.42" fill="#a85a00" />
             </g>
           </g>
         )}

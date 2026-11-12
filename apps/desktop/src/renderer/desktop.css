@@ -2090,10 +2090,19 @@ body.spotlight-body {
 .goose-beak.front.open .goose-mouth {
   opacity: 1;
 }
-/* In profile the lower beak drops open. */
+/* In profile the lower half of his beak drops open, as it does from the front. */
+.goose-beak.side .goose-jaw {
+  transition: transform 0.08s ease-out;
+  transform-origin: 17.8px 18.4px;
+}
+.goose-beak.side .goose-mouth {
+  opacity: 0;
+}
 .goose-beak.side.open .goose-jaw {
-  transform: translateY(2.5px) rotate(-6deg);
-  transform-origin: 19px 16px;
+  transform: rotate(-14deg);
+}
+.goose-beak.side.open .goose-mouth {
+  opacity: 1;
 }
 /* Turning his head: a quick swing about its middle. */
 .goose-head {
