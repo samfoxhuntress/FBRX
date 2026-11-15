@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { randomBytes } from 'node:crypto';
 import {
   APP_IDS,
+  DIGGER_ONLY_TOOLS,
   FBRX_APPS,
   LICENSE_FILE_NAME,
   decodeLicenseUnverified,
@@ -1289,8 +1290,9 @@ export class Kernel {
           ...knowledgeTools({ kb: this.knowledge, doctor: () => this.doctor(), fix: (id) => this.applyFix(id) }),
           ...fbrxTools({ status: () => this.status(), recentAudit: (n) => this.audit.query({ limit: n }) }),
           ...workspaceTools(this.workspace),
-          ...deviceConsoleTools(this.consoles),
-          ...netEnvTools(this.netenv, () => this.blackHoleOnly('Network environments')),
+          // Device consoles and network environments are FBRX Digger's (2.5.0): only its Fabrix has their tools.
+          ...(this.digger ? deviceConsoleTools(this.consoles) : []),
+          ...(this.digger ? netEnvTools(this.netenv, () => this.blackHoleOnly('Network environments')) : []),
           ...calendarTools(this.calendar, () => this.workspace.listProjects()),
           ...shieldTools(this.protection, this.shield),
           ...meshTools(this.assist, () => {
@@ -1299,7 +1301,9 @@ export class Kernel {
             return a.agentMayConsult && a.request !== 'off' ? null : 'Mesh Assist does not let the agent consult other computers';
           }),
           ...helpdeskTools(this.helpdesk, () => (this.fleet.enrolled ? null : 'This computer is not part of an organization, so there is no help desk to send to')),
-          ...pcTools({ monitor: this.monitor, net: this.net, networkTools: () => this.networkTools(), alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined), hasTool: (n) => this.registry.get(n) != null }),
+          ...pcTools({ monitor: this.monitor, net: this.net, networkTools: () => this.networkTools(), alerts: this.alerts, virustotalKey: () => (this.vault.isUnlocked ? this.vault.get('VIRUSTOTAL_API_KEY') : undefined), hasTool: (n) => this.registry.get(n) != null }).filter(
+            (t) => this.digger || !DIGGER_ONLY_TOOLS.includes(t.name),
+          ),
           ...createTools({
             output: this.output,
             renderer: () => this.platform.renderer ?? null,
@@ -2190,7 +2194,9 @@ export class Kernel {
 
   /** Every network tool, whatever the edition: on Endpoint Ultra, and always in FBRX Digger. */
   networkTools(): boolean {
-    return !this.ultraOnly('Network tools');
+    // From 2.5.0 the advanced network tools are FBRX Digger's (with Endpoint Ultra); FBRX Endpoint keeps the everyday
+    // ones.
+    return this.digger && !this.ultraOnly('Network tools');
   }
 
   /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Essentials or Pro), or null. */

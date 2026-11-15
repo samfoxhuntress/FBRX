@@ -26,6 +26,24 @@ export const DIGGER_PAGES = ['network', 'settings', 'agent'] as const;
 
 /** Digger's one AI: FBRX Endpoint's, on the same computer, found while Endpoint runs. */
 export const DIGGER_AI_PROVIDER: ProviderConfig = { id: 'fbrx-endpoint', type: 'fbrx-endpoint', name: 'FBRX Endpoint', enabled: true, cloud: false };
+/**
+ * From 2.5.0 the advanced network tools are FBRX Digger's alone: these Network Center tabs (FBRX Endpoint's
+ * Network Center keeps the overview with the full network check, speed, Wi-Fi, Bluetooth and printers, and hands the
+ * rest to Digger), and these AI tools, which only Digger's Fabrix has.
+ */
+export const DIGGER_ONLY_TABS = ['trace', 'devices', 'tools', 'adapters', 'environments', 'consoles'] as const;
+export const DIGGER_ONLY_TOOLS: readonly string[] = [
+  'net.scan_lan',
+  'device_console.sessions',
+  'device_console.read',
+  'device_console.send',
+  'network_env.overview',
+  'network_env.clients',
+  'network_env.device_stats',
+  'network_env.restart_device',
+  'network_env.guest_codes',
+];
+
 /** The settings tabs that apply to Digger. */
 export const DIGGER_SETTINGS = ['general', 'appearance', 'updates', 'logs'] as const;
 

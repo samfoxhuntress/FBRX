@@ -185,3 +185,26 @@ describe('the FBRX apps’ own data, out of the AI’s reach', () => {
     expect(checkPath(join(c.apps, 'Other app', 'file.txt'), 'write', opts).ok).toBe(true);
   });
 });
+
+describe('the advanced network tools are FBRX Digger’s (2.5.0)', () => {
+  it('leaves them out of FBRX Endpoint’s Fabrix, which says where they are, and keeps the everyday ones', async () => {
+    const endpoint = await makeKernel();
+    const digger = await makeKernel({ platform: { flavor: 'digger' } });
+    try {
+      const has = (k: typeof endpoint.kernel, n: string) => !!k.registry.get(n);
+      for (const n of ['net.scan_lan', 'device_console.send', 'network_env.overview']) {
+        expect(has(endpoint.kernel, n)).toBe(false);
+        expect(has(digger.kernel, n)).toBe(true);
+      }
+      for (const n of ['net.diagnose', 'net.ping', 'net.port_check', 'net.traceroute', 'net.speed_test']) expect(has(endpoint.kernel, n)).toBe(true);
+      const r = await endpoint.kernel.gate.invoke('net.scan_lan', {}, { origin: 'agent', actor: 'agent:test' });
+      expect(r.ok).toBe(false);
+      expect(r.output).toMatch(/is in FBRX Digger/);
+      expect(endpoint.kernel.networkTools()).toBe(false);
+      expect(digger.kernel.networkTools()).toBe(true);
+    } finally {
+      await endpoint.cleanup();
+      await digger.cleanup();
+    }
+  });
+});

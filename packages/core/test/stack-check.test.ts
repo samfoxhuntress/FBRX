@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DIGGER_ONLY_TOOLS } from '@fbrx/shared';
 import type { PingResult } from '@fbrx/shared';
 import { stackReport, stackText, type StackFacts } from '../src/network/stack-check';
 import { TOOLKIT_LIBRARY } from '../src/ai/toolkit-library';
@@ -126,7 +127,8 @@ describe('the full network check', () => {
     const { kernel, cleanup } = await makeKernel();
     try {
       expect(kernel.registry.get('net.diagnose')).toBeTruthy();
-      const real = new Set([...kernel.registry.list().map((t) => t.name), ...TOOLKIT_LIBRARY.map((a) => a.tool), 'server.network_check']);
+      // FBRX Digger's tools (2.5.0) are real too; in FBRX Endpoint the check leaves them out (it names only what is here).
+      const real = new Set([...kernel.registry.list().map((t) => t.name), ...TOOLKIT_LIBRARY.map((a) => a.tool), 'server.network_check', ...DIGGER_ONLY_TOOLS]);
       const named = new Set<string>();
       const variants: Array<(x: StackFacts) => void> = [
         (x) => (x.interfaces[0]!.up = false),

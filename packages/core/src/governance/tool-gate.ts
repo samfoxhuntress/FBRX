@@ -1,4 +1,4 @@
-import { cleanToolText, newId, type GuardianFinding, type ToolInvokeResult } from '@fbrx/shared';
+import { DIGGER_ONLY_TOOLS, cleanToolText, newId, type GuardianFinding, type ToolInvokeResult } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { AuditLog } from '../audit/audit-log';
 import type { Logger } from '../logger';
@@ -64,7 +64,11 @@ export class ToolGate {
       return { ok: false, status: 'denied', output: `Denied: ${reason}`, error: reason, durationMs: Date.now() - started, findings, callId };
     };
 
-    if (!tool) return deny(`Unknown tool "${name}"`);
+    if (!tool) {
+      // FBRX Endpoint asked for one of FBRX Digger's tools (2.5.0): say where it is, so Fabrix can say it too.
+      if (DIGGER_ONLY_TOOLS.includes(name)) return deny(`${name} is in FBRX Digger, the app with the advanced network tools (it comes with Endpoint Ultra). Tell the person to open FBRX Digger from Network Center → Digger, and use the everyday network tools here meanwhile (net.diagnose, net.ping, net.port_check, net.traceroute).`);
+      return deny(`Unknown tool "${name}"`);
+    }
     const blocked = ctx.origin === 'agent' ? this.d.agentToolsBlocked?.() : null;
     if (blocked) return deny(blocked);
     if (tool.feature && !this.d.license.has(tool.feature)) return deny(`Tool requires the "${tool.feature}" license feature`);

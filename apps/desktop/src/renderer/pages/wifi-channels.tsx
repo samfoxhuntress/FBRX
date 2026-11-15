@@ -183,7 +183,7 @@ export function WifiChannelPlanner() {
           </div>
         </div>
       ) : (
-        <Callout tone="info">Endpoint Ultra adds the channel width to set, DFS channels, how busy each channel has been, and every access point with its signal.</Callout>
+        <Callout tone="info">FBRX Digger (with Endpoint Ultra) adds the channel width to set, DFS channels, how busy each channel has been, and every access point with its signal.</Callout>
       )}
     </Card>
   );

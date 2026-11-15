@@ -8,7 +8,7 @@ import { DIGGER, IS_WINDOWS, navigate, routeArg } from '../app';
 import { AiContext, AskButton, askAgent } from '../widgets';
 import { ConnectDialog, DeviceConsolesPanel, consoleRoute, type ConnectTarget } from '../consoles';
 import { Speedometer, speedFraction } from '../speedometer';
-import { commandSearchUrl, matchDeviceProfile } from '@fbrx/shared';
+import { DIGGER_ONLY_TABS, commandSearchUrl, matchDeviceProfile } from '@fbrx/shared';
 import { EditionHint } from '../edition';
 import { Environments } from './network-environments';
 import { WifiChannelPlanner } from './wifi-channels';
@@ -914,8 +914,9 @@ export function NetworkPage({ advanced, everything }: { advanced: boolean; every
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
-  // Endpoint Essentials and Pro keep the everyday tabs; Ultra adds the IT ones, Black Hole Edition the network
-  // environments (network controllers).
+  // FBRX Endpoint keeps the everyday tabs; from 2.5.0 the IT ones (DIGGER_ONLY_TABS) are FBRX Digger's, which comes
+  // with Ultra, and Endpoint's Digger tab opens it. In Digger, network environments (network controllers) need Black
+  // Hole Edition.
   const all: Array<{ id: Tab; label: ReactNode; need?: 'ultra' | 'blackhole' }> = [
     { id: 'overview', label: 'Overview' },
     { id: 'trace', label: 'Ping & trace', need: 'ultra' },
@@ -933,13 +934,18 @@ export function NetworkPage({ advanced, everything }: { advanced: boolean; every
     // Network environments come last. FBRX Digger has every tab, so it marks none of them with an edition.
     { id: 'environments', label: DIGGER ? 'Environments' : advancedLabel('Environments', true), need: 'blackhole' },
   ];
-  const tabs = all.filter((t) => !t.need || (t.need === 'ultra' ? advanced : everything)).map(({ need: _n, ...t }) => t);
-  const shown = tabs.some((t) => t.id === tab) ? tab : 'overview';
+  const tabs = all
+    .filter((t) => DIGGER || !(DIGGER_ONLY_TABS as readonly string[]).includes(t.id))
+    .filter((t) => !t.need || (t.need === 'ultra' ? advanced : everything))
+    .map(({ need: _n, ...t }) => t);
+  // A link to a tab that moved to Digger (network/devices…) opens Endpoint's Digger tab.
+  const shown = tabs.some((t) => t.id === tab) ? tab : !DIGGER && (DIGGER_ONLY_TABS as readonly string[]).includes(tab) ? 'digger' : 'overview';
   return (
-    <Page title="Network Center" description={advanced ? 'See how this PC connects, what else is on your network, and what is slowing things down.' : 'See how this computer connects and what is slowing things down.'}>
+    <Page title="Network Center" description={DIGGER ? 'See how this PC connects, what else is on your network, and what is slowing things down.' : 'See how this computer connects and what is slowing things down.'}>
       <Tabs tabs={tabs} active={shown} onChange={setTab} />
-      {!advanced && shown === 'overview' && <EditionHint>Network scans and device consoles come with Endpoint Ultra.</EditionHint>}
-      {advanced && !everything && shown === 'overview' && <EditionHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole Edition, through your organization’s FBRX Command.</EditionHint>}
+      {!DIGGER && !advanced && shown === 'overview' && <EditionHint>Network scans, ping and trace, device consoles, network environments and the other IT tools are in FBRX Digger, which comes with Endpoint Ultra: see the Digger tab.</EditionHint>}
+      {!DIGGER && advanced && shown === 'overview' && <p className="fx-muted" style={{ margin: '0 0 12px' }}>Network scans, ping and trace, device consoles, network environments and the other IT tools are in FBRX Digger: see the Digger tab.</p>}
+      {DIGGER && advanced && !everything && shown === 'overview' && <EditionHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole Edition, through your organization’s FBRX Command.</EditionHint>}
       {shown === 'overview' && <Overview />}
       {shown === 'consoles' && <DeviceConsolesPanel selected={consoleId} onSelect={setConsoleId} />}
       {shown === 'digger' && <AppHandoffCard page="network/digger" />}

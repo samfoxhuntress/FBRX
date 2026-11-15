@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DIGGER_ONLY_TOOLS } from '@fbrx/shared';
 import { EVERYDAY_TASKS } from '../src/ai/eval/everyday-tasks';
 import { STARTER_SKILLS } from '../src/ai/skills';
 import { TOOLKIT_LIBRARY } from '../src/ai/toolkit-library';
@@ -28,11 +29,12 @@ describe('everyday tasks', () => {
       expect(misses).toEqual([]);
       // Every tool the list names exists (on Windows all of them; elsewhere all but the Windows-only ones).
       const windowsOnly = ['pc.security_status', 'pc.event_errors', 'pc.pending_updates', 'pc.run_fix'];
-      const unknown = EVERYDAY_TASKS.flatMap((t) => t.tools).filter((t) => !exists.has(t) && !windowsOnly.includes(t));
+      // FBRX Digger's tools (2.5.0) are real ones too, in Digger.
+      const unknown = EVERYDAY_TASKS.flatMap((t) => t.tools).filter((t) => !exists.has(t) && !windowsOnly.includes(t) && !DIGGER_ONLY_TOOLS.includes(t));
       expect(unknown).toEqual([]);
       // Every tool a starter skill names is a real one.
       const named = STARTER_SKILLS.flatMap((s) => s.steps.join(' ').match(/\b(?:[a-z]+_)?[a-z]+\.[a-z_]+\b/g) ?? []).filter((t) => /^(net|pc|kit|server|shield|system|alerts|fbrx|calendar|workspace|skills|memory)\./.test(t));
-      expect([...new Set(named)].filter((t) => !exists.has(t) && !windowsOnly.includes(t) && t !== 'server.network_check' && !TOOLKIT_LIBRARY.some((a) => a.tool === t))).toEqual([]);
+      expect([...new Set(named)].filter((t) => !exists.has(t) && !windowsOnly.includes(t) && !DIGGER_ONLY_TOOLS.includes(t) && t !== 'server.network_check' && !TOOLKIT_LIBRARY.some((a) => a.tool === t))).toEqual([]);
     } finally {
       await cleanup();
     }

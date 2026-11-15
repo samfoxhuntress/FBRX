@@ -121,7 +121,7 @@ describe('device console', () => {
   it('pins the SSH host key, logs in, types commands and lets the agent read and send', async () => {
     const key = hostKey();
     const dev = await sshDevice(key.private);
-    const { kernel, cleanup } = await makeKernel();
+    const { kernel, cleanup } = await makeKernel({ platform: { flavor: 'digger' } });
     try {
       const data: string[] = [];
       kernel.events.on('console.data', (e) => data.push(e.data));

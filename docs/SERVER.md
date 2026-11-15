@@ -639,12 +639,12 @@ are offered there. *Open* shows the console inside FBRX, in a browser of its own
 
 **Remote desktop.** An FBRX Server (a saved server on port 9443) opens as a remote desktop: its console, with the
 dashboard, the roles and every virtual machine's screen, and **Terminal**, a command line on the server over SSH under
-the console (the host key is confirmed the first time, a password can be kept encrypted in the vault, and the session
-is also in Terminal → Device consoles, with the FBRX Server guide). **Full screen** fills the screen with it, and **In a
-window of its own** gives the server a window beside FBRX. Away from home, connect [FBRX VPN](VPN.md) first: the bar
-shows *FBRX VPN* when the server is reached through your gate, and a server that does not answer offers to connect it.
-When the server is the gate itself, its console, SSH and FBRX Mesh answer VPN devices while the gate's VPN has full
-access (the default). The server has no graphical desktop of its own yet; the console is its screen.
+the console (the host key is confirmed the first time, and a password can be kept encrypted in the vault). **Full
+screen** fills the screen with it, and **In a window of its own** gives the server a window beside FBRX. Away from home,
+connect [FBRX VPN](VPN.md) first: the bar shows *FBRX VPN* when the server is reached through your gate, and a server
+that does not answer offers to connect it. When the server is the gate itself, its console, SSH and FBRX Mesh answer VPN
+devices while the gate's VPN has full access (the default). The server has no graphical desktop of its own yet; the
+console is its screen.
 
 **Let Fabrix look.** On an FBRX Server in *Your servers*, **Let Fabrix look** lets Fabrix check the network through it
 when you ask it to troubleshoot: FBRX Gate (its internet side: link, address and router; your networks, DHCP and DNS;

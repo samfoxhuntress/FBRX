@@ -80,14 +80,15 @@ export function FbrxAppsSettings() {
 /** What FBRX Digger adds, for its tab in the Endpoint's Network Center. */
 const DIGGER_ADDS = [
   'Device scans: ping sweep, ARP, mDNS, UPnP and port fingerprints name every PC, phone, printer and camera; compare two scans to see what joined and what left',
+  'Ping and trace route, DNS comparison and port checks, network adapter settings',
   'Consoles: SSH and Telnet to routers, switches and servers, with host keys pinned',
   'Remote desktop and screen sharing (RDP and VNC) from a scan',
   'The Wi-Fi channel planner with every access point, DFS channels and the width to set',
-  'Network environments: your network controller’s sites, devices and clients',
+  'Network environments (Black Hole Edition): your network controller’s sites, devices and clients',
 ];
 
 /** A page another app has taken: what that app does, and Open, Get or the edition it needs. */
-export function AppHandoffCard({ page }: { page: string }) {
+export function AppHandoffCard({ page, note }: { page: string; note?: string }) {
   const { data } = useApps();
   const { data: lic } = useCore('license.status', undefined, ['license.changed']);
   const installed = (data ?? []).filter((a) => a.installed && !a.self).map((a) => a.id);
@@ -101,7 +102,8 @@ export function AppHandoffCard({ page }: { page: string }) {
         <div className="app-handoff-text">
           <h3>{app.name}</h3>
           <p className="fx-muted">
-            {app.id === 'digger' ? 'The Network Center on its own, with every network tool. It runs beside FBRX Endpoint, asks Fabrix when you want a hand, and keeps working without it.' : app.what}
+            {note ? `${note} ` : ''}
+            {app.id === 'digger' ? 'The Network Center on its own, with every network tool. It runs beside FBRX Endpoint, asks Fabrix when you want a hand, and keeps working while Endpoint is closed.' : app.what}
           </p>
           {app.id === 'digger' && (
             <ul className="app-handoff-list">
@@ -113,7 +115,11 @@ export function AppHandoffCard({ page }: { page: string }) {
             </ul>
           )}
           <p className="fx-muted" style={{ fontSize: 12.5 }}>
-            {h.action === 'open' ? `${app.name} ${app.version ?? ''} is installed on this computer.` : h.action === 'get' ? `Included with your edition. ${app.name} installs beside FBRX Endpoint; this page keeps the everyday checks.` : `${app.name} comes with ${TIER_SHORT[app.edition]}. This page keeps the everyday checks: the full network check, Wi-Fi and speed.`}
+            {h.action === 'open'
+              ? `${app.name} ${app.version ?? ''} is installed on this computer.`
+              : h.action === 'get'
+                ? `Included with your edition. ${app.name} installs beside FBRX Endpoint${note ? '.' : '; the Network Center keeps the everyday checks.'}`
+                : `${app.name} comes with ${TIER_SHORT[app.edition]}.${note ? '' : ' The Network Center keeps the everyday checks: the full network check, Wi-Fi and speed.'}`}
           </p>
           <AppAction app={app} />
         </div>

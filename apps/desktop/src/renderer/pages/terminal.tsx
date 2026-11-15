@@ -8,7 +8,7 @@ import { AskButton, askAgent } from '../widgets';
 import { COMMAND_GROUPS, type LibraryCommand } from '../command-library';
 import { addToMacros } from '../macro-add';
 import { menuFor } from '../context-menu';
-import { DeviceConsolesPanel } from '../consoles';
+import { AppHandoffCard } from '../apps';
 import { peekBruce, unlockTrophy } from '../fun';
 import { Fbrx1Panel } from '../fbrx1';
 import { useSlashMenu } from '../slash-menu';
@@ -374,7 +374,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
             ? 'FBRX/1 manages FBRX itself, like the command line of a switch or firewall: show, request, configure and commit.'
             : tab === 'code'
               ? 'Write code with Fabrix beside you. Sandboxed: JavaScript runs with no network or file access, PowerShell and batch only in Windows Sandbox, everything else is explained, not run.'
-            : 'Command lines of switches, firewalls, access points and servers, over SSH or Telnet, with the maker\'s guide alongside.'
+            : 'Command lines of switches, firewalls, access points and servers are in FBRX Digger from 2.5.0.'
       }
       actions={
         bridge.popOut && !POPOUT ? (
@@ -404,13 +404,8 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
           <CodeLabPanel />
         </Suspense>
       ) : tab === 'consoles' ? (
-        <DeviceConsolesPanel
-          selected={consoleId}
-          onSelect={(id) => {
-            setConsoleId(id);
-            if (id && routeArg() !== `console/${id}`) history_replace(`terminal/console/${id}`);
-          }}
-        />
+        // From 2.5.0 device consoles (SSH, Telnet) and remote desktop are FBRX Digger's: open it or get it.
+        <AppHandoffCard page="network/digger" note="Device consoles (SSH and Telnet), remote desktop and screen sharing are in FBRX Digger." />
       ) : (
         <div className="term-layout">
           <Card

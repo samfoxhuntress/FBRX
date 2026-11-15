@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROVIDERS, CORE_PRINCIPLES, SOUL_CORE, PERSONALITY_LIMITS, PERSONA_END, principleProblem, personalityCommandIn, personalityCommands, personaOf, personalityProblems, personalitySection, personalitySections, withPersonalitySection, type AgentEvent, type PersonaInfo, type PersonalityStatus } from '@fbrx/shared';
+import { DIGGER_ONLY_TOOLS, DEFAULT_PROVIDERS, CORE_PRINCIPLES, SOUL_CORE, PERSONALITY_LIMITS, PERSONA_END, principleProblem, personalityCommandIn, personalityCommands, personaOf, personalityProblems, personalitySection, personalitySections, withPersonalitySection, type AgentEvent, type PersonaInfo, type PersonalityStatus } from '@fbrx/shared';
 import { DEFAULT_PERSONALITY } from '../src/ai/personality';
 import { PERSONAS, withPersona } from '../src/ai/personas';
 import { makeKernel, USER, waitFor } from './helpers';
@@ -39,7 +39,8 @@ describe('the default personality', () => {
       const kits = kernel.toolkit.list().map((a) => a.tool);
       // Some tools are there only on some systems (pc.security_status and its kind): they are in FBRX all the same.
       const everywhere = readFileSync(join(__dirname, '../src/tools/builtin/command-center-tools.ts'), 'utf8').match(/name: '[a-z_.]+'/g)!.map((m) => m.slice(7, -1));
-      const known = new Set([...kernel.registry.list().map((t) => t.name), ...kits, ...everywhere]);
+      // FBRX Digger's tools (2.5.0) are FBRX's too: the personality names them for Digger's Fabrix.
+      const known = new Set([...kernel.registry.list().map((t) => t.name), ...kits, ...everywhere, ...DIGGER_ONLY_TOOLS]);
       const named = [...new Set(DEFAULT_PERSONALITY.match(/\b[a-z_]+\.[a-z_]+\b/g) ?? [])].filter((n) => !/^(personality\.md|fbrx\.|[a-z]+\.(md|html))$/.test(n) || known.has(n));
       const missing = named.filter((n) => !known.has(n) && n !== 'personality.md');
       expect(missing).toEqual([]);

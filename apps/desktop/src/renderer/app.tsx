@@ -591,12 +591,12 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   ownWindows = POPOUT ? {} : { terminal: ultra && s.windows.terminal, agent: s.windows.agent };
 
   const page = (() => {
-    // FBRX Digger: its own pages, every network tool whatever the edition, and the chat while FBRX Endpoint's AI is
-    // there to answer it; anything else opens the Network Center.
+    // FBRX Digger (with Endpoint Ultra): its own pages, every network tool (network environments with Black Hole
+    // Edition), and the chat while FBRX Endpoint's AI is there to answer it; anything else opens the Network Center.
     if (DIGGER) {
       if (route === 'settings') return <SettingsPage onRerunSetup={() => setForceOnboarding(true)} />;
       if (route === 'agent' && diggerAi) return <AgentPage agentName={agentName} />;
-      return <NetworkPage advanced everything />;
+      return <NetworkPage advanced everything={blackhole} />;
     }
     // Essentials Home: the split-flap board and a few notes from FBRX (no dashboard).
     if (simple && route === 'home') return <EssentialsHome status={status} agentName={agentName} who={addressAs(s)} />;
@@ -645,7 +645,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       case 'lab':
         return ultra ? <LabPage /> : ultraOnly('The virtual lab', 'Test machines in Hyper-V or Windows Sandbox, with capacity gauges and one-click starts.');
       case 'network':
-        return <NetworkPage advanced={ultra || DIGGER} everything={blackhole || DIGGER} />;
+        return <NetworkPage advanced={ultra || DIGGER} everything={blackhole} />;
       case 'files':
         return <FilesPage />;
       case 'processes':
@@ -935,7 +935,8 @@ function TopBar({
       <PresenterPill status={presenter} />
       <UpdatePill />
       {status.aiHalt && <EmergencyStop compact />}
-      {openConsoles > 0 && route !== 'terminal' && !(DIGGER && routeArg()?.startsWith('consoles')) && (
+      {/* Device consoles are FBRX Digger's (2.5.0); FBRX Endpoint's own SSH sessions are in the FBRX Server page. */}
+      {DIGGER && openConsoles > 0 && !routeArg()?.startsWith('consoles') && (
         <button className="model-pill console-pill" onClick={() => navigate(DIGGER ? 'network/consoles' : 'terminal/console')} title="Device consoles that are connected">
           <span className="dot ok" aria-hidden />
           {openConsoles} console{openConsoles > 1 ? 's' : ''}

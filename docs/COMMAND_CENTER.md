@@ -73,7 +73,7 @@ saved goes away), up to what the computer may run. Prices are in US dollars, per
 | How you get it | Where every new computer starts | Bought on your FBRX account or with a license key, or through your organization's FBRX Command | The same | Only as an add-on in an organization's FBRX Command: for the people who run it and its FBRX Servers |
 | Pages | The AI on its own: Fabrix (the chat, with its memory and voice), AI models, Governance, the help desk (in an organization) and Settings. **Home** is the split-flap board and a few notes from FBRX: tips, the AI models, and what Pro and Ultra add (no dashboard) | Everything in Essentials, plus Dash, alerts, messages, notes, tasks, calendar, projects, snippets, storage, FBRX Shield, security, updates, Network Center, backup, files, clipboard (with Ctrl+Alt+Z history), Toolbox, How-tos (the Library), approvals, credentials and macros, in the branded sidebar sections | Everything in Pro | Everything in Ultra, plus the FBRX Server page |
 | How much the AI does on a task | **Thinking**: Quick, Everyday or Thorough (see *Thinking* below), and whether it shows what it is doing | The same, each part on its own (steps per task, longest answer, how much the built-in and Ollama models keep in mind), and unloading the local model when idle | The same, and the temperature | The same |
-| IT and expert tool sets | — | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, Network Center's ping and trace, device scans, tools and adapters, device consoles, the developer tools in the Toolbox, logs, update channels, the Local API | Everything in Ultra, plus **network environments** (your network controller) in Network Center and the whole Library: **The Lab** and the **FBRX command library** (FBRX/1, FBRX Server and FBRX Gate commands, also in Terminal → FBRX/1), always there |
+| IT and expert tool sets | — | — | Task Manager and Event Viewer, bug catcher, Copy & migrate, Terminal and code lab, virtual lab, FBRX/1, disks and partitions, Defender settings, FBRX Digger (Network Center's ping and trace, device scans, tools and adapters, device consoles), the developer tools in the Toolbox, logs, update channels, the Local API | Everything in Ultra, plus **network environments** (your network controller) in FBRX Digger and the whole Library: **The Lab** and the **FBRX command library** (FBRX/1, FBRX Server and FBRX Gate commands, also in Terminal → FBRX/1), always there |
 | Connect | AI models | AI models | Mesh & phone, FBRX VPN, AI coordination, connections, tools and plugins | The same |
 | Governance | What the AI may do on its own and what it asks first, the folders it may use, and the audit log | The same | The same | The same, and a second AI model reviewing risky calls |
 | Look | The themes (light, dark or follow the computer) and an accent color | The same | The same, plus textures (with a strength slider) and a sidebar icon color of your own | The same |
@@ -294,7 +294,7 @@ is edited in FBRX Command (Governance), not on the computer.
 | **Task Manager** | Three tabs. **Processes**: live list by CPU or memory with search, details and End task (core Windows processes are protected); *What is this?* on any process, and *What's using my PC?* / *Anything suspicious?* in the Fabrix panel beside it. **Performance**: live processor, memory and network graphs, every core, uptime, battery and temperature. **Event Viewer**: see below |
 | **Clipboard** | A copy-and-paste processor. Paste text (or type `/` for snippets), add steps — trim, remove blank or duplicate lines, sort, straighten quotes, strip HTML or terminal colors, change case (UPPER, Title, camelCase, snake_case…), find and replace (plain or regular expression), keep or drop matching lines, extract emails, web addresses, IP or MAC addresses and numbers, join or split, wrap each line, number lines, JSON format/minify, CSV or Excel cells → Markdown table, Base64 and URL encode/decode — and the result updates as you go. **Save as transform** keeps the steps; ▶ next to a saved transform runs it straight on the clipboard (copy, click, paste). Optional **History** keeps the last 50 things you copied while FBRX runs (see Security), and **Ctrl+Alt+Z** opens it anywhere (see Macros below) |
 | **Copy & migrate** | Copy, back up, mirror or move folders between drives, computers and network shares with **Robocopy** (Windows), **rsync** (Mac and Linux) or FBRX's own copier. Pick the folders, the tool and what to do (copy; new and changed only; mirror; move), skip clutter, retries, files at once, files and folders to leave out; the exact command is shown before it runs. **Preview** lists what would happen without changing anything; mirror and move ask first. Live output, counts and a summary, with *Explain this result*. Recipes: back up Documents, mirror to a NAS, copy a USB stick, move a project, and **Move my user folders to a new PC** (Desktop, Documents, Pictures, Music, Videos and Downloads, one after another). Guard rails refuse mirroring onto a drive root or a system or home folder, copying a folder into itself, and moving a whole drive or home folder away |
-| **Terminal** (Ultra) | **What if?** next to Run has Fabrix explain what the command in the box would do — what it reads, changes, deletes or downloads, whether it needs admin rights, and a verdict — without running it. Runs commands with streaming output in **PowerShell 7** when it is installed, otherwise **Windows PowerShell 5.1**, or Command Prompt (picker in the header). A **reference panel** puts ready-made commands (network, system, disks, processes, repair, security, power, printing; admin-only ones marked), your snippets, the code in your notes, and each project's snippets and notes one click away; ▶ runs one (commands that change something ask first). Save any command you ran as a snippet. **Ctrl+C** stops the command that is running (the newest, if several are), as in any terminal; with text selected it copies, and with nothing running it clears the line. Start a line with `?` to ask Fabrix for a command. Every command is in the audit log. The **Code** tab is the code lab (below), the **Device consoles** tab holds SSH and Telnet sessions (see Network Center), and **FBRX/1** is the management console for FBRX itself (below) |
+| **Terminal** (Ultra) | **What if?** next to Run has Fabrix explain what the command in the box would do — what it reads, changes, deletes or downloads, whether it needs admin rights, and a verdict — without running it. Runs commands with streaming output in **PowerShell 7** when it is installed, otherwise **Windows PowerShell 5.1**, or Command Prompt (picker in the header). A **reference panel** puts ready-made commands (network, system, disks, processes, repair, security, power, printing; admin-only ones marked), your snippets, the code in your notes, and each project's snippets and notes one click away; ▶ runs one (commands that change something ask first). Save any command you ran as a snippet. **Ctrl+C** stops the command that is running (the newest, if several are), as in any terminal; with text selected it copies, and with nothing running it clears the line. Start a line with `?` to ask Fabrix for a command. Every command is in the audit log. The **Code** tab is the code lab (below), the **Device consoles** tab opens FBRX Digger, where SSH and Telnet sessions are from 2.5.0, and **FBRX/1** is the management console for FBRX itself (below) |
 | **Toolbox** | Passwords, QR codes (guest Wi-Fi codes phones join by scanning, links, text), text tools, compare text, sizes and numbers (why a 1 TB drive shows 931 GB; decimal, hex, binary), decision maker, colors. Ultra: JSON, Base64, URL, hashes, UUIDs, timestamps, regex, JWT, subnet calculator, MAC vendor lookup, port reference (with risky ports flagged) and the command library. Every tool has *Try* examples, and the top row recommends common jobs — all offline |
 | **Library** | 61 short how-tos (Windows basics, files, Wi-Fi, security, speed, devices, troubleshooting) with buttons that open the right Windows setting or ask Fabrix. In Endpoint Black Hole Edition, **The Lab** adds power-user how-tos (install USBs, dual boot, a malware lab, device consoles, blue screen dumps, repairs, verifying downloads) and official download pages for Windows, Linux, security distributions and power tools, plus your computer maker's driver page. Safety goggles recommended (sold separately). **FBRX commands** (Black Hole Edition, always there) is the library of FBRX's own command lines: FBRX/1 on this computer (*Try it* opens FBRX/1 with the command typed in), FBRX Server and FBRX Gate (copy, then run in a device console), and how-tos such as copying settings to another computer or changing a gate without locking yourself out. Talking to the search like a switch (`show commands`, `enable`, `configure terminal`) opens it, and with fun extras on earns *Operator Mode* in any edition |
 
@@ -541,86 +541,25 @@ breaks and what to do first; open a layer to see what it found and the commands 
 copy. Name a site that will not load to check it too. A network that blocks pings is not taken for one that is down.
 It needs no AI, and in a chat Fabrix runs the same check (`net.diagnose`) before it fixes anything.
 
-Overview (this PC, router, internet latency and loss, public address, plain-language verdict), ping and
-**trace route with hop identification** (your router, other local routers / double NAT, your provider, the
-internet, the destination; names, makers and locations), **device discovery** (ping sweep, ARP, mDNS/Bonjour,
-UPnP, port fingerprints and MAC vendors identify PCs, phones, printers, TVs, cameras, smart-home devices and NAS),
-saved scans with comparison and CSV export, a **speedometer** speed test (download, upload, latency and jitter, with history), Wi-Fi (signal, channel, band) with
-the **channel planner**: every network around drawn over the channels it covers (yours in the accent color), how busy
-each channel is (closer and louder neighbors count for more; at 2.4 GHz, overlapping channels count too), the best
-channel for your network with the reason (at 2.4 GHz only 1, 6 or 11), and **Open router settings** to change it
-(Ultra: the channel width to set, DFS channels with their catch, how busy each channel has been since FBRX started, and
-every access point with its signal), Bluetooth devices with battery, printers (test page, queue, default, clear, restart spooler), DNS
-comparison, port checks and device consoles (Ultra). Ultra: adapter configuration (DHCP, static, secondary addresses).
+Overview (this PC, router, internet latency and loss, public address, plain-language verdict), a **speedometer**
+speed test (download, upload, latency and jitter, with history), Wi-Fi (signal, channel, band) with the **channel
+planner**: every network around drawn over the channels it covers (yours in the accent color), how busy each channel
+is (closer and louder neighbors count for more; at 2.4 GHz, overlapping channels count too), the best channel for your
+network with the reason (at 2.4 GHz only 1, 6 or 11), and **Open router settings** to change it; Bluetooth devices
+with battery; printers (test page, queue, default, clear, restart spooler).
+
+**The IT tools are in FBRX Digger** (from 2.5.0, with Ultra): ping and trace route with hop identification, device
+discovery with saved scans and their comparison, DNS comparison and port checks, adapter configuration, device
+consoles, remote desktop and screen sharing, network environments (Black Hole Edition), and the Wi-Fi planner's extras
+(the channel width to set, DFS channels, how busy each channel has been, every access point). The **Digger** tab opens
+Digger when it is installed, or gets it; Terminal → Device consoles does the same. In a chat, Fabrix keeps the
+everyday network tools (the full network check, ping, port checks, names and trace route); device scans, consoles and
+network environments are Digger's Fabrix's. See [DIGGER.md](DIGGER.md).
 
 Makers come from the **IEEE MAC address registry** that ships with FBRX OS (MA-L, MA-M and MA-S blocks, about 54,000
 entries, the most specific block wins; randomized phone and laptop addresses are recognized as such). *Update from
 the IEEE* in Toolbox → MAC vendor lookup downloads the current lists (falling back to the daily published JSON copy
 when the IEEE site refuses the download).
-
-### Network environments (Black Hole Edition): your UniFi console
-
-**Network Center → Environments** attaches the UniFi console that runs a school's or office's network (Dream Machine,
-Cloud Gateway, Cloud Key or UniFi OS Server with UniFi Network 9 or newer):
-
-1. In UniFi Network, **Settings → Control Plane → Integrations → Create API key**. Copy it; UniFi shows it once.
-2. In FBRX, **Attach a UniFi console**: the console's local address (for example `https://192.168.1.1`) and the key.
-3. **Test connection**. UniFi consoles make their own certificate, so FBRX shows its SHA-256 fingerprint; compare it
-   with your browser's certificate details for the same address and **Trust it**. From then on FBRX checks the
-   fingerprint before sending anything, and refuses the connection if the certificate changes.
-
-You then see every gateway, switch and access point (state, address, model, firmware and pending updates, clients per
-device), every client (name, address, MAC, Wi-Fi or wired, which access point or switch it is on, since when), and per
-device its uptime, CPU, memory and uplink traffic. **Restart** a device, and make **Guest Wi-Fi codes** (vouchers for a
-hotspot guest network) for visitors, substitutes or parent night. The key is kept in the vault; the agent can read the
-network (*which access points are offline? where is the Room 12 TV connected?*), and asks before it restarts anything
-or makes codes. Essentials and Pro do not show environments.
-
-### Remote desktop and screen sharing (Ultra)
-
-*New connection* (Terminal → Device consoles) and a scanned device with port 3389 or 5900 open offer **Remote
-desktop** (RDP) and **Screen sharing** (VNC) next to SSH and Telnet. FBRX opens this computer's own viewer with the
-address and user name filled in: Remote Desktop Connection on Windows, a remote desktop app or Screen Sharing on a
-Mac, FreeRDP, Remmina or a VNC viewer on Linux. The viewer asks for the password; FBRX keeps none. When no viewer is
-installed, FBRX says what to install. The connection is kept in Saved connections, where one click opens it again.
-
-### Device consoles (advanced)
-
-A device with SSH (22, or 4118 for WatchGuard) or Telnet (23) open gets a **Connect** button. The console opens in
-Terminal → Device consoles with a full terminal (colors, `--More--` paging, full-screen editors) and, next to it, the
-**device guide** for the maker: how to log in, the commands people use most (click to type one, ▶ to run it;
-commands that change or restart the device ask first), a button that turns paging off, the maker's official
-documentation and a search for more commands. Guides: **FBRX Server** (FBRX Virtual, its roles and libvirt) and
-**FBRX Gate & MiniDome** (picked by themselves when the server's name has fbrx in it), Ubiquiti UniFi / EdgeMAX, Sophos Firewall, Cisco IOS / IOS XE,
-Cisco Meraki (no CLI: dashboard pointers), Fortinet FortiGate, Palo Alto PAN-OS, Juniper Junos, HPE Aruba, MikroTik
-RouterOS, pfSense / OPNsense, TP-Link Omada / JetStream, NETGEAR, SonicWall, WatchGuard, Zyxel, Synology, QNAP,
-Raspberry Pi and generic Linux. *Web admin* opens the device's admin page; *Windows Terminal* opens the same SSH
-login outside FBRX.
-
-- **Saved connections:** every device you connect to is kept on the left and in the *Saved connections* view
-  (shown when no console is open): name, address, protocol, user, device guide, notes and when you last used it.
-  Edit one to name it and add notes, add one by hand, or untick *Keep in Saved connections* when connecting.
-  A key means its password is saved, so *Connect* logs in with one click. Removing a connection can forget its
-  password too. Passwords stay encrypted in the vault (Credentials); the list itself never holds them.
-- **Identity:** the device's SSH host key is saved the first time (you see its fingerprint) and a changed key is
-  refused with a warning until you confirm it.
-- **Logins:** user name and password (or keyboard-interactive), or your SSH keys in `~/.ssh` when the password is
-  empty. *Remember the password* stores it encrypted in the FBRX vault as an internal secret that plugins, the Local
-  API and the agent cannot read. Old firmware that only offers SHA-1 key exchange or CBC ciphers is retried
-  automatically with those allowed.
-- **Telnet** negotiates the window size and terminal type, fills in the user name and password at the first prompts,
-  and warns that it is unencrypted.
-- **Fabrix:** *Get help from Fabrix* and *Explain the screen* hand the console to the agent. With
-  `device_console.read` it reads what is on screen and with `device_console.send` it types one command at a time —
-  an *execute* tool, so each command waits for your approval with the exact text shown. It cannot open consoles or
-  see saved passwords.
-- Opening, typing into and reading consoles is reserved for the person at the computer (never the Local API, mesh
-  peers or remote commands); connections and disconnections are in the audit log.
-
-Device scans start from a chosen **network adapter**, and the subnet is filled in from it (limited to /22–/30, at most
-1022 addresses, so a scan takes about a minute). Endpoint Ultra lets you type a different subnet.
-
-A new device found by a scan raises the *Unknown device joined my network* alert when that rule is on.
 
 ## Presenter-safe mode
 
