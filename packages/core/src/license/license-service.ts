@@ -19,6 +19,29 @@ const TRIAL_KEY = 'edition.trial';
 export const SHARED_LICENSE_KEYS = ['license.managed', 'license.local', 'license.account', 'install.id', 'fleet.edition', 'fleet.deviceId', 'edition.chosen'] as const;
 export type SharedLicense = Partial<Record<(typeof SHARED_LICENSE_KEYS)[number], unknown>>;
 
+/**
+ * FBRX Endpoint's shared license as FBRX Digger may read it: text where text belongs, a real edition, an organization
+ * edition shaped like one. Anything else (a file damaged or edited by hand) is left out, so it counts as nothing bought.
+ */
+export function cleanSharedLicense(raw: unknown): SharedLicense {
+  const out: SharedLicense = {};
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
+  const r = raw as Record<string, unknown>;
+  for (const k of ['license.managed', 'license.local', 'license.account', 'install.id', 'fleet.deviceId'] as const) {
+    const v = r[k];
+    if (typeof v === 'string' && v.length > 0 && v.length <= 16_384) out[k] = v;
+  }
+  const chosen = typeof r['edition.chosen'] === 'string' ? parseTier(r['edition.chosen']) : null;
+  if (chosen) out['edition.chosen'] = chosen;
+  const ed = r['fleet.edition'];
+  if (ed && typeof ed === 'object' && !Array.isArray(ed)) {
+    const e = ed as Record<string, unknown>;
+    const tier = typeof e.tier === 'string' ? parseTier(e.tier) : null;
+    if (e.tier == null || tier) out['fleet.edition'] = { ...e, tier, audience: typeof e.audience === 'string' ? e.audience : undefined };
+  }
+  return out;
+}
+
 /** How long FBRX Digger trusts what it last read of FBRX Endpoint's license before reading it again. */
 const BORROWED_FOR_MS = 15_000;
 
@@ -89,7 +112,7 @@ export class LicenseService {
     this.cachedAt = Date.now();
     // FBRX Digger counts FBRX Endpoint's keys as Endpoint does (they are signed, and checked again here); anything
     // missing counts as nothing bought.
-    const borrowed = this.borrow ? (this.borrow() ?? {}) : null;
+    const borrowed = this.borrow ? cleanSharedLicense(this.borrow()) : null;
     const get = <T>(key: string): T | null => (borrowed ? (((borrowed as Record<string, unknown>)[key] as T | undefined) ?? null) : this.meta.get<T>(key));
     const major = parseSemver(this.appVersion)?.major ?? 1;
     const managed = get<string>('license.managed');

@@ -124,6 +124,11 @@ describe('the FBRX app family', () => {
       const file = join(c.os, SHARED_LICENSE_FILE);
       writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), 'license.account': sign('ultra', generateSigningKeyPair().privateKeyPem), 'edition.chosen': 'blackhole' }));
       expect(check()).toBe('essentials');
+      // A damaged file (numbers, lists and objects where text belongs) counts for nothing, without an error.
+      writeFileSync(file, JSON.stringify({ 'license.account': 42, 'install.id': ['x'], 'fleet.deviceId': {}, 'fleet.edition': { tier: 'gold' }, 'edition.chosen': 7 }));
+      expect(check()).toBe('essentials');
+      writeFileSync(file, '[1, 2]');
+      expect(check()).toBe('essentials');
       // Endpoint uninstalled (its program gone): its leftover license does not count.
       endpoint.kernel.license.applyAccount(sign('ultra'));
       os.shareLicense(endpoint.kernel.license.shared());
