@@ -23,6 +23,23 @@ Face; code and data are bundled with the app.
 
 No GPL component is included: the eSpeak NG phonemizer that other Kokoro front ends use is deliberately left out.
 
+# Bible texts
+
+Bundled with FBRX OS (`resources/scripture`, Brotli-compressed, one verse per line) for Fabrix's Bible verses. Each
+was built from the copies below, compared verse by verse where there were two, and its checksum is fixed in FBRX.
+
+| Text | Built from | License |
+| --- | --- | --- |
+| King James Version (66 books) | [aruljohn/Bible-kjv](https://github.com/aruljohn/Bible-kjv) and [pythonbible-kjv](https://pypi.org/project/pythonbible-kjv/) 0.0.2 | Public domain (in the United Kingdom the Crown holds rights in the KJV); MIT for both copies' packaging |
+| King James Version Apocrypha (1769 text, 14 books) | [scrollmapper/bible_databases](https://github.com/scrollmapper/bible_databases) KJVA and [eBible.org](https://ebible.org/) eng-kjv | Public domain (as the KJV) |
+| American Standard Version (1901) | scrollmapper/bible_databases ASV and [pythonbible-asv](https://pypi.org/project/pythonbible-asv/) 0.0.2 | Public domain |
+| World English Bible | eBible.org engwebp | Public domain |
+| Berean Standard Bible | eBible.org engbsb | Public domain |
+| Young's Literal Translation (1898) | scrollmapper/bible_databases YLT and [pythonbible-ylt](https://pypi.org/project/pythonbible-ylt/) 0.0.2 | Public domain |
+| Darby Translation (1890) | scrollmapper/bible_databases Darby and [pythonbible-dar](https://pypi.org/project/pythonbible-dar/) 0.0.2 | Public domain |
+
+How each was built (sources, checksums, counts) ships beside it as `<id>-build.json`.
+
 # Third-party components in Calendar
 
 | Component | Used for | License | Where |

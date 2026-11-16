@@ -1,0 +1,24 @@
+{
+  "translation": "King James Version",
+  "verses": 31102,
+  "books": 66,
+  "chapters": 1189,
+  "agree_word_for_word": 29862,
+  "differ_in_punctuation_or_case": 839,
+  "differ_in_spacing_or_ligature": 342,
+  "differ_in_spelling_or_words": 59,
+  "verses_mended_from_second_copy": 2,
+  "source_a": {
+    "name": "github.com/aruljohn/Bible-kjv",
+    "commit": "a9aa4e55afbb3e095f57e4b14cd1f22c5ee8d7c9",
+    "license": "MIT (packaging); text public domain",
+    "sha256": "9b7960368d6d16e1dafc5d2ae126b899101835a794a9df5e237a1c6bdccc2c82"
+  },
+  "source_b": {
+    "name": "pypi.org/project/pythonbible-kjv",
+    "version": "0.0.2",
+    "license": "MIT (packaging); text public domain",
+    "sha256": "85294b950464630d8e5cc303f05ba9a322b0e832f9f3c2cc9c82fe2e2aba19b5"
+  },
+  "output_sha256": "2a32063407a9b044b9e6722c777991c4b78bfe541535a074dd2311658c84610d"
+}

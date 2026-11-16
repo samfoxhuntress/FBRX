@@ -31,6 +31,10 @@ extraResources:
   - from: resources/provisioning
     to: provisioning
     filter: ["*.json"]
+  # Verified public-domain Bible texts for scripture.lookup (Brotli JSONL, with how each was built).
+  - from: resources/scripture
+    to: scripture
+    filter: ["*.jsonl.br", "*-build.json"]
 # Electron's fuses, switched in the app's own executable when it is packaged: what it refuses to do whoever starts it.
 electronFuses:
   # Kept on: the plugin worker and the MCP bridge other AI apps start are this executable in Node mode.

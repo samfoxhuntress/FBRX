@@ -1,5 +1,6 @@
 import type { ToolSpec } from '../tools/types';
 import { aboutOwnWork, requestWords } from './request-words';
+import { SCRIPTURE_REFERENCE } from '../scripture/scripture';
 
 /**
  * The tools a model on this computer (or on the local network) is given. Such a model reads every tool's definition
@@ -42,6 +43,8 @@ const GROUPS: Array<{ tools: RegExp; words: RegExp; fix?: true }> = [
   { tools: /^(mesh|helpdesk)\./, words: starts('mesh', 'other computer', 'another computer', 'help desk', 'helpdesk', 'ticket', 'it team', 'it support', 'admin') },
   { tools: /^skills\./, words: starts('skill', 'save this', 'save that', 'next time', 'same way', 'procedure', 'routine', 'what can you do', 'how you did') },
   { tools: /^toolkits?\./, words: starts('toolkit', 'tool kit', 'build', 'save this', 'save that', 'next time', 'shortcut', 'command', 'what can you do') },
+  // Bible verses: the words, or a book's name with a chapter after it ("John 3:16", "Ps 23").
+  { tools: /^scripture\./, words: new RegExp(`${starts('bible', 'scripture', 'verse', 'psalm', 'proverb', 'gospel', 'apocrypha', 'king james', 'kjv', 'testament', 'epistle', 'parable', 'beatitude').source}|${SCRIPTURE_REFERENCE.source}`, 'i') },
   { tools: /^personality\./, words: starts('personality', 'persona', 'how you talk', 'how you sound', 'how you answer', 'how you reply', 'talk like', 'speak like', 'call yourself', 'your name', 'your tone', 'from now on') },
   { tools: /^memory\./, words: starts('remember', 'forget', 'memory', 'earlier', 'last time', 'you said', 'we talked', 'told you') },
   { tools: /^fbrx\./, words: starts('fbrx', 'setting', 'edition', 'audit') },

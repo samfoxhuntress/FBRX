@@ -10,3 +10,4 @@ export * from './server-tools';
 export * from './folder-tools';
 export * from './knowledge-tools';
 export * from './fbrx-tools';
+export * from './scripture-tools';

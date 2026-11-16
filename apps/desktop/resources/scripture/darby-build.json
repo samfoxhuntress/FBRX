@@ -1,0 +1,33 @@
+{
+  "translation": "Darby Translation (1890)",
+  "verses": 31102,
+  "books": 66,
+  "chapters": 1189,
+  "license": "public domain",
+  "copies": [
+    {
+      "name": "github.com/scrollmapper/bible_databases formats/csv/Darby.csv",
+      "commit": "59b18c5af5845728c275d5b7178ad0d024172b1f",
+      "sha256": "5c5c723ecb1f475d5c73d6b50f5ad88209a0500e7e7bcbc1677cf812e00a4400"
+    },
+    {
+      "name": "pypi.org/project/pythonbible-dar",
+      "version": "0.0.2",
+      "sha256": "2f1124b344da39ff50044e6df05dee19a43ebdc163ce972375fb7d1c27a8def1"
+    }
+  ],
+  "cross_checked": true,
+  "comparison": {
+    "identical": 25889,
+    "punctuation or case": 732,
+    "spacing or ligature": 4365,
+    "spelling or words": 115,
+    "only_in_first_copy": 1,
+    "only_in_second_copy": 65
+  },
+  "verses_mended_from_second_copy": 3248,
+  "verses_mended_by_rule": 107,
+  "verses_with_markup": 0,
+  "verses_with_words_run_together": 1,
+  "output_sha256": "7cdd05f2805e201ad6e46c089d4ef273dc3a9d7a2c3ee105dcaac6f7579ba197"
+}

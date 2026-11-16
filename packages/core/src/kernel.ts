@@ -123,6 +123,8 @@ import { DirectoryClient } from './system/directory-client';
 import { readAccountsHere, runHere } from './system/directory-apply';
 import { OrgMesh } from './mesh/org-mesh';
 import { meshTools } from './tools/builtin/mesh-tools';
+import { scriptureTools } from './tools/builtin/scripture-tools';
+import { Scripture } from './scripture/scripture';
 import { AiCoordination } from './aicoord/aicoord';
 import { ConversationStore } from './ai/conversations';
 import { AttachmentStore } from './ai/attachments';
@@ -240,6 +242,8 @@ export class Kernel {
   /** The line in front of the built-in model: this computer's own requests first (mesh.assist.hostFirst). */
   readonly modelLine: ModelLine;
   readonly redactor = new Redactor();
+  /** Bible verses word for word, offline (the texts ship with FBRX OS). */
+  readonly scripture = new Scripture(() => (this.platform.resourcesDir ? join(this.platform.resourcesDir, 'scripture') : null));
   readonly limiter: RateLimiter;
   readonly license: LicenseService;
   readonly registry: ToolRegistry;
@@ -1320,6 +1324,8 @@ export class Kernel {
           ...passwordTools({ passwords: this.passwords, offerSave: (d) => this.events.emit('passwords.saveRequested', d) }),
           ...folderTools(this.folders),
           ...knowledgeTools({ kb: this.knowledge, doctor: () => this.doctor(), fix: (id) => this.applyFix(id) }),
+          // Bible verses from the texts shipped with FBRX OS (resources/scripture); hidden where they are not.
+          ...scriptureTools({ scripture: this.scripture }),
           ...fbrxTools({ status: () => this.status(), recentAudit: (n) => this.audit.query({ limit: n }) }),
           ...workspaceTools(this.workspace),
           // Device consoles and network environments are FBRX Digger's (2.5.0): only its Fabrix has their tools.

@@ -260,6 +260,17 @@ In an online chat (an offline one asks first), Fabrix can:
 Addresses on this computer and inside your network are refused (unless the policy allows private networks), and
 the organization's blocked sites apply.
 
+## Bible verses
+
+Ask for a verse or a passage ("What does John 3:16 say?", "Psalm 23 in the World English Bible") and Fabrix quotes it
+word for word from Bible texts that come with FBRX OS, on this computer and offline (*scripture.lookup*), not from the
+model's memory, which often gets verses wrong. It has the King James Version (the default), the American Standard
+Version, the World English Bible, the Berean Standard Bible, Young's Literal Translation and the Darby Translation,
+and the Apocrypha in the King James Version. A book or verse that does not exist gets a plain no ("3 Timothy" is no
+book), and a verse a version leaves out (a few are missing from the older manuscripts) is named as such. Up to 40
+verses come at a time. Each text was checked against a second copy where there was one, and FBRX refuses a text whose
+file was changed. Where the texts come from: *Third-party components* (THIRD_PARTY.md).
+
 ## Automations
 
 Automations (Studio → **Automations**, Endpoint Pro and up) are jobs Fabrix does by itself and tells you about.

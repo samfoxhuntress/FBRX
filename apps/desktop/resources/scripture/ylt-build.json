@@ -1,0 +1,33 @@
+{
+  "translation": "Young's Literal Translation (1898 revision)",
+  "verses": 31102,
+  "books": 66,
+  "chapters": 1189,
+  "license": "public domain",
+  "copies": [
+    {
+      "name": "github.com/scrollmapper/bible_databases formats/csv/YLT.csv",
+      "commit": "59b18c5af5845728c275d5b7178ad0d024172b1f",
+      "sha256": "d325557cfe7398e5c914b87b582f032903ee8ace8b14f7df1a3ea1739ad38a15"
+    },
+    {
+      "name": "pypi.org/project/pythonbible-ylt",
+      "version": "0.0.2",
+      "sha256": "0341b19319d0014509964833843dffcb38a717c4254bebd19985414a10783931"
+    }
+  ],
+  "cross_checked": true,
+  "comparison": {
+    "identical": 21424,
+    "punctuation or case": 4167,
+    "spacing or ligature": 5316,
+    "spelling or words": 195,
+    "only_in_first_copy": 0,
+    "only_in_second_copy": 0
+  },
+  "verses_mended_from_second_copy": 0,
+  "verses_mended_by_rule": 0,
+  "verses_with_markup": 0,
+  "verses_with_words_run_together": 0,
+  "output_sha256": "0ef045db9903c772726f5539505dc625a4a606fe0d3faf773ebc0923524a3ecd"
+}

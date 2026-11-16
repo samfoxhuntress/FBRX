@@ -23,7 +23,7 @@ export const TOOL_FAMILIES: Family[] = [
   { id: 'fbrx', title: 'FBRX itself', prefixes: ['fbrx'], about: 'Its guides, check-up, fixes, status and log.' },
   { id: 'server', title: 'FBRX Server and Gate', prefixes: ['server'], about: 'What the person’s FBRX Server sees of the network (FBRX Gate and MiniDome), read-only.' },
   { id: 'mesh', title: 'Mesh and devices', prefixes: ['mesh', 'device_console', 'network_env'], about: 'The person’s other computers, device consoles and network environments.' },
-  { id: 'work', title: 'Work', prefixes: ['workspace', 'calendar', 'docs', 'image', 'web', 'finance', 'helpdesk'], about: 'Notes, tasks, projects, the calendar, documents, pictures, the web and the help desk.' },
+  { id: 'work', title: 'Work', prefixes: ['workspace', 'calendar', 'docs', 'image', 'web', 'finance', 'helpdesk', 'scripture'], about: 'Notes, tasks, projects, the calendar, documents, pictures, the web, the help desk and Bible verses.' },
   { id: 'me', title: 'Me', prefixes: ['memory', 'skills', 'personality', 'toolkits'], about: 'What you remember, the skills you learned, your toolkits and your personality.' },
 ];
 

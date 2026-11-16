@@ -1,0 +1,46 @@
+{
+  "translation": "King James Version Apocrypha (1769 text)",
+  "verses": 5717,
+  "books": 14,
+  "chapters": 182,
+  "license": "public domain (outside the UK)",
+  "copies": [
+    {
+      "name": "github.com/scrollmapper/bible_databases formats/csv/KJVA.csv",
+      "commit": "59b18c5af5845728c275d5b7178ad0d024172b1f",
+      "sha256": "f7a4eb2a321a8a596e90053150e0684060740dd4bb2c23283923ec0f53e2a100"
+    },
+    {
+      "name": "ebible.org/Scriptures/eng-kjv_vpl.zip (eng-kjv_vpl.txt)",
+      "sha256": "fb7b8c10feb607c22b3461e837bfd267c09814f39ce23756a1928f7739a52b3c"
+    }
+  ],
+  "cross_checked": true,
+  "comparison": {
+    "identical": 5616,
+    "punctuation or case": 15,
+    "spacing or ligature": 1,
+    "spelling or words": 73,
+    "only_in_first_copy": 12,
+    "only_in_second_copy": 15
+  },
+  "verses_mended_from_second_copy": 0,
+  "verses_mended_by_rule": 0,
+  "verses_with_markup": 0,
+  "verses_with_words_run_together": 0,
+  "output_sha256": "7611261fb6d170dc4159f0f509d076a4be68ad045425ae9ca0356cf5da9e2245",
+  "kjv_66_books_against_kjv_jsonl": {
+    "scrollmapper KJVA": {
+      "identical": 24323,
+      "punctuation or case": 6426,
+      "spacing or ligature": 31,
+      "spelling or words": 322
+    },
+    "ebible eng-kjv": {
+      "identical": 27135,
+      "punctuation or case": 711,
+      "spacing or ligature": 3081,
+      "spelling or words": 175
+    }
+  }
+}
