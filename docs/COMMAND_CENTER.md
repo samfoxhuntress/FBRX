@@ -771,8 +771,10 @@ model less to read and write:
   model on a server) is shown every tool (about 13,000 tokens of descriptions). The AI on this computer, however much
   it holds, and any smaller one get a few it always has
   (the time, its memory, FBRX's help and check-up) and the tools for what the chat is about, briefly described: the
-  files, the web, the computer, the calendar… A new subject adds its tools at the end. It may still call any tool it
-  is allowed to use. *Tools it is shown* on each provider (AI models → edit) chooses for yourself.
+  files, the web, the computer, the calendar… A new subject adds its tools at the end. In a long chat, when they no
+  longer all fit, what you ask now comes first and the tools of the oldest subject make room. A file's name counts as
+  a file ("open router-tips.txt" asks for your files, not the router). It may still call any tool it is allowed to
+  use. *Tools it is shown* on each provider (AI models → edit) chooses for yourself.
 * **The same start every time.** The instructions and tools stay the same from one request to the next (what Fabrix
   remembers goes with your message), so the AI reuses what it already read and starts writing sooner: the built-in
   runtime's prompt cache, and a cloud AI's (Claude's, for one).

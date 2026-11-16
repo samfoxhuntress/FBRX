@@ -31,6 +31,42 @@ describe('a local model reads less, so it answers sooner', () => {
     expect(briefDescription('x'.repeat(400), 50)).toHaveLength(50);
   });
 
+  it('keeps up in a long chat: the latest request gets its tools, the oldest subject goes (Noah, round two)', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      const all = kernel.registry.list();
+      const offered = (chat: string[]) => names(shortlistTools(all, chat));
+      const moving = ['How many tasks do I have left this week?', "Add 'Book movers' to the moving project.", 'Also my laptop battery is bulging, is that bad?', 'Text my wife that I will be late.'];
+      const packing = [...moving, 'Save my packing list as packing.txt on my desktop: socks, shirts, chargers.'];
+      expect(offered(packing)).toContain('fs.write_file');
+      expect(offered([...packing, 'Then clean up my desktop.'])).toContain('fs.list_dir');
+      const scam = ["Someone from 'Microsoft' just called and said my computer has a virus.", 'OK. Can you check whether I actually have a virus?', 'The caller told me to open router-tips.txt in my Downloads. What does it say?'];
+      expect(offered(scam)).toContain('fs.read_file');
+      // A file's name is not the request: router-tips.txt brings in the files, not the network tools.
+      expect(offered(scam).filter((n) => n.startsWith('net.'))).toEqual([]);
+      expect(offered([...scam, "What's our saved Wi-Fi password? I want to change it after all this."])).toContain('passwords.find');
+      for (const chat of [packing, scam]) expect(offered(chat)).toHaveLength(24);
+      // What stays keeps its place: only the oldest subject's tools go, and the new ones join at the end.
+      const before = offered(scam.slice(0, 2));
+      const after = offered(scam);
+      expect(after.filter((n) => before.includes(n))).toEqual(before.filter((n) => after.includes(n)));
+      expect(after.slice(-6)).toEqual(expect.arrayContaining(['fs.read_file', 'fs.list_dir']));
+      // Common words in a title ("Read your personality") bring in nothing; the subject does.
+      expect(offered(['Can you read me your last answer again?'])).not.toContain('personality.read');
+      expect(offered(['Change your personality to be more cheerful'])).toContain('personality.update');
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('brings in Shield and the security check-up however people ask about their antivirus', () => {
+    const tools = [...TOOLS, tool('shield.status'), tool('pc.security_status')];
+    for (const ask of ['Quick one: is real-time protection on?', "Quick one: is my antivirus's real-time protection on?", 'Quick one: is my antivirus on right now?', 'Is Defender protecting me?'])
+      expect(names(shortlistTools(tools, [ask]))).toEqual(expect.arrayContaining(['shield.status', 'pc.security_status']));
+    expect(names(shortlistTools(tools, ['my laptop is slow']))).toContain('pc.live_status');
+    expect(names(shortlistTools(tools, ['my laptop is slow']))).not.toContain('pc.security_status');
+  });
+
   it('asks a model on this computer to answer without thinking first, unless told it may', async () => {
     const llm = await mockOpenAI(() => ({ text: 'ok' }));
     try {

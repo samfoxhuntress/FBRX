@@ -11,6 +11,9 @@ const SUBJECT_ENDS = new Set('and then but are is was were has have had so to fr
 const OWN_THINGS = /^(notes?|tasks?|to-?dos?|lists?|files?|documents?|docs?|snippets?|projects?|entry|entries)$/i;
 const ABOUT = /^(about|on|regarding|re|for|called|named|titled)$/i;
 
+/** A file name with a kind people name: "router-tips.txt", "Q3 report.pdf" stays a report (.pdf). */
+const FILE_NAME = /(?<![\w@.-])[\w-]+(?:\.[\w-]+)*\.(txt|csv|log|md|json|pdf|docx?|xlsx?|pptx?|rtf|odt|png|jpe?g|gif|bmp|webp|heic|svg|zip|7z|rar|exe|msi|dmg|pkg|deb|ps1|bat|cmd|sh|py|js|ts|html?|xml|ini|cfg|conf|ya?ml|toml|mp3|mp4|mov|wav)(?![\w-])/gi;
+
 /** The request without code, quoted names, the content it asks to save, and the subject of the person's notes or tasks. */
 export function requestWords(text: string): string {
   let t = text
@@ -18,7 +21,9 @@ export function requestWords(text: string): string {
     // in quotes ("it says 'DNS server not responding'") is what the request is about.
     .replace(/```[\s\S]*?```/g, ' ')
     .replace(/`[^`\n]*`/g, ' ')
-    .replace(/\b(called|named|titled|labell?ed|as)\s+("[^"\n]{0,200}"|“[^”\n]{0,200}”|‘[^’\n]{0,200}’|'[^'\n]{1,200}'(?=$|[\s.,:;!?)]))/gi, '$1 ');
+    .replace(/\b(called|named|titled|labell?ed|as)\s+("[^"\n]{0,200}"|“[^”\n]{0,200}”|‘[^’\n]{0,200}’|'[^'\n]{1,200}'(?=$|[\s.,:;!?)]))/gi, '$1 ')
+    // A file's name is a file, not its words: "open router-tips.txt" asks for a file, not the router.
+    .replace(FILE_NAME, 'file .$1');
   // What comes after the colon in "save this … : <content>" (or write, add, note down, put, paste, store, keep, jot).
   // Not "Note: the Wi-Fi drops", where the colon comes straight after the word.
   t = t.replace(/(\b(?:save|write|add|note|put|append|paste|store|keep|jot)\b\s+[^:\s][^:\n]{0,120}):[\s\S]*$/i, '$1');
