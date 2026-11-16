@@ -212,10 +212,9 @@ function EditionCard() {
   );
 }
 
-/** "$4.99 a month or $49.90 a year", "Free", "$49.99 a month a person, through FBRX Command", at the account's prices. */
+/** "$4.99 a month or $49.90 a year, or … a person through FBRX Command", "Free", at the account's prices. */
 function priceLine(t: Tier, book: PriceBook): ReactNode {
   if (t === 'essentials') return 'Free';
-  if (t === 'blackhole') return <>{formatPrice(book.seats.blackhole)} <small>a month a person, through FBRX Command</small></>;
   return (
     <>
       {formatPrice(book.personal[t])}{' '}
@@ -236,18 +235,17 @@ function ceilingLine(ed: EditionStatus): string {
     case 'trial':
       return `${trialLine(ed)} Then Pro is ${formatPrice(DEFAULT_PRICE_BOOK.personal.basic)} a month or ${formatPrice(personalPlan(DEFAULT_PRICE_BOOK, 'basic', 'year').amount)} a year; Essentials stays free.`;
     case 'standalone':
-      return `On its own, this computer runs Essentials for free.${ed.trialAvailable ? ` Pro can be tried free for ${STANDARD_TRIAL_DAYS} days, once.` : ''} Pro and Ultra are bought on your FBRX account or with a license key (Settings → License), or come through your organization’s FBRX Command. Black Hole Edition comes only through FBRX Command.`;
+      return `On its own, this computer runs Essentials for free.${ed.trialAvailable ? ` Pro can be tried free for ${STANDARD_TRIAL_DAYS} days, once.` : ''} Pro, Ultra and Black Hole Edition are bought on your FBRX account or with a license key (Settings → License), or come through your organization’s FBRX Command. Black Hole Edition comes only through FBRX Command.`;
     case 'organization':
       return `Your organization (FBRX Command) lets this computer go up to ${TIER_SHORT[ed.ceiling]}.`;
     default:
-      return ed.enrolled ? `Your organization's license allows up to ${TIER_SHORT[ed.ceiling]}.` : `Your license allows up to ${TIER_SHORT[ed.ceiling]}. Black Hole Edition comes only through an organization's FBRX Command.`;
+      return ed.enrolled ? `Your organization's license allows up to ${TIER_SHORT[ed.ceiling]}.` : `Your license allows up to ${TIER_SHORT[ed.ceiling]}.`;
   }
 }
 
 /**
- * Settings → Edition: Essentials (free, where a new computer starts), Pro and Ultra (bought, or through an
- * organization's FBRX Command) and Black Hole Edition (only through FBRX Command), with why a choice is locked and the
- * walkthrough again.
+ * Settings → Edition: Essentials (free, where a new computer starts), Pro, Ultra and Black Hole Edition (bought, or
+ * through an organization's FBRX Command), with why a choice is locked and the walkthrough again.
  */
 function EditionSettings() {
   const ed = useEditionStatus();

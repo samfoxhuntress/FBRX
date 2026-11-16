@@ -139,7 +139,12 @@ A new device found by a scan raises the *Unknown device joined my network* alert
 
 ## Install
 
-Download it from the repository's releases: the release named **FBRX Digger** (tagged `digger-v<version>`).
+**From FBRX Endpoint:** Network Center → **Digger** (or Settings → FBRX apps) → **Get Digger** downloads the file for
+your computer from Digger's latest release, checks it against the checksum GitHub lists for it, and opens it: the setup
+on Windows, the disk image on a Mac (drag FBRX Digger to Applications), and on Linux the AppImage, kept in
+`~/Applications` and started. If that cannot be done, the release page opens instead.
+
+Or download it from the repository's releases: the release named **FBRX Digger** (tagged `digger-v<version>`).
 
 | Computer | File |
 | --- | --- |

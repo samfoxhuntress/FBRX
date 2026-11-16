@@ -829,6 +829,8 @@ export interface CoreMethods extends ExtMethods {
   'apps.list': () => AppStatus[];
   /** Opens an installed FBRX app (the person at the computer only). */
   'apps.open': (p: { id: AppId }) => { opened: AppId };
+  /** Downloads the app's installer for this computer from its GitHub release, checks it and opens it. */
+  'apps.get': (p: { id: AppId }) => { file: string; name: string };
   'learning.status': () => LearningStatus;
   /** Learns the computer now, on the full screen: at the end of setup, or again (Settings). */
   'learning.start': (p?: { reason?: 'setup' | 'manual' }) => LearningStatus;

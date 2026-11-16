@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, tierRank, formatTokens, personalPlan, type AccountDevice, type AccountStatus, type BillingInterval, type CloudAiUsage, type InvitationPreview, type LocalAccountStatus, type PriceBook, type Tier, type Vertical } from '@fbrx/shared';
+import { COMMAND_PLAN, DEFAULT_PRICE_BOOK, EDITION_PLANS, TIER_NAMES, TIER_SHORT, VERTICALS, VERTICAL_NAMES, atLeast, formatPrice, tierRank, formatTokens, personalPlan, type AccountDevice, type AccountStatus, type BillingInterval, type CloudAiUsage, type InvitationPreview, type LocalAccountStatus, type PaidTier, type PriceBook, type Tier, type Vertical } from '@fbrx/shared';
 import { Button, Callout, Card, Field, Icons, Input, KeyValue, Select, Status, Toggle, formatDate, formatDay, timeAgo, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { call, onEvent, openExternal } from './client';
 import { useCore } from './hooks';
@@ -247,11 +247,11 @@ export const yearlyLabel = (book: PriceBook) => (book.yearlyMonths < 12 ? `Pay y
 export function BuyButtons({ account, only, short }: { account: AccountStatus; only?: Tier[]; short?: boolean }) {
   const { run, busy } = useAction();
   const [period, setPeriod] = useState<BillingInterval>('month');
-  const tiers = (only ?? (['basic', 'ultra'] as Tier[])).filter((t): t is 'basic' | 'ultra' => EDITION_PLANS[t].sold === 'personal' && !atLeast(account.tier, t));
+  const tiers = (only ?? (['basic', 'ultra', 'blackhole'] as Tier[])).filter((t): t is PaidTier => EDITION_PLANS[t].sold === 'personal' && !atLeast(account.tier, t));
   if (!account.canBuy || !tiers.length) return null;
   const book = account.prices ?? DEFAULT_PRICE_BOOK;
-  const buy = (t: 'basic' | 'ultra', i: BillingInterval) => run(`${t}-${i}`, () => call('account.checkout', { productId: personalPlan(book, t, i).productId }).then((r) => openExternal(r.url)));
-  const price = (t: 'basic' | 'ultra', i: BillingInterval) => `${formatPrice(personalPlan(book, t, i).amount)} a ${i}`;
+  const buy = (t: PaidTier, i: BillingInterval) => run(`${t}-${i}`, () => call('account.checkout', { productId: personalPlan(book, t, i).productId }).then((r) => openExternal(r.url)));
+  const price = (t: PaidTier, i: BillingInterval) => `${formatPrice(personalPlan(book, t, i).amount)} a ${i}`;
   if (short) {
     return (
       <>

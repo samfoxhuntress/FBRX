@@ -465,7 +465,7 @@ page({
     ${editionCard('essentials', `<a class="btn" href="download.html">Download</a>`)}
     ${editionCard('basic', `${buyLinks('basic')}<p class="muted small">Or try it free for ${STANDARD_TRIAL_DAYS} days in FBRX, no card needed.</p>`)}
     ${editionCard('ultra', buyLinks('ultra'))}
-    ${editionCard('blackhole', `<a class="btn" href="account.html?start=organization">Start an FBRX Command</a>`)}
+    ${editionCard('blackhole', `${buyLinks('blackhole')}<p class="muted small">Or for your organization's admins: <a href="account.html?start=organization">start an FBRX Command</a>.</p>`)}
   </div>
 </section>
 <section class="band" id="command">
@@ -500,7 +500,7 @@ ${serverSection}
   <details><summary>Can I try Pro first?</summary><p>Yes: every computer can try Pro free for ${STANDARD_TRIAL_DAYS} days, once, from Settings → Edition in FBRX. No card needed; when it ends, the computer goes back to Essentials unless you buy Pro. Pro used to be free, so a computer that ran FBRX before 2.0 starts its trial by itself when it updates.</p></details>
   <details><summary>How do I pay?</summary><p>On this site and in FBRX on your computer: by card, or with the wallet on your phone or computer when checkout offers it. In the phone apps, through the app store, once they leave beta. It all goes to one FBRX account, so what you buy anywhere works everywhere you sign in.</p></details>
   <details><summary>What does beta mean?</summary><p>FBRX is finished enough to use every day, and still changing quickly: new versions arrive often and install by themselves. Tell us what breaks, right from the app. Prices are the ones above.</p></details>
-  <details><summary>What is Black Hole Edition?</summary><p>${esc(EDITION_PLANS.blackhole.summary)} It is an add-on in FBRX Command, ${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} a month a person (on up to ${book.computers.included.blackhole} computers), and comes on wherever its person signs in.</p></details>
+  <details><summary>What is Black Hole Edition?</summary><p>${esc(EDITION_PLANS.blackhole.summary)} It is ${formatPrice(book.personal.blackhole)} a month on your own FBRX account, or ${formatPrice(EDITION_PLANS.blackhole.tenantMonthly)} a month a person in FBRX Command, on up to ${book.computers.included.blackhole} computers, and comes on wherever its person signs in.</p></details>
 </section>`,
 });
 
@@ -587,7 +587,7 @@ const site = {
   editions: TIER_SHORT,
   kinds: VERTICAL_NAMES,
   sources: PURCHASE_SOURCE_NAMES,
-  plans: Object.fromEntries(['basic', 'ultra'].map((t) => [t, Object.fromEntries(['month', 'year'].map((i) => [i, { productId: personalPlan(book, t, i).productId, price: formatPrice(personalPlan(book, t, i).amount) }]))])),
+  plans: Object.fromEntries(['basic', 'ultra', 'blackhole'].map((t) => [t, Object.fromEntries(['month', 'year'].map((i) => [i, { productId: personalPlan(book, t, i).productId, price: formatPrice(personalPlan(book, t, i).amount) }]))])),
 };
 writeFileSync(join(out, 'config.js'), `window.FBRX_SITE = ${JSON.stringify(site)};\n`);
 for (const f of ['styles.css', 'account.js', 'pricing.js', 'download.js']) copyFileSync(join(here, 'src', f), join(out, f));

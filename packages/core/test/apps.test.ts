@@ -246,3 +246,67 @@ describe('FBRX Endpoint’s saved connections and network environments move to F
     }
   });
 });
+
+describe('Get: an app’s installer from its GitHub release', () => {
+  const assets = (v: string) =>
+    [`FBRX-Digger-Setup-${v}.exe`, `FBRX-Digger-${v}-arm64.dmg`, `FBRX-Digger-${v}-x64.dmg`, `FBRX-Digger-${v}-arm64.AppImage`, `FBRX-Digger-${v}-x86_64.AppImage`, `FBRX-Digger-${v}-x64.deb`, `FBRX-OS-Setup-2.5.0.exe`].map((name) => ({ name, url: `https://github.com/x/${name}`, size: 4, digest: null }));
+
+  it('picks the one for this computer', async () => {
+    const { pickInstaller } = await import('../src/apps/app-installer');
+    const a = assets('1.3.0');
+    expect(pickInstaller('digger', a, 'win32', 'x64')?.name).toBe('FBRX-Digger-Setup-1.3.0.exe');
+    expect(pickInstaller('digger', a, 'darwin', 'arm64')?.name).toBe('FBRX-Digger-1.3.0-arm64.dmg');
+    expect(pickInstaller('digger', a, 'darwin', 'x64')?.name).toBe('FBRX-Digger-1.3.0-x64.dmg');
+    expect(pickInstaller('digger', a, 'linux', 'x64')?.name).toBe('FBRX-Digger-1.3.0-x86_64.AppImage');
+    expect(pickInstaller('digger', a, 'linux', 'arm64')?.name).toBe('FBRX-Digger-1.3.0-arm64.AppImage');
+    expect(pickInstaller('digger', a.slice(6), 'win32', 'x64')).toBeNull();
+  });
+
+  it('downloads it from GitHub only, checks it against GitHub’s checksum and opens it', async () => {
+    const { createHash } = await import('node:crypto');
+    const { downloadAndOpen } = await import('../src/apps/app-installer');
+    const dir = mkdtempSync(join(tmpdir(), 'fbrx-get-'));
+    dirs.push(dir);
+    const bytes = Buffer.from('FBRX');
+    const good = `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
+    const fake = (digest: string | null, host = 'github.com') =>
+      (async (u: string | URL | Request) => {
+        const url = String(u);
+        if (url.startsWith('https://api.github.com/')) return new Response(JSON.stringify({ assets: [{ name: 'FBRX-Digger-Setup-1.3.0.exe', browser_download_url: `https://${host}/d/FBRX-Digger-Setup-1.3.0.exe`, size: 4, digest }] }), { status: 200 });
+        return new Response(bytes, { status: 200 });
+      }) as unknown as typeof fetch;
+    const opened: string[] = [];
+    const base = { tag: 'digger-v1.3.0', downloads: dir, home: dir, platform: 'win32' as const, arch: 'x64', open: (f: string) => opened.push(f) };
+    const got = await downloadAndOpen('digger', { ...base, fetch: fake(good) });
+    expect(got.name).toBe('FBRX-Digger-Setup-1.3.0.exe');
+    expect(readFileSync(got.file, 'utf8')).toBe('FBRX');
+    expect(opened).toEqual([got.file]);
+    await expect(downloadAndOpen('digger', { ...base, fetch: fake('sha256:' + '0'.repeat(64)) })).rejects.toThrow(/does not match the checksum/);
+    await expect(downloadAndOpen('digger', { ...base, fetch: fake(good, 'evil.example') })).rejects.toThrow(/only taken from GitHub/);
+    // No checksum from GitHub and no SHA256SUMS.txt: not opened.
+    await expect(downloadAndOpen('digger', { ...base, fetch: fake(null) })).rejects.toThrow(/no checksum/);
+    expect(opened).toHaveLength(1);
+    // The release's SHA256SUMS.txt stands in for GitHub's checksum.
+    const sum = good.slice(7);
+    const withSums = (async (u: string | URL | Request) => {
+      const url = String(u);
+      if (url.startsWith('https://api.github.com/')) return new Response(JSON.stringify({ assets: [{ name: 'FBRX-Digger-Setup-1.3.0.exe', browser_download_url: 'https://github.com/d/FBRX-Digger-Setup-1.3.0.exe', size: 4, digest: null }, { name: 'SHA256SUMS.txt', browser_download_url: 'https://github.com/d/SHA256SUMS.txt', size: 100 }] }), { status: 200 });
+      if (url.endsWith('SHA256SUMS.txt')) return new Response(`${'1'.repeat(64)}  FBRX-Digger-1.3.0-x64.dmg\n${sum}  FBRX-Digger-Setup-1.3.0.exe\n`, { status: 200 });
+      return new Response(bytes, { status: 200 });
+    }) as unknown as typeof fetch;
+    await downloadAndOpen('digger', { ...base, fetch: withSums });
+    expect(opened).toHaveLength(2);
+  });
+
+  it('gets only an app the edition unlocks, with a release', async () => {
+    const c = computer();
+    let tier: Tier = 'basic';
+    const calls: string[] = [];
+    const os = new AppRegistry({ self: 'os', dataDir: c.os, appsDir: c.apps, version: '2.5.0', exec: null, tier: () => tier, releases: () => ({ digger: { version: '1.3.0', download: 'https://github.com/x' } }), dirs: { downloads: c.apps, home: c.apps }, install: async (_id, d) => (calls.push(d.tag), { file: 'f', name: 'n' }) });
+    await expect(os.get('digger')).rejects.toThrow(/fuller edition/);
+    await expect(os.get('reach')).rejects.toThrow(/arrives in/);
+    tier = 'ultra';
+    await expect(os.get('digger')).resolves.toEqual({ file: 'f', name: 'n' });
+    expect(calls).toEqual(['digger-v1.3.0']);
+  });
+});

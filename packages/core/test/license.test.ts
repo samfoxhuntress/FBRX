@@ -30,11 +30,11 @@ describe('licensing', () => {
       expect(kernel.edition()).toMatchObject({ productName: 'FBRX Endpoint Essentials', tourDone: false, trialUntil: null, trialAvailable: true });
       await expect(kernel.call('edition.choose', { tier: 'basic' }, USER)).rejects.toThrow(/FBRX Endpoint Pro is \$4\.99 a month .*, or try it free for 7 days/);
       const status = (await kernel.call('license.activate', { key }, USER)) as any;
-      // A license (one bought for this computer) turns on its features and goes up to Ultra; Black Hole Edition comes only
-      // through an organization.
+      // A license (one bought for this computer) turns on its features and goes up to the edition bought (Ultra here);
+      // from 2.5.0 Black Hole Edition is bought the same way.
       expect(status).toMatchObject({ state: 'valid', edition: 'enterprise', tier: 'essentials', ceiling: 'ultra', ceilingReason: 'license', commandUrl: null });
       await waitFor(() => kernel.services.get('plugins')?.state === 'running');
-      await expect(kernel.call('edition.choose', { tier: 'blackhole' }, USER)).rejects.toThrow(/comes only through an organization's FBRX Command/);
+      await expect(kernel.call('edition.choose', { tier: 'blackhole' }, USER)).rejects.toThrow(/Black Hole Edition is \$49\.99 a month on your FBRX account/);
       expect(await kernel.call('edition.choose', { tier: 'basic' }, USER)).toMatchObject({ tier: 'basic', productName: 'FBRX Endpoint Pro' });
       expect(await kernel.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra', productName: 'FBRX Endpoint Ultra' });
       // Only the person at the computer chooses.
@@ -51,16 +51,20 @@ describe('licensing', () => {
       expect(await kernel.call('license.activate', { key: sign({ tier: 'basic' }) }, USER)).toMatchObject({ edition: 'enterprise', ceiling: 'basic' });
       expect(await kernel.call('license.activate', { key: sign({ edition: 'community', tier: 'ultra' }) }, USER)).toMatchObject({ ceiling: 'ultra', tier: 'ultra' });
       await expect(kernel.call('edition.choose', { tier: 'blackhole' }, USER)).rejects.toThrow(/license allows up to FBRX Endpoint Ultra/);
-      // Black Hole Edition: only in an organization whose license allows it.
+      // Black Hole Edition: in an organization whose license allows it.
       expect(await kernel.call('license.activate', { key: sign({ tier: 'blackhole' }) }, USER)).toMatchObject({ ceiling: 'blackhole', tier: 'ultra' });
       expect(await kernel.call('edition.choose', { tier: 'blackhole' }, USER)).toMatchObject({ tier: 'blackhole', productName: 'FBRX Endpoint Black Hole Edition' });
       expect(kernel.ultraOnly('Mesh')).toBeNull();
       expect(kernel.blackHoleOnly('Network environments')).toBeNull();
-      // The same license on a computer on its own goes up to Ultra.
+      // From 2.5.0 the same license on a computer on its own goes up to Black Hole Edition too (it is sold on its own);
+      // an Ultra one stops at Ultra.
       kernel.meta.delete('fleet.deviceId');
+      expect(kernel.license.refresh()).toMatchObject({ tier: 'blackhole', chosen: 'blackhole', ceiling: 'blackhole', ceilingReason: 'license' });
+      await kernel.call('license.activate', { key: sign({ tier: 'ultra' }) }, USER);
       expect(kernel.license.refresh()).toMatchObject({ tier: 'ultra', chosen: 'blackhole', ceiling: 'ultra', ceilingReason: 'license' });
-      expect(kernel.blackHoleOnly('Network environments')).toMatch(/come with FBRX Endpoint Black Hole Edition/);
+      expect(kernel.blackHoleOnly('Network environments')).toMatch(/come with FBRX Endpoint Black Hole Edition, on your FBRX account/);
       kernel.meta.set('fleet.deviceId', 'dev_test');
+      await kernel.call('license.activate', { key: sign({ tier: 'blackhole' }) }, USER);
       expect(await kernel.call('edition.choose', { tier: 'ultra' }, USER)).toMatchObject({ tier: 'ultra' });
       kernel.meta.set('fleet.edition', { vertical: 'business', audience: 'staff', tier: 'essentials', helpdesk: { enabled: true, receiver: false }, autoUpdate: 'notify' });
       expect(kernel.license.refresh()).toMatchObject({ tier: 'essentials', chosen: 'ultra', ceiling: 'essentials', ceilingReason: 'organization' });

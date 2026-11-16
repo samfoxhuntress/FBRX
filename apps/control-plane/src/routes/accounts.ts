@@ -192,7 +192,7 @@ async function checkPassword(ctx: AppContext, a: AccountRow, password: string, w
 /** A product an account may buy for itself: Pro or Ultra, the personal plans. */
 function personalProduct(productId: string) {
   const p = productById(productId);
-  if (!p || p.kind !== 'edition' || p.tenant) throw badRequest('That is not an edition you can buy for yourself (Pro or Ultra)');
+  if (!p || p.kind !== 'edition' || p.tenant) throw badRequest('That is not an edition you can buy for yourself (Pro, Ultra or Black Hole Edition)');
   return p;
 }
 

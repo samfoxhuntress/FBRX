@@ -69,7 +69,7 @@ export function PricingPage() {
 
 /** The price list as the form holds it: what was typed, until it is saved. */
 interface Draft {
-  personal: Record<'basic' | 'ultra', string>;
+  personal: Record<(typeof PAID_TIERS)[number], string>;
   seats: Record<(typeof PAID_TIERS)[number], string>;
   included: Record<(typeof PAID_TIERS)[number], string>;
   extra: Record<(typeof PAID_TIERS)[number], string>;
@@ -81,7 +81,7 @@ interface Draft {
 }
 
 const draftOf = (b: PriceBook): Draft => ({
-  personal: { basic: dollars(b.personal.basic), ultra: dollars(b.personal.ultra) },
+  personal: { basic: dollars(b.personal.basic), ultra: dollars(b.personal.ultra), blackhole: dollars(b.personal.blackhole) },
   seats: { basic: dollars(b.seats.basic), ultra: dollars(b.seats.ultra), blackhole: dollars(b.seats.blackhole) },
   included: { basic: String(b.computers.included.basic), ultra: String(b.computers.included.ultra), blackhole: String(b.computers.included.blackhole) },
   extra: { basic: dollars(b.computers.extra.basic), ultra: dollars(b.computers.extra.ultra), blackhole: dollars(b.computers.extra.blackhole) },
@@ -119,7 +119,7 @@ function bookOf(d: Draft): PriceBook | string {
     const yearlyMonths = toCount(d.yearlyMonths);
     if (yearlyMonths === null || yearlyMonths > MAX_YEARLY_MONTHS) throw new Error(`Paying yearly: a year costs from 1 to ${MAX_YEARLY_MONTHS} months' price`);
     return {
-      personal: { basic: price(d.personal.basic, 'Pro on its own'), ultra: price(d.personal.ultra, 'Ultra on its own') },
+      personal: { basic: price(d.personal.basic, 'Pro on its own'), ultra: price(d.personal.ultra, 'Ultra on its own'), blackhole: price(d.personal.blackhole, 'Black Hole Edition on its own') },
       seats: { basic: price(d.seats.basic, 'Pro in an organization'), ultra: price(d.seats.ultra, 'Ultra in an organization'), blackhole: price(d.seats.blackhole, 'Black Hole Edition in an organization') },
       computers: {
         included: { basic: count(d.included.basic, 'Pro'), ultra: count(d.included.ultra, 'Ultra'), blackhole: count(d.included.blackhole, 'Black Hole Edition') },
@@ -162,6 +162,7 @@ function PriceBookEditor({ book, onSaved }: { book: PriceBook; onSaved: () => vo
           <div className="fx-form">
             <Field label="Pro">{money$(d.personal.basic, (v) => set({ personal: { ...d.personal, basic: v } }))}</Field>
             <Field label="Ultra">{money$(d.personal.ultra, (v) => set({ personal: { ...d.personal, ultra: v } }))}</Field>
+            <Field label="Black Hole Edition">{money$(d.personal.blackhole, (v) => set({ personal: { ...d.personal, blackhole: v } }))}</Field>
           </div>
         </Card>
         <Card title="The organization fee" subtitle="What an organization pays for its FBRX Command, a month, on top of its computers. It is never discounted.">

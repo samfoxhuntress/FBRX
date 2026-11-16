@@ -22,8 +22,8 @@ The desktop app is **FBRX Endpoint**, in four editions (see COMMAND_CENTER.md fo
   plugins, the theme studio with its gradients and textures, deep space maps with duplicate files and
   what grew, and the Wi-Fi channel planner's history and band-by-band advice.
 * **FBRX Endpoint Black Hole Edition** (`blackhole`) — everything: Ultra plus the whole Library (The Lab and the FBRX command
-  library), network environments in Network Center and the FBRX Server page. For the people who run
-  an organization's FBRX Command and its FBRX Servers, and only through FBRX Command.
+  library), network environments in FBRX Digger and the FBRX Server page. Bought on your own FBRX account (from
+  2.5.0, $49.99 a month) or through an organization's FBRX Command, for the people who run its FBRX Servers.
 
 **Governance** comes with every edition: what the AI may do on its own and what it asks first, the folders it may
 use, and the audit log, so whoever uses the computer stays in charge of its AI. (A second AI model reviewing risky

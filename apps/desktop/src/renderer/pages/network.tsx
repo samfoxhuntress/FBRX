@@ -945,7 +945,7 @@ export function NetworkPage({ advanced, everything }: { advanced: boolean; every
       <Tabs tabs={tabs} active={shown} onChange={setTab} />
       {!DIGGER && !advanced && shown === 'overview' && <EditionHint>Network scans, ping and trace, device consoles, network environments and the other IT tools are in FBRX Digger, which comes with Endpoint Ultra: see the Digger tab.</EditionHint>}
       {!DIGGER && advanced && shown === 'overview' && <p className="fx-muted" style={{ margin: '0 0 12px' }}>Network scans, ping and trace, device consoles, network environments and the other IT tools are in FBRX Digger: see the Digger tab.</p>}
-      {DIGGER && advanced && !everything && shown === 'overview' && <EditionHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole Edition, through your organization’s FBRX Command.</EditionHint>}
+      {DIGGER && advanced && !everything && shown === 'overview' && <EditionHint tier="blackhole">Attaching your school or office network’s controller (network environments) comes with Black Hole Edition.</EditionHint>}
       {shown === 'overview' && <Overview />}
       {shown === 'consoles' && <DeviceConsolesPanel selected={consoleId} onSelect={setConsoleId} />}
       {shown === 'digger' && <AppHandoffCard page="network/digger" />}

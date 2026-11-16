@@ -116,7 +116,8 @@ export function accountEntitlements(ctx: AppContext, accountId: string): Row[] {
 }
 
 /** Black Hole Edition is never bought on an account: one there (a grant, say) counts as Ultra. */
-const onAccount = (t: Tier): Tier => (t === 'blackhole' ? 'ultra' : t);
+// From 2.5.0 an account's own purchase may be Black Hole Edition too, so an account's edition is what it bought.
+const onAccount = (t: Tier): Tier => t;
 
 /** The edition an account's own purchases give (Essentials with none), and until when. */
 export function accountTier(ctx: AppContext, accountId: string): { tier: Tier; until: string | null } {

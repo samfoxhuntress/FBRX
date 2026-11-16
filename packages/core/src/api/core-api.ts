@@ -18,6 +18,7 @@ type Handler = (params: any, ctx: CallContext) => unknown | Promise<unknown>;
 /** Methods that only a person at the workstation may call (never the Local API or a remote command). */
 const USER_ONLY = new Set<string>([
   'apps.open',
+  'apps.get',
   'learning.start',
   'vault.reveal',
   'vault.initialize',
@@ -403,6 +404,7 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'ai.starter': () => k.starter.status(),
     'apps.list': () => k.apps.list(),
     'apps.open': (p) => k.apps.open(z.object({ id: z.enum(APP_IDS) }).parse(p).id),
+    'apps.get': (p) => k.apps.get(z.object({ id: z.enum(APP_IDS) }).parse(p).id),
     'learning.status': () => k.learning.status(),
     'learning.start': (p) => {
       const { reason } = z.object({ reason: z.enum(['setup', 'manual']).optional() }).parse(p ?? {});

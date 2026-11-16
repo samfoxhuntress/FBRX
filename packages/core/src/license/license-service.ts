@@ -147,8 +147,8 @@ export class LicenseService {
     // The most this computer may run.
     // - In an organization: what its license allows, held lower by FBRX Command for the computer or its group.
     // - On its own: Essentials, unless something was bought: a license key (or a purchase on the person's FBRX
-    //   account) goes up to Ultra. A license that belongs to an organization (it names its FBRX Command) counts only
-    //   there. Black Hole Edition comes only through an organization.
+    //   account) goes up to what was bought, Black Hole Edition included (from 2.5.0). A license that belongs to an
+    //   organization (it names its FBRX Command) counts only there.
     // - On its own, a computer may try Pro free for STANDARD_TRIAL_DAYS, once (startTrial).
     // Student and child computers always run the learner edition, on Pro (LEARNER_TIER).
     const ed = get<DeviceEdition>('fleet.edition');
@@ -160,7 +160,7 @@ export class LicenseService {
     if (status.source === 'development') reason = 'development';
     else if (!enrolled) {
       const bought = status.state === 'valid' && !status.commandUrl;
-      ceiling = bought ? minTier(status.tier, 'ultra') : 'essentials';
+      ceiling = bought ? status.tier : 'essentials';
       reason = bought ? 'license' : 'standalone';
       if (trial && Date.parse(trial.until) > Date.now() && tierRank(ceiling) < tierRank('basic')) {
         ceiling = 'basic';

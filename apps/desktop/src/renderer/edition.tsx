@@ -10,10 +10,8 @@ import { navigate } from './app';
  * computer opens in Essentials, free: the AI on its own (the chat, the AI models, Settings) and a walkthrough. Every
  * edition picks how much the AI does on a task (Settings → Agent → Thinking). Pro adds the everyday tools and the
  * AI's work budget part by part, with a free trial; Ultra the expert tool sets, Mesh, AI coordination, connections and
- * plugins and the theme studio. Both are bought (an FBRX account or a license key) or come through an organization's
- * FBRX Command.
- * Black Hole Edition (everything: the whole Library, network environments, the FBRX Server page) comes only through FBRX
- * Command.
+ * plugins and the theme studio. Black Hole Edition is everything: the whole Library, network environments, the FBRX
+ * Server page. Each is bought (an FBRX account or a license key) or comes through an organization's FBRX Command.
  */
 export const TierContext = createContext<Tier>('basic');
 
@@ -49,8 +47,8 @@ export function useAtLeast(min: Tier): boolean {
 }
 
 /**
- * How this computer could get `tier`, in a sentence: it may already (turn it on), its organization decides, it is
- * bought, or (Black Hole Edition) it comes only through an organization.
+ * How this computer could get `tier`, in a sentence: it may already (turn it on), its organization decides, or it is
+ * bought.
  */
 export function howToGet(tier: Tier, ed: EditionStatus | null): string {
   const plan = EDITION_PLANS[tier];

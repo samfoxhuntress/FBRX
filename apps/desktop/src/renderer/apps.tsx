@@ -1,5 +1,5 @@
 import { DIGGER_ICON_SVG, FBRX_APPS, TIER_SHORT, handoffFor, type AppId, type AppStatus } from '@fbrx/shared';
-import { Button, Card, Icons, Status, useAction } from '@fbrx/ui';
+import { Button, Card, Icons, Status, useAction, useToast } from '@fbrx/ui';
 import { call, openExternal } from './client';
 import { useCore } from './hooks';
 import { navigate } from './app';
@@ -29,6 +29,7 @@ export function AppIcon({ id, size = 40 }: { id: AppId; size?: number }) {
 
 function AppAction({ app }: { app: AppStatus }) {
   const { run, busy } = useAction();
+  const toast = useToast();
   if (app.self) return <Status tone="good">This app</Status>;
   if (!app.built) return <Status tone="neutral">Arrives in {app.since}</Status>;
   if (!app.unlocked)
@@ -43,8 +44,19 @@ function AppAction({ app }: { app: AppStatus }) {
         Open {app.short}
       </Button>
     );
+  // Get: the installer for this computer, downloaded from GitHub, checked and opened; the release page when that fails.
+  const get = () =>
+    run(`get-${app.id}`, async () => {
+      try {
+        const r = await call('apps.get', { id: app.id });
+        toast.success(`${app.name} is downloaded`, `${r.name} is open: follow its installer. It is saved at ${r.file}.`);
+      } catch (err) {
+        toast.error(`${app.name} could not be downloaded here`, `${(err as Error).message}. Its release page opens instead.`);
+        openExternal(app.download ?? RELEASES);
+      }
+    });
   return (
-    <Button size="sm" variant="primary" icon="download" onClick={() => openExternal(app.download ?? RELEASES)}>
+    <Button size="sm" variant="primary" icon="download" loading={busy === `get-${app.id}`} onClick={() => void get()}>
       Get {app.short}
     </Button>
   );

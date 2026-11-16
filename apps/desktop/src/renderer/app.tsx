@@ -202,7 +202,7 @@ function DiggerLocked() {
         <p>
           {pro
             ? `FBRX Endpoint on this computer runs ${TIER_SHORT.basic}. Digger opens with ${TIER_SHORT.ultra} or ${TIER_SHORT.blackhole}: change your edition in FBRX Endpoint (Settings → Edition) and Digger opens by itself.`
-            : `Digger runs at the edition of FBRX Endpoint on this computer. Install FBRX Endpoint and sign in to your FBRX account with ${TIER_SHORT.ultra} (or get ${TIER_SHORT.blackhole} through your organization), and Digger opens by itself.`}
+            : `Digger runs at the edition of FBRX Endpoint on this computer. Install FBRX Endpoint and sign in to your FBRX account with ${TIER_SHORT.ultra} (or ${TIER_SHORT.blackhole}), and Digger opens by itself.`}
         </p>
         <div className="digger-locked-actions">
           {!pro && (

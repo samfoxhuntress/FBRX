@@ -33,7 +33,8 @@ const size = z.number().int().min(2).max(1_000_000);
 
 export const PriceBookInput = z
   .object({
-    personal: z.object({ basic: cents, ultra: cents }).strict(),
+    // A price list saved before Black Hole Edition was sold on its own (2.5.0) takes plans.ts's price for it.
+    personal: z.object({ basic: cents, ultra: cents, blackhole: cents.default(DEFAULT_PRICE_BOOK.personal.blackhole) }).strict(),
     seats: z.object({ basic: cents, ultra: cents, blackhole: cents }).strict(),
     // A price list saved before computers were counted per person takes the prices in plans.ts for them.
     computers: z

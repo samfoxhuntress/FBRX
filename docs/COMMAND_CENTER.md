@@ -87,9 +87,9 @@ shortcut. Enter or → goes on, ← back, Esc skips; *Take the tour again* is in
 the watchdog, messages from your organization and the help desk, and new FBRX versions. Pro and up show the
 rest (alerts, storage, FBRX Shield and so on) as set in **Settings → Notifications**.
 
-**What may be unlocked.** On its own, a computer runs Essentials for free. Pro and Ultra are bought: on the
-person's FBRX account, or with a license key (Settings → License); a license that belongs to an organization (it
-names its FBRX Command) counts only in that organization. Black Hole Edition comes only through FBRX Command. In an
+**What may be unlocked.** On its own, a computer runs Essentials for free. Pro, Ultra and Black Hole Edition are
+bought: on the person's FBRX account, or with a license key (Settings → License); a license that belongs to an
+organization (it names its FBRX Command) counts only in that organization. In an
 organization, the most a computer may run is what the license allows (the edition it goes up to: Pro, Ultra
 or Black Hole Edition), held lower by its group in FBRX Command (*Profiles & groups →
 Edition*) or by the computer itself (*Devices → a device → Configuration → Edition*): **Essentials only**, **Up to

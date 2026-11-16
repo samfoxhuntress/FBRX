@@ -69,8 +69,8 @@ describe('editions and prices', () => {
     expect(['Black Hole', 'Standard', 'basic', 'FBRX Endpoint Pro'].map(parseTier)).toEqual(['blackhole', 'basic', 'basic', 'basic']);
   });
 
-  it('carries the price list: Pro $4.99, Ultra $24.99, Black Hole Edition $49.99 per computer in a tenant, FBRX Command $54.99', () => {
-    expect([priceOf('essentials', 'personal'), priceOf('basic', 'personal'), priceOf('ultra', 'personal'), priceOf('blackhole', 'personal')]).toEqual([0, 499, 2499, null]);
+  it('carries the price list: Pro $4.99, Ultra $24.99, Black Hole Edition $49.99 (on its own too from 2.5.0), FBRX Command $54.99', () => {
+    expect([priceOf('essentials', 'personal'), priceOf('basic', 'personal'), priceOf('ultra', 'personal'), priceOf('blackhole', 'personal')]).toEqual([0, 499, 2499, 4999]);
     // 20% off Pro and Ultra in a tenant; Black Hole Edition always full price; Essentials free everywhere.
     expect([priceOf('essentials', 'tenant'), priceOf('basic', 'tenant'), priceOf('ultra', 'tenant'), priceOf('blackhole', 'tenant')]).toEqual([0, 399, 1999, 4999]);
     expect(COMMAND_PLAN.monthly).toBe(5499);
@@ -78,16 +78,16 @@ describe('editions and prices', () => {
     expect(SERVER_OFFER).toMatchObject({ available: false });
     expect(SERVER_OFFER).not.toHaveProperty('price');
     expect([0, 499, 1199, 10000].map(formatPrice)).toEqual(['Free', '$4.99', '$11.99', '$100']);
-    // Every paid edition has a product id for Stripe and the stores, and Black Hole Edition is sold only in a tenant.
+    // Every paid edition has a product id for Stripe and the stores; from 2.5.0 Black Hole Edition is sold on its own too.
     for (const t of TIERS) expect(EDITION_PLANS[t].tenantProductId === null).toBe(t === 'essentials');
-    expect(EDITION_PLANS.blackhole).toMatchObject({ sold: 'tenant', productId: null });
+    expect(EDITION_PLANS.blackhole).toMatchObject({ sold: 'personal', productId: 'fbrx_blackhole_monthly' });
   });
 
   it('bills an organization per person: each covers its computers up to its edition, further ones cost extra', () => {
     // Until the operator changes it, the price list is the prices above: 10 shared Pro computers in a school.
     expect(organizationBill(DEFAULT_PRICE_BOOK, { kind: 'education', counts: { people: [], shared: { basic: 10 }, computers: 10 } }).total).toBe(5499 + 3990);
     const book: PriceBook = {
-      personal: { basic: 1200, ultra: 2900 },
+      personal: { basic: 1200, ultra: 2900, blackhole: 5900 },
       seats: { basic: 1200, ultra: 2900, blackhole: 9900 },
       computers: { included: { basic: 2, ultra: 5, blackhole: 15 }, extra: { basic: 199, ultra: 299, blackhole: 499 } },
       volume: [

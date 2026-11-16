@@ -828,6 +828,7 @@ export class Kernel {
       exec: this.platform.shell === 'desktop' ? (this.platform.appExec ?? null) : null,
       tier: () => this.license.status().tier,
       releases: () => this.release.apps(),
+      dirs: this.platform.shell === 'desktop' ? { downloads: this.platform.specialDirs().downloads, home: this.platform.specialDirs().home } : undefined,
       log: (msg, meta) => L('apps').info(msg, meta),
     });
     // One license: FBRX Digger runs at the edition FBRX Endpoint's license gives this computer (Digger comes with Ultra).
@@ -2255,7 +2256,7 @@ export class Kernel {
 
   /** Why a Black Hole Edition feature cannot be used on this computer (it runs a lighter edition), or null. */
   blackHoleOnly(what: string): string | null {
-    return atLeast(this.license.status().tier, 'blackhole') ? null : `${what} come with ${TIER_NAMES.blackhole}, through your organization's FBRX Command`;
+    return atLeast(this.license.status().tier, 'blackhole') ? null : `${what} come with ${TIER_NAMES.blackhole}, on your FBRX account or through your organization's FBRX Command`;
   }
 
   /** False when the organization's network policy blocks every internet host. */

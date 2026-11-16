@@ -4,6 +4,7 @@ import { basename, join } from 'node:path';
 import { APP_IDS, FBRX_APPS, appUnlocked, type AppId, type AppPresence, type AppStatus, type Tier } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { SharedLicense } from '../license/license-service';
+import { downloadAndOpen } from './app-installer';
 
 /** Where an app's own record goes, in its data folder. */
 export const PRESENCE_FILE = 'app.json';
@@ -30,6 +31,10 @@ export interface AppRegistryDeps {
   releases: () => Partial<Record<AppId, { version: string; download: string }>>;
   /** Starts a program on its own (tests pass a fake). */
   launch?: (exec: string) => void;
+  /** Where Get saves an installer: the person's Downloads folder and home (a Linux AppImage goes to ~/Applications). */
+  dirs?: { downloads: string; home: string };
+  /** Downloads and opens an app's installer (tests pass a fake). */
+  install?: typeof downloadAndOpen;
   log?: (msg: string, meta?: Record<string, unknown>) => void;
 }
 
@@ -139,6 +144,23 @@ export class AppRegistry {
         download: releases[id]?.download ?? null,
       };
     });
+  }
+
+  /**
+   * Gets an app the edition unlocks and this computer does not have (the person at the computer asked): its installer
+   * for this computer, from its latest release on GitHub, checked and opened.
+   */
+  async get(id: AppId): Promise<{ file: string; name: string }> {
+    const a = FBRX_APPS[id];
+    if (id === this.d.self) throw new CoreError('INVALID_ARGUMENT', `This is ${a.name}`);
+    if (!a.built) throw new CoreError('NOT_FOUND', `${a.name} arrives in ${a.since}`);
+    if (!appUnlocked(id, this.d.tier())) throw new CoreError('FORBIDDEN', `${a.name} comes with a fuller edition`);
+    const release = this.d.releases()[id];
+    if (!release) throw new CoreError('NOT_FOUND', `${a.name} has no release yet`);
+    if (!this.d.dirs) throw new CoreError('UNAVAILABLE', 'Apps are got from the desktop app');
+    const got = await (this.d.install ?? downloadAndOpen)(id, { tag: `${a.tag}${release.version}`, downloads: this.d.dirs.downloads, home: this.d.dirs.home });
+    this.d.log?.('got an app', { id, file: got.file });
+    return got;
   }
 
   /** Opens an installed app (the person at the computer asked). */

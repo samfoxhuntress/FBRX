@@ -7,9 +7,9 @@ import { TIERS, TIER_SHORT, type Tier } from './license';
  * here (Stripe: the price's lookup key; the stores: the subscription's product id).
  *
  * - Essentials is free, and joins an FBRX Command tenant for free.
- * - Pro and Ultra are sold to anyone for their own computers (an FBRX account), monthly or yearly, and through a
- *   tenant with the tenant's discount.
- * - Black Hole Edition is only an add-on in a tenant, per endpoint, at its full price.
+ * - Pro, Ultra and (from 2.5.0) Black Hole Edition are sold to anyone for their own computers (an FBRX account),
+ *   monthly or yearly, and through a tenant; Pro and Ultra with the tenant's discount, Black Hole Edition at its full
+ *   price.
  * - An FBRX Command tenant is a plan of its own, paid monthly or yearly: one interval for everything on it. A year costs
  *   the price list's `yearlyMonths` months of each price, under the same product id ending in `_yearly`; the same goes
  *   for a person's own Pro or Ultra.
@@ -85,12 +85,13 @@ export const EDITION_PLANS: Record<Tier, EditionPlan> = {
   },
   blackhole: {
     tier: 'blackhole',
-    monthly: null,
+    monthly: 4999,
     tenantMonthly: 4999,
-    sold: 'tenant',
-    productId: null,
+    // From 2.5.0 sold to anyone for their own computers too, not only through an organization's FBRX Command.
+    sold: 'personal',
+    productId: 'fbrx_blackhole_monthly',
     tenantProductId: 'fbrx_blackhole_tenant_monthly',
-    summary: 'Everything, for the people who run your FBRX Command and FBRX Servers.',
+    summary: 'Everything, FBRX Server included.',
     highlights: ['The whole Library, FBRX commands included', 'Network environments in Network Center', 'The FBRX Server page'],
   },
 };
@@ -193,8 +194,8 @@ export const productInterval = (productId: string): BillingInterval => (productI
 /** A price a month at an interval: itself, or a year of it at the price list's months. */
 export const intervalPrice = (book: PriceBook, monthly: number, interval: BillingInterval) => (interval === 'year' ? monthly * book.yearlyMonths : monthly);
 
-/** Pro or Ultra on one's own, paid monthly or yearly: its product id (Stripe lookup key) and price. */
-export function personalPlan(book: PriceBook, tier: 'basic' | 'ultra', interval: BillingInterval): { productId: string; amount: number } {
+/** Pro, Ultra or Black Hole Edition on one's own, paid monthly or yearly: its product id (Stripe lookup key) and price. */
+export function personalPlan(book: PriceBook, tier: PaidTier, interval: BillingInterval): { productId: string; amount: number } {
   return { productId: productFor(EDITION_PLANS[tier].productId!, interval), amount: intervalPrice(book, book.personal[tier], interval) };
 }
 
@@ -218,7 +219,7 @@ export const EXTRA_COMPUTER_PRODUCTS: Record<PaidTier, string> = {
  */
 export interface PriceBook {
   /** Pro and Ultra on their own, for a person's own computers. */
-  personal: { basic: number; ultra: number };
+  personal: Record<PaidTier, number>;
   /**
    * Each person in an organization at their edition (on as many of its computers as the edition covers), and each paid
    * computer no paying person uses (a shared, lab or student computer), before the volume discount.
@@ -250,7 +251,7 @@ export interface PriceBook {
 export const MAX_YEARLY_MONTHS = 12;
 
 export const DEFAULT_PRICE_BOOK: PriceBook = {
-  personal: { basic: EDITION_PLANS.basic.monthly!, ultra: EDITION_PLANS.ultra.monthly! },
+  personal: { basic: EDITION_PLANS.basic.monthly!, ultra: EDITION_PLANS.ultra.monthly!, blackhole: EDITION_PLANS.blackhole.monthly! },
   seats: { basic: EDITION_PLANS.basic.tenantMonthly, ultra: EDITION_PLANS.ultra.tenantMonthly, blackhole: EDITION_PLANS.blackhole.tenantMonthly },
   // Essentials counts no computers at all: it is free on every one.
   computers: { included: { basic: 2, ultra: 3, blackhole: 5 }, extra: { basic: 199, ultra: 299, blackhole: 499 } },
@@ -390,6 +391,7 @@ export function priceBookProducts(book: PriceBook, mdm: MdmPricing): PriceBookPr
   const all = [
     { productId: EDITION_PLANS.basic.productId!, label: 'Pro on its own', amount: book.personal.basic },
     { productId: EDITION_PLANS.ultra.productId!, label: 'Ultra on its own', amount: book.personal.ultra },
+    { productId: EDITION_PLANS.blackhole.productId!, label: 'Black Hole Edition on its own', amount: book.personal.blackhole },
     ...organizations,
   ];
   return [
