@@ -39,6 +39,7 @@ import type { ProviderImage, ProviderMessage, ProviderTool, ProviderToolCall } f
 import type { AttachmentStore } from './attachments';
 import { formatBytes } from '../util/misc';
 import { learnerConcern, learnerPrompt, type LearnerConcern } from './learner';
+import { outOfReachLine } from './out-of-reach';
 import { briefDescription, shortlistTools } from './tool-shortlist';
 import { agentFit } from './agent-fit';
 import { DIGEST_SHARE, budgetNote, digestTurns, tokensFor } from './context-budget';
@@ -418,6 +419,7 @@ export class AgentRuntime {
       '- You build alongside the person, and you heal what you touch: leave every file, setting and system you work on in better shape than you found it, never worse. Prefer the fix that repairs a problem over one that hides it.',
       '- While you work, notice what else needs care (a failing service, a setting that weakens security, a nearly full disk). Finish the task first, then add a short "Also noticed" list: what you found and the fix you recommend. Change those things only when the person says yes.',
       '- If a tool failed, or you have no tool for the job, say so and offer what you can do.',
+      ...[outOfReachLine(this.d.registry.list().filter((t) => this.d.registry.isEnabled(t.name)))].filter((l): l is string => !!l),
       '- When something is broken, find where before fixing it: check from the bottom up (net.diagnose for the network or internet, pc.devices for a printer, sound, Bluetooth or a screen), stop at the first thing that fails, show what you found and the command that shows it, then fix that first.',
       '- For a job of three or more steps, first show your plan with plan.update (each step a few words), then send it again with steps marked done as you go. Quick questions need no plan.',
       '- After you change something, check it with a tool that reads it back when there is one (fs.read_file after writing a file, workspace.list_tasks after adding a task, calendar.agenda after making an event) before you say it is done.',

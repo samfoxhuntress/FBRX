@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_PROVIDERS, type AgentEvent } from '@fbrx/shared';
 import { digestTurns } from '../src/ai/context-budget';
+import { outOfReachLine } from '../src/ai/out-of-reach';
 import type { StoredMessage } from '../src/ai/conversations';
 import { makeKernel, waitFor, USER } from './helpers';
 import { mockOpenAI } from './mock-llm';
@@ -10,6 +11,17 @@ const mock = (url: string, cloud = false) => ({
 });
 
 const msg = (role: StoredMessage['role'], content: string, extra: Partial<StoredMessage> = {}): StoredMessage => ({ id: 'm', role, content, createdAt: '', providerData: null, ...extra }) as StoredMessage;
+
+describe('what FBRX cannot do', () => {
+  it('is named from the tools there are: a plugin that sends email takes email off the list', () => {
+    const builtin = [{ name: 'helpdesk.send_ticket', title: 'Send a problem to IT' }, { name: 'memory.recall', title: 'Recall' }, { name: 'calendar.create_event', title: 'Add an event' }, { name: 'image.compose', title: 'Storybook scene' }];
+    expect(outOfReachLine(builtin)).toMatch(/no tool at all to send email, send texts or chat messages, make phone calls, book .* or buy or pay for anything\./);
+    const mail = outOfReachLine([...builtin, { name: 'gmail.send', title: 'Send a message' }])!;
+    expect(mail).toMatch(/no tool at all to make phone calls, book .* or buy or pay for anything\./);
+    expect(outOfReachLine([...builtin, { name: 'shop.checkout', title: 'Pay' }, { name: 'mail.send', title: 'Send' }, { name: 'sms.send', title: 'Text' }, { name: 'phone.dial', title: 'Dial' }])).toMatch(/no tool at all to book or reserve/);
+    expect(outOfReachLine([{ name: 'a.b', title: 'Email, SMS, phone, booking and payments' }])).toBeNull();
+  });
+});
 
 describe('the agent knows its room: context window, folded history and the monthly budget', () => {
   it('folds older requests into a digest that keeps what was asked, what came of it and the ids', () => {
@@ -38,6 +50,8 @@ describe('the agent knows its room: context window, folded history and the month
       const done = (await waitFor(() => events.find((e) => e.type === 'run.completed'))) as Extract<AgentEvent, { type: 'run.completed' }>;
       expect(seen.messages[0].content).toContain('## How you work');
       expect(seen.messages[0].content).toContain('Also noticed');
+      // What FBRX cannot do at all, so a model does not ask for an email address as if it could send (Noah).
+      expect(seen.messages[0].content).toContain("- FBRX has no tool at all to send email, send texts or chat messages, make phone calls, book or reserve anything with a business (travel, tables, appointments) or buy or pay for anything. Asked to, say plainly that you can't from here and offer what you can: a draft to copy and send, a note, a reminder.");
       // A short chat goes as written: the agent hears where it stands once its room fills.
       expect(seen.messages.filter((m: any) => m.role === 'user').pop().content).toBe('Hello');
       expect(done.context).toMatchObject({ usedTokens: 120, estimated: false });

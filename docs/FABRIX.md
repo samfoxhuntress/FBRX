@@ -17,7 +17,10 @@ same rules:
 - **Point out what else needs care.** While it works it notices other problems (a failing service, a setting that
   weakens security, a nearly full disk) and lists them after the task under *Also noticed*, with the fix it recommends.
   It changes them only when you say yes.
-- **Only claim what a tool confirmed.** If a tool failed, or it has none for what you asked, it says so.
+- **Only claim what a tool confirmed.** If a tool failed, or it has none for what you asked, it says so. FBRX cannot
+  send email, texts or chat messages, make phone calls, book with a business or pay for anything, and Fabrix is told
+  so: asked to, it offers a draft to copy and send instead. A plugin or connection that does one of these takes it off
+  that list.
 - **Show the plan.** For a job of three or more steps it shows its plan as a checklist in the chat and ticks steps off
   as it goes (`plan.update`; only the latest version of the plan shows).
 - **Check its work.** After a change it reads it back when it can (the file it wrote, the task it added, the event it
