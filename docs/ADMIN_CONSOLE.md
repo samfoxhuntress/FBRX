@@ -149,6 +149,17 @@ operators, who run sessions, do not. Watching one and deleting one are both in t
 512 MB or four hours (the session goes on), and the recordings are files in FBRX Command's data folder (under
 `recordings`), included when you back that folder up.
 
+### Remote desktop on Linux servers
+
+A Linux computer reports whether its remote desktop (xrdp) is on. When it is, **Remote desktop** on its page (for
+those with Remote screen switched on) downloads a connection file for your remote desktop (RDP) app, with the
+computer's local address; you sign in there with an account on the computer. On a Linux server where FBRX runs as
+root, **Set up remote desktop** (owners and administrators) installs and starts it without anyone at the server, the
+same way Settings → Remote desktop does on the computer ([MESH.md](MESH.md#remote-desktop-on-linux-computers-and-servers)),
+and *Send command → xrdp.set* turns it off again. Where FBRX does not run as root, the person at the computer sets it
+up, since the system's administrator prompt would appear on their screen. The address is the computer's local one,
+so connect from the same network or over a VPN to it.
+
 ## Sign in with Google or Microsoft
 
 Staff can sign in to FBRX Command with their school or work account instead of a separate password. Each

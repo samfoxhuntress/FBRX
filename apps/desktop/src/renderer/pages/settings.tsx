@@ -50,6 +50,7 @@ import { BrucePreview, peekBruce, seasonNow } from '../fun';
 import { TrophyBadge, TrophyCase } from '../trophies';
 import { FbrxAppsSettings } from '../apps';
 import { DirectorySettings } from './settings-directory';
+import { RemoteDesktopSettings } from './settings-remote-desktop';
 import { AskButton, EmergencyStop, ProfileFields, saveProfile } from '../widgets';
 import { ComputerKnowledge } from '../learning-screen';
 import { KeyRecorder, MacroSettings } from './settings-macros';
@@ -70,10 +71,10 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'personality' | 'memory' | 'skills' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'browser' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'apps' | 'directory' | 'api' | 'logs';
+type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'personality' | 'memory' | 'skills' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'browser' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'apps' | 'directory' | 'remote' | 'api' | 'logs';
 /** FBRX Digger's settings: what applies to a network toolkit. */
 const DIGGER_TABS: readonly string[] = DIGGER_SETTINGS;
-const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean }> = [
+const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean; linux?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
   { id: 'presenting', label: 'Presenting', icon: 'presentation', group: 'You', notEssentials: true },
@@ -94,6 +95,7 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: str
   { id: 'license', label: 'License', icon: 'key', group: 'This computer' },
   { id: 'apps', label: 'FBRX apps', icon: 'grid', group: 'This computer' },
   { id: 'directory', label: 'Directory', icon: 'users', group: 'This computer' },
+  { id: 'remote', label: 'Remote desktop', icon: 'monitor', group: 'This computer', notEssentials: true, linux: true },
   { id: 'api', label: 'Local API', icon: 'link', group: 'For experts', ultra: true },
   { id: 'logs', label: 'Logs & about', icon: 'book', group: 'For experts', basicLabel: 'About' },
 ];
@@ -109,7 +111,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   const funUnlocked = useCore('settings.get', undefined, ['settings.changed']).data?.settings.appearance.funUnlocked ?? false;
   const learner = useLearner();
   const vertical = useVertical();
-  const sections = SECTIONS.filter((x) => (DIGGER ? DIGGER_TABS.includes(x.id) : learner ? LEARNER_SECTIONS.has(x.id) : (ultra || !x.ultra) && !(tier === 'essentials' && x.notEssentials)));
+  const sections = SECTIONS.filter((x) => (DIGGER ? DIGGER_TABS.includes(x.id) : learner ? LEARNER_SECTIONS.has(x.id) : (ultra || !x.ultra) && !(tier === 'essentials' && x.notEssentials) && (!x.linux || bridge.platform === 'linux')));
   const [picked, setTab] = useState<SectionId>(() => sectionFromRoute() ?? 'general');
   const tab = sections.some((x) => x.id === picked) ? picked : 'general';
   // A link to a section (such as "See it" on a trophy) while Settings is already open.
@@ -165,6 +167,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'license' && <License />}
           {tab === 'apps' && <FbrxAppsSettings />}
           {tab === 'directory' && <DirectorySettings />}
+          {tab === 'remote' && <RemoteDesktopSettings />}
           {tab === 'api' && <LocalApi />}
           {tab === 'logs' && <Logs />}
         </div>

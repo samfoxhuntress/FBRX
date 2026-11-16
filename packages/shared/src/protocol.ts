@@ -95,6 +95,18 @@ export const HeartbeatSchema = z.object({
       })
       .nullable()
       .optional(),
+    /** Remote desktop (xrdp) on a Linux computer (2.5.0+): whether it runs, its port and local addresses. */
+    xrdp: z
+      .object({
+        installed: z.boolean(),
+        running: z.boolean(),
+        port: z.number().int(),
+        // Plain IPv4 addresses only: FBRX Command writes one into a connection file.
+        addresses: z.array(z.string().regex(/^\d{1,3}(\.\d{1,3}){3}$/)).max(16),
+        root: z.boolean(),
+      })
+      .nullable()
+      .optional(),
     /** This computer on FBRX Mesh, so FBRX Command can introduce the organization's computers to each other (1.9.5+). */
     mesh: z
       .object({

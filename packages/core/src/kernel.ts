@@ -46,6 +46,7 @@ import {
 import { AppRegistry, HANDOVER_FILE } from './apps/app-registry';
 import { ComputerLearning } from './ai/learning';
 import { systemInventory } from './system/inventory';
+import { setXrdp, xrdpStatus } from './system/xrdp';
 import { CoreError, errorMessage, toCoreError } from './errors';
 import { EventBus } from './events';
 import { LogSink, Logger } from './logger';
@@ -1996,6 +1997,7 @@ export class Kernel {
       protection: this.protection.summary(),
       imageBackup: this.imageBackup.summary(),
       mesh: this.meshIdentityForCommand(),
+      xrdp: await this.xrdpForCommand(),
       editionTier: lic.tier,
     };
   }
@@ -2077,7 +2079,27 @@ export class Kernel {
         this.notify({ title: 'Support mode is on', body: `Your organization started support mode${st.until ? ` until ${new Date(st.until).toLocaleTimeString()}` : ''}. Settings → License can end it.`, level: 'warning', source: 'administrator' });
         return { active: st.active, tier: st.tier, until: st.until };
       }
+      case 'xrdp.set': {
+        // Only where nobody would see an administrator prompt pop up: a server where FBRX runs as root.
+        if (process.getuid?.() !== 0) throw new CoreError('FORBIDDEN', 'FBRX does not run as root on this computer, so its administrator prompt would appear to the person there: set remote desktop up in FBRX OS → Settings → Remote desktop');
+        if (!atLeast(this.license.status().tier, 'basic')) throw new CoreError('FEATURE_UNAVAILABLE', 'Remote desktop comes with FBRX Endpoint Pro');
+        const st = await setXrdp(!!p.on, { root: true });
+        this.xrdpCache = null;
+        this.audit.append({ category: 'remote', action: p.on ? 'xrdp.setUp' : 'xrdp.turnedOff', actor: 'control-plane', outcome: 'success', details: { port: st.port, running: st.running } });
+        return { running: st.running, port: st.port, addresses: st.addresses };
+      }
     }
+  }
+
+  private xrdpCache: { at: number; value: Heartbeat['status']['xrdp'] } | null = null;
+  /** Remote desktop on Linux for FBRX Command's device page, read at most every five minutes. */
+  private async xrdpForCommand(): Promise<Heartbeat['status']['xrdp']> {
+    if (process.platform !== 'linux') return null;
+    if (this.xrdpCache && Date.now() - this.xrdpCache.at < 5 * 60_000) return this.xrdpCache.value;
+    const s = await xrdpStatus().catch(() => null);
+    const value = s ? { installed: s.installed, running: s.running, port: s.port, addresses: s.addresses.slice(0, 16), root: s.root } : null;
+    this.xrdpCache = { at: Date.now(), value };
+    return value;
   }
 
   // ---------------------------------------------------------------------------------- local API

@@ -985,6 +985,24 @@ export interface MonitorControls {
   why: string | null;
   monitors: MonitorControl[];
 }
+/** Remote desktop on a Linux computer (the system's xrdp), for any remote desktop (RDP) app. */
+export interface XrdpStatus {
+  /** Linux only; why not elsewhere (Windows and a Mac have their own). */
+  supported: boolean;
+  why: string | null;
+  installed: boolean;
+  running: boolean;
+  enabled: boolean;
+  port: number;
+  /** The desktops it can open (none on a server until setting it up adds a light one). */
+  desktops: string[];
+  /** This computer's addresses on its local networks, to connect to. */
+  addresses: string[];
+  manager: 'apt' | 'dnf' | 'zypper' | null;
+  canSetUp: boolean;
+  /** FBRX runs as root here (a server): FBRX Command can set it up without anyone at the computer. */
+  root: boolean;
+}
 export interface DeviceFinding {
   device: 'monitor' | 'graphics' | 'drive' | 'usb' | 'printer';
   level: 'info' | 'warning';
@@ -1421,6 +1439,8 @@ export interface ExtMethods {
   'pc.monitorControls': () => MonitorControls;
   /** Sets one of them (the person at the computer, Pro and up). */
   'pc.setMonitor': (p: { id: string; feature: MonitorFeature; value: number }) => { ok: true };
+  'pc.xrdpStatus': () => XrdpStatus;
+  'pc.setXrdp': (p: { on: boolean }) => XrdpStatus;
   'net.diagnose': (p: { target?: string }) => StackReport;
   /** How this computer opens remote desktop (RDP) and screen sharing (VNC). */
   'remote.viewers': () => RemoteViewer[];
@@ -1686,6 +1706,7 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'pc.ejectDrive',
   'pc.driveSpeed',
   'pc.setMonitor',
+  'pc.setXrdp',
   'vpn.add',
   'vpn.remove',
   'vpn.connect',

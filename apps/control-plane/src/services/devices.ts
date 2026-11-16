@@ -67,6 +67,7 @@ export function deviceView(ctx: AppContext, d: any) {
           services: s.services,
           protection: s.protection ?? null,
           imageBackup: s.imageBackup ?? null,
+          xrdp: s.xrdp ?? null,
         }
       : null,
   };

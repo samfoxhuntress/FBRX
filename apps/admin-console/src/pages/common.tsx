@@ -59,6 +59,8 @@ export interface DeviceSummary {
     protection: { provider: string; name: string; state: 'protected' | 'attention' | 'at-risk' | 'unknown'; realtime: boolean | null; threats: number } | null;
     /** Whole-computer images (FBRX Time), on Windows computers with FBRX Endpoint 1.9.8+. */
     imageBackup?: { configured: boolean; lastAt: string | null; ok: boolean | null; running: boolean } | null;
+    /** Remote desktop (xrdp) on a Linux computer. */
+    xrdp?: { installed: boolean; running: boolean; port: number; addresses: string[]; root: boolean } | null;
   };
 }
 

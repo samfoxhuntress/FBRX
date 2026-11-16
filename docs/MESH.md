@@ -74,6 +74,23 @@ What each system needs for this:
 * **Linux**: an Xorg session; using it needs `xdotool` (`sudo apt install xdotool`). Wayland lets no app see or use the
   screen without asking each time, so a Wayland session cannot be seen yet.
 
+### Remote desktop on Linux computers and servers
+
+Remote screen shows the desktop of the person at a computer. A Linux server usually has nobody at it, and often no
+desktop at all; for those, **Settings → Remote desktop** (Linux, Pro and up) sets up the system's own remote desktop
+(xrdp), so any remote desktop (RDP) app on another computer can sign in with an account on this one, FBRX directory
+accounts included. **Set up remote desktop** installs xrdp with the system's package manager (apt, dnf or zypper), and
+a light desktop (Xfce) where the computer has none, then starts it. Where a firewall is on (ufw or firewalld) it lets
+in only the local networks the computer is on. The system asks for an administrator's password; it can take a few
+minutes. The page then shows the address to connect to (port 3389), and **Turn off** stops it and takes the firewall
+rules away again (xrdp stays installed). Signing in as the person already signed in at the computer can show a black
+screen on some desktops: sign out there first, or use another account. Each set-up and turning off is in the audit
+log.
+
+On a server where FBRX runs as root, an FBRX Command administrator can set it up from the computer's page, and gets a
+connection file for their remote desktop app ([ADMIN_CONSOLE.md](ADMIN_CONSOLE.md#remote-desktop-on-linux-servers)).
+Windows has its own Remote Desktop, and a Mac its Screen Sharing.
+
 ## FBRX Sync: the same projects, tasks, notes and calendar on your computers
 
 FBRX Sync keeps your **projects, tasks, notes, snippets and FBRX calendar events** the same on two of your computers.

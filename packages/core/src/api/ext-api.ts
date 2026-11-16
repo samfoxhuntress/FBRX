@@ -4,6 +4,7 @@ import { openRemote, remoteViewers } from '../network/remote-desktop';
 import { systemInventory } from '../system/inventory';
 import { deviceReport, ejectDrive, systemSources, testDriveSpeed } from '../system/devices';
 import { monitorControls, setMonitor } from '../system/monitor-control';
+import { setXrdp, xrdpStatus } from '../system/xrdp';
 import { z } from 'zod';
 import {
   ALERT_CHANNELS,
@@ -38,7 +39,7 @@ import {
   TIERS,
   remoteInputProblem,
 } from '@fbrx/shared';
-import { CoreError } from '../errors';
+import { CoreError, errorMessage } from '../errors';
 import type { Kernel } from '../kernel';
 import { checkLink } from '../security/linkcheck';
 import { eventLogs, queryEvents } from '../system/events';
@@ -457,6 +458,20 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       if (!atLeast(k.license.status().tier, 'basic')) throw new CoreError('FEATURE_UNAVAILABLE', 'Devices come with FBRX Endpoint Pro');
       const q = z.object({ id: z.string().min(1).max(40), feature: z.enum(MONITOR_FEATURES), value: z.number().int().min(0).max(255) }).parse(p);
       return setMonitor(q.id, q.feature, q.value);
+    },
+    // Remote desktop on Linux (xrdp): Pro and up, like remote screen.
+    'pc.xrdpStatus': () => xrdpStatus(),
+    'pc.setXrdp': async (p) => {
+      if (!atLeast(k.license.status().tier, 'basic')) throw new CoreError('FEATURE_UNAVAILABLE', 'Remote desktop comes with FBRX Endpoint Pro');
+      const on = z.object({ on: z.boolean() }).parse(p).on;
+      try {
+        const s = await setXrdp(on);
+        k.audit.append({ category: 'remote', action: on ? 'xrdp.setUp' : 'xrdp.turnedOff', actor: 'user', outcome: 'success', details: { port: s.port, running: s.running } });
+        return s;
+      } catch (e) {
+        k.audit.append({ category: 'remote', action: on ? 'xrdp.setUp' : 'xrdp.turnedOff', actor: 'user', outcome: 'failure', details: { error: errorMessage(e).slice(0, 300) } });
+        throw e;
+      }
     },
     'pc.ejectDrive': (p) => {
       if (!atLeast(k.license.status().tier, 'basic')) throw new CoreError('FEATURE_UNAVAILABLE', 'Devices come with FBRX Endpoint Pro');

@@ -27,7 +27,7 @@ import {
   useAction,
   useConfirm,
 } from '@fbrx/ui';
-import { api, download } from '../api';
+import { api, download, saveBlob } from '../api';
 import { SettingsBuilder, type SettingsDraft } from './settings-builder';
 import { useApp, useQuery } from '../state';
 import { CommandComposer } from './command-composer';
@@ -93,6 +93,16 @@ export function DeviceDetailPage({ id }: { id: string }) {
             {app.can('devices.remote') && d.online && (
               <Button icon="monitor" title="See this computer's screen, or use it (a ticket number; the person there says yes)" onClick={() => setScreen(true)}>
                 Remote screen
+              </Button>
+            )}
+            {app.can('devices.remote') && d.online && d.health?.xrdp?.running && d.health.xrdp.addresses.length > 0 && (
+              <Button icon="download" title="A connection file for your remote desktop (RDP) app; sign in there with an account on the computer" onClick={() => saveBlob(new Blob([rdpFile(d.health!.xrdp!.addresses[0], d.health!.xrdp!.port)], { type: 'application/x-rdp' }), `${d.name.replace(/[^\w .-]+/g, '').trim() || 'computer'}.rdp`)}>
+                Remote desktop
+              </Button>
+            )}
+            {app.can('commands.privileged') && d.online && d.health?.xrdp && !d.health.xrdp.running && d.health.xrdp.root && (
+              <Button icon="monitor" loading={busy === 'xrdp.set'} title="Installs and starts xrdp on this Linux server (FBRX runs as root there), open to its local networks" onClick={() => void quick('xrdp.set', { on: true }, 'Remote desktop setup')}>
+                Set up remote desktop
               </Button>
             )}
             {app.can('licenses.manage') && (
@@ -435,4 +445,11 @@ function ConfigTab({ d, onSaved }: { d: Detail; onSaved: () => void }) {
       </div>
     </Grid>
   );
+}
+
+/** A remote desktop (RDP) connection file: the address, and the app asks for the account. */
+function rdpFile(address: string, port: number): string {
+  // Only an IPv4 address and a port: nothing the computer reported can add a line to the file.
+  if (!/^\d{1,3}(\.\d{1,3}){3}$/.test(address) || !Number.isInteger(port) || port < 1 || port > 65535) throw new Error('Not an address');
+  return [`full address:s:${address}${port === 3389 ? '' : `:${port}`}`, 'prompt for credentials:i:1', 'authentication level:i:2', 'screen mode id:i:2', ''].join('\r\n');
 }
