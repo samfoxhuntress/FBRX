@@ -35,8 +35,12 @@ Layers, in order:
 
 1. **The EICAR test file**, the standard harmless file antivirus products treat as malware, so you can check it works.
 2. **A threat database** of known-malware fingerprints (SHA-256), updated every day from a public feed (by default
-   abuse.ch MalwareBazaar's recent additions). If the feed asks for a key, add your free abuse.ch Auth-Key in
-   Credentials as `ABUSECH_AUTH_KEY`. You can point it at another list (one SHA-256 per line) or import a list.
+   abuse.ch MalwareBazaar's recent additions). abuse.ch asks for a free Auth-Key (sign up at auth.abuse.ch): add it in
+   Credentials as `ABUSECH_AUTH_KEY`, or, for an organization, once in FBRX Command as an organization secret named
+   `ABUSECH_AUTH_KEY`, which every computer gets. Until a key is there, the update says so instead of trying. You can
+   point it at another list (one SHA-256 per line, or a CSV with a `sha256_hash` column) or import a list; `{auth-key}`
+   in a feed address stands for the key. After a failed update FBRX tries again six hours later (*Update now* tries at
+   once).
 3. **FBRX's own rules** for suspicious files:
    * programs disguised as documents (`invoice.pdf.exe`) or with hidden right-to-left characters in the name;
    * scripts that delete backups and recovery points, turn off or exclude antivirus, download and run code, hide

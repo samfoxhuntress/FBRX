@@ -503,7 +503,7 @@ function ShieldSettings({ st, ultra }: { st: ProtectionStatus; ultra: boolean })
         <details className="cal-howto">
           <summary>Threat database source</summary>
           <div className="fx-grid" style={{ marginTop: 8 }}>
-            <Field label="Feed address" help="A list of SHA-256 fingerprints of known malware, one per line. The default is abuse.ch MalwareBazaar's recent additions; if it asks for a key, add your free abuse.ch Auth-Key in Credentials as ABUSECH_AUTH_KEY.">
+            <Field label="Feed address" help="A list of SHA-256 fingerprints of known malware. The default is abuse.ch MalwareBazaar's recent additions, which need a free abuse.ch Auth-Key (auth.abuse.ch): add it in Credentials as ABUSECH_AUTH_KEY, or once in FBRX Command as an organization secret. {auth-key} in an address stands for that key.">
               <Input value={feed ?? sh.feedUrl} disabled={L('feedUrl')} onChange={(e) => setFeed(e.target.value)} onBlur={() => feed !== null && feed.trim() !== sh.feedUrl && patch({ feedUrl: feed.trim() })} />
             </Field>
             <div className="fx-actions">

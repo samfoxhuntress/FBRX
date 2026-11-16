@@ -50,6 +50,8 @@ export interface ProtectionDeps {
   alert: (rule: string, title: string, body: string, key: string) => void;
   /** The alerts for these findings have nothing left to say (they were decided). */
   resolve?: (ids: string[]) => void;
+  /** Of this rule's alerts, those not about one of these keys are over (what they said is no longer true). */
+  settle?: (rule: string, keys: string[]) => void;
   /** Says once what a re-check of the findings cleared. */
   notify?: (title: string, body: string) => void;
   /** For tests: what is installed. */
@@ -73,7 +75,6 @@ export class ProtectionService {
   private schedTimer: NodeJS.Timeout | null = null;
   private kick: NodeJS.Timeout | null = null;
   private running = false;
-  private lastProblems = new Set<string>();
   /** New downloads tell one by one, three a minute at most; the rest wait for one alert that counts them. */
   private recentAlerts: number[] = [];
   private held: ShieldDetection[] = [];
@@ -155,8 +156,10 @@ export class ProtectionService {
   /** Every half hour: the threat database once a day, status (and alerts), and scheduled scans. */
   private async housekeeping(): Promise<void> {
     const s = this.d.settings().shield;
-    const sig = this.d.meta.get<{ at: string | null }>('shield.signatures');
-    if (s.updateSignatures && (!sig?.at || Date.now() - Date.parse(sig.at) > 24 * 3600_000)) {
+    const sig = this.d.meta.get<{ at: string | null; failedAt?: string | null }>('shield.signatures');
+    // Once a day; after a failure, not again for six hours (Update now still tries at once).
+    const waiting = !!sig?.failedAt && Date.now() - Date.parse(sig.failedAt) < 6 * 3600_000;
+    if (s.updateSignatures && !waiting && (!sig?.at || Date.now() - Date.parse(sig.at) > 24 * 3600_000)) {
       await this.d.shield.updateSignatures().catch((err) => this.d.log.info('Threat database update failed', { error: errorMessage(err) }));
     }
     if (!this.running) return;
@@ -164,8 +167,11 @@ export class ProtectionService {
     if (!this.running) return;
     // Microsoft Defender on Windows has its own alerts, and FBRX Shield's findings raise theirs as they happen.
     const problems = new Set(st.active.kind === 'defender' && IS_WIN ? [] : st.problems.filter((p) => !p.startsWith('FBRX Shield found')));
-    for (const p of problems) if (!this.lastProblems.has(p)) this.d.alert('av_problem', `${st.active.name} needs attention`, p, `${st.active.id}:${p}`);
-    this.lastProblems = problems;
+    // Each problem keeps one alert while it lasts (the alert engine says it again once a day at most, across restarts);
+    // the key is the problem's first clause, so a changing detail does not make it a new one. Gone: its alert goes too.
+    const keys = [...problems].map((p) => `${st.active.id}:${problemKey(p)}`);
+    [...problems].forEach((p, i) => this.d.alert('av_problem', `${st.active.name} needs attention`, p, keys[i]));
+    this.d.settle?.('av_problem', keys);
     this.scheduled();
   }
 
@@ -261,9 +267,10 @@ export class ProtectionService {
       upToDate = shield.signatures > 0 && sigAge !== null && sigAge <= 7;
       threats = openMalware;
       if (!realtime) problems.push('Download checks are off: new files are only checked when you scan.');
-      if (!shield.signatures) problems.push('The threat database is empty: update it so FBRX Shield knows current malware.');
+      // One problem for the database, whichever way it is behind (a failed update is why it is old).
+      if (shield.signaturesError && !upToDate) problems.push(`The threat database could not be updated: ${shield.signaturesError}`);
+      else if (!shield.signatures) problems.push('The threat database is empty: update it so FBRX Shield knows current malware.');
       else if (!upToDate) problems.push('The threat database is more than a week old.');
-      if (shield.signaturesError) problems.push(`The last threat database update failed: ${shield.signaturesError}`);
       notes.push('FBRX Shield checks new downloads, scans on demand and quarantines malware. It does not yet block programs as they start.');
       if (IS_WIN) notes.push('Microsoft Defender keeps running underneath, as Windows requires.');
       else if (process.platform === 'darwin') notes.push("macOS's own built-in protection keeps running too.");
@@ -521,4 +528,9 @@ function summarize(list: ShieldDetection[]): string {
 export function defaultDirs(): { home: string; downloads: string; desktop: string } {
   const home = homedir();
   return { home, downloads: join(home, 'Downloads'), desktop: join(home, 'Desktop') };
+}
+
+/** A problem's lasting part: up to its first colon ("The threat database could not be updated: …"). */
+export function problemKey(problem: string): string {
+  return problem.split(':')[0].trim().slice(0, 120);
 }

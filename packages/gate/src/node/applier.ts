@@ -31,6 +31,11 @@ export interface GateApplier {
   vpnKey(): Promise<{ publicKey: string }>;
   /** This computer's network ports, to choose from. */
   systemInterfaces(): Promise<SystemInterface[]>;
+  /**
+   * Forgets a device's lease (on the port `device` that gave it), so the address is free again. The device keeps
+   * using it until it next asks for one.
+   */
+  releaseLease(device: string, lease: Pick<GateLease, 'mac' | 'address'>): Promise<void>;
 }
 
 export interface SystemInterface {
@@ -105,6 +110,13 @@ export class SimulatedApplier implements GateApplier {
     return ['eno1', 'eno2', 'eno3', 'eno4'].map((name, i) => ({ name, mac: `02:fb:00:00:01:0${i + 1}`, up: i < 2, speed: i < 2 ? 1000 : null, kind: 'ethernet' as const }));
   }
 
+  /** Leases let go of (mac address): they stay away until the device would ask again. */
+  readonly released = new Set<string>();
+
+  async releaseLease(_device: string, lease: Pick<GateLease, 'mac' | 'address'>): Promise<void> {
+    this.released.add(`${lease.mac} ${lease.address}`);
+  }
+
   async live(c: GateConfig | null): Promise<GateLive> {
     const live = emptyLive();
     if (!c) return live;
@@ -121,7 +133,7 @@ export class SimulatedApplier implements GateApplier {
       ...(n.dhcp.enabled
         ? visitors.slice(0, 2 + (n.name.length % 3)).map((v, k) => ({ expires: new Date((Math.floor(t / 3600) + 1 + k) * 3600_000).toISOString(), mac: `02:fb:${n.name.length.toString(16).padStart(2, '0')}:00:10:${(k + 1).toString(16).padStart(2, '0')}`, address: intToIPv4(ipv4ToInt(n.dhcp.start) + k), name: `${v}-${n.name}`, network: n.name }))
         : []),
-    ]);
+    ]).filter((l) => !l.expires || !this.released.has(`${l.mac} ${l.address}`));
     for (const r of c.firewall.rules) live.counters[`rule:${r.id}`] = { packets: Math.round(t % 997), bytes: Math.round((t % 997) * 600) };
     live.counters['default:input'] = { packets: Math.round(t % 4093), bytes: Math.round((t % 4093) * 80) };
     live.counters['default:forward'] = { packets: Math.round(t % 211), bytes: Math.round((t % 211) * 120) };
@@ -190,6 +202,44 @@ export class LinuxApplier implements GateApplier {
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, content, { mode });
     chmodSync(file, mode);
+  }
+
+  private leaseFile() {
+    return join(this.o.paths.varDir, 'dnsmasq.leases');
+  }
+
+  private holds(lease: Pick<GateLease, 'mac' | 'address'>): boolean {
+    try {
+      return parseLeases(readFileSync(this.leaseFile(), 'utf8'), null).some((l) => l.mac === lease.mac && l.address === lease.address);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * dnsmasq's own way first: dhcp_release (dnsmasq-utils) tells it the device let the address go. Without it, or when
+   * the lease is still there after that, dnsmasq stops for a moment while the line comes out of its lease file.
+   */
+  async releaseLease(device: string, lease: Pick<GateLease, 'mac' | 'address'>): Promise<void> {
+    if (!this.holds(lease)) return;
+    const r = await this.run('dhcp_release', [device, lease.address, lease.mac]);
+    if (r.code === 0) {
+      for (let i = 0; i < 20 && this.holds(lease); i++) await new Promise((ok) => setTimeout(ok, 100));
+      if (!this.holds(lease)) return;
+    }
+    await this.must('systemctl', ['stop', 'dnsmasq'], 'dnsmasq did not stop');
+    try {
+      const file = this.leaseFile();
+      const kept = readFileSync(file, 'utf8')
+        .split('\n')
+        .filter((line) => {
+          const f = line.trim().split(/\s+/);
+          return !(f[1]?.toLowerCase() === lease.mac && f[2] === lease.address);
+        });
+      writeFileSync(file, kept.join('\n'));
+    } finally {
+      await this.must('systemctl', ['start', 'dnsmasq'], 'dnsmasq did not start again');
+    }
   }
 
   private dirs() {
@@ -452,7 +502,7 @@ export class LinuxApplier implements GateApplier {
       }
     }
     try {
-      live.leases = parseLeases(readFileSync(join(this.o.paths.varDir, 'dnsmasq.leases'), 'utf8'), c);
+      live.leases = parseLeases(readFileSync(this.leaseFile(), 'utf8'), c);
     } catch {
       /* no leases yet */
     }

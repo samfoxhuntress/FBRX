@@ -48,8 +48,18 @@ export const ALERT_RULES: RuleDef[] = [
   { id: 'edition_trial', group: 'Edition', label: 'My Pro trial is ending, or has ended', unit: null, threshold: null, enabled: true, severity: 'info', help: 'The day before the free trial ends, and when it has' },
 ];
 
+/**
+ * Conditions that stay true until someone deals with them (an antivirus off or behind, a firewall off): said once,
+ * then at most once a day while they last, across restarts, and taken off the inbox when they are over.
+ */
+const ONGOING_RULES = new Set(['av_problem', 'signatures_old', 'defender_off', 'firewall_off', 'printer_error']);
+const ONGOING_EVERY_MS = 24 * 3600_000;
+const ONGOING_KEY = 'alerts.ongoing';
+
 export interface AlertEngineDeps {
   db: Db;
+  /** Where ongoing conditions remember when they were last said (tests may leave it out). */
+  meta?: { get<T>(key: string): T | null; set(key: string, value: unknown): void };
   events: EventBus;
   log: Logger;
   settings: () => Settings;
@@ -150,6 +160,30 @@ export class AlertEngine {
     return n;
   }
 
+  private ongoing(): Record<string, number> {
+    return this.d.meta?.get<Record<string, number>>(ONGOING_KEY) ?? {};
+  }
+
+  /**
+   * Of an ongoing rule's alerts, the ones not about these keys are over: they leave the inbox, and the condition is
+   * said again at once if it comes back.
+   */
+  settle(ruleId: string, keep: string[]): number {
+    const gone = this.d.db.all<{ id: string; ref: string | null }>('SELECT id, ref FROM alerts WHERE rule_id = ?', ruleId).filter((r) => !keep.includes(r.ref ?? ''));
+    for (const r of gone) this.d.db.run('DELETE FROM alerts WHERE id = ?', r.id);
+    const map = this.ongoing();
+    let changed = false;
+    for (const k of Object.keys(map)) {
+      if (!k.startsWith(`${ruleId}:`) || keep.includes(k.slice(ruleId.length + 1))) continue;
+      delete map[k];
+      this.last.delete(k);
+      changed = true;
+    }
+    if (changed) this.d.meta?.set(ONGOING_KEY, map);
+    if (gone.length) this.d.events.emit('alerts.changed', this.counts());
+    return gone.length;
+  }
+
   remove(id: string): void {
     if (id === '*') this.d.db.run('DELETE FROM alerts');
     else this.d.db.run('DELETE FROM alerts WHERE id = ?', id);
@@ -185,6 +219,13 @@ export class AlertEngine {
     const k = `${ruleId}:${o.key ?? ''}`;
     const prev = this.last.get(k);
     if (!o.force && prev && Date.now() - prev < cfg.cooldownMinutes * 60_000) return null;
+    if (!o.force && ONGOING_RULES.has(ruleId)) {
+      const map = this.ongoing();
+      if (map[k] && Date.now() - map[k] < ONGOING_EVERY_MS) return null;
+      // Remembered across restarts; entries over a week old are forgotten.
+      for (const [x, at] of Object.entries(map)) if (Date.now() - at > 7 * ONGOING_EVERY_MS) delete map[x];
+      this.d.meta?.set(ONGOING_KEY, { ...map, [k]: Date.now() });
+    }
     this.last.set(k, Date.now());
     const severity = o.severity ?? rule?.severity ?? 'info';
     const alert: AlertItem = { id: newId('alrt'), ruleId, severity, title: title.slice(0, 200), body: body.slice(0, 2000), createdAt: new Date().toISOString(), read: false, deliveries: {} };
@@ -383,14 +424,23 @@ $bs=@(Get-WinEvent -FilterHashtable @{LogName='System'; Id=1001; ProviderName='M
       return;
     }
     this.lastCrash = new Date().toISOString();
-    if (j.av === true && j.rtp === false) this.raise('defender_off', 'Real-time protection is off', 'Microsoft Defender real-time protection is disabled. Turn it back on in Security.');
-    if (typeof j.sigAge === 'number' && j.sigAge > sigDays) this.raise('signatures_old', 'Virus definitions are out of date', `Definitions are ${j.sigAge} days old. Open Security → Update definitions.`);
+    // Defender's own state only counts while it is the antivirus in use (not when another one has taken over).
+    const off = j.av === true && j.rtp === false;
+    const old = j.av === true && typeof j.sigAge === 'number' && j.sigAge > sigDays;
+    if (off) this.raise('defender_off', 'Real-time protection is off', 'Microsoft Defender real-time protection is disabled. Turn it back on in Security.', { key: 'defender' });
+    if (old) this.raise('signatures_old', 'Virus definitions are out of date', `Definitions are ${j.sigAge} days old. Open Security → Update definitions.`, { key: 'defender' });
+    this.settle('defender_off', off ? ['defender'] : []);
+    this.settle('signatures_old', old ? ['defender'] : []);
     if (j.threat) {
       if (this.lastThreat && j.threat.time > this.lastThreat) this.raise('defender_threat', 'Microsoft Defender detected a threat', `${j.threat.res || 'A threat'} was detected. Open Security → Threats for details.`, { key: j.threat.time });
       this.lastThreat = j.threat.time;
     } else this.lastThreat ??= '0';
-    for (const name of [].concat(j.firewall ?? [])) this.raise('firewall_off', `Firewall is off (${name} profile)`, 'Turn Windows Firewall back on in Security → Firewall.', { key: name });
-    for (const p of [].concat(j.printers ?? []) as Array<{ name: string; status: string }>) this.raise('printer_error', `Printer "${p.name}" needs attention`, `Status: ${p.status}. Open Network Center → Printers.`, { key: p.name });
+    const fw: string[] = [].concat(j.firewall ?? []);
+    for (const name of fw) this.raise('firewall_off', `Firewall is off (${name} profile)`, 'Turn Windows Firewall back on in Security → Firewall.', { key: name });
+    this.settle('firewall_off', fw);
+    const printers = [].concat(j.printers ?? []) as Array<{ name: string; status: string }>;
+    for (const p of printers) this.raise('printer_error', `Printer "${p.name}" needs attention`, `Status: ${p.status}. Open Network Center → Printers.`, { key: p.name });
+    this.settle('printer_error', printers.map((p) => p.name));
     for (const c of [].concat(j.crashes ?? []) as Array<{ app: string; time: string }>) this.raise('crash', `${c.app} crashed`, 'Open Bug catcher to investigate with Fabrix.', { key: c.time });
     if (j.bsod) this.raise('crash', 'Windows recovered from a stop error (blue screen)', 'Open Bug catcher for the crash details.', { key: 'bsod', severity: 'critical' });
   }

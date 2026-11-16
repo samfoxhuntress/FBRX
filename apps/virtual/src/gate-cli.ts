@@ -33,6 +33,7 @@ const HELP = `fbrx-gate: FBRX Gate's command line
   reset                          throw the edits away
   history                        commits, newest first
   leases                         devices that got an address
+  release <address|mac>          let a device's address go (it keeps it until it next asks)
   preview nftables|dnsmasq|networkd
                                  the files the configuration turns into
 
@@ -259,6 +260,18 @@ async function main(argv: string[]): Promise<number> {
       const live = await api<GateLive>('GET', '/v1/gate/live');
       if (!live.leases.length) console.log(dim('No leases.'));
       for (const l of live.leases) console.log(`${l.address.padEnd(16)} ${l.mac}  ${(l.name ?? '').padEnd(24)} ${l.network ?? ''}  ${l.expires ? `until ${new Date(l.expires).toLocaleString()}` : 'reserved'}`);
+      return 0;
+    }
+    case 'release': {
+      const which = (rest[0] ?? '').toLowerCase();
+      if (!which) throw new Error('Which one? fbrx-gate release <address|mac> (fbrx-gate leases lists them)');
+      const live = await api<GateLive>('GET', '/v1/gate/live');
+      const found = live.leases.filter((l) => l.address === which || l.mac === which);
+      if (!found.length) throw new Error(`No lease for ${which} (fbrx-gate leases lists them)`);
+      for (const l of found) {
+        await api('POST', '/v1/gate/leases/release', { mac: l.mac, address: l.address });
+        console.log(`Released ${l.address} (${l.mac}${l.name ? `, ${l.name}` : ''}). It keeps it until it next asks for an address.`);
+      }
       return 0;
     }
     case 'preview': {

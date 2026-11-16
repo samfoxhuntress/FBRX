@@ -793,6 +793,7 @@ export class Kernel {
       setProvider: (provider) => void this.settings.update({ protection: { provider } }),
       dirs: () => this.platform.specialDirs(),
       alert: (rule, title, body, key) => void this.alerts.fire(rule, title, body, { key }).catch((err) => this.log.debug('Alert failed', { rule, error: errorMessage(err) })),
+      settle: (rule, keys) => void this.alerts.settle(rule, keys),
       resolve: (ids) => ids.forEach((id) => this.alerts.resolve('shield_threat', id)),
       notify: (title, body) => this.notify({ title, body, level: 'info', source: 'alerts' }),
     });
@@ -1076,6 +1077,7 @@ export class Kernel {
         : null;
     this.alerts = new AlertEngine({
       db: this.db,
+      meta: this.meta,
       events: this.events,
       log: L('alerts'),
       settings: () => this.settings.get(),

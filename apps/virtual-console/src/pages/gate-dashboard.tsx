@@ -1,5 +1,6 @@
 import type { GateLease } from '@fbrx/gate';
-import { Button, Callout, Card, Empty, formatBytes, formatNumber, Grid, KeyValue, LineChart, StatTile, Status, Table, timeAgo } from '@fbrx/ui';
+import { Button, Callout, Card, Empty, formatBytes, formatNumber, Grid, KeyValue, LineChart, StatTile, Status, Table, timeAgo, useAction, useConfirm } from '@fbrx/ui';
+import { api } from '../api';
 import { useGate } from '../gate-state';
 import { AskAiButton, describeFor } from '../ask-ai';
 import { useApp, useRoute } from '../state';
@@ -10,6 +11,18 @@ export function GateDashboardPage() {
   const app = useApp();
   const g = useGate();
   const [, go] = useRoute();
+  const { run, busy } = useAction();
+  const { confirm, dialog } = useConfirm();
+  const release = async (l: GateLease) => {
+    if (
+      await confirm({
+        title: `Release ${l.address}?`,
+        body: `${l.name ?? 'The device'} keeps using it until it next asks for an address (when it restarts or reconnects); then it may get another one, and this one can go to another device.`,
+        confirmLabel: 'Release it',
+      })
+    )
+      void run(`rel:${l.mac}`, () => api('POST', '/v1/gate/leases/release', { mac: l.mac, address: l.address }).then(() => g.reload()), `Released ${l.address}`);
+  };
   return (
     <GatePage
       title={g.info?.state.running?.hostname ?? g.info?.state.candidate.hostname ?? 'FBRX Gate'}
@@ -179,8 +192,21 @@ export function GateDashboardPage() {
                   { key: 'a', header: 'Address', render: (l) => <span className="mono">{l.address}</span> },
                   { key: 'w', header: 'Network', render: (l) => l.network ?? '—' },
                   { key: 'e', header: 'Address kept until', render: (l) => (l.expires ? new Date(l.expires).toLocaleString() : 'Reserved') },
+                  {
+                    key: 'x',
+                    header: '',
+                    width: 110,
+                    render: (l) =>
+                      l.expires &&
+                      app.can('operator') && (
+                        <Button size="sm" variant="ghost" icon="logout" loading={busy === `rel:${l.mac}`} onClick={() => void release(l)}>
+                          Release
+                        </Button>
+                      ),
+                  },
                 ]}
               />
+              {dialog}
             </Card>
           </>
         );

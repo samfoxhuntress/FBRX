@@ -410,7 +410,8 @@ if has_role gate; then
   if [ ! -f /etc/dnsmasq.d/fbrx-gate.conf ]; then
     printf '%s\n' '# FBRX Gate: replaced at the first commit. Until then dnsmasq answers this server only.' 'interface=lo' 'bind-interfaces' >/etc/dnsmasq.d/fbrx-gate.conf
   fi
-  GATE_PKGS="nftables dnsmasq wireguard-tools"
+  # dnsmasq-utils: dhcp_release, for letting a device's address go from the console.
+  GATE_PKGS="nftables dnsmasq dnsmasq-utils wireguard-tools"
   # MiniDome follows new connections with conntrack's event stream.
   if has_role minidome; then GATE_PKGS="$GATE_PKGS conntrack"; fi
   # Newer Debian ships systemd-networkd on its own.

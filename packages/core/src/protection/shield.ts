@@ -4,7 +4,7 @@ import { chmod, lstat, open, opendir, readFile, rm, stat, unlink, writeFile } fr
 import { tmpdir } from 'node:os';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { newId, type Settings, type ShieldAction, type ShieldDetection, type ShieldEngine as EngineName, type ShieldStatus, type ShieldVerdict } from '@fbrx/shared';
+import { FEED_KEY_PLACEHOLDER, newId, protectionFeed, type Settings, type ShieldAction, type ShieldDetection, type ShieldEngine as EngineName, type ShieldStatus, type ShieldVerdict } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { Logger } from '../logger';
 import type { MetaStore } from '../storage/meta';
@@ -30,6 +30,10 @@ import { scanCommand } from './products';
 
 /** 1.1: FBRX's own files are never flagged, and packages' code (node_modules) does not count as downloaded. */
 export const SHIELD_ENGINE_VERSION = '1.1';
+
+/** abuse.ch's exports need a free key since November 2026. */
+const NEEDS_KEY =
+  'abuse.ch, where the threat database comes from, now asks for a free Auth-Key: get one at auth.abuse.ch and add it in Credentials as ABUSECH_AUTH_KEY (in FBRX Command, add it once as an organization secret for every computer).';
 
 const MAX_HASH_BYTES = 100 * 1024 * 1024;
 const MAX_SCRIPT_BYTES = 2 * 1024 * 1024;
@@ -617,12 +621,21 @@ export class Shield {
   importSignatures(text: string, source: string): { added: number; total: number } {
     const now = new Date().toISOString();
     let added = 0;
+    // A CSV export (MalwareBazaar's) names its columns on a "#" line: the malware's name is its signature column.
+    let columns: string[] | null = null;
     this.d.db.tx(() => {
       for (const line of text.split(/\r?\n/)) {
-        if (!line || line.startsWith('#')) continue;
-        const m = /\b([a-fA-F0-9]{64})\b(?:[\s,;"]+([^"\r\n]{1,120}))?/.exec(line);
+        if (!line) continue;
+        if (line.startsWith('#')) {
+          if (/sha256_hash/.test(line)) columns = [...line.matchAll(/"?([a-z0-9_]+)"?\s*(?:,|$)/gi)].map((c) => c[1].toLowerCase());
+          continue;
+        }
+        const fields = columns ? [...line.matchAll(/"([^"]*)"/g)].map((f) => f[1]) : null;
+        const hash = fields && columns ? fields[columns.indexOf('sha256_hash')] : undefined;
+        const m = hash && /^[a-fA-F0-9]{64}$/.test(hash) ? ([hash, hash, fields![columns!.indexOf('signature')]] as const) : /\b([a-fA-F0-9]{64})\b(?:[\s,;"]+([^"\r\n]{1,120}))?/.exec(line);
         if (!m) continue;
-        const name = m[2]?.trim().replace(/^["']|["']$/g, '') || null;
+        const raw = m[2]?.trim().replace(/^["']|["']$/g, '');
+        const name = raw && !/^(n\/a|null|none|unknown)$/i.test(raw) ? raw.slice(0, 120) : null;
         added += this.d.db.run('INSERT OR IGNORE INTO shield_signatures (sha256, name, source, added_at) VALUES (?, ?, ?, ?)', m[1].toLowerCase(), name && !/^[a-f0-9]{32,}$/i.test(name) ? name : null, source, now).changes;
       }
     });
@@ -632,13 +645,19 @@ export class Shield {
 
   /** Brings the threat database up to date from the feed. */
   async updateSignatures(): Promise<{ added: number; total: number }> {
-    const url = this.d.settings().feedUrl.trim();
-    if (!url) throw new CoreError('INVALID_ARGUMENT', 'No threat feed is set.');
+    const feed = protectionFeed(this.d.settings().feedUrl);
+    if (!feed) throw new CoreError('INVALID_ARGUMENT', 'No threat feed is set.');
     if (!this.d.internet()) throw new CoreError('POLICY_DENIED', 'Internet access is blocked by policy.');
-    const key = this.d.secret('ABUSECH_AUTH_KEY');
+    const key = this.d.secret('ABUSECH_AUTH_KEY')?.trim();
     try {
-      const res = await fetch(url, { headers: { 'user-agent': `FBRX-Shield/${SHIELD_ENGINE_VERSION}`, ...(key ? { 'Auth-Key': key } : {}) }, signal: AbortSignal.timeout(120_000) });
-      if (res.status === 401 || res.status === 403) throw new Error('The threat feed asked for a key. Add your free abuse.ch Auth-Key in Credentials as ABUSECH_AUTH_KEY.');
+      // The key goes in the address where the feed asks for it there (abuse.ch's exports); the address is never shown.
+      if (feed.includes(FEED_KEY_PLACEHOLDER) && !key) throw new Error(NEEDS_KEY);
+      const url = feed.split(FEED_KEY_PLACEHOLDER).join(encodeURIComponent(key ?? ''));
+      // The key goes as a header to abuse.ch only, never to another feed's server.
+      const abuse = /(^|\.)abuse\.ch$/i.test(new URL(url).hostname);
+      const res = await fetch(url, { headers: { 'user-agent': `FBRX-Shield/${SHIELD_ENGINE_VERSION}`, ...(key && abuse ? { 'Auth-Key': key } : {}) }, signal: AbortSignal.timeout(120_000) });
+      if (res.status === 401 || res.status === 403) throw new Error(key ? 'The threat feed did not accept the abuse.ch Auth-Key (ABUSECH_AUTH_KEY in Credentials): check it at auth.abuse.ch.' : NEEDS_KEY);
+      if (res.status === 410) throw new Error('The threat feed’s address was retired (HTTP 410). Set the feed back to the default in Security → FBRX Shield.');
       if (!res.ok) throw new Error(`The threat feed answered HTTP ${res.status}.`);
       const buf = Buffer.from(await res.arrayBuffer());
       if (buf.length > MAX_FEED_BYTES) throw new Error('The threat feed is too large.');
@@ -664,10 +683,10 @@ export class Shield {
         }
       })();
       const r = this.importSignatures(text, host);
-      this.d.meta.set('shield.signatures', { at: new Date().toISOString(), error: null });
+      this.d.meta.set('shield.signatures', { at: new Date().toISOString(), error: null, failedAt: null });
       return r;
     } catch (err) {
-      this.d.meta.set('shield.signatures', { at: this.d.meta.get<{ at: string | null }>('shield.signatures')?.at ?? null, error: errorMessage(err) });
+      this.d.meta.set('shield.signatures', { at: this.d.meta.get<{ at: string | null }>('shield.signatures')?.at ?? null, error: errorMessage(err), failedAt: new Date().toISOString() });
       throw err instanceof CoreError ? err : new CoreError('UNAVAILABLE', errorMessage(err));
     }
   }

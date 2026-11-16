@@ -104,6 +104,12 @@ restart. The problems `fbrx-gate status` (and the Gate page) name, with what to 
 
 Viewers see everything; administrators change it.
 
+**Releasing an address.** On the *Gate* page, *Release* next to a device lets its address go at once (operators and
+administrators; it changes no settings, so there is nothing to commit). The device keeps using the address until it
+next asks for one, when it restarts or reconnects; then it may get another, and this one can go to another device. A
+reserved address stays its device's: take the reservation out under *Networks* to free it. `sudo fbrx-gate release
+<address|mac>` does the same.
+
 ## Networks and VLANs
 
 A **network** has a kind, an address for the gate (its size gives the range), what it may **reach**, whether its
@@ -222,6 +228,7 @@ fbrx-gate renumber lan 192.168.50.1/24   move a network: its range, reservations
 fbrx-gate wan static 203.0.113.2/29 203.0.113.1    a fixed internet address (wan dhcp: back to DHCP)
 fbrx-gate reset                          throw the edits away
 fbrx-gate history | leases | preview nftables|dnsmasq|networkd
+fbrx-gate release 192.168.1.57           let a device's address go (or its MAC address)
 ```
 
 It signs in with a token only root can read, accepted only from the gate itself.

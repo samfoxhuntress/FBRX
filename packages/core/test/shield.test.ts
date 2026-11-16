@@ -4,7 +4,7 @@ import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { lastScanDue, nextScanDue, scheduledScanDue, type AvProduct, type ProtectionStatus, type ScanJob, type ShieldDetection } from '@fbrx/shared';
+import { lastScanDue, nextScanDue, PROTECTION_DEFAULT_FEED, protectionFeed, scheduledScanDue, type AvProduct, type ProtectionStatus, type ScanJob, type ShieldDetection } from '@fbrx/shared';
 import { decodeProductState } from '../src/protection/products';
 import { isEicar, SCRIPT_RULES, zipEntryNames } from '../src/protection/shield';
 import { makeKernel, tempDir, USER, waitFor } from './helpers';
@@ -401,6 +401,62 @@ describe('FBRX Shield on a computer', () => {
       expect(kernel.protection.targets('quick')).not.toContain(home);
     } finally {
       await cleanup();
+    }
+  });
+});
+
+describe('the threat feed after abuse.ch retired its keyless downloads', () => {
+  it('maps the retired addresses to the keyed export', () => {
+    expect(protectionFeed('https://bazaar.abuse.ch/export/txt/sha256/recent/')).toBe(PROTECTION_DEFAULT_FEED);
+    expect(protectionFeed('https://bazaar.abuse.ch/export/txt/sha256/recent')).toBe(PROTECTION_DEFAULT_FEED);
+    expect(protectionFeed(' https://example.org/list.txt ')).toBe('https://example.org/list.txt');
+    expect(PROTECTION_DEFAULT_FEED).toContain('{auth-key}');
+  });
+
+  it('asks for the free key, puts it in the address, reads the CSV with its names and never shows the key', async () => {
+    const key = 'abc123-free-key';
+    const seen: string[] = [];
+    const csv = [
+      '################################################################',
+      '# MalwareBazaar recent malware samples (CSV)',
+      '# "first_seen_utc","sha256_hash","md5_hash","sha1_hash","reporter","file_name","file_type_guess","mime_type","signature","clamav","vtpercent","imphash","ssdeep","tlsh"',
+      `"2026-11-16 08:00:01", "${sha256('csv sample 1')}", "${'a'.repeat(32)}", "${'b'.repeat(40)}", "someone", "invoice.exe", "exe", "application/x-dosexec", "AgentTesla", "n/a", "n/a", "x", "y", "z"`,
+      `"2026-11-16 08:00:02", "${sha256('csv sample 2')}", "${'c'.repeat(32)}", "${'d'.repeat(40)}", "someone", "doc.js", "js", "text/plain", "n/a", "n/a", "n/a", "x", "y", "z"`,
+    ].join('\n');
+    const headers: Array<string | undefined> = [];
+    const feed = createServer((req, res) => {
+      seen.push(req.url ?? '');
+      headers.push(req.headers['auth-key'] as string | undefined);
+      if (req.url === `/v2/files/exports/${key}/recent.csv`) return void res.writeHead(200, { 'content-type': 'text/csv' }).end(csv);
+      if (req.url === '/gone') return void res.writeHead(410).end();
+      res.writeHead(401).end();
+    });
+    await new Promise<void>((r) => feed.listen(0, '127.0.0.1', () => r()));
+    const base = `http://127.0.0.1:${(feed.address() as AddressInfo).port}`;
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      kernel.settings.update({ protection: { provider: 'shield', shield: { feedUrl: `${base}/v2/files/exports/{auth-key}/recent.csv` } } });
+      await expect(kernel.call('shield.updateSignatures', undefined, USER)).rejects.toThrow(/free Auth-Key.*ABUSECH_AUTH_KEY/);
+      expect(seen).toEqual([]);
+      kernel.vault.set({ name: 'ABUSECH_AUTH_KEY', value: key });
+      expect(await kernel.call('shield.updateSignatures', undefined, USER)).toEqual({ added: 2, total: 2 });
+      expect(seen).toEqual([`/v2/files/exports/${key}/recent.csv`]);
+      // Not abuse.ch: the key is only where the address asked for it, not in a header.
+      expect(headers).toEqual([undefined]);
+      // The CSV's signature column names the malware; "n/a" names nothing.
+      const name = (h: string) => kernel.db.get<{ name: string | null }>('SELECT name FROM shield_signatures WHERE sha256 = ?', h)?.name;
+      expect(name(sha256('csv sample 1'))).toBe('AgentTesla');
+      expect(name(sha256('csv sample 2'))).toBeNull();
+      const status = (await kernel.call('protection.status', undefined, USER)) as ProtectionStatus;
+      expect(JSON.stringify(status)).not.toContain(key);
+
+      kernel.settings.update({ protection: { shield: { feedUrl: `${base}/gone` } } });
+      await expect(kernel.call('shield.updateSignatures', undefined, USER)).rejects.toThrow(/retired \(HTTP 410\)/);
+      const after = (await kernel.call('protection.status', undefined, USER)) as ProtectionStatus;
+      expect(JSON.stringify(after)).not.toContain(key);
+    } finally {
+      await cleanup();
+      feed.close();
     }
   });
 });

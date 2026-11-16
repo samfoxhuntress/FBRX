@@ -476,6 +476,10 @@ and its threshold changed (**Alerts → Rules**).
 | E-mail | Your SMTP server; the password lives in Credentials (`FBRX_SMTP_PASSWORD`) |
 
 Quiet hours hold back desktop and e-mail alerts that are not critical; a cooldown stops the same alert repeating.
+Something that stays wrong until someone fixes it (an antivirus that is off or behind, a firewall that is off, a
+printer that needs attention) is said once, then at most once a day while it lasts, even after FBRX restarts or the
+inbox is cleared; once it is fixed, its alert leaves the inbox. Microsoft Defender's definitions only count while
+Defender is the antivirus in use.
 
 ### Notifications
 

@@ -1,9 +1,9 @@
-import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { checkConfig, dhcpRange, pickLanAddress, render, renumberNetwork, starterConfig } from '../src/index';
-import { LinuxApplier, type Runner } from '../src/node/index';
+import { GateEngine, GateStore, LinuxApplier, SimulatedApplier, type Runner } from '../src/node/index';
 
 describe('a new gate behind a router', () => {
   it('keeps your network clear of the addresses the internet side uses', () => {
@@ -140,5 +140,66 @@ describe('a VLAN whose tag changes', () => {
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
+  });
+});
+
+describe('releasing a lease', () => {
+  const lease = { mac: '02:fb:00:00:10:01', address: '192.168.1.57' };
+  const file = (root: string) => join(root, 'dnsmasq.leases');
+  const leases = (root: string) =>
+    writeFileSync(file(root), `1900000000 ${lease.mac} ${lease.address} laptop 01:02:fb:00:00:10:01\n1900000000 02:fb:00:00:10:02 192.168.1.58 phone *\n`);
+
+  it('asks dnsmasq first, and takes the line out itself (dnsmasq stopped meanwhile) when that did not do it', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'fbrx-gate-release-'));
+    try {
+      leases(root);
+      const ran: string[] = [];
+      // No dhcp_release on this system (dnsmasq-utils is not installed).
+      const run: Runner = async (cmd, args) => (ran.push(`${cmd} ${args.join(' ')}`), cmd === 'dhcp_release' ? { code: -1, out: '', err: 'dhcp_release is not installed' } : { code: 0, out: '', err: '' });
+      const applier = new LinuxApplier({ paths: { varDir: root, logDir: root, etcDir: root }, mode: 'networkd', root, run });
+      await applier.releaseLease('br-lan', lease);
+      expect(ran).toEqual([`dhcp_release br-lan ${lease.address} ${lease.mac}`, 'systemctl stop dnsmasq', 'systemctl start dnsmasq']);
+      expect(readFileSync(file(root), 'utf8')).toBe('1900000000 02:fb:00:00:10:02 192.168.1.58 phone *\n');
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('leaves dnsmasq running when dhcp_release did it', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'fbrx-gate-release-'));
+    try {
+      leases(root);
+      const ran: string[] = [];
+      const run: Runner = async (cmd, args) => {
+        ran.push(`${cmd} ${args.join(' ')}`);
+        // dnsmasq drops the lease when it hears the release.
+        if (cmd === 'dhcp_release') writeFileSync(file(root), '1900000000 02:fb:00:00:10:02 192.168.1.58 phone *\n');
+        return { code: 0, out: '', err: '' };
+      };
+      const applier = new LinuxApplier({ paths: { varDir: root, logDir: root, etcDir: root }, mode: 'networkd', root, run });
+      await applier.releaseLease('eno2', lease);
+      expect(ran).toEqual([`dhcp_release eno2 ${lease.address} ${lease.mac}`]);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it('the engine refuses reserved addresses and gives the simulated gate the lease back', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'fbrx-gate-release-'));
+    const applier = new SimulatedApplier();
+    const c = starterConfig({ wan: 'eno1', lan: 'eno2', lanAddress: '192.168.1.1/24' });
+    c.networks[0].dhcp.reservations.push({ mac: '02:aa:bb:cc:dd:ee', address: '192.168.1.20', name: 'printer' });
+    const store = new GateStore(join(dir, 'gate.db'));
+    const engine = new GateEngine({ store, applier, paths: { varDir: dir, logDir: dir, etcDir: dir }, initial: () => c });
+    await engine.commit({ by: 'sam', comment: 'start' });
+    const live = await engine.live();
+    const dynamic = live.leases.find((l) => l.expires)!;
+    await expect(engine.releaseLease('02:aa:bb:cc:dd:ee', '192.168.1.20')).rejects.toThrow(/reserved/);
+    await expect(engine.releaseLease('02:00:00:00:00:00', '192.168.1.99')).rejects.toThrow(/no lease/);
+    await expect(engine.releaseLease(dynamic.mac.toUpperCase(), dynamic.address)).resolves.toMatchObject({ network: 'lan' });
+    expect((await engine.live()).leases.some((l) => l.mac === dynamic.mac)).toBe(false);
+    engine.stop();
+    store.close();
+    rmSync(dir, { recursive: true, force: true });
   });
 });

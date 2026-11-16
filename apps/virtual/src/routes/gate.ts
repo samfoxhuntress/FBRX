@@ -63,6 +63,13 @@ export async function gateRoutes(app: FastifyInstance, ctx: VirtualContext) {
     return gate().engine.live();
   });
 
+  /** Lets a device's address go at once (no commit: it changes no settings). */
+  app.post('/v1/gate/leases/release', async (req, reply) => {
+    need(req, 'operator');
+    const body = z.object({ mac: z.string().regex(/^[0-9a-fA-F:]{17}$/), address: z.string().max(45) }).parse(req.body);
+    return guarded(reply, () => audited(ctx, req, 'gate.lease.release', body.address, async () => ({ ok: true, ...(await gate().engine.releaseLease(body.mac, body.address)) }), { mac: body.mac.toLowerCase() }));
+  });
+
   app.get('/v1/gate/interfaces', async (req) => {
     need(req, 'viewer');
     return { interfaces: await gate().applier.systemInterfaces() };

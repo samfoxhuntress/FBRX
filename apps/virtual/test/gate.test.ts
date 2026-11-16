@@ -86,6 +86,14 @@ describe('FBRX Server as a gate', () => {
     expect(s.ctx.audit.list(20).map((e) => e.action)).toEqual(expect.arrayContaining(['gate.commit', 'gate.confirm']));
     const live = await req('GET', '/v1/gate/live', viewer);
     expect(live.body.interfaces.map((i: { name: string }) => i.name)).toEqual(['eno1', 'eno2']);
+
+    // Letting a device's address go: not for viewers, at once for administrators, and in the audit log.
+    const lease = (live.body.leases as Array<{ mac: string; address: string; expires: string | null }>).find((l) => l.expires)!;
+    expect((await req('POST', '/v1/gate/leases/release', viewer, { mac: lease.mac, address: lease.address })).status).toBe(403);
+    expect((await req('POST', '/v1/gate/leases/release', admin, { mac: lease.mac, address: '10.9.9.9' })).status).toBe(404);
+    expect((await req('POST', '/v1/gate/leases/release', admin, { mac: lease.mac, address: lease.address })).status).toBe(200);
+    expect((await req('GET', '/v1/gate/live', viewer)).body.leases.some((l: { mac: string }) => l.mac === lease.mac)).toBe(false);
+    expect(s.ctx.audit.list(5).map((e) => e.action)).toContain('gate.lease.release');
   });
 
   it('makes a VPN device with its settings and a QR code, keeping only its public key', async () => {
