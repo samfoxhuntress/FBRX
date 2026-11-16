@@ -45,6 +45,15 @@ itself (or press **Check again**). With Pro or Essentials, Digger stays closed. 
 itself, so the edition cannot be changed by editing a file, and a license left behind by an uninstalled FBRX Endpoint
 does not count.
 
+**From FBRX Endpoint.** The saved connections and network environments made in FBRX Endpoint before 2.5.0 come over
+to Digger by themselves, once, the first time it starts after Endpoint 2.5.0 has started. Passwords and API keys stay
+in Endpoint's vault: Digger asks for a password when you connect, and each network environment shows that its API key
+needs entering again. Something you remove in Digger does not come back.
+
+**Fabrix in FBRX Endpoint** runs the full network check, ping, trace route, name lookups, port checks and a device scan
+itself. For more (logging in to a switch, a network controller, saved and compared scans) it recommends Digger, with
+**Open Digger** or **Get Digger** under its answer; Digger's Fabrix carries on there.
+
 Otherwise Digger keeps to itself. It keeps its own data folder and settings, runs none of FBRX Endpoint's background
 work (no AI of its own, no backups, antivirus or organization), and leaves the keyboard alone (no global shortcuts),
 so it never gets in the way of FBRX Endpoint.

@@ -66,7 +66,7 @@ export class ToolGate {
 
     if (!tool) {
       // FBRX Endpoint asked for one of FBRX Digger's tools (2.5.0): say where it is, so Fabrix can say it too.
-      if (DIGGER_ONLY_TOOLS.includes(name)) return deny(`${name} is in FBRX Digger, the app with the advanced network tools (it comes with Endpoint Ultra). Tell the person to open FBRX Digger from Network Center → Digger, and use the everyday network tools here meanwhile (net.diagnose, net.ping, net.port_check, net.traceroute).`);
+      if (DIGGER_ONLY_TOOLS.includes(name)) return deny(`${name} is in FBRX Digger, the app with the advanced network tools (it comes with Endpoint Ultra). Tell the person to open FBRX Digger from Network Center → Digger, and use the everyday network tools here meanwhile (net.diagnose, net.ping, net.port_check, net.traceroute, net.scan_lan).`);
       return deny(`Unknown tool "${name}"`);
     }
     const blocked = ctx.origin === 'agent' ? this.d.agentToolsBlocked?.() : null;

@@ -176,6 +176,9 @@ answers "what is my IP address?" at once and the same way every time.
   approve it. Fabrix's actions that only look run straight away next time; one whose command could change anything
   asks before each run.
 - **Your own**: **New action**: a name, the toolkit it goes in, when to use it, and the command for each system.
+  When its command does what one of Fabrix's own tools does (ping, trace route, a name lookup, a port check, your
+  addresses, a speed test, a network scan, the Wi-Fi networks around), the editor says so: Fabrix uses its own tool
+  first, which reads the result for you and quotes names others chose, and your action when you ask for it.
 
 **Make it do it your way.** Every action can be changed: find it (the search looks in names and commands), click the
 pencil, and change the command. Fabrix runs it your way from then on. For example, if the action Fabrix built for your

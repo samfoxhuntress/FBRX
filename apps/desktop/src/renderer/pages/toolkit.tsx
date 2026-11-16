@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { TOOLKIT_INPUT_KINDS, TOOLKIT_LIMITS, TOOLKIT_SYSTEMS, TOOLKIT_SYSTEM_NAMES, toolkitPlaceholders, type ToolkitAction, type ToolkitInput, type ToolkitInputKind, type ToolkitSystem } from '@fbrx/shared';
+import { builtinFor, TOOLKIT_INPUT_KINDS, TOOLKIT_LIMITS, TOOLKIT_SYSTEMS, TOOLKIT_SYSTEM_NAMES, toolkitPlaceholders, type ToolkitAction, type ToolkitInput, type ToolkitInputKind, type ToolkitSystem } from '@fbrx/shared';
 import { Badge, Button, Callout, Card, Empty, Field, Input, Modal, Page, Select, Tabs, TextArea, Toggle, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { call } from '../client';
 import { useAgentName, useCore } from '../hooks';
@@ -281,6 +281,11 @@ function EditAction({ draft, setDraft, system, kits, onClose }: { draft: Draft; 
           <TextArea code rows={s === system ? 3 : 2} value={d.commands[s]} onChange={(e) => set({ commands: { ...d.commands, [s]: e.target.value } })} />
         </Field>
       ))}
+      {d.source !== 'library' && builtinFor(d.commands) && (
+        <Callout tone="info" title={`FBRX already has this: ${builtinFor(d.commands)!.title}`}>
+          {`Fabrix has its own ${builtinFor(d.commands)!.tool}, which reads the result for you and quotes names others chose. It uses that first, and this action when you ask for it.`}
+        </Callout>
+      )}
       <Field label="Inputs" help="What the command needs each time. FBRX checks each value and puts it in quoted, so it can never become a command of its own.">
         {d.inputs.map((inp, n) => (
           <div key={n} className="fx-row kit-input">

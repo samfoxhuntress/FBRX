@@ -549,12 +549,13 @@ network with the reason (at 2.4 GHz only 1, 6 or 11), and **Open router settings
 with battery; printers (test page, queue, default, clear, restart spooler).
 
 **The IT tools are in FBRX Digger** (from 2.5.0, with Ultra): ping and trace route with hop identification, device
-discovery with saved scans and their comparison, DNS comparison and port checks, adapter configuration, device
-consoles, remote desktop and screen sharing, network environments (Black Hole Edition), and the Wi-Fi planner's extras
-(the channel width to set, DFS channels, how busy each channel has been, every access point). The **Digger** tab opens
-Digger when it is installed, or gets it; Terminal → Device consoles does the same. In a chat, Fabrix keeps the
-everyday network tools (the full network check, ping, port checks, names and trace route); device scans, consoles and
-network environments are Digger's Fabrix's. See [DIGGER.md](DIGGER.md).
+discovery with saved scans and their comparison, DNS comparison and port checks, adapter configuration, device consoles,
+remote desktop and screen sharing, network environments (Black Hole Edition), and the Wi-Fi planner's extras (the
+channel width to set, DFS channels, how busy each channel has been, every access point). The **Digger** tab opens Digger
+when it is installed, or gets it; Terminal → Device consoles does the same. In a chat, Fabrix keeps the everyday network
+tools and diagnostics (the full network check, ping, port checks, names, trace route and a device scan) and recommends
+Digger, with a button to open or get it, for more: device consoles and network environments are Digger's Fabrix's. See
+[DIGGER.md](DIGGER.md).
 
 Makers come from the **IEEE MAC address registry** that ships with FBRX OS (MA-L, MA-M and MA-S blocks, about 54,000
 entries, the most specific block wins; randomized phone and laptop addresses are recognized as such). *Update from

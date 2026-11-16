@@ -333,6 +333,50 @@ export class NetEnvironments {
     throw explain(last ?? { status: 0, body: null });
   }
 
+  /** What FBRX Endpoint hands to FBRX Digger (2.5.0): each environment without its API key (kept in its vault). */
+  exportSaved(): Array<Pick<Stored, 'kind' | 'name' | 'url' | 'fingerprint' | 'defaultSiteId'>> {
+    return this.load().map(({ kind, name, url, fingerprint, defaultSiteId }) => ({ kind, name, url, fingerprint, defaultSiteId }));
+  }
+
+  /**
+   * FBRX Digger: takes in the environments FBRX Endpoint handed over, each checked as if typed in, without their API
+   * keys (the person enters each key once more). One already here (the same address) is left as it is. Returns how
+   * many it added.
+   */
+  adopt(items: unknown[]): number {
+    const list = this.load();
+    const added: Stored[] = [];
+    for (const raw of items) {
+      if (!raw || typeof raw !== 'object') continue;
+      const r = raw as Record<string, unknown>;
+      if (typeof r.kind !== 'string' || !NETENV_KINDS.includes(r.kind as NetEnvironment['kind']) || typeof r.url !== 'string') continue;
+      let url: string;
+      let fingerprint: string | null = null;
+      try {
+        url = consoleUrl(r.url);
+        if (typeof r.fingerprint === 'string' && r.fingerprint) fingerprint = formatFingerprint(r.fingerprint);
+      } catch {
+        continue;
+      }
+      if ([...list, ...added].some((x) => x.url === url)) continue;
+      added.push({
+        id: newId('net'),
+        kind: r.kind as NetEnvironment['kind'],
+        name: (typeof r.name === 'string' ? r.name.trim().slice(0, 80) : '') || 'Network',
+        url,
+        fingerprint,
+        trust: fingerprint ? 'pinned' : 'system',
+        defaultSiteId: typeof r.defaultSiteId === 'string' ? r.defaultSiteId.slice(0, 80) : null,
+        base: null,
+        createdAt: new Date().toISOString(),
+        lastOkAt: null,
+        lastError: 'Brought over from FBRX Endpoint: enter its API key again (Endpoint keeps it in its own vault).',
+      });
+    }
+    if (added.length) this.store([...list, ...added]);
+    return added.length;
+  }
+
   async save(input: NetEnvInput): Promise<NetEnvironment> {
     this.gate();
     if (!NETENV_KINDS.includes(input.kind)) throw new CoreError('INVALID_ARGUMENT', 'Unknown kind of network environment');

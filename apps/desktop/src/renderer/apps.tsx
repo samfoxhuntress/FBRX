@@ -50,11 +50,27 @@ function AppAction({ app }: { app: AppStatus }) {
   );
 }
 
+/**
+ * Under a Fabrix reply in FBRX Endpoint that recommends FBRX Digger: open it, get it, or the edition it needs, so the
+ * work carries on there (Digger's Fabrix thinks with Endpoint's AI and has the advanced network tools).
+ */
+export function DiggerSuggestion() {
+  const { data } = useApps();
+  const app = data?.find((a) => a.id === 'digger');
+  if (!app || app.self) return null;
+  return (
+    <div className="msg-app">
+      <AppIcon id="digger" size={22} />
+      <AppAction app={app} />
+    </div>
+  );
+}
+
 /** Settings → FBRX apps. */
 export function FbrxAppsSettings() {
   const { data } = useApps();
   return (
-    <Card title="FBRX apps" subtitle="One family of apps from FBRX: one license and one AI across all of them. Your edition unlocks each app; Fabrix, your vault and your saved connections are shared.">
+    <Card title="FBRX apps" subtitle="One family of apps from FBRX: one license and one AI across all of them. Your edition unlocks each app, and each thinks with Fabrix in FBRX Endpoint.">
       <div className="app-list">
         {(data ?? []).map((a) => (
           <div key={a.id} className={`app-row${a.built ? '' : ' planned'}`}>

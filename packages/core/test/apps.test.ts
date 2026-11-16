@@ -192,16 +192,54 @@ describe('the advanced network tools are FBRX Digger’s (2.5.0)', () => {
     const digger = await makeKernel({ platform: { flavor: 'digger' } });
     try {
       const has = (k: typeof endpoint.kernel, n: string) => !!k.registry.get(n);
-      for (const n of ['net.scan_lan', 'device_console.send', 'network_env.overview']) {
+      for (const n of ['device_console.send', 'network_env.overview']) {
         expect(has(endpoint.kernel, n)).toBe(false);
         expect(has(digger.kernel, n)).toBe(true);
       }
-      for (const n of ['net.diagnose', 'net.ping', 'net.port_check', 'net.traceroute', 'net.speed_test']) expect(has(endpoint.kernel, n)).toBe(true);
-      const r = await endpoint.kernel.gate.invoke('net.scan_lan', {}, { origin: 'agent', actor: 'agent:test' });
+      for (const n of ['net.diagnose', 'net.ping', 'net.port_check', 'net.traceroute', 'net.speed_test', 'net.scan_lan']) expect(has(endpoint.kernel, n)).toBe(true);
+      const r = await endpoint.kernel.gate.invoke('device_console.sessions', {}, { origin: 'agent', actor: 'agent:test' });
       expect(r.ok).toBe(false);
       expect(r.output).toMatch(/is in FBRX Digger/);
       expect(endpoint.kernel.networkTools()).toBe(false);
       expect(digger.kernel.networkTools()).toBe(true);
+    } finally {
+      await endpoint.cleanup();
+      await digger.cleanup();
+    }
+  });
+});
+
+describe('FBRX Endpoint’s saved connections and network environments move to FBRX Digger (2.5.0)', () => {
+  it('copies them over once, checked, without passwords or keys', async () => {
+    const { HANDOVER_FILE } = await import('../src/apps/app-registry');
+    const c = computer();
+    const endpoint = await makeKernel();
+    const digger = await makeKernel({ platform: { flavor: 'digger' } });
+    try {
+      endpoint.kernel.consoles.saveBookmark({ host: '10.0.0.2', protocol: 'ssh', username: 'admin', label: 'Core switch', notes: 'Rack 2' });
+      const osExec = join(c.apps, 'fbrx-os');
+      writeFileSync(osExec, '');
+      const os = new AppRegistry({ self: 'os', dataDir: c.os, appsDir: c.apps, version: '2.5.0', exec: osExec, tier: () => 'ultra', releases: () => ({}) });
+      const reader = new AppRegistry({ self: 'digger', dataDir: c.digger, appsDir: c.apps, version: '1.3.0', exec: c.exec, tier: () => 'ultra', releases: () => ({}) });
+      os.announce();
+      os.share(HANDOVER_FILE, {
+        connections: [
+          ...endpoint.kernel.consoles.bookmarks().map(({ passwordSaved: _p, ...b }) => b),
+          { host: 'bad host; rm -rf /', protocol: 'ssh' },
+          { host: '10.0.0.9', protocol: 'ftp' },
+        ],
+        environments: [{ kind: 'unifi', name: 'School', url: 'https://192.168.1.1', fingerprint: null, defaultSiteId: null }, { kind: 'other', url: 'https://x' }],
+      });
+      const handed = reader.fromEndpoint(HANDOVER_FILE);
+      expect(JSON.stringify(handed)).not.toMatch(/password|apiKey/i);
+      expect(digger.kernel.adoptFromEndpoint(handed)).toEqual({ connections: 1, environments: 1 });
+      expect(digger.kernel.consoles.bookmarks()).toMatchObject([{ label: 'Core switch', host: '10.0.0.2', username: 'admin', notes: 'Rack 2', passwordSaved: false }]);
+      expect(digger.kernel.netenv.list()).toMatchObject([{ name: 'School', hasKey: false }]);
+      // Once only: again, or after it was removed in Digger, nothing comes back.
+      expect(digger.kernel.adoptFromEndpoint(handed)).toEqual({ connections: 0, environments: 0 });
+      digger.kernel.consoles.removeBookmark(digger.kernel.consoles.bookmarks()[0]!.id);
+      expect(digger.kernel.adoptFromEndpoint(handed)).toEqual({ connections: 0, environments: 0 });
+      expect(digger.kernel.consoles.bookmarks()).toEqual([]);
     } finally {
       await endpoint.cleanup();
       await digger.cleanup();

@@ -29,11 +29,12 @@ export const DIGGER_AI_PROVIDER: ProviderConfig = { id: 'fbrx-endpoint', type: '
 /**
  * From 2.5.0 the advanced network tools are FBRX Digger's alone: these Network Center tabs (FBRX Endpoint's
  * Network Center keeps the overview with the full network check, speed, Wi-Fi, Bluetooth and printers, and hands the
- * rest to Digger), and these AI tools, which only Digger's Fabrix has.
+ * rest to Digger), and these AI tools, which only Digger's Fabrix has. FBRX Endpoint's Fabrix keeps the diagnostics
+ * and everyday network tools (the full check, ping, trace route, names, ports, a device scan); for more it recommends
+ * Digger.
  */
 export const DIGGER_ONLY_TABS = ['trace', 'devices', 'tools', 'adapters', 'environments', 'consoles'] as const;
 export const DIGGER_ONLY_TOOLS: readonly string[] = [
-  'net.scan_lan',
   'device_console.sessions',
   'device_console.read',
   'device_console.send',

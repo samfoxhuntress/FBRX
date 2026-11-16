@@ -21,6 +21,7 @@ import {
   notesFor,
   atLeast,
   type AiUsageReport,
+  type ConnectionProtocol,
   type DeviceCommand,
   type Heartbeat,
   type NotificationEvent,
@@ -42,7 +43,7 @@ import {
   type ComputerFacts,
   type LearningAgent,
 } from '@fbrx/shared';
-import { AppRegistry } from './apps/app-registry';
+import { AppRegistry, HANDOVER_FILE } from './apps/app-registry';
 import { ComputerLearning } from './ai/learning';
 import { systemInventory } from './system/inventory';
 import { CoreError, errorMessage, toCoreError } from './errors';
@@ -1486,7 +1487,9 @@ export class Kernel {
       if (!this.digger) {
         this.apps.shareLicense(this.license.shared());
         this.disposers.push(this.events.on('license.changed', () => this.apps.shareLicense(this.license.shared())));
-      }
+        // Its saved connections and network environments go to FBRX Digger (2.5.0), without passwords or keys.
+        this.apps.share(HANDOVER_FILE, { connections: this.consoles.bookmarks().map(({ passwordSaved: _p, ...b }) => b), environments: this.netenv.exportSaved() });
+      } else this.adoptFromEndpoint();
     }
     // FBRX Digger leaves out what is FBRX Endpoint's (its AI, messages, organization, account, support, automations).
     if (!this.digger) this.startEndpoint();
@@ -2193,6 +2196,45 @@ export class Kernel {
   }
 
   /** Every network tool, whatever the edition: on Endpoint Ultra, and always in FBRX Digger. */
+  /**
+   * FBRX Digger: takes in the saved connections and network environments FBRX Endpoint handed over (2.5.0 moved them
+   * here), each once and each checked as if typed in; one already here, or taken in before and since removed, is left.
+   */
+  adoptFromEndpoint(h: Record<string, unknown> | null = this.apps.fromEndpoint(HANDOVER_FILE)): { connections: number; environments: number } {
+    if (!h) return { connections: 0, environments: 0 };
+    const seen = new Set(this.meta.get<string[]>('apps.adopted') ?? []);
+    const key = (b: { protocol?: unknown; host?: unknown; port?: unknown; username?: unknown }) => `${String(b.protocol)}|${String(b.host)}|${String(b.port)}|${String(b.username ?? '')}`;
+    const here = new Set(this.consoles.bookmarks().map(key));
+    const text = (v: unknown) => (typeof v === 'string' ? v : undefined);
+    let connections = 0;
+    for (const raw of Array.isArray(h.connections) ? h.connections.slice(0, 500) : []) {
+      if (!raw || typeof raw !== 'object') continue;
+      const b = raw as Record<string, unknown>;
+      const k = key(b);
+      if (seen.has(k) || here.has(k) || !['ssh', 'telnet', 'rdp', 'vnc'].includes(String(b.protocol)) || typeof b.host !== 'string') continue;
+      seen.add(k);
+      try {
+        this.consoles.saveBookmark({ label: text(b.label), host: b.host, port: typeof b.port === 'number' ? b.port : undefined, protocol: b.protocol as ConnectionProtocol, username: text(b.username) ?? null, profileId: text(b.profileId) ?? null, vendor: text(b.vendor) ?? null, notes: text(b.notes) ?? '' });
+        connections++;
+      } catch {
+        // Not a valid saved connection: left out.
+      }
+    }
+    const envs = (Array.isArray(h.environments) ? h.environments.slice(0, 50) : []).filter((e) => {
+      const k = `env|${String((e as { url?: unknown })?.url)}`;
+      if (seen.has(k)) return false;
+      seen.add(k);
+      return true;
+    });
+    const environments = this.netenv.adopt(envs);
+    this.meta.set('apps.adopted', [...seen].slice(-2000));
+    if (connections || environments) {
+      this.log.info('Brought over from FBRX Endpoint', { connections, environments });
+      this.audit.append({ category: 'network', action: 'apps.adopted', actor: 'digger', outcome: 'success', details: { connections, environments } });
+    }
+    return { connections, environments };
+  }
+
   networkTools(): boolean {
     // From 2.5.0 the advanced network tools are FBRX Digger's (with Endpoint Ultra); FBRX Endpoint keeps the everyday
     // ones.

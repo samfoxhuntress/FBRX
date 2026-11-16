@@ -96,3 +96,30 @@ export function toolkitToolName(name: string, taken: Iterable<string> = []): str
   for (const suffix of 'bcdefghijklmnopqrstuvwxyz') if (!used.has(`${base}_${suffix}`)) return `${base}_${suffix}`;
   return `${base}_${Date.now().toString(36).replace(/\d/g, '')}`;
 }
+
+/**
+ * FBRX's own tools that an AI Toolkit action can do the same job as, by the command it runs. The builder says so, and
+ * Fabrix is told to use FBRX's tool first (it reads its results, quotes names others chose, and keeps to the trained
+ * skills) unless the person asks for their action.
+ */
+const BUILTIN_COMMANDS: Array<{ tool: string; title: string; match: RegExp }> = [
+  { tool: 'net.ping', title: 'Ping', match: /^(ping|ping6|Test-Connection)\b/i },
+  { tool: 'net.traceroute', title: 'Trace route', match: /^(traceroute|tracert|tracepath|mtr)\b|^Test-NetConnection\b.*-TraceRoute\b/i },
+  { tool: 'net.dns_lookup', title: 'DNS lookup', match: /^(nslookup|dig|host|Resolve-DnsName)\b/i },
+  { tool: 'net.port_check', title: 'Port check', match: /^(nc|ncat|netcat)\b.*\s-\w*z|^Test-NetConnection\b.*-Port\b/i },
+  { tool: 'net.ip_address', title: 'IP addresses', match: /^(ipconfig(\s+\/all)?|ifconfig|ip\s+(-\w+\s+)*a(ddr(ess)?)?(\s+show)?|Get-NetIPAddress)\s*$/i },
+  { tool: 'net.speed_test', title: 'Speed test', match: /^(speedtest|speedtest-cli|networkQuality)\b/i },
+  { tool: 'net.scan_lan', title: 'Network scan', match: /^(nmap|arp-scan|arp\s+-a)\b/i },
+  { tool: 'net.wifi_channels', title: 'Wi-Fi networks and channels', match: /^netsh\s+wlan\s+show\s+networks\b|^nmcli\s+(-\w+\s+)*dev(ice)?\s+wifi\b/i },
+];
+
+/** The FBRX tool an action's commands duplicate (the first line of any system's command), or null. */
+export function builtinFor(commands: ToolkitCommands): { tool: string; title: string } | null {
+  for (const cmd of Object.values(commands)) {
+    const first = (cmd ?? '').trim().split('\n')[0]!.trim();
+    if (!first) continue;
+    const hit = BUILTIN_COMMANDS.find((b) => b.match.test(first));
+    if (hit) return { tool: hit.tool, title: hit.title };
+  }
+  return null;
+}

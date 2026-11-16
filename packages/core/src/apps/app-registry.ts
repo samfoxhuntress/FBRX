@@ -9,6 +9,11 @@ import type { SharedLicense } from '../license/license-service';
 export const PRESENCE_FILE = 'app.json';
 /** Where FBRX Endpoint shares its license with the other FBRX apps, in its data folder (see SharedLicense). */
 export const SHARED_LICENSE_FILE = 'apps-license.json';
+/**
+ * What FBRX Endpoint hands to FBRX Digger (2.5.0): its saved connections and network environments, without passwords
+ * or API keys, which stay in Endpoint's vault. Digger takes each in once.
+ */
+export const HANDOVER_FILE = 'apps-handover.json';
 
 export interface AppRegistryDeps {
   /** The app running now. */
@@ -77,25 +82,35 @@ export class AppRegistry {
     }
   }
 
-  /** FBRX Endpoint: shares its license with the other FBRX apps on this computer (FBRX Digger runs at its edition). */
-  shareLicense(license: SharedLicense): void {
+  /** FBRX Endpoint: writes a file in its data folder for the other FBRX apps on this computer (its user's alone). */
+  share(file: string, data: unknown): void {
     if (this.d.self !== 'os' || !this.d.appsDir) return;
     try {
-      writeFileSync(join(this.d.dataDir, SHARED_LICENSE_FILE), `${JSON.stringify(license, null, 2)}\n`, { mode: 0o600 });
+      writeFileSync(join(this.d.dataDir, file), `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
     } catch (err) {
-      this.d.log?.('could not share the license with the other FBRX apps', { error: (err as Error).message });
+      this.d.log?.('could not share a file with the other FBRX apps', { file, error: (err as Error).message });
     }
+  }
+
+  /** Another app: a file FBRX Endpoint shared, when Endpoint is installed on this computer (null otherwise). */
+  fromEndpoint(file: string): Record<string, unknown> | null {
+    if (this.d.self === 'os' || !this.d.appsDir || !this.presence('os')) return null;
+    try {
+      const raw = JSON.parse(readFileSync(join(this.d.appsDir, FBRX_APPS.os.folder, file), 'utf8')) as unknown;
+      return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
+    } catch {
+      return null;
+    }
+  }
+
+  /** FBRX Endpoint: shares its license with the other FBRX apps on this computer (FBRX Digger runs at its edition). */
+  shareLicense(license: SharedLicense): void {
+    this.share(SHARED_LICENSE_FILE, license);
   }
 
   /** Another app: FBRX Endpoint's license, when Endpoint is installed on this computer (null otherwise). */
   endpointLicense(): SharedLicense | null {
-    if (this.d.self === 'os' || !this.d.appsDir || !this.presence('os')) return null;
-    try {
-      const raw = JSON.parse(readFileSync(join(this.d.appsDir, FBRX_APPS.os.folder, SHARED_LICENSE_FILE), 'utf8')) as unknown;
-      return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as SharedLicense) : null;
-    } catch {
-      return null;
-    }
+    return this.fromEndpoint(SHARED_LICENSE_FILE) as SharedLicense | null;
   }
 
   installed(): AppId[] {

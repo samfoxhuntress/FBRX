@@ -200,7 +200,7 @@ export const STARTER_SKILLS: Starter[] = [
       'net.scan_lan: the devices on the network, with their makers and open ports.',
       'Point out what stands out: a maker nobody recognizes, remote-access ports open (Telnet 23, RDP 3389, SMB 445), a second router (double NAT).',
       'net.port_check or net.ping on anything the person asks about.',
-      'Sum up in plain words, and suggest Network Center → Devices to save the scan and compare it later.',
+      'Sum up in plain words. To keep the scan and compare it later, FBRX Digger saves scans (its Devices tab).',
     ],
   },
   {

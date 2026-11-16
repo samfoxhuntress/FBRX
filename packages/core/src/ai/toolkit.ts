@@ -1,4 +1,5 @@
 import {
+  builtinFor,
   TOOLKIT_LIMITS,
   TOOLKIT_SYSTEMS,
   TOOLKIT_SYSTEM_NAMES,
@@ -188,6 +189,16 @@ export interface ToolkitDeps {
 }
 
 type SaveInput = Partial<Pick<ToolkitAction, 'kit' | 'when' | 'commands' | 'inputs' | 'ask' | 'admin' | 'undo'>> & { id?: string; name: string };
+
+/**
+ * For an action someone made (not FBRX's library, which is written to sit beside FBRX's tools) that does what one of
+ * FBRX's tools does: use FBRX's first, unless the person asks for this one.
+ */
+function dupNote(a: ToolkitAction): string {
+  if (a.source === 'library') return '';
+  const b = builtinFor(a.commands);
+  return b ? ` FBRX's own ${b.tool} does the same: use that, unless the person asks for this action.` : '';
+}
 
 export class ToolkitStore {
   constructor(private readonly d: ToolkitDeps) {}
@@ -446,7 +457,7 @@ export class ToolkitStore {
         return {
           name: a.tool,
           title: a.name,
-          description: `${a.when || a.name} An action in the AI Toolkit (${a.kit}).${a.undo ? ` Puts the change back after ${a.undo.seconds} seconds unless the person keeps it.` : ''}`,
+          description: `${a.when || a.name} An action in the AI Toolkit (${a.kit}).${a.undo ? ` Puts the change back after ${a.undo.seconds} seconds unless the person keeps it.` : ''}${dupNote(a)}`,
           // One that asks first stays 'execute'; one that reaches the network says so, so an offline chat asks.
           risk: a.ask ? 'execute' : network ? 'network' : 'read',
           network,

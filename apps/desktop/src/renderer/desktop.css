@@ -8158,3 +8158,11 @@ body.popout .fx-page-header p {
   gap: 8px;
   flex-wrap: wrap;
 }
+
+/* A Fabrix reply in FBRX Endpoint that recommends FBRX Digger: its Open or Get button (apps.tsx, DiggerSuggestion). */
+.msg-app {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 8px 0 4px;
+}

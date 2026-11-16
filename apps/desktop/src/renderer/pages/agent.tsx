@@ -5,6 +5,7 @@ import { Button, Callout, Card, FbrxMark, Icons, Markdown, Modal, Select, Status
 import { bridge, call, onEvent } from '../client';
 import { useCore, useStarterAi } from '../hooks';
 import { DIGGER, DiggerMark, POPOUT, navigate, routeArg } from '../app';
+import { DiggerSuggestion } from '../apps';
 import { EmergencyStop, ModelPicker } from '../widgets';
 import { useSlashMenu } from '../slash-menu';
 import { ActivityPanel, ThinkingNote } from '../agent-activity';
@@ -650,6 +651,8 @@ export function AgentPage({ agentName }: { agentName: string }) {
               <div key={m.id} className="msg">
                 {showThinking && m.thinking && <ThinkingNote text={m.thinking} agentName={agentName} />}
                 {m.content && <Markdown text={m.content} />}
+                {/* FBRX Endpoint: a reply that recommends FBRX Digger gets its Open or Get button. */}
+                {!DIGGER && /\bFBRX Digger\b/.test(m.content ?? '') && <DiggerSuggestion />}
                 {(m.toolCalls ?? []).map((c) =>
                   c.name === 'plan.update' ? (
                     c.id === lastPlan && <PlanCard key={c.id} c={c} />
