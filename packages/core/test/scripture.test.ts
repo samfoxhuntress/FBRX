@@ -1,7 +1,7 @@
 import { copyFileSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
-import { brotliCompressSync, brotliDecompressSync } from 'node:zlib';
+import { brotliCompressSync, brotliDecompressSync, constants } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
 import { findBook, parseReference, Scripture } from '../src/scripture/scripture';
 import { shortlistTools } from '../src/ai/tool-shortlist';
@@ -56,7 +56,8 @@ describe('scripture.lookup: Bible verses word for word, offline', () => {
   it('refuses a damaged text instead of quoting it, and is hidden where the texts are not installed', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fbrx-scripture-'));
     const text = brotliDecompressSync(readFileSync(join(DIR, 'kjv.jsonl.br'))).toString('utf8').replace('For God so loved', 'For God so liked');
-    writeFileSync(join(dir, 'kjv.jsonl.br'), brotliCompressSync(Buffer.from(text)));
+    // The fastest Brotli setting: the default (11) keeps a core busy for seconds and starves the timing tests beside it.
+    writeFileSync(join(dir, 'kjv.jsonl.br'), brotliCompressSync(Buffer.from(text), { params: { [constants.BROTLI_PARAM_QUALITY]: 1 } }));
     copyFileSync(join(DIR, 'kjv-build.json'), join(dir, 'kjv-build.json'));
     expect(() => new Scripture(() => dir).lookup('John 3:16')).toThrow(/damaged, so it is not quoted/);
     expect(new Scripture(() => null).unavailable()).toMatch(/not installed/);
