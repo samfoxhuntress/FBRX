@@ -1489,7 +1489,14 @@ export class Kernel {
         this.disposers.push(this.events.on('license.changed', () => this.apps.shareLicense(this.license.shared())));
         // Its saved connections and network environments go to FBRX Digger (2.5.0), without passwords or keys.
         this.apps.share(HANDOVER_FILE, { connections: this.consoles.bookmarks().map(({ passwordSaved: _p, ...b }) => b), environments: this.netenv.exportSaved() });
-      } else this.adoptFromEndpoint();
+      } else {
+        // Never in the way of Digger starting: what could not be taken in stays in Endpoint.
+        try {
+          this.adoptFromEndpoint();
+        } catch (err) {
+          this.log.warn('Could not bring saved connections over from FBRX Endpoint', { error: errorMessage(err) });
+        }
+      }
     }
     // FBRX Digger leaves out what is FBRX Endpoint's (its AI, messages, organization, account, support, automations).
     if (!this.digger) this.startEndpoint();
