@@ -37,10 +37,12 @@ const NOTES_INTRO = 'How you like me to work, as I learn it. I add to this with 
  * follows FBRX's newer default.
  */
 
-const WRITTEN = 'ai.soul.written';
-const LOG = 'ai.soul.log';
+const WRITTEN = 'ai.personality.written';
+const LOG = 'ai.personality.log';
 /** What FBRX took out of personality.md at start, and the history file of the version before, until the person has seen it. */
-const NOTICE = 'ai.soul.notice';
+const NOTICE = 'ai.personality.notice';
+/** Where 2.4.x and earlier kept them: moved over once (fromOldKeys). */
+const OLD_KEYS: Array<[string, string]> = [['ai.soul.written', WRITTEN], ['ai.soul.log', LOG], ['ai.soul.notice', NOTICE]];
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const stamp = () => new Date().toISOString().replace(/[:.]/g, '-');
@@ -66,6 +68,7 @@ export class PersonalityStore {
 
   /** At start: the default on a first run, and FBRX's newer default when the person never changed theirs. */
   ensure(): void {
+    this.fromOldKeys();
     this.fromSoul();
     const written = this.o.meta.get<string>(WRITTEN);
     if (!existsSync(this.o.file)) {
@@ -93,6 +96,16 @@ export class PersonalityStore {
    * the person changed (soul.read, soul.update, /soul…) follow, with the version before kept; an unchanged default is
    * left to follow FBRX's newer one.
    */
+  /** Up to 2.4.x the store's own notes were kept under ai.soul.*: they move to ai.personality.* once. */
+  private fromOldKeys(): void {
+    for (const [old, now] of OLD_KEYS) {
+      const value = this.o.meta.get<unknown>(old);
+      if (value === null) continue;
+      if (this.o.meta.get<unknown>(now) === null) this.o.meta.set(now, value);
+      this.o.meta.delete(old);
+    }
+  }
+
   private fromSoul(): void {
     const dir = dirname(this.o.file);
     const old = join(dir, 'soul.md');
@@ -329,6 +342,3 @@ function firstClause(does: string): string {
 }
 
 export { DEFAULT_PERSONALITY };
-
-/** @deprecated Through 2.4.x: the personality's name up to 2.3.x. */
-export { PersonalityStore as SoulStore };

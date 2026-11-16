@@ -160,6 +160,3 @@ What I work with, by family (toolkits.read gives the live list, with what this c
 
 How you like me to work, as I learn it. I add to this with /tune, and you approve each change.
 `;
-
-/** @deprecated Through 2.4.x: the personality's name up to 2.3.x. */
-export const DEFAULT_SOUL = DEFAULT_PERSONALITY;

@@ -2,7 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DIGGER_ONLY_TOOLS, DEFAULT_PROVIDERS, CORE_PRINCIPLES, SOUL_CORE, PERSONALITY_LIMITS, PERSONA_END, principleProblem, personalityCommandIn, personalityCommands, personaOf, personalityProblems, personalitySection, personalitySections, withPersonalitySection, type AgentEvent, type PersonaInfo, type PersonalityStatus } from '@fbrx/shared';
+import { DIGGER_ONLY_TOOLS, DEFAULT_PROVIDERS, CORE_PRINCIPLES, PERSONALITY_LIMITS, PERSONA_END, principleProblem, personalityCommandIn, personalityCommands, personaOf, personalityProblems, personalitySection, personalitySections, withPersonalitySection, type AgentEvent, type PersonaInfo, type PersonalityStatus } from '@fbrx/shared';
 import { DEFAULT_PERSONALITY } from '../src/ai/personality';
 import { PERSONAS, withPersona } from '../src/ai/personas';
 import { makeKernel, USER, waitFor } from './helpers';
@@ -131,7 +131,7 @@ describe('personality.md', () => {
       // As if an older FBRX had written its default: the store remembers it wrote that text.
       const older = DEFAULT_PERSONALITY.replace('## Notes', '## Notes (old)');
       writeFileSync(file, older);
-      kernel.meta.set('ai.soul.written', require('node:crypto').createHash('sha256').update(older).digest('hex'));
+      kernel.meta.set('ai.personality.written', require('node:crypto').createHash('sha256').update(older).digest('hex'));
       kernel.personality.ensure();
       expect(readFileSync(file, 'utf8')).toBe(DEFAULT_PERSONALITY);
       // The person's own is never replaced.
@@ -380,7 +380,7 @@ describe('FBRX’s core principles, under other names', () => {
     try {
       const older = DEFAULT_PERSONALITY.replace('## How I talk', '## What I care about\n\n1. My own line about privacy.\n\n## How I talk');
       writeFileSync(join(dataDir, 'personality.md'), older);
-      kernel.meta.set('ai.soul.written', '');
+      kernel.meta.set('ai.personality.written', '');
       kernel.personality.ensure();
       const status = (await kernel.call('personality.get', undefined, USER)) as PersonalityStatus;
       expect(status.notice?.removed.join(' ')).toMatch(/What I care about/);
@@ -503,7 +503,7 @@ describe('the plainest words for setting a principle aside', () => {
 
 // The soul is called the personality from 2.4.0: an existing soul.md and its history move over at the first start.
 describe('from soul.md to personality.md', () => {
-  it('moves a changed soul.md and its history over, with FBRX’s names in it, and keeps the old names working through 2.4.x', async () => {
+  it('moves a changed soul.md and its history over, with FBRX’s names in it, with its notes under their new keys', async () => {
     const { kernel, dataDir, cleanup } = await makeKernel();
     try {
       rmSync(join(dataDir, 'personality.md'), { force: true });
@@ -512,6 +512,7 @@ describe('from soul.md to personality.md', () => {
       writeFileSync(join(dataDir, 'soul.md'), mine);
       mkdirSync(join(dataDir, 'soul.history'));
       writeFileSync(join(dataDir, 'soul.history', '2026-11-01T00-00-00-000Z.md'), '# Soul\n\n## Notes\n\n- Older.\n');
+      kernel.meta.delete('ai.personality.written');
       kernel.meta.set('ai.soul.written', '');
       kernel.personality.ensure();
       expect(existsSync(join(dataDir, 'soul.md'))).toBe(false);
@@ -523,9 +524,10 @@ describe('from soul.md to personality.md', () => {
       // Its history came along, the version before the rename included.
       expect(readdirSync(join(dataDir, 'personality.history')).length).toBe(2);
       expect(kernel.personality.undo('test-user').text).toContain('`/soul`');
-      // The old names still work.
-      expect(kernel.soul).toBe(kernel.personality);
-      expect(SOUL_CORE).toBe(CORE_PRINCIPLES);
+      // 2.5.0 retired the old names in FBRX's code; the store's notes moved to their new keys.
+      expect((kernel as unknown as Record<string, unknown>).soul).toBeUndefined();
+      expect(kernel.meta.get('ai.soul.written')).toBeNull();
+      expect(kernel.meta.get('ai.personality.written')).not.toBeNull();
       expect(kernel.registry.get('personality.read')).toBeDefined();
       expect(kernel.registry.get('soul.read')).toBeUndefined();
     } finally {
@@ -539,6 +541,7 @@ describe('from soul.md to personality.md', () => {
       rmSync(join(dataDir, 'personality.md'), { force: true });
       const older = DEFAULT_PERSONALITY.replace('# Personality', '# Soul').replace('`/personality` — Read personality.md with personality.read', '`/soul` — Read soul.md with soul.read');
       writeFileSync(join(dataDir, 'soul.md'), older);
+      kernel.meta.delete('ai.personality.written');
       kernel.meta.set('ai.soul.written', require('node:crypto').createHash('sha256').update(older).digest('hex'));
       kernel.personality.ensure();
       expect(readFileSync(join(dataDir, 'personality.md'), 'utf8')).toBe(DEFAULT_PERSONALITY);

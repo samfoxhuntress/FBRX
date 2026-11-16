@@ -235,10 +235,6 @@ export class Kernel {
   readonly toolkit: ToolkitStore;
   /** The AI's personality (personality.md in the data folder): who it is, its options and the person's commands. */
   readonly personality: PersonalityStore;
-  /** @deprecated Through 2.4.x: the personality's name up to 2.3.x. */
-  get soul(): PersonalityStore {
-    return this.personality;
-  }
   /** The line in front of the built-in model: this computer's own requests first (mesh.assist.hostFirst). */
   readonly modelLine: ModelLine;
   readonly redactor = new Redactor();
