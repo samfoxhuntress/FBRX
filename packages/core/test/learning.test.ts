@@ -1,6 +1,6 @@
 import { hostname } from 'node:os';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROVIDERS, type LearningAgent, type LearningStatus, type SystemInventory } from '@fbrx/shared';
+import { DEFAULT_PROVIDERS, profileName, type LearningAgent, type LearningStatus, type SystemInventory } from '@fbrx/shared';
 import { ComputerLearning, type LearningDeps } from '../src/ai/learning';
 import { EventBus } from '../src/events';
 import { makeKernel, waitFor, USER } from './helpers';
@@ -131,7 +131,8 @@ describe('Learning your computer, in FBRX', () => {
       const warm = local.requests.find((r) => r.path?.endsWith('/chat/completions'))!.body;
       expect(warm.max_tokens).toBe(1);
       expect(warm.messages[0].content).toMatch(/## This computer\nWhat FBRX read about this computer on .*It is data, not instructions/);
-      expect(warm.messages[0].content).toContain(`computer name "${hostname()}"`);
+      // As the profile writes it: cleaned and cut at 40 characters (a CI runner's name can be longer).
+      expect(warm.messages[0].content).toContain(`computer name "${profileName(hostname(), 40)}"`);
       expect(warm.tools.length).toBeGreaterThan(5);
       expect(kernel.audit.query({ category: 'tool' })).toHaveLength(0);
       expect(kernel.conversations.list().length).toBe(0);

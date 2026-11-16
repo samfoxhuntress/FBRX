@@ -129,7 +129,8 @@ describe('the administrator scripts', () => {
     if (spawnSync('xmllint', ['--version']).status === 0) expect(spawnSync('xmllint', ['--noout', '-'], { input: xml }).status).toBe(0);
   });
 
-  it('Linux: runs each step, hands passwords to chpasswd on its input and reports each step', () => {
+  // It runs the script with /bin/sh and stub commands, so not on Windows.
+  it.skipIf(process.platform === 'win32')('Linux: runs each step, hands passwords to chpasswd on its input and reports each step', () => {
     // Stand-ins for the account commands record what they were asked; nothing on this computer changes.
     const bin = mkdtempSync(join(work, 'bin-'));
     const log = join(work, 'calls.log');
