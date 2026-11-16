@@ -515,6 +515,22 @@ links to the page that looks after it (Task Manager, Storage, Network Center, Up
 list on the clipboard as text, for a ticket or a message, and **Ask Fabrix** has Fabrix read it and say how the
 computer is doing and what is worth upgrading first. Fabrix reads the same list with `system.info`.
 
+**Devices** (Pro and up, 2.5.0), under the list, shows each kind of device with what looks wrong and what to do:
+
+- **Screens:** maker, model, serial number and year (from the screen itself), connection, and the resolution it runs
+  at against its best; one below its best says so.
+- **Graphics:** each card, its driver, and its temperature, load and memory where the card reports them, with a
+  button to the maker's driver page; a card at 85 °C or more says so.
+- **External drives:** each USB, Thunderbolt or other removable drive, its health and where it is open, with **Eject**
+  so it can be unplugged safely (only a drive in this list, with the system's own tools). One reporting a health
+  problem says to copy what matters off it, with a link to Backup.
+- **USB:** every device on it; one that does not say what it is may be missing its driver, and a DisplayLink dock
+  gets a link to its driver, since screens on it need one.
+- **Printers:** each printer and its state, with Network Center → Printers for the queue and a test page.
+
+Fabrix reads the same with `pc.devices` (graphics and drives are new), and has skills for graphics problems and
+external drives beside the one for screens.
+
 ## PC care (Windows)
 
 | Page | What it does |

@@ -5,6 +5,7 @@ import type { NetDiag } from '../../network/netdiag';
 import { stackText } from '../../network/stack-check';
 import { checkLink } from '../../security/linkcheck';
 import { spaceHogs } from '../../system/space';
+import { deviceReport } from '../../system/devices';
 import type { SystemMonitor } from '../../system/system-monitor';
 import { IS_WIN } from '../../windows/ps';
 import * as sec from '../../windows/security';
@@ -250,14 +251,31 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       name: 'pc.devices',
       title: 'Devices',
       description:
-        "This computer's devices of one kind, with their state: printers (status, waiting jobs, the default, its address), sound (speakers, headphones and microphones, which is the default), Bluetooth (the adapter and paired devices, connected or not), screens (each display, how it is connected, resolution) or USB. The first look for \"the printer won't print\", \"no sound\", \"my headphones won't connect\", \"the second screen is black\".",
+        "This computer's devices of one kind, with their state: printers (status, waiting jobs, the default, its address), sound (speakers, headphones and microphones, which is the default), Bluetooth (the adapter and paired devices, connected or not), screens (each display, how it is connected, its resolution against its best, its maker and year), graphics (each card, its driver, and its heat and load where it reports them), drives (USB and other external drives, their health) or USB. The first look for \"the printer won't print\", \"no sound\", \"my headphones won't connect\", \"the second screen is black\", \"my games stutter\", \"my USB drive won't show up\".",
       risk: 'read',
       timeoutMs: 60_000,
-      inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['printers', 'sound', 'bluetooth', 'screens', 'usb'] } }, required: ['kind'] },
+      inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['printers', 'sound', 'bluetooth', 'screens', 'graphics', 'drives', 'usb'] } }, required: ['kind'] },
       async run(i) {
         const lines: string[] = [];
         let data: unknown;
         switch (i.kind) {
+          // This PC → Devices (2.5.0): graphics cards and external drives, with what looks wrong and the fix.
+          case 'graphics':
+          case 'drives': {
+            const r = await deviceReport();
+            const kind = i.kind === 'graphics' ? 'graphics' : 'drive';
+            if (i.kind === 'graphics') {
+              data = r.graphics;
+              if (!r.graphics.length) lines.push('No graphics card was reported.');
+              for (const g of r.graphics) lines.push(`${quoteName(g.name)}: driver ${g.driver ? quoteName(g.driver) : 'not reported'}${g.vramMB ? `, ${g.vramMB} MB of memory` : ''}${g.temperatureC !== null ? `, ${g.temperatureC} °C` : ''}${g.loadPct !== null ? `, ${g.loadPct}% busy` : ''}${g.driverPage ? `; drivers: ${g.driverPage}` : ''}`);
+            } else {
+              data = r.externalDrives;
+              if (!r.externalDrives.length) lines.push('No USB or other external drive is plugged in (or this system does not report it).');
+              for (const x of r.externalDrives) lines.push(`${quoteName(x.name)} (${x.device}): ${Math.round(x.bytes / 1e9)} GB${x.interface ? `, ${x.interface}` : ''}, health ${x.health ?? 'not reported'}${x.mounts.length ? `, at ${x.mounts.map((m) => `${quoteName(m.mount)}${m.fs ? ` (${m.fs})` : ''}`).join(', ')}` : ', not opened (no volume mounted)'}`);
+            }
+            for (const f of r.findings.filter((x) => x.device === kind)) lines.push(`Needs a look: ${f.title}. ${f.detail}`);
+            break;
+          }
           case 'printers': {
             const list = IS_WIN ? await d.net.printers() : ((await si.printer().catch(() => [])) as any[]).map((p) => ({ name: p.name, status: p.status, isDefault: !!p.default, port: p.uri ?? '', ip: null, jobs: 0, driver: p.model ?? '', shared: !!p.shared }));
             data = list;

@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react';
-import { inventoryText, type SystemInventory } from '@fbrx/shared';
-import { Badge, Button, Card, Empty, Grid, KeyValue, Meter, Page, Spinner, StatTile, Status, Table, useAction, useToast } from '@fbrx/ui';
-import { call, writeClipboard } from '../client';
+import { atLeast, inventoryText, type DeviceReport, type SystemInventory } from '@fbrx/shared';
+import { Badge, Button, Callout, Card, Empty, Grid, KeyValue, Meter, Page, Spinner, StatTile, Status, Table, useAction, useToast } from '@fbrx/ui';
+import { call, openExternal, writeClipboard } from '../client';
+import { EditionHint, useLicenseTier } from '../edition';
 import { useAgentName, useCore } from '../hooks';
 import { navigate } from '../app';
 import { askAgent } from '../widgets';
@@ -25,6 +26,7 @@ function Go({ to, children }: { to: string; children: ReactNode }) {
  */
 export function ThisPcPage() {
   const inv = useCore('pc.inventory', {});
+  const pro = atLeast(useLicenseTier(), 'basic');
   const agent = useAgentName();
   const toast = useToast();
   const { run, busy } = useAction();
@@ -198,8 +200,97 @@ export function ThisPcPage() {
               </div>
             </Card>
           </div>
+          {pro ? <Devices /> : <EditionHint tier="basic">Devices (screens against their best, graphics cards, external drives with Eject, USB and printers, each with what to do) come with FBRX Endpoint Pro.</EditionHint>}
         </>
       )}
     </Page>
+  );
+}
+
+/**
+ * This PC → Devices (2.5.0, Pro and up): each kind of device with what it reports, what looks wrong and what to do,
+ * and Eject for an external drive. Fabrix reads the same through pc.devices.
+ */
+function Devices() {
+  const r = useCore('pc.deviceReport', {});
+  const toast = useToast();
+  const { run, busy } = useAction();
+  const d: DeviceReport | null = r.data ?? null;
+  const eject = (device: string) =>
+    void run(`eject-${device}`, () =>
+      call('pc.ejectDrive', { device }).then((x) => {
+        toast.success('Ejected', x.message);
+        r.reload();
+      }),
+    );
+  if (!d) return r.error ? <Empty title="Could not read the devices">{r.error}</Empty> : <Spinner />;
+  return (
+    <div className="thispc-devices">
+      <h2 className="thispc-section">Devices</h2>
+      {d.findings.map((f, n) => (
+        <Callout key={n} tone={f.level === 'warning' ? 'warning' : 'info'} title={f.title} actions={f.link ? (f.link.startsWith('http') ? <Button size="sm" variant="ghost" icon="external" onClick={() => openExternal(f.link!)}>Driver</Button> : <Button size="sm" variant="ghost" onClick={() => navigate(f.link!)}>Open</Button>) : undefined}>
+          {f.detail}
+        </Callout>
+      ))}
+      <div className="thispc-grid">
+        <Card title="Screens" actions={<Go to="settings/appearance">Appearance</Go>}>
+          {d.monitors.length ? (
+            <KeyValue
+              items={d.monitors.map((m, n): [ReactNode, ReactNode] => [
+                m.builtin ? 'Built-in screen' : m.main ? 'Main screen' : `Screen ${n + 1}`,
+                <>
+                  {[m.vendor, m.model ?? m.name].filter(Boolean).join(' ')}
+                  {m.width && m.height ? `, ${m.width}×${m.height}` : ''}
+                  {m.hz ? ` at ${m.hz} Hz` : ''}
+                  {m.bestWidth && m.bestHeight && m.width !== m.bestWidth ? ` (best ${m.bestWidth}×${m.bestHeight})` : ''}
+                  <span className="fx-muted">{[m.connection, m.year ? `made ${m.year}` : null, m.serial ? `serial ${m.serial}` : null].filter(Boolean).map((x) => ` · ${x}`).join('')}</span>
+                </>,
+              ])}
+            />
+          ) : (
+            <p className="fx-muted">No screen reported.</p>
+          )}
+        </Card>
+        <Card title="Graphics">
+          {d.graphics.length ? (
+            d.graphics.map((g) => (
+              <div key={g.name} className="thispc-device">
+                <KeyValue items={[['Card', g.name], ['Driver', or(g.driver)], ...(g.vramMB ? [['Memory', g.vramMB >= 1024 ? `${Math.round(g.vramMB / 1024)} GB` : `${g.vramMB} MB`] as [ReactNode, ReactNode]] : []), ...(g.temperatureC !== null ? [['Temperature', `${g.temperatureC} °C`] as [ReactNode, ReactNode]] : []), ...(g.loadPct !== null ? [['Busy', `${g.loadPct}%`] as [ReactNode, ReactNode]] : [])]} />
+                {g.driverPage && (
+                  <Button size="sm" variant="ghost" icon="external" onClick={() => openExternal(g.driverPage!)}>
+                    The maker’s drivers
+                  </Button>
+                )}
+              </div>
+            ))
+          ) : (
+            <p className="fx-muted">No graphics card reported.</p>
+          )}
+        </Card>
+        <Card title="External drives" actions={<Go to="backup">Back up to one</Go>}>
+          {d.externalDrives.length ? (
+            d.externalDrives.map((x) => (
+              <div key={x.device} className="thispc-device fx-row" style={{ justifyContent: 'space-between' }}>
+                <div>
+                  <strong>{x.name}</strong> <span className="fx-muted">{gb(x.bytes)}{x.interface ? ` · ${x.interface}` : ''}{x.health ? ` · ${x.health}` : ''}</span>
+                  <div className="fx-muted">{x.mounts.length ? x.mounts.map((m) => `${m.label ? `${m.label} ` : ''}${m.mount}${m.fs ? ` (${m.fs})` : ''}`).join(', ') : 'Not opened'}</div>
+                </div>
+                <Button size="sm" icon="upload" loading={busy === `eject-${x.device}`} onClick={() => eject(x.device)}>
+                  Eject
+                </Button>
+              </div>
+            ))
+          ) : (
+            <p className="fx-muted">No USB or other external drive is plugged in.</p>
+          )}
+        </Card>
+        <Card title="USB" subtitle={`${d.usb.length} device${d.usb.length === 1 ? '' : 's'}`}>
+          {d.usb.length ? <KeyValue items={d.usb.slice(0, 30).map((u, n): [ReactNode, ReactNode] => [u.name || `Device ${n + 1}`, [u.vendor, u.kind, u.maxPowerMa ? `${u.maxPowerMa} mA` : null].filter(Boolean).join(' · ') || '—'])} /> : <p className="fx-muted">No USB devices reported.</p>}
+        </Card>
+        <Card title="Printers" actions={<Go to="network/printers">Printers</Go>}>
+          {d.printers.length ? <KeyValue items={d.printers.map((p): [ReactNode, ReactNode] => [`${p.name}${p.isDefault ? ' (default)' : ''}`, [p.model, p.status, p.local ? 'on this computer' : 'on the network'].filter(Boolean).join(' · ')])} /> : <p className="fx-muted">No printers set up.</p>}
+        </Card>
+      </div>
+    </div>
   );
 }

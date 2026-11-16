@@ -2,9 +2,11 @@ import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { openRemote, remoteViewers } from '../network/remote-desktop';
 import { systemInventory } from '../system/inventory';
+import { deviceReport, ejectDrive } from '../system/devices';
 import { z } from 'zod';
 import {
   ALERT_CHANNELS,
+  atLeast,
   CALENDAR_LINKS,
   CALENDAR_REPEATS,
   CALENDAR_SHOW_AS,
@@ -425,6 +427,15 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     },
     'net.dns': (p) => k.net.dnsTest(z.object({ name: z.string().min(1).max(253) }).parse(p).name),
     'pc.inventory': (p) => systemInventory(!!(p as { fresh?: boolean } | undefined)?.fresh),
+    // This PC → Devices (2.5.0): looking and ejecting both come with Pro.
+    'pc.deviceReport': () => {
+      if (!atLeast(k.license.status().tier, 'basic')) throw new CoreError('FEATURE_UNAVAILABLE', 'Devices come with FBRX Endpoint Pro');
+      return deviceReport();
+    },
+    'pc.ejectDrive': (p) => {
+      if (!atLeast(k.license.status().tier, 'basic')) throw new CoreError('FEATURE_UNAVAILABLE', 'Devices come with FBRX Endpoint Pro');
+      return ejectDrive(z.object({ device: z.string().min(1).max(200) }).parse(p).device);
+    },
     'net.diagnose': (p) => k.net.diagnose({ target: z.object({ target: z.string().max(253).optional() }).parse(p ?? {}).target || undefined, online: true, has: (t) => k.registry.get(t) != null }),
     'net.port': (p) => {
       const q = z.object({ host: z.string().min(1).max(253), port: z.number().int() }).parse(p);

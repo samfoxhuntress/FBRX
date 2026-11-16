@@ -918,6 +918,29 @@ export interface SystemInventory {
   battery: { percent: number | null; charging: boolean; healthPct: number | null; cycles: number | null; designWh: number | null } | null;
 }
 
+/**
+ * This PC → Devices (2.5.0): each kind of device with what it reports, and what looks wrong with the fix. Names come
+ * from the devices themselves, so they are cleaned before the AI reads them.
+ */
+export interface DeviceReport {
+  at: string;
+  monitors: Array<{ name: string; vendor: string | null; model: string | null; serial: string | null; year: number | null; connection: string | null; builtin: boolean; main: boolean; width: number | null; height: number | null; bestWidth: number | null; bestHeight: number | null; hz: number | null }>;
+  graphics: Array<{ name: string; vendor: string | null; vramMB: number | null; driver: string | null; temperatureC: number | null; loadPct: number | null; memoryUsedMB: number | null; memoryTotalMB: number | null; fanPct: number | null; driverPage: string | null }>;
+  /** USB and Thunderbolt drives, and other removable ones. */
+  externalDrives: Array<{ device: string; name: string; vendor: string | null; bytes: number; interface: string | null; health: string | null; mounts: Array<{ mount: string; fs: string | null; label: string | null; device: string | null }> }>;
+  usb: Array<{ name: string; vendor: string | null; kind: string | null; maxPowerMa: number | null }>;
+  printers: Array<{ name: string; model: string | null; status: string | null; local: boolean; isDefault: boolean }>;
+  findings: DeviceFinding[];
+}
+export interface DeviceFinding {
+  device: 'monitor' | 'graphics' | 'drive' | 'usb' | 'printer';
+  level: 'info' | 'warning';
+  title: string;
+  detail: string;
+  /** The maker's page for a driver, or an FBRX page ("network/printers"). */
+  link: string | null;
+}
+
 /** The layers a full network check looks at, from the cable or radio up to the site the person wants. */
 export const STACK_LAYERS = ['physical', 'link', 'ip', 'routing', 'dns', 'transport', 'application'] as const;
 export type StackLayer = (typeof STACK_LAYERS)[number];
@@ -1331,6 +1354,10 @@ export interface ExtMethods {
   'net.dns': (p: { name: string }) => DnsTest;
   /** This PC: model, serial, processor, memory modules, drives, graphics, screens, adapters, battery. */
   'pc.inventory': (p: { fresh?: boolean }) => SystemInventory;
+  /** This PC → Devices (Pro and up). */
+  'pc.deviceReport': (p: { fresh?: boolean }) => DeviceReport;
+  /** Safely ejects an external drive from the Devices list (the person at the computer, Pro and up). */
+  'pc.ejectDrive': (p: { device: string }) => { message: string };
   'net.diagnose': (p: { target?: string }) => StackReport;
   /** How this computer opens remote desktop (RDP) and screen sharing (VNC). */
   'remote.viewers': () => RemoteViewer[];
@@ -1573,6 +1600,7 @@ export interface ExtEvents {
 
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
+  'pc.ejectDrive',
   'vpn.add',
   'vpn.remove',
   'vpn.connect',

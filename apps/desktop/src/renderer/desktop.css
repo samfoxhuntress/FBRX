@@ -8166,3 +8166,9 @@ body.popout .fx-page-header p {
   gap: 8px;
   margin: 8px 0 4px;
 }
+
+/* This PC → Devices (2.5.0). */
+.thispc-devices { margin-top: 18px; display: flex; flex-direction: column; gap: 12px; }
+.thispc-section { font-size: 16px; margin: 0; }
+.thispc-device { padding: 6px 0; border-bottom: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.15)); }
+.thispc-device:last-child { border-bottom: 0; }
