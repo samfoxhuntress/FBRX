@@ -141,7 +141,7 @@ describe('the Vault password keeper', () => {
     }
   });
 
-  it('lets Fabrix find sign-ins and save one with a new password, never seeing a username or password', async () => {
+  it('lets Fabrix find sign-ins (site, username, last change) and save one with a new password, never seeing a password', async () => {
     const { kernel, cleanup } = await makeKernel();
     try {
       await kernel.call('passwords.save', { urls: ['https://shop.example'], username: 'buyer@example.com', password: 'password1' }, USER);
@@ -149,9 +149,15 @@ describe('the Vault password keeper', () => {
       expect(find.risk).toBe('read');
       const all = await find.run({}, {} as any);
       expect(all.output).toMatch(/1 sign-ins in the Vault: 1 with a weak password/);
-      expect(all.output).toMatch(/Shop \(shop\.example\): very weak password/);
-      expect(all.output).not.toMatch(/buyer@example|password1/);
-      expect((await find.run({ query: 'bank' }, {} as any)).output).toMatch(/No sign-in matches "bank"/);
+      expect(all.output).toMatch(/Shop \(shop\.example\): username "buyer@example\.com"; password last changed \d{1,2} \w+ \d{4}; very weak password/);
+      // Where the person sees it, and that the model never has it (Noah: 3 of 8 runs made one up without this line).
+      expect(all.output).toMatch(/never given the passwords themselves, so never write or guess one\. The person sees a password in FBRX: Vault, Passwords/);
+      expect(all.output).not.toContain('password1');
+      expect((await find.run({ query: 'buyer' }, {} as any)).output).toMatch(/Matching:\n- Shop/);
+      expect((await find.run({ query: 'shop.example' }, {} as any)).output).toMatch(/Matching:\n- Shop/);
+      const none = await find.run({ query: 'bank' }, {} as any);
+      expect(none.output).toMatch(/No sign-in matches "bank"/);
+      expect(none.output).toMatch(/never write or guess one/);
 
       const create = kernel.registry.get('passwords.create')!;
       // Saving asks first (write tools do, by default).
@@ -160,6 +166,9 @@ describe('the Vault password keeper', () => {
       expect(made.output).toMatch(/Changed the password of "Shop" in the Vault; the old one is kept in its history\. .*new strong password \(20 characters\)/);
       const full = (await kernel.call('passwords.reveal', { id: (made.data as { id: string }).id }, USER)) as Login;
       expect(made.output).not.toContain(full.password);
+      expect(made.output).toMatch(/It is not shown to you, so never write one/);
+      // Should a saved password turn up in any other tool's output, the redactor takes it out before the model sees it.
+      expect(kernel.redactor.redact(`the file says ${full.password} here`).text).not.toContain(full.password);
       expect(full.strength).toBe(4);
       expect(full.history[0].password).toBe('password1');
       const fresh = await create.run({ title: 'Forum', site: 'forum.example', symbols: false, length: 16 }, {} as any);

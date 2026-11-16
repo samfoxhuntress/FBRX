@@ -69,10 +69,12 @@ How it stays safe:
 
 ## Fabrix and your passwords
 
-Fabrix never sees a password or a username. Its tools find sign-ins by name and site and report their health
-(*passwords.find*), open the Save to Vault window for you to type a password (*passwords.offer_save*), and save a
-sign-in with a password FBRX makes without showing it (*passwords.create*, which asks you first). Every password in
-the Vault is also scrubbed from anything a tool hands back to a model, as the keys are.
+Fabrix never sees a password. Its tools find sign-ins by name, site or username and tell it each one's username, when
+its password last changed and its health (*passwords.find*), open the Save to Vault window for you to type a password
+(*passwords.offer_save*), and save a sign-in with a password FBRX makes without showing it (*passwords.create*, which
+asks you first). When you ask Fabrix for a password, it tells you where to see it: **Vault**, **Passwords**, the
+sign-in, then the eye button. Every password in the Vault is also scrubbed from anything a tool hands back to a model,
+as the keys are.
 
 ## Locking
 
