@@ -524,17 +524,26 @@ computer is doing and what is worth upgrading first. Fabrix reads the same list 
 **Devices** (Pro and up, 2.5.0), under the list, shows each kind of device with what looks wrong and what to do:
 
 - **Screens:** maker, model, serial number and year (from the screen itself), connection, and the resolution it runs
-  at against its best; one below its best says so.
+  at against its best; one below its best says so. **Brightness and input** reads external screens that take
+  commands over their cable (DDC/CI, on in most screens' own menus) and gives each a brightness and a contrast slider
+  and its input (HDMI, DisplayPort, USB-C…), on Windows and Linux (Linux needs `ddcutil`); a laptop's own screen and
+  screens on a Mac are not there yet.
 - **Graphics:** each card, its driver, and its temperature, load and memory where the card reports them, with a
   button to the maker's driver page; a card at 85 °C or more says so.
 - **External drives:** each USB, Thunderbolt or other removable drive, its health and where it is open, with **Eject**
   so it can be unplugged safely (only a drive in this list, with the system's own tools). One reporting a health
-  problem says to copy what matters off it, with a link to Backup.
-- **USB:** every device on it; one that does not say what it is may be missing its driver, and a DisplayLink dock
-  gets a link to its driver, since screens on it need one.
-- **Printers:** each printer and its state, with Network Center → Printers for the queue and a test page.
+  problem says to copy what matters off it, with a link to Backup. **Test speed** writes a test file to the drive
+  (256 MB, or 64 MB on a nearly full one), reads it back past the computer's memory, removes it and shows how fast it
+  wrote and read; a slow one may be on a USB 2 port, hub or cable.
+- **USB:** each controller with its hubs and the devices on their ports, the speed each runs at (12 Mb/s, 480 Mb/s,
+  5 Gb/s…) and the power it asks for. A USB 3 device running at USB 2 speed says so, with where to plug it instead
+  (Windows says only each controller's speed). One that does not say what it is may be missing its driver, and a
+  DisplayLink dock gets a link to its driver, since screens on it need one.
+- **Printers:** each printer and its state, with its ink or toner levels where the printer reports them (asked over
+  IPP, the printing protocol, of this computer's print service or the printer on your network); one running low, or a
+  waste box nearly full, says so. Network Center → Printers has the queue and a test page.
 
-Fabrix reads the same with `pc.devices` (graphics and drives are new), and has skills for graphics problems and
+Fabrix reads the same with `pc.devices` (graphics, drives, the USB tree and ink levels are new), and has skills for graphics problems and
 external drives beside the one for screens.
 
 ## PC care (Windows)

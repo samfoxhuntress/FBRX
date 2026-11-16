@@ -1,11 +1,12 @@
 import si from 'systeminformation';
-import { REPORTED_NAMES_NOTE, TASK_PRIORITIES, TASK_STATUSES, cleanName, quoteName } from '@fbrx/shared';
+import { REPORTED_NAMES_NOTE, TASK_PRIORITIES, TASK_STATUSES, cleanName, quoteName, type PrinterSupply, type UsbNode } from '@fbrx/shared';
 import type { AlertEngine } from '../../alerts/alert-engine';
 import type { NetDiag } from '../../network/netdiag';
 import { stackText } from '../../network/stack-check';
 import { checkLink } from '../../security/linkcheck';
 import { spaceHogs } from '../../system/space';
-import { deviceReport } from '../../system/devices';
+import { defaultSupplies, deviceReport } from '../../system/devices';
+import { usbFindings, usbTree } from '../../system/usb-tree';
 import type { SystemMonitor } from '../../system/system-monitor';
 import { IS_WIN } from '../../windows/ps';
 import * as sec from '../../windows/security';
@@ -251,7 +252,7 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       name: 'pc.devices',
       title: 'Devices',
       description:
-        "This computer's devices of one kind, with their state: printers (status, waiting jobs, the default, its address), sound (speakers, headphones and microphones, which is the default), Bluetooth (the adapter and paired devices, connected or not), screens (each display, how it is connected, its resolution against its best, its maker and year), graphics (each card, its driver, and its heat and load where it reports them), drives (USB and other external drives, their health) or USB. The first look for \"the printer won't print\", \"no sound\", \"my headphones won't connect\", \"the second screen is black\", \"my games stutter\", \"my USB drive won't show up\".",
+        "This computer's devices of one kind, with their state: printers (status, waiting jobs, the default, its address, ink or toner levels where the printer reports them), sound (speakers, headphones and microphones, which is the default), Bluetooth (the adapter and paired devices, connected or not), screens (each display, how it is connected, its resolution against its best, its maker and year), graphics (each card, its driver, and its heat and load where it reports them), drives (USB and other external drives, their health) or USB (each controller, hub and device with the speed it runs at and its power; a USB 3 device at USB 2 speed is called out). The first look for \"the printer won't print\", \"no sound\", \"my headphones won't connect\", \"the second screen is black\", \"my games stutter\", \"my USB drive won't show up\".",
       risk: 'read',
       timeoutMs: 60_000,
       inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['printers', 'sound', 'bluetooth', 'screens', 'graphics', 'drives', 'usb'] } }, required: ['kind'] },
@@ -280,7 +281,22 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
             const list = IS_WIN ? await d.net.printers() : ((await si.printer().catch(() => [])) as any[]).map((p) => ({ name: p.name, status: p.status, isDefault: !!p.default, port: p.uri ?? '', ip: null, jobs: 0, driver: p.model ?? '', shared: !!p.shared }));
             data = list;
             if (!list.length) lines.push('No printers are set up on this computer.');
-            for (const p of list) lines.push(`${quoteName(p.name)}${p.isDefault ? ' (default)' : ''}: ${cleanName(p.status) || 'status unknown'}${p.jobs ? `, ${p.jobs} job(s) waiting` : ''}${p.ip ? `, at ${cleanName(p.ip)}` : p.port ? `, port ${quoteName(p.port)}` : ''}${p.driver ? `, driver ${quoteName(p.driver)}` : ''}`);
+            // Ink and toner over IPP (this computer's print service or the printer on the network), a few seconds each.
+            const levels = await Promise.all(
+              list.slice(0, 8).map((p) =>
+                Promise.race([
+                  defaultSupplies({ name: p.name, uri: /^(ipps?|https?):\/\//i.test(p.port ?? '') ? p.port : null, host: p.ip ?? null }).catch(() => null),
+                  new Promise<null>((r) => setTimeout(() => r(null), 6000)),
+                ]),
+              ),
+            );
+            data = list.map((p, n) => ({ ...p, supplies: levels[n] ?? null }));
+            const supplyText = (x: PrinterSupply) => `${quoteName(x.name)} ${x.level !== null ? `${x.level}%` : 'some left'}${x.low ? (x.kind === 'waste' ? ' (nearly full)' : ' (low)') : ''}`;
+            list.forEach((p, n) => {
+              lines.push(`${quoteName(p.name)}${p.isDefault ? ' (default)' : ''}: ${cleanName(p.status) || 'status unknown'}${p.jobs ? `, ${p.jobs} job(s) waiting` : ''}${p.ip ? `, at ${cleanName(p.ip)}` : p.port ? `, port ${quoteName(p.port)}` : ''}${p.driver ? `, driver ${quoteName(p.driver)}` : ''}`);
+              const s = levels[n];
+              if (s?.length) lines.push(`  Ink or toner: ${s.map(supplyText).join(', ')}`);
+            });
             break;
           }
           case 'sound': {
@@ -307,6 +323,21 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
             break;
           }
           default: {
+            const tree = await usbTree();
+            if (tree.length) {
+              // The tree, indented by hub, with the speed each runs at: "on a USB 2 port" can be said from it.
+              data = tree;
+              const speed = (m: number | null) => (m === null ? '' : m >= 1000 ? `${m / 1000} Gb/s` : `${m} Mb/s`);
+              const walk = (n: UsbNode, depth: number) => {
+                if (lines.length >= 80) return;
+                const bits = [speed(n.speedMbps), n.maxPowerMa ? `${n.maxPowerMa} mA` : ''].filter(Boolean).join(', ');
+                lines.push(`${'  '.repeat(depth)}- ${quoteName(n.name)}${n.vendor ? ` (made by ${quoteName(n.vendor)})` : ''}${bits ? `: ${bits}` : ''}`);
+                n.children.forEach((c) => walk(c, depth + 1));
+              };
+              tree.forEach((n) => walk(n, 0));
+              for (const f of usbFindings(tree)) lines.push(`Needs a look: ${quoteName(f.title.replace(/ runs at USB 2 speed$/, ''))} runs at USB 2 speed. ${f.detail}`);
+              break;
+            }
             const list = (await si.usb().catch(() => [])) as any[];
             data = list;
             if (!list.length) lines.push('No USB devices are reported.');

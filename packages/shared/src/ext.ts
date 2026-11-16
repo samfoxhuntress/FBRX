@@ -931,8 +931,59 @@ export interface DeviceReport {
   /** USB and Thunderbolt drives, and other removable ones. */
   externalDrives: Array<{ device: string; name: string; vendor: string | null; bytes: number; interface: string | null; health: string | null; mounts: Array<{ mount: string; fs: string | null; label: string | null; device: string | null }> }>;
   usb: Array<{ name: string; vendor: string | null; kind: string | null; maxPowerMa: number | null }>;
-  printers: Array<{ name: string; model: string | null; status: string | null; local: boolean; isDefault: boolean }>;
+  /** The controllers with their hubs and devices on their ports ([] where the system does not say). */
+  usbTree: UsbNode[];
+  /** Ink or toner levels: null where the printer does not say. */
+  printers: Array<{ name: string; model: string | null; status: string | null; local: boolean; isDefault: boolean; supplies: PrinterSupply[] | null }>;
   findings: DeviceFinding[];
+}
+/** A USB controller, hub or device, with what is plugged into it. */
+export interface UsbNode {
+  name: string;
+  vendor: string | null;
+  /** What it runs at now, in Mb/s (480 is USB 2, 5000 USB 3). */
+  speedMbps: number | null;
+  /** The USB version it is made for (3.2 for a USB 3 drive), where the system says. */
+  usbVersion: number | null;
+  maxPowerMa: number | null;
+  hub: boolean;
+  children: UsbNode[];
+}
+/** One ink, toner or other supply of a printer, as it reports it over IPP. */
+export interface PrinterSupply {
+  name: string;
+  kind: 'ink' | 'toner' | 'drum' | 'waste' | 'other';
+  /** "#00FFFF", where it says. */
+  color: string | null;
+  /** 0-100, or null where it only says "some left". */
+  level: number | null;
+  low: boolean;
+}
+/** A drive's quick speed test (This PC → Devices). */
+export interface DriveSpeed {
+  mount: string;
+  sizeMB: number;
+  writeMBps: number;
+  readMBps: number;
+  /** The read came partly from memory (this system cannot read past its cache there). */
+  readCached: boolean;
+  note: string | null;
+}
+export const MONITOR_FEATURES = ['brightness', 'contrast', 'input'] as const;
+export type MonitorFeature = (typeof MONITOR_FEATURES)[number];
+/** An external screen that answers over DDC/CI: what it is set to and what it takes. */
+export interface MonitorControl {
+  id: string;
+  name: string;
+  brightness: { value: number; max: number } | null;
+  contrast: { value: number; max: number } | null;
+  input: { value: number | null; options: Array<{ code: number; label: string }> } | null;
+}
+export interface MonitorControls {
+  supported: boolean;
+  /** Why nothing can be changed (no ddcutil, not on a Mac, no screen answered), or null. */
+  why: string | null;
+  monitors: MonitorControl[];
 }
 export interface DeviceFinding {
   device: 'monitor' | 'graphics' | 'drive' | 'usb' | 'printer';
@@ -1364,6 +1415,12 @@ export interface ExtMethods {
   'pc.deviceReport': (p: { fresh?: boolean }) => DeviceReport;
   /** Safely ejects an external drive from the Devices list (the person at the computer, Pro and up). */
   'pc.ejectDrive': (p: { device: string }) => { message: string };
+  /** A quick read and write speed test of an external drive from the Devices list (the person at the computer, Pro). */
+  'pc.driveSpeed': (p: { device: string }) => DriveSpeed;
+  /** The external screens' brightness, contrast and input, over DDC/CI (Pro and up). */
+  'pc.monitorControls': () => MonitorControls;
+  /** Sets one of them (the person at the computer, Pro and up). */
+  'pc.setMonitor': (p: { id: string; feature: MonitorFeature; value: number }) => { ok: true };
   'net.diagnose': (p: { target?: string }) => StackReport;
   /** How this computer opens remote desktop (RDP) and screen sharing (VNC). */
   'remote.viewers': () => RemoteViewer[];
@@ -1627,6 +1684,8 @@ export interface ExtEvents {
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'pc.ejectDrive',
+  'pc.driveSpeed',
+  'pc.setMonitor',
   'vpn.add',
   'vpn.remove',
   'vpn.connect',

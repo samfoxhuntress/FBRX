@@ -1,6 +1,6 @@
-import type { ReactNode } from 'react';
-import { atLeast, inventoryText, type DeviceReport, type SystemInventory } from '@fbrx/shared';
-import { Badge, Button, Callout, Card, Empty, Grid, KeyValue, Meter, Page, Spinner, StatTile, Status, Table, useAction, useToast } from '@fbrx/ui';
+import { useRef, useState, type ReactNode } from 'react';
+import { atLeast, inventoryText, type DeviceReport, type DriveSpeed, type MonitorControls, type MonitorFeature, type SystemInventory, type UsbNode } from '@fbrx/shared';
+import { Badge, Button, Callout, Card, Empty, Grid, KeyValue, Meter, Page, Select, Spinner, StatTile, Status, Table, useAction, useToast } from '@fbrx/ui';
 import { call, openExternal, writeClipboard } from '../client';
 import { EditionHint, useLicenseTier } from '../edition';
 import { useAgentName, useCore } from '../hooks';
@@ -216,6 +216,9 @@ function Devices() {
   const toast = useToast();
   const { run, busy } = useAction();
   const d: DeviceReport | null = r.data ?? null;
+  const [speeds, setSpeeds] = useState<Record<string, DriveSpeed>>({});
+  const testSpeed = (device: string) =>
+    void run(`speed-${device}`, () => call('pc.driveSpeed', { device }).then((x) => setSpeeds((s) => ({ ...s, [device]: x }))));
   const eject = (device: string) =>
     void run(`eject-${device}`, () =>
       call('pc.ejectDrive', { device }).then((x) => {
@@ -250,6 +253,7 @@ function Devices() {
           ) : (
             <p className="fx-muted">No screen reported.</p>
           )}
+          <ScreenSettings />
         </Card>
         <Card title="Graphics">
           {d.graphics.length ? (
@@ -274,23 +278,160 @@ function Devices() {
                 <div>
                   <strong>{x.name}</strong> <span className="fx-muted">{gb(x.bytes)}{x.interface ? ` · ${x.interface}` : ''}{x.health ? ` · ${x.health}` : ''}</span>
                   <div className="fx-muted">{x.mounts.length ? x.mounts.map((m) => `${m.label ? `${m.label} ` : ''}${m.mount}${m.fs ? ` (${m.fs})` : ''}`).join(', ') : 'Not opened'}</div>
+                  {speeds[x.device] && (
+                    <div className="drive-speed">
+                      Writes <strong>{speeds[x.device].writeMBps} MB/s</strong>, reads <strong>{speeds[x.device].readMBps} MB/s</strong>
+                      {speeds[x.device].note && <div className="fx-muted">{speeds[x.device].note}</div>}
+                    </div>
+                  )}
                 </div>
-                <Button size="sm" icon="upload" loading={busy === `eject-${x.device}`} onClick={() => eject(x.device)}>
-                  Eject
-                </Button>
+                <div className="fx-row" style={{ gap: 6 }}>
+                  {x.mounts.length > 0 && (
+                    <Button size="sm" variant="ghost" icon="gauge" loading={busy === `speed-${x.device}`} title="Writes a test file to the drive, reads it back and removes it" onClick={() => testSpeed(x.device)}>
+                      Test speed
+                    </Button>
+                  )}
+                  <Button size="sm" icon="upload" loading={busy === `eject-${x.device}`} onClick={() => eject(x.device)}>
+                    Eject
+                  </Button>
+                </div>
               </div>
             ))
           ) : (
             <p className="fx-muted">No USB or other external drive is plugged in.</p>
           )}
         </Card>
-        <Card title="USB" subtitle={`${d.usb.length} device${d.usb.length === 1 ? '' : 's'}`}>
-          {d.usb.length ? <KeyValue items={d.usb.slice(0, 30).map((u, n): [ReactNode, ReactNode] => [u.name || `Device ${n + 1}`, [u.vendor, u.kind, u.maxPowerMa ? `${u.maxPowerMa} mA` : null].filter(Boolean).join(' · ') || '—'])} /> : <p className="fx-muted">No USB devices reported.</p>}
+        <Card title="USB" subtitle={`${usbCount(d)} device${usbCount(d) === 1 ? '' : 's'}`}>
+          {d.usbTree.length ? (
+            <UsbTree nodes={d.usbTree} />
+          ) : d.usb.length ? (
+            <KeyValue items={d.usb.slice(0, 30).map((u, n): [ReactNode, ReactNode] => [u.name || `Device ${n + 1}`, [u.vendor, u.kind, u.maxPowerMa ? `${u.maxPowerMa} mA` : null].filter(Boolean).join(' · ') || '—'])} />
+          ) : (
+            <p className="fx-muted">No USB devices reported.</p>
+          )}
         </Card>
         <Card title="Printers" actions={<Go to="network/printers">Printers</Go>}>
-          {d.printers.length ? <KeyValue items={d.printers.map((p): [ReactNode, ReactNode] => [`${p.name}${p.isDefault ? ' (default)' : ''}`, [p.model, p.status, p.local ? 'on this computer' : 'on the network'].filter(Boolean).join(' · ')])} /> : <p className="fx-muted">No printers set up.</p>}
+          {d.printers.length ? (
+            d.printers.map((p) => (
+              <div key={p.name} className="thispc-device">
+                <div>
+                  <strong>{p.name}</strong>
+                  {p.isDefault ? <span className="fx-muted"> (default)</span> : null} <span className="fx-muted">{[p.model, p.status, p.local ? 'on this computer' : 'on the network'].filter(Boolean).join(' · ')}</span>
+                </div>
+                {p.supplies && p.supplies.length > 0 && (
+                  <div className="supplies">
+                    {p.supplies.map((x) => (
+                      <div key={x.name} className={`supply${x.low ? ' low' : ''}`} title={`${x.name}${x.level !== null ? `: ${x.level}%` : ': some left'}`}>
+                        <span className="supply-name">{x.name}</span>
+                        <span className="supply-bar">
+                          <span style={{ width: `${x.level ?? 50}%`, background: x.color ?? 'var(--accent)', opacity: x.level === null ? 0.35 : 1 }} />
+                        </span>
+                        <span className="supply-level">{x.low ? <Status tone="warning">{x.kind === 'waste' ? 'Full' : 'Low'}</Status> : x.level !== null ? `${x.level}%` : 'some'}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))
+          ) : (
+            <p className="fx-muted">No printers set up.</p>
+          )}
         </Card>
       </div>
+    </div>
+  );
+}
+
+/** The devices plugged in: the tree's devices (not its controllers and hubs) where there is a tree, else the list. */
+const usbCount = (d: DeviceReport): number => {
+  const walk = (l: UsbNode[]): number => l.reduce((n, x) => n + (x.hub ? 0 : 1) + walk(x.children), 0);
+  return d.usbTree.length ? walk(d.usbTree) : d.usb.length;
+};
+
+const speedLabel = (mbps: number | null) => (mbps === null ? null : mbps >= 1000 ? `${mbps / 1000} Gb/s` : `${mbps} Mb/s`);
+
+/** The USB controllers with their hubs and devices on their ports, each with its speed and power. */
+function UsbTree({ nodes }: { nodes: UsbNode[] }) {
+  return (
+    <ul className="usb-tree">
+      {nodes.map((n, i) => (
+        <li key={`${n.name}-${i}`}>
+          <span className={n.hub ? 'usb-hub' : 'usb-dev'}>{n.name}</span>
+          {n.vendor && <span className="fx-muted"> · {n.vendor}</span>}
+          {speedLabel(n.speedMbps) && <Badge>{speedLabel(n.speedMbps)}</Badge>}
+          {!n.hub && n.usbVersion !== null && n.usbVersion >= 3 && n.speedMbps !== null && n.speedMbps <= 480 && (
+            <span className="usb-slow">
+              <Status tone="warning">USB 3 device at USB 2 speed</Status>
+            </span>
+          )}
+          {n.maxPowerMa ? <span className="fx-muted"> · {n.maxPowerMa} mA</span> : null}
+          {n.children.length > 0 && <UsbTree nodes={n.children} />}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/**
+ * Brightness, contrast and the input of external screens over DDC/CI. Read on demand (screens answer slowly); a change
+ * is sent when the slider is let go.
+ */
+function ScreenSettings() {
+  const [c, setC] = useState<MonitorControls | null>(null);
+  const [draft, setDraft] = useState<Record<string, number>>({});
+  const { run, busy } = useAction();
+  const toast = useToast();
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const read = () => void run('read', () => call('pc.monitorControls').then(setC));
+  const send = (id: string, feature: MonitorFeature, value: number) =>
+    call('pc.setMonitor', { id, feature, value }).catch((e: Error) => toast.error('The screen did not change', e.message));
+  const slide = (id: string, feature: MonitorFeature, value: number) => {
+    setDraft((d) => ({ ...d, [`${id}:${feature}`]: value }));
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => void send(id, feature, value), 250);
+  };
+  if (!c)
+    return (
+      <div className="screen-settings">
+        <Button size="sm" variant="ghost" icon="sun" loading={busy === 'read'} onClick={read}>
+          Brightness and input
+        </Button>
+      </div>
+    );
+  return (
+    <div className="screen-settings">
+      {c.why && <p className="fx-muted">{c.why}</p>}
+      {c.monitors.map((m) => (
+        <div key={m.id} className="screen-setting">
+          <strong>{m.name}</strong>
+          {(['brightness', 'contrast'] as const).map((f) =>
+            m[f] ? (
+              <label key={f} className="screen-slider">
+                <span>{f === 'brightness' ? 'Brightness' : 'Contrast'}</span>
+                <input type="range" min={0} max={m[f]!.max} value={draft[`${m.id}:${f}`] ?? m[f]!.value} onChange={(e) => slide(m.id, f, Number(e.target.value))} />
+                <span className="fx-muted">{draft[`${m.id}:${f}`] ?? m[f]!.value}</span>
+              </label>
+            ) : null,
+          )}
+          {m.input && m.input.options.length > 0 && (
+            <label className="screen-slider">
+              <span>Input</span>
+              <Select
+                value={String(draft[`${m.id}:input`] ?? m.input.value ?? '')}
+                onChange={(e) => {
+                  const v = Number(e.target.value);
+                  setDraft((d) => ({ ...d, [`${m.id}:input`]: v }));
+                  void send(m.id, 'input', v);
+                }}
+                options={[...(m.input.value === null ? [{ value: '', label: 'Unknown' }] : []), ...m.input.options.map((o) => ({ value: String(o.code), label: o.label }))]}
+              />
+            </label>
+          )}
+        </div>
+      ))}
+      <Button size="sm" variant="ghost" icon="refresh" loading={busy === 'read'} onClick={read}>
+        Read again
+      </Button>
     </div>
   );
 }

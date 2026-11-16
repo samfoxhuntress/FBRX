@@ -1,8 +1,11 @@
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import si from 'systeminformation';
-import { cleanName, type DeviceFinding, type DeviceReport } from '@fbrx/shared';
+import { cleanName, type DeviceFinding, type DeviceReport, type DriveSpeed, type PrinterSupply, type UsbNode } from '@fbrx/shared';
 import { CoreError } from '../errors';
+import { driveSpeed } from './drive-speed';
+import { printerSupplies } from './ipp';
+import { usbFindings, usbTree } from './usb-tree';
 
 const run = promisify(execFile);
 
@@ -13,6 +16,25 @@ export interface DeviceSources {
   diskLayout(): Promise<any[]>;
   blockDevices(): Promise<any[]>;
   printer(): Promise<any[]>;
+  /** The USB tree (usb-tree.ts). */
+  usbTree?(): Promise<UsbNode[]>;
+  /** A printer's ink or toner levels (ipp.ts), or null. */
+  supplies?(printer: { name: string; uri: string | null; host: string | null }): Promise<PrinterSupply[] | null>;
+  /** Printers' addresses where the system keeps them apart (Windows: their ports). */
+  printerHosts?(): Promise<Array<{ name: string; ip: string | null }>>;
+}
+
+/** CUPS keeps each queue's levels (Linux, Mac); a network printer answers for itself. */
+export async function defaultSupplies(p: { name: string; uri: string | null; host: string | null }, platform: NodeJS.Platform = process.platform): Promise<PrinterSupply[] | null> {
+  const tries: string[] = [];
+  if (platform !== 'win32') tries.push(`ipp://localhost:631/printers/${encodeURIComponent(p.name)}`);
+  if (p.uri && /^(ipps?|https?):\/\//i.test(p.uri)) tries.push(p.uri);
+  if (p.host) tries.push(`ipp://${p.host.includes(':') && !p.host.startsWith('[') ? `[${p.host}]` : p.host}:631/ipp/print`);
+  for (const uri of tries) {
+    const s = await printerSupplies(uri);
+    if (s && s.length) return s;
+  }
+  return null;
 }
 
 const text = (v: unknown): string | null => {
@@ -54,17 +76,41 @@ export function deviceFindings(r: Omit<DeviceReport, 'findings' | 'at'>): Device
     if (d.health && !/^(ok|good|healthy|verified|passed)$/i.test(d.health)) out.push({ device: 'drive', level: 'warning', title: `${d.name} reports a health problem (${d.health})`, detail: 'Copy what matters off it now, and stop keeping the only copy of anything on it.', link: 'backup' });
   }
   for (const p of r.printers) if (p.status && /error|offline|stopped|jam|paper/i.test(p.status)) out.push({ device: 'printer', level: 'warning', title: `${p.name}: ${p.status}`, detail: 'Network Center → Printers shows its queue, prints a test page and restarts the print service.', link: 'network/printers' });
+  for (const p of r.printers) {
+    for (const x of p.supplies ?? []) {
+      if (!x.low) continue;
+      // A waste box reports how much room is left: low means nearly full.
+      if (x.kind === 'waste') out.push({ device: 'printer', level: 'info', title: `${p.name}: ${x.name} is nearly full`, detail: 'Replace it before the printer stops.', link: null });
+      else out.push({ device: 'printer', level: 'info', title: `${p.name}: ${x.name} is nearly out${x.level !== null ? ` (${x.level}%)` : ''}`, detail: `Order a new ${x.kind === 'toner' ? 'toner cartridge' : x.kind === 'ink' ? 'ink cartridge' : 'one'} before it runs out.`, link: null });
+    }
+  }
+  out.push(...usbFindings(r.usbTree));
   return out;
 }
 
+/** systeminformation, with what FBRX adds; `quick` leaves out the slower USB tree and printer questions. */
+export function systemSources(extra: Partial<DeviceSources> = {}, quick = false): DeviceSources {
+  return {
+    graphics: () => si.graphics(),
+    usb: () => si.usb(),
+    diskLayout: () => si.diskLayout(),
+    blockDevices: () => si.blockDevices(),
+    printer: () => si.printer(),
+    ...(quick ? { usbTree: async () => [], supplies: async () => null, printer: async () => [] } : {}),
+    ...extra,
+  };
+}
+
 /** The devices of this computer (This PC → Devices). */
-export async function deviceReport(src: DeviceSources = si as unknown as DeviceSources): Promise<DeviceReport> {
-  const [gfx, usb, disks, blocks, printers] = await Promise.all([
+export async function deviceReport(src: DeviceSources = systemSources()): Promise<DeviceReport> {
+  const [gfx, usb, disks, blocks, printers, tree, hosts] = await Promise.all([
     within(src.graphics(), { controllers: [], displays: [] }),
     within(src.usb(), []),
     within(src.diskLayout(), []),
     within(src.blockDevices(), []),
     within(src.printer(), []),
+    within((src.usbTree ?? (() => usbTree()))(), [] as UsbNode[]),
+    within(src.printerHosts?.() ?? Promise.resolve([]), [] as Array<{ name: string; ip: string | null }>),
   ]);
   const monitors = (gfx.displays ?? []).map((x: any) => ({
     name: text(x.model) ?? text(x.deviceName) ?? 'Screen',
@@ -111,8 +157,22 @@ export async function deviceReport(src: DeviceSources = si as unknown as DeviceS
     };
   });
   const usbDevices = (usb as any[]).map((u) => ({ name: text(u.name) ?? '', vendor: text(u.manufacturer) ?? text(u.vendor), kind: text(u.type), maxPowerMa: num(typeof u.maxPower === 'string' ? Number.parseInt(u.maxPower, 10) : u.maxPower) }));
-  const printerList = (printers as any[]).map((p) => ({ name: text(p.name) ?? 'Printer', model: text(p.model), status: text(p.status), local: !!p.local, isDefault: !!p.default }));
-  const body = { monitors, graphics, externalDrives, usb: usbDevices, printers: printerList };
+  const supplies = src.supplies ?? ((p: { name: string; uri: string | null; host: string | null }) => defaultSupplies(p));
+  const printerList = await Promise.all(
+    (printers as any[]).slice(0, 12).map(async (p) => {
+      const rawName = typeof p.name === 'string' ? p.name : '';
+      const host = hosts.find((h) => h.name === rawName)?.ip ?? null;
+      return {
+        name: text(p.name) ?? 'Printer',
+        model: text(p.model),
+        status: text(p.status),
+        local: !!p.local,
+        isDefault: !!p.default,
+        supplies: rawName ? await within(supplies({ name: rawName, uri: typeof p.uri === 'string' ? p.uri : null, host }), null, 6000) : null,
+      };
+    }),
+  );
+  const body = { monitors, graphics, externalDrives, usb: usbDevices, usbTree: tree, printers: printerList };
   return { at: new Date().toISOString(), ...body, findings: deviceFindings(body) };
 }
 
@@ -134,7 +194,7 @@ export function ejectCommand(platform: NodeJS.Platform, drive: DeviceReport['ext
 }
 
 /** Safely ejects one of the external drives the Devices list shows (anything else is refused). */
-export async function ejectDrive(device: string, src?: DeviceSources): Promise<{ message: string }> {
+export async function ejectDrive(device: string, src: DeviceSources = systemSources({}, true)): Promise<{ message: string }> {
   const drive = (await deviceReport(src)).externalDrives.find((d) => d.device === device);
   if (!drive) throw new CoreError('NOT_FOUND', 'That is not one of the external drives here');
   for (const [cmd, args] of ejectCommand(process.platform, drive)) {
@@ -145,4 +205,13 @@ export async function ejectDrive(device: string, src?: DeviceSources): Promise<{
     }
   }
   return { message: `${drive.name} can be unplugged now.` };
+}
+
+/** A quick speed test of one of the external drives the Devices list shows, on its first open volume. */
+export async function testDriveSpeed(device: string, src: DeviceSources = systemSources({}, true)): Promise<DriveSpeed> {
+  const drive = (await deviceReport(src)).externalDrives.find((d) => d.device === device);
+  if (!drive) throw new CoreError('NOT_FOUND', 'That is not one of the external drives here');
+  const mount = drive.mounts[0]?.mount;
+  if (!mount) throw new CoreError('CONFLICT', `${drive.name} is not open: open it in the file manager first`);
+  return driveSpeed(mount);
 }

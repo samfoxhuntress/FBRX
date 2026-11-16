@@ -8183,3 +8183,23 @@ body.popout .fx-page-header p {
 .screen-image { max-width: 100%; max-height: calc(100vh - 220px); object-fit: contain; border-radius: var(--radius-md, 8px); border: 1px solid var(--border); background: #000; justify-self: center; user-select: none; outline: none; }
 .screen-image.screen-control { cursor: crosshair; }
 .screen-image.screen-control:focus { box-shadow: 0 0 0 2px var(--accent); }
+
+/* This PC → Devices extras (2.5.0): the USB tree, ink levels, drive speed, screen settings. */
+.usb-tree { list-style: none; margin: 0; padding-left: 0; font-size: 13px; }
+.usb-tree .usb-tree { padding-left: 18px; border-left: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.2)); margin-left: 6px; }
+.usb-tree li { padding: 3px 0; }
+.usb-tree .usb-hub { font-weight: 600; }
+.usb-tree .fx-badge { margin-left: 6px; }
+.usb-tree .usb-slow { margin-left: 8px; font-size: 12px; }
+.supplies { display: grid; gap: 4px; margin-top: 6px; }
+.supply { display: grid; grid-template-columns: minmax(90px, 160px) 1fr 58px; align-items: center; gap: 8px; font-size: 12px; }
+.supply-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.supply-bar { height: 8px; border-radius: 4px; background: var(--surface-2, rgba(127, 127, 127, 0.15)); overflow: hidden; border: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.25)); }
+.supply-bar > span { display: block; height: 100%; }
+.supply.low .supply-level { color: var(--warning); font-weight: 600; }
+.supply-level { text-align: right; }
+.drive-speed { margin-top: 4px; font-size: 13px; }
+.screen-settings { margin-top: 10px; display: grid; gap: 10px; }
+.screen-setting { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.15)); }
+.screen-slider { display: grid; grid-template-columns: 90px 1fr 40px; align-items: center; gap: 8px; font-size: 13px; }
+.screen-slider input[type='range'] { width: 100%; accent-color: var(--accent); }

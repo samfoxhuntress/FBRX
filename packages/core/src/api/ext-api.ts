@@ -2,7 +2,8 @@ import { readFile } from 'node:fs/promises';
 import { basename, join } from 'node:path';
 import { openRemote, remoteViewers } from '../network/remote-desktop';
 import { systemInventory } from '../system/inventory';
-import { deviceReport, ejectDrive } from '../system/devices';
+import { deviceReport, ejectDrive, systemSources, testDriveSpeed } from '../system/devices';
+import { monitorControls, setMonitor } from '../system/monitor-control';
 import { z } from 'zod';
 import {
   ALERT_CHANNELS,
@@ -28,6 +29,7 @@ import {
   MIGRATE_ENGINES,
   MIGRATE_MODES,
   PRINTER_ACTIONS,
+  MONITOR_FEATURES,
   STORAGE_ACTIONS,
   TASK_STATUSES,
   VM_ACTIONS,
@@ -438,7 +440,23 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     // This PC → Devices (2.5.0): looking and ejecting both come with Pro.
     'pc.deviceReport': () => {
       if (!atLeast(k.license.status().tier, 'basic')) throw new CoreError('FEATURE_UNAVAILABLE', 'Devices come with FBRX Endpoint Pro');
-      return deviceReport();
+      // Windows keeps a printer's address on its port: Network Center's printer list has it, for the ink levels.
+      return deviceReport(systemSources(process.platform === 'win32' ? { printerHosts: () => k.net.printers().then((l) => l.map((p) => ({ name: p.name, ip: p.ip }))) } : {}));
+    },
+    'pc.driveSpeed': (p) => {
+      if (!atLeast(k.license.status().tier, 'basic')) throw new CoreError('FEATURE_UNAVAILABLE', 'Devices come with FBRX Endpoint Pro');
+      const device = z.object({ device: z.string().min(1).max(200) }).parse(p).device;
+      k.audit.append({ category: 'devices', action: 'drive.speedTest', actor: 'user', outcome: 'info', details: { device } });
+      return testDriveSpeed(device);
+    },
+    'pc.monitorControls': () => {
+      if (!atLeast(k.license.status().tier, 'basic')) throw new CoreError('FEATURE_UNAVAILABLE', 'Devices come with FBRX Endpoint Pro');
+      return monitorControls();
+    },
+    'pc.setMonitor': (p) => {
+      if (!atLeast(k.license.status().tier, 'basic')) throw new CoreError('FEATURE_UNAVAILABLE', 'Devices come with FBRX Endpoint Pro');
+      const q = z.object({ id: z.string().min(1).max(40), feature: z.enum(MONITOR_FEATURES), value: z.number().int().min(0).max(255) }).parse(p);
+      return setMonitor(q.id, q.feature, q.value);
     },
     'pc.ejectDrive': (p) => {
       if (!atLeast(k.license.status().tier, 'basic')) throw new CoreError('FEATURE_UNAVAILABLE', 'Devices come with FBRX Endpoint Pro');
