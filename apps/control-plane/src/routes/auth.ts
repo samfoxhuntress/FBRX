@@ -25,6 +25,8 @@ export function userView(u: any) {
     sso: !!u.sso_subject,
     /** Has a password (accounts made for single sign-on may not). */
     hasPassword: !!u.password_hash,
+    /** Remote screen is switched on for them (with an operator role or above). */
+    remoteControl: !!u.remote_control,
     lastLoginAt: u.last_login_at,
     createdAt: u.created_at,
   };
@@ -121,7 +123,9 @@ export async function authRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get('/v1/auth/me', { preHandler: auth }, async (req) => {
     const p = req.principal!;
-    const permissions = (Object.keys(PERMISSIONS) as Permission[]).filter((perm) => can(p.role, perm));
+    // Remote screen also needs the switch on the person's own user.
+    const remote = p.kind === 'user' && !!ctx.db.get<{ remote_control: number }>('SELECT remote_control FROM users WHERE id = ?', p.id)?.remote_control;
+    const permissions = (Object.keys(PERMISSIONS) as Permission[]).filter((perm) => can(p.role, perm) && (perm !== 'devices.remote' || remote));
     const tenants =
       p.role === 'superadmin'
         ? ctx.db.all<any>("SELECT id, name, slug, status, COALESCE(vertical, 'business') AS vertical FROM tenants ORDER BY name")

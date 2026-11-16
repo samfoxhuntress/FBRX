@@ -31,6 +31,7 @@ import { api, download } from '../api';
 import { SettingsBuilder, type SettingsDraft } from './settings-builder';
 import { useApp, useQuery } from '../state';
 import { CommandComposer } from './command-composer';
+import { RemoteScreenModal } from './screen';
 import { SupportPassModal } from './licenses';
 import { CommandStatus, HealthStatus, audienceHelp, audienceOptions, ImageBackupCell, OnlineStatus, PLATFORM_LABEL, ProtectionCell, ServiceState, SeverityStatus, tierLimitOptions, tierLimitWords, type DeviceSummary } from './common';
 
@@ -49,6 +50,7 @@ export function DeviceDetailPage({ id }: { id: string }) {
   const [tab, setTab] = useState<Tab>('overview');
   const [composer, setComposer] = useState(false);
   const [supportPass, setSupportPass] = useState(false);
+  const [screen, setScreen] = useState(false);
   const { confirm, dialog } = useConfirm();
   const { busy, run } = useAction();
   const { data: d, reload } = useQuery<Detail>(`/v1/admin/devices/${id}`, [id], (e) => ('deviceId' in e && e.deviceId === id) || (e.type === 'command.updated' && e.command?.deviceId === id));
@@ -86,6 +88,11 @@ export function DeviceDetailPage({ id }: { id: string }) {
             {app.can('commands.privileged') && d.health?.imageBackup?.configured && (
               <Button icon="drive" disabled={d.health.imageBackup.running} loading={busy === 'backup.image'} onClick={() => void quick('backup.image', {}, 'Image backup')}>
                 Image backup now
+              </Button>
+            )}
+            {app.can('devices.remote') && d.online && (
+              <Button icon="monitor" title="See this computer's screen, or use it (a ticket number; the person there says yes)" onClick={() => setScreen(true)}>
+                Remote screen
               </Button>
             )}
             {app.can('licenses.manage') && (
@@ -269,6 +276,7 @@ export function DeviceDetailPage({ id }: { id: string }) {
         </Card>
       )}
       {composer && <CommandComposer target={{ deviceId: id, label: d.name }} onClose={() => setComposer(false)} onSent={reload} />}
+      {screen && <RemoteScreenModal deviceId={id} deviceName={d.name} onClose={() => setScreen(false)} />}
       {supportPass && <SupportPassModal installId={d.installId ?? ''} device={{ id, name: d.name, canSend: app.can('commands.privileged') && app.can('commands.send') && d.status === 'active' }} onClose={() => (setSupportPass(false), reload())} />}
       {dialog}
     </Page>

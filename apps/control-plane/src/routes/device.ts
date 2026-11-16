@@ -240,6 +240,9 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
           case 'command.result':
             processCommandResult(ctx, d.id, String(msg.commandId), CommandResultSchema.parse(msg.result));
             break;
+          case 'screen.reply':
+            ctx.screen.onReply(d.id, msg);
+            break;
           case 'event': {
             const ev = DeviceEventSchema.parse(msg.event);
             recordDeviceEvent(ctx, d, ev.kind, ev.severity, ev.message, ev.data);

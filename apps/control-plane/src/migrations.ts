@@ -607,4 +607,12 @@ export const CP_MIGRATIONS: Migration[] = [
       ALTER TABLE groups ADD COLUMN mdm INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    version: 15,
+    name: 'remote-screen',
+    // Remote screen is switched on administrator by administrator (it also needs an operator role or above).
+    up: `
+      ALTER TABLE users ADD COLUMN remote_control INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
 ];

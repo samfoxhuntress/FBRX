@@ -210,7 +210,7 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     const u = ctx.db.get<any>('SELECT * FROM users WHERE id = ?', id);
     if (!u) throw notFound();
     if (p.role !== 'superadmin') assertTenantAccess(req, u.tenant_id);
-    const body = z.object({ name: z.string().min(1).max(120).optional(), role: z.enum(ROLES).optional(), status: z.enum(['active', 'disabled']).optional(), password: PasswordSchema.optional(), resetMfa: z.boolean().optional() }).parse(req.body);
+    const body = z.object({ name: z.string().min(1).max(120).optional(), role: z.enum(ROLES).optional(), status: z.enum(['active', 'disabled']).optional(), password: PasswordSchema.optional(), resetMfa: z.boolean().optional(), remoteControl: z.boolean().optional() }).parse(req.body);
     if (!assignableRoles(p.role).includes(u.role as Role)) throw forbidden('You cannot modify this user');
     if (body.role && !assignableRoles(p.role).includes(body.role)) throw forbidden(`You cannot assign the ${body.role} role`);
     if (body.role && (body.role === 'superadmin') !== (u.role === 'superadmin')) throw badRequest('Platform and tenant roles cannot be swapped');
@@ -226,6 +226,7 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
       new Date().toISOString(),
       id,
     );
+    if (body.remoteControl !== undefined) ctx.db.run('UPDATE users SET remote_control = ? WHERE id = ?', body.remoteControl ? 1 : 0, id);
     if (body.status === 'disabled' || body.password) ctx.db.run('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL', new Date().toISOString(), id);
     ctx.audit.record(actorOf(req), 'user.updated', { type: 'user', id, tenantId: u.tenant_id }, { ...body, password: body.password ? '[changed]' : undefined });
     return userView(ctx.db.get('SELECT * FROM users WHERE id = ?', id));

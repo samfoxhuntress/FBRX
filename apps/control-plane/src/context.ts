@@ -1,3 +1,4 @@
+import type { ScreenRelay } from './services/screen-relay';
 import type { FastifyBaseLogger } from 'fastify';
 import { newId } from '@fbrx/shared';
 import type { Db } from '@fbrx/shared/node';
@@ -14,6 +15,8 @@ export interface AppContext {
   keys: Keys;
   audit: CpAudit;
   realtime: Realtime;
+  /** Remote screen between administrators' browsers and computers. */
+  screen: ScreenRelay;
   webhooks: WebhookDispatcher;
   /** Email to FBRX accounts (mail.ts). */
   mail: Mailer;

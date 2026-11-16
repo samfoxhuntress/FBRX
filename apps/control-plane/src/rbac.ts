@@ -14,6 +14,8 @@ export const PERMISSIONS = {
   'apikeys.manage': ['superadmin', 'owner', 'admin'],
   'devices.read': ['superadmin', 'owner', 'admin', 'operator', 'viewer'],
   'devices.manage': ['superadmin', 'owner', 'admin', 'operator'],
+  /** Remote screen (with a ticket and the person's yes); each administrator also needs it switched on by name (Users). */
+  'devices.remote': ['superadmin', 'owner', 'admin', 'operator'],
   'commands.send': ['superadmin', 'owner', 'admin', 'operator'],
   'commands.privileged': ['superadmin', 'owner', 'admin'],
   'config.manage': ['superadmin', 'owner', 'admin'],

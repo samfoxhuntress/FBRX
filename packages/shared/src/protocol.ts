@@ -202,13 +202,19 @@ export type ServerToDeviceMessage =
   /** A message for this computer (Messages, organization chat). */
   | { type: 'chat.message'; message: OrgChatMessage }
   /** The organization's mesh changed (a computer joined or left, or the settings): fetch the roster again. */
-  | { type: 'mesh.roster' };
+  | { type: 'mesh.roster' }
+  /**
+   * Remote screen for an administrator: start (the person at the computer is asked), the session, a picture, mouse and
+   * keyboard, end. The computer answers each with screen.reply.
+   */
+  | { type: 'screen.call'; callId: string; op: 'start' | 'session' | 'frame' | 'input' | 'end'; params: Record<string, unknown> };
 
 export type DeviceToServerMessage =
   | { type: 'heartbeat'; heartbeat: Heartbeat }
   | { type: 'command.result'; commandId: string; result: CommandResult }
   | { type: 'event'; event: DeviceEvent }
-  | { type: 'pong'; at: string };
+  | { type: 'pong'; at: string }
+  | { type: 'screen.reply'; callId: string; ok: boolean; result?: unknown; error?: { code: string; message: string } };
 
 /** Provisioning file dropped next to an installer (or passed via CLI) for zero-touch enrollment. */
 export const ProvisioningFileSchema = z.object({

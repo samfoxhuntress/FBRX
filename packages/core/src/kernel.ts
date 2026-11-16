@@ -579,7 +579,13 @@ export class Kernel {
       requestRestart: (reason) => this.platform.requestRestart(reason),
       canSchedule: () => this.license.has('backup.scheduled'),
     });
+    this.screen = new ScreenHost({
+      share: () => this.platform.screenShare ?? null,
+      audit: (action, outcome, details) => this.audit.append({ category: 'security', action, actor: String(details.who ?? 'remote'), outcome, details }),
+      notify: (title, body) => this.notify({ title, body, level: 'info', source: 'screen' }),
+    });
     this.fleet = new FleetAgent({
+      screen: this.screen,
       db: this.db,
       meta: this.meta,
       vault: this.vault,
@@ -859,11 +865,6 @@ export class Kernel {
       vault: this.vault,
       home: () => this.platform.specialDirs().home,
       audit: (action, outcome, details) => this.audit.append({ category: 'console', action, actor: 'user', outcome, details }),
-    });
-    this.screen = new ScreenHost({
-      share: () => this.platform.screenShare ?? null,
-      audit: (action, outcome, details) => this.audit.append({ category: 'security', action, actor: String(details.who ?? 'remote'), outcome, details }),
-      notify: (title, body) => this.notify({ title, body, level: 'info', source: 'screen' }),
     });
     this.mesh = new MeshService(this.db, this.events, L('mesh'), {
       screen: this.screen,

@@ -34,6 +34,8 @@ import { commandRoutes } from './routes/command';
 import { accountRoutes } from './routes/accounts';
 import { billingAdminRoutes } from './routes/billing-admin';
 import { cloudAiRoutes } from './routes/cloud-ai';
+import { screenRoutes } from './routes/screen';
+import { ScreenRelay } from './services/screen-relay';
 import { stripeOf } from './billing/stripe';
 import { rememberStripePrice } from './billing/pricing';
 import { scheduleSeatSync, syncSeats, syncTenantLicense } from './billing/tenant-billing';
@@ -98,12 +100,14 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   db.migrate(CP_MIGRATIONS);
   const keys = loadKeys(config.dataDir);
   const version = readVersion();
+  const realtime = new Realtime();
   const base = {
     config,
     db,
     keys,
     audit: new CpAudit(db),
-    realtime: new Realtime(),
+    realtime,
+    screen: new ScreenRelay(realtime),
     webhooks: new WebhookDispatcher(db, keys.master, version, (m, d) => app.log.warn(d, m)),
     mail: createMailer(config.cloud.mail, app.log),
     version,
@@ -177,6 +181,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   await adminAssetRoutes(app, ctx);
   await accountRoutes(app, ctx);
   await cloudAiRoutes(app, ctx);
+  await screenRoutes(app, ctx);
   await app.register(async (scoped) => billingAdminRoutes(scoped, ctx));
   const updater = new CommandUpdater({
     version,

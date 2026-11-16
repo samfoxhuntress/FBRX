@@ -111,8 +111,23 @@ everyone now** sends `update.install` to every active computer (online ones star
 | Answer help desk tickets | ✔ | ✔ | ✔ | ✔ | |
 | Read the organization's *Everyone* messages | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Post to *Everyone* and remove messages | ✔ | ✔ | ✔ | ✔ | |
+| Remote screen, once switched on for the person in *Users* (a ticket number; the person at the computer says yes) | ✔ | ✔ | ✔ | ✔ | |
 | Read licenses | ✔ | ✔ | ✔ | | |
 | Tenants, releases, issuing licenses | ✔ | | | | |
+
+## Remote screen
+
+**Remote screen** on a computer's page (online computers) sees its screen and, if the person there allows it, uses its
+mouse and keyboard, for support. It needs an operator role or above **and** the switch *Remote screen* on the
+administrator in **Users** (an owner or administrator turns it on, person by person). Each session asks for a
+**ticket number** and a reason, which the person at the computer sees in the question: *Allow control*, *View only* or
+*No* (no answer within a minute is a no). While it lasts a red bar with **Stop** stays on their screen. Only the
+administrator who started a session can use it, and closing the window ends it.
+
+FBRX Command's audit log keeps who asked, the computer, the ticket, the reason and how long it lasted; the computer's
+own audit log keeps whether the mouse and keyboard were used. Pictures and keystrokes go through FBRX Command over the
+computer's encrypted connection, only while the window is open; nothing is recorded as video. What each system needs
+is the same as for your own computers ([MESH.md](MESH.md#remote-screen-seeing-and-using-your-other-computers)).
 
 ## Sign in with Google or Microsoft
 
