@@ -18,13 +18,15 @@ Each device gets its own permissions on *this* computer, changeable at any time 
 | Lock and sleep | | |
 | Borrow its AI (Mesh Assist, below) | — | ✔ |
 | Controller (Mesh Assist, below) | — | |
+| Remote screen, and without asking ([below](#remote-screen-seeing-and-using-your-other-computers)) | — | |
 | Network protection (a gate's FBRX MiniDome, below) | | |
 | Sync (FBRX Sync, below) | — | |
 
 Each device card offers one choice, **What it may do here**: *The usual* (the defaults above), *Full trust* (everything
-but the two special permissions), *Messages only* or *Paused* (stays paired, can do nothing). **Choose one by one**
-opens every permission, each with an (i) that explains it; **Network protection** and **Controller** are special and
-never part of a preset, and neither is **Sync**, which a computer's card also offers as *Turn on Sync*. *Message*
+but the special permissions), *Messages only* or *Paused* (stays paired, can do nothing). **Choose one by one**
+opens every permission, each with an (i) that explains it; **Network protection**, **Controller** and **Remote screen**
+(with or without asking) are special and never part of a preset, and neither is **Sync**, which a computer's card also
+offers as *Turn on Sync*. *Message*
 (opens the conversation with it in **Messages**, see [MESSAGES.md](MESSAGES.md)),
 *Ask its agent* and *How is it doing?* are on the card; *Send a ping*, *Find my
 phone*, *Lock it*, *Put it to sleep* and *Remove* are under **More**.
@@ -43,6 +45,34 @@ board (a greeting, the date, whether the AI is ready) and a few notes from FBRX:
 dismissed), **AI models** (the models on the computer, and *Use* to switch to one, for a phone that may ask the AI)
 and what Pro and Ultra add. Its tabs are Home, Ask, AI (and Approve when something waits). The notes are the
 same ones as on the computer's Home (`packages/shared/src/essentials-home.ts`).
+
+## Remote screen: seeing and using your other computers
+
+**Screen** on a paired computer (Mesh) shows its screen here, and with **Use it** this computer's mouse and keyboard
+work over there; **Only see it** shows the screen alone. It works from Pro, between computers, and only once the
+computer being seen allows it, in its own Mesh permissions for this one:
+
+* **Remote screen**: this computer may ask. The person over there gets a question each time (*Allow control*, *View
+  only* or *No*; no answer within a minute is a no), so control can be narrowed to view only.
+* **Remote screen without asking** (with Remote screen): for your own computers and servers when nobody is at them.
+  It starts at once.
+
+Either way, a red bar stays at the top of the screen being seen, with **Stop**, for as long as it lasts, and that
+computer's audit log keeps every session: who, how long, and whether the mouse and keyboard were used. Leaving the
+Screen page ends it, and so does a viewer that stops asking for pictures. The AI never starts or uses a remote screen.
+
+Pictures go only when the viewer asks for one (a few a second, smaller ones on a slow link; *Faster* asks for smaller
+ones); they travel over Mesh like everything else, sealed so only the two computers can read them. With two or more
+screens over there, pick one. Click the picture to type there; paste sends the text on this computer's clipboard.
+
+What each system needs for this:
+
+* **Windows**: nothing. Windows does not let any app use the sign-in screen or a window running as administrator
+  (UAC) from outside, so those stay view only.
+* **macOS**: Screen Recording for FBRX (to be seen) and Accessibility (to be used), in System Settings → Privacy &
+  Security.
+* **Linux**: an Xorg session; using it needs `xdotool` (`sudo apt install xdotool`). Wayland lets no app see or use the
+  screen without asking each time, so a Wayland session cannot be seen yet.
 
 ## FBRX Sync: the same projects, tasks, notes and calendar on your computers
 

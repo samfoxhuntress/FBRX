@@ -28,7 +28,7 @@ export const DIGGER_PEER: MeshDevice = {
   lastSeen: null,
   fingerprint: '',
   pairedAt: '',
-  permissions: { status: false, chat: false, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false, network: false, sync: false },
+  permissions: { status: false, chat: false, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false, network: false, sync: false, remote: false, unattended: false },
 };
 
 /** Requests are a conversation for the model at most (the lender keeps it under 1 MiB, with room). */

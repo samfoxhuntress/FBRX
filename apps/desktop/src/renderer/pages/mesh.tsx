@@ -24,6 +24,16 @@ const PERMS: Array<{ key: keyof MeshPermissions; label: string; help: string }> 
 const SPECIAL: Array<{ key: keyof MeshPermissions; label: string; help: string }> = [
   { key: 'network', label: 'Network protection', help: 'Only matters when the other device is an FBRX Server running as your network gate with FBRX MiniDome: it tells this computer about threats it sees coming from it, and sees how this computer is protected (antivirus on or off).' },
   { key: 'command', label: 'Controller', help: 'Lets the other computer hand out AI work that runs here without asking, may be urgent, and may stop less important help. Meant for one main computer you run as administrator. This computer’s policy still applies.' },
+  {
+    key: 'remote',
+    label: 'Remote screen',
+    help: 'Lets the other computer ask to see this screen, or use its mouse and keyboard. The person here says yes each time (or narrows it to view only), a red bar with Stop shows while it lasts, and the audit log keeps every session.',
+  },
+  {
+    key: 'unattended',
+    label: 'Remote screen without asking',
+    help: 'With Remote screen: the other computer starts at once, without anyone here saying yes. For your own computers and servers you reach from elsewhere. The red bar with Stop still shows.',
+  },
   { key: 'sync', label: 'Sync', help: 'FBRX Sync: keep projects, tasks, notes, snippets and FBRX calendar events the same on both computers, whenever either of you chooses Sync now. It goes straight between the two computers, sealed so only they can read it; no FBRX server ever holds it. Turn it on for each other on both computers.' },
 ];
 const relevant = (d: MeshDevice) => PERMS.filter((p) => d.kind === 'desktop' || p.key !== 'assist');
@@ -363,6 +373,11 @@ function DeviceCard({ d, sync, onPing, advanced = true }: { d: MeshDevice; sync?
           <Button size="sm" icon="activity" loading={busy === 'info'} onClick={() => void run('info', () => call('mesh.peerInfo', { id: d.id })).then((r) => r && setInfo(r))}>
             How is it doing?
           </Button>
+          {d.kind === 'desktop' && (
+            <Button size="sm" icon="monitor" onClick={() => navigate(`screen/${d.id}`)} title="See its screen, or use it (it needs Remote screen on that computer)">
+              Screen
+            </Button>
+          )}
           <span className="fx-spacer" />
           <MenuButton
             items={[

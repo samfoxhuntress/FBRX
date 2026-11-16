@@ -13,6 +13,7 @@ export {
   type KeychainAdapter,
   type MovedKeychain,
   type PlatformAdapter,
+  type ScreenShare,
   type UpdateController,
   type UpdateFeedConfig,
 } from './platform';

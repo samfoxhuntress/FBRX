@@ -8,6 +8,7 @@ import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarEventPatch
 import type { ProtectionState, ProtectionStatus, ScanJob, ScanType, ShieldDetection, ShieldVerdict } from './protection';
 import type { ImageBackupConfig, ImageBackupStatus } from './time';
 import type { DirectoryMembership } from './directory';
+import type { RemoteFrame, RemoteInput, RemoteMode, RemoteSession } from './remote';
 import type { AssistLogEntry, AssistLogQuery, AssistOffer, AssistPriority, AssistQueue, AssistSession, AssistTally, AssistTools } from './mesh-assist';
 import type { MeshNetworkStatus, MeshPathTest } from './net';
 import type { MessagesOverview, MessageState, ThreadMessage } from './messages';
@@ -1026,6 +1027,10 @@ export interface MeshPermissions {
    * starts a sync. It needs this on both computers, and is never part of a preset.
    */
   sync: boolean;
+  /** See this computer's screen and use its mouse and keyboard, once the person here says yes each time. */
+  remote: boolean;
+  /** With remote: without asking, for one of your own computers (a banner shows here while it lasts). */
+  unattended: boolean;
 }
 
 /** What an FBRX MiniDome saw coming from this computer, sent to it over FBRX Mesh. */
@@ -1541,6 +1546,16 @@ export interface ExtMethods {
   /** Lets Fabrix look at the server: an administrator signs in once; the server gives FBRX read-only access. */
   'server.fabrixConnect': (p: { id: string; username: string; password: string }) => SavedServer;
   'server.fabrixDisconnect': (p: { id: string }) => SavedServer;
+  /** Asks a paired computer to see its screen (or use it): it says yes there, unless it lets this one in without asking. */
+  'screen.connect': (p: { peerId: string; mode: RemoteMode }) => RemoteSession;
+  'screen.session': (p: { peerId: string; id: string }) => RemoteSession;
+  /** The newest picture of that screen, or null when it has not changed since `after`. */
+  'screen.frame': (p: { peerId: string; id: string; after?: number; display?: number; maxWidth?: number }) => RemoteFrame | null;
+  'screen.input': (p: { peerId: string; id: string; events: RemoteInput[] }) => { ok: true };
+  'screen.end': (p: { peerId: string; id: string }) => RemoteSession;
+  /** Someone seeing this computer's screen now, and stopping them. */
+  'screen.here': () => RemoteSession | null;
+  'screen.stopHere': () => { ok: true };
   /** This computer in an FBRX directory (FBRX Server's directory role). */
   'directory.status': () => DirectoryMembership;
   /** Joins through a saved server with a join code from its console (Directory). */
@@ -1628,6 +1643,12 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'server.trust',
   'server.fabrixConnect',
   'server.fabrixDisconnect',
+  'screen.connect',
+  'screen.session',
+  'screen.frame',
+  'screen.input',
+  'screen.end',
+  'screen.stopHere',
   'directory.join',
   'directory.apply',
   'directory.leave',

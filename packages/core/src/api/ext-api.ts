@@ -34,6 +34,7 @@ import {
   type ExtMethods,
   type SpotlightItem,
   TIERS,
+  remoteInputProblem,
 } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
@@ -944,6 +945,35 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return k.servers.connectFabrix(q.id, q.username, q.password);
     },
     'server.fabrixDisconnect': (p) => k.servers.disconnectFabrix(z.object({ id: z.string().max(64) }).parse(p).id),
+    'screen.connect': (p) => {
+      const q = z.object({ peerId: z.string().max(80), mode: z.enum(['view', 'control']) }).parse(p);
+      return k.mesh.call(q.peerId, 'screen.start', { mode: q.mode }, 20_000);
+    },
+    'screen.session': (p) => {
+      const q = z.object({ peerId: z.string().max(80), id: z.string().max(80) }).parse(p);
+      return k.mesh.call(q.peerId, 'screen.session', { id: q.id });
+    },
+    'screen.frame': (p) => {
+      const q = z.object({ peerId: z.string().max(80), id: z.string().max(80), after: z.number().int().optional(), display: z.number().int().min(0).max(16).optional(), maxWidth: z.number().int().min(320).max(2560).optional() }).parse(p);
+      const { peerId, ...rest } = q;
+      return k.mesh.call(peerId, 'screen.frame', rest, 20_000);
+    },
+    'screen.input': (p) => {
+      const q = z.object({ peerId: z.string().max(80), id: z.string().max(80), events: z.array(z.any()).max(200) }).parse(p);
+      const problem = remoteInputProblem(q.events);
+      if (problem) throw new CoreError('INVALID_ARGUMENT', problem);
+      return k.mesh.call(q.peerId, 'screen.input', { id: q.id, events: q.events });
+    },
+    'screen.end': (p) => {
+      const q = z.object({ peerId: z.string().max(80), id: z.string().max(80) }).parse(p);
+      return k.mesh.call(q.peerId, 'screen.end', { id: q.id });
+    },
+    'screen.here': () => k.screen.current(),
+    'screen.stopHere': () => {
+      const s = k.screen.current();
+      if (s) k.screen.end(s.id, 'person');
+      return { ok: true as const };
+    },
     'directory.status': () => k.directory.status(),
     'directory.join': (p) => {
       const q = z.object({ serverId: z.string().max(64), code: z.string().min(4).max(40) }).parse(p);

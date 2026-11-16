@@ -118,6 +118,7 @@ import { DIGGER_PEER, DiggerLinkServer, diggerLinkCall, diggerLinkPresent } from
 import { MeshNetwork } from './mesh/mesh-network';
 import { ServerResources } from './system/server-resources';
 import { SavedServers } from './system/saved-servers';
+import { ScreenHost } from './remote/screen-host';
 import { DirectoryClient } from './system/directory-client';
 import { readAccountsHere, runHere } from './system/directory-apply';
 import { OrgMesh } from './mesh/org-mesh';
@@ -298,6 +299,8 @@ export class Kernel {
   readonly apps: AppRegistry;
   readonly cli: Fbrx1Cli;
   readonly mesh: MeshService;
+  /** This computer's screen for remote view and control (own computers over Mesh, FBRX Command administrators). */
+  readonly screen: ScreenHost;
   /** FBRX Sync: projects, tasks, notes, snippets and calendar events between two paired computers, over the mesh. */
   readonly sync: SyncService;
   readonly orgMesh: OrgMesh;
@@ -857,7 +860,13 @@ export class Kernel {
       home: () => this.platform.specialDirs().home,
       audit: (action, outcome, details) => this.audit.append({ category: 'console', action, actor: 'user', outcome, details }),
     });
+    this.screen = new ScreenHost({
+      share: () => this.platform.screenShare ?? null,
+      audit: (action, outcome, details) => this.audit.append({ category: 'security', action, actor: String(details.who ?? 'remote'), outcome, details }),
+      notify: (title, body) => this.notify({ title, body, level: 'info', source: 'screen' }),
+    });
     this.mesh = new MeshService(this.db, this.events, L('mesh'), {
+      screen: this.screen,
       appVersion: this.platform.appVersion,
       ultra: () => !this.ultraOnly('Mesh extras'),
       deviceName: () => this.deviceName(),
@@ -1751,6 +1760,7 @@ export class Kernel {
     this.started = false;
     if (this.learningTimer) clearTimeout(this.learningTimer);
     this.learning.stop();
+    this.screen.stop();
     await this.diggerLink?.stop();
     this.release.stop();
     this.account.stop();

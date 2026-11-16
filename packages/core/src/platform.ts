@@ -3,7 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import { openBytes, sealString } from '@fbrx/shared/node';
-import type { AppFlavor, NotificationEvent, UpdateStatus, UpdateChannel } from '@fbrx/shared';
+import type { AppFlavor, NotificationEvent, RemoteInput, RemoteMode, UpdateStatus, UpdateChannel } from '@fbrx/shared';
 
 /**
  * Protects the vault's data-encryption key with something bound to this machine/user:
@@ -65,6 +65,20 @@ export interface ImageTools {
   thumbnail(data: Buffer, side: number): Buffer;
 }
 
+/** What remote view and control need from the desktop. */
+export interface ScreenShare {
+  /** A picture of one screen, at most this wide, as JPEG; null when the system does not let FBRX see it. */
+  capture(o: { display: number; maxWidth: number; quality: number }): Promise<{ jpeg: Buffer; width: number; height: number; displays: number } | null>;
+  /** Uses the mouse and keyboard on that screen. */
+  input(events: RemoteInput[], display: number): Promise<void>;
+  /** Whether the mouse and keyboard can be used here, and why not (Wayland, a permission missing). */
+  canControl(): Promise<{ ok: boolean; why: string | null }>;
+  /** Asks the person at this computer; resolves with what they allowed, or deny (also when nobody answers in time). */
+  ask(q: { who: string; asked: RemoteMode; ticket: string | null; reason: string | null; timeoutMs: number }): Promise<RemoteMode | 'deny'>;
+  /** Shows (or, with null, takes away) the banner that says the screen is being seen, with a Stop button. */
+  banner(on: { who: string; mode: RemoteMode } | null, stop: () => void): void;
+}
+
 export interface PlatformAdapter {
   shell: 'desktop' | 'headless';
   appVersion: string;
@@ -105,6 +119,8 @@ export interface PlatformAdapter {
   appExec?: string | null;
   /** Moves a file or folder to the Trash (Recycle Bin); the desktop app has it, a headless core does not. */
   trash?(path: string): Promise<void>;
+  /** This computer's screen, mouse and keyboard for remote view and control (the desktop app has them). */
+  screenShare?: ScreenShare | null;
   specialDirs(): SpecialDirs;
   /** FBRX's own folders outside its data folder (where it is installed, its update cache): never scanned. */
   ownDirs?(): string[];

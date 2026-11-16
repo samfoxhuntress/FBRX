@@ -65,6 +65,7 @@ const BugsPage = lazy(() => import('./pages/bugs').then((m) => ({ default: m.Bug
 const LabPage = lazy(() => import('./pages/lab').then((m) => ({ default: m.LabPage })));
 const ServerPage = lazy(() => import('./pages/server').then((m) => ({ default: m.ServerPage })));
 const MeshPage = lazy(() => import('./pages/mesh').then((m) => ({ default: m.MeshPage })));
+const ScreenPage = lazy(() => import('./pages/screen').then((m) => ({ default: m.ScreenPage })));
 const VpnPage = lazy(() => import('./pages/vpn').then((m) => ({ default: m.VpnPage })));
 const AiCoordPage = lazy(() => import('./pages/aicoord').then((m) => ({ default: m.AiCoordPage })));
 const MigratePage = lazy(() => import('./pages/migrate').then((m) => ({ default: m.MigratePage })));
@@ -103,6 +104,7 @@ export type Route =
   | 'toolbox'
   | 'library'
   | 'mesh'
+  | 'screen'
   | 'vpn'
   | 'aicoord'
   | 'connections'
@@ -666,6 +668,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return <ToolboxPage advanced={ultra} easterEggs={fun} />;
       case 'library':
         return <LibraryPage agentName={agentName} everything={blackhole} easterEggs={fun} />;
+      case 'screen':
+        // Another computer's screen over Mesh (Pro and up, like Mesh).
+        return atLeast(tier, 'basic') ? <ScreenPage /> : <StandardOnly title="Remote screen" what="See and use your other computers' screens over FBRX Mesh." />;
       case 'mesh':
         return atLeast(tier, 'basic') ? <MeshPage advanced={ultra} /> : <StandardOnly title="Mesh & phone" what="Link your computers and your phone over an encrypted mesh, and reach FBRX from anywhere." />;
       case 'vpn':

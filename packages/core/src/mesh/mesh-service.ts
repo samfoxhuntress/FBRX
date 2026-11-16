@@ -25,6 +25,7 @@ import {
   type Task,
 } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
+import type { ScreenHost } from '../remote/screen-host';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
 import type { Db } from '../storage/db';
@@ -43,13 +44,13 @@ import {
   type KeyPair,
 } from './mesh-crypto';
 
-export const MOBILE_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: true, approve: true, workspace: true, alerts: true, control: false, assist: false, command: false, network: false, sync: false };
+export const MOBILE_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: true, approve: true, workspace: true, alerts: true, control: false, assist: false, command: false, network: false, sync: false, remote: false, unattended: false };
 // Computers may ask each other's AI for help (each computer's Mesh Assist settings still decide); controllers and FBRX
 // Sync are chosen by hand.
 /** What a paired device may do only on Ultra and fuller (MeshHost.ultra). */
 export const ULTRA_MESH_PERMISSIONS: ReadonlyArray<keyof MeshPermissions> = ['approve', 'control', 'command'];
 
-export const DESKTOP_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false, network: false, sync: false };
+export const DESKTOP_PERMISSIONS: MeshPermissions = { status: true, chat: true, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false, network: false, sync: false, remote: false, unattended: false };
 const PERMISSION_KEYS = Object.keys(MOBILE_PERMISSIONS) as Array<keyof MeshPermissions>;
 const NO_PERMISSIONS = Object.fromEntries(PERMISSION_KEYS.map((k) => [k, false])) as unknown as MeshPermissions;
 
@@ -95,6 +96,8 @@ type OutboxItem =
   | { type: 'locate' };
 
 export interface MeshHost {
+  /** This computer's screen, for paired computers allowed to see it (Remote screen permission). */
+  screen?: ScreenHost;
   /**
    * Whether this computer runs Ultra or fuller. Mesh comes with Pro: pairing, status, messages, alerts, notes and asking
    * Fabrix. Approving from another device, lock and sleep, and handing out work as a controller come with Ultra.
@@ -1092,6 +1095,28 @@ export class MeshService {
       case 'assist.model.cancel':
         if (d.kind !== 'desktop' || !this.host.lend) throw new CoreError('NOT_FOUND', 'This computer does not lend its AI');
         return this.host.lend(d, method, p);
+      case 'screen.start':
+      case 'screen.session':
+      case 'screen.frame':
+      case 'screen.input':
+      case 'screen.end': {
+        // Between computers only; Remote screen lets it ask (the person here says yes each time), and Without asking
+        // lets one of the person's own computers in at once (a banner shows here while it lasts).
+        const host = this.host.screen;
+        if (d.kind !== 'desktop' || !host) throw new CoreError('NOT_FOUND', 'This computer does not share its screen');
+        need('remote');
+        if (method === 'screen.start') {
+          const mode = p.mode === 'control' ? 'control' : 'view';
+          return host.request({ kind: 'mesh', name: d.name, deviceId: d.id }, mode, { unattended: !!d.permissions.unattended });
+        }
+        const id = String(p.id ?? '');
+        // A session is only ever the computer's that started it.
+        if (host.session(id).viewer.deviceId !== d.id) throw new CoreError('NOT_FOUND', 'That screen session is over');
+        if (method === 'screen.session') return host.session(id);
+        if (method === 'screen.frame') return host.frame(id, { after: typeof p.after === 'number' ? p.after : undefined, display: typeof p.display === 'number' ? p.display : undefined, maxWidth: typeof p.maxWidth === 'number' ? p.maxWidth : undefined });
+        if (method === 'screen.input') return host.input(id, p.events);
+        return host.end(id, 'viewer');
+      }
       case 'action': {
         const a = String(p.action ?? '');
         if (a === 'notify') {

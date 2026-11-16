@@ -159,7 +159,7 @@ describe('Mesh by edition (2.5.0)', () => {
     const pro = await makeKernel({ devMode: false });
     const full = await makeKernel();
     try {
-      const phone = { permissions: { status: true, chat: true, ask: true, approve: true, workspace: true, alerts: true, control: true, assist: false, command: true, network: false, sync: false } };
+      const phone = { permissions: { status: true, chat: true, ask: true, approve: true, workspace: true, alerts: true, control: true, assist: false, command: true, network: false, sync: false, remote: false, unattended: false } };
       expect(pro.kernel.license.status().tier).not.toBe('ultra');
       for (const p of ['status', 'chat', 'ask', 'workspace', 'alerts'] as const) expect(pro.kernel.mesh.may(phone, p)).toBe(true);
       for (const p of ['approve', 'control', 'command'] as const) expect(pro.kernel.mesh.may(phone, p)).toBe(false);
