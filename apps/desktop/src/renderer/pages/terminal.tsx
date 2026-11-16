@@ -233,7 +233,11 @@ function Reference({ onInsert, onRun, lastCommand }: { onInsert: (cmd: string) =
 }
 
 /** A simple command runner: each command runs in a fresh shell; output streams live. Recorded in the audit log. */
-export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
+/**
+ * `paid`: Pro and up, and FBRX Digger. Essentials has the command line and FBRX/1, for troubleshooting; the code lab
+ * and device consoles come with Pro.
+ */
+export function TerminalPage({ easterEggs, paid }: { easterEggs: boolean; paid: boolean }) {
   // The page stays mounted while only the part after "terminal/" changes, so follow the address here.
   const [arg, setArg] = useState(() => routeArg() ?? '');
   useEffect(() => {
@@ -241,7 +245,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
-  const [tab, setTab] = useState<'commands' | 'code' | 'consoles' | 'fbrx1'>(arg.startsWith('console') ? 'consoles' : DIGGER ? 'commands' : arg.startsWith('fbrx1') ? 'fbrx1' : arg.startsWith('code') ? 'code' : 'commands');
+  const [tab, setTab] = useState<'commands' | 'code' | 'consoles' | 'fbrx1'>(arg.startsWith('console') && paid ? 'consoles' : DIGGER ? 'commands' : arg.startsWith('fbrx1') ? 'fbrx1' : arg.startsWith('code') && paid ? 'code' : 'commands');
   const [consoleId, setConsoleId] = useState<string | null>(arg.startsWith('console/') ? arg.slice(8) : null);
   const consoles = useConsoleSessions();
   const openConsoles = (consoles.data ?? []).filter((s) => s.state !== 'closed').length;
@@ -266,12 +270,12 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
     if (a.startsWith('cmd/')) {
       setTab('commands');
       setCmd(decodeURIComponent(a.slice(4)));
-    } else if (a.startsWith('console')) {
+    } else if (a.startsWith('console') && paid) {
       setTab('consoles');
       if (a.startsWith('console/')) setConsoleId(a.slice(8));
     } else if (a.startsWith('fbrx1')) setTab('fbrx1');
-    else if (a.startsWith('code')) setTab('code');
-  }, [arg]);
+    else if (a.startsWith('code') && paid) setTab('code');
+  }, [arg, paid]);
   useEffect(() => {
     const offs = [
       onEvent('terminal.output', (e) => setBlocks((bs) => bs.map((b) => (b.id === e.sessionId ? { ...b, out: [...b.out, { stream: e.stream, text: e.text }] } : b)))),
@@ -393,18 +397,19 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
         tabs={[
           { id: 'commands', label: shellName },
           // FBRX Digger's Terminal is the command line and the consoles: no code lab, and FBRX/1 is FBRX Endpoint's.
-          ...(DIGGER ? [] : [{ id: 'code' as const, label: 'Code' }]),
-          { id: 'consoles', label: `Device consoles${openConsoles ? ` (${openConsoles})` : ''}` },
+          // Essentials: the command line and FBRX/1 only.
+          ...(DIGGER || !paid ? [] : [{ id: 'code' as const, label: 'Code' }]),
+          ...(paid ? [{ id: 'consoles' as const, label: `Device consoles${openConsoles ? ` (${openConsoles})` : ''}` }] : []),
           ...(DIGGER ? [] : [{ id: 'fbrx1' as const, label: 'FBRX/1' }]),
         ]}
       />
       {tab === 'fbrx1' ? (
         <Fbrx1Panel prefill={arg.startsWith('fbrx1/') ? decodeURIComponent(arg.slice(6)) : undefined} />
-      ) : tab === 'code' ? (
+      ) : tab === 'code' && paid ? (
         <Suspense fallback={<div className="fx-muted" style={{ padding: 24 }}>Loading the code lab…</div>}>
           <CodeLabPanel />
         </Suspense>
-      ) : tab === 'consoles' ? (
+      ) : tab === 'consoles' && paid ? (
         // SSH and Telnet sessions, in FBRX Endpoint (Pro and up) and in FBRX Digger alike.
         <DeviceConsolesPanel
           selected={consoleId}

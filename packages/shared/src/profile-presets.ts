@@ -170,6 +170,25 @@ export const PROFILE_SETTINGS: ProfileSetting[] = [
   { path: 'updates.channel', area: 'updates', kind: 'select', label: 'Update channel', help: 'Stable for everyone; beta and dev get new versions sooner and are less tested.', options: UPDATE_CHANNELS.map((c) => ({ value: c, label: c[0].toUpperCase() + c.slice(1) })) },
   { path: 'updates.autoDownload', area: 'updates', kind: 'toggle', label: 'Download updates by themselves', help: 'New versions download in the background. A group’s Automatic updates setting decides installing.' },
   // Everyday
+  {
+    path: 'lab.terminal',
+    area: 'protection',
+    kind: 'toggle',
+    label: 'Allow the Terminal',
+    help: 'The Terminal for the person at the computer: PowerShell or the command prompt, FBRX/1 and, from Pro, device consoles. Off hides it and FBRX refuses it, whatever the edition; lock it so nobody turns it back on. What the agent may run is set in the policy, not here.',
+  },
+  {
+    path: 'lab.show',
+    area: 'everyday',
+    kind: 'select',
+    label: 'The Lab in the menu',
+    help: 'The Lab holds the Terminal (and, by edition, the virtual lab and FBRX Server). Automatic: in the advanced menu, not in the simple one.',
+    options: [
+      { value: 'auto', label: 'Automatic' },
+      { value: 'on', label: 'Shown' },
+      { value: 'off', label: 'Hidden' },
+    ],
+  },
   { path: 'general.launchAtLogin', area: 'everyday', kind: 'toggle', label: 'Start with the computer', help: 'FBRX opens (in the tray) when the person signs in.' },
   { path: 'general.minimizeToTray', area: 'everyday', kind: 'toggle', label: 'Keep running in the tray', help: 'Closing the window keeps FBRX running in the tray, so alerts and the mesh keep working.' },
   { path: 'voice.readReplies', area: 'everyday', kind: 'toggle', label: 'Read replies aloud', help: 'The agent reads its answers aloud after a spoken question.' },

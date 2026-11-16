@@ -109,6 +109,12 @@ const CalendarEventInput = z.object({
   showAs: z.enum(CALENDAR_SHOW_AS).optional(),
 });
 
+/** Refuses a Terminal call when there is a reason (the organization turned it off, or the edition lacks it). */
+function refuseTerminal(why: string | null): undefined {
+  if (why) throw new CoreError(why.startsWith('Your organization') ? 'FORBIDDEN' : 'FEATURE_UNAVAILABLE', why);
+  return undefined;
+}
+
 export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
   const vt = () => (k.vault.isUnlocked ? k.vault.get(VIRUSTOTAL_SECRET) : undefined);
   const guardPath = (p: string, ctx: CallContext) => {
@@ -166,6 +172,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return { results: await k.files.search(guardPath(q.root, ctx), q.pattern) };
     },
     'terminal.run': (p) => {
+      refuseTerminal(k.terminalOff());
       const q = z.object({ command: z.string().min(1).max(10_000), cwd: z.string().optional(), shell: z.enum(['pwsh', 'powershell', 'cmd', 'sh']).optional() }).parse(p);
       k.audit.append({ category: 'terminal', action: 'run', actor: 'user', outcome: 'info', details: { command: q.command.slice(0, 500), shell: q.shell ?? 'default' } });
       return k.terminal.run(q.command, q.cwd, q.shell);
@@ -728,6 +735,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     },
 
     'cli.exec': (p) => {
+      refuseTerminal(k.terminalOff());
       const q = z.object({ session: z.string().min(1).max(64), line: z.string().max(4000) }).parse(p);
       return k.cli.exec(q.session, q.line);
     },
@@ -738,6 +746,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
 
     // -------------------------------------------------------------------------------- device console
     'console.connect': (p) =>
+      refuseTerminal(k.consolesOff()) ??
       k.consoles.connect(
         z
           .object({
@@ -760,6 +769,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
           .parse(p),
       ),
     'console.write': (p) => {
+      refuseTerminal(k.terminalOff());
       const q = z.object({ id: z.string(), data: z.string().max(100_000) }).parse(p);
       k.consoles.write(q.id, q.data);
       return { ok: true };

@@ -32,6 +32,7 @@ import {
   thinkingLevelOf,
   tierRank,
   withSteps,
+  labShown,
   type ImageGenerator,
   type ImageSize,
   type PriceBook,
@@ -389,6 +390,21 @@ function General({ onRerunSetup }: { onRerunSetup: () => void }) {
             <Field label={<>Menu <Locked show={L('general.mode')} /></>} help="Simple: your AI, Governance, help and Settings. Advanced: every page this edition has, in sections.">
               <Select value={s.general.mode} disabled={L('general.mode')} onChange={(e) => void patch({ general: { mode: e.target.value as Settings['general']['mode'] } })} options={[{ value: 'simple', label: 'Simple' }, { value: 'advanced', label: 'Advanced' }]} />
             </Field>
+          )}
+          {!learner && (
+            <Toggle
+              checked={labShown(s, tier === 'essentials' || s.general.mode === 'simple')}
+              disabled={L('lab.show') || !s.lab.terminal}
+              onChange={(v) => void patch({ lab: { show: v ? 'on' : 'off' } })}
+              label={<>Show the Lab <Locked show={L('lab.show') || !s.lab.terminal} /></>}
+              info={
+                !s.lab.terminal
+                  ? 'Your organization turned off the Terminal on this computer.'
+                  : tier === 'essentials'
+                    ? 'Puts the Lab in the menu with the Terminal: the command line (PowerShell, the command prompt or the shell) and FBRX/1, for troubleshooting. Device consoles and the code lab come with Pro.'
+                    : 'Puts the Lab in the menu: the Terminal (the command line, FBRX/1, the code lab and device consoles), and the virtual lab and FBRX Server where your edition has them.'
+              }
+            />
           )}
           <Toggle checked={s.general.launchAtLogin} disabled={L('general.launchAtLogin')} onChange={(v) => void patch({ general: { launchAtLogin: v } })} label="Start FBRX when I sign in" />
           <Toggle checked={s.general.minimizeToTray} disabled={L('general.minimizeToTray')} onChange={(v) => void patch({ general: { minimizeToTray: v } })} label="Keep running in the tray when the window is closed" />

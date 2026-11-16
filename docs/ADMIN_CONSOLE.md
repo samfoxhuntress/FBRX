@@ -68,6 +68,9 @@ A profile (and a single device's overrides) is built from:
 * **The usual settings**, by area (AI, fun and look, privacy, screens and meetings, messages, mesh, backups, protection,
   updates, everyday), each with an **(i)** saying what it does: *Not set / On / Off* for switches, a list for choices,
   and **Lock** so people cannot change it on their computer. *Find a setting* searches names and explanations.
+  **Allow the Terminal** (protection) turns off the Terminal for the people at the computers (PowerShell or the
+  command prompt, FBRX/1 and device consoles), whatever their edition: lock it so nobody turns it back on. What the
+  agent may run is the policy's (Governance), not this.
 * **Advanced: everything as text**: the same profile as JSON (any FBRX OS setting) and the locked paths, one per line,
   for settings the switches do not cover. Both views are the same profile.
 

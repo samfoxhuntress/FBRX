@@ -114,6 +114,17 @@ export const SettingsSchema = z.object({
      */
     mode: z.enum(['simple', 'advanced']),
   }),
+  /**
+   * The Lab: the Terminal (PowerShell or the shell, FBRX/1, and from Pro the code lab and device consoles), the virtual
+   * lab and FBRX Server. It stays in FBRX OS in every edition, so the troubleshooting tools are there when another app
+   * or the license is not.
+   */
+  lab: z.object({
+    /** In the menu: `auto` shows it in the advanced menu and hides it in the simple one (Essentials always has that). */
+    show: z.enum(['auto', 'on', 'off']),
+    /** The Terminal for the person at the computer. An organization turns it off (and locks it) from FBRX Command. */
+    terminal: z.boolean(),
+  }),
   ai: z.object({
     defaultProvider: z.string(),
     defaultModel: z.string(),
@@ -594,6 +605,7 @@ export const DEFAULT_SETTINGS: Settings = {
     onboardingComplete: false,
     mode: 'advanced',
   },
+  lab: { show: 'auto', terminal: true },
   ai: {
     defaultProvider: 'local',
     defaultModel: '',
@@ -824,4 +836,10 @@ export function addressAs(s: Pick<Settings, 'profile'> | null | undefined): stri
   if (call) return call;
   const first = p.name.trim().split(/\s+/)[0];
   return first || null;
+}
+
+/** Whether the Lab (with the Terminal) is in the menu: the person's choice, else the advanced menu has it. */
+export function labShown(s: Pick<Settings, 'lab'>, simpleMenu: boolean): boolean {
+  if (!s.lab.terminal) return false;
+  return s.lab.show === 'on' || (s.lab.show === 'auto' && !simpleMenu);
 }

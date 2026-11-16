@@ -71,7 +71,7 @@ export const EDITION_PLANS: Record<Tier, EditionPlan> = {
     productId: 'fbrx_standard_monthly',
     tenantProductId: 'fbrx_standard_tenant_monthly',
     summary: 'The everyday tools, and control over your AI.',
-    highlights: ['Your AI’s controls: steps, answer length, how much it keeps in mind', 'Dash (the dashboard), alerts, notes, tasks, calendar and messages', 'Storage, FBRX Shield, updates, network and backups', 'Files, the clipboard history, the toolbox and how-tos'],
+    highlights: ['Your AI’s controls: steps, answer length, how much it keeps in mind', 'Dash (the dashboard), alerts, notes, tasks, calendar and messages', 'Storage, FBRX Shield, updates, network and backups', 'Files, the clipboard history, the toolbox and how-tos', 'The Terminal with device consoles and the code lab'],
   },
   ultra: {
     tier: 'ultra',
@@ -81,7 +81,7 @@ export const EDITION_PLANS: Record<Tier, EditionPlan> = {
     productId: 'fbrx_ultra_monthly',
     tenantProductId: 'fbrx_ultra_tenant_monthly',
     summary: 'Expert tools, your devices together, and every look.',
-    highlights: ['Terminal, Task Manager, the virtual lab and IT tools', 'Mesh with your computers and phone, AI coordination', 'Connections, plugins and the theme studio'],
+    highlights: ['FBRX Digger, Task Manager, the virtual lab and IT tools', 'Mesh with your computers and phone, AI coordination', 'Connections, plugins and the theme studio'],
   },
   blackhole: {
     tier: 'blackhole',

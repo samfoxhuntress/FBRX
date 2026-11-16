@@ -1,7 +1,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { NotificationEvent, PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
-import { DIGGER_AI_PROVIDER, DIGGER_ICON_SVG, DIGGER_PAGES, TIER_NAMES, TIER_SHORT, addressAs, atLeast, displayVersion, funEnabled, type ProviderStatus } from '@fbrx/shared';
-import { Button, ErrorBoundary, FBRX_MARK, FbrxMark, Icons, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
+import { DIGGER_AI_PROVIDER, DIGGER_ICON_SVG, DIGGER_PAGES, TIER_NAMES, TIER_SHORT, addressAs, atLeast, displayVersion, funEnabled, labShown, type ProviderStatus } from '@fbrx/shared';
+import { Button, Card, Empty, ErrorBoundary, FBRX_MARK, FbrxMark, Icons, Page, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent, openExternal } from './client';
 import { playChime } from './notify-sound';
 import { useConsoleSessions, useCore } from './hooks';
@@ -505,7 +505,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     // Every edition sees what its AI may do, and can change it.
     { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect' },
     { id: 'backup', label: 'Backup & restore', icon: 'archive', section: 'Protect' },
-    { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', need: 'basic' },
+    // Every edition (the troubleshooting tools stay when another app or the license does not): see labOn below.
+    { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced' },
     { id: 'lab', label: 'Virtual lab', icon: 'box', section: 'Advanced', need: 'ultra' },
     { id: 'server', label: 'FBRX Server', icon: 'server', section: 'Advanced', need: 'blackhole' },
     // Every edition sees its organization, or how to join one (Black Hole Edition only ever comes through FBRX Command).
@@ -517,6 +518,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const essentials = tier === 'essentials' && !learner;
   // The simple menu: Essentials always; any other edition when the person chose it (Settings → General → Menu).
   const simple = essentials || (!learner && s?.general.mode === 'simple');
+  // The Lab with the Terminal: in the advanced menu unless the person hid it, in the simple one (Essentials) when they
+  // turned it on in Settings; never on a student's computer, nor when the organization turned the Terminal off.
+  const labOn = !learner && labShown(s, simple);
   const byId = new Map(all.map((i) => [i.id, i]));
   const nav: NavItem[] = DIGGER
     ? DIGGER_PAGES.flatMap((id) => {
@@ -527,7 +531,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         return [{ ...rest, section: 'Digger' }];
       })
     : simple
-    ? ESSENTIALS_NAV.flatMap(([id, section, label]) => {
+    ? [...ESSENTIALS_NAV, ...(labOn ? ESSENTIALS_LAB : [])].flatMap(([id, section, label]) => {
         const item = byId.get(id);
         if (!item || (id === 'fleet' && !enrolled)) return [];
         const { need: _n, ...rest } = item;
@@ -535,6 +539,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       })
     : all
         .filter((i) => (learner ? LEARNER_PAGES.has(i.id) : !i.need || atLeast(tier, i.need)))
+        .filter((i) => i.id !== 'terminal' || labOn)
         .map(({ need: _n, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
   const groups: NavGroup[] | undefined = simple || DIGGER
     ? undefined
@@ -602,7 +607,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     }
     // Essentials Home: the split-flap board and a few notes from FBRX (no dashboard).
     if (simple && route === 'home') return <EssentialsHome status={status} agentName={agentName} who={addressAs(s)} />;
-    if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && !byId.get(route)?.need) {
+    if (essentials && !ESSENTIALS_PAGES.has(route) && route !== 'goose' && route !== 'terminal' && !byId.get(route)?.need) {
       return <StandardOnly title={byId.get(route)?.label ?? 'That page'} what={STANDARD_WHAT[route] ?? 'More of the everyday tools.'} />;
     }
     if (learner && route !== 'home' && !LEARNER_PAGES.has(route)) {
@@ -662,8 +667,10 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         // In the desktop app this opens its own window (see navigate); this inline view is the development fallback.
         return <BrowserApp agentName={agentName} />;
       case 'terminal':
-        // Pro and up (and FBRX Digger): the command line and SSH and Telnet device consoles.
-        return DIGGER || atLeast(tier, 'basic') ? <TerminalPage easterEggs={fun} /> : <StandardOnly title="The Terminal" what="PowerShell, the command prompt and SSH and Telnet device consoles, with a code lab, commands and snippets beside them." />;
+        // Every edition: the command line and FBRX/1; from Pro (and in FBRX Digger) the code lab and device consoles.
+        if (!s.lab.terminal) return <TerminalOff />;
+        if (essentials && !labOn) return <LabHidden />;
+        return <TerminalPage easterEggs={fun} paid={DIGGER || atLeast(tier, 'basic')} />;
       case 'toolbox':
         return <ToolboxPage advanced={ultra} easterEggs={fun} />;
       case 'library':
@@ -1008,6 +1015,39 @@ const ESSENTIALS_NAV: Array<[Route, string, string?]> = [
   ['settings', 'Help & settings'],
 ];
 const ESSENTIALS_PAGES = new Set<string>(ESSENTIALS_NAV.map(([id]) => id));
+/** The Lab in the simple menu, once the person turns it on (Settings → General). */
+const ESSENTIALS_LAB: Array<[Route, string, string?]> = [['terminal', 'Lab']];
+
+/** The Terminal, when the organization turned it off from FBRX Command. */
+function TerminalOff() {
+  return (
+    <Page title="Terminal">
+      <Empty title="Your organization turned off the Terminal on this computer">Ask your IT team if you need it. Fabrix and the rest of FBRX work as before.</Empty>
+    </Page>
+  );
+}
+
+/** The Terminal in Essentials before the Lab is turned on: one switch away. */
+function LabHidden() {
+  const [busy, setBusy] = useState(false);
+  return (
+    <Page title="Terminal">
+      <Card title="The Terminal is in the Lab" subtitle="The command line (PowerShell, the command prompt or the shell) and FBRX/1, for troubleshooting. Turn on the Lab to put it in the menu (Settings → General).">
+        <Button
+          variant="primary"
+          icon="terminal"
+          loading={busy}
+          onClick={() => {
+            setBusy(true);
+            void call('settings.update', { patch: { lab: { show: 'on' } } }).finally(() => setBusy(false));
+          }}
+        >
+          Show the Lab
+        </Button>
+      </Card>
+    </Page>
+  );
+}
 
 /** What a Pro page does, said on its place in Essentials. */
 const STANDARD_WHAT: Partial<Record<Route, string>> = {

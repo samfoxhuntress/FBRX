@@ -1203,6 +1203,12 @@ export class Kernel {
       this.events.on('settings.changed', () => this.presenterChanged()),
       this.events.on('settings.changed', () => this.calendar.schedule()),
       this.events.on('settings.changed', () => this.protection.applyWatch()),
+      // Turned off by the organization: what is open in the Terminal closes too.
+      this.events.on('settings.changed', () => {
+        if (!this.terminalOff()) return;
+        this.terminal.killAll();
+        this.consoles.closeAll();
+      }),
     );
     this.disposers.push(this.vault.onChange(() => this.updateRedaction()));
     // Licensed features (plugins, connectors, …) start or stop as soon as a license is activated, pushed or revoked.
@@ -2298,6 +2304,19 @@ export class Kernel {
     // From 2.5.0 the advanced network tools are FBRX Digger's (with Endpoint Ultra); FBRX Endpoint keeps the everyday
     // ones.
     return this.digger && !this.ultraOnly('Network tools');
+  }
+
+  /** Why the person cannot use the Terminal here (their organization turned it off from FBRX Command), or null. */
+  terminalOff(): string | null {
+    return this.settings.get().lab.terminal ? null : 'Your organization turned off the Terminal on this computer';
+  }
+
+  /**
+   * Why device consoles (SSH and Telnet) cannot be opened here, or null. In FBRX OS they come with Pro (Essentials
+   * keeps the command line and FBRX/1 for troubleshooting); FBRX Digger always has them.
+   */
+  consolesOff(): string | null {
+    return this.terminalOff() ?? (this.digger || atLeast(this.license.status().tier, 'basic') ? null : `Device consoles come with ${TIER_NAMES.basic}`);
   }
 
   /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Essentials or Pro), or null. */
