@@ -615,4 +615,33 @@ export const CP_MIGRATIONS: Migration[] = [
       ALTER TABLE users ADD COLUMN remote_control INTEGER NOT NULL DEFAULT 0;
     `,
   },
+  {
+    version: 16,
+    name: 'screen-recording',
+    // Organizations may keep recordings of their remote screen sessions (off until an owner or administrator turns it
+    // on), for the days they choose; the pictures are files in the data folder, these rows say whose they are.
+    up: `
+      ALTER TABLE tenants ADD COLUMN screen_recording INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE tenants ADD COLUMN screen_recording_days INTEGER NOT NULL DEFAULT 30;
+      CREATE TABLE screen_recordings (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        session_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        device_name TEXT NOT NULL,
+        admin_id TEXT NOT NULL,
+        admin TEXT NOT NULL,
+        ticket TEXT NOT NULL,
+        reason TEXT NOT NULL DEFAULT '',
+        mode TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        frames INTEGER NOT NULL DEFAULT 0,
+        bytes INTEGER NOT NULL DEFAULT 0,
+        input_used INTEGER NOT NULL DEFAULT 0,
+        cut TEXT
+      );
+      CREATE INDEX screen_recordings_tenant ON screen_recordings (tenant_id, started_at);
+    `,
+  },
 ];

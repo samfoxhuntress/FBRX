@@ -80,6 +80,14 @@ export async function download(path: string, fileName: string) {
   saveBlob(await res.blob(), fileName);
 }
 
+/** An authenticated picture or file as a blob (a recording's pictures). */
+export async function apiBlob(path: string): Promise<Blob> {
+  const res = await fetch(path, { headers: { authorization: `Bearer ${session.token}`, ...(session.tenant ? { 'x-fbrx-tenant': session.tenant } : {}) } });
+  if (res.status === 401) onUnauthorized();
+  if (!res.ok) throw new ApiError(res.status, `Request failed (${res.status})`);
+  return res.blob();
+}
+
 export function saveBlob(blob: Blob, fileName: string) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');

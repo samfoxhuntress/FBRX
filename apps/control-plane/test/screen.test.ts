@@ -31,11 +31,14 @@ async function waitFor<T>(fn: () => T | Promise<T>, ms = 15_000): Promise<T> {
 
 const inputs: RemoteInput[][] = [];
 const asked: string[] = [];
+const told: boolean[] = [];
+let picture = Buffer.from('office screen');
+let answer: 'control' | 'view' | 'deny' = 'control';
 const share: ScreenShare = {
-  capture: async () => ({ jpeg: Buffer.from('office screen'), width: 1280, height: 720, displays: 1 }),
+  capture: async () => ({ jpeg: picture, width: 1280, height: 720, displays: 1 }),
   input: async (events) => void inputs.push(events),
   canControl: async () => ({ ok: true, why: null }),
-  ask: async (q) => (asked.push(`${q.who}|${q.ticket}|${q.reason}`), 'control'),
+  ask: async (q) => (asked.push(`${q.who}|${q.ticket}|${q.reason}`), told.push(q.recorded), answer),
   banner: () => undefined,
 };
 
@@ -113,6 +116,70 @@ describe('remote screen from FBRX Command', () => {
     const audit = server.ctx.db.all<{ action: string }>("SELECT action FROM audit_log WHERE action LIKE 'device.screen.%'").map((r) => r.action);
     expect(audit).toEqual(expect.arrayContaining(['device.screen.requested', 'device.screen.ended']));
     expect(kernel.audit.query({ limit: 50 }).map((e: { action: string }) => e.action)).toEqual(expect.arrayContaining(['screen.requested', 'screen.started', 'screen.ended']));
+  }, 60_000);
+
+  it('keeps a recording when the organization turns it on, and the person is told', async () => {
+    const olly = await login('olly@fox.example', PASSWORD);
+    expect((await call('PATCH', `/v1/admin/tenants/${tenantId}`, { screenRecording: true, screenRecordingDays: 30 }, olly)).status).toBe(403);
+    expect((await call('PATCH', `/v1/admin/tenants/${tenantId}`, { screenRecording: true, screenRecordingDays: 30 })).body.screenRecording).toBe(true);
+
+    // A JPEG (FF D8 FF ...): only pictures go in a recording.
+    picture = Buffer.concat([Buffer.from([0xff, 0xd8, 0xff, 0xe0]), Buffer.from('the front desk screen')]);
+    const s = await call('POST', `/v1/admin/devices/${deviceId}/screen`, { mode: 'control', ticket: '4600', reason: 'Email will not send' });
+    expect(s.body.recorded).toBe(true);
+    expect(told[told.length - 1]).toBe(true);
+    const sid = s.body.id as string;
+    await waitFor(async () => (await call('GET', `/v1/admin/screen/${sid}`)).body?.state === 'live');
+    expect((await call('GET', `/v1/admin/screen/${sid}/frame?after=-1`)).status).toBe(200);
+    expect((await call('POST', `/v1/admin/screen/${sid}/input`, { events: [{ t: 'text', text: 'my password' }] })).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 1100));
+    expect((await call('GET', `/v1/admin/screen/${sid}/frame?after=-1`)).status).toBe(200);
+    expect((await call('POST', `/v1/admin/screen/${sid}/end`)).status).toBe(200);
+
+    // Operators run sessions; owners and administrators watch them.
+    expect((await call('GET', '/v1/admin/screen-recordings', undefined, olly)).status).toBe(403);
+    const list = (await call('GET', '/v1/admin/screen-recordings')).body;
+    expect(list.on).toBe(true);
+    expect(list.recordings).toHaveLength(1);
+    const rec = list.recordings[0];
+    expect(rec).toMatchObject({ device: 'Front desk', admin: 'Sam', ticket: '4600', reason: 'Email will not send', frames: 2, inputUsed: true, cut: null });
+    const detail = (await call('GET', `/v1/admin/screen-recordings/${rec.id}`)).body;
+    expect(detail.frames).toHaveLength(2);
+    expect(detail.frames[1].t).toBeGreaterThanOrEqual(1000);
+    expect(detail.inputs).toHaveLength(1);
+    const pic = await fetch(`${base}/v1/admin/screen-recordings/${rec.id}/frames/0`, { headers: { authorization: `Bearer ${token}`, 'x-fbrx-tenant': tenantId } });
+    expect(pic.headers.get('content-type')).toBe('image/jpeg');
+    expect(Buffer.from(await pic.arrayBuffer()).equals(picture)).toBe(true);
+    expect((await call('GET', `/v1/admin/screen-recordings/${rec.id}/frames/2`)).status).toBe(404);
+    expect((await call('GET', '/v1/admin/screen-recordings/rec_../../keys')).status).toBe(404);
+    // What was typed is nowhere in the recording.
+    const { readFileSync } = await import('node:fs');
+    expect(readFileSync(server.ctx.recorder.file(rec.id)).includes(Buffer.from('my password'))).toBe(false);
+
+    // A session the person said no to leaves no recording.
+    answer = 'deny';
+    const no = await call('POST', `/v1/admin/devices/${deviceId}/screen`, { mode: 'view', ticket: '4601' });
+    await waitFor(async () => (await call('GET', `/v1/admin/screen/${no.body.id}`)).body?.state === 'denied');
+    answer = 'control';
+    expect((await call('GET', '/v1/admin/screen-recordings')).body.recordings).toHaveLength(1);
+    expect(server.ctx.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM screen_recordings')?.n).toBe(1);
+
+    // Kept for the organization's days, then gone.
+    server.ctx.db.run('UPDATE screen_recordings SET started_at = ? WHERE id = ?', new Date(Date.now() - 31 * 86400_000).toISOString(), rec.id);
+    expect(server.ctx.recorder.sweep()).toBe(1);
+    expect((await call('GET', `/v1/admin/screen-recordings/${rec.id}`)).status).toBe(404);
+
+    // Deleting one is in the audit log.
+    const s2 = await call('POST', `/v1/admin/devices/${deviceId}/screen`, { mode: 'view', ticket: '4602' });
+    await waitFor(async () => (await call('GET', `/v1/admin/screen/${s2.body.id}`)).body?.state === 'live');
+    await call('GET', `/v1/admin/screen/${s2.body.id}/frame?after=-1`);
+    await call('POST', `/v1/admin/screen/${s2.body.id}/end`);
+    const id2 = (await call('GET', '/v1/admin/screen-recordings')).body.recordings[0].id;
+    expect((await call('DELETE', `/v1/admin/screen-recordings/${id2}`)).status).toBe(200);
+    const { existsSync } = await import('node:fs');
+    expect(existsSync(server.ctx.recorder.file(id2))).toBe(false);
+    const audit = server.ctx.db.all<{ action: string }>("SELECT action FROM audit_log WHERE action LIKE 'device.screen.recording.%'").map((r) => r.action);
+    expect(audit).toEqual(expect.arrayContaining(['device.screen.recording.viewed', 'device.screen.recording.deleted']));
   }, 60_000);
 
   it('says so when the computer is not connected', async () => {

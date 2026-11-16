@@ -74,9 +74,9 @@ export interface ScreenShare {
   /** Whether the mouse and keyboard can be used here, and why not (Wayland, a permission missing). */
   canControl(): Promise<{ ok: boolean; why: string | null }>;
   /** Asks the person at this computer; resolves with what they allowed, or deny (also when nobody answers in time). */
-  ask(q: { who: string; asked: RemoteMode; ticket: string | null; reason: string | null; timeoutMs: number }): Promise<RemoteMode | 'deny'>;
+  ask(q: { who: string; asked: RemoteMode; ticket: string | null; reason: string | null; recorded: boolean; timeoutMs: number }): Promise<RemoteMode | 'deny'>;
   /** Shows (or, with null, takes away) the banner that says the screen is being seen, with a Stop button. */
-  banner(on: { who: string; mode: RemoteMode } | null, stop: () => void): void;
+  banner(on: { who: string; mode: RemoteMode; recorded: boolean } | null, stop: () => void): void;
 }
 
 export interface PlatformAdapter {

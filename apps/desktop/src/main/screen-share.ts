@@ -100,8 +100,8 @@ function stopHelper() {
   helper = null;
 }
 
-function bannerHtml(who: string, mode: 'view' | 'control') {
-  const text = `${mode === 'control' ? 'Your screen, mouse and keyboard are being used by' : 'Your screen is being seen by'} ${who.replace(/[<>&"]/g, '')}`;
+function bannerHtml(who: string, mode: 'view' | 'control', recorded: boolean) {
+  const text = `${mode === 'control' ? 'Your screen, mouse and keyboard are being used by' : 'Your screen is being seen by'} ${who.replace(/[<>&"]/g, '')}${recorded ? ' (recorded)' : ''}`;
   return `<!doctype html><meta charset="utf-8"><style>
     body{margin:0;font:13px system-ui,sans-serif;background:#b3261e;color:#fff;display:flex;align-items:center;gap:12px;height:100vh;padding:0 12px;box-sizing:border-box;-webkit-app-region:drag;user-select:none}
     span{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -145,6 +145,7 @@ export function createScreenShare(): ScreenShare {
         q.asked === 'control' ? `${q.who} wants to see your screen and use your mouse and keyboard.` : `${q.who} wants to see your screen.`,
         ...(q.ticket ? [`Ticket: ${q.ticket}`] : []),
         ...(q.reason ? [`Why: ${q.reason}`] : []),
+        ...(q.recorded ? ['', 'Your organization keeps a recording of what is seen on your screen during this session.'] : []),
         '',
         'A red bar stays at the top of your screen while it lasts, with Stop.',
       ];
@@ -176,7 +177,7 @@ export function createScreenShare(): ScreenShare {
         if (url.startsWith('https://stop.fbrx.invalid')) stop();
       });
       banner.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
-      void banner.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(bannerHtml(on.who, on.mode))}`);
+      void banner.loadURL(`data:text/html;charset=utf-8,${encodeURIComponent(bannerHtml(on.who, on.mode, on.recorded))}`);
       banner.once('ready-to-show', () => banner?.showInactive());
       // Closing the bar any way stops the session.
       const mine = banner;

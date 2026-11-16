@@ -48,6 +48,7 @@ export const Icons = {
   download: make(['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M7 10l5 5 5-5', 'M12 15V3']),
   upload: make(['M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4', 'M17 8l-5-5-5 5', 'M12 3v12']),
   play: make(['M6 4l14 8-14 8z']),
+  pause: make(['M6 4h4v16H6z', 'M14 4h4v16h-4z']),
   stop: make(['M6 6h12v12H6z']),
   send: make(['M22 2L11 13', 'M22 2l-7 20-4-9-9-4z']),
   lock: make(['M5 11h14v10H5z', 'M8 11V7a4 4 0 0 1 8 0v4']),

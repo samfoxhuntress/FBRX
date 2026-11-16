@@ -40,6 +40,8 @@ interface Tenant {
   autoUpdate: AutoUpdateMode;
   helpdeskEnabled: boolean;
   chatEnabled: boolean;
+  screenRecording: boolean;
+  screenRecordingDays: number;
 }
 
 const VERTICAL_HELP: Record<Vertical, string> = {
@@ -88,6 +90,18 @@ export function ConfigPage() {
               </Field>
               <Field label="Messages" help={tenant.vertical === 'home' ? 'The family’s computers can message each other (Messages in the sidebar)' : 'Computers can message each other and everyone at once (the No chatting preset turns it off for a group)'}>
                 <Toggle checked={tenant.chatEnabled} onChange={(v) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { chatEnabled: v }).then(tenants.reload), v ? 'Messages on' : 'Messages off')} label={tenant.chatEnabled ? 'On' : 'Off'} />
+              </Field>
+            </div>
+            <div className="fx-row">
+              <Field label="Remote screen recordings" help="Keeps what administrators see in remote screen sessions (a picture a second, never what is typed). The person at the computer is told before they say yes. Owners and administrators watch them under Screen recordings.">
+                <Toggle checked={tenant.screenRecording} onChange={(v) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { screenRecording: v }).then(tenants.reload), v ? 'Sessions are recorded' : 'Sessions are not recorded')} label={tenant.screenRecording ? 'On' : 'Off'} />
+              </Field>
+              <Field label="Keep recordings for" help="Older recordings are deleted.">
+                <Select
+                  value={String(tenant.screenRecordingDays)}
+                  onChange={(e) => void run('t', () => api('PATCH', `/v1/admin/tenants/${tenant.id}`, { screenRecordingDays: Number(e.target.value) }).then(tenants.reload), 'Kept for ' + e.target.value + ' days')}
+                  options={[...new Set([7, 30, 90, 365, tenant.screenRecordingDays])].sort((a, b) => a - b).map((n) => ({ value: String(n), label: n === 365 ? 'A year' : `${n} days` }))}
+                />
               </Field>
             </div>
             <div className="fx-row">

@@ -18,6 +18,8 @@ export interface RemoteFrom {
   admin?: string;
   ticket?: string;
   reason?: string;
+  /** Command: the organization keeps a recording of the session (the person is told in the question and the bar). */
+  recorded?: boolean;
 }
 
 export type RemoteState = 'asking' | 'live' | 'denied' | 'ended';

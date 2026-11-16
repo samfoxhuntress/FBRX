@@ -82,6 +82,9 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     helpdeskEnabled: z.boolean().optional(),
     /** Messages between the organization's computers. */
     chatEnabled: z.boolean().optional(),
+    /** Keep recordings of remote screen sessions (the person at the computer is told), and for how many days. */
+    screenRecording: z.boolean().optional(),
+    screenRecordingDays: z.number().int().min(1).max(365).optional(),
   });
   const tenantView = (t: any) => ({
     id: t.id,
@@ -96,6 +99,8 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     autoUpdate: t.auto_update ?? 'notify',
     helpdeskEnabled: Number(t.helpdesk_enabled ?? 1) === 1,
     chatEnabled: Number(t.chat_enabled ?? 1) === 1,
+    screenRecording: Number(t.screen_recording ?? 0) === 1,
+    screenRecordingDays: Number(t.screen_recording_days ?? 30),
     configVersion: Number(t.config_version),
     createdAt: t.created_at,
     deviceCount: Number(ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM devices WHERE tenant_id = ? AND status = 'active'", t.id)?.n ?? 0),
@@ -159,6 +164,14 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
       new Date().toISOString(),
       id,
     );
+    if (body.screenRecording !== undefined || body.screenRecordingDays !== undefined) {
+      ctx.db.run(
+        'UPDATE tenants SET screen_recording = ?, screen_recording_days = ? WHERE id = ?',
+        body.screenRecording === undefined ? Number(t.screen_recording ?? 0) : body.screenRecording ? 1 : 0,
+        body.screenRecordingDays ?? Number(t.screen_recording_days ?? 30),
+        id,
+      );
+    }
     if (body.defaultProfileId !== undefined || body.updateChannel || body.vertical || body.autoUpdate || body.helpdeskEnabled !== undefined) ctx.bumpConfig(id);
     if (body.status === 'suspended') for (const d of ctx.db.all<{ id: string }>('SELECT id FROM devices WHERE tenant_id = ?', id)) ctx.realtime.disconnectDevice(d.id, 'tenant suspended');
     ctx.audit.record(actorOf(req), 'tenant.updated', { type: 'tenant', id, tenantId: id }, body);

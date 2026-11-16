@@ -35,6 +35,7 @@ import { accountRoutes } from './routes/accounts';
 import { billingAdminRoutes } from './routes/billing-admin';
 import { cloudAiRoutes } from './routes/cloud-ai';
 import { screenRoutes } from './routes/screen';
+import { ScreenRecorder } from './services/screen-recorder';
 import { ScreenRelay } from './services/screen-relay';
 import { stripeOf } from './billing/stripe';
 import { rememberStripePrice } from './billing/pricing';
@@ -108,6 +109,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     audit: new CpAudit(db),
     realtime,
     screen: new ScreenRelay(realtime),
+    recorder: new ScreenRecorder(db, config.dataDir),
     webhooks: new WebhookDispatcher(db, keys.master, version, (m, d) => app.log.warn(d, m)),
     mail: createMailer(config.cloud.mail, app.log),
     version,
@@ -227,7 +229,18 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   }
 
   // Housekeeping.
+  ctx.recorder.recover();
+  let recordingsSweptAt = 0;
   const sweep = () => {
+    // Recordings past the days their organization keeps them, once an hour.
+    if (Date.now() - recordingsSweptAt > 3600_000) {
+      recordingsSweptAt = Date.now();
+      try {
+        ctx.recorder.sweep();
+      } catch (err) {
+        app.log.warn({ err }, 'Could not remove old screen recordings');
+      }
+    }
     const now = new Date().toISOString();
     db.run("UPDATE commands SET status = 'expired', completed_at = ? WHERE status IN ('queued','sent') AND expires_at IS NOT NULL AND expires_at < ?", now, now);
     db.run('DELETE FROM device_metrics WHERE ts < ?', new Date(Date.now() - 30 * 86400_000).toISOString());
@@ -266,6 +279,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     },
     async close() {
       clearInterval(timer);
+      ctx.recorder.closeAll();
       clearInterval(billingTimer);
       updater.stop();
       ctx.realtime.closeAll();

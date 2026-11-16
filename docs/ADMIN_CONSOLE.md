@@ -115,6 +115,7 @@ everyone now** sends `update.install` to every active computer (online ones star
 | Read the organization's *Everyone* messages | ✔ | ✔ | ✔ | ✔ | ✔ |
 | Post to *Everyone* and remove messages | ✔ | ✔ | ✔ | ✔ | |
 | Remote screen, once switched on for the person in *Users* (a ticket number; the person at the computer says yes) | ✔ | ✔ | ✔ | ✔ | |
+| Watch and delete remote screen recordings; turn recording on | ✔ | ✔ | ✔ | | |
 | Read licenses | ✔ | ✔ | ✔ | | |
 | Tenants, releases, issuing licenses | ✔ | | | | |
 
@@ -129,8 +130,24 @@ administrator who started a session can use it, and closing the window ends it.
 
 FBRX Command's audit log keeps who asked, the computer, the ticket, the reason and how long it lasted; the computer's
 own audit log keeps whether the mouse and keyboard were used. Pictures and keystrokes go through FBRX Command over the
-computer's encrypted connection, only while the window is open; nothing is recorded as video. What each system needs
-is the same as for your own computers ([MESH.md](MESH.md#remote-screen-seeing-and-using-your-other-computers)).
+computer's encrypted connection, only while the window is open. What each system needs is the same as for your own
+computers ([MESH.md](MESH.md#remote-screen-seeing-and-using-your-other-computers)).
+
+### Recordings
+
+An organization can keep recordings of its remote screen sessions: **Profiles & groups → Remote screen recordings**
+(owners and administrators; off until turned on), and **Keep recordings for** 7, 30 or 90 days or a year, after which
+they are deleted. A recording is what the administrator saw, a picture a second, and the moments the mouse and
+keyboard were used; what was typed is never kept. The person at the computer is told in the question, before they
+answer, that the organization records the session, and the red bar says *(recorded)*. A session they said no to leaves
+no recording. If FBRX Command cannot start a recording the organization keeps, the session does not start.
+
+**Screen recordings** (under Access) lists them with the computer, the administrator, the ticket and the reason, how
+long it lasted and whether the mouse and keyboard were used. **Watch** plays one: play and pause, a timeline with a
+mark wherever the mouse or keyboard was used, and 1× to 8× speed. Owners and administrators watch and delete them;
+operators, who run sessions, do not. Watching one and deleting one are both in the audit log. A recording stops at
+512 MB or four hours (the session goes on), and the recordings are files in FBRX Command's data folder (under
+`recordings`), included when you back that folder up.
 
 ## Sign in with Google or Microsoft
 

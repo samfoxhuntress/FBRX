@@ -516,7 +516,8 @@ export class FleetAgent {
         const ticket = text(p.ticket, 40);
         if (!ticket) throw new CoreError('INVALID_ARGUMENT', 'A ticket number is needed');
         const admin = text(p.admin, 120) || 'An administrator';
-        const session = await host.request({ kind: 'command', name: admin, admin, ticket, reason: text(p.reason, 300) || undefined }, p.mode === 'control' ? 'control' : 'view', { unattended: false });
+        // FBRX Command says when it keeps a recording; the person is told before they answer.
+        const session = await host.request({ kind: 'command', name: admin, admin, ticket, reason: text(p.reason, 300) || undefined, recorded: p.recorded === true }, p.mode === 'control' ? 'control' : 'view', { unattended: false });
         return reply(true, session);
       }
       const id = text(p.id, 80);

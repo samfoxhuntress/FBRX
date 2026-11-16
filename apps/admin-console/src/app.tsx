@@ -20,6 +20,7 @@ import { TenantsPage } from './pages/tenants';
 import { UsersPage } from './pages/users';
 import { WebhooksPage } from './pages/webhooks';
 import { AuditPage } from './pages/audit';
+import { RecordingsPage } from './pages/recordings';
 import { EventsPage } from './pages/events';
 import { AccountPage } from './pages/account';
 import { HelpdeskPage } from './pages/helpdesk';
@@ -118,6 +119,7 @@ function Console() {
     ...(app.can('users.manage') ? [{ id: 'users', label: 'Users & API keys', icon: 'users', section: 'Access' } as NavItem] : []),
     ...(app.can('webhooks.manage') ? [{ id: 'webhooks', label: 'Webhooks', icon: 'link', section: 'Access' } as NavItem] : []),
     ...(app.can('audit.read') ? [{ id: 'audit', label: 'Audit log', icon: 'history', section: 'Access' } as NavItem] : []),
+    ...(app.can('audit.read') ? [{ id: 'recordings', label: 'Screen recordings', icon: 'video', section: 'Access' } as NavItem] : []),
   ];
   const activeNav = route.page === 'device' ? 'devices' : route.page;
   const needsTenant = !app.tenantId && !['overview', 'tenants', 'releases', 'account', 'accounts', 'cloud-ai', 'pricing', 'audit', 'licenses', 'devices', 'events', 'helpdesk'].includes(route.page);
@@ -159,6 +161,8 @@ function Console() {
         return <WebhooksPage />;
       case 'audit':
         return <AuditPage />;
+      case 'recordings':
+        return <RecordingsPage />;
       case 'account':
         return <AccountPage />;
       case 'members':

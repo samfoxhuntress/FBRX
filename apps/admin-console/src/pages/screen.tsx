@@ -124,11 +124,14 @@ export function RemoteScreenModal({ deviceId, deviceName, onClose }: { deviceId:
           </div>
         </div>
       ) : session.state === 'asking' ? (
-        <Empty title="Waiting for a yes">The person at {deviceName} is asked whether to share their screen.</Empty>
+        <Empty title="Waiting for a yes">
+          The person at {deviceName} is asked whether to share their screen{(session as RemoteSession & { recorded?: boolean }).recorded ? ', and told this organization records the session' : ''}.
+        </Empty>
       ) : (
         <div className="fx-form">
           <div className="fx-actions">
             <Status tone="good">{control ? 'Using it' : 'Seeing it'}</Status>
+            {(session as RemoteSession & { recorded?: boolean }).recorded && <Status tone="info">Recorded</Status>}
             {session.mode === 'view' && session.asked === 'control' && <span className="fx-muted">{session.control.why ?? 'View only, as the person chose'}</span>}
             <span className="fx-spacer" />
             <Button variant="danger" icon="x" onClick={() => void api<RemoteSession>('POST', `/v1/admin/screen/${session.id}/end`).then(setSession, () => onClose())}>

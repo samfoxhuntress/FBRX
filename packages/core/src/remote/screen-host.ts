@@ -87,7 +87,7 @@ export class ScreenHost {
       control,
     };
     this.live = { session, lastAsked: this.now(), seq: 0, frame: null, frameAt: 0, display: 0, capturing: null, inputUsed: false };
-    this.d.audit('screen.requested', 'success', { session: session.id, who: remoteWho(from), kind: from.kind, asked, ticket: from.ticket ?? null, reason: from.reason ?? null, unattended: o.unattended });
+    this.d.audit('screen.requested', 'success', { session: session.id, who: remoteWho(from), kind: from.kind, asked, ticket: from.ticket ?? null, reason: from.reason ?? null, recorded: !!from.recorded, unattended: o.unattended });
     this.watchIdle();
     if (o.unattended) this.goLive(session);
     else void this.ask(session);
@@ -97,7 +97,7 @@ export class ScreenHost {
   private async ask(session: RemoteSession) {
     let answer: RemoteMode | 'deny';
     try {
-      answer = await this.share().ask({ who: remoteWho(session.viewer), asked: session.mode, ticket: session.viewer.ticket ?? null, reason: session.viewer.reason ?? null, timeoutMs: REMOTE_LIMITS.askMs });
+      answer = await this.share().ask({ who: remoteWho(session.viewer), asked: session.mode, ticket: session.viewer.ticket ?? null, reason: session.viewer.reason ?? null, recorded: !!session.viewer.recorded, timeoutMs: REMOTE_LIMITS.askMs });
     } catch {
       answer = 'deny';
     }
@@ -114,7 +114,7 @@ export class ScreenHost {
   private goLive(session: RemoteSession) {
     session.state = 'live';
     this.d.audit('screen.started', 'success', { session: session.id, who: remoteWho(session.viewer), mode: session.mode, unattended: session.unattended });
-    this.share().banner({ who: remoteWho(session.viewer), mode: session.mode }, () => this.end(session.id, 'person'));
+    this.share().banner({ who: remoteWho(session.viewer), mode: session.mode, recorded: !!session.viewer.recorded }, () => this.end(session.id, 'person'));
   }
 
   private watchIdle() {
