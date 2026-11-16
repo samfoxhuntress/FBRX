@@ -23,11 +23,13 @@ network tool FBRX has and nothing else. It runs on Windows, macOS and Linux, bes
   has port 3389 or 5900 open) or *New connection*. It opens in this computer's own viewer (Remote Desktop Connection
   on Windows, Screen Sharing on a Mac, FreeRDP, Remmina or a VNC viewer on Linux), which asks for the password: Digger
   keeps none. They go in Saved connections like the consoles.
+* **Terminal**: this computer's command line (PowerShell, Command Prompt or the shell) with the reference panel, and
+  the device consoles. FBRX Endpoint has the same Terminal from Pro.
 * **Names others choose**: device, Wi-Fi network, printer and Bluetooth names are whatever their owners typed, so when
   Fabrix reads them they come cleaned (no hidden characters or line breaks), cut short and in quotes.
-* **Consoles**: SSH and Telnet to routers, switches, firewalls and servers, straight from a scan or the Consoles tab,
-  with SSH host keys pinned on first use and the session open right there. A refused login says why in the connect
-  box, ready for another try.
+* **Consoles**: SSH and Telnet to routers, switches, firewalls and servers, straight from a scan, the Consoles tab or
+  the **Terminal** page, with SSH host keys pinned on first use and the session open right there. A refused login says
+  why in the connect box, ready for another try.
 * **Network environments** (the last tab, Black Hole Edition): attach a network controller (UniFi) to see its sites,
   devices and clients.
 * A router's or device's own page opens in your computer's browser.

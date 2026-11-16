@@ -503,7 +503,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     // Every edition sees what its AI may do, and can change it.
     { id: 'governance', label: 'Governance', icon: 'shield', section: 'Protect' },
     { id: 'backup', label: 'Backup & restore', icon: 'archive', section: 'Protect' },
-    { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', need: 'ultra' },
+    { id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Advanced', need: 'basic' },
     { id: 'lab', label: 'Virtual lab', icon: 'box', section: 'Advanced', need: 'ultra' },
     { id: 'server', label: 'FBRX Server', icon: 'server', section: 'Advanced', need: 'blackhole' },
     // Every edition sees its organization, or how to join one (Black Hole Edition only ever comes through FBRX Command).
@@ -660,7 +660,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         // In the desktop app this opens its own window (see navigate); this inline view is the development fallback.
         return <BrowserApp agentName={agentName} />;
       case 'terminal':
-        return ultra ? <TerminalPage easterEggs={fun} /> : ultraOnly('The Terminal', 'PowerShell, the command prompt and device consoles, with a code lab, commands and snippets beside them.');
+        // Pro and up (and FBRX Digger): the command line and SSH and Telnet device consoles.
+        return DIGGER || atLeast(tier, 'basic') ? <TerminalPage easterEggs={fun} /> : <StandardOnly title="The Terminal" what="PowerShell, the command prompt and SSH and Telnet device consoles, with a code lab, commands and snippets beside them." />;
       case 'toolbox':
         return <ToolboxPage advanced={ultra} easterEggs={fun} />;
       case 'library':
@@ -936,7 +937,7 @@ function TopBar({
       <UpdatePill />
       {status.aiHalt && <EmergencyStop compact />}
       {/* Device consoles are FBRX Digger's (2.5.0); FBRX Endpoint's own SSH sessions are in the FBRX Server page. */}
-      {DIGGER && openConsoles > 0 && !routeArg()?.startsWith('consoles') && (
+      {openConsoles > 0 && !routeArg()?.startsWith('consoles') && !routeArg()?.startsWith('console') && (
         <button className="model-pill console-pill" onClick={() => navigate(DIGGER ? 'network/consoles' : 'terminal/console')} title="Device consoles that are connected">
           <span className="dot ok" aria-hidden />
           {openConsoles} console{openConsoles > 1 ? 's' : ''}

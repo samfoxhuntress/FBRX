@@ -2,13 +2,13 @@ import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import type { Note, ProjectSummary, Snippet, TerminalShell } from '@fbrx/shared';
 import { Button, Card, Empty, Input, Page, Select, Status, Tabs, TextArea, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
-import { POPOUT, navigate, routeArg } from '../app';
+import { DIGGER, POPOUT, navigate, routeArg } from '../app';
 import { useConsoleSessions, useCore } from '../hooks';
 import { AskButton, askAgent } from '../widgets';
 import { COMMAND_GROUPS, type LibraryCommand } from '../command-library';
 import { addToMacros } from '../macro-add';
 import { menuFor } from '../context-menu';
-import { AppHandoffCard } from '../apps';
+import { DeviceConsolesPanel } from '../consoles';
 import { peekBruce, unlockTrophy } from '../fun';
 import { Fbrx1Panel } from '../fbrx1';
 import { useSlashMenu } from '../slash-menu';
@@ -241,7 +241,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
     window.addEventListener('hashchange', on);
     return () => window.removeEventListener('hashchange', on);
   }, []);
-  const [tab, setTab] = useState<'commands' | 'code' | 'consoles' | 'fbrx1'>(arg.startsWith('console') ? 'consoles' : arg.startsWith('fbrx1') ? 'fbrx1' : arg.startsWith('code') ? 'code' : 'commands');
+  const [tab, setTab] = useState<'commands' | 'code' | 'consoles' | 'fbrx1'>(arg.startsWith('console') ? 'consoles' : DIGGER ? 'commands' : arg.startsWith('fbrx1') ? 'fbrx1' : arg.startsWith('code') ? 'code' : 'commands');
   const [consoleId, setConsoleId] = useState<string | null>(arg.startsWith('console/') ? arg.slice(8) : null);
   const consoles = useConsoleSessions();
   const openConsoles = (consoles.data ?? []).filter((s) => s.state !== 'closed').length;
@@ -374,7 +374,7 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
             ? 'FBRX/1 manages FBRX itself, like the command line of a switch or firewall: show, request, configure and commit.'
             : tab === 'code'
               ? 'Write code with Fabrix beside you. Sandboxed: JavaScript runs with no network or file access, PowerShell and batch only in Windows Sandbox, everything else is explained, not run.'
-            : 'Command lines of switches, firewalls, access points and servers are in FBRX Digger from 2.5.0.'
+            : "Command lines of switches, firewalls, access points and servers, over SSH or Telnet, with the maker's guide alongside."
       }
       actions={
         bridge.popOut && !POPOUT ? (
@@ -392,9 +392,10 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
         }}
         tabs={[
           { id: 'commands', label: shellName },
-          { id: 'code', label: 'Code' },
+          // FBRX Digger's Terminal is the command line and the consoles: no code lab, and FBRX/1 is FBRX Endpoint's.
+          ...(DIGGER ? [] : [{ id: 'code' as const, label: 'Code' }]),
           { id: 'consoles', label: `Device consoles${openConsoles ? ` (${openConsoles})` : ''}` },
-          { id: 'fbrx1', label: 'FBRX/1' },
+          ...(DIGGER ? [] : [{ id: 'fbrx1' as const, label: 'FBRX/1' }]),
         ]}
       />
       {tab === 'fbrx1' ? (
@@ -404,8 +405,14 @@ export function TerminalPage({ easterEggs }: { easterEggs: boolean }) {
           <CodeLabPanel />
         </Suspense>
       ) : tab === 'consoles' ? (
-        // From 2.5.0 device consoles (SSH, Telnet) and remote desktop are FBRX Digger's: open it or get it.
-        <AppHandoffCard page="network/digger" note="Device consoles (SSH and Telnet), remote desktop and screen sharing are in FBRX Digger." />
+        // SSH and Telnet sessions, in FBRX Endpoint (Pro and up) and in FBRX Digger alike.
+        <DeviceConsolesPanel
+          selected={consoleId}
+          onSelect={(id) => {
+            setConsoleId(id);
+            if (id && routeArg() !== `console/${id}`) history_replace(`terminal/console/${id}`);
+          }}
+        />
       ) : (
         <div className="term-layout">
           <Card

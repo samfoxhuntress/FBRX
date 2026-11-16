@@ -19,10 +19,11 @@ export const DIGGER_VERSION = '1.3.0';
 export type AppFlavor = 'os' | 'digger';
 
 /**
- * The pages Digger shows: the Network Center and its settings, and the chat while FBRX Endpoint's AI is there to answer
- * it. A router's or device's own page opens in the computer's browser.
+ * The pages Digger shows: the Network Center, the Terminal (the command line and device consoles), its settings, and
+ * the chat while FBRX Endpoint's AI is there to answer it. A router's or device's own page opens in the computer's
+ * browser.
  */
-export const DIGGER_PAGES = ['network', 'settings', 'agent'] as const;
+export const DIGGER_PAGES = ['network', 'terminal', 'settings', 'agent'] as const;
 
 /** Digger's one AI: FBRX Endpoint's, on the same computer, found while Endpoint runs. */
 export const DIGGER_AI_PROVIDER: ProviderConfig = { id: 'fbrx-endpoint', type: 'fbrx-endpoint', name: 'FBRX Endpoint', enabled: true, cloud: false };
