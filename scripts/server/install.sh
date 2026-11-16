@@ -36,9 +36,9 @@ CMD_ETC=/etc/fbrx-command
 CMD_UNIT=/etc/systemd/system/fbrx-command.service
 CMD_USER=fbrx-command
 NODE_MAJOR=22
-# Roles this installer sets up. Planned roles (dns, directory) come with later releases.
-AVAILABLE_ROLES="virtual ai gate minidome time command files"
-PLANNED_ROLES="dns directory"
+# Roles this installer sets up. Planned roles (dns) come with later releases.
+AVAILABLE_ROLES="virtual ai gate minidome time command files directory"
+PLANNED_ROLES="dns"
 
 BUNDLE=""
 YES=0
@@ -86,6 +86,8 @@ Options:
                                 files    a file server: shared folders for your network (SMB) from this server, or
                                          one of its virtual machines as the file server; priority for its traffic
                                          and backups to a NAS
+                                directory the FBRX directory: the same accounts on every computer that joins it
+                                         (users, groups, administrators, password rules), applied by FBRX OS
                               The web console comes with every role. The server keeps a copy of this installer, so
                               roles change later from the console (Roles) or with sudo fbrx-server roles add <role>.
   --gate-wan <nic>            the gate's internet port (from your modem or provider)
@@ -935,6 +937,7 @@ if has_role command; then
   if has_role gate && [ "$GATE_NEW" -eq 0 ]; then note "On this gate, let your network reach it: a firewall rule from your network to the gate, TCP $CMD_PORT (the console's FBRX Command page says when it is missing)."; fi
 fi
 if has_role time; then note "FBRX Time in the console: back up virtual machines on a schedule, and connect computers to the backup folder (its connection code is there).$(with_role gate ' On a gate, let your network reach it: a firewall rule for TCP 445 to the gate.')"; fi
+if has_role directory; then note "The FBRX directory in the console (Directory): add users and groups, set the password rules, and make a join code for each computer (FBRX OS: Settings, Directory).$(with_role gate ' On a gate, computers reach it on the console port.')"; fi
 if has_role files; then note "The file server in the console (File server): serve shares from this server or pick a virtual machine as the file server, give its traffic priority, and back it up to a NAS.$(with_role gate ' On a gate, the page adds the firewall rule your networks need, for a commit with What If.')"; fi
 # Everything that should run, runs (fbrx-server doctor --fix switches on whatever is off).
 if [ "$START" -eq 1 ] && ! in_chroot; then /usr/local/sbin/fbrx-server doctor --quiet || note "sudo fbrx-server doctor --fix switches on what is off."; fi

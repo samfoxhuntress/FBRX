@@ -66,8 +66,8 @@ roles fit.
 | `time` | FBRX Time: image backups of virtual machines and computers, each checked by starting it | 1.0 |
 | `command` | FBRX Command on the server: the organization's computers, settings and policy, licenses and updates; servers join it too | New |
 | `files` | A file server: shared folders from the server or one of its virtual machines, priority for their traffic, backups to a NAS | New |
+| `directory` | The FBRX directory: the same accounts on every computer that joins (users, groups, administrators, password rules), applied by FBRX OS; sign-in against the server (a domain) later | New |
 | `dns` | Name service for the network | Planned |
-| `directory` | Directory and sign-in for the organization's computers (a domain controller) | Planned |
 
 Where this is going, for example:
 

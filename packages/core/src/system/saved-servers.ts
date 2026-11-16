@@ -183,6 +183,16 @@ export class SavedServers {
 
   // ------------------------------------------------------------------------------------- Fabrix's access
 
+  /**
+   * A request to a saved server's API (https only), over its trusted certificate, with a token of the caller's (the
+   * FBRX directory uses this computer's own).
+   */
+  async call<T>(id: string, method: string, path: string, token: string | null, body?: unknown): Promise<T> {
+    const s = this.get(id);
+    if (s.scheme !== 'https') throw new CoreError('INVALID_ARGUMENT', `${s.name} is saved with http://: this only works over https://`);
+    return this.request<T>(s, method, path, token, body);
+  }
+
   /** A request to a server's API, over its trusted certificate (pinned when no authority vouches for it). */
   private async request<T>(s: SavedServer, method: string, path: string, token: string | null, body?: unknown): Promise<T> {
     const url = new URL(path, s.url).toString();

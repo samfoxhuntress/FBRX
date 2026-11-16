@@ -8172,3 +8172,7 @@ body.popout .fx-page-header p {
 .thispc-section { font-size: 16px; margin: 0; }
 .thispc-device { padding: 6px 0; border-bottom: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.15)); }
 .thispc-device:last-child { border-bottom: 0; }
+
+/* Settings → Directory: the changes waiting for this computer. */
+.dir-steps { margin: 0 0 12px; padding-left: 0; list-style: none; display: grid; gap: 6px; }
+.dir-step-mark { display: inline-block; width: 1.2em; color: var(--text-muted); font-weight: 600; text-align: center; }

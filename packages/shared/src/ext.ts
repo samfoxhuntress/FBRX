@@ -7,6 +7,7 @@ import type { Tier } from './license';
 import type { CalendarAccount, CalendarChange, CalendarEvent, CalendarEventPatch, CalendarSignIn, CalendarStatus, NewCalendarEvent } from './calendar';
 import type { ProtectionState, ProtectionStatus, ScanJob, ScanType, ShieldDetection, ShieldVerdict } from './protection';
 import type { ImageBackupConfig, ImageBackupStatus } from './time';
+import type { DirectoryMembership } from './directory';
 import type { AssistLogEntry, AssistLogQuery, AssistOffer, AssistPriority, AssistQueue, AssistSession, AssistTally, AssistTools } from './mesh-assist';
 import type { MeshNetworkStatus, MeshPathTest } from './net';
 import type { MessagesOverview, MessageState, ThreadMessage } from './messages';
@@ -1540,6 +1541,16 @@ export interface ExtMethods {
   /** Lets Fabrix look at the server: an administrator signs in once; the server gives FBRX read-only access. */
   'server.fabrixConnect': (p: { id: string; username: string; password: string }) => SavedServer;
   'server.fabrixDisconnect': (p: { id: string }) => SavedServer;
+  /** This computer in an FBRX directory (FBRX Server's directory role). */
+  'directory.status': () => DirectoryMembership;
+  /** Joins through a saved server with a join code from its console (Directory). */
+  'directory.join': (p: { serverId: string; code: string }) => DirectoryMembership;
+  /** Looks for changes now. */
+  'directory.sync': () => DirectoryMembership;
+  /** Applies the changes through the system's administrator prompt. */
+  'directory.apply': () => DirectoryMembership;
+  /** Leaves the directory; the accounts on this computer stay as they are. */
+  'directory.leave': () => DirectoryMembership;
   /** What the server sees of the network now: FBRX Gate and FBRX MiniDome (for troubleshooting). */
   'server.networkReport': (p: { id?: string }) => ServerNetworkReport;
   'server.opened': (p: { id: string }) => { ok: true };
@@ -1617,6 +1628,9 @@ export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'server.trust',
   'server.fabrixConnect',
   'server.fabrixDisconnect',
+  'directory.join',
+  'directory.apply',
+  'directory.leave',
   'server.opened',
   'helpdesk.assist',
   // Who asked what, and stopping or reordering it: for the people who run this computer, not its agent or plugins.

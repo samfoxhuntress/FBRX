@@ -43,6 +43,8 @@ import { gateRoutes } from './routes/gate';
 import { domeRoutes } from './routes/dome';
 import { timeRoutes } from './routes/time';
 import { filesRoutes } from './routes/files';
+import { directoryRoutes } from './routes/directory';
+import { DirectoryService } from './directory/service';
 import { readEnv, roleRoutes } from './routes/roles';
 import { commandRoutes, commandRule } from './routes/command';
 import { terminalRoutes } from './routes/terminal';
@@ -132,6 +134,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     dome: null,
     time: null,
     files: null,
+    directory: null,
     cliToken: randomBytes(32).toString('base64url'),
     log: app.log,
     tls: tls ? { fingerprint: tls.fingerprint, selfSigned: tls.selfSigned, notAfter: tls.notAfter } : null,
@@ -247,6 +250,9 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     ctx.files.start();
   }
 
+  // The FBRX directory: the directory role.
+  if (config.roles.includes('directory')) ctx.directory = new DirectoryService({ db, key, defaultName: hostname() });
+
   await app.register(helmet, {
     contentSecurityPolicy: {
       directives: {
@@ -299,6 +305,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   await domeRoutes(app, ctx);
   await timeRoutes(app, ctx);
   await filesRoutes(app, ctx);
+  await directoryRoutes(app, ctx);
   await roleRoutes(app, ctx);
   await commandRoutes(app, ctx);
   await terminalRoutes(app, ctx);

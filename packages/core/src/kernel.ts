@@ -118,6 +118,8 @@ import { DIGGER_PEER, DiggerLinkServer, diggerLinkCall, diggerLinkPresent } from
 import { MeshNetwork } from './mesh/mesh-network';
 import { ServerResources } from './system/server-resources';
 import { SavedServers } from './system/saved-servers';
+import { DirectoryClient } from './system/directory-client';
+import { readAccountsHere, runHere } from './system/directory-apply';
 import { OrgMesh } from './mesh/org-mesh';
 import { meshTools } from './tools/builtin/mesh-tools';
 import { AiCoordination } from './aicoord/aicoord';
@@ -309,6 +311,8 @@ export class Kernel {
   /** FBRX Server resources (installer ISO, bundle, guides) shipped inside the app. */
   readonly serverResources: ServerResources;
   readonly servers: SavedServers;
+  /** This computer in an FBRX directory (FBRX Server's directory role). */
+  readonly directory: DirectoryClient;
   readonly aicoord: AiCoordination;
   private readonly api: Record<string, (p: any, ctx: CallContext) => unknown>;
   private disposers: Array<() => void> = [];
@@ -971,6 +975,20 @@ export class Kernel {
           .map((d) => ({ name: d.name, host: this.mesh.addressFor(d.id) ?? '', roles: this.mesh.rolesOf(d.id) }))
           .filter((d) => d.host && d.roles.length),
     });
+    const dirOs = osPlatform() === 'win32' ? 'windows' : osPlatform() === 'darwin' ? 'mac' : osPlatform() === 'linux' ? 'linux' : null;
+    this.directory = new DirectoryClient({
+      meta: this.meta,
+      vault: this.vault,
+      servers: this.servers,
+      audit: (action, details) => this.audit.append({ category: 'user', action, actor: 'user', outcome: 'success', details }),
+      os: dirOs,
+      me: () => userInfo().username,
+      computerName: () => this.deviceName(),
+      readAccounts: (groups) => readAccountsHere(dirOs!, groups),
+      run: (plan, local, workDir) => runHere(dirOs!, plan, local, workDir),
+      tmpDir: this.paths.tmp,
+      notify: (title, body) => this.notify({ title, body, level: 'info', source: 'directory', open: 'settings/directory' }),
+    });
     this.meshNetwork = new MeshNetwork({
       settings: () => this.settings.get().mesh.network,
       port: () => this.settings.get().mesh.port,
@@ -1382,6 +1400,20 @@ export class Kernel {
       enabled: () => !this.digger,
       start: () => this.backup.start(),
       stop: () => this.backup.stop(),
+    });
+    s.register({
+      name: 'directory',
+      title: 'FBRX directory',
+      description: 'The accounts an FBRX Server directory keeps on this computer',
+      dependsOn: ['vault'],
+      enabled: () => !this.digger,
+      start: () => this.directory.start(),
+      stop: () => this.directory.stop(),
+      health: async () => {
+        const d = this.directory.status();
+        if (!d.joined) return { state: 'running', message: 'Not in a directory' };
+        return d.error ? { state: 'degraded', message: d.error } : { state: 'running', message: d.directory ?? 'Joined' };
+      },
     });
     s.register({
       name: 'fleet',

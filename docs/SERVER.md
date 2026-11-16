@@ -24,6 +24,10 @@ With the **files** role the server is a **file server**: shared folders for your
 or by one of its virtual machines (a NAS system, Windows Server). Their traffic can go first, and their files are
 backed up to a NAS or another server on a schedule. Same console, *File server* page.
 
+With the **directory** role the server keeps the **same accounts on every computer** that joins it: who has an
+account, which groups they are in, who is an administrator, and the password rules. FBRX OS on each computer applies
+the changes. Same console, *Directory* page.
+
 With the **command** role the server runs your organization's **FBRX Command**: the computers that join it, their
 settings and policy, licenses, updates, backups and help desk, with its own console on port **8787**. It runs day and
 night, so computers stay in touch with it, and it updates with the server. A server with the ai role also joins an
@@ -95,8 +99,8 @@ helper, so work can go to the right server).
 | `time` | FBRX Time: image backups of virtual machines and computers, each checked by starting it ([TIME.md](TIME.md)); needs `virtual` | New in 1.0 |
 | `command` | FBRX Command: your organization's computers, their settings and policy, licenses and updates, with its own console on port 8787 ([below](#fbrx-command-on-the-server-the-command-role)) | New |
 | `files` | A file server: shared folders (SMB) from the server or one of its virtual machines, priority for their traffic, backups to a NAS ([below](#file-server-the-files-role)) | New |
+| `directory` | The FBRX directory: the same accounts on every computer that joins (users, groups, administrators, password rules), applied by FBRX OS ([below](#directory-the-directory-role)) | New |
 | `dns` | Name service for the network | Planned |
-| `directory` | Directory and sign-in for the organization's computers (a domain controller) | Planned |
 
 The web console comes with every role (it is FBRX Virtual's service, with or without virtual machines). The installer
 refuses a planned role for now and says so.
@@ -424,6 +428,72 @@ what most likely went wrong and what to try. Operators can start and stop backup
 
 The account a backup signs in with needs to write to the folder on the NAS. Its password is encrypted with the
 server's key and never shown again: leave it empty when you change the backup to keep it.
+
+## Directory (the directory role)
+
+The **Directory** page (Server section) keeps the same accounts on every computer that joins: people, their groups,
+who is an administrator, and the password rules. **FBRX OS** on each computer applies them as that computer's own
+local accounts, through the computer's own administrator prompt. Signing in against the server itself (a domain, with
+one password everywhere) comes in a later release: for now each computer keeps its own password for each person.
+
+### People and groups
+
+1. **Groups.** *Administrators* is built in: its members are administrators of the computers they have an account on.
+   Add your own (`accounting`, `lab`): each is made on the computers with its members in it, for folders and apps that
+   go by group. Names that already mean something on a computer (`sudo`, `wheel`, `docker`, `admin` and the like) are
+   refused, so administrator rights only ever come from *Administrators*.
+2. **Add a person.** An account name (what they type to sign in: small letters, numbers, `-` or `_`, up to 20), a full
+   name, their groups, and the computers they get an account on: every computer in the directory (and those that join
+   later) or the ones you pick.
+3. **A first password.** Each computer sets it once when it makes the account and asks the person to choose their own
+   at their first sign-in; from then on the password is that computer's own. It is kept on the server, encrypted with
+   the server's key, for computers that join later, and never shown in the console again. *New first password* (change
+   the person) sends another one to every computer: use it when someone forgets theirs.
+
+Taking a person off a computer, disabling them or removing them from the directory **disables** the account on the
+computers (nobody can sign in to it) and keeps it, with its files: the directory never deletes an account.
+
+### Computers and join codes
+
+*New join code* makes a code that joins one computer, or as many as you say, for a week. It is shown once, with the
+server's certificate fingerprint for the computer to compare. On the computer, in FBRX OS: **Settings → Directory**,
+type the server's address (or pick it when it is saved already), compare the fingerprint, then type the code.
+
+The *Computers* list shows each computer, when it was last seen and whether its accounts are *Up to date*, have
+*Changes waiting* or something did not apply (point at it for the reasons). Removing a computer stops its key from
+working; the accounts on it stay as they are.
+
+### Password rules
+
+The fewest characters, capitals, small letters and numbers, how often passwords must change (0: never; forced changes
+tend to make people pick weaker passwords, so most advice is to change one only after a leak), and how many wrong
+passwords in a row lock an account, and for how long. Each computer applies them as its own rules:
+
+* **Windows**: its local security policy. Windows sets at most 14 as the fewest characters this way; a computer that is
+  also in a Windows domain follows the domain's rules.
+* **macOS**: its account policies. On a Mac with FileVault, turn FileVault on for a new account in System Settings so it
+  can unlock the disk too.
+* **Linux**: the password-quality and lockout settings that its sign-in uses (`pwquality` and `faillock`, where the
+  distribution uses them), and how long each directory account's password lasts.
+
+### On each computer (FBRX OS)
+
+**Settings → Directory** shows the directory, when FBRX last looked (every 15 minutes, or *Look for changes*) and the
+changes waiting for this computer, each in words. FBRX says so when new changes arrive. **Apply changes** asks for an
+administrator's password on this computer (the system's own prompt) and makes them; what did not work is listed, and
+the server sees it too.
+
+What FBRX OS keeps to, whatever the server says:
+
+* It only changes accounts and groups the directory made or took over. An account already on the computer with the
+  same name is taken over (its password stays as it is); the list says so before you apply.
+* It never deletes an account. One that leaves the directory is disabled, with its files kept.
+* It never disables, or takes administrator rights from, the account applying the changes.
+* Names no system should get, and anything else it cannot use, are left out and listed.
+* First passwords never go in a program's command line on Windows or Linux, and what runs as administrator is checked
+  to be exactly what FBRX wrote before it runs.
+
+*Leave* takes the computer out of the directory; its accounts stay as they are.
 
 ## The hardware map
 

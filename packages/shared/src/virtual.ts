@@ -359,6 +359,7 @@ export const SERVER_ROLE_CATALOG: ServerRoleInfo[] = [
   { id: 'minidome', name: 'FBRX MiniDome', what: 'Watches the network through FBRX Gate for threats and tells the computer they are about.', needs: ['gate'] },
   { id: 'time', name: 'FBRX Time', what: 'Image backups of virtual machines and computers, each checked by starting it as a throwaway machine.', needs: ['virtual'] },
   { id: 'files', name: 'File server', what: 'Shared folders for your network, from this server or one of its virtual machines, with priority for their traffic and backups to a NAS.' },
+  { id: 'directory', name: 'FBRX directory', what: 'The same accounts on every computer that joins: users, groups, who is an administrator and the password rules, applied by FBRX OS.' },
   { id: 'command', name: 'FBRX Command', what: 'Your organization’s FBRX Command on this server: its computers, their settings and policy, licenses and updates, with its own console.' },
 ];
 

@@ -23,6 +23,7 @@ import { GateChangesPage } from './pages/gate-changes';
 import { DomePage } from './pages/dome';
 import { TimePage } from './pages/time';
 import { FilesPage } from './pages/files';
+import { DirectoryPage } from './pages/directory';
 import { RolesPage } from './pages/roles';
 import { CommandPage } from './pages/command';
 
@@ -122,6 +123,7 @@ function Console() {
     ...(app.has('minidome') ? ([{ id: 'dome', label: 'MiniDome', icon: 'eye', section: 'Gate' }] satisfies NavItem[]) : []),
     ...(app.has('time') ? ([{ id: 'time', label: 'FBRX Time', icon: 'history', section: 'Server' }] satisfies NavItem[]) : []),
     ...(app.has('files') ? ([{ id: 'files', label: 'File server', icon: 'folder', section: 'Server' }] satisfies NavItem[]) : []),
+    ...(app.has('directory') ? ([{ id: 'directory', label: 'Directory', icon: 'users', section: 'Server' }] satisfies NavItem[]) : []),
     { id: 'hardware', label: 'Hardware map', icon: 'cpu', section: 'Server' },
     { id: 'server', label: 'Server & BIOS', icon: 'server', section: 'Server' },
     ...(app.has('ai') ? ([{ id: 'fabrix', label: 'Fabrix', icon: 'agent', section: 'Server' }] satisfies NavItem[]) : []),
@@ -171,6 +173,8 @@ function Console() {
         return <TimePage tab={route.id} />;
       case 'files':
         return <FilesPage />;
+      case 'directory':
+        return <DirectoryPage />;
       case 'roles':
         return <RolesPage />;
       case 'command':

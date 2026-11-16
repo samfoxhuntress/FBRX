@@ -944,6 +944,14 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return k.servers.connectFabrix(q.id, q.username, q.password);
     },
     'server.fabrixDisconnect': (p) => k.servers.disconnectFabrix(z.object({ id: z.string().max(64) }).parse(p).id),
+    'directory.status': () => k.directory.status(),
+    'directory.join': (p) => {
+      const q = z.object({ serverId: z.string().max(64), code: z.string().min(4).max(40) }).parse(p);
+      return k.directory.join(q.serverId, q.code);
+    },
+    'directory.sync': () => k.directory.sync(),
+    'directory.apply': () => k.directory.apply(),
+    'directory.leave': () => k.directory.leave(),
     'server.networkReport': async (p) => (await k.servers.networkReport(z.object({ id: z.string().max(64).optional() }).parse(p ?? {}).id)).report,
     'mesh.network.status': () => k.meshNetwork.status(),
     'mesh.network.test': (p) => k.meshNetwork.test(z.object({ peerId: z.string().max(80).optional() }).parse(p ?? {}).peerId),

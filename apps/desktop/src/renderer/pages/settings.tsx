@@ -48,6 +48,7 @@ import { PRESETS, TEXTURE_NAMES, playStartupSound, presetAllowed, resolvedMode, 
 import { BrucePreview, peekBruce, seasonNow } from '../fun';
 import { TrophyBadge, TrophyCase } from '../trophies';
 import { FbrxAppsSettings } from '../apps';
+import { DirectorySettings } from './settings-directory';
 import { AskButton, EmergencyStop, ProfileFields, saveProfile } from '../widgets';
 import { ComputerKnowledge } from '../learning-screen';
 import { KeyRecorder, MacroSettings } from './settings-macros';
@@ -68,7 +69,7 @@ function Locked({ show }: { show: boolean }) {
   ) : null;
 }
 
-type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'personality' | 'memory' | 'skills' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'browser' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'apps' | 'api' | 'logs';
+type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'personality' | 'memory' | 'skills' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'browser' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'apps' | 'directory' | 'api' | 'logs';
 /** FBRX Digger's settings: what applies to a network toolkit. */
 const DIGGER_TABS: readonly string[] = DIGGER_SETTINGS;
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean }> = [
@@ -91,6 +92,7 @@ const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: str
   { id: 'edition', label: 'Edition', icon: 'layers', group: 'This computer' },
   { id: 'license', label: 'License', icon: 'key', group: 'This computer' },
   { id: 'apps', label: 'FBRX apps', icon: 'grid', group: 'This computer' },
+  { id: 'directory', label: 'Directory', icon: 'users', group: 'This computer' },
   { id: 'api', label: 'Local API', icon: 'link', group: 'For experts', ultra: true },
   { id: 'logs', label: 'Logs & about', icon: 'book', group: 'For experts', basicLabel: 'About' },
 ];
@@ -161,6 +163,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
           {tab === 'edition' && <EditionSettings />}
           {tab === 'license' && <License />}
           {tab === 'apps' && <FbrxAppsSettings />}
+          {tab === 'directory' && <DirectorySettings />}
           {tab === 'api' && <LocalApi />}
           {tab === 'logs' && <Logs />}
         </div>
