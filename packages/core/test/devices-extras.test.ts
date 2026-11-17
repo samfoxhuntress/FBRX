@@ -52,7 +52,8 @@ describe('Devices extras (2.5.0): the USB tree, ink levels, a drive speed test a
     dev('1-1.2', { product: 'Fast\u200B Drive', manufacturer: 'Maker', speed: '480', version: ' 3.20', bDeviceClass: '00', bMaxPower: '896mA' });
     dev('1-1.10', { product: 'Keyboard', speed: '12', version: ' 1.10', bDeviceClass: '00' });
     dev('2-1', { product: 'Quick Drive', speed: '5000', version: ' 3.10', bDeviceClass: '00' });
-    mkdirSync(join(root, '1-1.2:1.0'));
+    // An interface entry ("1-1.2:1.0") is left out; Windows cannot make a folder with a colon in its name.
+    if (process.platform !== 'win32') mkdirSync(join(root, '1-1.2:1.0'));
     const tree = linuxUsbTree(root);
     expect(tree.map((n) => n.name)).toEqual(['USB controller (bus 1, USB 2)', 'USB controller (bus 2, USB 3)']);
     const hub = tree[0].children[0];
@@ -163,7 +164,8 @@ describe('Devices extras (2.5.0): the USB tree, ink levels, a drive speed test a
     expect(await monitorControls('darwin')).toMatchObject({ supported: false, why: expect.stringMatching(/not on a Mac yet/) });
     await expect(setMonitor('ddc-1', 'brightness', 50, 'linux')).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
-    // Linux, with a stand-in for ddcutil.
+    // Linux, with a stand-in for ddcutil (a shell script, which Windows cannot run).
+    if (process.platform === 'win32') return;
     const bin = mkdtempSync(join(tmpdir(), 'fbrx-ddc-'));
     const log = join(bin, 'calls.log');
     writeFileSync(
