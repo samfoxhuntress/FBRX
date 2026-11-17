@@ -26,8 +26,9 @@ network tool. **Any change to the network tooling is a change to Digger**: the N
 (`apps/desktop/src/renderer/pages/network*.tsx`, `wifi-channels.tsx`, `../consoles.tsx`) and the core's
 `packages/core/src/network`, consoles and network environments. With such a change:
 
-1. Make sure it works in Digger: no dependency on the AI, on the edition (gate Ultra parts in the core with
-   `kernel.networkTools()`, which is always on in Digger) or on pages Digger does not show.
+1. Make sure it works in Digger: no dependency on the AI or on pages Digger does not show. Gate the advanced parts in
+   the core with `kernel.networkTools()`: since 2.5.0 they are Digger's alone, at Ultra (the edition FBRX Endpoint's
+   license gives the computer), and FBRX Endpoint keeps the everyday ones.
 2. A new page or settings tab joins `DIGGER_PAGES` or `DIGGER_SETTINGS` in `packages/shared/src/digger.ts`.
 3. Update `docs/DIGGER.md`.
 4. Raise `DIGGER_VERSION` and release Digger (the **FBRX Digger** workflow, `digger-v<version>`) alongside the FBRX OS

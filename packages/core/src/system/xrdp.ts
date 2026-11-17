@@ -116,6 +116,8 @@ export async function xrdpStatus(d: XrdpDeps = {}): Promise<XrdpStatus> {
 }
 
 const NET = /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/;
+/** The local networks remote desktop was opened to, one per line. */
+const OPENED = '/etc/xrdp/fbrx-networks';
 
 /**
  * The script that sets it up (or, with on: false, turns it off), for /bin/sh: each step says FBRX-STEP first, so a
@@ -125,15 +127,23 @@ const NET = /^\d{1,3}(\.\d{1,3}){3}\/\d{1,2}$/;
 export function xrdpScript(o: { on: boolean; manager: 'apt' | 'dnf' | 'zypper'; desktop: boolean; networks: string[]; port?: number }): string {
   const nets = o.networks.filter((n) => NET.test(n));
   const port = o.port ?? PORT;
-  const ufw = (verb: string) => nets.map((n) => `  ufw ${verb} from ${n} to any port ${port} proto tcp${verb === 'allow' ? " comment 'FBRX remote desktop'" : ''} || true`).join('\n');
-  const fwd = (verb: string) => nets.map((n) => `  firewall-cmd --permanent --${verb}-rich-rule='rule family="ipv4" source address="${n}" port port="${port}" protocol="tcp" accept' || true`).join('\n');
+  // The networks opened are kept (root's own file), so Turn off closes those too after the computer has moved on.
+  const ufw = (verb: string) => `  for n in ${nets.join(' ')} $(cat ${OPENED} 2>/dev/null); do
+    case "$n" in *[!0-9./]*|'') continue ;; esac
+    ufw ${verb} from "$n" to any port ${port} proto tcp${verb === 'allow' ? " comment 'FBRX remote desktop'" : ''} || true
+  done`;
+  const fwd = (verb: string) => `  for n in ${nets.join(' ')} $(cat ${OPENED} 2>/dev/null); do
+    case "$n" in *[!0-9./]*|'') continue ;; esac
+    firewall-cmd --permanent --${verb}-rich-rule="rule family=\\"ipv4\\" source address=\\"$n\\" port port=\\"${port}\\" protocol=\\"tcp\\" accept" || true
+  done`;
   const firewall = (on: boolean) => `echo FBRX-STEP firewall
 if command -v ufw >/dev/null 2>&1 && ufw status 2>/dev/null | grep -q 'Status: active'; then
-${ufw(on ? 'allow' : 'delete allow') || '  true'}
+${ufw(on ? 'allow' : 'delete allow')}
 elif command -v firewall-cmd >/dev/null 2>&1 && firewall-cmd --state >/dev/null 2>&1; then
-${fwd(on ? 'add' : 'remove') || '  true'}
+${fwd(on ? 'add' : 'remove')}
   firewall-cmd --reload || true
-fi`;
+fi
+${on ? `mkdir -p /etc/xrdp && { cat ${OPENED} 2>/dev/null; printf '%s\\n' ${nets.join(' ')}; } | sort -u > ${OPENED}.new && mv ${OPENED}.new ${OPENED}` : `rm -f ${OPENED}`}`;
   if (!o.on) return ['set -e', 'echo FBRX-STEP service', 'systemctl disable --now xrdp || true', firewall(false), 'echo FBRX-STEP done', ''].join('\n');
   const install =
     o.manager === 'apt'

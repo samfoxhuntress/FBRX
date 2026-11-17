@@ -4,7 +4,8 @@ import { cleanName, type MonitorControl, type MonitorControls, type MonitorFeatu
 import { CoreError } from '../errors';
 
 /**
- * Brightness, contrast and the input of external screens (This PC → Devices), over DDC/CI, the channel screens listen on
+ * Brightness, contrast and the input of external screens (This PC → Devices), over DDC/CI, the channel screens listen
+ * on
  * through their cable: Windows' own monitor configuration API (dxva2, no installs), ddcutil on Linux. Not on a Mac yet.
  * A screen that does not answer is left out; nothing is changed but what the person moves.
  */

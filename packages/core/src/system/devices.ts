@@ -188,7 +188,8 @@ export function ejectCommand(platform: NodeJS.Platform, drive: DeviceReport['ext
     return [['diskutil', ['eject', drive.device]]];
   }
   if (!/^\/dev\/[a-z0-9]+$/.test(drive.device)) throw new CoreError('INVALID_ARGUMENT', 'That drive cannot be ejected from here');
-  // Each partition unmounted the way the desktop does it (udisksctl, as the person, no root), then the drive powered off.
+  // Each partition unmounted the way the desktop does it (udisksctl, as the person, no root), then the drive powered
+  // off.
   const parts = [...new Set(drive.mounts.map((m) => (m.device && /^\/dev\/[a-z0-9]+$/.test(m.device) ? m.device : null)).filter((x): x is string => !!x))];
   return [...parts.map((p): [string, string[]] => ['udisksctl', ['unmount', '-b', p]]), ['udisksctl', ['power-off', '-b', drive.device]]];
 }

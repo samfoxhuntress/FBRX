@@ -21,7 +21,10 @@ export interface AppRegistryDeps {
   self: AppId;
   /** Its data folder (it writes app.json there). */
   dataDir: string;
-  /** The folder that holds every FBRX app's data folder (each named after its app), or null where apps are not side by side (a server). */
+  /**
+   * The folder that holds every FBRX app's data folder (each named after its app), or null where apps are not side by
+   * side (a server).
+   */
   appsDir: string | null;
   version: string;
   /** The program that starts this app, written so the others can open it. */

@@ -19,7 +19,9 @@ export interface LearningStep {
   detail: string | null;
 }
 
-/** Why it learns: setup (or the first start of a version that learns), a new AI, an old profile, or the person asked. */
+/**
+ * Why it learns: setup (or the first start of a version that learns), a new AI, an old profile, or the person asked.
+ */
 export type LearningReason = 'setup' | 'agent' | 'refresh' | 'manual';
 
 /** The AI the profile is for. */
@@ -191,7 +193,10 @@ export function computerProfile(f: ComputerFacts, o: { cloud: boolean }): string
   return kept.length < lines.length ? `${kept.join('\n')}\n…` : kept.join('\n');
 }
 
-/** One line about the computer, for the person: "A Dell XPS 13 laptop with Windows 11, 16 GB of memory and 120 GB free, on Wi-Fi." */
+/**
+ * One line about the computer, for the person: "A Dell XPS 13 laptop with Windows 11, 16 GB of memory and 120 GB free,
+ * on Wi-Fi."
+ */
 export function computerSummary(f: ComputerFacts): string {
   const i = f.inventory;
   if (!i) return 'This computer, as FBRX could read it.';

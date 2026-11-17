@@ -3,7 +3,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { createServer } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { join } from 'node:path';
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { lastScanDue, nextScanDue, PROTECTION_DEFAULT_FEED, protectionFeed, scheduledScanDue, type AvProduct, type ProtectionStatus, type ScanJob, type ShieldDetection } from '@fbrx/shared';
 import { decodeProductState } from '../src/protection/products';
 import { isEicar, SCRIPT_RULES, zipEntryNames } from '../src/protection/shield';
@@ -433,16 +433,24 @@ describe('the threat feed after abuse.ch retired its keyless downloads', () => {
     });
     await new Promise<void>((r) => feed.listen(0, '127.0.0.1', () => r()));
     const base = `http://127.0.0.1:${(feed.address() as AddressInfo).port}`;
+    // abuse.ch, over https, is this test's server.
+    const realFetch = globalThis.fetch;
+    const spy = vi.spyOn(globalThis, 'fetch').mockImplementation((input, init) => realFetch(String(input).replace('https://bazaar.abuse.ch', base), init));
     const { kernel, cleanup } = await makeKernel();
     try {
-      kernel.settings.update({ protection: { provider: 'shield', shield: { feedUrl: `${base}/v2/files/exports/{auth-key}/recent.csv` } } });
+      kernel.settings.update({ protection: { provider: 'shield', shield: { feedUrl: 'https://bazaar.abuse.ch/v2/files/exports/{auth-key}/recent.csv' } } });
       await expect(kernel.call('shield.updateSignatures', undefined, USER)).rejects.toThrow(/free Auth-Key.*ABUSECH_AUTH_KEY/);
       expect(seen).toEqual([]);
       kernel.vault.set({ name: 'ABUSECH_AUTH_KEY', value: key });
       expect(await kernel.call('shield.updateSignatures', undefined, USER)).toEqual({ added: 2, total: 2 });
       expect(seen).toEqual([`/v2/files/exports/${key}/recent.csv`]);
-      // Not abuse.ch: the key is only where the address asked for it, not in a header.
-      expect(headers).toEqual([undefined]);
+      expect(headers).toEqual([key]);
+      // Another feed's address never gets the key, even where it asks for it (nor one over plain http).
+      for (const other of [`${base}/v2/files/exports/{auth-key}/recent.csv`, 'http://bazaar.abuse.ch/{auth-key}/recent.csv', 'https://abuse.ch.example.net/{auth-key}']) {
+        kernel.settings.update({ protection: { shield: { feedUrl: other } } });
+        await expect(kernel.call('shield.updateSignatures', undefined, USER)).rejects.toThrow(/Only an abuse\.ch feed over https/);
+      }
+      expect(seen).toHaveLength(1);
       // The CSV's signature column names the malware; "n/a" names nothing.
       const name = (h: string) => kernel.db.get<{ name: string | null }>('SELECT name FROM shield_signatures WHERE sha256 = ?', h)?.name;
       expect(name(sha256('csv sample 1'))).toBe('AgentTesla');
@@ -455,6 +463,7 @@ describe('the threat feed after abuse.ch retired its keyless downloads', () => {
       const after = (await kernel.call('protection.status', undefined, USER)) as ProtectionStatus;
       expect(JSON.stringify(after)).not.toContain(key);
     } finally {
+      spy.mockRestore();
       await cleanup();
       feed.close();
     }

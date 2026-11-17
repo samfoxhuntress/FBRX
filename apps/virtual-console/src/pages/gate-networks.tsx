@@ -225,7 +225,9 @@ function NetworkModal({ config, index, onClose, onDelete }: { config: GateConfig
   const [net, setNet] = useState<GateNetwork>(start.net);
   const [vlanId, setVlanId] = useState(start.vlanId);
   const currentIface = isNew ? null : config.interfaces.find((i) => i.name === start.net.interface);
-  /** An existing network on a VLAN: its tag can change (the VLAN becomes <port>.<tag>; rules follow the network's name). */
+  /**
+   * An existing network on a VLAN: its tag can change (the VLAN becomes <port>.<tag>; rules follow the network's name).
+   */
   const [tag, setTag] = useState(currentIface?.kind === 'vlan' ? (currentIface.vlanId ?? 0) : 0);
   const tagTaken = !!currentIface && currentIface.kind === 'vlan' && tag !== currentIface.vlanId && config.interfaces.some((i) => i.kind === 'vlan' && i.parent === currentIface.parent && i.vlanId === tag);
   const [jumbo, setJumbo] = useState(isNew ? false : (currentIface?.mtu ?? 1500) >= JUMBO_MTU);

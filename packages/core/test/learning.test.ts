@@ -137,7 +137,8 @@ describe('Learning your computer, in FBRX', () => {
       expect(kernel.audit.query({ category: 'tool' })).toHaveLength(0);
       expect(kernel.conversations.list().length).toBe(0);
 
-      // A cloud AI: checked, not asked (it would cost the person), and its profile names nothing that identifies the computer.
+      // A cloud AI: checked, not asked (it would cost the person), and its profile names nothing that identifies the
+      // computer.
       kernel.settings.update({ ai: { defaultProvider: 'far', defaultModel: 'mock-model' } });
       await kernel.learning.start('agent', true);
       expect(kernel.learning.status().steps.find((x) => x.id === 'warmup')).toMatchObject({ state: 'done', detail: 'Ready when you are' });

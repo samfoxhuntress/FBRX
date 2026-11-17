@@ -115,7 +115,9 @@ export interface PlatformAdapter {
   endpointDataDir?: string | null;
   /** The folder that holds every FBRX app's data folder (each named after its app), where the apps find each other. */
   appsDir?: string | null;
-  /** The program that starts this app, which it writes down so the other FBRX apps can open it (packaged builds only). */
+  /**
+   * The program that starts this app, which it writes down so the other FBRX apps can open it (packaged builds only).
+   */
   appExec?: string | null;
   /** Moves a file or folder to the Trash (Recycle Bin); the desktop app has it, a headless core does not. */
   trash?(path: string): Promise<void>;

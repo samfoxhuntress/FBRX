@@ -194,7 +194,9 @@ export const productInterval = (productId: string): BillingInterval => (productI
 /** A price a month at an interval: itself, or a year of it at the price list's months. */
 export const intervalPrice = (book: PriceBook, monthly: number, interval: BillingInterval) => (interval === 'year' ? monthly * book.yearlyMonths : monthly);
 
-/** Pro, Ultra or Black Hole Edition on one's own, paid monthly or yearly: its product id (Stripe lookup key) and price. */
+/**
+ * Pro, Ultra or Black Hole Edition on one's own, paid monthly or yearly: its product id (Stripe lookup key) and price.
+ */
 export function personalPlan(book: PriceBook, tier: PaidTier, interval: BillingInterval): { productId: string; amount: number } {
   return { productId: productFor(EDITION_PLANS[tier].productId!, interval), amount: intervalPrice(book, book.personal[tier], interval) };
 }

@@ -307,7 +307,15 @@ function DeviceCard({ d, sync, onPing, advanced = true }: { d: MeshDevice; sync?
             <div className="fx-muted" style={{ fontSize: 12.5 }}>
               {d.name} may {d.kind === 'mobile' ? 'see how this computer is doing, send messages, show alerts, tasks and notes, and ask the agent' : 'see how this computer is doing, send messages and borrow its AI when stuck'}.
             </div>
-            <EditionHint>Choosing what each device may do, approving from your phone, and lock and sleep come with Ultra.</EditionHint>
+            {/* Remote screen is Pro, like Mesh: this computer decides whether the other one may ask to see it. */}
+            {d.kind === 'desktop' && (
+              <div className="perm-grid">
+                {SPECIAL.filter((p) => p.key === 'remote' || p.key === 'unattended').map((p) => (
+                  <Toggle key={p.key} checked={d.permissions[p.key]} disabled={p.key === 'unattended' && !d.permissions.remote} onChange={(v) => setPerms({ [p.key]: v })} label={p.label} info={p.help} />
+                ))}
+              </div>
+            )}
+            <EditionHint>Choosing what else each device may do, approving from your phone, and lock and sleep come with Ultra.</EditionHint>
           </div>
         ) : (
         <>

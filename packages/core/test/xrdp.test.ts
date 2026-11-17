@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { describe, expect, it } from 'vitest';
 import { localNetworks, setXrdp, xrdpPort, xrdpScript, xrdpStatus, type XrdpDeps } from '../src/system/xrdp';
 
@@ -45,14 +46,21 @@ describe('remote desktop (xrdp)', () => {
     expect(s).toContain('apt-get install -y -q xrdp xorgxrdp');
     expect(s).toContain('xfce4');
     expect(s).toContain('systemctl enable --now xrdp');
-    expect(s).toContain('ufw allow from 192.168.1.0/24 to any port 3389 proto tcp');
-    expect(s).toContain('source address="10.8.0.0/16"');
+    expect(s).toContain('for n in 192.168.1.0/24 10.8.0.0/16 $(cat /etc/xrdp/fbrx-networks');
+    expect(s).toContain('ufw allow from "$n" to any port 3389 proto tcp');
+    expect(s).toContain('source address=\\"$n\\"');
+    // The networks opened are kept, so turning it off later closes them wherever the computer is then.
+    expect(s).toMatch(/printf '%s\\n' 192\.168\.1\.0\/24 10\.8\.0\.0\/16; \} \| sort -u > \/etc\/xrdp\/fbrx-networks\.new/);
     expect(s).not.toContain('rm -rf');
     expect(xrdpScript({ on: true, manager: 'dnf', desktop: false, networks: [] })).not.toContain('xfce');
     const off = xrdpScript({ on: false, manager: 'apt', desktop: false, networks: ['192.168.1.0/24'] });
     expect(off).toContain('systemctl disable --now xrdp');
-    expect(off).toContain('ufw delete allow from 192.168.1.0/24');
+    expect(off).toContain('for n in 192.168.1.0/24 $(cat /etc/xrdp/fbrx-networks');
+    expect(off).toContain('ufw delete allow from "$n" to any port 3389 proto tcp');
+    expect(off).toContain('rm -f /etc/xrdp/fbrx-networks');
     expect(off).not.toContain('apt-get');
+    // Both are valid shell.
+    if (process.platform !== 'win32') for (const script of [s, off]) expect(spawnSync('sh', ['-n'], { input: script }).status).toBe(0);
   });
 
   it('runs it as root, and says where it stopped or that the prompt was closed', async () => {

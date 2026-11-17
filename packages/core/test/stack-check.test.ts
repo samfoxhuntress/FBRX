@@ -127,7 +127,8 @@ describe('the full network check', () => {
     const { kernel, cleanup } = await makeKernel();
     try {
       expect(kernel.registry.get('net.diagnose')).toBeTruthy();
-      // FBRX Digger's tools (2.5.0) are real too; in FBRX Endpoint the check leaves them out (it names only what is here).
+      // FBRX Digger's tools (2.5.0) are real too; in FBRX Endpoint the check leaves them out (it names only what is
+      // here).
       const real = new Set([...kernel.registry.list().map((t) => t.name), ...TOOLKIT_LIBRARY.map((a) => a.tool), 'server.network_check', ...DIGGER_ONLY_TOOLS]);
       const named = new Set<string>();
       const variants: Array<(x: StackFacts) => void> = [

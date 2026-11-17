@@ -846,7 +846,8 @@ export class Kernel {
       dirs: this.platform.shell === 'desktop' ? { downloads: this.platform.specialDirs().downloads, home: this.platform.specialDirs().home } : undefined,
       log: (msg, meta) => L('apps').info(msg, meta),
     });
-    // One license: FBRX Digger runs at the edition FBRX Endpoint's license gives this computer (Digger comes with Ultra).
+    // One license: FBRX Digger runs at the edition FBRX Endpoint's license gives this computer (Digger comes with
+    // Ultra).
     if (this.digger) this.license.borrowFrom(() => this.apps.endpointLicense());
     // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
     this.cli = new Fbrx1Cli({
@@ -1595,7 +1596,10 @@ export class Kernel {
     return { key: `${config.id}:${model}|${persona ?? ''}`, providerId: config.id, model, label, where, cloud: !!config.cloud, persona };
   }
 
-  /** Gets the AI ready to answer, for Learning your computer: the starter model downloaded, the model started, or one elsewhere answering. */
+  /**
+   * Gets the AI ready to answer, for Learning your computer: the starter model downloaded, the model started, or one
+   * elsewhere answering.
+   */
   private async prepareAgent(agent: LearningAgent, report: (detail: string) => void, signal: AbortSignal): Promise<LearningAgent | null> {
     const cfg = this.providers.config(agent.providerId);
     if (cfg.type === 'local-runtime') {
@@ -2278,7 +2282,6 @@ export class Kernel {
     throw new Error('This computer has no way to update itself: it was not installed from the repository and has no update feed');
   }
 
-  /** Every network tool, whatever the edition: on Endpoint Ultra, and always in FBRX Digger. */
   /**
    * FBRX Digger: takes in the saved connections and network environments FBRX Endpoint handed over (2.5.0 moved them
    * here), each once and each checked as if typed in; one already here, or taken in before and since removed, is left.
@@ -2318,9 +2321,11 @@ export class Kernel {
     return { connections, environments };
   }
 
+  /**
+   * The advanced network tools (scans, consoles, environments, adapters): from 2.5.0 FBRX Digger's alone, at Ultra (the
+   * edition FBRX Endpoint's license gives the computer); FBRX Endpoint keeps the everyday ones.
+   */
   networkTools(): boolean {
-    // From 2.5.0 the advanced network tools are FBRX Digger's (with Endpoint Ultra); FBRX Endpoint keeps the everyday
-    // ones.
     return this.digger && !this.ultraOnly('Network tools');
   }
 

@@ -11,7 +11,9 @@ import { Kernel } from '../../../packages/core/src/kernel';
 import { createNodePlatform } from '../../../packages/core/src/node-platform';
 import { StaticKeyKeychain, type ScreenShare } from '../../../packages/core/src/platform';
 
-/** Remote screen from FBRX Command: the administrator's switch, a ticket, the person's yes, only the asker's session. */
+/**
+ * Remote screen from FBRX Command: the administrator's switch, a ticket, the person's yes, only the asker's session.
+ */
 const USER = { origin: 'user' as const, actor: 'tester' };
 const PASSWORD = 'Super-Secret-Admin-Pass-1';
 
@@ -163,6 +165,9 @@ describe('remote screen from FBRX Command', () => {
     answer = 'control';
     expect((await call('GET', '/v1/admin/screen-recordings')).body.recordings).toHaveLength(1);
     expect(server.ctx.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM screen_recordings')?.n).toBe(1);
+    // Its end is in the audit log all the same, said by the computer.
+    const ended = server.ctx.db.all<{ details: string }>("SELECT details FROM audit_log WHERE action = 'device.screen.ended'").map((r) => JSON.parse(r.details));
+    expect(ended).toEqual(expect.arrayContaining([expect.objectContaining({ session: no.body.id, ticket: '4601', state: 'denied', by: 'computer' })]));
 
     // Kept for the organization's days, then gone.
     server.ctx.db.run('UPDATE screen_recordings SET started_at = ? WHERE id = ?', new Date(Date.now() - 31 * 86400_000).toISOString(), rec.id);

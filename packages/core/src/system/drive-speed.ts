@@ -1,6 +1,7 @@
 import { execFile } from 'node:child_process';
 import { randomBytes } from 'node:crypto';
-import { closeSync, fsyncSync, openSync, readSync, statfsSync, unlinkSync, writeSync } from 'node:fs';
+import { statfsSync } from 'node:fs';
+import { open, unlink, type FileHandle } from 'node:fs/promises';
 import { join } from 'node:path';
 import { promisify } from 'node:util';
 import type { DriveSpeed } from '@fbrx/shared';
@@ -86,28 +87,32 @@ export async function driveSpeed(mount: string, o: { sizeMB?: number; platform?:
   const chunk = randomBytes(BLOCK);
   const blocks = Math.max(1, Math.round((sizeMB << 20) / BLOCK));
   const bytes = blocks * BLOCK;
-  let fd: number | null = null;
+  // Asynchronous writes and reads: FBRX keeps answering while a slow drive takes its time.
+  let fh: FileHandle | null = null;
   try {
     try {
-      fd = openSync(file, 'w');
+      fh = await open(file, 'w');
     } catch {
       throw new CoreError('FORBIDDEN', 'FBRX cannot write to that drive (it may be read-only, or locked)');
     }
     const w0 = process.hrtime.bigint();
-    for (let i = 0; i < blocks; i++) writeSync(fd, chunk);
-    fsyncSync(fd);
+    for (let i = 0; i < blocks; i++) await fh.write(chunk);
+    await fh.sync();
     const writeSec = Number(process.hrtime.bigint() - w0) / 1e9;
-    closeSync(fd);
-    fd = null;
+    await fh.close();
+    fh = null;
     let readSec = await uncachedRead(file, platform);
     const cached = readSec === null;
     if (readSec === null) {
-      const rfd = openSync(file, 'r');
-      const buf = Buffer.alloc(BLOCK);
-      const r0 = process.hrtime.bigint();
-      while (readSync(rfd, buf, 0, BLOCK, null) > 0);
-      readSec = Number(process.hrtime.bigint() - r0) / 1e9;
-      closeSync(rfd);
+      const rh = await open(file, 'r');
+      try {
+        const buf = Buffer.alloc(BLOCK);
+        const r0 = process.hrtime.bigint();
+        while ((await rh.read(buf, 0, BLOCK, null)).bytesRead > 0);
+        readSec = Number(process.hrtime.bigint() - r0) / 1e9;
+      } finally {
+        await rh.close();
+      }
     }
     const mbps = (sec: number) => Math.round((bytes / (1 << 20) / Math.max(sec, 1e-6)) * 10) / 10;
     const writeMBps = mbps(writeSec);
@@ -126,11 +131,7 @@ export async function driveSpeed(mount: string, o: { sizeMB?: number; platform?:
           : null,
     };
   } finally {
-    if (fd !== null) closeSync(fd);
-    try {
-      unlinkSync(file);
-    } catch {
-      // Already gone.
-    }
+    await fh?.close().catch(() => undefined);
+    await unlink(file).catch(() => undefined);
   }
 }

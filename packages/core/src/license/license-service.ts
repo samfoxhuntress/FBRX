@@ -21,7 +21,8 @@ export type SharedLicense = Partial<Record<(typeof SHARED_LICENSE_KEYS)[number],
 
 /**
  * FBRX Endpoint's shared license as FBRX Digger may read it: text where text belongs, a real edition, an organization
- * edition shaped like one. Anything else (a file damaged or edited by hand) is left out, so it counts as nothing bought.
+ * edition shaped like one. Anything else (a file damaged or edited by hand) is left out, so it counts as nothing
+ * bought.
  */
 export function cleanSharedLicense(raw: unknown): SharedLicense {
   const out: SharedLicense = {};

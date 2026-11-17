@@ -78,7 +78,8 @@ describe('editions and prices', () => {
     expect(SERVER_OFFER).toMatchObject({ available: false });
     expect(SERVER_OFFER).not.toHaveProperty('price');
     expect([0, 499, 1199, 10000].map(formatPrice)).toEqual(['Free', '$4.99', '$11.99', '$100']);
-    // Every paid edition has a product id for Stripe and the stores; from 2.5.0 Black Hole Edition is sold on its own too.
+    // Every paid edition has a product id for Stripe and the stores; from 2.5.0 Black Hole Edition is sold on its own
+    // too.
     for (const t of TIERS) expect(EDITION_PLANS[t].tenantProductId === null).toBe(t === 'essentials');
     expect(EDITION_PLANS.blackhole).toMatchObject({ sold: 'personal', productId: 'fbrx_blackhole_monthly' });
   });

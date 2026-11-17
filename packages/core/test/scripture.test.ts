@@ -56,7 +56,8 @@ describe('scripture.lookup: Bible verses word for word, offline', () => {
   it('refuses a damaged text instead of quoting it, and is hidden where the texts are not installed', () => {
     const dir = mkdtempSync(join(tmpdir(), 'fbrx-scripture-'));
     const text = brotliDecompressSync(readFileSync(join(DIR, 'kjv.jsonl.br'))).toString('utf8').replace('For God so loved', 'For God so liked');
-    // The fastest Brotli setting: the default (11) keeps a core busy for seconds and starves the timing tests beside it.
+    // The fastest Brotli setting: the default (11) keeps a core busy for seconds and starves the timing tests beside
+    // it.
     writeFileSync(join(dir, 'kjv.jsonl.br'), brotliCompressSync(Buffer.from(text), { params: { [constants.BROTLI_PARAM_QUALITY]: 1 } }));
     copyFileSync(join(DIR, 'kjv-build.json'), join(dir, 'kjv-build.json'));
     expect(() => new Scripture(() => dir).lookup('John 3:16')).toThrow(/damaged, so it is not quoted/);

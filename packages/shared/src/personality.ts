@@ -326,7 +326,9 @@ function actsOnAState(rest: string): boolean {
   return ACTS_ON_A_STATE.test(rest.replace(/\bhow\s+(?:to|they can|the person can|you can)\b[^,;:.!?]*/g, ' '));
 }
 
-/** Words the narrow exceptions excuse must end the line (only "who asks" may follow), so nothing rides along with them. */
+/**
+ * Words the narrow exceptions excuse must end the line (only "who asks" may follow), so nothing rides along with them.
+ */
 const ENDS_THE_LINE = /^\s*(?:who\s+(?:asks?|wants?\s+(?:them|it|some|one)))?\s*[.!]?\s*$/;
 
 /** "Share tips with anyone who asks": general advice or a joke, not the person's things. */
@@ -369,7 +371,8 @@ function secretNotTheObject(text: string, at: number, end: number): boolean {
   if (/\b(how|whose|which|where|why|whether|reset|change|update|rotate|set|create|renew|strength|policy|policies|manager|rules|expire\w*|older|new|temporary|temp|one-time|random|generated)\b|\bwhat makes (?:a |an )?(?:strong|good|safe|secure|weak) \S+$/.test(span)) return true;
   const after = text.slice(end);
   if (/^\s+(?:that\s+|which\s+)?(?:(?:will|is|are|has|have|was|were|must|needs?|should)\s+)?(?:\w+\s+){0,2}?(?:expire\w*|weak|old|older|short|reused|compromised|leaked|breached|changed|reset|locked|rotated|due|stale|too\s+\w+)\b/.test(after)) return true;
-  // Codes that run out, as the line's last words ("…when their recovery codes run out.", not "…run out, and show them").
+  // Codes that run out, as the line's last words ("…when their recovery codes run out.", not "…run out, and show
+  // them").
   if (/^\s+(?:that\s+|which\s+)?(?:will\s+)?run(?:s|ning)?\s+(?:out|low)\s*[.!]?\s*$/.test(after)) return true;
   if (/^\s*(?:rules?|polic(?:y|ies)|managers?|strength|length|requirements?|settings?|page|field|prompt|expir\w*|hints?|resets?|vault|app|history|age|format)\b/.test(after)) return true;
   if (new RegExp(String.raw`\b(?:not|never|no|nor|without|except)\s+(?:(?:about|on|regarding|including|any|for)\s+)?${SECRETS}$`).test(span)) return true;

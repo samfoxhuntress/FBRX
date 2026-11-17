@@ -650,11 +650,13 @@ export class Shield {
     if (!this.d.internet()) throw new CoreError('POLICY_DENIED', 'Internet access is blocked by policy.');
     const key = this.d.secret('ABUSECH_AUTH_KEY')?.trim();
     try {
-      // The key goes in the address where the feed asks for it there (abuse.ch's exports); the address is never shown.
+      // The key goes to abuse.ch only, over https, never to another feed's server: in the address where abuse.ch's
+      // exports ask for it there (the address is never shown), or as a header.
+      const target = new URL(feed.split(FEED_KEY_PLACEHOLDER).join('key'));
+      const abuse = target.protocol === 'https:' && /(^|\.)abuse\.ch$/i.test(target.hostname);
+      if (feed.includes(FEED_KEY_PLACEHOLDER) && !abuse) throw new Error('Only an abuse.ch feed over https can take the abuse.ch key in its address: set the feed back to the default in Security → FBRX Shield.');
       if (feed.includes(FEED_KEY_PLACEHOLDER) && !key) throw new Error(NEEDS_KEY);
       const url = feed.split(FEED_KEY_PLACEHOLDER).join(encodeURIComponent(key ?? ''));
-      // The key goes as a header to abuse.ch only, never to another feed's server.
-      const abuse = /(^|\.)abuse\.ch$/i.test(new URL(url).hostname);
       const res = await fetch(url, { headers: { 'user-agent': `FBRX-Shield/${SHIELD_ENGINE_VERSION}`, ...(key && abuse ? { 'Auth-Key': key } : {}) }, signal: AbortSignal.timeout(120_000) });
       if (res.status === 401 || res.status === 403) throw new Error(key ? 'The threat feed did not accept the abuse.ch Auth-Key (ABUSECH_AUTH_KEY in Credentials): check it at auth.abuse.ch.' : NEEDS_KEY);
       if (res.status === 410) throw new Error('The threat feed’s address was retired (HTTP 410). Set the feed back to the default in Security → FBRX Shield.');

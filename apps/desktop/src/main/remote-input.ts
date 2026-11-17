@@ -53,7 +53,12 @@ export function windowsLines(events: RemoteInput[], d: { x: number; y: number; w
     if (e.t === 'move') out.push(`m ${abs(e.x, e.y).join(' ')} ${MOVE} 0`);
     else if (e.t === 'down' || e.t === 'up') out.push(`m ${abs(e.x, e.y).join(' ')} ${MOVE} 0`, `m 0 0 ${BTN[e.button][e.t === 'down' ? 0 : 1]} 0`);
     else if (e.t === 'scroll') out.push(`m ${abs(e.x, e.y).join(' ')} ${MOVE} 0`, `m 0 0 ${0x0800} ${Math.round(-e.dy * 120)}`);
-    else if (e.t === 'text') for (const unit of e.text.replace(/\r?\n/g, '\r')) out.push(`k 0 ${unit.charCodeAt(0)} 4`, `k 0 ${unit.charCodeAt(0)} 6`);
+    else if (e.t === 'text')
+      // Each character as its UTF-16 units: one beyond the first plane (an emoji) is two, sent down together, then up.
+      for (const ch of e.text.replace(/\r?\n/g, '\r')) {
+        const units = Array.from({ length: ch.length }, (_, i) => ch.charCodeAt(i));
+        out.push(...units.map((u) => `k 0 ${u} 4`), ...units.map((u) => `k 0 ${u} 6`));
+      }
     else if (e.t === 'key') {
       const vk = winVk(e.key);
       out.push(...e.mods.map((m) => `k ${WIN_VK[m]} 0 0`), `k ${vk} 0 0`, `k ${vk} 0 2`, ...[...e.mods].reverse().map((m) => `k ${WIN_VK[m]} 0 2`));

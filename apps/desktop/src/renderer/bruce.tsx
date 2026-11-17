@@ -23,7 +23,8 @@ const TOP_H = PEEK * K + PAD;
 const SIDE_W = LEAN * K + PAD;
 
 /**
- * Where he hides: behind a card (Home's and Dash's tiles too), a button, or anything marked data-bruce, in the page (not
+ * Where he hides: behind a card (Home's and Dash's tiles too), a button, or anything marked data-bruce, in the page
+ * (not
  * the sidebar or top bar).
  */
 const HIDING_PLACES = ['.fx-card', '.home-note', '.glass-tile', '.glass-hero', '.fx-btn:not(.icon)', '[data-bruce]'].map((x) => `.fx-content ${x}`).join(', ');
@@ -94,7 +95,10 @@ function sideSpot(el: Element, r: DOMRect, area: DOMRect, side: 'left' | 'right'
   return { side, x, y, w, h, scale, flip: side === 'right', el };
 }
 
-/** A place to peek from: a card most of the time (over it or round its side), a button now and then. Null when none fits. */
+/**
+ * A place to peek from: a card most of the time (over it or round its side), a button now and then. Null when none
+ * fits.
+ */
 function findSpot(avoid: Element | null): Spot | null {
   const content = document.querySelector('.fx-content');
   if (!content) return null;
@@ -115,7 +119,9 @@ function findSpot(avoid: Element | null): Spot | null {
   return null;
 }
 
-/** When called and nothing fits: over the bottom edge of the window, at the left of the page (toasts are on the right). */
+/**
+ * When called and nothing fits: over the bottom edge of the window, at the left of the page (toasts are on the right).
+ */
 function fallbackSpot(): Spot {
   const area = document.querySelector('.fx-content')?.getBoundingClientRect();
   const scale = 1;

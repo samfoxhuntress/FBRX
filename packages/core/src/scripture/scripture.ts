@@ -6,7 +6,8 @@ import { brotliDecompressSync } from 'node:zlib';
 /**
  * Bible verses, word for word, from verified public-domain texts shipped with FBRX OS (resources/scripture): a model
  * quotes from here, not from memory, where every model misquotes or invents. Read-only and offline. Each text is a
- * Brotli-compressed JSONL file ({"book", "chapter", "verse", "text"} per line); its checksum is fixed here, so a damaged
+ * Brotli-compressed JSONL file ({"book", "chapter", "verse", "text"} per line); its checksum is fixed here, so a
+ * damaged
  * or swapped file is refused rather than quoted.
  */
 

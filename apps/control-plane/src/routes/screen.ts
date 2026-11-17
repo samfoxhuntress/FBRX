@@ -71,8 +71,10 @@ export async function screenRoutes(app: FastifyInstance, ctx: AppContext) {
     const s = mine(req);
     const r = await ctx.screen.call<{ state: string; mode: string }>(s.deviceId, 'session', { id: s.id });
     if (r.state === 'ended' || r.state === 'denied') {
+      // The person stopped it or said no: the end goes in the audit log as when the administrator ends it.
       ctx.screen.sessions.delete(s.id);
       ctx.recorder.end(s.id);
+      ctx.audit.record(actorOf(req), 'device.screen.ended', { type: 'device', id: s.deviceId, tenantId: s.tenantId }, { session: s.id, ticket: s.ticket, seconds: Math.round((Date.now() - Date.parse(s.startedAt)) / 1000), state: r.state, by: 'computer' });
     }
     return { ...r, recorded: ctx.recorder.recording(s.id) };
   });

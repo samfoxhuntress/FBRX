@@ -71,6 +71,8 @@ interface Open {
 
 export class ScreenRecorder {
   private readonly open = new Map<string, Open>();
+  /** Finished recordings' indexes, so a player's picture requests do not walk the file each time. */
+  private readonly index = new Map<string, RecordingMark[]>();
   readonly dir: string;
 
   constructor(
@@ -182,6 +184,8 @@ export class ScreenRecorder {
 
   /** Where each record of a recording is, for the player (the file is walked by its headers, never trusted). */
   marks(id: string): RecordingMark[] {
+    const cached = this.index.get(id);
+    if (cached) return cached;
     const f = this.file(id);
     if (!existsSync(f)) return [];
     const fd = openSync(f, 'r');
@@ -197,6 +201,11 @@ export class ScreenRecorder {
         if ((kind !== KIND.frame && kind !== KIND.input) || at + HEAD + length > size) break;
         out.push({ kind: kind === KIND.frame ? 'frame' : 'input', t: head.readUInt32BE(1), width: head.readUInt16BE(5), height: head.readUInt16BE(7), offset: at + HEAD, length });
         at += HEAD + length;
+      }
+      // Only finished recordings are kept (a few at a time): an open one still grows.
+      if (![...this.open.values()].some((o) => o.id === id)) {
+        if (this.index.size >= 8) this.index.delete(this.index.keys().next().value!);
+        this.index.set(id, out);
       }
       return out;
     } finally {
@@ -217,6 +226,7 @@ export class ScreenRecorder {
   }
 
   remove(id: string): void {
+    this.index.delete(id);
     rmSync(this.file(id), { force: true });
     this.db.run('DELETE FROM screen_recordings WHERE id = ?', id);
   }

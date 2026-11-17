@@ -120,7 +120,9 @@ export const SettingsSchema = z.object({
    * or the license is not.
    */
   lab: z.object({
-    /** In the menu: `auto` shows it in the advanced menu and hides it in the simple one (Essentials always has that). */
+    /**
+     * In the menu: `auto` shows it in the advanced menu and hides it in the simple one (Essentials always has that).
+     */
     show: z.enum(['auto', 'on', 'off']),
     /** The Terminal for the person at the computer. An organization turns it off (and locks it) from FBRX Command. */
     terminal: z.boolean(),
@@ -311,7 +313,8 @@ export const SettingsSchema = z.object({
   }),
   /**
    * Presenter-safe mode, for when the screen is on a projector or shared in a meeting: notifications stay quiet,
-   * clipboard history is masked, private lists (chats, alerts, credentials, tickets) are blurred, and Bruce stays hidden.
+   * clipboard history is masked, private lists (chats, alerts, credentials, tickets) are blurred, and Bruce stays
+   * hidden.
    */
   presenter: z.object({
     /** Turned on by hand (Settings, the tray, the top bar or its shortcut). */

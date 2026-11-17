@@ -12,7 +12,8 @@ import type { MetaStore } from '../storage/meta';
  * 3. The model reads its instructions and tools once, so the first answer starts at once.
  *
  * Nothing is sent anywhere while it learns, no tool runs and no approval is asked. A cloud AI reads the profile without
- * what identifies the computer or the person (computerProfile). The profile is learned again, quietly, when it is a week
+ * what identifies the computer or the person (computerProfile). The profile is learned again, quietly, when it is a
+ * week
  * old or reads differently in a newer FBRX.
  */
 

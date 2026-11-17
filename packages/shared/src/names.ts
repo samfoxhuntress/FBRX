@@ -27,7 +27,9 @@ export function cleanName(raw: unknown, max = NAME_MAX): string {
   return chars.length > max ? `${chars.slice(0, max - 1).join('').trimEnd()}…` : s;
 }
 
-/** A name someone else can set, as a tool prints it: cleaned, cut short and always in quotes, its own quotes escaped. */
+/**
+ * A name someone else can set, as a tool prints it: cleaned, cut short and always in quotes, its own quotes escaped.
+ */
 export function quoteName(raw: unknown, max = NAME_MAX): string {
   return JSON.stringify(cleanName(raw, max));
 }

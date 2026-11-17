@@ -1623,7 +1623,9 @@ export interface ExtMethods {
   /** Lets Fabrix look at the server: an administrator signs in once; the server gives FBRX read-only access. */
   'server.fabrixConnect': (p: { id: string; username: string; password: string }) => SavedServer;
   'server.fabrixDisconnect': (p: { id: string }) => SavedServer;
-  /** Asks a paired computer to see its screen (or use it): it says yes there, unless it lets this one in without asking. */
+  /**
+   * Asks a paired computer to see its screen (or use it): it says yes there, unless it lets this one in without asking.
+   */
   'screen.connect': (p: { peerId: string; mode: RemoteMode }) => RemoteSession;
   'screen.session': (p: { peerId: string; id: string }) => RemoteSession;
   /** The newest picture of that screen, or null when it has not changed since `after`. */

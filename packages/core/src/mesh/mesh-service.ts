@@ -99,7 +99,8 @@ export interface MeshHost {
   /** This computer's screen, for paired computers allowed to see it (Remote screen permission). */
   screen?: ScreenHost;
   /**
-   * Whether this computer runs Ultra or fuller. Mesh comes with Pro: pairing, status, messages, alerts, notes and asking
+   * Whether this computer runs Ultra or fuller. Mesh comes with Pro: pairing, status, messages, alerts, notes and
+   * asking
    * Fabrix. Approving from another device, lock and sleep, and handing out work as a controller come with Ultra.
    */
   ultra?: () => boolean;
@@ -967,7 +968,10 @@ export class MeshService {
     return { nonce: out.nonce, box: out.box };
   }
 
-  /** Whether a device may do something here: its permission, and for the Ultra ones (ULTRA_MESH_PERMISSIONS) the edition. */
+  /**
+   * Whether a device may do something here: its permission, and for the Ultra ones (ULTRA_MESH_PERMISSIONS) the
+   * edition.
+   */
   may(d: Pick<MeshDevice, 'permissions'>, perm: keyof MeshPermissions): boolean {
     if (!d.permissions[perm]) return false;
     return !ULTRA_MESH_PERMISSIONS.includes(perm) || this.host.ultra?.() !== false;

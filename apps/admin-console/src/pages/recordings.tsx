@@ -114,7 +114,10 @@ export function RecordingsPage() {
   );
 }
 
-/** Plays a recording: its pictures at their times, with play, a timeline (the marks are mouse and keyboard use) and speed. */
+/**
+ * Plays a recording: its pictures at their times, with play, a timeline (the marks are mouse and keyboard use) and
+ * speed.
+ */
 function Player({ id, onClose }: { id: string; onClose: () => void }) {
   const [d, setD] = useState<Detail | null>(null);
   const [error, setError] = useState<string | null>(null);

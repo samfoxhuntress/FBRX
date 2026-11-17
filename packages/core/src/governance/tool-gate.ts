@@ -157,7 +157,8 @@ export class ToolGate {
         runId: ctx.runId ?? null,
         signal: controller.signal,
       });
-      // Invisible and direction-changing characters go, and text dressed as FBRX's own notice is marked as the output's.
+      // Invisible and direction-changing characters go, and text dressed as FBRX's own notice is marked as the
+      // output's.
       const redacted = this.d.redactor.redact(cleanToolText(out.output));
       const outputFindings = this.d.guardian.scanOutput(redacted.text);
       const durationMs = Date.now() - started;

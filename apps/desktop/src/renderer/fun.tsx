@@ -197,7 +197,9 @@ function useBlink(): boolean {
   return closed;
 }
 
-/** Bruce, his body drawn facing left; his head turned to look at you (`look` front) or in profile (side). Aviator goggles pushed up on his head, dressed for the season; once every trophy is
+/**
+ * Bruce, his body drawn facing left; his head turned to look at you (`look` front) or in profile (side). Aviator
+ * goggles pushed up on his head, dressed for the season; once every trophy is
  * found he carries a golden egg with a #1 ribbon on his back. `flipped` keeps the ribbon's text readable. */
 export function GooseSvg({ walking, honking, golden = false, flipped = false, fast = false, season = null, look = 'front' }: { walking: boolean; honking: boolean; golden?: boolean; flipped?: boolean; fast?: boolean; season?: Season | null; look?: 'front' | 'side' }) {
   const winter = season === 'winter';
@@ -285,8 +287,8 @@ export function GooseSvg({ walking, honking, golden = false, flipped = false, fa
           </g>
         ) : (
           <g key="side" className="goose-head side">
-            {/* His head in profile, looking off to the side: drawn like his face (the same head, eyes, cheeks, goggles and
-                beak), just turned. */}
+            {/* His head in profile, looking off to the side: drawn like his face (the same head, eyes, cheeks,
+                goggles and beak), just turned. */}
             <circle cx="27" cy="13.6" r="10.2" fill="#f7f7f2" stroke="#cfcfc6" strokeWidth="1.2" />
             {/* The goggles from the side: the strap round his head, the far lens peeking out behind the near one. */}
             <path d="M18.2 9.6 Q26 1.4 37 10.6" stroke="#6b4a1f" strokeWidth="2.6" strokeLinecap="round" fill="none" />

@@ -22,6 +22,8 @@ describe('remote mouse and keyboard on each system', () => {
     expect(lines.slice(5, 7)).toEqual(['k 0 233 4', 'k 0 233 6']);
     expect(lines.slice(7)).toEqual(['k 17 0 0', `k ${'C'.charCodeAt(0)} 0 0`, `k ${'C'.charCodeAt(0)} 0 2`, 'k 17 0 2']);
     expect(winVk('F5')).toBe(0x74);
+    // A character beyond the first plane is two UTF-16 units, both sent.
+    expect(windowsLines([{ t: 'text', text: 'a👍' }], screen, screen)).toEqual(['k 0 97 4', 'k 0 97 6', 'k 0 55357 4', 'k 0 56397 4', 'k 0 55357 6', 'k 0 56397 6']);
   });
 
   it('macOS: points on the screen, drags while a button is held, key codes with modifier flags', () => {
