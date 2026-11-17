@@ -1,46 +1,51 @@
 {
   "product": "FBRX OS",
   "stage": "Beta",
-  "version": "2.4.0",
+  "version": "2.5.0",
   "codename": "Weft",
-  "released": "2026-11-11",
+  "released": "2026-11-17",
   "importance": "recommended",
-  "summary": "FBRX 2.4.0 Beta (Weft): Fabrix’s personality with ready-made personas, a network check that finds where the internet stops, remote desktop to your other computers, and This PC.",
+  "summary": "FBRX 2.5.0 Beta (Weft): the FBRX apps with FBRX Digger for the advanced network tools, remote screen to your own computers and from FBRX Command, the FBRX directory, Devices in This PC, and the Lab in every edition.",
   "notes": [
-    "Personality (Settings → Personality, it was Soul): ready-made personas such as Everyday helper and IT pro, and your options as simple fields. FBRX’s own principles (privacy, secrets, no harm, asking first) always come first, whatever the persona says.",
-    "Setup asks what you will be using FBRX for and picks a persona and AI Toolkit actions to match; Settings → Personality and AI Toolkit change them later.",
-    "Network Center → Check every layer: finds where a network stops working, from the adapter and Wi-Fi up to websites, with what to do first. Fabrix runs the same check when you ask why the internet is down, and has new skills for printers, sound, Bluetooth, screens and USB.",
-    "Remote desktop (RDP) and screen sharing (VNC) beside SSH and Telnet (Ultra): from a scanned device or New connection in Terminal → Device consoles, in your computer’s own viewer, which asks for the password. Kept in Saved connections.",
-    "This PC (first in Pit Stop): the make and model, serial number, processor, each memory module, drives and their health, graphics, screens, network adapters and battery, with Copy all and a link to the page that looks after each part.",
-    "Glass is now called Home in the sidebar.",
-    "Every notification has a close button, and Clear all clears them at once.",
-    "FBRX/1 shows your edition (Essentials, Pro, Ultra or Black Hole Edition).",
-    "Fabrix’s instructions are shorter, so small local models answer sooner.",
-    "Prices: Ultra is now $24.99 a month and Black Hole Edition $49.99; Pro stays $4.99."
+    "FBRX apps (Settings → FBRX apps): FBRX Digger is the network toolkit, with Ultra. Scans, consoles, network environments and adapter settings move there; the Network Center keeps the full network check, Wi-Fi, speed, Bluetooth and printers, and its Digger tab opens Digger or offers the download. Fabrix runs the everyday checks itself and offers Open Digger or Get Digger for more.",
+    "Remote screen (Pro): see or use your other computers over FBRX Mesh. The person there says yes each time, unless you let one of your own computers in without asking, and a red bar with Stop shows while it lasts.",
+    "FBRX Command's administrators can see or use a computer's screen for support, with a ticket number and the person's yes; organizations can keep recordings, and the person is told before answering.",
+    "Remote desktop on Linux (Settings → Remote desktop, Pro): sets up the system's own remote desktop so any RDP app can sign in, also on a server with nobody at it.",
+    "The FBRX directory: the same accounts, groups, administrators and password rules on every computer that joins an FBRX Server (Settings → Directory). Changes are applied through the system's own administrator prompt.",
+    "This PC → Devices (Pro): screens, graphics cards, external drives with Eject and a speed test, the USB tree with the speed each device runs at, printers with their ink and toner, and screen brightness, contrast and input.",
+    "The Lab in every edition: in Essentials, Show the Lab (Settings → General) adds the Terminal with the command line and FBRX/1; from Pro the Lab is in the menu with the device consoles. Organizations can turn the Terminal off.",
+    "Learning your computer: after setup and when you pick a new AI model, FBRX gets the AI ready with what it needs to know about this computer, so the first answer comes ready.",
+    "Mesh is in Pro, and Black Hole Edition can be bought by one person, not only an organization.",
+    "Fabrix never sees your saved passwords, keeps the right tools at hand in long chats, says plainly what it cannot do, and can quote Bible verses word for word, offline.",
+    "The Black Hole theme, and Bruce the Goose, who now plays hide-and-seek inside the FBRX window.",
+    "FBRX Shield's threat feed uses abuse.ch's keyed export (a free key, in Credentials); the abuse.ch key is only ever sent to abuse.ch."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.4.0.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.4.0",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.5.0.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.5.0",
   "server": {
-    "version": "1.4.3",
-    "released": "2026-11-09",
-    "summary": "FBRX Server 1.4.3 comes with FBRX OS 2.3.3 and changes nothing on the server itself: updating from 1.4.2 is optional.",
+    "version": "1.4.4",
+    "released": "2026-11-17",
+    "summary": "FBRX Server 1.4.4 comes with FBRX OS 2.5.0: the FBRX directory, changing a network's VLAN tag in FBRX Gate, and releasing a DHCP lease that works.",
     "notes": [
-      "The same server as 1.4.2, released alongside FBRX OS 2.3.3.",
+      "The directory role (its Directory page): people, groups, administrators and password rules, and join codes for the computers that use them.",
+      "FBRX Gate: change the VLAN tag of an existing network; every network on it moves with it.",
+      "FBRX Gate: Release on a DHCP lease frees it.",
       "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
     ],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.3.3/fbrx-server-1.4.3.tar.gz",
-    "sha256": "5f5ffa76f686b596ae9bbc9c787f0d42f22d87ed1f7d6c96ccb8d1a9a00b7461",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.3.3"
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.5.0/fbrx-server-1.4.4.tar.gz",
+    "sha256": "bd7f6fa764792a47032db603415de8944ae5a521024538c201dfb11ee79e2362",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.5.0"
   },
   "digger": {
-    "version": "1.2.0",
-    "released": "2026-11-11",
-    "summary": "FBRX Digger 1.2.0: Check every layer finds where a network stops working, and remote desktop opens beside the consoles.",
+    "version": "1.3.0",
+    "released": "2026-11-17",
+    "summary": "FBRX Digger 1.3.0: the network toolkit of the FBRX apps, with Ultra, taking over FBRX Endpoint's advanced network tools and its saved connections.",
     "notes": [
-      "Overview → Check every layer: from the adapter and Wi-Fi signal through the router, the address, routing, names (DNS) and secure connections up to websites, with what to do first and the commands that show each layer by hand.",
-      "Remote desktop (RDP) and screen sharing (VNC) from a scan or New connection, in your computer’s own viewer, which asks for the password. They go in Saved connections like the consoles."
+      "Digger runs at the edition FBRX Endpoint's license gives this computer, and needs Ultra.",
+      "Your saved connections and network environments come over from FBRX Endpoint once, without passwords or keys.",
+      "Fabrix in Digger has the scan, console and environment tools that moved here."
     ],
-    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.2.0",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.2.0"
+    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.3.0",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.3.0"
   }
 }
