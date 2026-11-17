@@ -8180,6 +8180,7 @@ body.popout .fx-page-header p {
 /* Another computer's screen (Mesh → Screen). */
 .screen-view { display: grid; gap: 10px; }
 .screen-bar { align-items: center; }
+.screen-bar .fx-select { width: auto; min-width: 120px; flex: 0 0 auto; }
 .screen-image { max-width: 100%; max-height: calc(100vh - 220px); object-fit: contain; border-radius: var(--radius-md, 8px); border: 1px solid var(--border); background: #000; justify-self: center; user-select: none; outline: none; }
 .screen-image.screen-control { cursor: crosshair; }
 .screen-image.screen-control:focus { box-shadow: 0 0 0 2px var(--accent); }
