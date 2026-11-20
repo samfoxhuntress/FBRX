@@ -28,3 +28,7 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
    config, skills, memory and MCP servers, starting with Hermes Agent (`~/.hermes`). Sam runs a Hermes agent with its
    own soul.md on each lab machine and wants FBRX OS to take that role over. Then other agent tools' instruction and
    config files. FBRX already writes itself into Hermes' config (AI coordination, 2.1.2); this is the other direction.
+7. **FBRX Time: back up to a NAS or an external drive.** Sam found no way to send a Time backup to a network share or
+   an external hard drive. Check whether it exists but is hard to find; if not, add both as backup destinations.
+8. **FBRX Time: change the backup location afterwards.** Once the backup location is set there is no way to edit it.
+   Let it be changed later, and say what happens to the backups already made there.
