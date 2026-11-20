@@ -32,3 +32,6 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
    an external hard drive. Check whether it exists but is hard to find; if not, add both as backup destinations.
 8. **FBRX Time: change the backup location afterwards.** Once the backup location is set there is no way to edit it.
    Let it be changed later, and say what happens to the backups already made there.
+9. **FBRX Virtual: long pastes into a VM come out garbled.** Pasting long text into a VM works for the first part,
+   then the characters come out wrong. The paste is typed into the VM as keystrokes, so check whether they are sent
+   faster than the VM takes them (pace them, or send in chunks with a pause), and test with long text and symbols.
