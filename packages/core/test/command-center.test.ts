@@ -135,6 +135,27 @@ describe('alerts', () => {
       hook.close();
     }
   });
+
+  it('says a lasting condition once a day at most, even after a restart, and takes it away when it is over', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      kernel.settings.update({ alerts: { cooldownMinutes: 1, channels: { desktop: false } } });
+      expect(await kernel.alerts.fire('av_problem', 'FBRX Shield needs attention', 'The threat database is more than a week old.', { key: 'shield:The threat database is more than a week old.' })).not.toBeNull();
+      // A restart forgets the cooldown; the condition is still not said again the same day.
+      (kernel.alerts as unknown as { last: Map<string, number> }).last.clear();
+      expect(await kernel.alerts.fire('av_problem', 'FBRX Shield needs attention', 'The threat database is more than a week old.', { key: 'shield:The threat database is more than a week old.' })).toBeNull();
+      // Clearing the inbox does not bring it back either.
+      await kernel.call('alerts.delete', { id: '*' }, USER);
+      expect(await kernel.alerts.fire('av_problem', 'x', 'y', { key: 'shield:The threat database is more than a week old.' })).toBeNull();
+      // Over: its alerts go, and if it comes back it is said at once.
+      await kernel.alerts.fire('av_problem', 'FBRX Shield needs attention', 'Download checks are off.', { key: 'shield:Download checks are off.' });
+      expect(kernel.alerts.settle('av_problem', [])).toBe(1);
+      expect(((await kernel.call('alerts.inbox', {}, USER)) as unknown[]).length).toBe(0);
+      expect(await kernel.alerts.fire('av_problem', 'FBRX Shield needs attention', 'The threat database is more than a week old.', { key: 'shield:The threat database is more than a week old.' })).not.toBeNull();
+    } finally {
+      await cleanup();
+    }
+  });
 });
 
 describe('command-center API guards', () => {

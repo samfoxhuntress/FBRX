@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState, type DragEvent }
 import type { HwDevice, HwFlows, HwTopology, VmSummary } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Icons, Input, KeyValue, Page, Select, Table, Toggle, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { api } from '../api';
+import { AskAiButton, describeFor } from '../ask-ai';
 import { useApp, usePoll } from '../state';
 
 /**
@@ -347,7 +348,16 @@ function DevicePanel({
   const multi = t.nodes.length > 1;
   const slow = d.link?.width && d.link.maxWidth && d.link.width < d.link.maxWidth;
   return (
-    <Card title={d.name} subtitle={`${d.vendor ?? 'Unknown maker'} · ${d.address}`} actions={pinned && <span className="fx-badge" title="Put back after every restart">Placement kept: CPUs {pinned}</span>}>
+    <Card
+      title={d.name}
+      subtitle={`${d.vendor ?? 'Unknown maker'} · ${d.address}`}
+      actions={
+        <>
+          {pinned && <span className="fx-badge" title="Put back after every restart">Placement kept: CPUs {pinned}</span>}
+          <AskAiButton what={`the device ${d.name} (${d.address})`} question="Look at this device in the server: is its link running at full speed, is it on the right processor (NUMA node) for what uses it, and should it be given to a virtual machine? What would you do?" details={() => describeFor({ ...d, numaNodes: t.nodes.length, pinnedCpus: pinned })} />
+        </>
+      }
+    >
       <div className="vt-panel">
         <div>
           <KeyValue

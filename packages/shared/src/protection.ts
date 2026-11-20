@@ -4,6 +4,8 @@
  * runs its scans where it can, and warns when it is off or out of date.
  */
 
+import type { Schedule } from './schedule';
+
 export type ProtectionKind = 'shield' | 'defender' | 'product';
 export type ProtectionState = 'protected' | 'attention' | 'at-risk' | 'unknown';
 
@@ -42,7 +44,7 @@ export interface ShieldStatus {
   /** Detections still waiting for a decision. */
   open: number;
   lastScan: { at: string; type: ScanType; files: number; found: number } | null;
-  /** Endpoint Ultra: scheduled scans, extra engines (ClamAV, VirusTotal). */
+  /** Endpoint Ultra: the scheduled scan's time and day, extra engines (ClamAV, VirusTotal). */
   full: boolean;
   engines: { clamav: boolean; virustotal: boolean };
 }
@@ -119,4 +121,23 @@ export interface ScanJob {
   error: string | null;
 }
 
-export const PROTECTION_DEFAULT_FEED = 'https://bazaar.abuse.ch/export/txt/sha256/recent/';
+/** Where a feed address takes the free abuse.ch Auth-Key (ABUSECH_AUTH_KEY in the vault). */
+export const FEED_KEY_PLACEHOLDER = '{auth-key}';
+/** abuse.ch MalwareBazaar's recent additions (its last 48 hours), with the Auth-Key in the address. */
+export const PROTECTION_DEFAULT_FEED = `https://mb-api.abuse.ch/v2/files/exports/${FEED_KEY_PLACEHOLDER}/recent.csv`;
+/**
+ * Keyless addresses abuse.ch retired in November 2026 (they answer 410 Gone): settings that still name one use the
+ * default.
+ */
+export const PROTECTION_RETIRED_FEEDS = ['https://bazaar.abuse.ch/export/txt/sha256/recent/', 'https://bazaar.abuse.ch/export/txt/sha256/full/', 'https://bazaar.abuse.ch/export/csv/recent/'];
+
+/** The feed address to use for this saved setting. */
+export function protectionFeed(saved: string): string {
+  const url = saved.trim();
+  return PROTECTION_RETIRED_FEEDS.includes(url.replace(/\/?$/, '/')) || PROTECTION_RETIRED_FEEDS.includes(url) ? PROTECTION_DEFAULT_FEED : url;
+}
+
+// ------------------------------------------------------------------------------------- scheduled scans
+
+export type ScanSchedule = Schedule;
+export { SCHEDULE_TIME_PATTERN as SCAN_TIME_PATTERN, lastDue as lastScanDue, nextDue as nextScanDue, isDue as scheduledScanDue } from './schedule';

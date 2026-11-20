@@ -15,6 +15,23 @@ export function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   });
 }
 
+/** A file name that is safe on every system (no path, no reserved characters), cut to `max` keeping its end. */
+export function safeFileName(name: string, max = 120): string {
+  const base = name
+    .replace(/[\\/:*?"<>|\u0000-\u001f]/g, '_')
+    .replace(/^[.\s]+|[.\s]+$/g, '')
+    .slice(-max);
+  return base || 'file';
+}
+
+/** A size in bytes as people read it: 512 B, 12.3 KB, 4.5 MB, 1.25 GB. */
+export function formatBytes(n: number): string {
+  if (n < 1024) return `${n} B`;
+  if (n < 1024 ** 2) return `${(n / 1024).toFixed(1)} KB`;
+  if (n < 1024 ** 3) return `${(n / 1024 ** 2).toFixed(1)} MB`;
+  return `${(n / 1024 ** 3).toFixed(2)} GB`;
+}
+
 export function truncate(s: string, max: number): string {
   if (s.length <= max) return s;
   return `${s.slice(0, max)}\n… [truncated ${s.length - max} characters]`;

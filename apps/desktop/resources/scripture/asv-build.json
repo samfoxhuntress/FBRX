@@ -1,0 +1,33 @@
+{
+  "translation": "American Standard Version (1901)",
+  "verses": 31102,
+  "books": 66,
+  "chapters": 1189,
+  "license": "public domain",
+  "copies": [
+    {
+      "name": "github.com/scrollmapper/bible_databases formats/csv/ASV.csv",
+      "commit": "59b18c5af5845728c275d5b7178ad0d024172b1f",
+      "sha256": "95d26cb14704ab4804635d533f2a518f4a9575e5f63fe44f4db025990f1cabb5"
+    },
+    {
+      "name": "pypi.org/project/pythonbible-asv",
+      "version": "0.0.2",
+      "sha256": "9cd917a3411b96f10120a461929ee4db81940ef2ec2ad55308a4050c8a875425"
+    }
+  ],
+  "cross_checked": true,
+  "comparison": {
+    "identical": 30615,
+    "punctuation or case": 5,
+    "spacing or ligature": 336,
+    "spelling or words": 146,
+    "only_in_first_copy": 0,
+    "only_in_second_copy": 0
+  },
+  "verses_mended_from_second_copy": 0,
+  "verses_mended_by_rule": 0,
+  "verses_with_markup": 0,
+  "verses_with_words_run_together": 0,
+  "output_sha256": "81150cc82c634f4b0d02a891791bc054c0f816f5d8dceee19f802b0c59f7855e"
+}

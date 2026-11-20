@@ -19,6 +19,7 @@ import {
   type Vertical,
 } from '@fbrx/shared';
 import { openString, type Db } from '@fbrx/shared/node';
+import { cloudPlanActive } from '../billing/entitlements';
 
 interface ProfileRow {
   id: string;
@@ -109,15 +110,38 @@ const AUTO_UPDATE_SETTINGS: Record<AutoUpdateMode, Record<string, boolean>> = {
 
 const oneOf = <T extends string>(list: readonly T[], v: unknown): T | null => (typeof v === 'string' && (list as readonly string[]).includes(v) ? (v as T) : null);
 
-/** Who uses the computer and what it may be: the device's own setting, else its group's, else the organization's. */
-export function deviceEdition(db: Db, d: any, t: any, g: any): DeviceEdition {
+/**
+ * An organization in the cloud runs what it pays for: a computer nobody gave an edition runs Essentials (free), and
+ * without an active FBRX Command plan every computer does. Organizations the operator set up keep their licenses.
+ */
+function cloudTier(db: Db, t: any, given: Tier | null): Tier | null {
+  if (t.billing !== 'cloud') return given;
+  return cloudPlanActive(db, t.id) ? (given ?? 'essentials') : 'essentials';
+}
+
+interface Given {
+  tier?: unknown;
+  audience?: unknown;
+}
+
+/**
+ * Who uses a computer and the edition it is given: its own setting, else its group's (the kind of organization decides
+ * which audiences there are). Billing counts computers by the same.
+ */
+export function givenEdition(t: { vertical?: unknown }, d: Given, g: Given | null): { vertical: Vertical; audience: Audience; tier: Tier | null } {
   const vertical = oneOf<Vertical>(VERTICALS, t.vertical) ?? 'business';
   const assigned = oneOf<Audience>(AUDIENCES, d.audience) ?? oneOf<Audience>(AUDIENCES, g?.audience);
+  return { vertical, audience: resolveAudience(vertical, assigned), tier: oneOf<Tier>(TIERS, d.tier) ?? oneOf<Tier>(TIERS, g?.tier) };
+}
+
+/** What FBRX Command decided for a computer: who uses it and what it may be, its help desk and its updates. */
+export function deviceEdition(db: Db, d: any, t: any, g: any): DeviceEdition {
+  const { vertical, audience, tier } = givenEdition(t, d, g);
   const receivers = Number(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM devices WHERE tenant_id = ? AND helpdesk_receiver = 1 AND status = 'active'", t.id)?.n ?? 0);
   return {
     vertical,
-    audience: resolveAudience(vertical, assigned),
-    tier: oneOf<Tier>(TIERS, g?.tier),
+    audience,
+    tier: cloudTier(db, t, tier),
     helpdesk: { enabled: Number(t.helpdesk_enabled ?? 1) === 1, receiver: Number(d.helpdesk_receiver ?? 0) === 1 && receivers > 0 },
     autoUpdate: oneOf<AutoUpdateMode>(AUTO_UPDATE_MODES, g?.auto_update) ?? oneOf<AutoUpdateMode>(AUTO_UPDATE_MODES, t.auto_update) ?? 'notify',
   };

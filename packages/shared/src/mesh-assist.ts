@@ -27,8 +27,22 @@ export type AssistTrigger = 'agent' | 'steps' | 'provider' | 'person' | 'control
 export type AssistStatus = 'waiting-approval' | 'queued' | 'running' | 'done' | 'denied' | 'error' | 'cancelled';
 
 /** Server roles a computer announces (FBRX Server runs one or more; more arrive with later products). */
-export const SERVER_ROLES = ['ai', 'virtual', 'command', 'dns', 'directory', 'files', 'gate', 'minidome'] as const;
+export const SERVER_ROLES = ['ai', 'virtual', 'command', 'dns', 'directory', 'files', 'gate', 'minidome', 'time'] as const;
 export type ServerRole = (typeof SERVER_ROLES)[number];
+
+/**
+ * A computer's answer to "may my agent think with your AI?": its own AI model, lent to a paired computer whose agent
+ * keeps working there (its tools, memory and approvals stay on that computer; only the model's work happens here).
+ */
+export interface LentModel {
+  accepts: AssistMode;
+  reason: string | null;
+  /** The model it would use, and the others its AI offers. */
+  model: string | null;
+  models: Array<{ id: string; name: string }>;
+  /** About how many characters of conversation the model holds. */
+  historyChars: number;
+}
 
 /** A computer's answer to "could you help?". */
 export interface AssistOffer {
@@ -46,6 +60,20 @@ export interface AssistOffer {
   /** The highest priority the asker may use there. */
   maxPriority: AssistPriority;
 }
+
+/**
+ * Who asked: the person on the asking computer, as that computer tells it (the computer itself is proven by its mesh
+ * pairing; the person is what it says). An FBRX account's name and email when someone is signed in, and the system
+ * user.
+ */
+export interface AssistRequester {
+  name: string | null;
+  email: string | null;
+  user: string | null;
+}
+
+/** How a person is shown: their name, else their email, else their system user. */
+export const requesterLabel = (r: AssistRequester | null | undefined): string | null => (r ? r.name || r.email || r.user : null);
 
 export interface AssistSession {
   id: string;
@@ -70,7 +98,85 @@ export interface AssistSession {
   conversationId: string | null;
   /** Help asked from here: the session on the helper (follow-ups continue it). */
   remoteId: string | null;
+  /** Who asked (null when the asking computer did not say). */
+  requester: AssistRequester | null;
+  /** Waiting its turn on the helper: its place in line (1: next); null otherwise. */
+  position: number | null;
+  startedAt: string | null;
+  /** Who stopped it: an administrator of the helper, or the computer that asked. */
+  cancelledBy: string | null;
 }
+
+/** The helper's work queue, as its administrators see it. */
+export interface AssistQueue {
+  /** Nothing new starts while paused; what runs goes on. */
+  paused: boolean;
+  /** How many run at once (Mesh Assist's settings). */
+  capacity: number;
+  running: AssistSession[];
+  /** Queued in the order they will run, then those waiting for someone here to allow them. */
+  waiting: AssistSession[];
+  /**
+   * The line in front of this computer's own AI model: requests from here ("host") and for other computers ("mesh"),
+   * running and waiting, and whether this computer's own go first.
+   */
+  model?: { hostFirst: boolean; host: { running: number; waiting: number }; mesh: { running: number; waiting: number } };
+}
+
+/** One request in the log a computer keeps of the help it gave (and asked for), by computer and by person. */
+export interface AssistLogEntry {
+  id: string;
+  direction: 'in' | 'out';
+  peerId: string;
+  peerName: string;
+  requester: AssistRequester | null;
+  kind: AssistKind;
+  trigger: AssistTrigger;
+  priority: AssistPriority;
+  status: AssistStatus;
+  goal: string;
+  error: string | null;
+  steps: number;
+  tools: string[];
+  /** How long the answer was (the answer itself stays with the conversation, not in the log). */
+  answerChars: number;
+  createdAt: string;
+  startedAt: string | null;
+  finishedAt: string | null;
+  cancelledBy: string | null;
+}
+
+export interface AssistLogQuery {
+  direction?: 'in' | 'out';
+  status?: AssistStatus;
+  peerId?: string;
+  /** A person: their email, or their system user. */
+  person?: string;
+  /** Words in what was asked. */
+  text?: string;
+  since?: string;
+  before?: string;
+  limit?: number;
+}
+
+/** What one computer or one person asked for, in total. */
+export interface AssistTally {
+  key: string;
+  label: string;
+  /** The person's email or system user and computer; for a computer, null. */
+  detail: string | null;
+  jobs: number;
+  done: number;
+  failed: number;
+  cancelled: number;
+  denied: number;
+  /** Time spent working on them, in milliseconds. */
+  runMs: number;
+  lastAt: string;
+}
+
+/** How long the log keeps a request. */
+export const ASSIST_LOG_DAYS = 180;
 
 export const ASSIST_TERMINAL: readonly AssistStatus[] = ['done', 'denied', 'error', 'cancelled'];
 

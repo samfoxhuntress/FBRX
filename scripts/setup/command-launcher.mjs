@@ -80,6 +80,8 @@ function serverEnv() {
     FBRX_CP_LOG_LEVEL: config.logLevel ?? 'info',
   };
   if (config.setupToken) env.FBRX_CP_SETUP_TOKEN = config.setupToken;
+  // The FBRX folder it was installed from: "Update now" in the console downloads the new version there.
+  if (config.installedFrom) env.FBRX_CP_INSTALLED_FROM = config.installedFrom;
   if (config.mode === 'network') {
     env.FBRX_CP_TLS = 'self-signed';
     env.FBRX_CP_TLS_NAMES = (config.names ?? []).join(',');

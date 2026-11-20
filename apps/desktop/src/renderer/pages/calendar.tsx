@@ -1,19 +1,33 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { CALENDAR_COLORS, type CalendarAccount, type CalendarEvent, type CalendarSignIn, type CalendarStatus, type DeepPartial, type Settings } from '@fbrx/shared';
-import { Button, Callout, Card, ChoiceCards, Empty, Field, Input, Modal, Page, Select, Spinner, Status, Tabs, TextArea, Toggle, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
+import {
+  CALENDAR_COLORS,
+  CALENDAR_LINK_COLORS,
+  CALENDAR_REPEATS,
+  FBRX_CALENDAR,
+  type CalendarAccount,
+  type CalendarEvent,
+  type CalendarLinkKind,
+  type CalendarRepeat,
+  type CalendarSignIn,
+  type CalendarStatus,
+  type DeepPartial,
+  type Settings,
+} from '@fbrx/shared';
+import { Button, Callout, Card, ChoiceCards, Empty, Field, Icons, Input, Modal, Page, Select, Spinner, Status, Tabs, TextArea, Toggle, timeAgo, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { call, onEvent, openExternal } from '../client';
 import { isLocked, useCore } from '../hooks';
-import { routeArg } from '../app';
+import { navigate, routeArg } from '../app';
 import { AskButton } from '../widgets';
 import { eventWhen, fmtTime } from '../calendar-format';
 
 /**
- * Workspace → Calendar: Outlook / Microsoft 365 accounts and calendar links side by side, as an agenda or a week.
- * FBRX keeps the last week and the next two months on the computer, reminds before meetings, and the agent can
- * read it (and, with approval, add events).
+ * Studio → Calendar: the FBRX calendar on this computer (events you add, which may repeat and be about a project, a
+ * note, a task or an automation, in its color; your tasks and projects by their due dates; when automations run),
+ * with shared calendars beside it as add-ons (Outlook / Microsoft 365, calendar links). As an agenda, a week or a
+ * month. FBRX reminds before events, and the agent can read it (and, with approval, add events).
  */
 
-type View = 'agenda' | 'week';
+type View = 'agenda' | 'week' | 'month';
 const DAY = 86_400_000;
 const HOUR_PX = 44;
 
@@ -44,59 +58,73 @@ const onDay = (e: CalendarEvent, d: Date) => {
   const b = addDays(d, 1).getTime();
   return s < b && (en > a || (s === en && s >= a));
 };
+/** What an event is about, as people say it, and the page it lives on. */
+const LINKS: Record<CalendarLinkKind, { label: string; icon: IconName; page: (id: string) => string }> = {
+  project: { label: 'Project', icon: 'layers', page: () => 'projects' },
+  note: { label: 'Note', icon: 'note', page: (id) => `notes/${encodeURIComponent(id)}` },
+  task: { label: 'Task', icon: 'tasks', page: () => 'tasks' },
+  automation: { label: 'Automation', icon: 'repeat', page: () => 'automations' },
+};
+const REPEATS: Record<CalendarRepeat, string> = { none: 'Does not repeat', daily: 'Every day', weekdays: 'Every weekday', weekly: 'Every week', monthly: 'Every month', yearly: 'Every year' };
+/** What the FBRX calendar shows from elsewhere (a task, a project's deadline, an automation's run). */
+const fromElsewhere = (e: CalendarEvent) => e.accountId === FBRX_CALENDAR && e.calendarId !== 'events';
 
 export function CalendarPage({ agentName, learner }: { agentName: string; learner: boolean }) {
   const status = useCore('calendar.status', undefined, ['calendar.changed', 'settings.changed', 'vault.changed']);
-  const [view, setView] = useState<View>(() => (routeArg() === 'week' ? 'week' : 'agenda'));
+  const [view, setView] = useState<View>(() => {
+    const arg = routeArg();
+    return arg === 'week' || arg === 'month' ? arg : 'agenda';
+  });
   const [anchor, setAnchor] = useState(() => startOfDay(new Date()));
   const [adding, setAdding] = useState(false);
-  const [creating, setCreating] = useState<{ date: Date; hour?: number } | null>(null);
+  const [editing, setEditing] = useState<{ event?: CalendarEvent; date: Date; hour?: number } | null>(null);
   const [open, setOpen] = useState<CalendarEvent | null>(null);
   const { run, busy } = useAction();
 
   const range = useMemo(() => {
+    if (view === 'month') {
+      const from = startOfWeek(new Date(anchor.getFullYear(), anchor.getMonth(), 1));
+      return { from, to: addDays(from, 42) };
+    }
     const from = view === 'week' ? startOfWeek(anchor) : anchor;
     return { from, to: addDays(from, view === 'week' ? 7 : 14) };
   }, [view, anchor]);
-  const events = useCore('calendar.events', { from: range.from.toISOString(), to: range.to.toISOString() }, ['calendar.changed']);
+  // Tasks, projects and automations show on the FBRX calendar too, so it follows them.
+  const events = useCore('calendar.events', { from: range.from.toISOString(), to: range.to.toISOString() }, ['calendar.changed', 'workspace.changed', 'automations.changed']);
   const st = status.data;
   const accounts = st?.accounts ?? [];
-  const writable = accounts.some((a) => a.enabled && a.canWrite);
   const list = events.data ?? [];
 
-  const step = (dir: -1 | 1) => setAnchor((a) => addDays(a, dir * (view === 'week' ? 7 : 14)));
-  const title = view === 'week' ? `${range.from.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${addDays(range.to, -1).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}` : null;
+  const step = (dir: -1 | 1) => setAnchor((a) => (view === 'month' ? new Date(a.getFullYear(), a.getMonth() + dir, 1) : addDays(a, dir * (view === 'week' ? 7 : 14))));
+  const title =
+    view === 'month'
+      ? anchor.toLocaleDateString(undefined, { month: 'long', year: 'numeric' })
+      : view === 'week'
+        ? `${range.from.toLocaleDateString(undefined, { month: 'short', day: 'numeric' })} – ${addDays(range.to, -1).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}`
+        : null;
+  const create = (date: Date, hour?: number) => setEditing({ date, hour });
 
   return (
     <Page
       title="Calendar"
-      description={`Outlook / Microsoft 365 and calendar links in one place. FBRX reminds you before meetings, and ${agentName} can see what is on.`}
+      description={`Your FBRX calendar, with your projects, tasks and automations on it, and shared calendars beside it. FBRX reminds you before events, and ${agentName} can see what is on.`}
       actions={
-        accounts.length ? (
-          <>
-            {!learner && (
-              <AskButton
-                label="Prepare my day"
-                prompt="Look at my calendar for today and tomorrow and help me prepare: what is coming up, any clashes or back-to-back meetings, and when I have time to focus."
-              />
-            )}
-            {writable && (
-              <Button icon="plus" onClick={() => setCreating({ date: new Date() })}>
-                New event
-              </Button>
-            )}
-            <Button variant="primary" icon="calendar" onClick={() => setAdding(true)}>
-              Add calendar
-            </Button>
-          </>
-        ) : undefined
+        <>
+          {!learner && (
+            <AskButton
+              label="Prepare my day"
+              prompt="Look at my calendar for today and tomorrow and help me prepare: what is coming up, any clashes or back-to-back meetings, and when I have time to focus."
+            />
+          )}
+          <Button variant="primary" icon="plus" onClick={() => create(new Date())}>
+            New event
+          </Button>
+        </>
       }
     >
       {status.error && <Callout tone="warning">{status.error}</Callout>}
       {!st ? (
         <Spinner />
-      ) : !accounts.length ? (
-        <Welcome onAdd={() => setAdding(true)} />
       ) : (
         <div className="cal-layout">
           <div className="cal-main">
@@ -112,41 +140,31 @@ export function CalendarPage({ agentName, learner }: { agentName: string; learne
                 tabs={[
                   { id: 'agenda', label: 'Agenda' },
                   { id: 'week', label: 'Week' },
+                  { id: 'month', label: 'Month' },
                 ]}
                 active={view}
                 onChange={setView}
               />
             </div>
-            {view === 'agenda' ? <Agenda from={range.from} events={list} onOpen={setOpen} /> : <Week from={range.from} events={list} onOpen={setOpen} onCreate={writable ? (date, hour) => setCreating({ date, hour }) : undefined} />}
+            {view === 'agenda' ? (
+              <Agenda from={range.from} events={list} onOpen={setOpen} />
+            ) : view === 'week' ? (
+              <Week from={range.from} events={list} onOpen={setOpen} onCreate={create} />
+            ) : (
+              <Month month={anchor} from={range.from} events={list} onOpen={setOpen} onCreate={create} onDay={(d) => (setAnchor(d), setView('week'))} />
+            )}
           </div>
           <aside className="cal-side">
             <Accounts status={st} onAdd={() => setAdding(true)} syncing={busy === 'sync'} onSync={() => void run('sync', () => call('calendar.sync', {}))} />
+            <Legend events={list} agentName={agentName} />
             <CalendarSettings status={st} learner={learner} />
           </aside>
         </div>
       )}
       {adding && <AddCalendar status={st} onClose={() => setAdding(false)} />}
-      {creating && <NewEvent accounts={accounts} date={creating.date} hour={creating.hour} onClose={() => setCreating(null)} />}
-      {open && <EventDetails event={open} agentName={agentName} onClose={() => setOpen(null)} />}
+      {editing && <EventEditor accounts={accounts} event={editing.event} date={editing.date} hour={editing.hour} onClose={() => setEditing(null)} />}
+      {open && <EventDetails event={open} agentName={agentName} onClose={() => setOpen(null)} onEdit={() => (setEditing({ event: open, date: new Date(open.start) }), setOpen(null))} />}
     </Page>
-  );
-}
-
-function Welcome({ onAdd }: { onAdd: () => void }) {
-  return (
-    <Card>
-      <Empty
-        title="Bring your calendar to FBRX"
-        action={
-          <Button variant="primary" icon="calendar" onClick={onAdd}>
-            Add a calendar
-          </Button>
-        }
-      >
-        Sign in to Outlook / Microsoft 365, or paste a calendar link from Outlook.com, Google, Apple or your school. Your meetings show here and on FBRX Glass, FBRX reminds you before they start, and your
-        assistant can tell you what is on or find a free hour.
-      </Empty>
-    </Card>
   );
 }
 
@@ -162,9 +180,20 @@ function EventRow({ e, onOpen }: { e: CalendarEvent; onOpen: (e: CalendarEvent) 
       <span className="cal-what">
         <b className="private">{e.title}</b>
         <span className="cal-sub">
-          {[e.location, e.showAs === 'tentative' ? 'Tentative' : e.showAs === 'free' ? 'Free' : e.showAs === 'oof' ? 'Away' : null, e.cancelled ? 'Cancelled' : null, e.accountName].filter(Boolean).join(' · ')}
+          {[
+            e.link && !fromElsewhere(e) ? `${LINKS[e.link.kind].label}: ${e.link.name}` : null,
+            e.link?.project && e.link.kind !== 'project' ? e.link.project.name : null,
+            e.repeat !== 'none' ? REPEATS[e.repeat] : null,
+            e.location,
+            e.showAs === 'tentative' ? 'Tentative' : e.showAs === 'free' && !fromElsewhere(e) ? 'Free' : e.showAs === 'oof' ? 'Away' : null,
+            e.cancelled ? 'Cancelled' : null,
+            fromElsewhere(e) ? e.calendarName : e.accountName,
+          ]
+            .filter(Boolean)
+            .join(' · ')}
         </span>
       </span>
+      {e.madeBy === 'fabrix' && <Icons.sparkles size={13} className="cal-fabrix" aria-label="Added by your assistant" />}
       {e.joinUrl && !e.cancelled && (
         <Button
           size="sm"
@@ -234,7 +263,7 @@ function layoutDay(list: CalendarEvent[], day: Date) {
   return items;
 }
 
-function Week({ from, events, onOpen, onCreate }: { from: Date; events: CalendarEvent[]; onOpen: (e: CalendarEvent) => void; onCreate?: (date: Date, hour: number) => void }) {
+function Week({ from, events, onOpen, onCreate }: { from: Date; events: CalendarEvent[]; onOpen: (e: CalendarEvent) => void; onCreate: (date: Date, hour: number) => void }) {
   const days = Array.from({ length: 7 }, (_, i) => addDays(from, i));
   const scroller = useRef<HTMLDivElement>(null);
   const [now, setNow] = useState(() => new Date());
@@ -288,7 +317,6 @@ function Week({ from, events, onOpen, onCreate }: { from: Date; events: Calendar
               key={d.toISOString()}
               className={`cal-day${sameDay(d, now) ? ' today' : ''}`}
               onDoubleClick={(ev) => {
-                if (!onCreate) return;
                 const y = ev.clientY - (ev.currentTarget as HTMLElement).getBoundingClientRect().top;
                 onCreate(d, Math.max(0, Math.min(23, Math.floor(y / HOUR_PX))));
               }}
@@ -321,12 +349,56 @@ function Week({ from, events, onOpen, onCreate }: { from: Date; events: Calendar
   );
 }
 
+// ------------------------------------------------------------------------------------------------- month
+
+/** Six weeks around a month: each day's first events (in their colors), a double-click away from adding one. */
+function Month({ month, from, events, onOpen, onCreate, onDay: openDay }: { month: Date; from: Date; events: CalendarEvent[]; onOpen: (e: CalendarEvent) => void; onCreate: (date: Date) => void; onDay: (d: Date) => void }) {
+  const days = Array.from({ length: 42 }, (_, i) => addDays(from, i));
+  const today = new Date();
+  return (
+    <div className="cal-month">
+      <div className="cal-month-head">
+        {days.slice(0, 7).map((d) => (
+          <span key={d.getDay()}>{d.toLocaleDateString(undefined, { weekday: 'short' })}</span>
+        ))}
+      </div>
+      <div className="cal-month-grid">
+        {days.map((d) => {
+          // Room is short: automations' runs come after the rest.
+          const later = (e: CalendarEvent) => Number(e.accountId === FBRX_CALENDAR && e.calendarId === 'automations');
+          const list = events.filter((e) => onDay(e, d)).sort((a, b) => later(a) - later(b) || Number(b.allDay) - Number(a.allDay) || a.start.localeCompare(b.start));
+          return (
+            <div key={d.toISOString()} className={`cal-mday${d.getMonth() !== month.getMonth() ? ' other' : ''}${sameDay(d, today) ? ' today' : ''}`} onDoubleClick={() => onCreate(d)}>
+              <button className="cal-mday-num" onClick={() => openDay(d)} title="Show this week">
+                {d.getDate()}
+              </button>
+              {list.slice(0, 3).map((e) => (
+                <button key={`${e.accountId}:${e.id}`} className="cal-mchip private" style={{ ['--cal' as string]: e.color }} onClick={() => onOpen(e)} title={`${e.title} · ${eventWhen(e)}`}>
+                  {!e.allDay && <small>{fmtTime(e.start)}</small>} {e.title}
+                </button>
+              ))}
+              {list.length > 3 && (
+                <button className="cal-more" onClick={() => openDay(d)}>
+                  {list.length - 3} more
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------------------------- details
 
-function EventDetails({ event: e, agentName, onClose }: { event: CalendarEvent; agentName: string; onClose: () => void }) {
+function EventDetails({ event: e, agentName, onClose, onEdit }: { event: CalendarEvent; agentName: string; onClose: () => void; onEdit: () => void }) {
   const { confirm, dialog } = useConfirm();
   const { run, busy } = useAction();
   const day = new Date(e.start).toLocaleDateString(undefined, { weekday: 'long', month: 'long', day: 'numeric' });
+  const fbrx = e.accountId === FBRX_CALENDAR;
+  const until = e.repeatUntil ? `, until ${new Date(`${e.repeatUntil}T00:00`).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' })}` : '';
+  const go = (page: string) => (onClose(), navigate(page));
   return (
     <Modal
       title={e.title}
@@ -340,7 +412,10 @@ function EventDetails({ event: e, agentName, onClose }: { event: CalendarEvent; 
               icon="trash"
               loading={busy === 'del'}
               onClick={async () => {
-                if (await confirm({ title: 'Delete this event?', body: 'It is removed from your Outlook calendar too. If you organized a meeting, Outlook tells the people you invited.', danger: true, confirmLabel: 'Delete' })) {
+                const body = fbrx
+                  ? `It is removed from your FBRX calendar${e.repeat !== 'none' ? ', every time it repeats' : ''}.`
+                  : 'It is removed from your Outlook calendar too. If you organized a meeting, Outlook tells the people you invited.';
+                if (await confirm({ title: 'Delete this event?', body, danger: true, confirmLabel: 'Delete' })) {
                   await run('del', () => call('calendar.delete', { accountId: e.accountId, id: e.id }), 'Event deleted');
                   onClose();
                 }
@@ -350,6 +425,16 @@ function EventDetails({ event: e, agentName, onClose }: { event: CalendarEvent; 
             </Button>
           )}
           <span className="fx-spacer" />
+          {e.link && (
+            <Button icon={LINKS[e.link.kind].icon} onClick={() => go(LINKS[e.link!.kind].page(e.link!.id))}>
+              Open {LINKS[e.link.kind].label.toLowerCase()}
+            </Button>
+          )}
+          {e.canEdit && (
+            <Button variant="primary" icon="edit" onClick={onEdit}>
+              Edit
+            </Button>
+          )}
           {e.webLink && (
             <Button icon="external" onClick={() => openExternal(e.webLink!)}>
               Open in Outlook
@@ -366,6 +451,24 @@ function EventDetails({ event: e, agentName, onClose }: { event: CalendarEvent; 
       <div className="cal-details">
         {e.cancelled && <Callout tone="warning">This event was cancelled.</Callout>}
         <dl>
+          {e.link && (
+            <>
+              <dt>About</dt>
+              <dd>
+                {LINKS[e.link.kind].label}: <b>{e.link.name}</b>
+                {e.link.project && e.link.kind !== 'project' ? ` · project ${e.link.project.name}` : ''}
+              </dd>
+            </>
+          )}
+          {e.repeat !== 'none' && (
+            <>
+              <dt>Repeats</dt>
+              <dd>
+                {REPEATS[e.repeat]}
+                {until}
+              </dd>
+            </>
+          )}
           {e.location && (
             <>
               <dt>Where</dt>
@@ -383,9 +486,22 @@ function EventDetails({ event: e, agentName, onClose }: { event: CalendarEvent; 
             <span className="cal-dot" style={{ background: e.color }} /> {e.accountName}
             {e.calendarName !== e.accountName ? ` · ${e.calendarName}` : ''}
           </dd>
-          <dt>Shows as</dt>
-          <dd>{{ free: 'Free', tentative: 'Tentative', busy: 'Busy', oof: 'Away', workingElsewhere: 'Working elsewhere', unknown: 'Busy' }[e.showAs]}</dd>
+          {!fromElsewhere(e) && (
+            <>
+              <dt>Shows as</dt>
+              <dd>{{ free: 'Free', tentative: 'Tentative', busy: 'Busy', oof: 'Away', workingElsewhere: 'Working elsewhere', unknown: 'Busy' }[e.showAs]}</dd>
+            </>
+          )}
+          {e.madeBy === 'fabrix' && (
+            <>
+              <dt>Added by</dt>
+              <dd>
+                <Icons.sparkles size={12} /> {agentName}
+              </dd>
+            </>
+          )}
         </dl>
+        {e.notes && <p className="cal-notes private">{e.notes}</p>}
         <div className="fx-actions">
           <AskButton label={`Prepare with ${agentName}`} prompt={`Help me prepare for "${e.title}" (${day}, ${eventWhen(e)}). What should I have ready? Check my calendar around it for anything that clashes.`} context={{ title: e.title, when: `${day} ${eventWhen(e)}`, location: e.location, organizer: e.organizer }} />
         </div>
@@ -399,6 +515,7 @@ function EventDetails({ event: e, agentName, onClose }: { event: CalendarEvent; 
 
 function Accounts({ status, onAdd, onSync, syncing }: { status: CalendarStatus; onAdd: () => void; onSync: () => void; syncing: boolean }) {
   const [editing, setEditing] = useState<CalendarAccount | null>(null);
+  const shared = status.accounts.some((a) => a.kind !== 'fbrx');
   const { confirm, dialog } = useConfirm();
   const { run } = useAction();
   const toast = useToast();
@@ -414,12 +531,7 @@ function Accounts({ status, onAdd, onSync, syncing }: { status: CalendarStatus; 
   return (
     <Card
       title="Calendars"
-      actions={
-        <>
-          <Button size="sm" variant="ghost" icon="refresh" loading={syncing} aria-label="Update now" title="Update now" onClick={onSync} />
-          <Button size="sm" variant="ghost" icon="plus" aria-label="Add calendar" title="Add calendar" onClick={onAdd} />
-        </>
-      }
+      actions={shared && <Button size="sm" variant="ghost" icon="refresh" loading={syncing} aria-label="Update the shared calendars now" title="Update the shared calendars now" onClick={onSync} />}
     >
       <div className="cal-accounts">
         {status.accounts.map((a) => (
@@ -428,11 +540,11 @@ function Accounts({ status, onAdd, onSync, syncing }: { status: CalendarStatus; 
               <span className="cal-dot" style={{ background: a.color }} />
               <div className="cal-account-name">
                 <b>{a.name}</b>
-                <small className="private">{a.kind === 'microsoft' ? (a.address ?? 'Outlook / Microsoft 365') : `Link · ${a.address ?? ''}`}</small>
+                <small className="private">{a.kind === 'fbrx' ? 'On this computer' : a.kind === 'microsoft' ? (a.address ?? 'Outlook / Microsoft 365') : `Link · ${a.address ?? ''}`}</small>
               </div>
               <Toggle checked={a.enabled} onChange={(v) => void run('t', () => call('calendar.update', { id: a.id, enabled: v }))} title={a.enabled ? 'Shown' : 'Hidden'} />
             </div>
-            {a.kind === 'microsoft' && a.enabled && a.calendars.length > 1 && (
+            {(a.kind === 'fbrx' || a.kind === 'microsoft') && a.enabled && a.calendars.length > 1 && (
               <div className="cal-subcals">
                 {a.calendars.map((c) => (
                   <label key={c.id}>
@@ -443,7 +555,11 @@ function Accounts({ status, onAdd, onSync, syncing }: { status: CalendarStatus; 
               </div>
             )}
             <div className="cal-account-foot">
-              {a.lastError ? (
+              {a.kind === 'fbrx' ? (
+                <small>
+                  {a.events} event{a.events === 1 ? '' : 's'} of yours
+                </small>
+              ) : a.lastError ? (
                 <Status tone="warning">{a.lastError}</Status>
               ) : (
                 <small>
@@ -458,21 +574,29 @@ function Accounts({ status, onAdd, onSync, syncing }: { status: CalendarStatus; 
                 </Button>
               )}
               <Button size="sm" variant="ghost" icon="edit" aria-label={`Edit ${a.name}`} title="Name and color" onClick={() => setEditing(a)} />
-              <Button
-                size="sm"
-                variant="ghost"
-                icon="trash"
-                aria-label={`Remove ${a.name}`}
-                title="Remove"
-                onClick={async () => {
-                  if (await confirm({ title: `Remove ${a.name}?`, body: 'Its events disappear from FBRX and FBRX forgets the sign-in or link. Nothing changes in the calendar itself.', danger: true, confirmLabel: 'Remove' })) {
-                    await run('rm', () => call('calendar.remove', { id: a.id }), 'Calendar removed');
-                  }
-                }}
-              />
+              {a.kind !== 'fbrx' && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  icon="trash"
+                  aria-label={`Remove ${a.name}`}
+                  title="Remove"
+                  onClick={async () => {
+                    if (await confirm({ title: `Remove ${a.name}?`, body: 'Its events disappear from FBRX and FBRX forgets the sign-in or link. Nothing changes in the calendar itself.', danger: true, confirmLabel: 'Remove' })) {
+                      await run('rm', () => call('calendar.remove', { id: a.id }), 'Calendar removed');
+                    }
+                  }}
+                />
+              )}
             </div>
           </div>
         ))}
+      </div>
+      <div className="cal-add-shared">
+        <Button size="sm" variant="ghost" icon="plus" onClick={onAdd}>
+          Add a shared calendar
+        </Button>
+        {!shared && <small>Outlook / Microsoft 365, or a calendar link from Google, Apple or your school, beside your FBRX calendar.</small>}
       </div>
       {status.signIn && (
         <div className="cal-pending">
@@ -583,7 +707,7 @@ function AddCalendar({ status, onClose }: { status: CalendarStatus | null; onClo
 
   return (
     <Modal
-      title="Add a calendar"
+      title="Add a shared calendar"
       wide
       onClose={() => {
         if (pending) void call('calendar.cancelSignIn');
@@ -713,43 +837,96 @@ function MicrosoftAppSetup() {
   );
 }
 
-// -------------------------------------------------------------------------------------------- new event
+// ----------------------------------------------------------------------------------------- an event
 
-function NewEvent({ accounts, date, hour, onClose }: { accounts: CalendarAccount[]; date: Date; hour?: number; onClose: () => void }) {
-  const targets = accounts.filter((a) => a.enabled && a.canWrite).flatMap((a) => a.calendars.filter((c) => c.canWrite).map((c) => ({ value: `${a.id}|${c.id}`, label: a.calendars.length > 1 ? `${a.name} · ${c.name}` : a.name, isDefault: c.isDefault })));
+const KINDS_SHOWN: Record<Exclude<CalendarLinkKind, 'project'>, string> = { note: 'Notes', task: 'Tasks', automation: 'Automations' };
+
+/**
+ * Adds an event, or changes one of the FBRX calendar's (all of it, when it repeats). On the FBRX calendar it can
+ * repeat and be about a project, a note, a task or an automation, whose color it takes unless it has one of its own.
+ */
+function EventEditor({ accounts, event, date, hour, onClose }: { accounts: CalendarAccount[]; event?: CalendarEvent; date: Date; hour?: number; onClose: () => void }) {
+  const projects = useCore('projects.list', undefined, ['workspace.changed']).data ?? [];
+  const notes = useCore('notes.list', undefined, ['workspace.changed']).data ?? [];
+  const tasks = useCore('tasks.list', undefined, ['workspace.changed']).data ?? [];
+  const automations = useCore('automations.list', undefined, ['automations.changed']).data ?? [];
+  // Where it can go: the FBRX calendar, and the Outlook calendars that take events.
+  const targets = [
+    { value: `${FBRX_CALENDAR}|events`, label: accounts.find((a) => a.id === FBRX_CALENDAR)?.name ?? 'FBRX' },
+    ...accounts
+      .filter((a) => a.kind === 'microsoft' && a.enabled && a.canWrite)
+      .flatMap((a) => a.calendars.filter((c) => c.canWrite).map((c) => ({ value: `${a.id}|${c.id}`, label: a.calendars.length > 1 ? `${a.name} · ${c.name}` : a.name }))),
+  ];
+  // A repeating event is changed as a whole, from its first day.
+  const first = event ? new Date(event.seriesStart ?? event.start) : null;
+  const last = event && first ? new Date(first.getTime() + new Date(event.end).getTime() - new Date(event.start).getTime()) : null;
+  const hm = (d: Date) => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
   const startHour = hour ?? Math.min(22, new Date().getHours() + 1);
-  const [f, setF] = useState({ title: '', day: ymd(date), start: `${pad(startHour)}:00`, end: `${pad(startHour)}:30`, allDay: false, location: '', notes: '', target: (targets.find((t) => t.isDefault) ?? targets[0])?.value ?? '' });
+  const [f, setF] = useState(() => ({
+    title: event?.title ?? '',
+    day: ymd(first ?? date),
+    lastDay: event?.allDay && last ? ymd(addDays(last, -1)) : ymd(first ?? date),
+    start: first && !event?.allDay ? hm(first) : `${pad(startHour)}:00`,
+    end: last && !event?.allDay ? hm(last) : `${pad(startHour)}:30`,
+    allDay: event?.allDay ?? false,
+    location: event?.location ?? '',
+    notes: event?.notes ?? '',
+    target: targets[0].value,
+    repeat: event?.repeat ?? ('none' as CalendarRepeat),
+    until: event?.repeatUntil ?? '',
+    linkKind: event?.link?.kind ?? ('' as CalendarLinkKind | ''),
+    linkId: event?.link?.id ?? '',
+    color: event?.ownColor ?? (null as string | null),
+  }));
   const { run, busy } = useAction();
   const set = (p: Partial<typeof f>) => setF((x) => ({ ...x, ...p }));
+  const fbrx = f.target.startsWith(`${FBRX_CALENDAR}|`);
+  const options: Array<{ value: string; label: string }> =
+    f.linkKind === 'project'
+      ? projects.map((p) => ({ value: p.id, label: p.name }))
+      : f.linkKind === 'note'
+        ? notes.slice(0, 300).map((n) => ({ value: n.id, label: n.title }))
+        : f.linkKind === 'task'
+          ? tasks.filter((t) => t.status !== 'done' || t.id === f.linkId).map((t) => ({ value: t.id, label: t.title }))
+          : f.linkKind === 'automation'
+            ? automations.map((x) => ({ value: x.id, label: x.name }))
+            : [];
+  // The color it gets without one of its own (as the FBRX calendar works it out).
+  const projectOf = (id: string | null | undefined) => projects.find((p) => p.id === id);
+  const linkedProject =
+    f.linkKind === 'project' ? projectOf(f.linkId) : f.linkKind === 'note' ? projectOf(notes.find((n) => n.id === f.linkId)?.projectId) : f.linkKind === 'task' ? projectOf(tasks.find((t) => t.id === f.linkId)?.projectId) : undefined;
+  const auto =
+    linkedProject?.color ??
+    (f.linkKind && f.linkKind !== 'project' && f.linkId ? CALENDAR_LINK_COLORS[f.linkKind] : null) ??
+    (event?.madeBy === 'fabrix' ? CALENDAR_LINK_COLORS.fabrix : (accounts.find((a) => a.id === FBRX_CALENDAR)?.color ?? CALENDAR_COLORS[0]));
+  const timesWrong = !f.allDay && f.end <= f.start;
+  const untilWrong = f.repeat !== 'none' && !!f.until && f.until < f.day;
   const save = () =>
     run(
       'save',
       async () => {
         const [accountId, calendarId] = f.target.split('|');
-        await call('calendar.create', {
-          accountId,
-          calendarId,
-          title: f.title.trim(),
-          start: f.allDay ? f.day : new Date(`${f.day}T${f.start}`).toISOString(),
-          end: f.allDay ? undefined : new Date(`${f.day}T${f.end}`).toISOString(),
-          allDay: f.allDay,
-          location: f.location.trim() || undefined,
-          notes: f.notes.trim() || undefined,
-        });
+        const when = f.allDay
+          ? { start: f.day, end: f.lastDay > f.day ? f.lastDay : undefined, allDay: true }
+          : { start: new Date(`${f.day}T${f.start}`).toISOString(), end: new Date(`${f.day}T${f.end}`).toISOString(), allDay: false };
+        const own = fbrx ? { repeat: f.repeat, repeatUntil: f.repeat === 'none' ? null : f.until || null, link: f.linkKind && f.linkId ? { kind: f.linkKind, id: f.linkId } : null, color: f.color } : {};
+        if (event) await call('calendar.edit', { id: event.series!, title: f.title.trim(), ...when, location: f.location.trim(), notes: f.notes.trim(), ...own });
+        else await call('calendar.create', { accountId, calendarId, title: f.title.trim(), ...when, location: f.location.trim() || undefined, notes: f.notes.trim() || undefined, ...own });
         onClose();
       },
-      'Event added',
+      event ? 'Event changed' : 'Event added',
     );
   return (
     <Modal
-      title="New event"
+      title={event ? 'Edit event' : 'New event'}
+      description={event && event.repeat !== 'none' ? 'Changes apply every time it repeats.' : undefined}
       onClose={onClose}
       footer={
         <>
           <span className="fx-spacer" />
           <Button onClick={onClose}>Cancel</Button>
-          <Button variant="primary" loading={busy === 'save'} disabled={!f.title.trim() || !f.target || (!f.allDay && f.end <= f.start)} onClick={() => void save()}>
-            Add event
+          <Button variant="primary" loading={busy === 'save'} disabled={!f.title.trim() || timesWrong || untilWrong || (!!f.linkKind && !f.linkId)} onClick={() => void save()}>
+            {event ? 'Save' : 'Add event'}
           </Button>
         </>
       }
@@ -759,34 +936,98 @@ function NewEvent({ accounts, date, hour, onClose }: { accounts: CalendarAccount
           <Input autoFocus value={f.title} onChange={(e) => set({ title: e.target.value })} maxLength={255} />
         </Field>
         <div className="fx-row">
-          <Field label="Day">
-            <Input type="date" value={f.day} onChange={(e) => set({ day: e.target.value })} />
+          <Field label={f.repeat !== 'none' ? 'First day' : 'Day'}>
+            <Input type="date" value={f.day} onChange={(e) => set({ day: e.target.value, lastDay: e.target.value > f.lastDay ? e.target.value : f.lastDay })} />
           </Field>
-          {!f.allDay && (
+          {f.allDay ? (
+            <Field label="Last day">
+              <Input type="date" value={f.lastDay} min={f.day} onChange={(e) => set({ lastDay: e.target.value })} />
+            </Field>
+          ) : (
             <>
               <Field label="Starts">
                 <Input type="time" value={f.start} onChange={(e) => set({ start: e.target.value, end: e.target.value >= f.end ? `${pad(Math.min(23, Number(e.target.value.slice(0, 2)) + 1))}:${e.target.value.slice(3)}` : f.end })} />
               </Field>
-              <Field label="Ends" error={f.end <= f.start ? 'Ends before it starts' : undefined}>
+              <Field label="Ends" error={timesWrong ? 'Ends before it starts' : undefined}>
                 <Input type="time" value={f.end} onChange={(e) => set({ end: e.target.value })} />
               </Field>
             </>
           )}
         </div>
         <Toggle checked={f.allDay} onChange={(v) => set({ allDay: v })} label="All day" />
+        {fbrx && (
+          <>
+            <div className="fx-row">
+              <Field label="Repeats">
+                <Select value={f.repeat} onChange={(e) => set({ repeat: e.target.value as CalendarRepeat })} options={CALENDAR_REPEATS.map((r) => ({ value: r, label: REPEATS[r] }))} />
+              </Field>
+              {f.repeat !== 'none' && (
+                <Field label="Until" help={f.until ? undefined : 'Empty: for good'} error={untilWrong ? 'Before it starts' : undefined}>
+                  <Input type="date" value={f.until} min={f.day} onChange={(e) => set({ until: e.target.value })} />
+                </Field>
+              )}
+            </div>
+            <div className="fx-row">
+              <Field label="About" help="It takes the color of what it is about.">
+                <Select
+                  value={f.linkKind}
+                  onChange={(e) => set({ linkKind: e.target.value as CalendarLinkKind | '', linkId: '' })}
+                  options={[{ value: '', label: 'Nothing in particular' }, ...(Object.keys(LINKS) as CalendarLinkKind[]).map((k) => ({ value: k, label: LINKS[k].label }))]}
+                />
+              </Field>
+              {f.linkKind && (
+                <Field label={LINKS[f.linkKind].label}>
+                  <Select value={f.linkId} onChange={(e) => set({ linkId: e.target.value })} options={[{ value: '', label: options.length ? 'Choose…' : `No ${f.linkKind === 'project' ? 'projects' : KINDS_SHOWN[f.linkKind].toLowerCase()} yet` }, ...options]} />
+                </Field>
+              )}
+            </div>
+            <Field label="Color" help={f.color ? 'Its own color.' : 'Automatic: its project’s color, else what it is about, else the calendar’s.'}>
+              <div className="cal-colors" role="radiogroup" aria-label="Color">
+                <button type="button" role="radio" aria-checked={f.color === null} aria-label="Automatic" title="Automatic" className={`auto${f.color === null ? ' active' : ''}`} style={{ background: auto }} onClick={() => set({ color: null })} />
+                {CALENDAR_COLORS.map((c) => (
+                  <button key={c} type="button" role="radio" aria-checked={c === f.color} aria-label={c} className={c === f.color ? 'active' : undefined} style={{ background: c }} onClick={() => set({ color: c })} />
+                ))}
+              </div>
+            </Field>
+          </>
+        )}
         <Field label="Where">
           <Input value={f.location} onChange={(e) => set({ location: e.target.value })} maxLength={255} />
         </Field>
         <Field label="Notes">
           <TextArea rows={3} value={f.notes} onChange={(e) => set({ notes: e.target.value })} maxLength={4000} />
         </Field>
-        {targets.length > 1 && (
-          <Field label="Calendar">
-            <Select value={f.target} onChange={(e) => set({ target: e.target.value })} options={targets.map(({ value, label }) => ({ value, label }))} />
+        {!event && targets.length > 1 && (
+          <Field label="Calendar" help={fbrx ? undefined : 'Outlook events do not repeat from FBRX or take a project’s color.'}>
+            <Select value={f.target} onChange={(e) => set({ target: e.target.value })} options={targets} />
           </Field>
         )}
       </div>
     </Modal>
+  );
+}
+
+// ------------------------------------------------------------------------------------------------ colors
+
+/** What the colors on screen stand for: projects, what events are about, who added them, and the calendars. */
+function Legend({ events, agentName }: { events: CalendarEvent[]; agentName: string }) {
+  const entries = new Map<string, string>();
+  for (const e of events) {
+    if (e.ownColor) continue;
+    const label = e.link?.project ? e.link.project.name : e.link && e.link.kind !== 'project' ? KINDS_SHOWN[e.link.kind] : e.madeBy === 'fabrix' ? `Added by ${agentName}` : e.accountName;
+    if (!entries.has(label)) entries.set(label, e.color);
+  }
+  if (!entries.size) return null;
+  return (
+    <Card title="Colors">
+      <div className="cal-legend">
+        {[...entries].map(([label, color]) => (
+          <span key={label}>
+            <span className="cal-dot" style={{ background: color }} /> {label}
+          </span>
+        ))}
+      </div>
+    </Card>
   );
 }
 

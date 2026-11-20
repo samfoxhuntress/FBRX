@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  FBRX Mobile talks to the FBRX computer at its address on the local network over plain http (every request and reply
+  is sealed end to end by the app itself, with keys made at pairing). Android allows plain http only where this says
+  so; computers have no fixed name, so it is allowed in general. The FBRX account is always reached over https.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

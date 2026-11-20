@@ -5,13 +5,14 @@ import { call } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { IS_WINDOWS, navigate } from '../app';
 import { AskButton, askAgent } from '../widgets';
+import { NotificationsTab } from './alerts-notifications';
 
 const CHANNEL_LABEL: Record<AlertChannel, string> = { inbox: 'Inbox', desktop: 'Desktop', mobile: 'Phone', organisation: 'Organization', webhook: 'Webhook', email: 'Email' };
 const SEV: AlertSeverity[] = ['info', 'warning', 'critical'];
 type Alerts = Settings['alerts'];
 
 export function AlertsPage() {
-  const [tab, setTab] = useState<'inbox' | 'rules' | 'delivery'>('inbox');
+  const [tab, setTab] = useState<'inbox' | 'rules' | 'notifications' | 'delivery'>('inbox');
   const [unreadOnly, setUnreadOnly] = useState(false);
   const inbox = useCore('alerts.inbox', { limit: 300, unreadOnly }, ['alerts.changed']);
   const rules = useCore('alerts.rules', undefined, ['settings.changed']);
@@ -64,6 +65,7 @@ export function AlertsPage() {
         tabs={[
           { id: 'inbox', label: 'Inbox' },
           { id: 'rules', label: 'Rules' },
+          { id: 'notifications', label: 'Notifications' },
           { id: 'delivery', label: 'Delivery' },
         ]}
         active={tab}
@@ -126,6 +128,8 @@ export function AlertsPage() {
           ))}
         </Grid>
       )}
+
+      {tab === 'notifications' && settings.data && <NotificationsTab settings={settings.data.settings} locked={locked} />}
 
       {tab === 'delivery' && cfg && (
         <>

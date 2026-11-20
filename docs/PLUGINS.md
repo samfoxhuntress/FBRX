@@ -191,5 +191,6 @@ when the vault is locked, …). Calls made through the Local API are audited wit
 | `fs.write_file`, `fs.make_dir`, `fs.delete_file` | write | Guardian blocks writes into system locations |
 | `shell.run` | execute | Blocked patterns, timeout, working-directory confinement |
 | `http.request` | network | Domain allow/block lists, private-network and rebinding protection |
-| `system.info`, `system.processes`, `system.notify`, `time.now`, `fbrx.status`, `fbrx.audit_recent` | read | |
+| `system.info`, `system.processes`, `system.notify`, `time.now`, `fbrx.status`, `fbrx.audit_recent` | read | A notification's title starts with the AI's name; at most 3 a minute and 20 an hour |
+| `mesh.consult` | network | Sends the question to another computer's AI; an offline chat asks to go online first |
 | `memory.remember`, `memory.recall`, `memory.forget` | write / read / write | Long-term memory stored locally; allowed without approval by the built-in policy rule |

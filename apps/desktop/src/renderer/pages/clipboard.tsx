@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Settings, TextStep } from '@fbrx/shared';
 import { TEXT_OPS, applySteps, textOp } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Icons, Input, Page, TextArea, Toggle, timeAgo, useAction, useToast } from '@fbrx/ui';
-import { bridge, call, clipHistory, readClipboard, writeClipboard, type ClipEntry } from '../client';
+import { bridge, call, clipHistory, copyClip, readClipboard, writeClipboard, type ClipEntry } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { navigate, routeArg } from '../app';
 import { AskButton } from '../widgets';
@@ -130,7 +130,7 @@ export function ClipboardPage() {
   };
 
   const hist = history.state;
-  const entries = (hist?.entries ?? []).filter((e) => !histQ || e.text.toLowerCase().includes(histQ.toLowerCase()));
+  const entries = (hist?.entries ?? []).filter((e) => !histQ || (e.image ? `picture image ${e.image.width}x${e.image.height}` : e.text).toLowerCase().includes(histQ.toLowerCase()));
   const histLocked = isLocked(s.data?.locked, 'clipboard.history');
 
   return (
@@ -303,23 +303,29 @@ export function ClipboardPage() {
               </Button>
             }
           >
-            Turn it on to keep the last 50 things you copy, so you can paste any of them again. Copies that password managers mark as secret are skipped.
+            Turn it on to keep the last 50 things you copy, text and pictures, so you can paste any of them again. Copies that password managers mark as secret are skipped.
           </Empty>
         ) : !entries.length ? (
-          <Empty title={histQ ? 'Nothing matches' : 'Nothing copied yet'}>{histQ ? 'Try another word.' : 'Copy some text anywhere and it shows up here.'}</Empty>
+          <Empty title={histQ ? 'Nothing matches' : 'Nothing copied yet'}>{histQ ? 'Try another word.' : 'Copy text or a picture anywhere and it shows up here.'}</Empty>
         ) : (
           <div className="clip-history private">
             {entries.map((e) => (
               <div key={e.id} className={`clip-hist${e.pinned ? ' pinned' : ''}`}>
-                <pre className="clip-hist-text">{e.text.length > 600 ? `${e.text.slice(0, 600)}…` : e.text}</pre>
+                {e.image ? (
+                  <img className="clip-hist-image" src={e.image.thumb} alt={`Copied picture, ${e.image.width} by ${e.image.height}`} />
+                ) : (
+                  <pre className="clip-hist-text">{e.text.length > 600 ? `${e.text.slice(0, 600)}…` : e.text}</pre>
+                )}
                 <div className="clip-hist-bar">
                   <span className="fx-muted">
-                    {timeAgo(e.at)} · {e.text.length.toLocaleString()} chars
+                    {timeAgo(e.at)} · {e.image ? `picture ${e.image.width} × ${e.image.height}` : `${e.text.length.toLocaleString()} chars`}
                   </span>
-                  <Button size="sm" variant="ghost" onClick={() => setInput(e.text)}>
-                    Edit
-                  </Button>
-                  <Button size="sm" variant="ghost" icon="copy" aria-label="Copy again" onClick={() => void writeClipboard(e.text).then(() => toast.success('Copied'))} />
+                  {!e.image && (
+                    <Button size="sm" variant="ghost" onClick={() => setInput(e.text)}>
+                      Edit
+                    </Button>
+                  )}
+                  <Button size="sm" variant="ghost" icon="copy" aria-label="Copy again" onClick={() => void (e.image ? copyClip(e.id) : writeClipboard(e.text)).then(() => toast.success('Copied'))} />
                   <Button size="sm" variant="ghost" icon="bookmark" aria-label={e.pinned ? 'Unpin' : 'Pin'} title={e.pinned ? 'Unpin' : 'Pin (kept when you clear)'} className={e.pinned ? 'on' : undefined} onClick={() => history.act('pin', e.id, !e.pinned)} />
                   <Button size="sm" variant="ghost" icon="x" aria-label="Remove" onClick={() => history.act('remove', e.id)} />
                 </div>

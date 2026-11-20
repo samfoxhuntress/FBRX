@@ -5,7 +5,7 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { SimulatedApplier } from '@fbrx/gate/node';
 import type { GateConfig } from '@fbrx/gate';
 import { loadConfig } from '../src/config';
-import { buildServer, type BuiltVirtual } from '../src/server';
+import { buildServer, gateStarter, type BuiltVirtual } from '../src/server';
 
 // FBRX Server with the gate role only (no virtual machines), FBRX Gate applying to a simulated system.
 let dir: string;
@@ -86,6 +86,14 @@ describe('FBRX Server as a gate', () => {
     expect(s.ctx.audit.list(20).map((e) => e.action)).toEqual(expect.arrayContaining(['gate.commit', 'gate.confirm']));
     const live = await req('GET', '/v1/gate/live', viewer);
     expect(live.body.interfaces.map((i: { name: string }) => i.name)).toEqual(['eno1', 'eno2']);
+
+    // Letting a device's address go: not for viewers, at once for administrators, and in the audit log.
+    const lease = (live.body.leases as Array<{ mac: string; address: string; expires: string | null }>).find((l) => l.expires)!;
+    expect((await req('POST', '/v1/gate/leases/release', viewer, { mac: lease.mac, address: lease.address })).status).toBe(403);
+    expect((await req('POST', '/v1/gate/leases/release', admin, { mac: lease.mac, address: '10.9.9.9' })).status).toBe(404);
+    expect((await req('POST', '/v1/gate/leases/release', admin, { mac: lease.mac, address: lease.address })).status).toBe(200);
+    expect((await req('GET', '/v1/gate/live', viewer)).body.leases.some((l: { mac: string }) => l.mac === lease.mac)).toBe(false);
+    expect(s.ctx.audit.list(5).map((e) => e.action)).toContain('gate.lease.release');
   });
 
   it('makes a VPN device with its settings and a QR code, keeping only its public key', async () => {
@@ -147,6 +155,21 @@ describe('a gate set up by the installer', () => {
       await again.close();
       rmSync(d, { recursive: true, force: true });
     }
+  });
+
+  it('keeps your network clear of the router in front, and a fixed internet address with the port', () => {
+    const base = { FBRX_V_ROLES: 'gate', FBRX_V_GATE_WAN: 'eno1', FBRX_V_GATE_LAN: 'eno2', FBRX_V_TLS: 'off' };
+    // The internet port got 192.168.1.37 from a home router: the gate's own network is not 192.168.1.x.
+    const behindRouter = gateStarter(loadConfig(base), { eno1: [{ family: 'IPv4', cidr: '192.168.1.37/24' }] });
+    expect(behindRouter.networks[0].address).toBe('192.168.10.1/24');
+    expect(behindRouter.wan.mode).toBe('dhcp');
+    // What the installer chose wins (it saw the same and wrote it down).
+    expect(gateStarter(loadConfig({ ...base, FBRX_V_GATE_LAN_ADDRESS: '192.168.50.1/24' }), {}).networks[0]).toMatchObject({ address: '192.168.50.1/24', dhcp: { start: '192.168.50.100' } });
+    const fixed = gateStarter(loadConfig({ ...base, FBRX_V_GATE_WAN_ADDRESS: '203.0.113.2/29', FBRX_V_GATE_WAN_GATEWAY: '203.0.113.1' }), {});
+    expect(fixed.wan).toMatchObject({ mode: 'static', address: '203.0.113.2/29', gateway: '203.0.113.1' });
+    expect(fixed.networks[0].address).toBe('192.168.1.1/24');
+    // Half a fixed address is no fixed address.
+    expect(loadConfig({ ...base, FBRX_V_GATE_WAN_ADDRESS: '203.0.113.2/29' }).gate.wanStatic).toBeNull();
   });
 });
 

@@ -69,6 +69,29 @@ describe('agent (OpenAI-compatible / local runtime protocol)', () => {
     }
   });
 
+  it('does not run the same call over and over: the model is shown what it got, then asked to answer', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    // A model stuck on one tool: it calls it whenever it may, and answers only once it has no tools left.
+    const llm = await mockOpenAI((body) => (body.tools?.length ? { tool: { name: 'time__now', args: {} } } : { text: 'It is about noon.' }));
+    try {
+      kernel.settings.update({
+        ai: { defaultProvider: 'mock', defaultModel: 'm', providers: [...DEFAULT_PROVIDERS, { id: 'mock', type: 'openai-compatible', name: 'Mock', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] },
+      });
+      const r = await kernel.agent.runToCompletion({ message: 'What time is it?', origin: 'user', actor: 'u' });
+      expect(r.status).toBe('completed');
+      expect(r.answer).toContain('noon');
+      // It ran once; the two repeats were not run, and the model saw why.
+      expect(kernel.audit.query({ category: 'tool', limit: 10 }).filter((e) => e.action === 'time.now')).toHaveLength(1);
+      const tools = kernel.conversations.get(r.conversationId).messages.filter((m) => m.role === 'tool');
+      expect(tools).toHaveLength(3);
+      expect(tools[1].content).toMatch(/^Not run again/);
+      expect(llm.requests.filter((q) => q.body.messages).length).toBe(4);
+    } finally {
+      await llm.close();
+      await cleanup();
+    }
+  });
+
   it('refuses cloud providers when policy forbids them', async () => {
     const { kernel, cleanup } = await makeKernel();
     try {

@@ -5,7 +5,7 @@
  * stay on the validated design-system palette in every preset.
  */
 
-/* ------------------------------------------------------------------------------------- Fabrics (amber) */
+/* ----------------------------------------------------------------- Honey (id fabrics: golden honey) */
 :root[data-preset='fabrics'] {
   --page: #f6f2ea;
   --surface-1: #fffdf8;
@@ -19,70 +19,88 @@
   --border-strong: rgba(27, 22, 16, 0.18);
   --grid: #e6dece;
   --axis: #c9bda8;
-  --accent: #a35f08;
-  --accent-hover: #8a5006;
+  --accent: #946000;
+  --accent-hover: #7a4f00;
   --accent-ink: #ffffff;
-  --accent-wash: rgba(181, 107, 12, 0.12);
-  --focus: rgba(181, 107, 12, 0.4);
+  --accent-wash: rgba(214, 154, 32, 0.13);
+  --focus: rgba(214, 154, 32, 0.42);
 }
 :root[data-preset='fabrics'][data-theme='dark'] {
-  --page: #100e0b;
-  --surface-1: #1a1714;
-  --surface-2: #221e1a;
-  --surface-3: #2d2822;
-  --sidebar: #13110e;
-  --text-primary: #f6f1e9;
-  --text-secondary: #cfc5b4;
-  --text-muted: #91877a;
-  --border: rgba(246, 226, 196, 0.1);
-  --border-strong: rgba(246, 226, 196, 0.18);
-  --grid: #2d2822;
-  --axis: #3b352d;
-  --accent: #f0a530;
-  --accent-hover: #f6b955;
+  /* A cool page; the theme's color is on the elements (accent, glow, section colors). */
+  --page: #0d1015;
+  --surface-1: #161a20;
+  --surface-2: #1d222a;
+  --surface-3: #272d36;
+  --sidebar: #10141a;
+  --text-primary: #f2f4f7;
+  --text-secondary: #c3c9d2;
+  --text-muted: #858d99;
+  --border: rgba(190, 205, 228, 0.11);
+  --border-strong: rgba(190, 205, 228, 0.2);
+  --grid: #272d36;
+  --axis: #343b46;
+  --accent: #f4b942;
+  --accent-hover: #f8ca6a;
   --accent-ink: #1a1408;
-  --accent-wash: rgba(240, 165, 48, 0.16);
-  --focus: rgba(240, 165, 48, 0.5);
+  --accent-wash: rgba(244, 185, 66, 0.16);
+  --focus: rgba(244, 185, 66, 0.5);
 }
 
-/* ---------------------------------------------------------------------------------- Tropical (sunset) */
-/* Mango orange with a hibiscus-pink glow and a hint of lagoon teal. */
-:root[data-preset='tropical'] {
-  --page: #fff6ec;
-  --surface-1: #fffbf5;
-  --surface-2: #fff0e0;
-  --surface-3: #fde2c6;
-  --sidebar: #fff3e4;
-  --text-primary: #26140a;
-  --text-secondary: #6b4632;
-  --text-muted: #9c735a;
-  --border: rgba(38, 20, 10, 0.1);
-  --border-strong: rgba(38, 20, 10, 0.18);
-  --grid: #f6dcc2;
-  --axis: #e0bc98;
-  --accent: #e8590c;
-  --accent-hover: #c94a08;
+/* ------------------------------------------------------------------------------------ Graphite (blue) */
+/* The design system's neutral page with a blue accent. */
+:root[data-preset='graphite'] {
+  --accent: #2a78d6;
+  --accent-hover: #256abf;
   --accent-ink: #ffffff;
-  --accent-wash: rgba(232, 89, 12, 0.12);
-  --focus: rgba(232, 89, 12, 0.4);
+  --accent-wash: rgba(42, 120, 214, 0.1);
+  --focus: rgba(42, 120, 214, 0.45);
+}
+:root[data-preset='graphite'][data-theme='dark'] {
+  --accent: #3987e5;
+  --accent-hover: #5598e7;
+  --accent-ink: #ffffff;
+  --accent-wash: rgba(57, 135, 229, 0.16);
+  --focus: rgba(57, 135, 229, 0.55);
+}
+
+/* -------------------------------------------------------------------------- Tropical (FBRX's own) */
+/*
+ * The default: honey running into red on calm, neutral pages. The page stays out of the way and the color is on the
+ * things you use: buttons, the current page, switches and section icons wear the honey-to-red gradient
+ * (--accent-fill, from the design system); text and icons wear the mango accent.
+ */
+:root[data-preset='tropical'] {
+  --page: #f5f5f3;
+  --surface-1: #ffffff;
+  --surface-2: #f2f2ef;
+  --surface-3: #e7e6e2;
+  --sidebar: #fafaf8;
+  --text-primary: #1c1b19;
+  --text-secondary: #5c5954;
+  --text-muted: #8b8882;
+  --grid: #e4e3de;
+  --axis: #c6c4bc;
+  --accent: #c8410e;
+  --accent-hover: #a93509;
+  --accent-ink: #ffffff;
+  --accent-wash: rgba(255, 122, 61, 0.12);
+  --focus: rgba(255, 122, 61, 0.45);
 }
 :root[data-preset='tropical'][data-theme='dark'] {
-  --page: #150b07;
-  --surface-1: #20120c;
-  --surface-2: #2a1810;
-  --surface-3: #372015;
-  --sidebar: #180d08;
-  --text-primary: #fff3e8;
-  --text-secondary: #f1cdb2;
-  --text-muted: #b3876b;
-  --border: rgba(255, 196, 150, 0.12);
-  --border-strong: rgba(255, 196, 150, 0.2);
-  --grid: #372015;
-  --axis: #4a2c1d;
+  --page: #0f1013;
+  --surface-1: #17191c;
+  --surface-2: #1e2024;
+  --surface-3: #282a2f;
+  --sidebar: #121316;
+  --text-primary: #f5f5f7;
+  --text-secondary: #c3c5cb;
+  --text-muted: #8a8d95;
+  --grid: #282a2f;
+  --axis: #363940;
   --accent: #ffa23a;
   --accent-hover: #ffb862;
-  --accent-ink: #2a1200;
-  --accent-wash: rgba(255, 162, 58, 0.16);
+  --accent-ink: #2b1000;
+  --accent-wash: rgba(255, 162, 58, 0.15);
   --focus: rgba(255, 162, 58, 0.5);
 }
 
@@ -146,18 +164,19 @@
   --focus: rgba(194, 65, 12, 0.4);
 }
 :root[data-preset='ember'][data-theme='dark'] {
-  --page: #110c0a;
-  --surface-1: #1b1412;
-  --surface-2: #241b18;
-  --surface-3: #30241f;
-  --sidebar: #140f0d;
-  --text-primary: #fbf1ec;
-  --text-secondary: #d6c3ba;
-  --text-muted: #998479;
-  --border: rgba(255, 220, 205, 0.1);
-  --border-strong: rgba(255, 220, 205, 0.18);
-  --grid: #30241f;
-  --axis: #3f302a;
+  /* A cool page; the theme's color is on the elements (accent, glow, section colors). */
+  --page: #0e0f13;
+  --surface-1: #17191f;
+  --surface-2: #1e2128;
+  --surface-3: #282b33;
+  --sidebar: #111317;
+  --text-primary: #f4f4f6;
+  --text-secondary: #c6c8cf;
+  --text-muted: #878a94;
+  --border: rgba(200, 205, 220, 0.11);
+  --border-strong: rgba(200, 205, 220, 0.19);
+  --grid: #282b33;
+  --axis: #353943;
   --accent: #ff6b3d;
   --accent-hover: #ff875f;
   --accent-ink: #1c0c06;
@@ -342,18 +361,19 @@
   --shadow: none;
 }
 :root[data-preset='paper'][data-theme='dark'] {
-  --page: #1a1611;
-  --surface-1: #231e17;
-  --surface-2: #2b251d;
-  --surface-3: #362e24;
-  --sidebar: #1d1914;
-  --text-primary: #f3e9d7;
-  --text-secondary: #cdbfa6;
-  --text-muted: #948670;
-  --border: rgba(243, 233, 215, 0.12);
-  --border-strong: rgba(243, 233, 215, 0.2);
-  --grid: #362e24;
-  --axis: #453b2e;
+  /* A cool page; the theme's color is on the elements (accent, glow, section colors). */
+  --page: #121418;
+  --surface-1: #1b1e24;
+  --surface-2: #22262d;
+  --surface-3: #2c3038;
+  --sidebar: #15181d;
+  --text-primary: #eef0f3;
+  --text-secondary: #c3c7ce;
+  --text-muted: #8a8f99;
+  --border: rgba(220, 225, 235, 0.12);
+  --border-strong: rgba(220, 225, 235, 0.2);
+  --grid: #2c3038;
+  --axis: #393e47;
   --accent: #d9a066;
   --accent-hover: #e3b483;
   --accent-ink: #1d1409;
@@ -402,11 +422,31 @@
   --focus: rgba(255, 212, 0, 0.75);
 }
 
+/* ------------------------------------------------------------------------------------- Accent fill */
+/*
+ * Filled things (primary buttons, the current page, switches, progress) wear --accent-fill. Tropical keeps the design
+ * system's honey-to-red; the other themes light their own accent from above, high contrast stays flat, and a custom
+ * accent (theme.ts) does the same as the themes.
+ */
+:root[data-preset]:not([data-preset='tropical']) {
+  --accent-from: color-mix(in srgb, var(--accent) 86%, #ffffff);
+  --accent-to: var(--accent);
+  --accent-fill: linear-gradient(180deg, var(--accent-from) 0%, var(--accent-to) 100%);
+  --accent-fill-ink: var(--accent-ink);
+}
+:root[data-preset='contrast'] {
+  --accent-from: var(--accent);
+  --accent-to: var(--accent);
+  --accent-fill: linear-gradient(var(--accent), var(--accent));
+  --radius-btn: 4px;
+}
+
 /* ------------------------------------------------------------------------------------------ Radius */
 :root[data-radius='sharp'] {
   --radius-sm: 2px;
   --radius: 3px;
   --radius-lg: 4px;
+  --radius-btn: 3px;
 }
 :root[data-radius='soft'] {
   --radius-sm: 10px;
@@ -457,7 +497,7 @@
 
 /* ----------------------------------------------------------------------------------------- Texture */
 /*
- * --texture is an SVG tile drawn by theme.ts in the theme's ink (each theme has its own: weave for Fabrics, palms for
+ * --texture is an SVG tile drawn by theme.ts in the theme's ink (each theme has its own: weave for Honey, palms for
  * Tropical…). It lies on the sidebar and top bar (with the gradients below) and on the page behind the cards.
  */
 :root {
@@ -488,10 +528,10 @@
   --glow-2: transparent;
   --glow-strength: 1;
 }
-:root[data-preset='fabrics'] { --glow: #c7c7c4; }
-:root[data-preset='tropical'] { --glow: #ff9f6b; --glow-2: #5fd3c6; }
-:root[data-preset='tropical'][data-theme='dark'] { --glow: #ff4f81; --glow-2: #0f8f86; }
-:root[data-preset='fabrics'][data-theme='dark'] { --glow: #b4b4b0; }
+:root[data-preset='fabrics'] { --glow: #e6c06a; }
+:root[data-preset='tropical'] { --glow: #ffb547; --glow-2: #ff4d5e; }
+:root[data-preset='tropical'][data-theme='dark'] { --glow: #ff8a3d; --glow-2: #ff4d5e; }
+:root[data-preset='fabrics'][data-theme='dark'] { --glow: #a87614; }
 :root[data-preset='neon'] { --glow: #5ccfff; --glow-2: #ff9d4d; }
 :root[data-preset='neon'][data-theme='dark'] { --glow: #0066ff; --glow-2: #ff6a00; }
 :root[data-preset='ember'] { --glow: #ef9a7a; }
@@ -509,8 +549,9 @@
 :root[data-preset='paper'] { --glow: #d9b98c; }
 :root[data-preset='paper'][data-theme='dark'] { --glow: #5c3e1f; }
 :root[data-theme='light'] { --glow-strength: 0.55; }
-/* Endpoint Basic: plain light and dark, no glows (gradients and textures come with Ultra). */
-:root[data-edition='basic'][data-theme] { --glow-strength: 0; }
+/* Tropical keeps its pages calm: a breath of honey and red, not a wash. */
+:root[data-preset='tropical'] { --glow-strength: 0.7; }
+:root[data-preset='tropical'][data-theme='light'] { --glow-strength: 0.35; }
 
 :root:not([data-preset='contrast']) .fx-sidebar {
   /* A soft wash of the theme's glow at the top, and only a whisper of texture that fades out behind the menu. */
@@ -531,20 +572,13 @@
     radial-gradient(900px 520px at 100% 100%, color-mix(in srgb, var(--glow-2) calc(9% * var(--glow-strength)), transparent), transparent 70%),
     var(--page);
 }
-:root[data-preset='tropical'] .fx-btn.primary {
-  background: linear-gradient(135deg, #ffb347 0%, var(--accent) 55%, #ff4f81 130%);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
-    0 4px 12px -6px color-mix(in srgb, var(--accent) 65%, transparent);
-}
-:root[data-preset='tropical'][data-theme='light'] .fx-btn.primary {
-  background: linear-gradient(135deg, #f7891f 0%, var(--accent) 55%, #d6336c 130%);
-}
 :root:not([data-preset='contrast']) .fx-btn.primary:hover:not(:disabled) {
   filter: brightness(1.06);
 }
 :root:not([data-preset='contrast']) .fx-tab.active {
-  background: linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--accent) 10%, transparent) 100%);
+  background:
+    var(--accent-fill) bottom / 100% 2px no-repeat,
+    linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--accent) 8%, transparent) 100%);
 }
 :root:not([data-preset='contrast']) .fx-brand-mark {
   filter: drop-shadow(0 0 10px color-mix(in srgb, var(--glow) calc(60% * var(--glow-strength)), transparent));
@@ -579,6 +613,11 @@
   transform-origin: 50% 50%;
   opacity: 0;
   animation: splash-letters 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) 0.6s forwards;
+}
+/* FBRX Digger's mole pops up the way the letters do. */
+.splash-mole {
+  opacity: 0;
+  animation: splash-letters 0.6s cubic-bezier(0.2, 0.8, 0.3, 1) 0.3s forwards;
 }
 .splash-word {
   margin-top: 20px;
@@ -805,7 +844,7 @@
   z-index: 1;
 }
 
-/* ------------------------------------------------------------------------------------------ FBRX Glass */
+/* ------------------------------------------------------------------------------------------------ Dash */
 /*
  * The dashboard: classic glass. Panels are frosted and see-through, with a glossy upper half like old-school
  * desktop glass, over a soft aurora in the theme's colors. High contrast keeps solid panels.
@@ -821,8 +860,11 @@
 }
 .glass-aurora {
   position: absolute;
-  inset: -40px -60px auto;
+  /* It starts at the page and fades in, so nothing is cut off in a hard line under the top bar. */
+  inset: 0 -60px auto;
   height: 620px;
+  -webkit-mask-image: linear-gradient(180deg, transparent 0, #000 140px);
+  mask-image: linear-gradient(180deg, transparent 0, #000 140px);
   z-index: 0;
   pointer-events: none;
   background:
@@ -857,7 +899,7 @@
     0 1px 2px rgba(0, 0, 0, 0.05),
     0 18px 36px -26px rgba(0, 0, 0, 0.35);
 }
-/* The gloss: a bright upper half that stops at a soft line, like a pane of glass catching the light. */
+/* The sheen: light catching the top edge of the glass, fading out before the middle. */
 .glass-dash .fx-card,
 .glass-tile,
 .glass-hero {
@@ -871,7 +913,7 @@
   inset: 0;
   border-radius: inherit;
   pointer-events: none;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.14) 0%, rgba(255, 255, 255, 0.045) 46%, transparent 47%);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.1) 0%, rgba(255, 255, 255, 0.025) 38%, transparent 60%);
 }
 .glass-hero {
   display: grid;
@@ -899,7 +941,10 @@
   color: var(--text-secondary);
 }
 .glass-eyebrow b {
-  color: var(--accent);
+  background: var(--accent-fill);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
   font-weight: 800;
 }
 .glass-sub {
@@ -939,11 +984,16 @@
   font-variant-numeric: tabular-nums;
 }
 .glass-ring-text span {
-  font-size: 10.5px;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
   color: var(--text-secondary);
   margin-top: 4px;
+  /* "Needs attention" takes two short lines inside the ring instead of running over it. */
+  max-width: 72px;
+  text-align: center;
+  line-height: 1.2;
+  overflow-wrap: break-word;
 }
 .glass-insights {
   display: grid;
@@ -1002,33 +1052,20 @@
   line-height: 1.4;
 }
 
-/* Screws: the hero is bolted on at four corners. One tile is not. */
+/* Screws: the hero is bolted on at four corners, with plain flat bolt heads. One tile is not. */
 .screw {
   position: absolute;
-  width: 9px;
-  height: 9px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 35%, #f6f8fa, #9aa1aa 62%, #6b717a);
-  box-shadow:
-    inset 0 0 0 0.5px rgba(0, 0, 0, 0.35),
-    0 1px 1.5px rgba(0, 0, 0, 0.35);
+  background: color-mix(in srgb, var(--text-primary) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--text-primary) 12%, transparent);
   z-index: 2;
   transition: transform 0.25s ease;
 }
-.screw::after {
-  content: '';
-  position: absolute;
-  left: 1.5px;
-  right: 1.5px;
-  top: 50%;
-  height: 1.3px;
-  margin-top: -0.65px;
-  background: rgba(40, 40, 44, 0.75);
-  transform: rotate(45deg);
-}
 .glass-hero .screw {
-  width: 11px;
-  height: 11px;
+  width: 8px;
+  height: 8px;
 }
 .s-tl {
   top: 8px;
@@ -1164,7 +1201,7 @@
     inset 0 2px 10px rgba(0, 0, 0, 0.7),
     0 1px 0 rgba(255, 255, 255, 0.08);
   font-family: var(--mono);
-  font-size: clamp(12px, 1.45vw, 22px);
+  font-size: clamp(14px, 1.8vw, 27px);
   font-weight: 700;
   user-select: none;
 }
@@ -1292,7 +1329,7 @@
   height: 16px;
   margin-top: -8px;
   border-radius: 3px;
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 70%, #ffffff), var(--accent));
+  background: var(--accent-fill);
 }
 :root:not([data-preset='contrast'])[data-theme='dark'] .fx-card {
   background: var(--surface-1);
@@ -1305,19 +1342,12 @@
   box-shadow: var(--shadow);
 }
 :root:not([data-preset='contrast']) .fx-btn {
-  border-radius: 8px;
+  border-radius: var(--radius-btn);
   transition:
     background 0.15s ease,
     border-color 0.15s ease,
     box-shadow 0.15s ease,
     filter 0.15s ease;
-}
-:root:not([data-preset='contrast']):not([data-preset='tropical']) .fx-btn.primary {
-  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 86%, #ffffff) 0%, var(--accent) 100%);
-  border-color: color-mix(in srgb, var(--accent) 85%, #000000);
-  box-shadow:
-    inset 0 1px 0 rgba(255, 255, 255, 0.25),
-    0 4px 12px -6px color-mix(in srgb, var(--accent) 65%, transparent);
 }
 :root:not([data-preset='contrast']) .fx-input,
 :root:not([data-preset='contrast']) .fx-select,
@@ -1365,4 +1395,295 @@
 }
 :root[data-effects='light'] .fx-card {
   box-shadow: none !important;
+}
+
+/* ------------------------------------------------------------------ Color on the elements (dark mode) */
+/*
+ * Dark mode keeps the page itself cool and quiet (slate neutrals in every theme) and puts the color on the things
+ * you use: each sidebar section has its own color, cards carry a breath of the theme's accent, and table heads,
+ * buttons and the current page pick it up too. The page glow is softer than the sidebar's. High contrast stays flat.
+ */
+:root {
+  --sec-command: #4c8dff;
+  --sec-workspace: #a78bfa;
+  --sec-care: #f5a524;
+  --sec-utilities: #2dd4bf;
+  --sec-connect: #38bdf8;
+  --sec-protect: #34d399;
+  --sec-advanced: #f472b6;
+  --sec-system: #94a3b8;
+}
+:root[data-theme='light'] {
+  --sec-command: #2a6fd6;
+  --sec-workspace: #7c5cd6;
+  --sec-care: #c27800;
+  --sec-utilities: #0f9488;
+  --sec-connect: #0284c7;
+  --sec-protect: #0d9f6e;
+  --sec-advanced: #d0397f;
+  --sec-system: #64748b;
+}
+/* Sections by name (the grouped sidebar) and by heading (Essentials' short list). */
+.fx-group[data-group='glass'],
+[data-section='Command'],
+[data-section='Your AI'] { --hue: var(--sec-command); }
+.fx-group[data-group='studio'],
+[data-section='Workspace'] { --hue: var(--sec-workspace); }
+.fx-group[data-group='pitstop'],
+[data-section='PC care'] { --hue: var(--sec-care); }
+.fx-group[data-group='workbench'],
+[data-section='Utilities'] { --hue: var(--sec-utilities); }
+.fx-group[data-group='orbit'],
+[data-section='Connect'] { --hue: var(--sec-connect); }
+.fx-group[data-group='stronghold'],
+[data-section='Protect'] { --hue: var(--sec-protect); }
+.fx-group[data-group='lab'],
+[data-section='Advanced'] { --hue: var(--sec-advanced); }
+.fx-group[data-group='control'],
+[data-section='System'],
+[data-section='Help & settings'] { --hue: var(--sec-system); }
+
+/*
+ * Settings → Appearance → Sidebar icons (data-nav-icons): one color for every section, the theme's accent (the
+ * default) or one picked (--nav-hue); each section its own (above); or plain. --nav-tint scales the wash behind them.
+ */
+:root[data-nav-icons='accent'] :is(.fx-group, [data-section]) {
+  --hue: var(--accent);
+  --hue-fill: var(--accent-fill);
+  --hue-ink: var(--accent-fill-ink);
+}
+:root[data-nav-icons='custom'] :is(.fx-group, [data-section]) {
+  --hue: var(--nav-hue, var(--accent));
+  --hue-ink: var(--nav-hue-ink, var(--accent-ink));
+}
+:root[data-nav-icons='plain'] :is(.fx-group, [data-section]) {
+  --hue: initial;
+  --hue-ink: var(--accent-ink);
+}
+
+:root:not([data-preset='contrast']) .fx-group .fx-group-icon {
+  color: var(--hue, var(--text-secondary));
+  background: color-mix(in srgb, var(--hue, var(--text-secondary)) calc(13% * var(--nav-tint, 1)), var(--surface-2));
+  border-color: color-mix(in srgb, var(--hue, var(--text-secondary)) calc(28% * var(--nav-tint, 1)), transparent);
+}
+:root:not([data-preset='contrast']) .fx-group.here .fx-group-icon {
+  color: var(--hue-ink, #ffffff);
+  background: var(--hue-fill, linear-gradient(145deg, color-mix(in srgb, var(--hue, var(--accent)) 92%, #ffffff), var(--hue, var(--accent))));
+  border-color: transparent;
+  box-shadow: 0 4px 14px -6px var(--hue, var(--accent));
+}
+:root:not([data-preset='contrast']) .fx-nav-item[data-section] svg {
+  color: color-mix(in srgb, var(--hue, var(--text-secondary)) 85%, var(--text-secondary));
+}
+:root:not([data-preset='contrast']) .fx-nav-item.active[data-section] {
+  background: color-mix(in srgb, var(--hue, var(--accent)) 14%, transparent);
+}
+:root:not([data-preset='contrast']) .fx-nav-item.active[data-section]::before {
+  background: var(--hue-fill, var(--hue, var(--accent)));
+}
+:root:not([data-preset='contrast']) .fx-nav-item.active[data-section] svg {
+  color: var(--hue, var(--accent));
+}
+
+/* Dark mode: a cool page with softer glows, color on cards, table heads, buttons and tabs. */
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-main {
+  background:
+    radial-gradient(1000px 460px at 8% -12%, color-mix(in srgb, var(--glow) calc(7% * var(--glow-strength)), transparent), transparent 70%),
+    radial-gradient(900px 520px at 100% 100%, color-mix(in srgb, var(--glow-2) calc(6% * var(--glow-strength)), transparent), transparent 70%),
+    var(--page);
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-card {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--accent) 6%, var(--surface-1)) 0, var(--surface-1) 120px);
+  border-color: color-mix(in srgb, var(--accent) 14%, var(--border));
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-card-title svg,
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-card-head svg:first-child {
+  color: var(--accent);
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-table th {
+  background: color-mix(in srgb, var(--accent) 7%, var(--surface-2));
+  color: color-mix(in srgb, var(--accent) 35%, var(--text-secondary));
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-btn:not(.primary):not(.danger):not(.danger-solid):not(.ghost) {
+  border-color: color-mix(in srgb, var(--accent) 26%, var(--border-strong));
+  background: color-mix(in srgb, var(--accent) 6%, var(--surface-2));
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-btn:not(.primary):not(.danger):not(.danger-solid):not(.ghost):hover:not(:disabled) {
+  background: color-mix(in srgb, var(--accent) 13%, var(--surface-2));
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-btn.primary {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.18),
+    0 6px 18px -10px var(--accent);
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-badge {
+  border-color: color-mix(in srgb, var(--accent) 30%, var(--border));
+  background: color-mix(in srgb, var(--accent) 10%, var(--surface-2));
+}
+:root:not([data-preset='contrast'])[data-theme='dark'] .fx-tab.active {
+  color: var(--text-primary);
+  background:
+    var(--accent-fill) bottom / 100% 2px no-repeat,
+    linear-gradient(180deg, transparent 0%, color-mix(in srgb, var(--accent) 13%, transparent) 100%);
+}
+
+/* ------------------------------------------------------------------------------- Black Hole (Black Hole Edition) */
+/*
+ * Black Hole Edition's own theme. Deep space with a violet light; a starfield behind the pages, and in the lower
+ * right of the window a black hole: a black core in a thin gold photon ring, with its glowing accretion disk turning
+ * slowly across the front of it (hot gold to magenta to violet). The light version keeps the hole, on a pale sky.
+ */
+:root[data-preset='blackhole'] {
+  --page: #f6f4fb;
+  --surface-1: #ffffff;
+  --surface-2: #f1eef9;
+  --surface-3: #e5e0f3;
+  --sidebar: #f9f8fd;
+  --text-primary: #15111f;
+  --text-secondary: #4d4566;
+  --text-muted: #7d7598;
+  --border: rgba(60, 30, 120, 0.12);
+  --border-strong: rgba(60, 30, 120, 0.2);
+  --grid: #e4dff2;
+  --axis: #c3bbdc;
+  --accent: #6d28d9;
+  --accent-hover: #5b21b6;
+  --accent-ink: #ffffff;
+  --accent-wash: rgba(109, 40, 217, 0.1);
+  --focus: rgba(109, 40, 217, 0.4);
+  --glow: #b79cff;
+  --glow-2: #ff9a4d;
+  --bh-ring: 0.85;
+}
+:root[data-preset='blackhole'][data-theme='dark'] {
+  --page: #050409;
+  --surface-1: #0d0b15;
+  --surface-2: #14111f;
+  --surface-3: #1d192d;
+  --sidebar: #07060d;
+  --text-primary: #f2effc;
+  --text-secondary: #bfb8d8;
+  --text-muted: #8a83a8;
+  --border: rgba(167, 139, 250, 0.14);
+  --border-strong: rgba(167, 139, 250, 0.24);
+  --grid: #1d192d;
+  --axis: #2e2846;
+  --accent: #a78bfa;
+  --accent-hover: #c0aafc;
+  --accent-ink: #12082a;
+  --accent-wash: rgba(167, 139, 250, 0.14);
+  --focus: rgba(167, 139, 250, 0.5);
+  --glow: #5b2fd6;
+  --glow-2: #ff8a3d;
+  --bh-ring: 1;
+}
+/* Filled things carry the disk's light: hot gold into violet (beats the general rule for every theme but Tropical). */
+:root[data-preset='blackhole']:not([data-preset='tropical']) {
+  --accent-from: #7f56e3;
+  --accent-to: #d4434f;
+  /* Main buttons and other filled things: violet into FBRX's orange and red, softly (white text stays readable). */
+  --accent-fill: linear-gradient(105deg, #7f56e3 0%, #b6508f 34%, #d8613a 68%, #d4434f 100%);
+  --accent-fill-ink: #ffffff;
+  --accent-gradient: linear-gradient(135deg, #ffb45a 0%, #ff5fa2 50%, #8b5cf6 100%);
+}
+:root[data-preset='blackhole'][data-theme='dark'] {
+  --accent-from: #b9a3ff;
+  --accent-to: #ff8f97;
+  /* In the dark, the same colors as a pastel glow with dark text: easy on the eyes. */
+  --accent-fill: linear-gradient(105deg, #b9a3ff 0%, #e6a2d0 34%, #ffb38a 68%, #ff8f97 100%);
+  --accent-fill-ink: #1a0b1f;
+}
+:root[data-preset='blackhole'] .fx-btn.primary {
+  box-shadow:
+    inset 0 1px 0 rgba(255, 255, 255, 0.28),
+    0 0 18px -6px rgba(216, 97, 58, 0.55);
+}
+:root[data-preset='blackhole'][data-theme='dark'] .fx-card {
+  border-color: rgba(167, 139, 250, 0.16);
+  box-shadow:
+    inset 0 1px 0 rgba(196, 176, 255, 0.07),
+    0 0 26px -12px rgba(139, 92, 246, 0.45);
+}
+:root[data-preset='blackhole'][data-theme='dark'] .fx-page-header h1 {
+  background: linear-gradient(90deg, #ffffff 0%, #d9ccff 55%, #ffb45a 130%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+:root[data-preset='blackhole'] .fx-sidebar {
+  border-right: 1px solid color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+/* The black hole: fixed to the lower right of the window, behind the pages, and never in the way of a click. */
+@property --bh-spin {
+  syntax: '<angle>';
+  inherits: false;
+  initial-value: 0deg;
+}
+:root[data-preset='blackhole'] .fx-main {
+  position: relative;
+}
+:root[data-preset='blackhole'] .fx-main > * {
+  position: relative;
+  z-index: 1;
+}
+:root[data-preset='blackhole'] .fx-main::before,
+:root[data-preset='blackhole'] .fx-main::after {
+  content: '';
+  position: fixed;
+  pointer-events: none;
+  z-index: 0;
+  border-radius: 50%;
+}
+/* The shadow and its photon ring, with a violet halo. */
+:root[data-preset='blackhole'] .fx-main::before {
+  width: 230px;
+  height: 230px;
+  right: -25px;
+  bottom: -35px;
+  opacity: var(--bh-ring);
+  background: radial-gradient(circle, #000 0 49%, rgba(255, 226, 170, 0.95) 51.5%, rgba(255, 150, 80, 0.6) 54%, rgba(190, 100, 255, 0.28) 60%, rgba(120, 70, 255, 0.08) 68%, transparent 72%);
+  box-shadow: 0 0 90px 24px rgba(110, 60, 255, 0.16);
+}
+/* The accretion disk, tilted and turning; its near side crosses in front of the shadow and is brighter. */
+:root[data-preset='blackhole'] .fx-main::after {
+  width: 640px;
+  height: 640px;
+  right: calc(90px - 320px);
+  bottom: calc(80px - 320px);
+  opacity: calc(var(--bh-ring) * 0.95);
+  background: conic-gradient(
+    from var(--bh-spin),
+    rgba(255, 200, 120, 0.15),
+    rgba(255, 190, 110, 0.85) 12%,
+    rgba(255, 110, 150, 0.55) 30%,
+    rgba(150, 100, 255, 0.25) 48%,
+    rgba(255, 170, 90, 0.12) 62%,
+    rgba(255, 210, 140, 0.7) 82%,
+    rgba(255, 200, 120, 0.15)
+  );
+  -webkit-mask-image: radial-gradient(circle, transparent 0 19%, #000 21.5%, #000 31%, rgba(0, 0, 0, 0.35) 40%, transparent 50%);
+  mask-image: radial-gradient(circle, transparent 0 19%, #000 21.5%, #000 31%, rgba(0, 0, 0, 0.35) 40%, transparent 50%);
+  transform: rotate(-16deg) scaleY(0.24);
+  filter: blur(0.6px);
+  animation: bh-spin 48s linear infinite;
+}
+@keyframes bh-spin {
+  to {
+    --bh-spin: 360deg;
+  }
+}
+:root[data-motion='reduce'][data-preset='blackhole'] .fx-main::after {
+  animation: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  :root[data-preset='blackhole'] .fx-main::after {
+    animation: none;
+  }
+}
+/* Light effects: the disk stays (it is only a gradient), still and sharp. */
+:root[data-effects='light'][data-preset='blackhole'] .fx-main::after {
+  display: block !important;
+  animation: none;
+  filter: none;
 }

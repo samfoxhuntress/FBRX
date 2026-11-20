@@ -1,6 +1,5 @@
 /** Product identity. Changing APP_ID breaks upgrade paths for installed clients. */
 export const PRODUCT_NAME = 'FBRX OS';
-export const PRODUCT_FULL_NAME = 'FBRX OS — Fabrics Operating System';
 export const APP_ID = 'com.fbrx.os';
 
 /** Wire protocol between desktop clients and the control plane. Bump on breaking changes. */

@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
-import { RELEASE_MANIFEST_URL, compareSemver, isValidSemver, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
+import { DIGGER_NAME, RELEASE_MANIFEST_URL, ReleaseManifestSchema, compareSemver, type AppFlavor, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
@@ -19,18 +19,6 @@ import { unzip } from '../util/unzip';
  * newer version, and, when asked, downloads the new version into the same folder and starts the installer there,
  * exactly what the person would otherwise do by hand. The installer closes FBRX, updates it and reopens it.
  */
-
-const ManifestSchema = z.object({
-  version: z.string().refine(isValidSemver, 'not a version'),
-  stage: z.string().max(40).default('Alpha'),
-  codename: z.string().max(60).default(''),
-  released: z.string().max(40).default(''),
-  importance: z.enum(['optional', 'recommended', 'important']).default('recommended'),
-  summary: z.string().max(600).default(''),
-  notes: z.array(z.string().max(400)).max(40).default([]),
-  download: z.string().url(),
-  page: z.string().url(),
-});
 
 /** Written by the setup wizard into the data folder: where FBRX was installed from. */
 export const INSTALL_SOURCE_FILE = 'install-source.json';
@@ -54,10 +42,14 @@ export interface ReleaseCheckerDeps {
   launchInstaller?: (root: string) => string;
   /** A good moment to install by itself (nobody presenting, the agent idle, the computer not in use). */
   quiet?: () => boolean;
+  /** FBRX Digger follows its own entry in release.json, and is downloaded from its release page. */
+  flavor?: AppFlavor;
 }
 
 export class ReleaseChecker {
   private state: ReleaseCheck;
+  /** The other apps' latest releases from the last check, for "Get" (only Digger has its own so far). */
+  private others: { digger?: { version: string; download: string } } = {};
   private timer: NodeJS.Timeout | null = null;
   private busy: Promise<ReleaseCheck> | null = null;
 
@@ -89,6 +81,11 @@ export class ReleaseChecker {
     this.autoTimer = null;
   }
 
+  /** The other apps' latest releases, as the last check read them. */
+  apps(): { digger?: { version: string; download: string } } {
+    return this.others;
+  }
+
   status(): ReleaseCheck {
     const off = !this.d.settings().updates.checkRepo && this.state.state === 'idle';
     return { ...this.state, state: off ? 'off' : this.state.state, skipped: !!this.state.latest && this.d.settings().updates.skipVersion === this.state.latest.version, canInstall: !!this.installRoot() };
@@ -111,15 +108,19 @@ export class ReleaseChecker {
     try {
       const res = await fetch(this.manifestUrl, { headers: { 'user-agent': `FBRX-OS/${this.d.appVersion}`, 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(20_000) });
       if (!res.ok) throw new Error(`The release list answered ${res.status}`);
-      const latest: ReleaseInfo = ManifestSchema.parse(await res.json());
-      const newer = compareSemver(latest.version, this.d.appVersion) > 0;
+      // What is new in FBRX Command is for FBRX Command; FBRX Digger reads its own entry.
+      const { command: _command, digger, ...os } = ReleaseManifestSchema.parse(await res.json());
+      this.others = digger ? { digger: { version: digger.version, download: digger.download } } : {};
+      const latest: ReleaseInfo | null = this.d.flavor === 'digger' ? (digger ? { ...digger, stage: '', codename: '', importance: 'recommended' } : null) : os;
+      const newer = !!latest && compareSemver(latest.version, this.d.appVersion) > 0;
       this.set({ state: newer ? 'available' : 'current', latest, checkedAt: new Date().toISOString(), message: null });
+      if (!latest) return this.status();
       this.d.log.info('Checked for a new version', { current: this.d.appVersion, latest: latest.version });
       if (newer) this.maybeAutoInstall();
       if (newer && !this.d.settings().updates.autoInstall && this.d.settings().updates.skipVersion !== latest.version && this.readState().notified !== latest.version) {
         this.writeState({ notified: latest.version });
         await this.d.notify(
-          `FBRX OS ${latest.stage} ${latest.version} is available`,
+          this.d.flavor === 'digger' ? `${DIGGER_NAME} ${latest.version} is available` : `FBRX OS ${latest.stage} ${latest.version} is available`,
           `${latest.summary || 'A new version is ready.'} Open Settings → Updates to install it when it suits you.`,
           latest.version,
         );
@@ -170,7 +171,17 @@ export class ReleaseChecker {
   }
 
   /** The folder the setup wizard installed from, when it is still there. */
+  /** Removes FBRX OS (see launchUninstaller); says what happens next. */
+  uninstall(): { message: string } {
+    const root = this.installRoot();
+    if (process.platform === 'win32') throw new CoreError('CONFLICT', 'On Windows, remove FBRX OS in Settings → Apps → FBRX OS → Uninstall.');
+    if (!root) throw new CoreError('CONFLICT', 'FBRX OS was not installed from an FBRX folder here. Remove it the way it was installed (sudo apt remove fbrx-os for the .deb, or delete the AppImage).');
+    return { message: launchUninstaller(root) };
+  }
+
   installRoot(): string | null {
+    // Digger is installed from its own installers: a new version is downloaded from its release page.
+    if (this.d.flavor === 'digger') return null;
     try {
       const { root } = JSON.parse(readFileSync(join(this.d.dataRoot, INSTALL_SOURCE_FILE), 'utf8')) as { root?: string };
       return root && existsSync(join(root, 'package-lock.json')) && existsSync(join(root, 'apps', 'desktop')) ? root : null;
@@ -261,6 +272,22 @@ function launchInstaller(root: string): string {
     spawn('open', ['-a', 'Terminal', join(root, 'Install FBRX OS.command')], { detached: true, stdio: 'ignore' }).unref();
     return 'The installer opened in Terminal: press Return to start. FBRX OS closes, updates and opens again by itself.';
   }
-  spawn('xdg-open', [root], { detached: true, stdio: 'ignore' }).unref();
-  return `The new version is in ${root}. Run the installer there to finish.`;
+  // Linux: the launcher opens a terminal window of its own when it is started without one (Install FBRX OS.command).
+  spawn('bash', [join(root, 'Install FBRX OS.command'), '--yes'], { cwd: root, detached: true, stdio: 'ignore' }).unref();
+  return 'The installer opened in a terminal window. FBRX OS closes, updates and opens again by itself (a few minutes).';
+}
+
+/**
+ * Starts removing FBRX OS (macOS and Linux, installed from an FBRX folder): the installer opens in a terminal window
+ * and asks before it removes anything. Windows removes it in Settings → Apps.
+ */
+export function launchUninstaller(root: string): string {
+  const script = join(root, 'Install FBRX OS.command');
+  if (process.platform === 'darwin') {
+    // A shell command (the path in single quotes), then an AppleScript string around it.
+    const shell = `bash '${script.replace(/'/g, "'\\''")}' --uninstall`;
+    const applescript = shell.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    spawn('osascript', ['-e', `tell application "Terminal" to do script "${applescript}"`, '-e', 'tell application "Terminal" to activate'], { detached: true, stdio: 'ignore' }).unref();
+  } else spawn('bash', [script, '--uninstall'], { cwd: root, detached: true, stdio: 'ignore' }).unref();
+  return 'The uninstaller opened in a terminal window: it asks before it removes anything, and keeps your data unless you say otherwise.';
 }

@@ -1,3 +1,5 @@
+import type { ScreenRecorder } from './services/screen-recorder';
+import type { ScreenRelay } from './services/screen-relay';
 import type { FastifyBaseLogger } from 'fastify';
 import { newId } from '@fbrx/shared';
 import type { Db } from '@fbrx/shared/node';
@@ -6,6 +8,7 @@ import type { Keys } from './keys';
 import type { CpAudit } from './audit';
 import type { Realtime } from './realtime';
 import type { WebhookDispatcher } from './services/webhooks';
+import type { Mailer } from './mail';
 
 export interface AppContext {
   config: Config;
@@ -13,7 +16,13 @@ export interface AppContext {
   keys: Keys;
   audit: CpAudit;
   realtime: Realtime;
+  /** Remote screen between administrators' browsers and computers. */
+  screen: ScreenRelay;
+  /** Recordings of remote screen sessions, for organizations that keep them. */
+  recorder: ScreenRecorder;
   webhooks: WebhookDispatcher;
+  /** Email to FBRX accounts (mail.ts). */
+  mail: Mailer;
   version: string;
   log: FastifyBaseLogger;
   /** The certificate FBRX Command serves HTTPS with, when it does so itself (null behind a proxy or on plain HTTP). */
@@ -70,4 +79,10 @@ export const ids = {
   ticket: () => newId('tkt'),
   ticketMessage: () => newId('tkm'),
   chatMessage: () => newId('chm'),
+  account: () => newId('acc'),
+  accountSession: () => newId('acs'),
+  accountToken: () => newId('act'),
+  invitation: () => newId('inv'),
+  entitlement: () => newId('ent'),
+  promo: () => newId('prm'),
 };

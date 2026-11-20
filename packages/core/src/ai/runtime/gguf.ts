@@ -7,7 +7,26 @@ export interface GgufInfo {
   /** Transformer layers (what --n-gpu-layers counts). */
   blockCount: number | null;
   name: string | null;
+  /** How long a context the model was trained for, in tokens. */
+  contextLength?: number | null;
+  /** What sizes the memory a context takes: attention heads (all, and for keys and values) and their widths. */
+  headCount?: number | null;
+  headCountKv?: number | null;
+  embeddingLength?: number | null;
+  keyLength?: number | null;
+  valueLength?: number | null;
 }
+
+/** The architecture keys read for the context window, by the GgufInfo field each goes to. */
+const ARCH_KEYS: Record<string, keyof GgufInfo> = {
+  block_count: 'blockCount',
+  context_length: 'contextLength',
+  embedding_length: 'embeddingLength',
+  'attention.head_count': 'headCount',
+  'attention.head_count_kv': 'headCountKv',
+  'attention.key_length': 'keyLength',
+  'attention.value_length': 'valueLength',
+};
 
 /** How much of the file is read: the metadata that matters comes before the (large) tokenizer lists. */
 const HEAD_BYTES = 4 * 1024 * 1024;
@@ -96,8 +115,12 @@ export function parseGgufHeader(buf: Buffer): GgufInfo | null {
       const v = value(type);
       if (key === 'general.architecture' && typeof v === 'string') info.architecture = v;
       else if (key === 'general.name' && typeof v === 'string') info.name = v;
-      else if (info.architecture && key === `${info.architecture}.block_count` && typeof v === 'number') info.blockCount = v;
-      if (info.architecture && info.blockCount !== null && info.name !== null) break;
+      else if (info.architecture && key.startsWith(`${info.architecture}.`) && typeof v === 'number') {
+        const field = ARCH_KEYS[key.slice(info.architecture.length + 1)];
+        if (field) (info as unknown as Record<string, number>)[field] = v;
+      }
+      // The tokenizer's long lists come after what matters here.
+      if (key.startsWith('tokenizer.')) break;
     }
   } catch {
     /* the rest of the metadata lies past the window (or is malformed): keep what was read */

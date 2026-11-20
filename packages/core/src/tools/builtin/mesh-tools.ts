@@ -34,7 +34,9 @@ export function meshTools(assist: MeshAssist, unavailable: () => string | null):
       title: 'Consult another computer',
       description:
         "Asks another computer's AI on the mesh to answer a question or do a piece of work with its own tools, knowledge and internet connection, and returns its answer. It cannot see this computer's files: include what it needs in the question. Use it for a second opinion, to split a big job, when this computer lacks something, or to save this computer's effort. followUp continues the same conversation with the same helper.",
-      risk: 'read',
+      // What it sends leaves this computer for another one, whose AI can use tools: an offline chat asks first, and the
+      // guardian checks it like anything else that goes online.
+      risk: 'network',
       timeoutMs: 31 * 60_000,
       inputSchema: {
         type: 'object',

@@ -1,0 +1,19 @@
+{
+  "translation": "World English Bible (current edition, from eBible.org)",
+  "verses": 31103,
+  "books": 66,
+  "chapters": 1189,
+  "license": "public domain",
+  "copies": [
+    {
+      "name": "ebible.org/Scriptures/engwebp_vpl.zip (engwebp_vpl.txt)",
+      "sha256": "5a150b653d07369448a792ec2baaf9133ba6c582d7a0609cdcd72e185a06c45b"
+    }
+  ],
+  "cross_checked": false,
+  "verses_mended_from_second_copy": 0,
+  "verses_mended_by_rule": 0,
+  "verses_with_markup": 0,
+  "verses_with_words_run_together": 0,
+  "output_sha256": "63703ea9179e144d75b884b5bf95208520296451f71efe4fcefdac579efa2bc0"
+}

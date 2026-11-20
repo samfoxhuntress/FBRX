@@ -36,7 +36,7 @@ export function machineId(): string {
   return cachedMachineId;
 }
 
-export function deviceFacts(appVersion: string, deviceName: string): DeviceFacts {
+export function deviceFacts(appVersion: string, deviceName: string, installId?: string): DeviceFacts {
   return {
     name: deviceName || hostname(),
     hostname: hostname(),
@@ -45,5 +45,6 @@ export function deviceFacts(appVersion: string, deviceName: string): DeviceFacts
     osVersion: `${release()} ${version()}`.slice(0, 200),
     appVersion,
     machineId: machineId(),
+    ...(installId ? { installId } : {}),
   };
 }

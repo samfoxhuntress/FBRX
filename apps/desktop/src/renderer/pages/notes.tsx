@@ -1,9 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Note } from '@fbrx/shared';
-import { Button, Card, Empty, Icons, Input, Select, Status, TextArea, timeAgo, useAction, useConfirm } from '@fbrx/ui';
+import { Button, Card, Empty, Icons, Input, Markdown, Select, Status, TextArea, timeAgo, useAction, useConfirm } from '@fbrx/ui';
 import { call } from '../client';
 import { useAgentName, useCore } from '../hooks';
-import { Markdown } from '../markdown';
 import { navigate, routeArg } from '../app';
 
 /** Notes with Markdown preview, tags, pinning and autosave. */
@@ -55,7 +54,8 @@ export function NotesPage() {
 
   const list = notes.data ?? [];
   return (
-    <div className="split">
+    // In a narrow window (a page of its own, say) the list and the note take turns: the list until a note is picked.
+    <div className={`split${draft ? ' has-selection' : ''}`}>
       <Card className="split-list" title="Notes" actions={<Button size="sm" icon="plus" aria-label="New note" onClick={() => void create()} />} flush>
         <div style={{ padding: '0 12px 8px' }}>
           <Input placeholder="Search notes" value={query} onChange={(e) => setQuery(e.target.value)} aria-label="Search notes" />
@@ -80,6 +80,9 @@ export function NotesPage() {
         {draft ? (
           <div className="note-editor">
             <div className="note-bar">
+              <Button className="split-back" size="sm" variant="ghost" icon="chevronLeft" aria-label="All notes" onClick={() => (setSelected(null), navigate('notes'))}>
+                Notes
+              </Button>
               <input className="note-title" value={draft.title} onChange={(e) => edit({ title: e.target.value })} aria-label="Title" />
               <Status tone={saved === 'saved' ? 'good' : saved === 'saving' ? 'busy' : 'neutral'}>{saved === 'dirty' ? 'editing' : saved}</Status>
               <div className="seg">

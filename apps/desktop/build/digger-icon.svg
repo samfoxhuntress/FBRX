@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="dg-ink" gradientUnits="userSpaceOnUse" x1="260" y1="170" x2="764" y2="900"><stop offset="0" stop-color="#ffb547"/><stop offset="0.5" stop-color="#ff8a3d"/><stop offset="1" stop-color="#ff4d5e"/></linearGradient>
+  </defs>
+  <rect x="64" y="64" width="896" height="896" rx="200" fill="#0b0b0c"/>
+  <g fill="none" stroke="url(#dg-ink)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M512 214V174M432 236L412 202M592 236L612 202"/>
+    <path d="M326 452C336 330 414 266 512 266C610 266 688 330 698 452"/>
+    <path d="M292 456H732"/>
+    <circle cx="512" cy="356" r="42"/>
+    <path d="M344 474C300 540 286 630 296 712M680 474C724 540 738 630 728 712"/>
+    <path d="M404 566q30 -28 60 0M560 566q30 -28 60 0"/>
+    <path d="M196 712H828"/>
+    <path d="M362 712a50 42 0 0 1 100 0M562 712a50 42 0 0 1 100 0"/>
+  </g>
+  <ellipse cx="512" cy="628" rx="38" ry="26" fill="url(#dg-ink)"/>
+  <g fill="url(#dg-ink)">
+    <circle cx="300" cy="790" r="18"/><circle cx="430" cy="812" r="12"/><circle cx="560" cy="792" r="16"/><circle cx="700" cy="818" r="14"/>
+    <circle cx="368" cy="868" r="10"/><circle cx="620" cy="872" r="11"/><circle cx="496" cy="880" r="8"/><circle cx="236" cy="850" r="9"/><circle cx="780" cy="858" r="9"/>
+  </g>
+</svg>

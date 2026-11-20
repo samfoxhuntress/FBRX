@@ -1,6 +1,8 @@
+import { TIER_SHORT, type Tier } from '@fbrx/shared';
 import { BarList, Button, Card, Grid, Meter, Page, StatTile, Status, formatNumber, timeAgo, Empty } from '@fbrx/ui';
 import { useApp, useQuery } from '../state';
 import { PLATFORM_LABEL, SeverityStatus } from './common';
+import { ServerComingSoon } from './billing';
 
 interface Overview {
   devices: { total: number; online: number; offline: number; retired: number; disabled: number; critical: number; warning: number; outdated: number };
@@ -10,7 +12,7 @@ interface Overview {
   agent: { runs24h: number; toolCalls24h: number; denials24h: number; errors24h: number; pendingApprovals: number };
   commands24h: Record<string, number>;
   recentEvents: Array<{ id: string; deviceId: string; deviceName: string; ts: string; kind: string; severity: string; message: string }>;
-  license: { edition: string; seats: number; used: number; expiresAt: string | null } | null;
+  license: { edition: string; tier: Tier; seats: number; used: number; expiresAt: string | null } | null;
   tenants?: number;
 }
 
@@ -100,7 +102,7 @@ export function OverviewPage() {
                 <div className="fx-divider" />
                 <div style={{ display: 'flex', justifyContent: 'space-between' }}>
                   <span className="fx-secondary">
-                    License seats ({data.license.edition}){data.license.expiresAt ? ` · renews ${new Date(data.license.expiresAt).toLocaleDateString()}` : ''}
+                    License seats (up to {TIER_SHORT[data.license.tier]}){data.license.expiresAt ? ` · renews ${new Date(data.license.expiresAt).toLocaleDateString()}` : ''}
                   </span>
                   <strong>
                     {data.license.used} / {data.license.seats || '∞'}
@@ -112,6 +114,7 @@ export function OverviewPage() {
           </div>
         </Card>
       </Grid>
+      <ServerComingSoon />
     </Page>
   );
 }

@@ -7,8 +7,9 @@ design assumes the model can be wrong or manipulated and puts every action behin
 
 | Boundary | Control |
 | --- | --- |
-| Model → workstation | Every tool call passes the [governance pipeline](ARCHITECTURE.md#governance-pipeline): license, schema validation, rate limit, policy (hard constraints → rules → risk defaults), guardian, human approval, redaction, audit |
-| Untrusted content → model | Tool output (files, web pages, API responses) is scanned for prompt-injection language and handed to the model explicitly marked as untrusted data; any tool call whose input carries such language, or any other guardian warning, requires human approval with the finding shown |
+| Model → workstation | Every tool call passes the governance pipeline: license, schema validation, rate limit, policy (hard constraints → rules → risk defaults), guardian, human approval, redaction, audit |
+| Untrusted content → model | Tool output (files, web pages, API responses) is scanned for prompt-injection language and handed to the model explicitly marked as untrusted data; any tool call whose input carries such language, or any other guardian warning, requires human approval with the finding shown. Before the model reads any tool output, invisible and direction-changing characters are removed, and text dressed as FBRX's own notice to the AI is marked as the output's |
+| Names someone else sets → model | Bluetooth, sound, USB, screen and printer names, devices found on the network, Wi-Fi network names and the names of routers in a trace are printed cleaned (no control characters, line breaks or direction marks), cut to 64 characters and always in quotes with their own quote marks escaped, with a line saying anyone nearby can set them |
 | Plugin → workstation | Separate process, Node permission model (files, processes, addons), network and process-control modules removed, all capabilities brokered and permission-checked ([details](PLUGINS.md#sandbox)) |
 | Renderer → core | Sandboxed, context-isolated renderer with a strict CSP; only the `window.fbrx` bridge, which routes through the same API and origin checks as everything else |
 | Local scripts → core | Local API on 127.0.0.1 only (remote opt-in), bearer tokens (full / agent-scoped), Host-header checks against DNS rebinding |
@@ -17,11 +18,12 @@ design assumes the model can be wrong or manipulated and puts every action behin
 | Paired devices → workstation | Mesh off by default; one-time pairing codes proven with HMAC over both public keys; every request sealed with NaCl box, timestamped and replay-checked; per-device permissions and instant revocation ([details](MESH.md)) |
 | Other AI apps → workstation | MCP bridge over the Local API with the agent-scoped token, so calls get the same policy, guardian, approvals and audit as Fabrix; the token is read from the data folder, never copied into other apps' configuration |
 | FBRX → network devices (device consoles) | Opened only by the person at the workstation; SSH host keys pinned on first use and a changed key refused until confirmed; saved passwords kept in the vault as internal secrets (not readable by plugins, the Local API or the agent); the agent can type into a console the person opened only through `device_console.send`, an execute-risk tool that asks for approval by default; connections audited |
+| FBRX VPN → system tunnel | Added, connected and removed only by the person at the workstation (never the agent, the Local API or FBRX Command); the gate's settings are read strictly (no `PreUp`/`PostUp`/`PreDown`/`PostDown` or unknown settings) and the tunnel's file is rebuilt from them; keys sealed with the vault key, the file on disk only while the tunnel starts or stops (Windows: while it runs), readable by the user alone ([details](VPN.md)) |
 | FBRX → Windows administrator rights | Only for actions the person starts at the workstation (never the Local API, the agent's read tools or mesh peers); scripts go to the elevated PowerShell as an encoded command, not a file, and Windows shows the UAC prompt every time |
 
 ## Policy defaults
 
-Out of the box (`packages/shared/src/policy.ts`):
+Out of the box:
 
 * Reads and network requests run; writes, command execution and sensitive actions ask a human.
 * Files are reachable only under the user's home folder and the FBRX workspace; SSH/GPG keys, cloud credentials,
@@ -30,7 +32,7 @@ Out of the box (`packages/shared/src/policy.ts`):
   resolution, so the agent cannot be used to probe the LAN or cloud metadata services.
 * Destructive shell patterns (`rm -rf /`, `mkfs`, `dd of=/dev/…`, fork bombs, `format C:`, `diskpart`,
   `curl … | sh`) are blocked outright.
-* Limits: 12 model steps and 40 tool calls per run, 60 tool calls per minute, approvals time out after 5 minutes.
+* Limits: 30 model steps and 80 tool calls per run, 60 tool calls per minute, approvals time out after 5 minutes.
 * New chats start **offline**: the first network tool in a chat asks the person to put that chat online.
 * Methods that change the computer (terminal, file writes, ending processes, Defender, firewall, repairs, Hyper-V,
   network adapters, mesh pairing, connecting AI apps) are reserved for the person at the workstation. Automation
@@ -45,7 +47,7 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
 
 * Vault secrets are AES-256-GCM encrypted under a data key that is protected on this computer (Windows DPAPI; the
   Linux secret service; on macOS a key file only the user can read, see below) and optionally by a recovery
-  passphrase (scrypt). See [ARCHITECTURE.md](ARCHITECTURE.md#vault-credentials).
+  passphrase (scrypt).
 * **macOS does not use the Keychain.** Electron's safeStorage keeps its key in the login Keychain, and macOS asks for
   the Mac password whenever an updated, re-signed app opens that item, which for an app that is not notarized is
   every update. Since 1.8.1 FBRX keeps the vault key in `keychain.key` (mode 0600) in the data folder and starts
@@ -59,7 +61,12 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   passphrase is entered (FBRX asks when it opens). Services that need credentials wait for the unlock instead of
   failing.
 * The model never sees secret values. Connectors and plugins reference secrets by name; the redactor removes any
-  secret value from tool output, logs and the conversation.
+  secret value, and every password in the password keeper, from tool output, logs and the conversation.
+* **The password keeper** (Vault → Passwords) seals each sign-in whole (site and username too) with the vault key,
+  bound to the sign-in's id. Its methods are for the person at the computer only, never the Local API or a remote
+  command. FBRX Browser's sign-in helper runs in each page's main frame in an isolated world the page cannot reach,
+  fills in only on the person's pick, only into visible boxes, and only on a page of one of the sign-in's sites (the
+  core checks the address; an `https` sign-in is never offered on `http`). See [VAULT.md](VAULT.md).
 * Organization credentials are created in the console, encrypted at rest with the control plane's master key,
   delivered over the authenticated device channel and stored as read-only managed secrets.
 * Snapshots contain the vault key encrypted under the snapshot passphrase — protect snapshot files and passphrases
@@ -74,9 +81,6 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
 * **FBRX/1** (`cli.exec`, `cli.complete`) is reserved for the person at the computer. It calls the same core methods
   as the app (so policy, locks, validation and audit all apply) and validates configuration commits against the
   settings schema and the organization's locked paths before applying them.
-* The Silly Goose's pointer grab on Windows runs a small PowerShell helper (started with the goose, ended when it
-  leaves) that only moves the mouse pointer to coordinates sent by the goose's own window, for at most about three
-  seconds per grab. It is never started when Fun extras are off.
 
 ## Copy & migrate
 
@@ -99,7 +103,8 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   networking off, the code folder mapped **read-only**, and the file started inside it. Closing the sandbox discards
   everything. Each run is in the audit log. Other languages are not run by FBRX at all.
 * **Clipboard history** is off by default (an organization can lock `clipboard.history`). When on, the desktop app
-  checks the clipboard once a second and keeps the last 50 text copies **in memory only**: never written to disk,
+  checks the clipboard once a second and keeps the last 50 copies of text and pictures (up to 12 pictures) **in
+  memory only**: never written to disk,
   never synced or backed up, cleared when FBRX quits or the switch is turned off. Copies marked by password managers
   (`ExcludeClipboardContentFromMonitorProcessing`, `CanIncludeInClipboardHistory`, `org.nspasteboard.ConcealedType`
   and similar) are skipped. The **Ctrl+Alt+Z** window shows the same in-memory list. Picking a copy puts it on the
@@ -144,6 +149,33 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   Agent (`ai.showThinking`). The work budget's step limit is part of the policy (`ai.maxStepsPerRun`), so an
   organization can fix it; the answer length and context sizes are ordinary settings an organization can lock.
 
+## The AI's memory and personal details
+
+The agent's memory (Settings → Memory) lives in FBRX's database on the computer and
+is never synced or sent anywhere. A backup made for FBRX Command leaves it out (and vacuums the copy so nothing of it
+remains in free pages); a backup the person makes, encrypted with their passphrase, keeps it, so moving to a new
+computer keeps it too.
+
+* **Never stored**: national ID / Social Security, driver's license, passport and tax ID numbers, bank account,
+  routing and IBAN numbers, full payment card numbers (13–19 digits passing the Luhn check) and security codes, and
+  passwords, PINs and security answers. They are found by shape and nearby words and
+  removed before a fact is saved, whether the person, the agent or the learning step wrote it; the short-term summary
+  of recent chats is scrubbed the same way.
+* **Private kinds** (addresses, location, email and phone, birthday, cards by last four digits) are stored only when
+  the person allows that kind, and are sent only to providers marked local. With a cloud provider the agent gets
+  general facts or nothing (the person's choice), never private facts and never the last 24 hours.
+* **Online tools**: when a tool goes online (network risk, an AI Toolkit action that reaches the network, a connector, or
+  a call with URLs), the guardian blocks any identity or money number in its input as **critical** (refused, never
+  sent), and a remembered private value in its input as a **warning** that needs approval.
+* Memory is off on student and child computers. Adding, changing and forgetting memories is for the person at the
+  computer (not the Local API or FBRX Command).
+
+## Folders the AI may use
+
+`filesystem.allowedRoots` is edited from Governance on the computer (local policy only: a managed policy cannot be
+changed there). System folders and FBRX's data folder are refused. The agent's `files.request_access` tool only asks;
+the folder is added when the person picks it in the window, and the request lapses after the approval timeout.
+
 ## Single sign-on to FBRX Command
 
 * Standard OpenID Connect authorization code flow with **PKCE**, `state` and `nonce`; nothing about the sign-in
@@ -174,7 +206,9 @@ across updates) and computers **pin** it:
   connection (the computer reports it rather than trusting the new one).
 * Plain `http://` is accepted only for FBRX Command on the same computer (`localhost`). The console on FBRX Command's
   own computer is on `http://127.0.0.1:<port + 1>`, bound to the loopback interface only.
-* The Windows script FBRX Command generates pins the same fingerprint when it downloads the installer.
+* The Windows script FBRX Command generates pins the same fingerprint when it downloads the installer from FBRX
+  Command. When the current release comes from FBRX's downloads instead (nothing as new uploaded to FBRX Command), it
+  downloads over ordinary HTTPS from there.
 
 ## Network environments (UniFi)
 
@@ -218,7 +252,7 @@ across updates) and computers **pin** it:
 
 While it is on, the core drops desktop notifications (an `error` one becomes a content-free "needs your attention"),
 the renderer suppresses toasts and blurs elements marked private, the clipboard history window masks entries, and the
-goose cannot appear. It hides things from an audience; it is not access control.
+Bruce the Goose stays hidden. It hides things from an audience; it is not access control.
 
 ## Help desk
 
@@ -260,12 +294,25 @@ tenant, and a deliberate *Disconnect* is respected.
 
 ## Supply chain and updates
 
-* Desktop builds are code-signed (and notarized on macOS) in CI, on Windows with Azure Trusted Signing or a certificate
-  (DEPLOYMENT.md → Signing). A **signed** Windows copy installs an update only when Windows reports a valid
+* Desktop builds are code-signed (and notarized on macOS) when they are released, on Windows with a trusted signing
+  service or a certificate. A **signed** Windows copy installs an update only when Windows reports a valid
   Authenticode signature from the same publisher (subject CN) as itself; an unsigned copy (built from source) relies on
   the SHA-512 in the authenticated feed, as before, and accepts the first signed update.
 * Update feeds are served per device by your control plane over authenticated HTTPS; files carry SHA-512 checksums
   verified by electron-updater.
+* **Electron's fuses** are switched when the app is packaged:
+  `NODE_OPTIONS` and `--inspect`-style arguments are ignored, so nothing can inject code into FBRX or attach a
+  debugger by starting it differently; the app's code loads only from `app.asar`, checked at start against the hash
+  built into the executable (Windows and macOS); cookies are encrypted with the system keychain. Node mode
+  (`ELECTRON_RUN_AS_NODE`) stays available because the plugin worker and the MCP bridge for other AI apps run that way.
+* **Dependencies** are checked with `npm audit` before each release; known issues in shipped packages are fixed by
+  updating them (2.2.0: the MCP SDK, nodemailer 10, systeminformation, zod, fastify and others). Electron follows its
+  newest patch release.
+* **FBRX Server updates itself only when asked.** `sudo fbrx-server update check` reads the same `release.json`
+  (its `server` entry) and downloads the bundle only from a GitHub release (any host only when the server's
+  administrator names another release list), refuses it unless it matches the SHA-256 in the list or the `.sha256`
+  published next to it, and unpacks it without changing what runs. `update commit` (root) keeps the running version
+  aside, runs the new version's installer, and goes back by itself when the console does not answer afterwards.
 * **New versions offered from the repository.** The desktop app reads `release.json` from the public FBRX repository
   (`raw.githubusercontent.com/samfoxhuntress/FBRX/HEAD/release.json`) a minute and a half after it starts and every
   six hours, only while internet access is allowed and **Check for new versions automatically** is on. A newer

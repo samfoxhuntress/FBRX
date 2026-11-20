@@ -45,22 +45,35 @@ export const ALERT_RULES: RuleDef[] = [
   { id: 'mesh_online', group: 'Mesh', label: 'One of my devices came online', unit: null, threshold: null, enabled: false, severity: 'info', help: '' },
   { id: 'approval_waiting', group: 'Agent', label: 'An action is waiting for my approval', unit: null, threshold: null, enabled: true, severity: 'warning', help: 'So you can approve from your phone' },
   { id: 'update_available', group: 'Updates', label: 'FBRX OS update available', unit: null, threshold: null, enabled: true, severity: 'info', help: '' },
+  { id: 'edition_trial', group: 'Edition', label: 'My Pro trial is ending, or has ended', unit: null, threshold: null, enabled: true, severity: 'info', help: 'The day before the free trial ends, and when it has' },
 ];
+
+/**
+ * Conditions that stay true until someone deals with them (an antivirus off or behind, a firewall off): said once,
+ * then at most once a day while they last, across restarts, and taken off the inbox when they are over.
+ */
+const ONGOING_RULES = new Set(['av_problem', 'signatures_old', 'defender_off', 'firewall_off', 'printer_error']);
+const ONGOING_EVERY_MS = 24 * 3600_000;
+const ONGOING_KEY = 'alerts.ongoing';
 
 export interface AlertEngineDeps {
   db: Db;
+  /** Where ongoing conditions remember when they were last said (tests may leave it out). */
+  meta?: { get<T>(key: string): T | null; set(key: string, value: unknown): void };
   events: EventBus;
   log: Logger;
   settings: () => Settings;
   monitor: SystemMonitor;
   workspace: WorkspaceStore;
-  notify: (title: string, body: string, level: 'info' | 'warning' | 'error') => void;
+  notify: (title: string, body: string, level: 'info' | 'warning' | 'error', ruleId: string) => void;
   /** Pushes an alert to paired phones; returns how many received it. */
   toMobile: (alert: AlertItem) => number;
   /** Forwards an alert to the organization's control plane; false when not enrolled. */
   toOrganisation: (alert: AlertItem) => boolean;
   secret: (name: string) => string | undefined;
   meshPeers: () => Array<{ id: string; name: string; online: boolean }>;
+  /** What to tell the person about this computer's edition (its Pro trial ending, or over), once each. */
+  editionNotice: () => { title: string; body: string } | null;
 }
 
 /**
@@ -147,6 +160,30 @@ export class AlertEngine {
     return n;
   }
 
+  private ongoing(): Record<string, number> {
+    return this.d.meta?.get<Record<string, number>>(ONGOING_KEY) ?? {};
+  }
+
+  /**
+   * Of an ongoing rule's alerts, the ones not about these keys are over: they leave the inbox, and the condition is
+   * said again at once if it comes back.
+   */
+  settle(ruleId: string, keep: string[]): number {
+    const gone = this.d.db.all<{ id: string; ref: string | null }>('SELECT id, ref FROM alerts WHERE rule_id = ?', ruleId).filter((r) => !keep.includes(r.ref ?? ''));
+    for (const r of gone) this.d.db.run('DELETE FROM alerts WHERE id = ?', r.id);
+    const map = this.ongoing();
+    let changed = false;
+    for (const k of Object.keys(map)) {
+      if (!k.startsWith(`${ruleId}:`) || keep.includes(k.slice(ruleId.length + 1))) continue;
+      delete map[k];
+      this.last.delete(k);
+      changed = true;
+    }
+    if (changed) this.d.meta?.set(ONGOING_KEY, map);
+    if (gone.length) this.d.events.emit('alerts.changed', this.counts());
+    return gone.length;
+  }
+
   remove(id: string): void {
     if (id === '*') this.d.db.run('DELETE FROM alerts');
     else this.d.db.run('DELETE FROM alerts WHERE id = ?', id);
@@ -182,6 +219,13 @@ export class AlertEngine {
     const k = `${ruleId}:${o.key ?? ''}`;
     const prev = this.last.get(k);
     if (!o.force && prev && Date.now() - prev < cfg.cooldownMinutes * 60_000) return null;
+    if (!o.force && ONGOING_RULES.has(ruleId)) {
+      const map = this.ongoing();
+      if (map[k] && Date.now() - map[k] < ONGOING_EVERY_MS) return null;
+      // Remembered across restarts; entries over a week old are forgotten.
+      for (const [x, at] of Object.entries(map)) if (Date.now() - at > 7 * ONGOING_EVERY_MS) delete map[x];
+      this.d.meta?.set(ONGOING_KEY, { ...map, [k]: Date.now() });
+    }
     this.last.set(k, Date.now());
     const severity = o.severity ?? rule?.severity ?? 'info';
     const alert: AlertItem = { id: newId('alrt'), ruleId, severity, title: title.slice(0, 200), body: body.slice(0, 2000), createdAt: new Date().toISOString(), read: false, deliveries: {} };
@@ -217,7 +261,7 @@ export class AlertEngine {
     };
     if (routes.has('desktop') && ch.desktop) {
       if (quiet) out.desktop = 'held (quiet hours)';
-      else await attempt('desktop', () => (this.d.notify(a.title, a.body, a.severity === 'critical' ? 'error' : a.severity === 'warning' ? 'warning' : 'info'), 'ok'));
+      else await attempt('desktop', () => (this.d.notify(a.title, a.body, a.severity === 'critical' ? 'error' : a.severity === 'warning' ? 'warning' : 'info', a.ruleId), 'ok'));
     }
     if (routes.has('mobile') && ch.mobile) await attempt('mobile', () => `${this.d.toMobile(a)} device(s)`);
     if (routes.has('organisation') && ch.organisation) await attempt('organisation', () => (this.d.toOrganisation(a) ? 'ok' : 'not enrolled'));
@@ -277,7 +321,7 @@ export class AlertEngine {
       let result = 'ok';
       if (channel === 'webhook') result = await this.sendWebhook(a);
       else if (channel === 'email') result = await this.sendEmail(a);
-      else if (channel === 'desktop') this.d.notify(a.title, a.body, 'info');
+      else if (channel === 'desktop') this.d.notify(a.title, a.body, 'info', a.ruleId);
       else if (channel === 'mobile') result = `${this.d.toMobile(a)} device(s) reached`;
       else if (channel === 'organisation') result = this.d.toOrganisation(a) ? 'sent to the control plane' : 'this device is not enrolled';
       else if (channel === 'inbox') await this.fire('test', a.title, a.body, { force: true });
@@ -311,6 +355,10 @@ export class AlertEngine {
       if (prev === false && p.online) this.raise('mesh_online', `${p.name} is online`, `${p.name} is reachable again.`, { key: p.id });
     }
     if (this.ticks % 20 === 2) this.taskCheck();
+    if (this.ticks % 20 === 3) {
+      const n = this.d.editionNotice();
+      if (n) this.raise('edition_trial', n.title, n.body);
+    }
     if (IS_WIN && this.ticks % 10 === 1) await this.windowsChecks(rules.signatures_old.threshold ?? 3).catch(() => undefined);
   }
 
@@ -376,14 +424,23 @@ $bs=@(Get-WinEvent -FilterHashtable @{LogName='System'; Id=1001; ProviderName='M
       return;
     }
     this.lastCrash = new Date().toISOString();
-    if (j.av === true && j.rtp === false) this.raise('defender_off', 'Real-time protection is off', 'Microsoft Defender real-time protection is disabled. Turn it back on in Security.');
-    if (typeof j.sigAge === 'number' && j.sigAge > sigDays) this.raise('signatures_old', 'Virus definitions are out of date', `Definitions are ${j.sigAge} days old. Open Security → Update definitions.`);
+    // Defender's own state only counts while it is the antivirus in use (not when another one has taken over).
+    const off = j.av === true && j.rtp === false;
+    const old = j.av === true && typeof j.sigAge === 'number' && j.sigAge > sigDays;
+    if (off) this.raise('defender_off', 'Real-time protection is off', 'Microsoft Defender real-time protection is disabled. Turn it back on in Security.', { key: 'defender' });
+    if (old) this.raise('signatures_old', 'Virus definitions are out of date', `Definitions are ${j.sigAge} days old. Open Security → Update definitions.`, { key: 'defender' });
+    this.settle('defender_off', off ? ['defender'] : []);
+    this.settle('signatures_old', old ? ['defender'] : []);
     if (j.threat) {
       if (this.lastThreat && j.threat.time > this.lastThreat) this.raise('defender_threat', 'Microsoft Defender detected a threat', `${j.threat.res || 'A threat'} was detected. Open Security → Threats for details.`, { key: j.threat.time });
       this.lastThreat = j.threat.time;
     } else this.lastThreat ??= '0';
-    for (const name of [].concat(j.firewall ?? [])) this.raise('firewall_off', `Firewall is off (${name} profile)`, 'Turn Windows Firewall back on in Security → Firewall.', { key: name });
-    for (const p of [].concat(j.printers ?? []) as Array<{ name: string; status: string }>) this.raise('printer_error', `Printer "${p.name}" needs attention`, `Status: ${p.status}. Open Network Center → Printers.`, { key: p.name });
+    const fw: string[] = [].concat(j.firewall ?? []);
+    for (const name of fw) this.raise('firewall_off', `Firewall is off (${name} profile)`, 'Turn Windows Firewall back on in Security → Firewall.', { key: name });
+    this.settle('firewall_off', fw);
+    const printers = [].concat(j.printers ?? []) as Array<{ name: string; status: string }>;
+    for (const p of printers) this.raise('printer_error', `Printer "${p.name}" needs attention`, `Status: ${p.status}. Open Network Center → Printers.`, { key: p.name });
+    this.settle('printer_error', printers.map((p) => p.name));
     for (const c of [].concat(j.crashes ?? []) as Array<{ app: string; time: string }>) this.raise('crash', `${c.app} crashed`, 'Open Bug catcher to investigate with Fabrix.', { key: c.time });
     if (j.bsod) this.raise('crash', 'Windows recovered from a stop error (blue screen)', 'Open Bug catcher for the crash details.', { key: 'bsod', severity: 'critical' });
   }

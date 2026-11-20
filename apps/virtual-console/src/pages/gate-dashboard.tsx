@@ -1,6 +1,8 @@
 import type { GateLease } from '@fbrx/gate';
-import { Button, Callout, Card, Empty, formatBytes, formatNumber, Grid, KeyValue, LineChart, StatTile, Status, Table, timeAgo } from '@fbrx/ui';
+import { Button, Callout, Card, Empty, formatBytes, formatNumber, Grid, KeyValue, LineChart, StatTile, Status, Table, timeAgo, useAction, useConfirm } from '@fbrx/ui';
+import { api } from '../api';
 import { useGate } from '../gate-state';
+import { AskAiButton, describeFor } from '../ask-ai';
 import { useApp, useRoute } from '../state';
 import { bitRate, GatePage, zoneWords } from './gate-common';
 
@@ -9,12 +11,46 @@ export function GateDashboardPage() {
   const app = useApp();
   const g = useGate();
   const [, go] = useRoute();
+  const { run, busy } = useAction();
+  const { confirm, dialog } = useConfirm();
+  const release = async (l: GateLease) => {
+    if (
+      await confirm({
+        title: `Release ${l.address}?`,
+        body: `${l.name ?? 'The device'} keeps using it until it next asks for an address (when it restarts or reconnects); then it may get another one, and this one can go to another device.`,
+        confirmLabel: 'Release it',
+      })
+    )
+      void run(`rel:${l.mac}`, () => api('POST', '/v1/gate/leases/release', { mac: l.mac, address: l.address }).then(() => g.reload()), `Released ${l.address}`);
+  };
   return (
     <GatePage
       title={g.info?.state.running?.hostname ?? g.info?.state.candidate.hostname ?? 'FBRX Gate'}
       description="FBRX Gate: this server routes and protects your network. Its firewall, networks, addresses, VPN and traffic priority are one configuration you edit, review and commit."
       actions={
         <>
+          {g.info && (
+            <AskAiButton
+              what="FBRX Gate on this server"
+              question="Look at the gate: its internet side, ports, networks and the problems it reports. Is the network healthy? What should I look at or change?"
+              details={() =>
+                describeFor({
+                  mode: g.info!.mode,
+                  committed: !!g.info!.state.running,
+                  changesNotCommitted: g.info!.state.changes.length,
+                  confirmPending: g.info!.state.confirm?.deadline,
+                  internet: g.live?.wan,
+                  ports: g.live?.interfaces.map((i) => `${i.name} ${i.up ? 'up' : 'down'} ${i.addresses.join(' ')}`),
+                  networks: g.info!.state.running?.networks.map((n) => `${n.name} (${n.purpose}) ${n.address} on ${n.interface}, access ${n.access}, DHCP ${n.dhcp.enabled ? 'on' : 'off'}`),
+                  devicesWithAddresses: g.live?.leases.length,
+                  dnsRunning: g.live?.dns.running,
+                  problems: g.live?.problems,
+                  settingsErrors: g.info!.state.errors.map((e) => e.message),
+                  settingsWarnings: g.info!.state.warnings.map((w) => w.message),
+                })
+              }
+            />
+          )}
           <Button icon="network" onClick={() => go('gate-networks')}>
             Networks
           </Button>
@@ -156,8 +192,21 @@ export function GateDashboardPage() {
                   { key: 'a', header: 'Address', render: (l) => <span className="mono">{l.address}</span> },
                   { key: 'w', header: 'Network', render: (l) => l.network ?? '—' },
                   { key: 'e', header: 'Address kept until', render: (l) => (l.expires ? new Date(l.expires).toLocaleString() : 'Reserved') },
+                  {
+                    key: 'x',
+                    header: '',
+                    width: 110,
+                    render: (l) =>
+                      l.expires &&
+                      app.can('operator') && (
+                        <Button size="sm" variant="ghost" icon="logout" loading={busy === `rel:${l.mac}`} onClick={() => void release(l)}>
+                          Release
+                        </Button>
+                      ),
+                  },
                 ]}
               />
+              {dialog}
             </Card>
           </>
         );

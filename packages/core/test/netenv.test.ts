@@ -86,7 +86,7 @@ const listen = (s: Server) => new Promise<void>((r) => s.listen(0, '127.0.0.1', 
 
 describe('network environments (UniFi)', () => {
   it('trusts a self-signed console by fingerprint, reads the network, and refuses a swapped certificate', async () => {
-    const { kernel, cleanup } = await makeKernel();
+    const { kernel, cleanup } = await makeKernel({ platform: { flavor: 'digger' } });
     const unifi = mockConsole(CERT_A, KEY_A);
     await listen(unifi.server);
     try {
@@ -147,13 +147,13 @@ describe('network environments (UniFi)', () => {
     }
   });
 
-  it('is part of Endpoint Ultra: Basic refuses it and the agent does not see the tools', async () => {
-    const { kernel, cleanup } = await makeKernel({ devMode: false });
+  it('is part of Endpoint Black Hole Edition: lighter editions refuse it and the agent does not see the tools', async () => {
+    const { kernel, cleanup } = await makeKernel({ devMode: false, platform: { flavor: 'digger' } });
     try {
-      await expect(kernel.call('netenv.probe', { url: 'https://192.0.2.1', apiKey: KEY }, USER)).rejects.toThrow(/Endpoint Ultra/);
+      await expect(kernel.call('netenv.probe', { url: 'https://192.0.2.1', apiKey: KEY }, USER)).rejects.toThrow(/Endpoint Black Hole Edition/);
       const r = await kernel.gate.invoke('network_env.overview', {}, { origin: 'agent', actor: 'agent:test' });
       expect(r.ok).toBe(false);
-      expect(r.output).toMatch(/Endpoint Ultra/);
+      expect(r.output).toMatch(/Endpoint Black Hole Edition/);
     } finally {
       await cleanup();
     }

@@ -15,7 +15,7 @@ export function ChatHistory({
   chats,
   reload,
   selected,
-  busyId,
+  busy,
   learner,
   filter,
   setFilter,
@@ -24,8 +24,8 @@ export function ChatHistory({
   chats: ConversationSummary[];
   reload: () => void;
   selected: string | null;
-  /** The chat the agent is answering in (not deletable right now). */
-  busyId: string | null;
+  /** The chats the agent is answering in right now (marked, and not deletable until it is done). */
+  busy: ReadonlySet<string>;
   learner: boolean;
   filter: ChatFilter;
   setFilter: (f: ChatFilter) => void;
@@ -82,17 +82,23 @@ export function ChatHistory({
           const project = c.projectId ? byId.get(c.projectId) : undefined;
           return (
             <div key={c.id} className={`agent-conv-row${selected === c.id ? ' active' : ''}${picked.has(c.id) ? ' picked' : ''}`}>
-              {selecting && <input type="checkbox" className="chat-pick" aria-label={`Select ${c.title}`} checked={picked.has(c.id)} disabled={c.id === busyId} onChange={() => toggle(c.id)} />}
-              <button className={`agent-conv${selected === c.id ? ' active' : ''}`} onClick={() => (selecting ? c.id !== busyId && toggle(c.id) : onOpen(c.id))}>
+              {selecting && <input type="checkbox" className="chat-pick" aria-label={`Select ${c.title}`} checked={picked.has(c.id)} disabled={busy.has(c.id)} onChange={() => toggle(c.id)} />}
+              <button className={`agent-conv${selected === c.id ? ' active' : ''}`} onClick={() => (selecting ? !busy.has(c.id) && toggle(c.id) : onOpen(c.id))}>
                 <div className="agent-conv-title">{c.title}</div>
                 <div className="agent-conv-sub">
+                  {busy.has(c.id) && (
+                    <span className="chat-busy">
+                      <span className="fx-spinner" aria-hidden />
+                      Working ·{' '}
+                    </span>
+                  )}
                   {project && (
                     <span className="chat-project" title={`In ${project.name}`}>
                       <span className="chat-project-dot" style={{ background: project.color || 'var(--accent)' }} />
                       {project.name} ·{' '}
                     </span>
                   )}
-                  {timeAgo(c.updatedAt)} · {c.messageCount} messages{c.origin === 'remote' ? ' · remote' : ''}
+                  {timeAgo(c.updatedAt)} · {c.messageCount} messages{c.origin === 'remote' ? ' · remote' : c.origin === 'scheduler' ? ' · automation' : ''}
                 </div>
               </button>
               {!selecting && (
@@ -109,7 +115,7 @@ export function ChatHistory({
                     ...(c.projectId && !learner
                       ? [{ icon: 'x' as const, label: `Take out of ${project?.name ?? 'the project'}`, run: () => void call('ai.conversations.setProject', { id: c.id, projectId: null }).then(() => changed()) }]
                       : []),
-                    { icon: 'trash', label: 'Delete', danger: true, disabled: c.id === busyId, run: () => setDeleting([c.id]) },
+                    { icon: 'trash', label: 'Delete', danger: true, disabled: busy.has(c.id), run: () => setDeleting([c.id]) },
                   ]}
                 />
               )}

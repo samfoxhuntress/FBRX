@@ -71,7 +71,9 @@ export function renderNftables(c: GateConfig): string {
   add(`    ct state established,related accept`);
   add(`    ct state invalid drop`);
   for (const r of c.firewall.rules) if (r.enabled && r.to === 'gate') add(`    ${ruleLine(r, zones, 'input')}`);
-  const mgmt = [...(c.management.ssh ? [22] : []), c.management.consolePort];
+  // SSH, the server's console, and FBRX Mesh to the server's own FBRX core (its AI, Mesh Assist): from the networks
+  // that may manage the gate and from the VPN with full access.
+  const mgmt = [...(c.management.ssh ? [22] : []), c.management.consolePort, c.qos.preferMesh.port];
   for (const n of c.networks) {
     const i = q(netDevice(n));
     if (n.dhcp.enabled) add(`    iifname ${i} udp dport 67 accept comment "dhcp:${n.name}"`);

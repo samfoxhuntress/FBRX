@@ -3,6 +3,7 @@ import type { IsoDownload, IsoImage, StoragePool, StorageVolume } from '@fbrx/sh
 import { Button, Callout, Card, Empty, Field, formatBytes, formatDate, Grid, Input, Meter, Modal, Page, Table, Tabs, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { api, upload } from '../api';
 import { useApp, usePoll } from '../state';
+import { AskAiButton, describeFor } from '../ask-ai';
 import { gb } from './common';
 
 export function StoragePage() {
@@ -176,7 +177,12 @@ function Pools() {
             key={p.name}
             title={p.role === 'images' ? 'Virtual disks' : p.role === 'isos' ? 'ISO library' : p.name}
             subtitle={<span className="mono">{p.path ?? p.type}</span>}
-            actions={<Button size="sm" onClick={() => setOpen(open === p.name ? null : p.name)}>{open === p.name ? 'Hide files' : 'Files'}</Button>}
+            actions={
+              <>
+                <AskAiButton what={`the storage ${p.name}`} question="Look at this storage on the server: how full it is and what holds the space. Should I free or add space, and how?" details={() => describeFor({ ...p })} />
+                <Button size="sm" onClick={() => setOpen(open === p.name ? null : p.name)}>{open === p.name ? 'Hide files' : 'Files'}</Button>
+              </>
+            }
           >
             {!p.active && <Callout tone="warning">This pool is not active.</Callout>}
             <Meter label={`${gb(p.allocationGb)} used of ${gb(p.capacityGb)} · ${gb(p.availableGb)} free`} value={p.allocationGb} max={p.capacityGb || 1} />

@@ -14,6 +14,10 @@ export const PERMISSIONS = {
   'apikeys.manage': ['superadmin', 'owner', 'admin'],
   'devices.read': ['superadmin', 'owner', 'admin', 'operator', 'viewer'],
   'devices.manage': ['superadmin', 'owner', 'admin', 'operator'],
+  /**
+   * Remote screen (with a ticket and the person's yes); each administrator also needs it switched on by name (Users).
+   */
+  'devices.remote': ['superadmin', 'owner', 'admin', 'operator'],
   'commands.send': ['superadmin', 'owner', 'admin', 'operator'],
   'commands.privileged': ['superadmin', 'owner', 'admin'],
   'config.manage': ['superadmin', 'owner', 'admin'],
@@ -29,6 +33,12 @@ export const PERMISSIONS = {
   /** Organization chat: everyone can read the organization-wide conversation; operators and up post to it and remove messages. */
   'messages.read': ['superadmin', 'owner', 'admin', 'operator', 'viewer'],
   'messages.manage': ['superadmin', 'owner', 'admin', 'operator'],
+  /** FBRX Command's own version and new versions of it; installing one is for the platform operator. */
+  'command.read': ['superadmin', 'owner', 'admin'],
+  'command.update': ['superadmin'],
+  /** The organization's FBRX Command plan (cloud): owners pay; admins see what it comes to. */
+  'billing.read': ['superadmin', 'owner', 'admin'],
+  'billing.manage': ['superadmin', 'owner'],
 } as const satisfies Record<string, readonly Role[]>;
 export type Permission = keyof typeof PERMISSIONS;
 
@@ -51,4 +61,4 @@ export function assignableRoles(role: Role): Role[] {
 }
 
 /** Commands that can change data or run the agent need a more trusted role. */
-export const PRIVILEGED_COMMANDS = new Set(['agent.run', 'plugin.install', 'plugin.uninstall', 'update.install', 'vault.lock', 'app.restart', 'backup.create', 'helpdesk.assist']);
+export const PRIVILEGED_COMMANDS = new Set(['agent.run', 'plugin.install', 'plugin.uninstall', 'update.install', 'vault.lock', 'app.restart', 'backup.create', 'backup.image', 'helpdesk.assist', 'support.start', 'xrdp.set']);

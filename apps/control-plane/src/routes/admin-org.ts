@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { AUTO_UPDATE_MODES, UPDATE_CHANNELS, VERTICALS, compareSemver } from '@fbrx/shared';
+import { AUTO_UPDATE_MODES, UPDATE_CHANNELS, VERTICALS, compareSemver, decodeLicenseUnverified, tierFor, type Edition } from '@fbrx/shared';
 import { hashPassword, randomToken, sha256Hex } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
@@ -37,7 +37,7 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
       .all<any>(`SELECT e.*, d.name AS device_name FROM device_events e JOIN devices d ON d.id = e.device_id ${tenant ? 'WHERE e.tenant_id = ?' : ''} ORDER BY e.ts DESC LIMIT 15`, ...args)
       .map((e) => ({ id: e.id, deviceId: e.device_id, deviceName: e.device_name, ts: e.ts, kind: e.kind, severity: e.severity, message: e.message }));
     const lic = tenant
-      ? ctx.db.get<any>('SELECT edition, seats, expires_at FROM licenses WHERE tenant_id = ? AND revoked_at IS NULL ORDER BY issued_at DESC LIMIT 1', tenant)
+      ? ctx.db.get<any>('SELECT edition, seats, expires_at, key_text FROM licenses WHERE tenant_id = ? AND revoked_at IS NULL ORDER BY issued_at DESC LIMIT 1', tenant)
       : null;
     return {
       devices: {
@@ -62,7 +62,7 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
       },
       commands24h: Object.fromEntries(commands.map((c) => [c.status, Number(c.n)])),
       recentEvents: events,
-      license: lic ? { edition: lic.edition, seats: Number(lic.seats), used: active.length, expiresAt: lic.expires_at } : null,
+      license: lic ? { edition: lic.edition, tier: tierFor(lic.edition as Edition, decodeLicenseUnverified(lic.key_text)?.tier), seats: Number(lic.seats), used: active.length, expiresAt: lic.expires_at } : null,
       tenants: tenant ? undefined : Number(ctx.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM tenants')?.n ?? 0),
     };
   });
@@ -82,6 +82,9 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     helpdeskEnabled: z.boolean().optional(),
     /** Messages between the organization's computers. */
     chatEnabled: z.boolean().optional(),
+    /** Keep recordings of remote screen sessions (the person at the computer is told), and for how many days. */
+    screenRecording: z.boolean().optional(),
+    screenRecordingDays: z.number().int().min(1).max(365).optional(),
   });
   const tenantView = (t: any) => ({
     id: t.id,
@@ -96,6 +99,8 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     autoUpdate: t.auto_update ?? 'notify',
     helpdeskEnabled: Number(t.helpdesk_enabled ?? 1) === 1,
     chatEnabled: Number(t.chat_enabled ?? 1) === 1,
+    screenRecording: Number(t.screen_recording ?? 0) === 1,
+    screenRecordingDays: Number(t.screen_recording_days ?? 30),
     configVersion: Number(t.config_version),
     createdAt: t.created_at,
     deviceCount: Number(ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM devices WHERE tenant_id = ? AND status = 'active'", t.id)?.n ?? 0),
@@ -159,6 +164,14 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
       new Date().toISOString(),
       id,
     );
+    if (body.screenRecording !== undefined || body.screenRecordingDays !== undefined) {
+      ctx.db.run(
+        'UPDATE tenants SET screen_recording = ?, screen_recording_days = ? WHERE id = ?',
+        body.screenRecording === undefined ? Number(t.screen_recording ?? 0) : body.screenRecording ? 1 : 0,
+        body.screenRecordingDays ?? Number(t.screen_recording_days ?? 30),
+        id,
+      );
+    }
     if (body.defaultProfileId !== undefined || body.updateChannel || body.vertical || body.autoUpdate || body.helpdeskEnabled !== undefined) ctx.bumpConfig(id);
     if (body.status === 'suspended') for (const d of ctx.db.all<{ id: string }>('SELECT id FROM devices WHERE tenant_id = ?', id)) ctx.realtime.disconnectDevice(d.id, 'tenant suspended');
     ctx.audit.record(actorOf(req), 'tenant.updated', { type: 'tenant', id, tenantId: id }, body);
@@ -210,7 +223,7 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
     const u = ctx.db.get<any>('SELECT * FROM users WHERE id = ?', id);
     if (!u) throw notFound();
     if (p.role !== 'superadmin') assertTenantAccess(req, u.tenant_id);
-    const body = z.object({ name: z.string().min(1).max(120).optional(), role: z.enum(ROLES).optional(), status: z.enum(['active', 'disabled']).optional(), password: PasswordSchema.optional(), resetMfa: z.boolean().optional() }).parse(req.body);
+    const body = z.object({ name: z.string().min(1).max(120).optional(), role: z.enum(ROLES).optional(), status: z.enum(['active', 'disabled']).optional(), password: PasswordSchema.optional(), resetMfa: z.boolean().optional(), remoteControl: z.boolean().optional() }).parse(req.body);
     if (!assignableRoles(p.role).includes(u.role as Role)) throw forbidden('You cannot modify this user');
     if (body.role && !assignableRoles(p.role).includes(body.role)) throw forbidden(`You cannot assign the ${body.role} role`);
     if (body.role && (body.role === 'superadmin') !== (u.role === 'superadmin')) throw badRequest('Platform and tenant roles cannot be swapped');
@@ -226,6 +239,7 @@ export async function adminOrgRoutes(app: FastifyInstance, ctx: AppContext) {
       new Date().toISOString(),
       id,
     );
+    if (body.remoteControl !== undefined) ctx.db.run('UPDATE users SET remote_control = ? WHERE id = ?', body.remoteControl ? 1 : 0, id);
     if (body.status === 'disabled' || body.password) ctx.db.run('UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL', new Date().toISOString(), id);
     ctx.audit.record(actorOf(req), 'user.updated', { type: 'user', id, tenantId: u.tenant_id }, { ...body, password: body.password ? '[changed]' : undefined });
     return userView(ctx.db.get('SELECT * FROM users WHERE id = ?', id));

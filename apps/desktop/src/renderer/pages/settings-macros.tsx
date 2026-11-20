@@ -4,6 +4,7 @@ import { Button, Card, Field, Icons, Toggle, useAction } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { navigate } from '../app';
+import { addToMacros } from '../macro-add';
 
 /**
  * Macros: keyboard shortcuts that work anywhere, even while FBRX is in the background. Spotlight (Alt+Space) and the
@@ -120,6 +121,42 @@ export function MacroSettings() {
             <KeyRecorder value={settings.presenter.hotkey} allowOff disabled={locked('presenter.hotkey')} onChange={(v) => void patch({ presenter: { hotkey: v } }, v ? `Presenter-safe mode: ${keyLabel(v)}` : 'Presenter-safe mode shortcut off')} />
           </div>
         </div>
+      </Card>
+
+      <Card
+        title="Your macros"
+        subtitle="Shortcuts that type a command or text into any app. Add one here, or right-click a command anywhere in FBRX (or use its ⚡ button) and choose Add to macros."
+        actions={
+          <Button size="sm" icon="plus" disabled={locked('keyMacros')} onClick={() => addToMacros({ name: '', text: '' })}>
+            Add a macro
+          </Button>
+        }
+      >
+        {settings.keyMacros.length ? (
+          <div className="macro-keys">
+            {settings.keyMacros.map((m) => (
+              <div key={m.id} className="macro-key">
+                <div className="macro-key-what">
+                  <Icons.zap size={16} />
+                  <div>
+                    <b>{m.name}</b>
+                    <code className="macro-text">{m.text.length > 120 ? `${m.text.slice(0, 120)}…` : m.text}</code>
+                  </div>
+                </div>
+                <div className="fx-actions" style={{ flexWrap: 'nowrap' }}>
+                  <KeyRecorder value={m.hotkey} allowOff disabled={locked('keyMacros')} onChange={(v) => void patch({ keyMacros: settings.keyMacros.map((x) => (x.id === m.id ? { ...x, hotkey: v } : x)) }, v ? `${m.name}: ${keyLabel(v)}` : `${m.name}: no shortcut`)} />
+                  <Button size="sm" variant="ghost" icon="edit" aria-label={`Edit ${m.name}`} title="Edit" disabled={locked('keyMacros')} onClick={() => addToMacros({ id: m.id, name: m.name, text: m.text })} />
+                  <Button size="sm" variant="ghost" icon="trash" aria-label={`Remove ${m.name}`} title="Remove" disabled={locked('keyMacros')} onClick={() => void patch({ keyMacros: settings.keyMacros.filter((x) => x.id !== m.id) }, `Removed ${m.name}`)} />
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="fx-muted" style={{ margin: 0 }}>
+            None yet. Try it with a command you type often: in the Library's FBRX commands, the Terminal or FBRX/1, right-click it and choose <b>Add to macros</b>.
+          </p>
+        )}
+        {IS_MAC && <p className="fx-muted">On a Mac, a macro puts its text on the clipboard; press ⌘V to paste it.</p>}
       </Card>
 
       <Card

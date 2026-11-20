@@ -70,6 +70,22 @@ describe('new versions', () => {
     expect(c.skip('1.8.2').skipped).toBe(true);
   });
 
+  it("FBRX Digger follows its own entry, and is downloaded from its release page", async () => {
+    const os = JSON.parse(manifest('https://github.com', '2.2.0'));
+    const digger = { version: '1.1.0', summary: 'Sharper scans.', notes: ['Scans compare faster'], download: 'https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.0', page: 'https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.1.0' };
+    const srv = await serve({ '/with.json': JSON.stringify({ ...os, digger }), '/without.json': JSON.stringify(os) });
+    process.env.FBRX_RELEASE_MANIFEST = `${srv.base}/with.json`;
+    const { c, notify } = checker(tempDir(), { appVersion: '1.0.0', flavor: 'digger' });
+    expect(await c.check()).toMatchObject({ state: 'available', latest: { version: '1.1.0', notes: ['Scans compare faster'] }, canInstall: false });
+    expect(notify.mock.calls[0][0]).toBe('FBRX Digger 1.1.0 is available');
+    expect(c.installRoot()).toBeNull();
+    // Before Digger has a release of its own, FBRX OS's newer version is not offered to it.
+    process.env.FBRX_RELEASE_MANIFEST = `${srv.base}/without.json`;
+    const none = checker(tempDir(), { appVersion: '1.0.0', flavor: 'digger' });
+    expect(await none.c.check()).toMatchObject({ state: 'current', latest: null });
+    expect(none.notify).not.toHaveBeenCalled();
+  });
+
   it('says so when this is the latest, and reports a broken list', async () => {
     const srv = await serve({ '/release.json': manifest('https://github.com', '1.8.1'), '/bad.json': '{"version":"soon"}' });
     process.env.FBRX_RELEASE_MANIFEST = `${srv.base}/release.json`;
@@ -136,10 +152,29 @@ describe('new versions', () => {
     expect(launch).not.toHaveBeenCalled();
   });
 
-  it('names versions the Alpha way, with codenames', () => {
+  it('names versions with their stage (1.x Alpha, 2.x Beta) and codenames', () => {
     expect(displayVersion('1.8.1')).toBe('Alpha 1.8.1');
+    expect(displayVersion('v2.0.0')).toBe('Beta 2.0.0');
     expect(codenameFor('1.8.1')?.name).toBe('Spindle');
     expect(codenameFor('2.0.0')?.name).toBe('Loom');
+    expect(codenameFor('2.1.0')?.name).toBe('Warp');
+    expect(codenameFor('2.1.1')?.name).toBe('Warp');
+    expect(codenameFor('2.1.2')?.name).toBe('Warp');
+    expect(codenameFor('2.2.0')?.name).toBe('Weft');
+    // From 2.2 a codename changes only with a major version.
+    expect(codenameFor('2.3.0')?.name).toBe('Weft');
+    expect(codenameFor('2.9.4')?.name).toBe('Weft');
+    expect(codenameFor('3.0.0')?.name).toBe('Selvedge');
+    expect(codenameFor('3.2.1')?.name).toBe('Selvedge');
     expect(codenameFor('9.9.9')).toBeNull();
+  });
+
+  it('calls 2.x the Beta when release.json does not name the stage', async () => {
+    const { stage: _stage, ...rest } = JSON.parse(manifest('https://github.com', '2.0.0'));
+    const srv = await serve({ '/release.json': JSON.stringify(rest) });
+    process.env.FBRX_RELEASE_MANIFEST = `${srv.base}/release.json`;
+    const { c, notify } = checker(tempDir());
+    expect(await c.check()).toMatchObject({ state: 'available', latest: { version: '2.0.0', stage: 'Beta' } });
+    expect(notify.mock.calls[0][0]).toBe('FBRX OS Beta 2.0.0 is available');
   });
 });

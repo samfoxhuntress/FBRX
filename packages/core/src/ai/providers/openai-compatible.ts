@@ -20,6 +20,10 @@ export interface OpenAICompatibleOptions {
   historyBudgetChars?: number;
   /** Send `stream_options.include_usage` (supported by OpenAI and llama.cpp). */
   includeUsage?: boolean;
+  /** How requests go out, when not the plain fetch (FBRX Cloud AI on an FBRX Command trusted by its fingerprint). */
+  fetch?: (url: string, init: RequestInit) => Promise<Response>;
+  /** Ask how far the model has read the request while it reads (llama.cpp's return_progress). */
+  readingProgress?: boolean;
 }
 
 /**
@@ -41,6 +45,10 @@ export class OpenAICompatibleProvider implements ChatProvider {
     return `${this.o.baseUrl.replace(/\/+$/, '')}${path}`;
   }
 
+  private send(url: string, init: RequestInit): Promise<Response> {
+    return this.o.fetch ? this.o.fetch(url, init) : fetch(url, init);
+  }
+
   private headers(): Record<string, string> {
     const h: Record<string, string> = { 'content-type': 'application/json' };
     const key = this.o.apiKey?.();
@@ -49,7 +57,7 @@ export class OpenAICompatibleProvider implements ChatProvider {
   }
 
   async listModels(signal?: AbortSignal): Promise<ModelInfo[]> {
-    const res = await fetch(this.url('/models'), { headers: this.headers(), signal: signal ?? AbortSignal.timeout(8000) });
+    const res = await this.send(this.url('/models'), { headers: this.headers(), signal: signal ?? AbortSignal.timeout(8000) });
     if (!res.ok) throw new ProviderHttpError(res.status, await readErrorBody(res));
     const body = (await res.json()) as { data?: Array<{ id: string }> };
     return (body.data ?? []).map((m) => ({ id: m.id, name: m.id, providerId: this.id }));
@@ -83,6 +91,10 @@ export class OpenAICompatibleProvider implements ChatProvider {
           };
         case 'tool':
           return { role: 'tool', tool_call_id: m.toolCallId, content: m.content };
+        case 'user':
+          return m.images?.length
+            ? { role: 'user', content: [...m.images.map((i) => ({ type: 'image_url', image_url: { url: `data:${i.mime};base64,${i.data}` } })), { type: 'text', text: m.content }] }
+            : { role: 'user', content: m.content };
         default:
           return { role: m.role, content: m.content };
       }
@@ -96,13 +108,16 @@ export class OpenAICompatibleProvider implements ChatProvider {
       stream: true,
       ...(this.o.includeUsage !== false ? { stream_options: { include_usage: true } } : {}),
     };
+    if (this.o.readingProgress) body.return_progress = true;
     if (req.temperature !== undefined) body.temperature = req.temperature;
     if (req.maxTokens) body.max_tokens = req.maxTokens;
+    // The built-in runtime (llama.cpp) hands this to the model's chat template: Qwen3 and the like skip their thinking.
+    if (this.type === 'local-runtime' && req.reasoning !== undefined) body.chat_template_kwargs = { enable_thinking: req.reasoning };
     if (req.tools.length) {
       body.tools = req.tools.map((t) => ({ type: 'function', function: { name: t.name, description: t.description, parameters: t.parameters } }));
       body.tool_choice = 'auto';
     }
-    const res = await fetch(this.url('/chat/completions'), {
+    const res = await this.send(this.url('/chat/completions'), {
       method: 'POST',
       headers: this.headers(),
       body: JSON.stringify(body),
@@ -122,6 +137,8 @@ export class OpenAICompatibleProvider implements ChatProvider {
         continue;
       }
       if (chunk.error) throw new Error(chunk.error.message ?? String(chunk.error));
+      const p = chunk.prompt_progress;
+      if (p && Number(p.total) > 0) yield { type: 'reading', read: Math.min(Number(p.processed) || 0, Number(p.total)), of: Number(p.total) };
       if (chunk.usage) {
         yield { type: 'usage', inputTokens: chunk.usage.prompt_tokens ?? 0, outputTokens: chunk.usage.completion_tokens ?? 0 };
       }

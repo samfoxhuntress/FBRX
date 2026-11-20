@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /**
  * Builds the FBRX Server bundle on Linux, macOS or Windows: FBRX Virtual (server + web console), the FBRX core for the
- * "ai" role, the installer, the fbrx-server command and the systemd units.
+ * "ai" role, FBRX Command (server + console) for the "command" role, the installer, the fbrx-server command and the
+ * systemd units.
  *
  *   node scripts/server/bundle.mjs               → dist/fbrx-server-<version>/ and dist/fbrx-server-<version>.tar.gz
  *   node scripts/server/bundle.mjs --with-node   also packs Node.js for Linux (the ISO installs without reaching nodejs.org)
- *   node scripts/server/bundle.mjs --skip-build  uses the FBRX Virtual build already in apps/virtual/dist
+ *   node scripts/server/bundle.mjs --skip-build  uses the builds already in apps/virtual/dist and apps/control-plane/dist
  *
  * The archive is written here (not with a tar program) so that install.sh and fbrx-server stay executable even when
  * the bundle is made on Windows.
@@ -39,13 +40,18 @@ const NAME = `fbrx-server-${VERSION}`;
 const DIST = join(ROOT, 'dist');
 const OUT = join(DIST, NAME);
 const VDIST = join(ROOT, 'apps/virtual/dist');
+const CDIST = join(ROOT, 'apps/control-plane/dist');
 
 if (!SKIP_BUILD) {
-  // The same as npm run build in apps/virtual-console (vite build) and apps/virtual (node build.mjs).
+  // The same as npm run build in apps/virtual-console (vite build) and apps/virtual (node build.mjs), then FBRX
+  // Command's console and server (which takes the console into its dist).
   node(join(ROOT, 'node_modules/vite/bin/vite.js'), ['build'], join(ROOT, 'apps/virtual-console'));
   node('build.mjs', [], join(ROOT, 'apps/virtual'));
+  node(join(ROOT, 'node_modules/vite/bin/vite.js'), ['build'], join(ROOT, 'apps/admin-console'));
+  node('build.mjs', [], join(ROOT, 'apps/control-plane'));
 }
 if (!existsSync(join(VDIST, 'server.mjs')) || !existsSync(join(VDIST, 'virtual-console/index.html'))) fail('Build FBRX Virtual and its console first');
+if (!existsSync(join(CDIST, 'server.mjs')) || !existsSync(join(CDIST, 'admin-console/index.html'))) fail('Build FBRX Command and its console first');
 
 rmSync(OUT, { recursive: true, force: true });
 mkdirSync(join(OUT, 'fbrx-virtual'), { recursive: true });
@@ -53,7 +59,11 @@ for (const f of ['server.mjs', 'cli.mjs', 'gate-cli.mjs', 'package.json']) cpSyn
 cpSync(join(VDIST, 'virtual-console'), join(OUT, 'fbrx-virtual/virtual-console'), { recursive: true, filter: (src) => !src.endsWith('.map') });
 // The FBRX core (ai role): the agent, FBRX Mesh and Mesh Assist, headless.
 node(join(ROOT, 'scripts/server/build-core.mjs'), [join(OUT, 'fbrx-core')]);
-for (const f of ['install.sh', 'firstboot.sh', 'fbrx-server', 'fbrx-gate', 'fbrx-virtual.service', 'fbrx-core.service', 'fbrx-gate-firewall.service', 'fbrx-server-firstboot.service']) cpSync(join(ROOT, 'scripts/server', f), join(OUT, f));
+// FBRX Command (command role): its one-file server and its console.
+mkdirSync(join(OUT, 'fbrx-command'), { recursive: true });
+for (const f of ['server.mjs', 'package.json']) cpSync(join(CDIST, f), join(OUT, 'fbrx-command', f));
+cpSync(join(CDIST, 'admin-console'), join(OUT, 'fbrx-command/admin-console'), { recursive: true, filter: (src) => !src.endsWith('.map') });
+for (const f of ['install.sh', 'firstboot.sh', 'fbrx-server', 'fbrx-gate', 'fbrx-virtual.service', 'fbrx-core.service', 'fbrx-command.service', 'fbrx-gate-firewall.service', 'fbrx-server-firstboot.service']) cpSync(join(ROOT, 'scripts/server', f), join(OUT, f));
 writeFileSync(join(OUT, 'VERSION'), `${VERSION}\n`);
 const EXECUTABLE = new Set(['install.sh', 'firstboot.sh', 'fbrx-server', 'fbrx-gate']);
 if (process.platform !== 'win32') for (const f of EXECUTABLE) chmodSync(join(OUT, f), 0o755);

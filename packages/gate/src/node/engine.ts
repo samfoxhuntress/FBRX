@@ -1,5 +1,5 @@
 import { diffConfig } from '../diff';
-import { GateConfigSchema, type GateConfig } from '../model';
+import { GateConfigSchema, netDevice, type GateConfig } from '../model';
 import { render, type GateRendered } from '../render/index';
 import type { GatePaths } from '../render/paths';
 import type { GateCommit, GateLive, GateState } from '../types';
@@ -204,6 +204,30 @@ export class GateEngine {
 
   live(): Promise<GateLive> {
     return this.o.applier.live(this.running());
+  }
+
+  /**
+   * Lets a device's address go: the lease is forgotten and the address can go to another device. A reserved address
+   * stays its device's (take the reservation out under Networks instead).
+   */
+  releaseLease(mac: string, address: string): Promise<{ name: string | null; network: string }> {
+    return this.serial(async () => {
+      const running = this.running();
+      if (!running) throw new GateError('Nothing runs on the gate yet', 'CONFLICT');
+      const lease = (await this.o.applier.live(running)).leases.find((l) => l.mac === mac.toLowerCase() && l.address === address);
+      if (!lease) throw new GateError('That device has no lease for that address (any more)', 'NOT_FOUND');
+      const net = running.networks.find((n) => n.name === lease.network);
+      if (!lease.expires || net?.dhcp.reservations.some((r) => r.mac.toLowerCase() === lease.mac || r.address === lease.address))
+        throw new GateError(`${address} is reserved for this device: take the reservation out under Networks to free it`, 'CONFLICT');
+      if (!net) throw new GateError('That address is in none of the gate’s networks', 'NOT_FOUND');
+      try {
+        await this.o.applier.releaseLease(netDevice(net), lease);
+      } catch (e) {
+        throw new GateError(`The lease could not be released: ${(e as Error).message}`, 'APPLY');
+      }
+      this.log('info', `Released ${lease.address} (${lease.mac}) on ${net.name}`);
+      return { name: lease.name, network: net.name };
+    });
   }
 
   /**

@@ -38,9 +38,14 @@ describe('device manager files', () => {
     const p = macProfile({ ...input, serverFingerprint: fp, uuids: ['AAAA-1', 'BBBB-2'] });
     expect(p).toMatch(new RegExp(`<key>ServerFingerprint</key>\\s*<string>${fp}</string>`));
     expect(provisioningFromPreferences({ ServerURL: input.serverUrl, EnrollmentToken: input.enrollmentToken, ServerFingerprint: fp })).toMatchObject({ serverFingerprint: fp });
-    const s = windowsScript({ ...input, serverFingerprint: fp, installerUrl: 'https://192.168.1.20:8787/v1/downloads/rel/FBRX-OS-Setup.exe?et=x' });
+    const own = { ...input, serverUrl: 'https://192.168.1.20:8787', serverFingerprint: fp };
+    const s = windowsScript({ ...own, installerUrl: 'https://192.168.1.20:8787/v1/downloads/rel/FBRX-OS-Setup.exe?et=x' });
     expect(s).toContain(`"serverFingerprint": "${fp}"`);
     expect(s).toContain("-eq 'ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789ABCDEF0123456789'");
+    // The current release from FBRX's downloads: ordinary HTTPS there, the pin only in the provisioning file.
+    const fromFbrx = windowsScript({ ...own, installerUrl: 'https://github.com/samfoxhuntress/FBRX/releases/download/v2.3.0/FBRX-OS-Setup-2.3.0.exe' });
+    expect(fromFbrx).toContain(`"serverFingerprint": "${fp}"`);
+    expect(fromFbrx).not.toContain('ServerCertificateValidationCallback');
   });
 });
 
