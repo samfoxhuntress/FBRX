@@ -9,7 +9,8 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
    advanced tools follow the edition FBRX Endpoint gives the computer (Ultra or above, `kernel.networkTools()`).
    Check how Digger reads that edition on a Mac: Black Hole Edition is above Ultra, so it must count. Also check
    which kind of Black Hole Edition this is (license, organization, support pass or the developer unlock): the
-   developer unlock lives in FBRX OS's own data, and Digger may not see it.
+   developer unlock lives in FBRX OS's own data, and Digger may not see it. Sam believes the iMac is on Black Hole
+   Edition through the developer unlock (`418teapotadmin`).
 2. **Disk-filling-up notifications show in Digger, not in FBRX OS** (same iMac). The warning about the computer's
    drive belongs to FBRX OS (the endpoint). Find which part of the core raises it and why Digger runs it. Digger
    should leave computer-health notifications to FBRX OS when FBRX OS is installed, and FBRX OS must still show them.
