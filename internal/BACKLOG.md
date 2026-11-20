@@ -19,3 +19,12 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
 4. **FBRX Server: thin or thick provisioning when creating a VM.** Let the person choose the virtual disk type, in
    the standard terms: **Thin provisioned** (dynamically expanding: the disk file grows as the VM writes data, up to
    its maximum size) or **Thick provisioned** (fixed size: the full capacity is allocated when the VM is created).
+5. **Sign in with an AI account people already pay for, no API key.** Connect a ChatGPT, Gemini, Grok or Claude
+   account (and Nous Portal, whose free models such as LongCat 2.5 Sam uses), the way Hermes Agent does, so no
+   separate API billing. Look into how Hermes signs in to each one (the providers' own sign-in flows for their
+   command-line tools), and check each provider's terms before building: some allow a subscription sign-in only in
+   their own apps, and FBRX must not break them.
+6. **Bring agent setups over from other platforms.** Import an agent's setup into FBRX OS: its soul.md (Personality),
+   config, skills, memory and MCP servers, starting with Hermes Agent (`~/.hermes`). Sam runs a Hermes agent with its
+   own soul.md on each lab machine and wants FBRX OS to take that role over. Then other agent tools' instruction and
+   config files. FBRX already writes itself into Hermes' config (AI coordination, 2.1.2); this is the other direction.
