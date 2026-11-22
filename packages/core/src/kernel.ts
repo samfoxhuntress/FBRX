@@ -190,6 +190,10 @@ function systemUser(): string | null {
 /** Where the MCP bridge finds the Local API address and agent token (readable by this user only). */
 const AGENT_TOKEN_FILE = 'localapi-agent.json';
 
+/** The alerts FBRX Digger raises (see AlertEngineDeps.allow). */
+const DIGGER_ALERTS = new Set(['new_device', 'update_available', 'approval_waiting']);
+const NET_ALERTS = new Set(['net_down', 'net_restored']);
+
 /**
  * The FBRX OS kernel: owns storage and every service, exposes the single core API surface used by the
  * desktop UI (IPC), the Local API, and the fleet agent. Shell-agnostic: the Electron app and the headless
@@ -1105,6 +1109,9 @@ export class Kernel {
       secret: (name) => (this.vault.isUnlocked ? this.vault.get(name) : undefined),
       meshPeers: () => (this.mesh.running ? this.mesh.peers() : []),
       editionNotice: () => this.trialNotice(),
+      // FBRX Digger tells about the network only; the internet connection too where FBRX OS is not on this computer
+      // (so it is said once). Drives, processor, memory, battery and security are FBRX OS's to tell.
+      allow: this.digger ? (id) => DIGGER_ALERTS.has(id) || (NET_ALERTS.has(id) && !this.apps.installed().includes('os')) : undefined,
     });
     this.aicoord = new AiCoordination({
       shim: () => {

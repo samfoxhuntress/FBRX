@@ -46,7 +46,11 @@ to your FBRX account with Ultra (or get Black Hole Edition through your organiza
 it says what it needs, and it looks again every few seconds, so a purchase or a sign-in in FBRX Endpoint opens it by
 itself (or press **Check again**). With Pro or Essentials, Digger stays closed. Digger checks Endpoint's license
 itself, so the edition cannot be changed by editing a file, and a license left behind by an uninstalled FBRX Endpoint
-does not count.
+does not count. While FBRX Endpoint is in support mode, Digger runs at the same edition until support ends.
+
+**Alerts.** Digger tells you about the network: an unknown device on it (when that rule is on), and the internet
+connection lost or back when FBRX Endpoint is not on the computer (with Endpoint, Endpoint says it). Your computer's
+health (drive space, processor, memory, battery) and its protection are FBRX Endpoint's alerts, not Digger's.
 
 **From FBRX Endpoint.** The saved connections and network environments made in FBRX Endpoint before 2.5.0 come over
 to Digger by themselves, once, the first time it starts after Endpoint 2.5.0 has started. Passwords and API keys stay

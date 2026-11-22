@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { FBRX_APPS, appUnlocked, handoffFor, type Tier } from '@fbrx/shared';
-import { generateSigningKeyPair, signLicense } from '@fbrx/shared/node';
+import { generateSigningKeyPair, signLicense, signSupportPass } from '@fbrx/shared/node';
 import { AppRegistry, SHARED_LICENSE_FILE, looksLike } from '../src/apps/app-registry';
 import { makeKernel, USER } from './helpers';
 
@@ -129,6 +129,27 @@ describe('the FBRX app family', () => {
       expect(check()).toBe('essentials');
       writeFileSync(file, '[1, 2]');
       expect(check()).toBe('essentials');
+      // Endpoint in support mode counts in Digger too: the developer unlock (until 3.0)...
+      os.shareLicense(endpoint.kernel.license.shared());
+      expect(check()).toBe('basic');
+      await endpoint.kernel.call('support.activate', { pass: '418teapotadmin' }, USER);
+      os.shareLicense(endpoint.kernel.license.shared());
+      expect(check()).toBe('blackhole');
+      expect(digger.kernel.networkTools()).toBe(true);
+      await endpoint.kernel.call('support.activate', { pass: 'refusetobrew' }, USER);
+      os.shareLicense(endpoint.kernel.license.shared());
+      expect(check()).toBe('basic');
+      // ...and a support pass for this computer, checked again in Digger (one for another computer counts for nothing).
+      const pass = (installId: string) => {
+        const now = Date.now();
+        return signSupportPass({ v: 1, installId, tier: 'ultra', scope: 'endpoint', note: 'Ticket 1', issuedBy: 'support', issuedAt: new Date(now).toISOString(), expiresAt: new Date(now + 3600_000).toISOString() }, keys.privateKeyPem);
+      };
+      await endpoint.kernel.call('support.activate', { pass: pass(endpoint.kernel.meta.get<string>('install.id')!) }, USER);
+      os.shareLicense(endpoint.kernel.license.shared());
+      expect(check()).toBe('ultra');
+      writeFileSync(file, JSON.stringify({ ...JSON.parse(readFileSync(file, 'utf8')), 'support.pass': pass('another-computer') }));
+      expect(check()).toBe('basic');
+      await endpoint.kernel.call('support.end', {}, USER);
       // Endpoint uninstalled (its program gone): its leftover license does not count.
       endpoint.kernel.license.applyAccount(sign('ultra'));
       os.shareLicense(endpoint.kernel.license.shared());
@@ -187,6 +208,23 @@ describe('the FBRX apps’ own data, out of the AI’s reach', () => {
 });
 
 describe('the advanced network tools are FBRX Digger’s (2.5.0)', () => {
+  it('leaves the computer’s health alerts (drives, processor, memory, battery, security) to FBRX OS', async () => {
+    const endpoint = await makeKernel();
+    const digger = await makeKernel({ platform: { flavor: 'digger' } });
+    try {
+      const ids = (k: typeof endpoint.kernel) => k.alerts.rules().map((r) => r.id);
+      expect(ids(endpoint.kernel)).toEqual(expect.arrayContaining(['disk_low', 'cpu_high', 'shield_threat', 'net_down']));
+      // No FBRX OS on this computer: Digger still says when the internet connection is lost.
+      expect(ids(digger.kernel)).toEqual(expect.arrayContaining(['new_device', 'net_down', 'net_restored']));
+      for (const id of ['disk_low', 'cpu_high', 'mem_high', 'temp_high', 'battery_low', 'shield_threat', 'av_problem', 'task_due']) expect(ids(digger.kernel)).not.toContain(id);
+      expect(await digger.kernel.alerts.fire('disk_low', 'Drive / is running out of space', '1.0 GB free (2%).')).toBeNull();
+      expect(await endpoint.kernel.alerts.fire('disk_low', 'Drive / is running out of space', '1.0 GB free (2%).')).not.toBeNull();
+    } finally {
+      await endpoint.cleanup();
+      await digger.cleanup();
+    }
+  });
+
   it('leaves them out of FBRX Endpoint’s Fabrix, which says where they are, and keeps the everyday ones', async () => {
     const endpoint = await makeKernel();
     const digger = await makeKernel({ platform: { flavor: 'digger' } });

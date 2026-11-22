@@ -1,5 +1,5 @@
 import { ALL_FEATURES, EDITION_PLANS, FEATURES, LEARNER_TIER, STANDARD_TRIAL_DAYS, formatPrice, isLearner, licenseEditionFor, maxTier, minTier, narrowTier, parseSemver, parseTier, TIER_NAMES, TIER_SHORT, tierRank, type CeilingReason, type DeviceEdition, type Feature, type LicenseStatus, type Tier } from '@fbrx/shared';
-import { UNTRUSTED_LICENSE, licenseStatusFrom, verifyLicense } from '@fbrx/shared/node';
+import { UNTRUSTED_LICENSE, licenseStatusFrom, verifyLicense, verifySupportPass } from '@fbrx/shared/node';
 import { CoreError } from '../errors';
 import type { MetaStore } from '../storage/meta';
 import type { EventBus } from '../events';
@@ -14,10 +14,11 @@ const TRIAL_KEY = 'edition.trial';
 /**
  * What FBRX Endpoint shares of its license with the other FBRX apps on the computer (FBRX Digger): its keys, which are
  * signed and checked again by the app reading them, and how they count there (the computer's install id, its
- * organization's edition, the edition chosen).
+ * organization's edition, the edition chosen). A support pass is shared too (signed, and checked again the same way),
+ * and so is the developer unlock while Endpoint honors it (see `shared()`).
  */
 export const SHARED_LICENSE_KEYS = ['license.managed', 'license.local', 'license.account', 'install.id', 'fleet.edition', 'fleet.deviceId', 'edition.chosen'] as const;
-export type SharedLicense = Partial<Record<(typeof SHARED_LICENSE_KEYS)[number], unknown>>;
+export type SharedLicense = Partial<Record<(typeof SHARED_LICENSE_KEYS)[number] | 'support.pass' | 'support.developer', unknown>>;
 
 /**
  * FBRX Endpoint's shared license as FBRX Digger may read it: text where text belongs, a real edition, an organization
@@ -28,12 +29,13 @@ export function cleanSharedLicense(raw: unknown): SharedLicense {
   const out: SharedLicense = {};
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
   const r = raw as Record<string, unknown>;
-  for (const k of ['license.managed', 'license.local', 'license.account', 'install.id', 'fleet.deviceId'] as const) {
+  for (const k of ['license.managed', 'license.local', 'license.account', 'install.id', 'fleet.deviceId', 'support.pass'] as const) {
     const v = r[k];
     if (typeof v === 'string' && v.length > 0 && v.length <= 16_384) out[k] = v;
   }
   const chosen = typeof r['edition.chosen'] === 'string' ? parseTier(r['edition.chosen']) : null;
   if (chosen) out['edition.chosen'] = chosen;
+  if (r['support.developer'] === true) out['support.developer'] = true;
   const ed = r['fleet.edition'];
   if (ed && typeof ed === 'object' && !Array.isArray(ed)) {
     const e = ed as Record<string, unknown>;
@@ -78,34 +80,55 @@ export class LicenseService {
     this.cached = null;
   }
 
-  /** What FBRX Endpoint writes for the other FBRX apps on this computer (see SHARED_LICENSE_KEYS). */
+  /**
+   * What FBRX Endpoint writes for the other FBRX apps on this computer (see SHARED_LICENSE_KEYS). While support mode
+   * is on, its pass goes too; while the developer unlock is on (SUPPORT_ENTER_PHRASE, until 3.0), a mark that it is:
+   * it is not signed, but it gives FBRX Digger nothing the phrase does not give anyone who types it into Endpoint.
+   */
   shared(): SharedLicense {
     const out: SharedLicense = {};
     for (const k of SHARED_LICENSE_KEYS) {
       const v = this.meta.get<unknown>(k);
       if (v !== undefined && v !== null) out[k] = v;
     }
+    const support = this.supportElevation?.();
+    const pass = this.meta.get<string>('support.pass');
+    if (support?.until && pass) out['support.pass'] = pass;
+    if (support && support.until === null) out['support.developer'] = true;
     return out;
+  }
+
+  /** FBRX Digger: the support mode FBRX Endpoint shares (a valid pass for this computer, or the developer unlock). */
+  private lentElevation(b: SharedLicense): { tier: Tier; until: string | null } | null {
+    const pass = b['support.pass'];
+    if (typeof pass === 'string') {
+      const v = verifySupportPass(pass, this.publicKeys);
+      if (v.ok && !v.expired && v.payload.installId === b['install.id']) return { tier: v.payload.tier, until: v.payload.expiresAt };
+    }
+    return b['support.developer'] === true ? { tier: 'blackhole', until: null } : null;
+  }
+
+  /** How the computer runs in support mode: at its edition, with everything on. */
+  private elevated(support: { tier: Tier; until: string | null }): LicenseStatus {
+    return {
+      ...licenseStatusFrom(null, this.publicKeys, 'none', 1),
+      state: 'valid',
+      edition: licenseEditionFor(support.tier),
+      tier: support.tier,
+      chosen: support.tier,
+      ceiling: support.tier,
+      ceilingReason: 'support',
+      features: [...ALL_FEATURES],
+      source: 'support',
+      support: true,
+      message: support.until ? `Support mode: running as ${TIER_NAMES[support.tier]} until ${new Date(support.until).toLocaleString()}` : `${TIER_NAMES[support.tier]}, unlocked on this computer`,
+    };
   }
 
   status(): LicenseStatus {
     // Support mode wins over everything else while its pass is valid (it ends on its own at the pass's expiry).
     const support = this.supportElevation?.();
-    if (support) {
-      return {
-        ...licenseStatusFrom(null, this.publicKeys, 'none', 1),
-        state: 'valid',
-        edition: licenseEditionFor(support.tier),
-        tier: support.tier,
-        chosen: support.tier,
-        ceiling: support.tier,
-        ceilingReason: 'support',
-        features: [...ALL_FEATURES],
-        source: 'support',
-        support: true,
-        message: support.until ? `Support mode: running as ${TIER_NAMES[support.tier]} until ${new Date(support.until).toLocaleString()}` : `${TIER_NAMES[support.tier]}, unlocked on this computer`,
-      };
-    }
+    if (support) return this.elevated(support);
     // The Pro trial ends by itself: look again once it is over.
     // FBRX Digger reads FBRX Endpoint's license again every little while, so it follows a purchase or a sign-out.
     const stale = !!this.borrow && Date.now() - this.cachedAt > BORROWED_FOR_MS;
@@ -114,6 +137,9 @@ export class LicenseService {
     // FBRX Digger counts FBRX Endpoint's keys as Endpoint does (they are signed, and checked again here); anything
     // missing counts as nothing bought.
     const borrowed = this.borrow ? cleanSharedLicense(this.borrow()) : null;
+    // FBRX Endpoint in support mode (a pass, or the developer unlock): FBRX Digger runs as Endpoint does.
+    const lent = borrowed ? this.lentElevation(borrowed) : null;
+    if (lent) return (this.cached = this.elevated(lent));
     const get = <T>(key: string): T | null => (borrowed ? (((borrowed as Record<string, unknown>)[key] as T | undefined) ?? null) : this.meta.get<T>(key));
     const major = parseSemver(this.appVersion)?.major ?? 1;
     const managed = get<string>('license.managed');

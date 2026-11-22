@@ -74,6 +74,11 @@ export interface AlertEngineDeps {
   meshPeers: () => Array<{ id: string; name: string; online: boolean }>;
   /** What to tell the person about this computer's edition (its Pro trial ending, or over), once each. */
   editionNotice: () => { title: string; body: string } | null;
+  /**
+   * The rules this app raises, when not all of them: FBRX Digger leaves the computer's health (drives, processor,
+   * memory, battery, security) to FBRX OS.
+   */
+  allow?: (ruleId: string) => boolean;
 }
 
 /**
@@ -113,7 +118,7 @@ export class AlertEngine {
 
   rules(): AlertRuleInfo[] {
     const cfg = this.d.settings().alerts.rules;
-    return ALERT_RULES.map((r) => ({
+    return ALERT_RULES.filter((r) => this.d.allow?.(r.id) ?? true).map((r) => ({
       id: r.id,
       group: r.group,
       label: r.label,
@@ -336,18 +341,9 @@ export class AlertEngine {
   private async tick(): Promise<void> {
     this.ticks++;
     const rules = Object.fromEntries(this.rules().map((r) => [r.id, r]));
-    const m = this.d.monitor;
-    const cpu = m.average('cpu', 300);
-    if (cpu != null && cpu > (rules.cpu_high.threshold ?? 90)) this.raise('cpu_high', 'CPU has been very busy', `Average CPU load ${cpu.toFixed(0)}% over the last 5 minutes. Open Processes to see what is using it.`);
-    const mem = m.average('mem', 300);
-    if (mem != null && mem > (rules.mem_high.threshold ?? 92)) this.raise('mem_high', 'Memory is almost full', `${mem.toFixed(0)}% of memory in use over the last 5 minutes.`);
-    const cur = m.current;
-    if (cur?.tempC && cur.tempC > (rules.temp_high.threshold ?? 90)) this.raise('temp_high', 'Processor is running hot', `CPU temperature is ${cur.tempC} °C. Check the fans and airflow.`);
-    if (cur?.battery && !cur.battery.charging && cur.battery.percent <= (rules.battery_low.threshold ?? 15)) {
-      this.raise('battery_low', 'Battery is low', `${cur.battery.percent}% remaining and not charging.`);
-    }
-    if (this.ticks % 4 === 1) await this.diskCheck(rules.disk_low.threshold ?? 10);
-    await this.connectivityCheck();
+    // The computer's health is checked only where it is this app's to tell (not in FBRX Digger).
+    if (rules.disk_low) await this.healthChecks(rules);
+    if (rules.net_down || rules.net_restored) await this.connectivityCheck();
     for (const p of this.d.meshPeers()) {
       const prev = this.peerState.get(p.id);
       this.peerState.set(p.id, p.online);
@@ -359,7 +355,22 @@ export class AlertEngine {
       const n = this.d.editionNotice();
       if (n) this.raise('edition_trial', n.title, n.body);
     }
-    if (IS_WIN && this.ticks % 10 === 1) await this.windowsChecks(rules.signatures_old.threshold ?? 3).catch(() => undefined);
+    if (rules.disk_low && IS_WIN && this.ticks % 10 === 1) await this.windowsChecks(rules.signatures_old.threshold ?? 3).catch(() => undefined);
+  }
+
+  /** The computer's health: processor, memory, temperature, battery and drives. */
+  private async healthChecks(rules: Record<string, AlertRuleInfo>) {
+    const m = this.d.monitor;
+    const cpu = m.average('cpu', 300);
+    if (cpu != null && cpu > (rules.cpu_high.threshold ?? 90)) this.raise('cpu_high', 'CPU has been very busy', `Average CPU load ${cpu.toFixed(0)}% over the last 5 minutes. Open Processes to see what is using it.`);
+    const mem = m.average('mem', 300);
+    if (mem != null && mem > (rules.mem_high.threshold ?? 92)) this.raise('mem_high', 'Memory is almost full', `${mem.toFixed(0)}% of memory in use over the last 5 minutes.`);
+    const cur = m.current;
+    if (cur?.tempC && cur.tempC > (rules.temp_high.threshold ?? 90)) this.raise('temp_high', 'Processor is running hot', `CPU temperature is ${cur.tempC} °C. Check the fans and airflow.`);
+    if (cur?.battery && !cur.battery.charging && cur.battery.percent <= (rules.battery_low.threshold ?? 15)) {
+      this.raise('battery_low', 'Battery is low', `${cur.battery.percent}% remaining and not charging.`);
+    }
+    if (this.ticks % 4 === 1) await this.diskCheck(rules.disk_low.threshold ?? 10);
   }
 
   private async diskCheck(threshold: number) {
