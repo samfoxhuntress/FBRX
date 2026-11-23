@@ -99,7 +99,7 @@ export interface TimeImage {
   note: string;
 }
 
-export type TimeTaskKind = 'backup' | 'check' | 'restore' | 'import';
+export type TimeTaskKind = 'backup' | 'check' | 'restore' | 'import' | 'copy';
 
 /** Something FBRX Time is doing or did: one at a time, the rest wait their turn. */
 export interface TimeTask {
@@ -140,6 +140,35 @@ export interface TimeSettings {
   aiAdvice: boolean;
 }
 
+/** A drive plugged into the server that FBRX Time could copy images to. */
+export interface TimeDrive {
+  /** Its file system's UUID: how FBRX Time finds it again, wherever it is plugged in. */
+  uuid: string;
+  label: string;
+  sizeBytes: number;
+  fileSystem: string;
+  model: string;
+  /** Where the system already mounted it, if it did. */
+  mountedAt: string | null;
+}
+
+/**
+ * Where FBRX Time copies each new image off the server: a shared folder on a NAS (SMB), an NFS export, or a drive
+ * plugged into the server. Images stay on the server too; the place keeps `keep` of each machine or computer.
+ */
+export interface TimeCopyOut {
+  kind: 'smb' | 'nfs' | 'drive';
+  /** \\nas\backups, nas:/export/backups, or the drive's UUID. */
+  path: string;
+  /** SMB: the account (its password stays on the server, sealed, and is never shown). */
+  user: string;
+  keep: number;
+  /** A drive's label and size, or the share, in words. */
+  label: string;
+  /** The last copy: when, whether it worked, what happened. */
+  last: { at: string; ok: boolean; detail: string } | null;
+}
+
 export interface TimeComputer {
   name: string;
   images: number;
@@ -162,6 +191,8 @@ export interface TimeStatus {
   tasks: TimeTask[];
   /** The hypervisor can open images (for boot checks and restores). */
   canBoot: boolean;
+  /** Where each new image is also copied, off the server (null: kept on the server only). */
+  copyOut: TimeCopyOut | null;
 }
 
 export const TIME_DEFAULT_SETTINGS: TimeSettings = { verifyComputers: true, checkSeconds: 180, keepComputer: 7, checkNetwork: true, aiAdvice: true };

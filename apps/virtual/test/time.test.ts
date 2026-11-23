@@ -194,6 +194,58 @@ describe('FBRX Time on FBRX Server', () => {
     expect((await req('PUT', '/v1/time/settings', admin, { checkSeconds: 5 })).status).toBe(400);
     expect((await req('PUT', '/v1/time/settings', admin, { checkSeconds: 300, verifyComputers: false })).body.settings).toEqual({ verifyComputers: false, checkSeconds: 300, keepComputer: 7, checkNetwork: true, aiAdvice: true });
   });
+
+  it('copies each new image off the server, to a NAS or a drive, and the place can be changed', async () => {
+    const vm = (await req('GET', '/v1/vms', viewer)).body.vms.find((x: { name: string }) => x.name === 'files-01');
+    const backUp = async () => {
+      await req('POST', '/v1/time/backup', operator, { vmId: vm.id });
+      return settle();
+    };
+    // Kept on the server only, at first.
+    expect((await req('GET', '/v1/time', viewer)).body.copyOut).toBeNull();
+    const nas = { kind: 'smb', path: '\\\\nas\\backups', user: 'backup', password: 'nas password', keep: 2 };
+    expect((await req('PUT', '/v1/time/copy-out', operator, nas)).status).toBe(403);
+    expect((await req('PUT', '/v1/time/copy-out', admin, { ...nas, path: 'nas/backups' })).status).toBe(400);
+    // The place is opened before it is saved: a wrong password is said now.
+    expect((await req('PUT', '/v1/time/copy-out', admin, { ...nas, password: 'wrong' })).body.error.message).toMatch(/account or password is wrong/);
+    expect((await req('GET', '/v1/time', viewer)).body.copyOut).toBeNull();
+    expect((await req('PUT', '/v1/time/copy-out', admin, nas)).body.copyOut).toMatchObject({ kind: 'smb', path: '//nas/backups', label: '\\\\nas\\backups', user: 'backup', keep: 2, last: null });
+    // The password is never shown, and stays when the rest changes.
+    expect(JSON.stringify((await req('GET', '/v1/time', admin)).body)).not.toContain('nas password');
+    expect((await req('PUT', '/v1/time/copy-out', admin, { ...nas, password: undefined })).status).toBe(200);
+    expect((await req('PUT', '/v1/time/copy-out', admin, { ...nas, user: 'someone-else', password: undefined })).status).toBe(400);
+
+    // Each new image is copied there after it is made; the place keeps the newest two of each machine.
+    for (let n = 0; n < 3; n++) expect((await backUp()).find((t) => t.kind === 'copy')).toMatchObject({ state: 'done', subject: 'files-01', detail: expect.stringContaining('copied to \\\\nas\\backups') });
+    const atNas = join(dir, 'time-copies', 'smb-_nas_backups', 'FBRX Time', 'files-01');
+    const kept = readdirSync(atNas);
+    expect(kept).toHaveLength(2);
+    expect(existsSync(join(atNas, kept[0]!, 'image.json'))).toBe(true);
+    expect((await req('GET', '/v1/time', viewer)).body.copyOut.last).toMatchObject({ ok: true });
+
+    // Changed to a drive plugged into the server: new images go there, and the NAS keeps its copies.
+    const drives = (await req('GET', '/v1/time/copy-out/drives', admin)).body.drives;
+    expect(drives).toEqual([expect.objectContaining({ uuid: '6F2A-91C4', label: 'BACKUP' })]);
+    expect((await req('PUT', '/v1/time/copy-out', admin, { kind: 'drive', path: 'ABCD-0000', keep: 5 })).body.error.message).toMatch(/not plugged into the server/);
+    expect((await req('PUT', '/v1/time/copy-out', admin, { kind: 'drive', path: '6F2A-91C4', keep: 5 })).body.copyOut).toMatchObject({ kind: 'drive', label: expect.stringContaining('BACKUP') });
+    await backUp();
+    const atDrive = join(dir, 'time-copies', 'drive-6F2A-91C4', 'FBRX Time', 'files-01');
+    expect(readdirSync(atDrive)).toHaveLength(1);
+    expect(readdirSync(atNas)).toHaveLength(2);
+    // An image made before can be copied by hand.
+    const older = (await images('files-01')).at(-1)!;
+    expect((await req('POST', `/v1/time/images/${older.id}/copy`, viewer)).status).toBe(403);
+    expect((await req('POST', `/v1/time/images/${older.id}/copy`, operator)).body.task).toMatchObject({ kind: 'copy' });
+    await settle();
+    expect(readdirSync(atDrive)).toHaveLength(2);
+
+    // Turned off: new images stay on the server only; the copies made stay where they are.
+    expect((await req('DELETE', '/v1/time/copy-out', operator)).status).toBe(403);
+    expect((await req('DELETE', '/v1/time/copy-out', admin)).status).toBe(200);
+    expect((await backUp()).filter((t) => t.kind === 'copy' && t.state === 'queued')).toHaveLength(0);
+    expect(readdirSync(atDrive)).toHaveLength(2);
+    expect((await req('POST', `/v1/time/images/${older.id}/copy`, operator)).status).toBe(409);
+  });
 });
 
 describe('Boot checks, in pieces', () => {

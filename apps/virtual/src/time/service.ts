@@ -7,10 +7,14 @@ import {
   encodeTimeCode,
   isDue,
   nextDue,
+  nfsPath,
+  smbPath,
   SCHEDULE_TIME_PATTERN,
   TIME_DEFAULT_SETTINGS,
   type BootCheck,
   type TimeComputer,
+  type TimeCopyOut,
+  type TimeDrive,
   type TimeDiskFile,
   type TimeImage,
   type TimeJob,
@@ -21,11 +25,13 @@ import {
   type TimeTaskKind,
   type VmDetail,
 } from '@fbrx/shared';
-import type { Db } from '@fbrx/shared/node';
+import { openString, sealString, type Db } from '@fbrx/shared/node';
 import type { Hypervisor } from '../drivers/types';
 import { IMAGES_POOL, VM_NAME_RE } from '../drivers/types';
 import { badRequest, conflict, errorMessage, notFound } from '../errors';
 import type { ImageFacts, TimeDriver } from './driver';
+import type { MountPlace } from '../files/system';
+import type { TimeCopier } from './copy-out';
 
 /**
  * FBRX Time on the server (the time role): backup jobs for virtual machines, the images computers send to its backup
@@ -52,6 +58,29 @@ export interface TimeServiceOptions {
   quietMs?: number;
   /** This server's AI (the ai role), asked once for an answer; absent when the server has none. */
   advise?: (prompt: string) => Promise<{ answer: string; model: string }>;
+  /** Copies images off the server (a NAS, an NFS export, a drive); absent: they stay on the server only. */
+  copier?: TimeCopier;
+  /** Seals the NAS account's password at rest. */
+  key?: Uint8Array;
+}
+
+/** What FBRX Time keeps of where it copies images (the password sealed). */
+interface SavedCopyOut {
+  kind: TimeCopyOut['kind'];
+  path: string;
+  user: string;
+  secret: string | null;
+  keep: number;
+  label: string;
+}
+
+/** Where images are copied, as someone sets it (a new password, or none to keep the one saved). */
+export interface CopyOutInput {
+  kind: TimeCopyOut['kind'];
+  path: string;
+  user?: string;
+  password?: string;
+  keep: number;
 }
 
 /** What this server's AI is asked about a check that failed or warned: the image, what the check saw, short. */
@@ -87,8 +116,8 @@ const json = <T>(s: unknown, fallback: T): T => {
 
 const NO_CHECK: BootCheck = { state: 'none', at: null, seconds: null, detail: '', screenshot: null, agent: null };
 
-/** 3.2 GB, or 412 MB for a small one. */
-const size = (b: number) => (b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : `${Math.max(1, Math.round(b / 1024 ** 2))} MB`);
+/** 3.2 GB, 412 MB for a small one, 2.0 TB for a drive. */
+const size = (b: number) => (b >= 1024 ** 4 ? `${(b / 1024 ** 4).toFixed(1)} TB` : b >= 1024 ** 3 ? `${(b / 1024 ** 3).toFixed(1)} GB` : `${Math.max(1, Math.round(b / 1024 ** 2))} MB`);
 
 export class TimeService {
   private readonly queue: Pending[] = [];
@@ -135,6 +164,99 @@ export class TimeService {
     if (next.keepComputer < 1 || next.keepComputer > 365) throw badRequest('Keep between 1 and 365 images of each computer');
     this.o.db.run("INSERT INTO settings (key, value) VALUES ('time.settings', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify(next));
     return next;
+  }
+
+  // --------------------------------------------------------------------------------- copies off the server
+
+  private savedCopyOut(): SavedCopyOut | null {
+    const r = this.o.db.get<{ value: string }>("SELECT value FROM settings WHERE key = 'time.copyOut'");
+    return json<SavedCopyOut | null>(r?.value, null);
+  }
+
+  /** Where each new image is also copied, with how the last copy went (never the password). */
+  copyOut(): TimeCopyOut | null {
+    const c = this.savedCopyOut();
+    if (!c) return null;
+    const last = this.o.db.get<{ finished_at: string; state: string; detail: string }>("SELECT finished_at, state, detail FROM time_tasks WHERE kind = 'copy' AND state IN ('done', 'failed') ORDER BY finished_at DESC LIMIT 1");
+    return { kind: c.kind, path: c.path, user: c.user, keep: c.keep, label: c.label, last: last ? { at: last.finished_at, ok: last.state === 'done', detail: last.detail } : null };
+  }
+
+  async drives(): Promise<TimeDrive[]> {
+    return this.o.copier ? this.o.copier.drives() : [];
+  }
+
+  private place(c: SavedCopyOut): MountPlace {
+    if (c.kind === 'drive') return { kind: 'drive', uuid: c.path };
+    if (c.kind === 'nfs') return { kind: 'nfs', path: c.path };
+    if (!c.secret || !this.o.key) throw new Error('The password for the shared folder is missing: set it again in FBRX Time → Settings');
+    return { kind: 'smb', path: c.path, user: c.user, password: openString(this.o.key, c.secret, 'time.copyOut') };
+  }
+
+  /**
+   * Sets (or changes) where images are copied. The place is opened and written to first, so a wrong path or password
+   * is said now rather than at the next backup. Copies already made at the old place stay there.
+   */
+  async setCopyOut(i: CopyOutInput, signal: AbortSignal = AbortSignal.timeout(90_000)): Promise<TimeCopyOut> {
+    if (!this.o.copier) throw conflict('Copies off the server are not available on this server');
+    if (!Number.isInteger(i.keep) || i.keep < 1 || i.keep > 365) throw badRequest('Keep between 1 and 365 images of each machine there');
+    const before = this.savedCopyOut();
+    let next: SavedCopyOut;
+    if (i.kind === 'drive') {
+      const d = (await this.o.copier.drives()).find((x) => x.uuid === i.path);
+      if (!d) throw badRequest('That drive is not plugged into the server: plug it in and look again');
+      next = { kind: 'drive', path: d.uuid, user: '', secret: null, keep: i.keep, label: `${d.label || d.model || 'Drive'} (${size(d.sizeBytes)}, ${d.fileSystem})` };
+    } else if (i.kind === 'nfs') {
+      const path = nfsPath(i.path);
+      if (!path) throw badRequest(`${i.path || 'That'} is not an NFS export: write it like nas:/export/backups`);
+      next = { kind: 'nfs', path, user: '', secret: null, keep: i.keep, label: path };
+    } else {
+      const path = smbPath(i.path);
+      if (!path) throw badRequest(`${i.path || 'That'} is not a shared folder: write it like \\\\nas\\backups`);
+      const user = (i.user ?? '').trim();
+      if (!user || user.length > 100 || /[\r\n]/.test(user)) throw badRequest('Enter the account the NAS signs in with');
+      if (i.password && (i.password.length > 256 || /[\r\n]/.test(i.password))) throw badRequest('That password cannot be used');
+      if (!this.o.key) throw conflict('This server cannot keep a password safely');
+      const secret = i.password ? sealString(this.o.key, i.password, 'time.copyOut') : before?.kind === 'smb' && before.path === path && before.user === user ? before.secret : null;
+      if (!secret) throw badRequest(`Enter the password for ${user}`);
+      next = { kind: 'smb', path, user, secret, keep: i.keep, label: path.replace(/\//g, '\\') };
+    }
+    try {
+      await this.o.copier.test(this.place(next), signal);
+    } catch (e) {
+      throw badRequest(errorMessage(e));
+    }
+    this.o.db.run("INSERT INTO settings (key, value) VALUES ('time.copyOut', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", JSON.stringify(next));
+    return this.copyOut()!;
+  }
+
+  /** Stops copying images off the server; the copies already made stay where they are. */
+  clearCopyOut(): void {
+    this.o.db.run("DELETE FROM settings WHERE key = 'time.copyOut'");
+  }
+
+  /** Copies an image to the place (after each new image, or when asked). */
+  copyImage(imageId: string): TimeTask {
+    const img = this.image(imageId);
+    if (!this.savedCopyOut() || !this.o.copier) throw conflict('Set where to copy images first (FBRX Time → Settings)');
+    if (this.queue.some((p) => p.task.imageId === imageId && p.task.kind === 'copy')) throw conflict('This image is already waiting to be copied');
+    return this.enqueue(this.newTask('copy', img.subject, img.id), async (task, signal) => {
+      const c = this.savedCopyOut();
+      if (!c || !this.o.copier) return 'Copying off the server was turned off';
+      const dir = this.imageDir(img.id);
+      const now = this.image(img.id);
+      const r = await this.o.copier.copy(this.place(c), dir, slug(img.subject), dir.split(/[\\/]/).pop()!, { ...now, copiedAt: new Date().toISOString() }, c.keep, signal);
+      return `${img.subject}'s image of ${img.createdAt.slice(0, 16).replace('T', ' ')} UTC copied to ${c.label} (${size(img.bytes)})${r.pruned ? `; ${r.pruned} older cop${r.pruned === 1 ? 'y' : 'ies'} removed there` : ''}`;
+    });
+  }
+
+  /** A new image goes off the server too, when a place is set. */
+  private copyLater(image: TimeImage) {
+    if (!this.savedCopyOut() || !this.o.copier) return;
+    try {
+      this.copyImage(image.id);
+    } catch (e) {
+      this.o.log('warn', `FBRX Time: could not queue a copy of ${image.subject}: ${errorMessage(e)}`);
+    }
   }
 
   // --------------------------------------------------------------------------------------------- jobs
@@ -461,6 +583,7 @@ export class TimeService {
         this.prune('vm', vm.name, job!.keep);
       }
       if (verify) this.check(image.id);
+      this.copyLater(image);
       return `${vm.name}: ${r.disks.length} disk${r.disks.length === 1 ? '' : 's'}, ${size(image.bytes)} (${r.consistency === 'quiesced' ? 'consistent: the guest agent paused writes' : r.consistency === 'offline' ? 'the machine was off' : 'copied while it ran'})${verify ? '; boot check next' : ''}`;
     } catch (e) {
       rmSync(dir, { recursive: true, force: true });
@@ -618,6 +741,7 @@ export class TimeService {
           });
           this.prune('computer', f.name, this.settings().keepComputer);
           if (verify) this.check(image.id);
+          this.copyLater(image);
           return `${f.name}'s backup of ${created.toISOString().slice(0, 16).replace('T', ' ')} UTC kept (${size(image.bytes)})${verify ? '; boot check next' : ''}`;
         } catch (e) {
           rmSync(dir, { recursive: true, force: true });
@@ -684,6 +808,7 @@ export class TimeService {
       computers: this.computers(),
       tasks: this.tasks(),
       canBoot: await this.o.driver.canBoot(),
+      copyOut: this.copyOut(),
     };
   }
 }

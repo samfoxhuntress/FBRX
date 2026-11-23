@@ -59,6 +59,26 @@ is off is simply copied. Each image says which of these it was.
 default network. The original is never touched. Start it when you are ready (and turn the original off first if they
 would clash on your network).
 
+## Copies off the server
+
+Images live on the server, where boot checks and restores use them. So that a backup outlives the server's own disks,
+*FBRX Time → Settings → Copies off the server* also copies **each new image** (of a machine or a computer) to:
+
+* **A shared folder on a NAS (SMB):** `\\nas\backups`, with an account the NAS signs in with. The password is kept
+  sealed on the server and never shown again.
+* **An NFS export:** `nas:/export/backups`, which must let the server write there.
+* **A drive plugged into the server** (USB): pick it from the drives FBRX Time finds (never the server's own disks).
+  FBRX Time opens it for each copy and closes it after, so it can be unplugged between backups.
+
+Before it saves, FBRX Time opens the place and writes a test file there, so a wrong path or password shows straight
+away. At the place, everything is in one folder, `FBRX Time\<machine or computer>\<when>`, each with an `image.json`
+saying what it is; it keeps the newest of each as many times as you choose (the oldest copies there are removed). A
+copy that stops halfway is cleared up next time and never looks like an image. The card shows the last copy and
+whether it worked; *Copy* on an image (*Images*) copies one made earlier.
+
+**Change…** points new copies somewhere else at any time; the copies already made stay where they are. **Stop
+copying** goes back to keeping images on the server only.
+
 ## Computers
 
 ### On the computer: FBRX Endpoint
@@ -76,8 +96,9 @@ would clash on your network).
    system and administrators can read.
 
 After that, *Back up now* (and FBRX Command's request) just starts the task: no more prompts. The card shows the last
-image, when the next one is due and how many images the target holds. *Stop image backups* removes the task; the
-images already made stay where they are.
+image, when the next one is due and how many images the target holds. *Change…* picks another place or time whenever you
+like (the images already at the old place stay there). *Stop image backups* removes the task; the images already made
+stay where they are.
 
 The computer's other backup, the encrypted **snapshot**, is a different thing: it keeps FBRX itself (settings,
 credentials, conversations, agent memory) and moves it to another computer ([BACKUP_RESTORE.md](BACKUP_RESTORE.md)).
@@ -160,4 +181,8 @@ operator; jobs, restores, deleting images and settings need an administrator.
 | `POST /v1/time/images/:id/restore` `{ name }` | A new virtual machine (or, for a computer, a copy in the backup folder) |
 | `DELETE /v1/time/images/:id` | Delete an image |
 | `POST /v1/time/computers/scan` | Look for finished computer backups now |
+| `GET /v1/time/copy-out/drives` | Drives plugged into the server that images can be copied to (administrators) |
+| `PUT /v1/time/copy-out` `{ kind, path, user?, password?, keep }` | Where each new image is copied: `smb`, `nfs` or `drive` (its UUID); tested first (administrators) |
+| `DELETE /v1/time/copy-out` | Stop copying images off the server (administrators) |
+| `POST /v1/time/images/:id/copy` | Copy an image there now |
 | `PUT /v1/time/settings` | Boot-check computers, how long a check runs, images kept per computer, the online check (`checkNetwork`), the AI's advice (`aiAdvice`) |

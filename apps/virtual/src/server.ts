@@ -54,6 +54,7 @@ import { FilesService } from './files/service';
 import { LinuxFilesSystem, SimulatedFilesSystem, type FilesSystem } from './files/system';
 import { memoryNft } from './files/priority';
 import { LibvirtTimeDriver, SimulatedTimeDriver, type TimeDriver } from './time/driver';
+import { LinuxTimeCopier, SimulatedTimeCopier, type TimeCopier } from './time/copy-out';
 import { ConntrackSensor, DevicesSensor, DnsLogSensor, DomeEngine, DomeStore, SimulatedSensor, type DomeSensor } from '@fbrx/dome/node';
 import { DEFAULT_CONTROL_PLANE_PORT, type MeshNetworkComputer } from '@fbrx/shared';
 
@@ -92,6 +93,7 @@ export interface BuildOptions {
   domeSensors?: DomeSensor[];
   /** FBRX Time works through this (tests). */
   timeDriver?: TimeDriver;
+  timeCopier?: TimeCopier;
   /** The file server works through this (tests). */
   filesSystem?: FilesSystem;
 }
@@ -228,6 +230,9 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
       log: (level, msg) => app.log[level](msg),
       // With the ai role, this server's AI looks at checks that fail or warn.
       advise: config.roles.includes('ai') ? (prompt) => ctx.core.call<{ answer: string; model: string }>('ai.quick', { reqId: randomUUID(), prompt }, 'fbrx-time', 120_000) : undefined,
+      // Copies of each new image off the server (Settings): a NAS, an NFS export or a drive plugged in.
+      copier: opts.timeCopier ?? (config.time.mode === 'libvirt' ? new LinuxTimeCopier({ workDir: join(config.dataDir, 'time-work') }) : new SimulatedTimeCopier(join(config.dataDir, 'time-copies'))),
+      key,
     });
     ctx.time = time;
     time.start();

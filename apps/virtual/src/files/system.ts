@@ -193,29 +193,12 @@ export class LinuxFilesSystem implements FilesSystem {
     if (mine) await this.must('userdel', [name]);
   }
 
-  private async mount(place: Exclude<BackupPlace, { kind: 'folder' }>, at: string, work: string, readOnly: boolean, signal: AbortSignal) {
-    mkdirSync(at, { recursive: true });
-    if (place.kind === 'smb') {
-      const share = smbPath(place.path);
-      if (!share) throw new Error(`${place.path} is not a shared folder's path (\\\\device\\folder)`);
-      const cred = join(work, `${basename(at)}.cred`);
-      writeFileSync(cred, cifsCredentials(place.user, place.password), { mode: 0o600 });
-      try {
-        const r = await this.run('mount', ['-t', 'cifs', share, at, '-o', `credentials=${cred},iocharset=utf8,${readOnly ? 'ro' : 'rw,file_mode=0660,dir_mode=0770'}`], { timeoutMs: 60_000, signal });
-        if (r.code !== 0) throw new Error(`${place.path} could not be opened: ${mountWords(tail(r.err || r.out))}`);
-      } finally {
-        unlinkSync(cred);
-      }
-    } else {
-      const exp = nfsPath(place.path);
-      if (!exp) throw new Error(`${place.path} is not an NFS export (device:/folder)`);
-      const r = await this.run('mount', ['-t', 'nfs', exp, at, '-o', readOnly ? 'ro' : 'rw'], { timeoutMs: 60_000, signal });
-      if (r.code !== 0) throw new Error(`${place.path} could not be opened: ${mountWords(tail(r.err || r.out))}`);
-    }
+  private mount(place: Exclude<BackupPlace, { kind: 'folder' }>, at: string, work: string, readOnly: boolean, signal: AbortSignal) {
+    return mountPlace(this.run, place, at, work, readOnly, signal);
   }
 
-  private async unmount(at: string) {
-    if ((await this.run('umount', [at], { timeoutMs: 60_000 })).code !== 0) await this.run('umount', ['-l', at], { timeoutMs: 30_000 });
+  private unmount(at: string) {
+    return unmountPlace(this.run, at);
   }
 
   async backup(job: BackupJob, signal: AbortSignal): Promise<BackupResult> {
@@ -261,6 +244,43 @@ export class LinuxFilesSystem implements FilesSystem {
       }
     }
   }
+}
+
+/** A place another device keeps copies: a shared folder (SMB), an NFS export, or a drive plugged into the server. */
+export type MountPlace = Exclude<BackupPlace, { kind: 'folder' }> | { kind: 'drive'; uuid: string };
+
+/**
+ * Opens a place at `at` (root only): mount.cifs with a credentials file in `work` that is removed straight after, NFS,
+ * or a drive by its file system's UUID.
+ */
+export async function mountPlace(runner: Runner, place: MountPlace, at: string, work: string, readOnly: boolean, signal: AbortSignal): Promise<void> {
+  mkdirSync(at, { recursive: true });
+  if (place.kind === 'smb') {
+    const share = smbPath(place.path);
+    if (!share) throw new Error(`${place.path} is not a shared folder's path (\\\\device\\folder)`);
+    const cred = join(work, `${basename(at)}.cred`);
+    writeFileSync(cred, cifsCredentials(place.user, place.password), { mode: 0o600 });
+    try {
+      const r = await runner('mount', ['-t', 'cifs', share, at, '-o', `credentials=${cred},iocharset=utf8,${readOnly ? 'ro' : 'rw,file_mode=0660,dir_mode=0770'}`], { timeoutMs: 60_000, signal });
+      if (r.code !== 0) throw new Error(`${place.path} could not be opened: ${mountWords(tail(r.err || r.out))}`);
+    } finally {
+      unlinkSync(cred);
+    }
+  } else if (place.kind === 'nfs') {
+    const exp = nfsPath(place.path);
+    if (!exp) throw new Error(`${place.path} is not an NFS export (device:/folder)`);
+    const r = await runner('mount', ['-t', 'nfs', exp, at, '-o', readOnly ? 'ro' : 'rw'], { timeoutMs: 60_000, signal });
+    if (r.code !== 0) throw new Error(`${place.path} could not be opened: ${mountWords(tail(r.err || r.out))}`);
+  } else {
+    if (!/^[A-Za-z0-9-]{4,64}$/.test(place.uuid)) throw new Error('That is not a drive this server knows');
+    const r = await runner('mount', [`UUID=${place.uuid}`, at, '-o', readOnly ? 'ro' : 'rw'], { timeoutMs: 60_000, signal });
+    if (r.code !== 0) throw new Error(`The drive could not be opened (is it plugged in?): ${mountWords(tail(r.err || r.out))}`);
+  }
+}
+
+/** Closes a place opened with mountPlace (lazily when something still holds it). */
+export async function unmountPlace(runner: Runner, at: string): Promise<void> {
+  if ((await runner('umount', [at], { timeoutMs: 60_000 })).code !== 0) await runner('umount', ['-l', at], { timeoutMs: 30_000 });
 }
 
 /** mount's errors, in words. */

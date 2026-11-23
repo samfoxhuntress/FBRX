@@ -14,11 +14,7 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
    config, skills, memory and MCP servers, starting with Hermes Agent (`~/.hermes`). Sam runs a Hermes agent with its
    own soul.md on each lab machine and wants FBRX OS to take that role over. Then other agent tools' instruction and
    config files. FBRX already writes itself into Hermes' config (AI coordination, 2.1.2); this is the other direction.
-3. **FBRX Time: back up to a NAS or an external drive.** Sam found no way to send a Time backup to a network share or
-   an external hard drive. Check whether it exists but is hard to find; if not, add both as backup destinations.
-4. **FBRX Time: change the backup location afterwards.** Once the backup location is set there is no way to edit it.
-   Let it be changed later, and say what happens to the backups already made there.
-5. **FBRX Virtual: long pastes into a VM come out garbled.** Pasting long text into a VM works for the first part,
+3. **FBRX Virtual: long pastes into a VM come out garbled.** Pasting long text into a VM works for the first part,
    then the characters come out wrong. If the paste is typed into the VM as keystrokes, check whether they are sent
    faster than the VM takes them (pace them, or send in chunks with a pause), and test with long text and symbols.
 
@@ -28,4 +24,7 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
   alerts to FBRX OS. Needs both an FBRX OS and a Digger release. (FBRX OS showed the drive warning too; Sam confirmed.)
 * FBRX Server: quick downloads in the ISO library (Ubuntu 26.04 LTS Desktop and Server, newest point release, checked
   against Ubuntu's SHA256SUMS) and thin or thick provisioned disks for new VMs. Needs an FBRX Server release; the look
-  waits for Sam's approval.
+  was approved by Sam.
+* FBRX Time on FBRX Server: copies of each new image off the server (a NAS share, an NFS export or a USB drive), tested
+  before saving, changeable any time. FBRX Endpoint already had a drive or network folder and Change… on Windows. Needs
+  an FBRX Server release; the look waits for Sam's approval.

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { describeSchedule, WEEKDAYS, type BootCheckState, type TimeImage, type TimeJob, type TimeStatus, type TimeTask, type VmSummary } from '@fbrx/shared';
+import { describeSchedule, WEEKDAYS, type BootCheckState, type TimeCopyOut, type TimeDrive, type TimeImage, type TimeJob, type TimeStatus, type TimeTask, type VmSummary } from '@fbrx/shared';
 import { Button, Callout, Card, CopyText, Empty, Field, formatBytes, formatDate, Grid, Input, KeyValue, Modal, Page, Select, StatTile, Status, Table, Tabs, timeAgo, Toggle, useAction, useConfirm, useToast, type StatusTone } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, usePoll, useRoute } from '../state';
@@ -8,7 +8,7 @@ type Tab = 'overview' | 'jobs' | 'images' | 'computers' | 'settings';
 
 const CHECK_TONE: Record<BootCheckState, StatusTone> = { none: 'neutral', queued: 'busy', running: 'busy', passed: 'good', warning: 'warning', failed: 'critical' };
 const CHECK_WORDS: Record<BootCheckState, string> = { none: 'Not checked', queued: 'Check waiting', running: 'Checking…', passed: 'Tested: it starts', warning: 'Look at it', failed: 'Did not start' };
-const KIND_WORDS: Record<TimeTask['kind'], string> = { backup: 'Backup', check: 'Boot check', restore: 'Restore', import: 'Kept from the backup folder' };
+const KIND_WORDS: Record<TimeTask['kind'], string> = { backup: 'Backup', check: 'Boot check', restore: 'Restore', import: 'Kept from the backup folder', copy: 'Copied off the server' };
 const CONSISTENCY: Record<TimeImage['consistency'], string> = {
   offline: 'The machine was off',
   quiesced: 'Consistent (the guest agent paused writes)',
@@ -61,7 +61,7 @@ export function TimePage({ tab }: { tab?: string }) {
           />
           {active === 'overview' && <Overview s={s} reload={st.reload} />}
           {active === 'jobs' && <Jobs />}
-          {active === 'images' && <Images />}
+          {active === 'images' && <Images copies={!!s.copyOut} />}
           {active === 'computers' && <Computers s={s} reload={st.reload} />}
           {active === 'settings' && app.can('admin') && <Settings s={s} reload={st.reload} />}
         </>
@@ -382,7 +382,7 @@ function RestoreDialog({ image, onClose }: { image: TimeImage; onClose: () => vo
   );
 }
 
-function Images() {
+function Images({ copies }: { copies: boolean }) {
   const app = useApp();
   const [subject, setSubject] = useState('');
   const images = usePoll<{ images: TimeImage[] }>('/v1/time/images', 4000);
@@ -441,6 +441,11 @@ function Images() {
                 {app.can('operator') && (
                   <Button size="sm" icon="play" disabled={i.check.state === 'queued' || i.check.state === 'running'} loading={busy === `c:${i.id}`} onClick={() => void run(`c:${i.id}`, () => api('POST', `/v1/time/images/${i.id}/check`).then(() => images.reload()), 'Boot check started')}>
                     Check
+                  </Button>
+                )}
+                {app.can('operator') && copies && (
+                  <Button size="sm" variant="ghost" icon="upload" loading={busy === `o:${i.id}`} title="Copy it to the place set in Settings" onClick={() => void run(`o:${i.id}`, () => api('POST', `/v1/time/images/${i.id}/copy`), 'Copying it off the server')}>
+                    Copy
                   </Button>
                 )}
                 {app.can('admin') && (
@@ -543,22 +548,161 @@ function Settings({ s, reload }: { s: TimeStatus; reload: () => Promise<void> })
   const { run } = useAction();
   const save = (p: Partial<TimeStatus['settings']>) => void run('s', () => api('PUT', '/v1/time/settings', p).then(reload), 'Saved');
   return (
-    <Card title="Settings">
-      <div className="fx-form">
-        <Toggle checked={s.settings.verifyComputers} onChange={(v) => save({ verifyComputers: v })} label="Check computers' images when they arrive (start each one as a throwaway machine)" />
-        <Toggle checked={s.settings.checkNetwork} onChange={(v) => save({ checkNetwork: v })} label="See it come online: give the throwaway machine a private test network that reaches nothing else" />
-        <Toggle checked={s.settings.aiAdvice} onChange={(v) => save({ aiAdvice: v })} label="When a check fails or warns, this server's AI looks at it and says what to do (with the ai role)" />
-        <Field label="How long a boot check lets the machine run" help="Then it looks at the machine: still running, its screen, and (when the machine has one) its guest agent. Windows can need a few minutes.">
+    <div style={{ display: 'grid', gap: 16 }}>
+      <CopyOutCard s={s} reload={reload} />
+      <Card title="Settings">
+        <div className="fx-form">
+          <Toggle checked={s.settings.verifyComputers} onChange={(v) => save({ verifyComputers: v })} label="Check computers' images when they arrive (start each one as a throwaway machine)" />
+          <Toggle checked={s.settings.checkNetwork} onChange={(v) => save({ checkNetwork: v })} label="See it come online: give the throwaway machine a private test network that reaches nothing else" />
+          <Toggle checked={s.settings.aiAdvice} onChange={(v) => save({ aiAdvice: v })} label="When a check fails or warns, this server's AI looks at it and says what to do (with the ai role)" />
+          <Field label="How long a boot check lets the machine run" help="Then it looks at the machine: still running, its screen, and (when the machine has one) its guest agent. Windows can need a few minutes.">
+            <div className="fx-actions">
+              <Input type="number" min={30} max={1800} value={seconds} style={{ width: 120 }} onChange={(e) => setSeconds(Number(e.target.value))} onBlur={() => seconds !== s.settings.checkSeconds && save({ checkSeconds: seconds })} />
+              <span className="fx-muted">seconds</span>
+            </div>
+          </Field>
+          <Field label="Images kept of each computer">
+            <Input type="number" min={1} max={365} value={keep} style={{ width: 120 }} onChange={(e) => setKeep(Number(e.target.value))} onBlur={() => keep !== s.settings.keepComputer && save({ keepComputer: keep })} />
+          </Field>
+          <KeyValue items={[['Images are kept in', <code key="r">{s.repository}</code>]]} />
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+const PLACE_WORDS: Record<TimeCopyOut['kind'], string> = { smb: 'A shared folder on a NAS (SMB)', nfs: 'An NFS export', drive: 'A drive plugged into this server' };
+
+/** Copies of each new image off the server, so a backup outlives the server's own disks. */
+function CopyOutCard({ s, reload }: { s: TimeStatus; reload: () => Promise<void> }) {
+  const [editing, setEditing] = useState(false);
+  const { busy, run } = useAction();
+  const { confirm, dialog } = useConfirm();
+  const c = s.copyOut;
+  const stop = async () => {
+    if (await confirm({ title: 'Stop copying images off the server?', body: 'New images stay on this server only. The copies already made stay where they are.', confirmLabel: 'Stop copying', danger: true })) void run('off', () => api('DELETE', '/v1/time/copy-out').then(reload), 'Images are no longer copied');
+  };
+  return (
+    <Card
+      title="Copies off the server"
+      subtitle="Each new image also goes to a NAS or a drive, so a backup outlives this server. Boot checks and restores still use the images here."
+      actions={c && <Status tone={!c.last ? 'neutral' : c.last.ok ? 'good' : 'critical'}>{!c.last ? 'No copy yet' : c.last.ok ? `Copied ${timeAgo(c.last.at)}` : 'The last copy failed'}</Status>}
+    >
+      {c ? (
+        <div className="fx-form">
+          <KeyValue
+            items={[
+              ['Where', <span key="w">{PLACE_WORDS[c.kind]}: <code>{c.label}</code></span>],
+              ...(c.kind === 'smb' ? ([['Account', c.user]] as Array<[string, string]>) : []),
+              ['Keeps there', `The newest ${c.keep} of each machine and computer`],
+              ['Folder there', <code key="f">FBRX Time</code>],
+            ]}
+          />
+          {c.last && !c.last.ok && <Callout tone="critical" title="The last copy did not work">{c.last.detail}</Callout>}
           <div className="fx-actions">
-            <Input type="number" min={30} max={1800} value={seconds} style={{ width: 120 }} onChange={(e) => setSeconds(Number(e.target.value))} onBlur={() => seconds !== s.settings.checkSeconds && save({ checkSeconds: seconds })} />
-            <span className="fx-muted">seconds</span>
+            <Button icon="settings" onClick={() => setEditing(true)}>
+              Change…
+            </Button>
+            <span style={{ flex: 1 }} />
+            <Button variant="ghost" icon="trash" loading={busy === 'off'} onClick={() => void stop()}>
+              Stop copying
+            </Button>
           </div>
-        </Field>
-        <Field label="Images kept of each computer">
-          <Input type="number" min={1} max={365} value={keep} style={{ width: 120 }} onChange={(e) => setKeep(Number(e.target.value))} onBlur={() => keep !== s.settings.keepComputer && save({ keepComputer: keep })} />
-        </Field>
-        <KeyValue items={[['Images are kept in', <code key="r">{s.repository}</code>]]} />
-      </div>
+        </div>
+      ) : (
+        <div className="fx-form">
+          <p className="fx-muted" style={{ margin: 0 }}>Images are kept on this server only. If its disks fail, its backups go with them.</p>
+          <div className="fx-actions">
+            <Button variant="primary" icon="upload" onClick={() => setEditing(true)}>
+              Copy images off the server…
+            </Button>
+          </div>
+        </div>
+      )}
+      {editing && <CopyOutDialog current={c} onClose={() => setEditing(false)} onSaved={() => void reload()} />}
+      {dialog}
     </Card>
+  );
+}
+
+function CopyOutDialog({ current, onClose, onSaved }: { current: TimeCopyOut | null; onClose: () => void; onSaved: () => void }) {
+  const [kind, setKind] = useState<TimeCopyOut['kind']>(current?.kind ?? 'smb');
+  const [path, setPath] = useState(current?.kind === 'smb' ? current.label : current?.kind === 'nfs' ? current.path : '');
+  const [user, setUser] = useState(current?.user ?? '');
+  const [password, setPassword] = useState('');
+  const [drive, setDrive] = useState(current?.kind === 'drive' ? current.path : '');
+  const [keep, setKeep] = useState(current?.keep ?? 7);
+  const [drives, setDrives] = useState<TimeDrive[] | null>(null);
+  const { busy, run } = useAction();
+  const look = () => void api<{ drives: TimeDrive[] }>('GET', '/v1/time/copy-out/drives').then((r) => setDrives(r.drives), () => setDrives([]));
+  useEffect(() => {
+    if (kind === 'drive' && drives === null) look();
+  }, [kind]);
+  const keepsPassword = current?.kind === 'smb' && kind === 'smb' && current.user === user.trim();
+  const ready = kind === 'drive' ? !!drive : !!path.trim() && (kind === 'nfs' || (!!user.trim() && (!!password || keepsPassword)));
+  const save = () =>
+    run('save', async () => {
+      await api('PUT', '/v1/time/copy-out', { kind, path: kind === 'drive' ? drive : path.trim(), user: kind === 'smb' ? user.trim() : undefined, password: kind === 'smb' && password ? password : undefined, keep });
+      onSaved();
+      onClose();
+    }, 'Saved: each new image is copied there');
+  return (
+    <Modal
+      title={current ? 'Change where images are copied' : 'Copy images off the server'}
+      description="FBRX Time opens the place and writes a test file before saving, so a wrong path or password shows now."
+      onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" loading={busy === 'save'} disabled={!ready || keep < 1} onClick={() => void save()}>
+            Save
+          </Button>
+        </>
+      }
+    >
+      <div className="fx-form">
+        <Field label="Where">
+          <Select value={kind} onChange={(e) => setKind(e.target.value as TimeCopyOut['kind'])} options={(Object.keys(PLACE_WORDS) as Array<TimeCopyOut['kind']>).map((k) => ({ value: k, label: PLACE_WORDS[k] }))} />
+        </Field>
+        {kind === 'smb' && (
+          <>
+            <Field label="Shared folder" help="The NAS's name or address, then the shared folder.">
+              <Input value={path} placeholder="\\nas\backups" onChange={(e) => setPath(e.target.value)} spellCheck={false} />
+            </Field>
+            <Grid cols={2}>
+              <Field label="Account">
+                <Input value={user} autoComplete="off" onChange={(e) => setUser(e.target.value)} spellCheck={false} />
+              </Field>
+              <Field label="Password" help={keepsPassword ? 'Leave empty to keep the one saved.' : undefined}>
+                <Input type="password" value={password} autoComplete="new-password" onChange={(e) => setPassword(e.target.value)} />
+              </Field>
+            </Grid>
+          </>
+        )}
+        {kind === 'nfs' && (
+          <Field label="NFS export" help="The NAS must let this server write there.">
+            <Input value={path} placeholder="nas:/export/backups" onChange={(e) => setPath(e.target.value)} spellCheck={false} />
+          </Field>
+        )}
+        {kind === 'drive' && (
+          <Field label="Drive" help="USB drives plugged into the server. FBRX Time opens it for each copy and closes it after, so it can be unplugged between backups.">
+            <div className="fx-actions" style={{ flexWrap: 'nowrap' }}>
+              <div style={{ flex: 1 }}>
+                <Select
+                  value={drive}
+                  onChange={(e) => setDrive(e.target.value)}
+                  options={[{ value: '', label: drives === null ? 'Looking…' : drives.length ? 'Choose a drive' : 'No drive plugged in' }, ...(drives ?? []).map((d) => ({ value: d.uuid, label: `${d.label || d.model || 'Drive'}: ${formatBytes(d.sizeBytes)}, ${d.fileSystem}` }))]}
+                />
+              </div>
+              <Button variant="ghost" icon="refresh" aria-label="Look again" onClick={() => (setDrives(null), look())} />
+            </div>
+          </Field>
+        )}
+        <Field label="Images kept there of each machine and computer" help="The oldest copies there are removed after a new one is copied. Images on this server follow their own settings.">
+          <Input type="number" min={1} max={365} value={keep} style={{ width: 120 }} onChange={(e) => setKeep(Math.round(Number(e.target.value)))} />
+        </Field>
+        {current && <Callout tone="info">New images go to the new place. The copies already made stay where they are.</Callout>}
+      </div>
+    </Modal>
   );
 }

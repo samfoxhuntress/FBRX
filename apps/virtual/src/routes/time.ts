@@ -119,6 +119,30 @@ export async function timeRoutes(app: FastifyInstance, ctx: VirtualContext) {
     return audited(ctx, req, 'time.cancel', null, () => ({ stopped: time().cancelCurrent() }));
   });
 
+  // Copies of each new image off the server: a NAS (SMB), an NFS export, or a drive plugged into the server.
+  app.get('/v1/time/copy-out/drives', async (req) => {
+    need(req, 'admin');
+    return { drives: await time().drives() };
+  });
+
+  app.put('/v1/time/copy-out', async (req) => {
+    need(req, 'admin');
+    const body = z.object({ kind: z.enum(['smb', 'nfs', 'drive']), path: z.string().max(300), user: z.string().max(100).optional(), password: z.string().max(256).optional(), keep: z.number().int() }).parse(req.body);
+    const { password: _p, ...details } = body;
+    return audited(ctx, req, 'time.copyOut', body.path, async () => ({ copyOut: await time().setCopyOut(body) }), details);
+  });
+
+  app.delete('/v1/time/copy-out', async (req) => {
+    need(req, 'admin');
+    return audited(ctx, req, 'time.copyOut.off', null, () => (time().clearCopyOut(), { copyOut: null }));
+  });
+
+  app.post('/v1/time/images/:id/copy', async (req) => {
+    need(req, 'operator');
+    const { id } = z.object({ id: z.string().max(100) }).parse(req.params);
+    return audited(ctx, req, 'time.copy', id, () => ({ task: time().copyImage(id) }));
+  });
+
   app.put('/v1/time/settings', async (req) => {
     need(req, 'admin');
     const body = z.object({ verifyComputers: z.boolean(), checkSeconds: z.number().int(), keepComputer: z.number().int(), checkNetwork: z.boolean(), aiAdvice: z.boolean() }).partial().parse(req.body);
