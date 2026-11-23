@@ -155,7 +155,10 @@ and sign-in is in the audit log.
 
 * **Virtual machines.** *New virtual machine* picks sensible devices for the operating system: Windows gets SATA disks
   and an Intel network card (installs with no extra drivers), Secure Boot and a TPM for Windows 11; Linux gets the fast
-  virtio devices. Disks are thin qcow2 files in `/var/lib/fbrx-virtual/images`.
+  virtio devices. Disks are qcow2 files in `/var/lib/fbrx-virtual/images`. **Disk provisioning** picks how a disk takes
+  its space: **thin provisioned** (dynamically expanding, the default) uses space only as the machine writes data, up to
+  the disk's size, and gives back what the machine frees; **thick provisioned** (fixed size) allocates the whole size
+  when the machine is made, so the space is guaranteed (it has to fit in what the storage has free).
 * **Screen.** Each running machine's screen opens in the browser (VNC relayed by FBRX Virtual; the VNC ports themselves
   only listen on the server). Ctrl+Alt+Del and full screen are in the toolbar, and **Paste** sends text from your
   computer: it shows your clipboard (or a box to paste into), then types it into the machine as on a US keyboard, so it
@@ -164,7 +167,9 @@ and sign-in is in the audit log.
   settings outside the disk, which QEMU cannot put in a snapshot, so they are snapshotted (and restored) while off.
 * **Changes.** Processors and memory change at the machine's next start (the page says so); the CD drive, the disk size
   and processor placement change right away.
-* **ISOs.** Upload installers, or have the server download them from a web address (faster).
+* **ISOs.** Upload installers, or have the server download them from a web address (faster). **Quick downloads** fetch
+  the major operating systems in one click (Ubuntu 26.04 LTS Desktop and Server, for the server's kind of processor):
+  the server takes the newest release and keeps the image only when it matches the checksum its publisher lists.
 * **Networks.** Each network is a card showing the way out: machines → the network or switch → where it leads, and
   which machines are plugged in. `default` is a private network with internet through the server: machines reach the
   internet, nothing on your network reaches them. To put machines **on your network** (next to your other devices,

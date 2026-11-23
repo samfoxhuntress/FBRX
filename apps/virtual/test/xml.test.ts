@@ -5,6 +5,13 @@ import { buildDomainXml, editDomainXml, hostdevXml, parseDomainXml, setNicSource
 const linux: VmCreateSpec = { name: 'web-01', os: 'linux', cpus: 2, memoryMb: 2048, diskGb: 20, network: { kind: 'network', source: 'default' }, firmware: 'bios', description: 'Web & <proxy>' };
 
 describe('domain XML', () => {
+  it('lets a thin disk give freed space back, and keeps a thick one whole', () => {
+    const build = (provisioning?: 'thin' | 'thick') => buildDomainXml({ spec: { ...linux, provisioning }, domainType: 'kvm', diskPath: '/i/web-01.qcow2', isoPath: null, tpmAvailable: false, createdAt: '2026-11-23T00:00:00.000Z' });
+    expect(build()).toContain("<driver name='qemu' type='qcow2' discard='unmap'/>");
+    expect(build('thin')).toContain("discard='unmap'");
+    expect(build('thick')).toContain("<driver name='qemu' type='qcow2'/>");
+  });
+
   it('builds a Linux machine and reads it back', () => {
     const xml = buildDomainXml({ spec: linux, domainType: 'kvm', diskPath: '/var/lib/fbrx-virtual/images/web-01.qcow2', isoPath: '/isos/debian.iso', tpmAvailable: false, createdAt: '2026-10-06T00:00:00.000Z' });
     expect(xml).toContain("<domain type='kvm'>");

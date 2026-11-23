@@ -116,6 +116,11 @@ export interface VmCreateSpec {
   cpus: number;
   memoryMb: number;
   diskGb: number;
+  /**
+   * How the disk takes its space. Thin provisioned (dynamically expanding, the default): the disk file grows as the VM
+   * writes, up to its size. Thick provisioned (fixed size): all of it is allocated when the VM is created.
+   */
+  provisioning?: 'thin' | 'thick';
   pool?: string;
   /** An ISO from the ISO library, put in the virtual CD drive. */
   iso?: string | null;

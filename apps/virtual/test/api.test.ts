@@ -62,6 +62,11 @@ describe('FBRX Virtual API', () => {
     expect((await call('POST', '/v1/vms', operator, { ...spec, name: 'bad name!' })).status).toBe(400);
     expect((await call('POST', '/v1/vms', operator, { ...spec, secureBoot: true })).status).toBe(400);
     expect((await call('POST', '/v1/vms', operator, { ...spec, iso: 'missing.iso' })).status).toBe(404);
+    expect((await call('POST', '/v1/vms', operator, { ...spec, provisioning: 'eager' })).status).toBe(400);
+    // Thick provisioned: the whole disk is allocated when the machine is made.
+    const thick = await call('POST', '/v1/vms', operator, { ...spec, name: 'db-01', provisioning: 'thick' });
+    expect(thick.body.disks.find((d: { device: string }) => d.device === 'disk')).toMatchObject({ sizeGb: 20, allocatedGb: 20 });
+    expect((await call('DELETE', `/v1/vms/${thick.body.id}`, admin)).status).toBe(200);
     const made = await call('POST', '/v1/vms', operator, spec);
     expect(made.status).toBe(200);
     const id = made.body.id;

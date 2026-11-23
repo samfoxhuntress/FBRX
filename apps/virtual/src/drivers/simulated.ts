@@ -13,6 +13,7 @@ interface SimVm {
   cpus: number;
   memoryMb: number;
   diskGb: number;
+  provisioning?: 'thin' | 'thick';
   pool: string;
   autostart: boolean;
   description: string;
@@ -130,7 +131,7 @@ export class SimulatedHypervisor implements Hypervisor {
       tpm: v.tpm,
       machine: 'pc-q35',
       disks: [
-        { target: win ? 'sda' : 'vda', device: 'disk', path: `/simulated/${v.pool}/${v.name}.qcow2`, bus: win ? 'sata' : 'virtio', sizeGb: v.diskGb, allocatedGb: Math.round(v.diskGb * 0.3 * 100) / 100 },
+        { target: win ? 'sda' : 'vda', device: 'disk', path: `/simulated/${v.pool}/${v.name}.qcow2`, bus: win ? 'sata' : 'virtio', sizeGb: v.diskGb, allocatedGb: v.provisioning === 'thick' ? v.diskGb : Math.round(v.diskGb * 0.3 * 100) / 100 },
         { target: win ? 'sdb' : 'sda', device: 'cdrom', path: v.iso, bus: 'sata', sizeGb: null, allocatedGb: null },
       ],
       nics: [{ mac: v.mac, kind: v.network.kind, source: v.network.source, model: win ? 'e1000e' : 'virtio', ip: s.ip }],
@@ -160,6 +161,7 @@ export class SimulatedHypervisor implements Hypervisor {
       cpus: spec.cpus,
       memoryMb: spec.memoryMb,
       diskGb: spec.diskGb,
+      provisioning: spec.provisioning ?? 'thin',
       pool: spec.pool ?? IMAGES_POOL,
       autostart: !!spec.autostart,
       description: spec.description ?? '',

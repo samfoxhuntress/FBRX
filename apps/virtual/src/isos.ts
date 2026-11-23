@@ -1,6 +1,6 @@
 import { createWriteStream, existsSync, mkdirSync, readdirSync, renameSync, rmSync, statSync } from 'node:fs';
 import { isAbsolute, join, relative, sep } from 'node:path';
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import type { IsoDownload, IsoImage } from '@fbrx/shared';
@@ -83,8 +83,11 @@ export class IsoLibrary {
     return this.list().find((i) => i.name === name)!;
   }
 
-  /** Starts downloading an image from the internet in the background. */
-  download(url: string, name: string, fetcher: typeof fetch = fetch): IsoDownload {
+  /**
+   * Starts downloading an image from the internet in the background. With `sha256` (a quick download), the image is
+   * kept only when it matches the checksum its publisher lists.
+   */
+  download(url: string, name: string, fetcher: typeof fetch = fetch, sha256?: string): IsoDownload {
     let u: URL;
     try {
       u = new URL(url);
@@ -104,7 +107,15 @@ export class IsoLibrary {
         const len = Number(res.headers.get('content-length'));
         d.total = Number.isFinite(len) && len > 0 ? len : null;
         if (d.total && d.total > this.maxBytes) throw new Error(`It is ${Math.round(d.total / 1024 ** 3)} GB; the limit is ${Math.round(this.maxBytes / 1024 ** 3)} GB`);
-        await pipeline(Readable.fromWeb(res.body as never), this.limiter((n) => (d.received = n)), createWriteStream(part), { signal: abort.signal });
+        const hash = createHash('sha256');
+        const tap = new Transform({
+          transform(chunk: Buffer, _enc, cb) {
+            hash.update(chunk);
+            cb(null, chunk);
+          },
+        });
+        await pipeline(Readable.fromWeb(res.body as never), this.limiter((n) => (d.received = n)), tap, createWriteStream(part), { signal: abort.signal });
+        if (sha256 && hash.digest('hex') !== sha256.toLowerCase()) throw new Error('It does not match the checksum its publisher lists, so it was not kept. Try again.');
         renameSync(part, join(this.dir, name));
         d.state = 'done';
         await this.onChange().catch(() => undefined);

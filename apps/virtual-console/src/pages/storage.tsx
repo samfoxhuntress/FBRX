@@ -26,6 +26,8 @@ function IsoLibrary() {
   const [uploading, setUploading] = useState<{ name: string; fraction: number; abort: AbortController } | null>(null);
   const [fetchOpen, setFetchOpen] = useState(false);
   const op = app.can('operator');
+  // Quick downloads: the major operating systems' installers (the server picks the newest release and checks it).
+  const catalog = usePoll<{ catalog: Array<{ id: string; name: string; note: string }> }>(op ? '/v1/isos/catalog' : null, 3_600_000);
   const pick = async (f: File) => {
     const name = f.name.replace(/[^A-Za-z0-9._+()-]/g, '-').replace(/^[^A-Za-z0-9]+/, '');
     if (!/\.(iso|img)$/i.test(name)) return toast.error('Choose an .iso or .img file');
@@ -62,6 +64,16 @@ function IsoLibrary() {
           )
         }
       >
+        {op && !!catalog.data?.catalog.length && (
+          <div style={{ padding: 12, flexWrap: 'wrap' }} className="fx-row">
+            <span className="fx-muted">Quick downloads</span>
+            {catalog.data.catalog.map((c) => (
+              <Button key={c.id} size="sm" icon="download" title={c.note} loading={busy === c.id} onClick={() => void run(c.id, async () => { await api('POST', `/v1/isos/catalog/${c.id}`); await data.reload(); }, `${c.name} is downloading`)}>
+                {c.name}
+              </Button>
+            ))}
+          </div>
+        )}
         {uploading && (
           <div style={{ padding: 12 }} className="fx-row">
             <div style={{ flex: 1 }}>

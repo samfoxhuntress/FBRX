@@ -73,7 +73,8 @@ export function buildDomainXml(b: DomainBuild): string {
     `  <on_crash>destroy</on_crash>`,
     `  <devices>`,
     `    <disk type='file' device='disk'>`,
-    `      <driver name='qemu' type='qcow2' discard='unmap'/>`,
+    // A thin disk gives space back when the guest frees it; a thick one keeps all of it.
+    `      <driver name='qemu' type='qcow2'${spec.provisioning === 'thick' ? '' : " discard='unmap'"}/>`,
     `      <source file='${esc(b.diskPath)}'/>`,
     `      <target dev='${diskDev}' bus='${diskBus}'/>`,
     `    </disk>`,

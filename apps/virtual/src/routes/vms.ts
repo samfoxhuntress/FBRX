@@ -16,6 +16,7 @@ const Spec = z.object({
   cpus: z.number().int().min(1).max(128),
   memoryMb: z.number().int().min(128).max(4 * 1024 * 1024),
   diskGb: z.number().int().min(1).max(64 * 1024),
+  provisioning: z.enum(['thin', 'thick']).optional(),
   pool: z.string().max(64).optional(),
   iso: z.string().max(200).nullable().optional(),
   network: z.object({ kind: z.enum(['network', 'bridge']), source: z.string().regex(/^[A-Za-z0-9._-]{1,64}$/) }),
@@ -51,7 +52,7 @@ export async function vmRoutes(app: FastifyInstance, ctx: VirtualContext) {
     const spec = Spec.parse(req.body) as VmCreateSpec;
     if (spec.secureBoot && spec.firmware !== 'uefi') throw badRequest('Secure Boot needs UEFI firmware');
     const iso = spec.iso ? ctx.isos.path(spec.iso) : null;
-    return audited(ctx, req, 'vm.create', spec.name, () => ctx.hv.createVm(spec, iso), { cpus: spec.cpus, memoryMb: spec.memoryMb, diskGb: spec.diskGb, os: spec.os, iso: spec.iso ?? null });
+    return audited(ctx, req, 'vm.create', spec.name, () => ctx.hv.createVm(spec, iso), { cpus: spec.cpus, memoryMb: spec.memoryMb, diskGb: spec.diskGb, provisioning: spec.provisioning ?? 'thin', os: spec.os, iso: spec.iso ?? null });
   });
 
   app.get('/v1/vms/:id', async (req) => {
