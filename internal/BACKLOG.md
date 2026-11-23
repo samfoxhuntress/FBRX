@@ -30,5 +30,4 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
 ## Fixed, waiting for a release
 
 * Digger follows FBRX OS in support mode (the developer unlock and support passes), and leaves the computer's health
-  alerts to FBRX OS. Needs both an FBRX OS and a Digger release. Still open: why FBRX OS on the iMac did not show the
-  drive warning itself (same check as Digger had). Check FBRX OS → Alerts for it, and macOS Notifications for FBRX OS.
+  alerts to FBRX OS. Needs both an FBRX OS and a Digger release. (FBRX OS showed the drive warning too; Sam confirmed.)
