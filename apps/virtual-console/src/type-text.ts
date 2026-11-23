@@ -57,27 +57,47 @@ export function keysFor(text: string): { keys: KeyStroke[]; skipped: number } {
   return { keys, skipped };
 }
 
-/** The most a paste types: about two minutes of keys. */
+/** The most a paste types: a few minutes of keys at PACE. */
 export const MAX_PASTE = 20_000;
+
+/**
+ * How fast a paste types. A virtual machine's keyboard (QEMU's PS/2 or USB) holds only a few keys; keys that arrive in
+ * a burst while the guest is busy are dropped, and a dropped Shift turns the rest of the text into the wrong case or
+ * symbols. So keys go a little apart, with a breath every few dozen keys and after each line (where a terminal or an
+ * editor does its work).
+ */
+export const PACE = { keyMs: 12, everyKeys: 32, pauseMs: 120, lineMs: 60 };
 
 type Sender = { sendKey(keysym: number, code: string | null, down?: boolean): void };
 
 /**
- * Types the keys into the machine, a few milliseconds apart so none are dropped, holding Shift where the US layout
- * needs it. Stops early when `signal` aborts; resolves with how many were typed.
+ * Types the keys into the machine at PACE, holding Shift over a run of keys that need it and letting it go before any
+ * key that does not (and at the end, whatever happened). Stops early when `signal` aborts; resolves with how many keys
+ * were typed.
  */
-export async function typeKeys(rfb: Sender, keys: KeyStroke[], o: { signal?: AbortSignal; onProgress?: (done: number) => void; delayMs?: number } = {}): Promise<number> {
-  const wait = () => new Promise((r) => setTimeout(r, o.delayMs ?? 8));
+export async function typeKeys(rfb: Sender, keys: KeyStroke[], o: { signal?: AbortSignal; onProgress?: (done: number) => void; pace?: Partial<typeof PACE> } = {}): Promise<number> {
+  const pace = { ...PACE, ...o.pace };
+  const wait = (ms: number) => (ms > 0 ? new Promise((r) => setTimeout(r, ms)) : Promise.resolve());
+  let shift = false;
+  const setShift = (down: boolean) => {
+    if (down === shift) return;
+    rfb.sendKey(SHIFT.keysym, SHIFT.code, down);
+    shift = down;
+  };
   let done = 0;
-  for (const k of keys) {
-    if (o.signal?.aborted) break;
-    if (k.shift) rfb.sendKey(SHIFT.keysym, SHIFT.code, true);
-    rfb.sendKey(k.keysym, k.code, true);
-    rfb.sendKey(k.keysym, k.code, false);
-    if (k.shift) rfb.sendKey(SHIFT.keysym, SHIFT.code, false);
-    done++;
-    if (done % 25 === 0) o.onProgress?.(done);
-    await wait();
+  try {
+    for (const k of keys) {
+      if (o.signal?.aborted) break;
+      setShift(k.shift);
+      rfb.sendKey(k.keysym, k.code, true);
+      rfb.sendKey(k.keysym, k.code, false);
+      done++;
+      if (done % 25 === 0) o.onProgress?.(done);
+      await wait(k.code === 'Enter' ? pace.lineMs : pace.keyMs);
+      if (done % pace.everyKeys === 0) await wait(pace.pauseMs);
+    }
+  } finally {
+    setShift(false);
   }
   o.onProgress?.(done);
   return done;

@@ -26,11 +26,36 @@ describe('pasting into a virtual machine', () => {
   it('presses and releases each key, holding Shift around shifted ones, and stops when asked', async () => {
     const sent: string[] = [];
     const rfb = { sendKey: (_: number, code: string | null, down?: boolean) => void sent.push(`${code}${down ? '↓' : '↑'}`) };
-    expect(await typeKeys(rfb, keysFor('aB').keys, { delayMs: 0 })).toBe(2);
+    const now = { keyMs: 0, pauseMs: 0, lineMs: 0 };
+    expect(await typeKeys(rfb, keysFor('aB').keys, { pace: now })).toBe(2);
     expect(sent).toEqual(['KeyA↓', 'KeyA↑', 'ShiftLeft↓', 'KeyB↓', 'KeyB↑', 'ShiftLeft↑']);
+
+    // Shift is held over a run that needs it, let go before a key that does not, and never left down.
+    sent.length = 0;
+    await typeKeys(rfb, keysFor('HI there!').keys, { pace: now });
+    expect(sent.filter((x) => x.startsWith('Shift'))).toEqual(['ShiftLeft↓', 'ShiftLeft↑', 'ShiftLeft↓', 'ShiftLeft↑']);
+    expect(sent.slice(0, 6)).toEqual(['ShiftLeft↓', 'KeyH↓', 'KeyH↑', 'KeyI↓', 'KeyI↑', 'ShiftLeft↑']);
+    expect(sent.at(-1)).toBe('ShiftLeft↑');
 
     const stop = new AbortController();
     stop.abort();
-    expect(await typeKeys(rfb, keysFor('abc').keys, { delayMs: 0, signal: stop.signal })).toBe(0);
+    expect(await typeKeys(rfb, keysFor('abc').keys, { pace: now, signal: stop.signal })).toBe(0);
+    // Stopped halfway through capitals: Shift is let go.
+    sent.length = 0;
+    const half = new AbortController();
+    await typeKeys({ sendKey: (s, c, d) => (rfb.sendKey(s, c, d), sent.length === 4 && half.abort()) }, keysFor('ABCDEF').keys, { pace: now, signal: half.signal });
+    expect(sent.at(-1)).toBe('ShiftLeft↑');
+  });
+
+  it('types at a pace the machine can take: a breath every few dozen keys and after each line', async () => {
+    const at: number[] = [];
+    const t0 = Date.now();
+    const rfb = { sendKey: (_: number, code: string | null, down?: boolean) => void (down && code !== 'ShiftLeft' && at.push(Date.now() - t0)) };
+    await typeKeys(rfb, keysFor('abcd\nef').keys, { pace: { keyMs: 5, everyKeys: 3, pauseMs: 60, lineMs: 40 } });
+    const gaps = at.slice(1).map((t, i) => t - at[i]!);
+    // a→b, b→c: one key apart; c→d: the breath after three keys; Enter→e: the line's pause.
+    expect(gaps[0]).toBeLessThan(40);
+    expect(gaps[2]).toBeGreaterThanOrEqual(60);
+    expect(gaps[4]).toBeGreaterThanOrEqual(38);
   });
 });

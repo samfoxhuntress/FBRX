@@ -14,10 +14,6 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
    config, skills, memory and MCP servers, starting with Hermes Agent (`~/.hermes`). Sam runs a Hermes agent with its
    own soul.md on each lab machine and wants FBRX OS to take that role over. Then other agent tools' instruction and
    config files. FBRX already writes itself into Hermes' config (AI coordination, 2.1.2); this is the other direction.
-3. **FBRX Virtual: long pastes into a VM come out garbled.** Pasting long text into a VM works for the first part,
-   then the characters come out wrong. If the paste is typed into the VM as keystrokes, check whether they are sent
-   faster than the VM takes them (pace them, or send in chunks with a pause), and test with long text and symbols.
-
 ## Fixed, waiting for a release
 
 * Digger follows FBRX OS in support mode (the developer unlock and support passes), and leaves the computer's health
@@ -28,3 +24,6 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
 * FBRX Time on FBRX Server: copies of each new image off the server (a NAS share, an NFS export or a USB drive), tested
   before saving, changeable any time. FBRX Endpoint already had a drive or network folder and Change… on Windows. Needs
   an FBRX Server release; the look waits for Sam's approval.
+* FBRX Virtual: long pastes into a VM. Keys are paced (a breath every 32 keys and after each line), Shift is held over
+  a run and always let go, and the console relay sends keys at once (no Nagle). Needs an FBRX Server release; Sam to
+  try a long paste on a real VM.

@@ -33,7 +33,8 @@ export class ConsoleTickets {
 
 /** Relays a WebSocket to a TCP port, both ways, until either side closes. */
 export function relay(ws: WebSocket, host: string, port: number): void {
-  const sock = connect({ host, port });
+  // Keys go to the machine as they come: Nagle's algorithm would bunch them into bursts its keyboard drops.
+  const sock = connect({ host, port, noDelay: true });
   const pending: Buffer[] = [];
   let open = false;
   sock.on('connect', () => {
