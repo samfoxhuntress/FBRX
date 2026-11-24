@@ -27,3 +27,7 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
 * FBRX Virtual: long pastes into a VM. Keys are paced (a breath every 32 keys and after each line), Shift is held over
   a run and always let go, and the console relay sends keys at once (no Nagle). Needs an FBRX Server release; Sam to
   try a long paste on a real VM.
+* FBRX Server: Networks → Bridge a port… makes bridge br0 from the console (DHCP, a fixed address or a spare card),
+  says what the outer hypervisor must allow (VMware, Hyper-V, VirtualBox), and Restart now finishes it. Needs an FBRX
+  Server release; the look waits for Sam's approval. Sam's ESXi port group must allow Promiscuous mode, MAC address
+  changes and Forged transmits.

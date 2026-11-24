@@ -210,6 +210,29 @@ export interface VirtualNetwork {
   gate?: { network: string; purpose: string; address: string; access: 'full' | 'internet' | 'isolated'; port: string } | null;
 }
 
+/** Making a bridge on one of the server's ports, so virtual machines sit straight on that network. */
+export interface HostBridgeStatus {
+  /** A bridge can be made from the console here, or why not (in words). */
+  canMake: boolean;
+  why: string | null;
+  ports: Array<{
+    name: string;
+    mac: string | null;
+    addresses: string[];
+    up: boolean;
+    /** How the port gets its address now (none: not in the network settings, a spare card). */
+    mode: 'dhcp' | 'static' | 'manual' | 'none' | 'other';
+    usable: boolean;
+    /** Why it cannot be bridged, in words. */
+    note: string | null;
+  }>;
+  /** The hypervisor this server runs on, when it is itself a virtual machine (the bridge then needs allowing there). */
+  outer: 'vmware' | 'hyper-v' | 'virtualbox' | 'kvm' | 'other' | null;
+  /** A bridge saved and waiting for the server to restart. */
+  pending: { port: string; at: string } | null;
+  canRestart: boolean;
+}
+
 // ------------------------------------------------------------------------------------- hardware view
 
 export interface HwCpuNode {

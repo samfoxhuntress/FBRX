@@ -46,6 +46,7 @@ import { filesRoutes } from './routes/files';
 import { directoryRoutes } from './routes/directory';
 import { DirectoryService } from './directory/service';
 import { readEnv, roleRoutes } from './routes/roles';
+import { hostBridgeRoutes } from './routes/host-bridge';
 import { commandRoutes, commandRule } from './routes/command';
 import { terminalRoutes } from './routes/terminal';
 import { troubleshootRoutes } from './routes/troubleshoot';
@@ -312,6 +313,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   await filesRoutes(app, ctx);
   await directoryRoutes(app, ctx);
   await roleRoutes(app, ctx);
+  await hostBridgeRoutes(app, ctx);
   await commandRoutes(app, ctx);
   await terminalRoutes(app, ctx);
   await troubleshootRoutes(app, ctx);

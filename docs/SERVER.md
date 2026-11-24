@@ -81,7 +81,7 @@ options (for device passthrough, after one reboot) and starts the `fbrx-virtual`
 | `--gate-wan eno1 --gate-lan eno2` | The gate's internet port and the port to your network (gate role; see [GATE.md](GATE.md#install)). Your network avoids the addresses the internet side uses; `--gate-lan-address`, `--gate-wan-address` and `--gate-wan-gateway` choose them yourself. `--gate-manage <cidr\|none>` keeps the console and SSH reachable from a private network on the internet side. |
 | `--reboot` | Restart at the end when a change waits for it (the gate taking its ports, the bridge). |
 | `--command-address command.example.lan` | The address computers use to reach FBRX Command (command role): a name in your DNS, or an address. By default the one it has, else this server's address (the gate's address in your network, on a gate). |
-| `--bridge eno1` | Makes bridge `br0` on that port so virtual machines sit straight on your network (applies after a reboot). Only for a port set up with DHCP; for a static address, see *Networks* below. |
+| `--bridge eno1` | Makes bridge `br0` on that port so virtual machines sit straight on your network (applies after a reboot). Only for a port set up with DHCP; the console's *Networks → Bridge a port* also takes a fixed address or a spare card. |
 | `--port 9443` | The console's port. |
 | `--uninstall [--purge]` | Takes FBRX Server off again. Virtual machines and their disks, and the ai role's mesh pairings and keys, stay unless `--purge`. |
 
@@ -178,7 +178,15 @@ and sign-in is in the audit log.
   reachable from them, one more device for your router or gate):
   * **with FBRX Gate on this server**, turn on *Virtual machines can join this network* for a gate network (your LAN,
     a VLAN) and commit: it becomes a switch machines plug into ([GATE.md](GATE.md#virtual-machines-on-your-networks));
-  * **otherwise**, a bridge on the port cabled to your network: the installer's `--bridge eno1`, or by hand.
+  * **otherwise**, a bridge on the port cabled to your network: *Networks → Bridge a port…* (administrators) lists the
+    server's network cards with their addresses; pick one and it is saved as bridge `br0` (the port's address, DHCP or
+    fixed, moves to the bridge; a spare card gives a bridge for machines only), then *Restart now* finishes it. The
+    old settings stay in `/etc/network/interfaces.fbrx-backup`. The installer's `--bridge eno1` does the same for a
+    DHCP port.
+  * **When FBRX Server is itself a virtual machine** (VMware, Hyper-V, VirtualBox), its host must let its network
+    card carry the machines' addresses, or they get none: in vSphere, allow *Promiscuous mode*, *MAC address changes*
+    and *Forged transmits* on the port group (or MAC learning on a distributed switch); in Hyper-V, turn on *MAC
+    address spoofing* for the adapter. The dialog says so when it sees one.
   Any number of machines share a switch or bridge with the server itself. Giving a network card to one machine
   (*Hardware map*, passthrough) is different: that machine alone uses the card, at full speed.
   Pick the network when creating a machine, or move one under *its Settings → Network* (running machines move at

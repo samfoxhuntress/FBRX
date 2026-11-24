@@ -821,7 +821,7 @@ EOF
     REBOOT_WHY="${REBOOT_WHY:+$REBOOT_WHY, }the bridge"
     note "Saved (the old file is $IFACES.fbrx-backup). It takes over after the reboot; the server's address may change."
   else
-    warn "$BRIDGE is not set up with DHCP in $IFACES: add the bridge by hand (docs/SERVER.md shows how)."
+    warn "$BRIDGE is not set up with DHCP in $IFACES: use the console's Networks -> Bridge a port (it also takes a fixed address or a spare card), or add the bridge by hand (docs/SERVER.md shows how)."
   fi
 fi
 
