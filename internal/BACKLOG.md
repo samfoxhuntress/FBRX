@@ -5,11 +5,10 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
 
 ## Reported 2026-11-20 (FBRX OS 2.5.0, FBRX Digger 1.3.0)
 
-1. **Sign in with an AI account people already pay for, no API key.** Connect a ChatGPT, Gemini, Grok or Claude
-   account (and Nous Portal, whose free models such as LongCat 2.5 Sam uses), the way Hermes Agent does, so no
-   separate API billing. Look into how Hermes signs in to each one (the providers' own sign-in flows for their
-   command-line tools), and check each provider's terms before building: some allow a subscription sign-in only in
-   their own apps, and FBRX must not break them.
+1. **Sign in with an AI account people already pay for, no API key.** Researched (2026-11-24): see `AI_ACCOUNTS.md`.
+   Only OpenAI has a program (Sign in with ChatGPT, a trial for commercial apps); Claude and Gemini forbid it, Grok is
+   a partnership. Waiting on Sam's decisions there.
+
 ## Fixed, waiting for a release
 
 * Digger follows FBRX OS in support mode (the developer unlock and support passes), and leaves the computer's health
@@ -29,4 +28,4 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
   changes and Forged transmits.
 * FBRX OS: AI coordination → Hermes Agent → Bring its setup over… takes its persona (SOUL.md → Who I am), memories
   (MEMORY.md, USER.md), skills (SKILL.md) and MCP servers (config.yaml, keys into the vault), per profile, through
-  FBRX's checks. Other agent tools' files come later. Needs an FBRX OS release; the look waits for Sam's approval.
+  FBRX's checks. Other agent tools' files come later. Needs an FBRX OS release; the look was approved by Sam.
