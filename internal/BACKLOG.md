@@ -10,10 +10,6 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
    separate API billing. Look into how Hermes signs in to each one (the providers' own sign-in flows for their
    command-line tools), and check each provider's terms before building: some allow a subscription sign-in only in
    their own apps, and FBRX must not break them.
-2. **Bring agent setups over from other platforms.** Import an agent's setup into FBRX OS: its soul.md (Personality),
-   config, skills, memory and MCP servers, starting with Hermes Agent (`~/.hermes`). Sam runs a Hermes agent with its
-   own soul.md on each lab machine and wants FBRX OS to take that role over. Then other agent tools' instruction and
-   config files. FBRX already writes itself into Hermes' config (AI coordination, 2.1.2); this is the other direction.
 ## Fixed, waiting for a release
 
 * Digger follows FBRX OS in support mode (the developer unlock and support passes), and leaves the computer's health
@@ -31,3 +27,6 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
   says what the outer hypervisor must allow (VMware, Hyper-V, VirtualBox), and Restart now finishes it. Needs an FBRX
   Server release; the look waits for Sam's approval. Sam's ESXi port group must allow Promiscuous mode, MAC address
   changes and Forged transmits.
+* FBRX OS: AI coordination → Hermes Agent → Bring its setup over… takes its persona (SOUL.md → Who I am), memories
+  (MEMORY.md, USER.md), skills (SKILL.md) and MCP servers (config.yaml, keys into the vault), per profile, through
+  FBRX's checks. Other agent tools' files come later. Needs an FBRX OS release; the look waits for Sam's approval.

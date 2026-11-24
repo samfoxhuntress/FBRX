@@ -678,6 +678,24 @@ Disconnect takes the line out again. Run `/reload-mcp` in Hermes, or start it ag
 line, then connect again. FBRX finds Hermes on Linux and macOS, where it keeps its settings in your home folder (inside
 WSL on Windows, its settings are out of FBRX's reach).
 
+**Bring Hermes Agent's setup over.** *Bring its setup over…* on Hermes' row lets FBRX OS take over what Hermes has
+made its own on this computer (`~/.hermes`, or `HERMES_HOME`), one of its profiles at a time. It shows what it found,
+and you tick what comes over:
+
+* **Its persona** (`SOUL.md`) becomes *Who I am* in your Personality. The one there before is kept: Settings →
+  Personality → Undo puts it back. FBRX's core principles stay fixed, so a persona that would change them is not
+  brought over (it says why).
+* **What it remembers** (`memories/MEMORY.md`) and **what it knows about you** (`memories/USER.md`) become memories,
+  one each, through the same rules as any memory (identity and card numbers are never kept).
+* **Its skills** (`skills/…/SKILL.md`) become your own AI skills: the description is when Fabrix uses one, its numbered
+  lines the steps (a skill longer than FBRX's twelve steps keeps the first twelve, and the list says so).
+* **Its MCP servers** (`mcp_servers` in `config.yaml`) become connections in Connectors, starting in the background.
+  Their keys (an env value, a header) go into your vault and the connection refers to them; a web server's
+  `Authorization: Bearer …` becomes its bearer sign-in. FBRX's own `fbrx` entry is left out.
+
+Hermes keeps its copy; nothing in `~/.hermes` changes. Its API keys (`.env`), past conversations and scheduled jobs stay
+with it.
+
 **Second opinion** asks another configured model the same question without tools. Claude Code, when installed, is
 one of the choices: FBRX runs `claude -p` with the question and shows the answer, which is how to ask Claude from
 FBRX without an API key (an Anthropic API key, added in AI models, works too). FBRX cannot type into the Claude

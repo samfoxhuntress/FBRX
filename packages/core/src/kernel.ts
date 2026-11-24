@@ -42,6 +42,10 @@ import {
   type OrgMeshRoster,
   type ComputerFacts,
   type LearningAgent,
+  PERSONALITY_LIMITS,
+  type AgentAdoptChoice,
+  type AgentAdoptResult,
+  type AgentSetupPreview,
 } from '@fbrx/shared';
 import { AppRegistry, HANDOVER_FILE } from './apps/app-registry';
 import { ComputerLearning } from './ai/learning';
@@ -127,6 +131,7 @@ import { meshTools } from './tools/builtin/mesh-tools';
 import { scriptureTools } from './tools/builtin/scripture-tools';
 import { Scripture } from './scripture/scripture';
 import { AiCoordination } from './aicoord/aicoord';
+import { hermesHome, previewOf, readHermes, secretName } from './aicoord/agent-import';
 import { ConversationStore } from './ai/conversations';
 import { AttachmentStore } from './ai/attachments';
 import { OutputFolder } from './docs/output-folder';
@@ -2417,6 +2422,89 @@ export class Kernel {
       board: homeBoard({ name: addressAs(st), agentName: st.ai.agentName, aiReady, deviceName: this.deviceName(), tier }),
       notes: notesFor({ tier, agentName: st.ai.agentName, modelName, paired: true }),
     };
+  }
+
+  /** Hermes Agent's setup on this computer (or one of its profiles), to take over (AI coordination). */
+  agentSetup(profile = 'default'): AgentSetupPreview | null {
+    const s = readHermes(hermesHome(), profile);
+    return s ? previewOf(s) : null;
+  }
+
+  /**
+   * Brings what the person chose of Hermes Agent's setup into FBRX OS, each through FBRX's own checks (the core
+   * principles, what memory keeps, the vault for keys): its persona becomes the Personality's Who I am (the one before
+   * is kept, so it can be undone), its memories become memories, its skills skills, its MCP servers connectors.
+   */
+  async adoptAgent(c: AgentAdoptChoice, actor: string): Promise<AgentAdoptResult> {
+    const s = readHermes(hermesHome(), c.profile ?? 'default');
+    if (!s) throw new CoreError('NOT_FOUND', 'Hermes Agent has no setup on this computer');
+    const out: AgentAdoptResult = { brought: { personality: false, memories: 0, aboutYou: 0, skills: 0, servers: 0 }, notBrought: [] };
+    const short = (t: string) => (t.length > 60 ? `${t.slice(0, 57)}…` : t);
+    if (c.personality && s.personality) {
+      try {
+        this.personality.update({ section: 'Who I am', content: s.personality.slice(0, PERSONALITY_LIMITS.change), mode: 'replace' }, `${actor} (from Hermes Agent)`);
+        out.brought.personality = true;
+        if (s.personality.length > PERSONALITY_LIMITS.change) out.notBrought.push(`The end of its persona: SOUL.md is longer than the ${PERSONALITY_LIMITS.change.toLocaleString('en-US')} characters one change holds`);
+      } catch (e) {
+        out.notBrought.push(`Its persona: ${errorMessage(e)}`);
+      }
+    }
+    for (const kind of ['memories', 'aboutYou'] as const) {
+      if (!c[kind]) continue;
+      for (const content of s[kind]) {
+        try {
+          this.memory.remember({ content, source: 'person', tags: ['hermes'] });
+          out.brought[kind]++;
+        } catch (e) {
+          const err = toCoreError(e);
+          out.notBrought.push(err.code === 'UNAVAILABLE' ? err.message : `“${short(content)}”: ${err.message}`);
+          if (err.code === 'UNAVAILABLE') break;
+        }
+      }
+    }
+    for (const k of s.skills.filter((x) => c.skills.includes(x.name))) {
+      try {
+        this.skills.save({ name: k.name, when: k.when, steps: k.steps, source: 'yours' });
+        out.brought.skills++;
+        if (k.cut) out.notBrought.push(`The end of skill ${k.name}: it is longer than an FBRX skill holds`);
+      } catch (e) {
+        out.notBrought.push(`Skill ${k.name}: ${errorMessage(e)}`);
+      }
+    }
+    const have = new Set(this.connectors.list().map((x) => `${x.type}|${x.name.toLowerCase()}`));
+    for (const v of s.servers.filter((x) => c.servers.includes(x.name))) {
+      if (have.has(`${v.type}|${v.name.toLowerCase()}`)) {
+        out.notBrought.push(`MCP server ${v.name}: FBRX already has a connection by that name`);
+        continue;
+      }
+      try {
+        const config = { ...v.config } as Record<string, unknown>;
+        if (v.type === 'mcp-http') config.authType = 'none';
+        // Its keys go into the vault; the connection refers to them, so no key sits in its settings.
+        if (v.secrets.length) {
+          if (!this.vault.isUnlocked) throw new CoreError('UNAVAILABLE', 'it has keys, and the vault is locked: unlock it and bring it again');
+          const env: Record<string, string> = {};
+          const headers: Record<string, string> = {};
+          for (const x of v.secrets) {
+            const name = secretName(v.name, x.key);
+            // A web server's first header is its sign-in, in the form's own fields (bearer token, or a named header).
+            const bearer = x.where === 'headers' && /^authorization$/i.test(x.key) && /^bearer\s+/i.test(x.value);
+            this.vault.set({ name, value: bearer ? x.value.replace(/^bearer\s+/i, '') : x.value, kind: 'api-key', description: `From Hermes Agent's MCP server ${v.name}`, tags: ['hermes'] });
+            if (x.where === 'headers' && config.authType === 'none') Object.assign(config, bearer ? { authType: 'bearer', secretRef: name } : { authType: 'header', headerName: x.key, secretRef: name });
+            else (x.where === 'env' ? env : headers)[x.key] = `\${secret:${name}}`;
+          }
+          if (Object.keys(env).length) config.env = env;
+          if (Object.keys(headers).length) config.headers = headers;
+        }
+        // It starts in the background: a server that downloads itself first (npx) can take a while.
+        await this.connectors.create({ name: v.name, type: v.type, config }, actor, { background: true });
+        out.brought.servers++;
+      } catch (e) {
+        out.notBrought.push(`MCP server ${v.name}: ${errorMessage(e)}`);
+      }
+    }
+    this.audit.append({ category: 'ai', action: 'agent.adopted', actor, outcome: 'success', details: { app: 'hermes', profile: s.profile, ...out.brought, notBrought: out.notBrought.length } });
+    return out;
   }
 
   /** Asks a configured AI provider for a second opinion, without tools. */

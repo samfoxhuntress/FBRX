@@ -1202,6 +1202,46 @@ export interface AiAppInfo {
   /** A cloud API the app's maker offers, which can be added as a model for second opinions. */
   api?: { name: string; baseUrl: string; model: string; keyUrl: string };
 }
+/**
+ * An AI agent's setup on this computer that FBRX OS can take over (Hermes Agent's ~/.hermes, or one of its profiles):
+ * what would come over, before the person chooses. Secret values are never in it, only which servers have one.
+ */
+export interface AgentSetupPreview {
+  app: 'hermes';
+  name: string;
+  folder: string;
+  /** default, then Hermes' other profiles. */
+  profiles: string[];
+  profile: string;
+  /** Its persona (SOUL.md): how long it is and how it starts. */
+  personality: { chars: number; start: string } | null;
+  /** What the agent remembers (MEMORY.md), one entry each. */
+  memories: string[];
+  /** What it knows about the person (USER.md). */
+  aboutYou: string[];
+  /** cut: longer than an FBRX skill holds, so its end is left out. */
+  skills: Array<{ name: string; when: string; steps: number; cut: boolean }>;
+  servers: Array<{ name: string; kind: 'command' | 'web'; what: string; secrets: string[] }>;
+  /** What stays with the agent, in words. */
+  stays: string[];
+}
+
+/** What to bring over: all of a kind, or the named skills and servers. */
+export interface AgentAdoptChoice {
+  profile?: string;
+  personality: boolean;
+  memories: boolean;
+  aboutYou: boolean;
+  skills: string[];
+  servers: string[];
+}
+
+export interface AgentAdoptResult {
+  brought: { personality: boolean; memories: number; aboutYou: number; skills: number; servers: number };
+  /** What did not come over, and why, in words. */
+  notBrought: string[];
+}
+
 export interface McpBridgeInfo {
   ready: boolean;
   reason: string | null;
@@ -1667,6 +1707,10 @@ export interface ExtMethods {
   'aicoord.consult': (p: { providerId: string; prompt: string; model?: string }) => { answer: string; providerId: string; model: string };
   /** Claude Code on this computer, usable for second opinions without an API key. */
   'aicoord.claudeCode': () => { available: boolean };
+  /** Hermes Agent's setup on this computer (a profile of it), to take over: null when it has none here. */
+  'aicoord.setup': (p?: { profile?: string }) => AgentSetupPreview | null;
+  /** Brings what the person chose of it into FBRX OS: personality, memories, skills, MCP servers. */
+  'aicoord.adopt': (p: AgentAdoptChoice) => AgentAdoptResult;
 }
 
 export interface ExtEvents {

@@ -4,6 +4,7 @@ import { Button, Callout, Card, Empty, Field, Grid, Icons, Markdown, Page, Selec
 import { call } from '../client';
 import { useCore } from '../hooks';
 import { navigate } from '../app';
+import { AdoptHermes } from './aicoord-adopt';
 
 const KIND: Record<string, string> = { 'desktop-app': 'Desktop app', cli: 'Command line', ide: 'Code editor', 'local-server': 'Local AI server' };
 
@@ -16,6 +17,7 @@ const FIND_TOOLS: Record<string, string> = {
 export function AiCoordPage({ agentName }: { agentName: string }) {
   const [apps, setApps] = useState<AiAppInfo[] | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [adopting, setAdopting] = useState(false);
   const bridge = useCore('aicoord.bridge', undefined, ['service.changed', 'settings.changed']);
   const providers = useCore('ai.providers', undefined, ['settings.changed']);
   const { run, busy } = useAction();
@@ -105,6 +107,11 @@ export function AiCoordPage({ agentName }: { agentName: string }) {
                     Test
                   </Button>
                 )}
+                {a.id === 'hermes' && a.found && (
+                  <Button size="sm" variant="ghost" icon="download" title="Its persona, memories, skills and MCP servers, into FBRX" onClick={() => setAdopting(true)}>
+                    Bring its setup over…
+                  </Button>
+                )}
                 {a.found && a.launchable && (
                   <Button size="sm" variant="ghost" icon="external" loading={busy === `open:${a.id}`} onClick={() => void run(`open:${a.id}`, () => call('aicoord.launch', { appId: a.id })).then((r) => r && toast.info(r.message))}>
                     {a.kind === 'local-server' ? 'Start' : 'Open'}
@@ -189,6 +196,7 @@ export function AiCoordPage({ agentName }: { agentName: string }) {
           )}
         </Card>
       </Grid>
+      {adopting && <AdoptHermes onClose={() => setAdopting(false)} />}
     </Page>
   );
 }

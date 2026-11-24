@@ -1065,6 +1065,12 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       return k.consult(q.providerId, q.prompt, q.model);
     },
     'aicoord.claudeCode': async () => ({ available: await k.aicoord.hasClaudeCode() }),
+    'aicoord.setup': (p) => k.agentSetup(z.object({ profile: z.string().max(64).optional() }).optional().parse(p)?.profile),
+    'aicoord.adopt': (p, ctx) =>
+      k.adoptAgent(
+        z.object({ profile: z.string().max(64).optional(), personality: z.boolean(), memories: z.boolean(), aboutYou: z.boolean(), skills: z.array(z.string().max(200)).max(200), servers: z.array(z.string().max(200)).max(50) }).parse(p),
+        ctx.actor,
+      ),
     'aicoord.test': (p) => k.aicoord.test(z.object({ appId: z.string().max(60) }).parse(p).appId),
   };
 }

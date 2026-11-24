@@ -264,7 +264,8 @@ export class ConnectorHub {
     return slug;
   }
 
-  async create(input: ConnectorInput, actor: string, opts: { managed?: boolean } = {}): Promise<ConnectorInfo> {
+  /** Adds a connection and starts it (in the background with `background`: it shows connecting, then its state). */
+  async create(input: ConnectorInput, actor: string, opts: { managed?: boolean; background?: boolean } = {}): Promise<ConnectorInfo> {
     this.validate(input);
     this.d.license.require(this.featureFor(input.type));
     const id = newId('conn');
@@ -283,7 +284,12 @@ export class ConnectorHub {
     );
     this.d.audit.append({ category: 'connector', action: 'created', actor, target: id, outcome: 'success', details: { name: input.name, type: input.type } });
     const r = this.record(id);
-    if (r.enabled) await this.activate(r);
+    // In the background it may finish after FBRX closed (its state then goes nowhere).
+    if (r.enabled && opts.background)
+      void this.activate(r)
+        .then(() => this.d.events.emit('connectors.changed', this.list()))
+        .catch((e) => this.d.log.debug('Connector start ended late', { connector: r.name, error: errorMessage(e) }));
+    else if (r.enabled) await this.activate(r);
     this.d.events.emit('connectors.changed', this.list());
     return this.info(this.record(id));
   }
