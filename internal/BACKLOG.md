@@ -7,7 +7,7 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
 
 1. **Sign in with an AI account people already pay for, no API key.** Researched (2026-11-24): see `AI_ACCOUNTS.md`.
    Only OpenAI has a program (Sign in with ChatGPT, a trial for commercial apps); Claude and Gemini forbid it, Grok is
-   a partnership. Waiting on Sam's decisions there.
+   a partnership. Codex CLI now connects (next step 2); waiting on Sam's decisions for steps 1, 3 and 4.
 
 ## Fixed, waiting for a release
 
@@ -29,3 +29,6 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
 * FBRX OS: AI coordination → Hermes Agent → Bring its setup over… takes its persona (SOUL.md → Who I am), memories
   (MEMORY.md, USER.md), skills (SKILL.md) and MCP servers (config.yaml, keys into the vault), per profile, through
   FBRX's checks. Other agent tools' files come later. Needs an FBRX OS release; the look was approved by Sam.
+* FBRX OS: AI coordination connects OpenAI Codex CLI (its `~/.codex/config.toml`, an `[mcp_servers.fbrx]` table, the
+  rest of the file kept), so a ChatGPT plan works with FBRX's tools through Codex's own sign-in. Needs an FBRX OS
+  release.

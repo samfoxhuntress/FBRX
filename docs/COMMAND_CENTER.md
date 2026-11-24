@@ -655,8 +655,8 @@ security model.
 **AI coordination** finds other AI apps on the computer from the Start menu, the installed-programs list, running
 processes and their folders: Claude Desktop, Claude Code, Cursor, Windsurf, VS Code with GitHub Copilot, Hermes Agent,
 Gemini CLI, LM Studio, Perplexity, Comet, Grok, ChatGPT, Microsoft Copilot, Msty, AnythingLLM, Codex CLI, Ollama, Jan and
-GPT4All. Apps that support MCP (Claude Desktop and Code, Cursor, Windsurf, VS Code, Hermes Agent, Gemini CLI, LM Studio)
-connect with one click and then see FBRX tools plus `ask_fabrix` (apps that still call it by its old name, `ask_fabric`, keep working). Apps without MCP on Windows (Perplexity, Grok, ChatGPT) can be
+GPT4All. Apps that support MCP (Claude Desktop and Code, Cursor, Windsurf, VS Code, Hermes Agent, Gemini CLI, Codex CLI,
+LM Studio) connect with one click and then see FBRX tools plus `ask_fabrix` (apps that still call it by its old name, `ask_fabric`, keep working). Apps without MCP on Windows (Perplexity, Grok, ChatGPT) can be
 opened from FBRX, and their makers' APIs can be added as models for second opinions (*Add as a model*; you need an
 API key from them). **Look again** re-scans and reports what it found.
 
@@ -677,6 +677,13 @@ Disconnect takes the line out again. Run `/reload-mcp` in Hermes, or start it ag
 `mcp_fbrx_…`. A `mcp_servers` list written on one line (`mcp_servers: {…}`) is left alone: put each server on its own
 line, then connect again. FBRX finds Hermes on Linux and macOS, where it keeps its settings in your home folder (inside
 WSL on Windows, its settings are out of FBRX's reach).
+
+**OpenAI Codex CLI** keeps its MCP servers in `~/.codex/config.toml` (or `config.toml` in `CODEX_HOME`). Connect adds
+an `[mcp_servers.fbrx]` table at its end and leaves every other line as it was, comments included (the old file is kept
+as `config.toml.fbrx-backup`); Disconnect takes the table out again. Start Codex again and `/mcp` lists the FBRX tools.
+This is how to use FBRX's tools with a ChatGPT plan: Codex signs in with your ChatGPT account, and FBRX never sees or
+reuses that sign-in. An `fbrx` server written another way (inside `[mcp_servers]`, or as `mcp_servers.fbrx = …`) is
+left alone: take it out, then connect again.
 
 **Bring Hermes Agent's setup over.** *Bring its setup over…* on Hermes' row lets FBRX OS take over what Hermes has
 made its own on this computer (`~/.hermes`, or `HERMES_HOME`), one of its profiles at a time. It shows what it found,

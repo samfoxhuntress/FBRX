@@ -97,6 +97,36 @@ describe('AI coordination', () => {
     }
   }, 90_000); // on Windows each look also reads the Start menu and installed programs
 
+  it("connects OpenAI Codex CLI through its TOML config, keeping the person's own servers and comments", async () => {
+    const home = mkdtempSync(join(tmpdir(), 'fbrx-codex-'));
+    const before = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE, CODEX_HOME: process.env.CODEX_HOME };
+    const config = join(home, '.codex', 'config.toml');
+    const own = 'model = "gpt-5.5"\n# my servers\n[mcp_servers.docs]\ncommand = "npx"\nargs = ["-y", "docs-mcp"]\n';
+    mkdirSync(join(home, '.codex'));
+    writeFileSync(config, own);
+    try {
+      Object.assign(process.env, { HOME: home, USERPROFILE: home });
+      delete process.env.CODEX_HOME;
+      vi.resetModules();
+      const { AiCoordination: Fresh } = await import('../src/aicoord/aicoord');
+      const co = new Fresh({ shim: () => ({ command: process.execPath, args: ['fbrx-mcp.mjs'], env: { FBRX_DATA_DIR: '/data' } }), localApiRunning: () => true });
+      expect((await co.detect()).find((a) => a.id === 'codex')).toMatchObject({ found: true, mcp: true, bridged: false });
+      await co.install('codex');
+      expect(readFileSync(`${config}.fbrx-backup`, 'utf8')).toBe(own);
+      expect(readFileSync(config, 'utf8')).toBe(`${own}\n[mcp_servers.fbrx]\ncommand = ${JSON.stringify(process.execPath)}\nargs = ["fbrx-mcp.mjs"]\nenv = { "FBRX_DATA_DIR" = "/data" }\n`);
+      expect((await co.detect()).find((a) => a.id === 'codex')?.bridged).toBe(true);
+      await co.remove('codex');
+      expect(readFileSync(config, 'utf8')).toBe(own);
+    } finally {
+      for (const [k, v] of Object.entries(before)) {
+        if (v === undefined) delete process.env[k];
+        else process.env[k] = v;
+      }
+      vi.resetModules();
+      rmSync(home, { recursive: true, force: true });
+    }
+  }, 90_000);
+
   it('is reachable from the core API', async () => {
     const { kernel, cleanup } = await makeKernel();
     try {

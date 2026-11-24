@@ -6,6 +6,7 @@ import type { AiAppInfo, McpBridgeInfo } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import { exec, IS_WIN, psObject } from '../windows/ps';
 import { readYamlEntry, setYamlEntry } from './yaml-entry';
+import { readTomlEntry, setTomlEntry } from './toml-entry';
 
 const HOME = homedir();
 const APPDATA = process.env.APPDATA ?? join(HOME, 'AppData', 'Roaming');
@@ -20,7 +21,7 @@ interface CatalogEntry {
   cmd?: string;
   port?: number;
   /** MCP configuration file, the key holding servers, and whether the file is YAML rather than JSON. */
-  config?: { file: string; key: 'mcpServers' | 'servers' | 'mcp_servers'; vscode?: boolean; yaml?: boolean };
+  config?: { file: string; key: 'mcpServers' | 'servers' | 'mcp_servers'; vscode?: boolean; yaml?: boolean; toml?: boolean };
   vscodeExt?: RegExp;
   /** Windows: matches the app's Start menu entry or installed-program name. */
   match?: RegExp;
@@ -130,7 +131,8 @@ const CATALOG: CatalogEntry[] = [
   { id: 'copilot', name: 'Microsoft Copilot', kind: 'desktop-app', paths: [], match: /^(Microsoft )?Copilot$/i, note: 'Copilot cannot load tools from other apps (MCP).' },
   { id: 'msty', name: 'Msty', kind: 'desktop-app', paths: [join(LOCAL, 'Programs', 'Msty')], match: /^Msty/i, process: /^Msty$/i, note: 'Msty can use local models; point it at Ollama to share the same models as FBRX OS.' },
   { id: 'anythingllm', name: 'AnythingLLM', kind: 'desktop-app', paths: [join(LOCAL, 'Programs', 'AnythingLLM'), join(APPDATA, 'anythingllm-desktop')], match: /^AnythingLLM/i, note: 'AnythingLLM can use local models; point it at Ollama to share the same models as FBRX OS.' },
-  { id: 'codex', name: 'OpenAI Codex CLI', kind: 'cli', paths: [join(HOME, '.codex')], cmd: 'codex' },
+  // Codex keeps its MCP servers in TOML (~/.codex/config.toml, or CODEX_HOME's): a ChatGPT subscription's own client.
+  { id: 'codex', name: 'OpenAI Codex CLI', kind: 'cli', paths: [join(HOME, '.codex')], cmd: 'codex', config: { file: join(process.env.CODEX_HOME || join(HOME, '.codex'), 'config.toml'), key: 'mcp_servers', toml: true } },
   { id: 'ollama', name: 'Ollama', kind: 'local-server', paths: [join(LOCAL, 'Programs', 'Ollama'), join(HOME, '.ollama')], cmd: 'ollama', port: 11434, match: /^Ollama$/i, process: /^ollama( app)?$/i },
   { id: 'jan', name: 'Jan', kind: 'local-server', paths: [join(LOCAL, 'Programs', 'jan'), join(APPDATA, 'Jan')], port: 1337, match: /^Jan$/i },
   { id: 'gpt4all', name: 'GPT4All', kind: 'local-server', paths: [join(LOCAL, 'nomic.ai'), join(HOME, 'gpt4all')], port: 4891, match: /^GPT4All/i },
@@ -186,17 +188,19 @@ type BridgeEntry = { command: string; args: string[]; env?: Record<string, strin
 
 /** FBRX's entry in one of the app's configuration files, or null. */
 function readEntry(c: CatalogEntry, file: string): BridgeEntry | null {
-  const { key, yaml } = c.config!;
+  const { key, yaml, toml } = c.config!;
+  if (toml) return existsSync(file) ? readTomlEntry(readFileSync(file, 'utf8'), key, 'fbrx') : null;
   if (!yaml) return readJson(file)[key]?.fbrx ?? null;
   return existsSync(file) ? (readYamlEntry(readFileSync(file, 'utf8'), key, 'fbrx') as BridgeEntry | null) : null;
 }
 
 /** The text of one of the app's configuration files with FBRX's entry set (or with null removed), the rest kept. */
 function withEntry(c: CatalogEntry, file: string, entry: object | null): string {
-  const { key, yaml } = c.config!;
-  if (yaml) {
+  const { key, yaml, toml } = c.config!;
+  if (yaml || toml) {
     try {
-      return setYamlEntry(existsSync(file) ? readFileSync(file, 'utf8') : '', key, 'fbrx', entry);
+      const text = existsSync(file) ? readFileSync(file, 'utf8') : '';
+      return toml ? setTomlEntry(text, key, 'fbrx', entry as BridgeEntry | null) : setYamlEntry(text, key, 'fbrx', entry);
     } catch (e) {
       throw new CoreError('INVALID_ARGUMENT', `In ${file}, ${(e as Error).message}`);
     }

@@ -23,8 +23,8 @@ that works today without breaking anyone's terms is the one FBRX already has: th
 
 * **The official apps use FBRX.** AI coordination connects Claude Desktop, Claude Code, Gemini CLI, Hermes and others
   to FBRX's tools (MCP). The person works in the app they pay for, on its subscription, and FBRX's tools, approvals
-  and audit log come along. Codex CLI (a ChatGPT subscription's own client) is found but cannot be connected yet: it
-  keeps its MCP servers in `~/.codex/config.toml`, which FBRX does not write.
+  and audit log come along. Codex CLI (a ChatGPT subscription's own client) connects too since 2026-11-24: FBRX writes
+  its `[mcp_servers.fbrx]` table in `~/.codex/config.toml`.
 * **Second opinions from the official client.** FBRX already asks Claude Code on this computer (the person's own
   install and sign-in). The same could be offered for `codex exec` and `gemini -p`; for Gemini, reports of suspensions
   even with the official CLI argue for waiting.
@@ -34,7 +34,8 @@ that works today without breaking anyone's terms is the one FBRX already has: th
 ## Next steps (decisions for Sam)
 
 1. Apply to OpenAI's Sign in with ChatGPT trial for FBRX OS.
-2. Connect Codex CLI in AI coordination (its `config.toml`), so a ChatGPT subscription works with FBRX's tools today.
+2. ~~Connect Codex CLI in AI coordination (its `config.toml`), so a ChatGPT subscription works with FBRX's tools
+   today.~~ Done 2026-11-24, waiting for a release.
 3. Offer Codex (and later Gemini) second opinions through the official CLIs, like Claude Code's.
 4. Confirm Nous Portal's API keys and free models, then add it as a provider preset.
 

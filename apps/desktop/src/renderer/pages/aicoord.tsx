@@ -12,6 +12,7 @@ const KIND: Record<string, string> = { 'desktop-app': 'Desktop app', cli: 'Comma
 const FIND_TOOLS: Record<string, string> = {
   'claude-desktop': 'In Claude, the FBRX tools appear under the tools (slider) button in the chat box as "fbrx".',
   hermes: 'In Hermes, run /reload-mcp (or start it again): the FBRX tools appear named mcp_fbrx_….',
+  codex: 'Start Codex again: /mcp in Codex lists the FBRX tools.',
 };
 
 export function AiCoordPage({ agentName }: { agentName: string }) {
