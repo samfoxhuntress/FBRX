@@ -7,7 +7,8 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
 
 1. **Sign in with an AI account people already pay for, no API key.** Researched (2026-11-24): see `AI_ACCOUNTS.md`.
    Only OpenAI has a program (Sign in with ChatGPT, a trial for commercial apps); Claude and Gemini forbid it, Grok is
-   a partnership. Codex CLI now connects (next step 2); waiting on Sam's decisions for steps 1, 3 and 4.
+   a partnership. Codex CLI now connects (step 2); Nous Portal works today as an OpenAI-compatible model (step 4).
+   Sam is sending the Sign in with ChatGPT application (step 1, answers drafted); Codex second opinions (step 3) wait.
 
 ## Fixed, waiting for a release
 

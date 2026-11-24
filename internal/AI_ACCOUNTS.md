@@ -17,7 +17,7 @@ that works today without breaking anyone's terms is the one FBRX already has: th
 | Anthropic (Claude Pro/Max) | Not allowed. Since February 2026 Anthropic's terms say subscription sign-ins work only in Claude Code and claude.ai, and third-party apps may not offer a Claude login; it is enforced. | No subscription sign-in. Keep API keys, and Claude Code on this PC for second opinions (the official client, run by the person). |
 | Google (Gemini, Google AI Pro/Ultra) | No program. Accounts that used Gemini CLI or Antigravity sign-ins through third-party tools were suspended through 2026. | No subscription sign-in. API keys (Google AI Studio has a free tier). |
 | xAI (SuperGrok, X Premium+) | xAI built SuperGrok sign-in into Hermes as a partnership; its endpoints are on xAI's own allowlist. No open program for other apps found. | Ask xAI for a partnership if wanted; until then, API keys. |
-| Nous Portal | Its sign-in is Hermes' own. Nous Portal is a subscription gateway; whether other apps may use it, and its free models, could not be confirmed. | Check Nous Portal's docs for API keys and free models: if it has an OpenAI-compatible key, FBRX can use it today as a custom provider. |
+| Nous Portal | Its sign-in is Hermes' own, but it also sells Portal API keys for an OpenAI-compatible endpoint (checked 2026-11-24, below). | Works today: an OpenAI-compatible model in FBRX with a Portal API key. |
 
 ## What works today, within every provider's terms
 
@@ -33,11 +33,51 @@ that works today without breaking anyone's terms is the one FBRX already has: th
 
 ## Next steps (decisions for Sam)
 
-1. Apply to OpenAI's Sign in with ChatGPT trial for FBRX OS.
+1. Apply to OpenAI's Sign in with ChatGPT trial for FBRX OS. Sam said apply (2026-11-24); the answers are below, for
+   Sam to send through OpenAI's interest form (it needs Sam's own details, and openai.com is not reachable from the
+   build environment).
 2. ~~Connect Codex CLI in AI coordination (its `config.toml`), so a ChatGPT subscription works with FBRX's tools
    today.~~ Done 2026-11-24, waiting for a release.
 3. Offer Codex (and later Gemini) second opinions through the official CLIs, like Claude Code's.
-4. Confirm Nous Portal's API keys and free models, then add it as a provider preset.
+4. ~~Confirm Nous Portal's API keys and free models.~~ Checked 2026-11-24 (below): it works today as an
+   OpenAI-compatible model. A preset can come once Sam has tried a key.
+
+## Sign in with ChatGPT: the application
+
+Commercial apps join through OpenAI's **Sign in with ChatGPT interest form** (openai.com/form/sign-in-with-chatgpt-interest),
+or through an OpenAI representative. The form asks for the company, website and the person's job title, whether the app
+wants sign-in only or sign-in and plan usage, and which products would use it and how. Open-source and local personal
+tools register on first sign-in without approval; FBRX OS is a commercial app, so it needs the form. Once accepted,
+OpenAI issues a client ID (developers.openai.com/siwc/request-client-id) and FBRX OS gets the sign-in.
+
+Answers to paste (Sam fills in the name, email, job title and website):
+
+* **Company:** Fox Huntress Labs.
+* **Product:** FBRX OS, a desktop app for Windows, macOS and Linux. Its assistant, Fabrix, runs on the person's own
+  computer and works on it (files, settings, the network, everyday IT) through tools the person approves, with an audit
+  log of every action. Organizations manage their computers with FBRX Command.
+* **What we ask for:** Sign in with ChatGPT and plan usage. A person could choose their own ChatGPT plan as Fabrix's
+  model, next to the local model and API keys they already can.
+* **How it keeps to the terms:** every request goes from the person's own computer under their own sign-in. Nothing
+  is pooled, shared, resold or relayed through FBRX's servers; the sign-in is kept sealed in FBRX OS's vault on that
+  computer and can be signed out at any time. In an organization, FBRX Command never holds or hands out a member's
+  ChatGPT sign-in.
+* **Capabilities used:** chat with streaming, tool calls (each one gated by FBRX's approvals) and reasoning.
+* **Today:** people with a ChatGPT plan use FBRX's tools through Codex CLI (FBRX OS connects it), so the demand is there.
+
+## Nous Portal (checked 2026-11-24)
+
+From Nous' own comparison pages and third-party lists; the portal itself is not reachable from the build environment.
+
+* **API:** OpenAI-compatible at `https://inference-api.nousresearch.com/v1`, with a **Portal API key** made in the
+  portal. Model IDs are OpenRouter-style (`maker/model`).
+* **Paying:** keys bill pay-as-you-go credits per token, never a plan's included usage. Plans start around $20 a
+  month. One report says getting a key needs a card on file (a $0 charge), even for free use.
+* **Free models:** a Free plan with free models (IDs end in `:free`), standard rate limits that are not published. The
+  lists disagree and change: in November 2026 they named about six to nine, among them `stepfun/step-3.7-flash:free`
+  and Poolside's Laguna models. The portal's models page (Free filter) has the current list.
+* **In FBRX today:** on the AI models page, add an OpenAI-compatible model with that address, the key, and a model ID.
+  No code is needed. The free model Sam reached through Hermes (LongCat) was not on the lists found.
 
 ## Sources
 
@@ -55,3 +95,10 @@ that works today without breaking anyone's terms is the one FBRX already has: th
   [Hermes docs: xAI Grok OAuth](https://hermes-agent.nousresearch.com/docs/guides/xai-grok-oauth),
   [Hermes providers](https://hermes-agent.nousresearch.com/docs/integrations/providers),
   [Nous Portal](https://hermes-agent.nousresearch.com/docs/integrations/nous-portal)
+* [Sign in with ChatGPT interest form](https://openai.com/form/sign-in-with-chatgpt-interest/),
+  [Request a client ID](https://developers.openai.com/siwc/request-client-id),
+  [On your website](https://developers.openai.com/siwc/website),
+  [Using your ChatGPT plan in other apps](https://help.openai.com/en/articles/20001542-using-your-chatgpt-plan-in-other-apps-and-sites)
+* [Nous Portal vs OpenRouter](https://portal.nousresearch.com/compare/openrouter),
+  [Nous Portal free tier (awesome-free-ai-coding)](https://mvalentsev.github.io/awesome-free-ai-coding/providers/nous-portal/),
+  [freeinference.dev](https://freeinference.dev/providers/nous-portal/)
