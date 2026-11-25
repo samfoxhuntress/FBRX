@@ -27,6 +27,8 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
   Delivery was approved by Sam.
 * FBRX Alerts chunk 2: FBRX Server's Alerts page and its alerts (drives, Gate, MiniDome, FBRX Time) to e-mail, a
   signed webhook and syslog. Needs an FBRX Server release; the look waits for Sam's approval.
+* FBRX OS: model fallbacks (AI models → If the model fails): a second and third choice carry on with the same
+  conversation when the model fails mid-run. Needs an FBRX OS release; the look waits for Sam's approval.
 
 ## Released
 
