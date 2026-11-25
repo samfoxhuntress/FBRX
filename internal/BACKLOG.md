@@ -25,6 +25,8 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
   too (needs an FBRX Server release). The look was approved by Sam.
 * FBRX Alert v1 (2.6.0 chunk 1): all-clears, signed webhooks and syslog in FBRX OS and Digger. The look of Alerts →
   Delivery was approved by Sam.
+* FBRX Alerts chunk 2: FBRX Server's Alerts page and its alerts (drives, Gate, MiniDome, FBRX Time) to e-mail, a
+  signed webhook and syslog. Needs an FBRX Server release; the look waits for Sam's approval.
 
 ## Released
 
