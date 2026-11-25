@@ -680,9 +680,14 @@ export class AgentRuntime {
     p: ChatParams,
     controller: AbortController,
   ): Promise<RunResult> {
-    const { provider, config, model } = resolved;
+    let { provider, config, model } = resolved;
     const policy = this.d.policy.policy;
     const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+    // What the model in use read and wrote since it took over (each model's share is counted against it).
+    let segment: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+    // The models tried in this run: a fallback is tried once.
+    const tried = new Set([`${config.id}|${model}`]);
+    const fellBack: Array<{ from: string; to: string; error: string }> = [];
     let steps = 0;
     let toolCallsUsed = 0;
     // The same call again (same tool, same input) is a model going round in circles: it is not run again, the model is
@@ -699,7 +704,7 @@ export class AgentRuntime {
     const last = this.d.store.messages(conversationId).at(-1);
     const again = last?.role === 'user' && last.content === text && sameFiles(last.attachments ?? [], files);
     if (!again) this.d.store.append(conversationId, { role: 'user', content: text, ...(files.length ? { attachments: files } : {}) });
-    const sees = modelSeesImages(config.type, model);
+    let sees = modelSeesImages(config.type, model);
     // Memory: what the person just said may hold a lasting fact; what is remembered goes into this run's instructions
     // (with a cloud AI, only general facts, never private ones).
     try {
@@ -707,7 +712,7 @@ export class AgentRuntime {
     } catch (err) {
       this.d.log.debug('Memory could not learn from the message', { error: (err as Error).message });
     }
-    const memory = this.d.memory?.context({ conversationId, text, cloud: config.cloud }) ?? null;
+    let memory = this.d.memory?.context({ conversationId, text, cloud: config.cloud }) ?? null;
     // The skills that fit go with the message, and the tools their steps name join a small model's short list.
     const skills = this.d.learner?.() ? null : (this.d.skills?.context(text) ?? null);
     const kit = this.d.learner?.() ? null : (this.d.toolkit?.context(text) ?? null);
@@ -722,8 +727,9 @@ export class AgentRuntime {
     // FBRX scaffolds as much as the agent needs (agent-fit.ts): a small model sees the tools this conversation is
     // about, briefly described; one that holds a long conversation sees them all. Either way what it remembers goes
     // with the person's message, so the start of every request stays the same and the provider reuses its reading.
-    const focused = agentFit(config, provider).tools === 'focused';
-    const asked = focused ? this.d.store.messages(conversationId).filter((m) => m.role === 'user').map((m) => m.content) : [];
+    let focused = agentFit(config, provider).tools === 'focused';
+    const askedOf = () => (focused ? this.d.store.messages(conversationId).filter((m) => m.role === 'user').map((m) => m.content) : []);
+    let asked = askedOf();
     this.emit({ type: 'run.started', runId, conversationId, providerId: config.id, model });
     this.d.log.info('Agent run started', { runId, provider: config.id, model, origin: p.origin });
     const maxSteps = Math.min(policy.ai.maxStepsPerRun, p.limits?.maxSteps ?? Number.POSITIVE_INFINITY);
@@ -732,9 +738,26 @@ export class AgentRuntime {
     // What the agent is doing right now, for the activity panel while it works.
     // How full the conversation is (estimated, then as the provider counted the last request), and the monthly cloud
     // AI budget when one is set and this is a cloud model.
-    const windowTokens = tokensFor(provider.historyBudgetChars);
+    let windowTokens = tokensFor(provider.historyBudgetChars);
     const budget = this.d.settings.get().ai.monthlyBudgetTokens;
-    const counted = !!config.cloud && budget > 0 && !!this.d.usage;
+    let counted = !!config.cloud && budget > 0 && !!this.d.usage;
+    /**
+     * Another model takes over the run: what the one before used is counted against it, and everything that depends on
+     * the model (what it sees, what it may remember, how many tools it is shown, how much it holds) is worked out again.
+     * A cloud model gets only the memories a cloud model may have.
+     */
+    const adopt = (next: ReturnType<ProviderManager['resolve']>) => {
+      this.d.usage?.record({ providerId: config.id, model, cloud: !!config.cloud, usage: segment });
+      segment = { inputTokens: 0, outputTokens: 0 };
+      ({ provider, config, model } = next);
+      tried.add(`${config.id}|${model}`);
+      sees = modelSeesImages(config.type, model);
+      memory = this.d.memory?.context({ conversationId, text, cloud: config.cloud }) ?? null;
+      focused = agentFit(config, provider).tools === 'focused';
+      asked = askedOf();
+      windowTokens = tokensFor(provider.historyBudgetChars);
+      counted = !!config.cloud && budget > 0 && !!this.d.usage;
+    };
     const monthUsed = () => (this.d.usage?.cloudUsed() ?? 0) + usage.inputTokens + usage.outputTokens;
     const month = () => (counted ? { used: monthUsed(), budget } : null);
     let reading: ContextReading = { windowTokens, usedTokens: 0, folded: 0, estimated: true, month: month() };
@@ -798,44 +821,67 @@ export class AgentRuntime {
         const calls: ProviderToolCall[] = [];
         let lastReading = 0;
         let finish: { finishReason: string; providerData?: any; servedModel?: string; message?: string } = { finishReason: 'stop' };
-        for await (const chunk of provider.chat({
-          model,
-          messages,
-          tools: toolCallsUsed < policy.ai.maxToolCallsPerRun && repeats < REPEATS_BEFORE_ANSWER ? wireTools : [],
-          temperature: this.d.settings.get().ai.temperature,
-          maxTokens,
-          // A model on this computer or the network thinks first only when the Thinking level says so; a cloud AI
-          // decides for itself.
-          ...(config.cloud ? {} : { reasoning: this.d.settings.get().ai.localThinking }),
-          // Help this computer gives another through Mesh Assist waits while this computer's own requests do.
-          priority: p.origin === 'remote' && p.actor.startsWith('mesh-assist:') ? 'mesh' : 'host',
-          signal,
-        })) {
-          if (chunk.type === 'text') {
-            if (phase !== 'writing' && chunk.delta.trim()) progress((phase = 'writing'), 'Writing the answer');
-            content += chunk.delta;
-            pending += chunk.delta;
-            if (Date.now() - lastFlush >= 66) flush();
-          } else if (chunk.type === 'thinking') {
-            if (phase !== 'thinking') progress((phase = 'thinking'), steps === 1 ? 'Working out how to approach this' : 'Working out the next move');
-            thinking += chunk.delta;
-            pendingThinking += chunk.delta;
-            if (Date.now() - lastFlush >= 66) flush();
-          } else if (chunk.type === 'tool_call') calls.push(chunk.call);
-          else if (chunk.type === 'waiting')
-            progress(steps === 1 ? 'model' : 'reading', chunk.for === 'mesh' ? 'Waiting for an answer this computer is giving another computer to finish: your requests go next' : 'Waiting for your other chat: the AI on this computer answers one chat at a time');
-          else if (chunk.type === 'reading') {
-            // How far the model has read the request: on a processor a long one takes a while before the first word.
-            if (chunk.read < chunk.of && Date.now() - lastReading >= 1000) {
-              lastReading = Date.now();
-              progress(steps === 1 ? 'model' : 'reading', `Reading ${steps === 1 ? 'your request' : 'the results'}: ${chunk.read.toLocaleString('en-US')} of ${chunk.of.toLocaleString('en-US')} tokens`);
-            }
-          } else if (chunk.type === 'usage') {
-            usage.inputTokens += chunk.inputTokens;
-            usage.outputTokens += chunk.outputTokens;
-            request.inputTokens += chunk.inputTokens;
-            request.outputTokens += chunk.outputTokens;
-          } else if (chunk.type === 'done') finish = chunk;
+        try {
+          for await (const chunk of provider.chat({
+            model,
+            messages,
+            tools: toolCallsUsed < policy.ai.maxToolCallsPerRun && repeats < REPEATS_BEFORE_ANSWER ? wireTools : [],
+            temperature: this.d.settings.get().ai.temperature,
+            maxTokens,
+            // A model on this computer or the network thinks first only when the Thinking level says so; a cloud AI
+            // decides for itself.
+            ...(config.cloud ? {} : { reasoning: this.d.settings.get().ai.localThinking }),
+            // Help this computer gives another through Mesh Assist waits while this computer's own requests do.
+            priority: p.origin === 'remote' && p.actor.startsWith('mesh-assist:') ? 'mesh' : 'host',
+            signal,
+          })) {
+            if (chunk.type === 'text') {
+              if (phase !== 'writing' && chunk.delta.trim()) progress((phase = 'writing'), 'Writing the answer');
+              content += chunk.delta;
+              pending += chunk.delta;
+              if (Date.now() - lastFlush >= 66) flush();
+            } else if (chunk.type === 'thinking') {
+              if (phase !== 'thinking') progress((phase = 'thinking'), steps === 1 ? 'Working out how to approach this' : 'Working out the next move');
+              thinking += chunk.delta;
+              pendingThinking += chunk.delta;
+              if (Date.now() - lastFlush >= 66) flush();
+            } else if (chunk.type === 'tool_call') calls.push(chunk.call);
+            else if (chunk.type === 'waiting')
+              progress(steps === 1 ? 'model' : 'reading', chunk.for === 'mesh' ? 'Waiting for an answer this computer is giving another computer to finish: your requests go next' : 'Waiting for your other chat: the AI on this computer answers one chat at a time');
+            else if (chunk.type === 'reading') {
+              // How far the model has read the request: on a processor a long one takes a while before the first word.
+              if (chunk.read < chunk.of && Date.now() - lastReading >= 1000) {
+                lastReading = Date.now();
+                progress(steps === 1 ? 'model' : 'reading', `Reading ${steps === 1 ? 'your request' : 'the results'}: ${chunk.read.toLocaleString('en-US')} of ${chunk.of.toLocaleString('en-US')} tokens`);
+              }
+            } else if (chunk.type === 'usage') {
+              usage.inputTokens += chunk.inputTokens;
+              usage.outputTokens += chunk.outputTokens;
+              segment.inputTokens += chunk.inputTokens;
+              segment.outputTokens += chunk.outputTokens;
+              request.inputTokens += chunk.inputTokens;
+              request.outputTokens += chunk.outputTokens;
+            } else if (chunk.type === 'done') finish = chunk;
+          }
+        } catch (err) {
+          // The model failed (no answer, an error from its provider, the connection lost mid-answer). The next model
+          // in Settings → AI models → If the model fails takes this step over: what this one began to write goes, and
+          // the conversation (the request, every reply and every tool result so far) is the same for it.
+          if (signal.aborted) throw err;
+          const next = this.fallback(tried, conversationId);
+          if (!next) throw err;
+          const why = errorMessage(err);
+          const from = `${config.name}${model ? ` (${model})` : ''}`;
+          const to = `${next.config.name}${next.model ? ` (${next.model})` : ''}`;
+          fellBack.push({ from: `${config.id}|${model}`, to: `${next.config.id}|${next.model}`, error: why.slice(0, 300) });
+          // A new reply replaces the one cut off.
+          this.emit({ type: 'message.delta', runId, conversationId, messageId: newId('msg'), delta: '' });
+          progress('model', `${from} stopped answering (${why.slice(0, 120)}). Carrying on with ${to}, with the whole conversation so far.`);
+          this.d.log.warn('The model failed; another takes over', { runId, from: `${config.id}/${model}`, to: `${next.config.id}/${next.model}`, error: why });
+          this.d.audit.append({ category: 'agent', action: 'run.fallback', actor: p.actor, target: conversationId, outcome: 'info', details: { runId, from: `${config.id}/${model}`, to: `${next.config.id}/${next.model}`, error: why.slice(0, 500) } });
+          adopt(next);
+          steps--;
+          continue;
         }
         flush();
         if (request.inputTokens) reading = { ...reading, usedTokens: request.inputTokens + request.outputTokens, estimated: false, month: month() };
@@ -963,7 +1009,7 @@ export class AgentRuntime {
         actor: p.actor,
         target: conversationId,
         outcome: 'success',
-        details: { runId, origin: p.origin, provider: config.id, model, steps, toolCalls: toolCallsUsed, usage },
+        details: { runId, origin: p.origin, provider: config.id, model, steps, toolCalls: toolCallsUsed, usage, ...(fellBack.length ? { fellBack } : {}) },
       });
       return { runId, conversationId, answer: finalAnswer, steps, usage, status: 'completed' };
     } catch (err) {
@@ -995,8 +1041,30 @@ export class AgentRuntime {
       return { runId, conversationId, answer: finalAnswer, steps, usage, status: cancelled ? 'cancelled' : 'failed', error: message };
     } finally {
       // Counted whatever the outcome: a stopped or failed run still read and wrote what it did.
-      this.d.usage?.record({ providerId: config.id, model, cloud: !!config.cloud, usage });
+      this.d.usage?.record({ providerId: config.id, model, cloud: !!config.cloud, usage: segment });
     }
+  }
+
+  /**
+   * The next model to carry on with when the one in use fails (Settings → AI models → If the model fails), in order,
+   * each once. One that cannot be used now is passed over: switched off, blocked by policy, not set up, or a cloud
+   * model while the chat is offline (an offline chat stays on this computer and network).
+   */
+  private fallback(tried: Set<string>, conversationId: string): ReturnType<ProviderManager['resolve']> | null {
+    const offline = this.d.store.isOffline(conversationId);
+    for (const f of this.d.settings.get().ai.fallbacks ?? []) {
+      let next: ReturnType<ProviderManager['resolve']>;
+      try {
+        next = this.d.providers.resolve(f.providerId, f.model || undefined);
+      } catch (err) {
+        this.d.log.debug('A fallback model cannot be used now', { provider: f.providerId, error: errorMessage(err) });
+        continue;
+      }
+      const id = `${next.config.id}|${next.model}`;
+      if (tried.has(id) || !next.config.enabled || (offline && next.config.cloud)) continue;
+      return next;
+    }
+    return null;
   }
 }
 

@@ -866,6 +866,16 @@ graphics card with enough memory for the model is the biggest speed-up of all.
   there does the thinking. From away, connect FBRX VPN first. See [MESH.md](MESH.md#think-with-your-fbrx-servers-ai).
 * **Providers**: Ollama, Claude, other OpenAI-compatible endpoints, and other computers' AI. The *Default model* is a
   list of the provider's models (or *Other model…* to type a name).
+* **If the model fails**: a second and a third choice. When the model answering stops working (out of credits,
+  overloaded, down, the provider refusing the key, or the connection dropping in the middle of an answer), the next
+  one carries on with the same task. It gets the whole conversation as it stands, so nothing starts over: your
+  request, every reply, and the results of the tools already used. Only what the failed model was in the middle of
+  writing is dropped. The chat says which model took over, each answer shows the model that wrote it, and the audit
+  log keeps each handover. A choice that cannot be used at that moment is passed over (switched off, blocked by
+  policy, or a cloud model while the chat is offline: an offline chat never goes to the cloud). A cloud model that
+  takes over gets only the memories a cloud model may have, and each model's use is counted against it. When no
+  choice is left, the chat says what went wrong, and **Mesh Assist** can still hand the task to another computer
+  ([MESH.md](MESH.md#mesh-assist-computers-lending-each-other-their-ai)).
 
 The chat's model list shows the same installed models. If a chat asks Ollama for a model it does not have, the error
 names the installed ones. Each answer in a chat shows the model that wrote it and how long it took from your question,

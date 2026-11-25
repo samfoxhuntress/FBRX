@@ -130,6 +130,11 @@ export const SettingsSchema = z.object({
   ai: z.object({
     defaultProvider: z.string(),
     defaultModel: z.string(),
+    /**
+     * When the model fails, the second and third choices carry on with the same conversation, in order (an empty
+     * model is the provider's own).
+     */
+    fallbacks: z.array(z.object({ providerId: z.string().min(1), model: z.string() })).max(3),
     systemPrompt: z.string().max(20000),
     temperature: z.number().min(0).max(2),
     providers: z.array(ProviderConfigSchema),
@@ -615,6 +620,7 @@ export const DEFAULT_SETTINGS: Settings = {
   ai: {
     defaultProvider: 'local',
     defaultModel: '',
+    fallbacks: [],
     systemPrompt: DEFAULT_SYSTEM_PROMPT,
     temperature: 0.2,
     providers: DEFAULT_PROVIDERS,

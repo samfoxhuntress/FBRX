@@ -213,6 +213,7 @@ export function RuntimePage() {
           ]}
         />
       </Card>
+      {ai && providers.data && <Fallbacks providers={providers.data} fallbacks={ai.fallbacks} locked={isLocked(locked, 'ai.fallbacks')} />}
       <div>
         <Button
           icon="plus"
@@ -225,6 +226,44 @@ export function RuntimePage() {
       {editProvider && settings.data && <ProviderEditor provider={editProvider} all={settings.data.settings.ai.providers} onClose={() => setEditProvider(null)} />}
       {dialog}
     </Page>
+  );
+}
+
+/**
+ * The second and third choice of model: when the one answering fails, the next carries on with the same conversation.
+ */
+function Fallbacks({ providers, fallbacks, locked }: { providers: ProviderStatus[]; fallbacks: Array<{ providerId: string; model: string }>; locked: boolean }) {
+  const { run, busy } = useAction();
+  const empty = { providerId: '', model: '' };
+  const [rows, setRows] = useState(() => [fallbacks[0] ?? empty, fallbacks[1] ?? empty]);
+  const options = [{ value: '', label: 'None' }, ...providers.filter((p) => p.enabled).map((p) => ({ value: p.id, label: `${p.name}${p.cloud ? ' (cloud)' : ''}` }))];
+  const set = (i: number, v: Partial<(typeof rows)[number]>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...v } : r)));
+  const changed = JSON.stringify(rows.filter((r) => r.providerId)) !== JSON.stringify(fallbacks);
+  return (
+    <Card
+      title="If the model fails"
+      subtitle="When the model answering stops working (out of credits, overloaded, down, or the connection drops in the middle of an answer), the next one here carries on with the same conversation: your request, every reply and every result so far. An offline chat skips cloud models."
+    >
+      <div className="fx-form">
+        {['Second choice', 'Third choice'].map((label, i) => (
+          <div className="fx-row" key={label}>
+            <Field label={label}>
+              <Select value={rows[i]!.providerId} disabled={locked} options={options} onChange={(e) => set(i, { providerId: e.target.value, model: '' })} />
+            </Field>
+            {rows[i]!.providerId ? (
+              <Field label="Model">
+                <ModelPicker providerId={rows[i]!.providerId} value={rows[i]!.model} onChange={(m) => set(i, { model: m })} defaultLabel="Its own model" ariaLabel={`${label} model`} />
+              </Field>
+            ) : null}
+          </div>
+        ))}
+        <div className="fx-actions">
+          <Button variant="primary" disabled={locked || !changed} loading={busy === 'fallbacks'} onClick={() => void run('fallbacks', () => call('settings.update', { patch: { ai: { fallbacks: rows.filter((r) => r.providerId) } } }), 'Saved')}>
+            Save
+          </Button>
+        </div>
+      </div>
+    </Card>
   );
 }
 
