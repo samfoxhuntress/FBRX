@@ -1,8 +1,16 @@
 name: FBRX Server ISO
 
 # The FBRX Server installer ISO: Debian 13's network installer with FBRX Server added (scripts/server/build-iso.sh).
+# With "release", the server bundle and the ISO are published on their own as a GitHub release tagged
+# server-v<version> (never the repository's latest: that stays FBRX OS), for an FBRX Server update between FBRX OS
+# releases. The version is apps/virtual/package.json's. Then point release.json's "server" entry at the bundle.
 on:
   workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a GitHub release (server-v<version>) with the server bundle and the ISO
+        type: boolean
+        default: false
   push:
     tags: ["server-v*"]
     branches: [main, "claude/**"]
@@ -26,6 +34,8 @@ jobs:
   iso:
     name: Build the installer ISO
     runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-node@v5
@@ -34,6 +44,8 @@ jobs:
           cache: npm
       - run: sudo apt-get update -qq && sudo apt-get install -y -qq xorriso >/dev/null
       - run: npm ci --no-audit --no-fund
+      - id: v
+        run: echo "version=$(node -p "require('./apps/virtual/package.json').version")" >> "$GITHUB_OUTPUT"
       - name: Bundle FBRX Server (with Node.js, so the installer needs no extra download)
         run: scripts/server/bundle.sh --with-node
       - name: Add FBRX Server to the Debian 13 network installer
@@ -46,3 +58,35 @@ jobs:
             dist/fbrx-server-*-amd64.iso.sha256
           retention-days: 14
           compression-level: 0
+      - uses: actions/upload-artifact@v4
+        with:
+          name: fbrx-server-bundle
+          path: dist/fbrx-server-*.tar.gz
+          retention-days: 14
+          compression-level: 0
+
+  publish:
+    needs: iso
+    if: ${{ inputs.release }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: fbrx-server-*
+          path: dist-server
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist-server && rm -f *.iso.sha256 && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: server-v${{ needs.iso.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: FBRX Server ${{ needs.iso.outputs.version }}
+          make_latest: false
+          files: dist-server/*
+          body: |
+            FBRX Server ${{ needs.iso.outputs.version }}. On a server from 1.1: sudo fbrx-server update check, then
+            sudo fbrx-server update commit (or Settings → Updates in its console). The ISO installs a new server.
+            See docs/SERVER.md.
