@@ -20,6 +20,11 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
 * FBRX OS: AI coordination connects OpenAI Codex CLI (its `~/.codex/config.toml`, an `[mcp_servers.fbrx]` table, the
   rest of the file kept), so a ChatGPT plan works with FBRX's tools through Codex's own sign-in. Needs an FBRX OS
   release.
+* Device consoles (FBRX OS and FBRX Digger 1.3.1): copy and paste (Ctrl+V, Ctrl+Shift+V, Shift+Insert, Cmd+V,
+  right-click), and the console fits the window and scrolls its own lines. FBRX Server's Terminal tab fits the window
+  too (needs an FBRX Server release). The look waits for Sam's approval.
+* FBRX Alert v1 (2.6.0 chunk 1): all-clears, signed webhooks and syslog in FBRX OS and Digger. The look of Alerts →
+  Delivery waits for Sam's approval.
 
 ## Released
 
