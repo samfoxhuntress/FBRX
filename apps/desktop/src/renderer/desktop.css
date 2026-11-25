@@ -1906,6 +1906,7 @@ body.spotlight-body {
 .console-body {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: minmax(0, 1fr);
   flex: 1;
   min-height: 0;
 }
@@ -1915,8 +1916,9 @@ body.spotlight-body {
 .console-screen {
   background: #0c0e11;
   padding: 8px 4px 8px 10px;
-  min-height: 480px;
+  min-height: 0;
   height: 100%;
+  overflow: hidden;
 }
 .console-screen .xterm {
   height: 100%;
@@ -1925,7 +1927,7 @@ body.spotlight-body {
   border-left: 1px solid var(--border);
   padding: 12px;
   overflow: auto;
-  max-height: 620px;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 8px;

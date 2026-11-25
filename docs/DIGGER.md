@@ -119,6 +119,11 @@ RouterOS, pfSense / OPNsense, TP-Link Omada / JetStream, NETGEAR, SonicWall, Wat
 Raspberry Pi and generic Linux. *Web admin* opens the device's admin page; *Windows Terminal* opens the same SSH
 login outside Digger.
 
+The console fills the window below it and scrolls its own lines (the last 5,000), so the newest output and the prompt
+stay in view. **Copy and paste** work as in other terminals: select text and press Ctrl+C (or Ctrl+Shift+C) to copy
+it; Ctrl+C with nothing selected goes to the device. Ctrl+V, Ctrl+Shift+V, Shift+Insert and ⌘V on a Mac paste, and
+right-clicking the console offers Copy and Paste.
+
 - **Saved connections:** every device you connect to is kept on the left and in the *Saved connections* view
   (shown when no console is open): name, address, protocol, user, device guide, notes and when you last used it.
   Edit one to name it and add notes, add one by hand, or untick *Keep in Saved connections* when connecting.

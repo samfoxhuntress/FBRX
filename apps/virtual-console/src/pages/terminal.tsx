@@ -38,6 +38,23 @@ export function TerminalPage() {
 function Screen({ state }: { state: TerminalState }) {
   const toast = useToast();
   const box = useRef<HTMLDivElement>(null);
+  // As tall as the window leaves below it (with the line of help under it), so the page never scrolls to follow the
+  // output: the terminal scrolls its own lines.
+  const [fill, setFill] = useState<number | null>(null);
+  useEffect(() => {
+    const el = box.current;
+    if (!el) return;
+    const measure = () => {
+      let sc: HTMLElement | null = null;
+      for (let p = el.parentElement; p && !sc; p = p.parentElement) if (['auto', 'scroll'].includes(getComputedStyle(p).overflowY)) sc = p;
+      const r = el.getBoundingClientRect();
+      const top = sc ? r.top - sc.getBoundingClientRect().top + sc.scrollTop : r.top + window.scrollY;
+      setFill(Math.max(280, Math.floor((sc ? sc.clientHeight : window.innerHeight) - top - 72)));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, []);
   const term = useRef<Terminal | null>(null);
   const sock = useRef<WebSocket | null>(null);
   const [phase, setPhase] = useState<Phase>('connecting');
@@ -186,7 +203,7 @@ function Screen({ state }: { state: TerminalState }) {
       >
         {error && <Callout tone="critical">{error}</Callout>}
         <div className="vt-term-wrap">
-          <div ref={box} className="vt-term" onClick={() => term.current?.focus()} />
+          <div ref={box} className="vt-term" style={fill ? ({ '--vt-fill': `${fill}px` } as React.CSSProperties) : undefined} onClick={() => term.current?.focus()} />
         </div>
       </Card>
       <p className="fx-help">

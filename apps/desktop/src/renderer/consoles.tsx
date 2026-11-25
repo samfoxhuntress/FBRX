@@ -4,7 +4,8 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { DEVICE_PROFILES, commandSearchUrl, deviceProfile, matchDeviceProfile, type ConnectionProtocol, type ConsoleBookmark, type ConsoleProtocol, type ConsoleSession, type DeviceProfile, type RemoteProtocol } from '@fbrx/shared';
 import { Button, Callout, Empty, Field, Icons, InfoTip, Input, Modal, Select, Status, TextArea, Toggle, timeAgo, useConfirm, useToast } from '@fbrx/ui';
-import { bridge, call, onEvent } from './client';
+import { bridge, call, onEvent, readClipboard, writeClipboard } from './client';
+import { menuFor } from './context-menu';
 import { useAgentName, useConsoleSessions, useCore } from './hooks';
 import { askAgent } from './widgets';
 import { DIGGER } from './app';
@@ -340,6 +341,46 @@ function cssVar(name: string, fallback: string) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
+/** The nearest ancestor that scrolls, or null for the window. */
+function scrollerOf(el: HTMLElement): HTMLElement | null {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    const o = getComputedStyle(p).overflowY;
+    if (o === 'auto' || o === 'scroll') return p;
+  }
+  return null;
+}
+
+/**
+ * A box as tall as the window leaves below it: its bottom meets the bottom of the page's scrolling area, so a console
+ * in it never pushes the page to scroll; the terminal scrolls its own lines instead.
+ */
+export function useFillHeight(ref: React.RefObject<HTMLElement | null>, deps: unknown[], o: { gap?: number; min?: number } = {}): number | null {
+  const [height, setHeight] = useState<number | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const measure = () => {
+      const sc = scrollerOf(el);
+      const r = el.getBoundingClientRect();
+      const top = sc ? r.top - sc.getBoundingClientRect().top + sc.scrollTop : r.top + window.scrollY;
+      const room = sc ? sc.clientHeight - parseFloat(getComputedStyle(sc).paddingBottom || '0') : window.innerHeight;
+      setHeight(Math.max(o.min ?? 320, Math.floor(room - top - (o.gap ?? 12))));
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    // The page above it can change height (a notice, the tabs wrapping).
+    const ro = new ResizeObserver(measure);
+    const sc = scrollerOf(el);
+    if (sc?.firstElementChild) ro.observe(sc.firstElementChild);
+    return () => {
+      window.removeEventListener('resize', measure);
+      ro.disconnect();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return height;
+}
+
 /** The terminal screen of one session (xterm.js), sized to its box. */
 export function ConsoleScreen({ session }: { session: ConsoleSession }) {
   const box = useRef<HTMLDivElement>(null);
@@ -366,6 +407,23 @@ export function ConsoleScreen({ session }: { session: ConsoleSession }) {
     const input = t.onData((data) => {
       if (!closedRef.current) void call('console.write', { id: session.id, data }).catch(() => undefined);
     });
+    // Copy and paste as in other terminals. Ctrl+C with text selected copies it (Ctrl+Shift+C always); without, it goes
+    // to the device. Ctrl+V, Ctrl+Shift+V, Shift+Insert and Cmd+V paste: the terminal leaves the key to the app, which
+    // pastes into it, and it types what was pasted (Ctrl+V would otherwise reach the device as a control key).
+    t.attachCustomKeyEventHandler((e) => {
+      if (e.type !== 'keydown') return true;
+      const k = e.key.toLowerCase();
+      if (e.shiftKey && k === 'insert' && !e.ctrlKey && !e.metaKey) return false;
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return true;
+      if (k === 'c' && (t.hasSelection() || e.shiftKey)) {
+        if (t.hasSelection()) void writeClipboard(t.getSelection()).catch(() => undefined);
+        t.clearSelection();
+        e.preventDefault();
+        return false;
+      }
+      if (k === 'v') return false;
+      return true;
+    });
     let timer: ReturnType<typeof setTimeout> | undefined;
     const ro = new ResizeObserver(() => {
       try {
@@ -390,7 +448,27 @@ export function ConsoleScreen({ session }: { session: ConsoleSession }) {
   useEffect(() => {
     if (closed) term.current?.write(`\r\n\x1b[33m[${session.reason ?? 'Disconnected'}]\x1b[0m\r\n`);
   }, [closed, session.reason]);
-  return <div className="console-screen" ref={box} onClick={() => term.current?.focus()} />;
+  // Right-click: Copy what is selected, Paste what is on the clipboard.
+  const menu = menuFor(() => {
+    const t = term.current;
+    if (!t) return [];
+    const picked = t.hasSelection() ? t.getSelection() : '';
+    return [
+      { label: 'Copy', icon: 'copy', disabled: !picked, onSelect: () => void writeClipboard(picked).catch(() => undefined), hint: 'Ctrl+C' },
+      {
+        label: 'Paste',
+        icon: 'clipboard',
+        disabled: closed,
+        onSelect: () =>
+          void readClipboard().then((text) => {
+            if (text && !closedRef.current) t.paste(text);
+            t.focus();
+          }),
+        hint: 'Ctrl+V',
+      },
+    ];
+  });
+  return <div className="console-screen" ref={box} onClick={() => term.current?.focus()} onContextMenu={menu} />;
 }
 
 function Guide({ session, profile }: { session: ConsoleSession; profile: DeviceProfile | null }) {
@@ -490,8 +568,10 @@ export function DeviceConsolesPanel({ selected, onSelect }: { selected: string |
   const fromBookmark = (b: ConsoleBookmark): ConnectTarget => ({ host: b.host, port: b.port, protocol: b.protocol, username: b.username, profileId: b.profileId, name: b.label, vendor: b.vendor, auto: true });
   const [showGuide, setShowGuide] = useState(true);
   const toast = useToast();
+  const mainRef = useRef<HTMLDivElement>(null);
   const list = sessions.data ?? [];
   const current = list.find((s) => s.id === selected) ?? list[0] ?? null;
+  const fill = useFillHeight(mainRef, [current?.id, showSaved]);
   const profile = useMemo(() => deviceProfile(current?.profileId), [current?.profileId]);
   useEffect(() => {
     if (current && current.id !== selected) onSelect(current.id);
@@ -539,7 +619,7 @@ export function DeviceConsolesPanel({ selected, onSelect }: { selected: string |
           onChanged={() => bookmarks.reload()}
         />
       ) : current ? (
-        <div className="console-main">
+        <div className="console-main" ref={mainRef} style={fill ? { height: fill } : undefined}>
           <div className="console-head">
             <div style={{ minWidth: 0 }}>
               <div className="console-title">{current.label}</div>

@@ -8,7 +8,7 @@
 .vt-term-sub { display: inline-flex; align-items: center; gap: 10px; flex-wrap: wrap; }
 .vt-term-wrap { background: #0b0b0d; padding: 8px 4px 4px 10px; border-radius: 0 0 var(--radius) var(--radius); }
 .vt-term-wrap:fullscreen { padding: 12px; border-radius: 0; }
-.vt-term { height: min(70vh, 780px); min-height: 360px; }
+.vt-term { height: var(--vt-fill, min(70vh, 780px)); min-height: 280px; }
 .vt-term-wrap:fullscreen .vt-term { height: calc(100vh - 24px); }
 
 .vt-chips { display: flex; flex-wrap: wrap; gap: 6px; }
