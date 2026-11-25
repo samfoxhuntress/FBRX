@@ -88,5 +88,4 @@ jobs:
           files: dist-server/*
           body: |
             FBRX Server ${{ needs.iso.outputs.version }}. On a server from 1.1: sudo fbrx-server update check, then
-            sudo fbrx-server update commit (or Settings → Updates in its console). The ISO installs a new server.
-            See docs/SERVER.md.
+            sudo fbrx-server update commit. The ISO installs a new server. See docs/SERVER.md.
