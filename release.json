@@ -23,18 +23,20 @@
   "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.5.0.zip",
   "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.5.0",
   "server": {
-    "version": "1.4.4",
-    "released": "2026-11-17",
-    "summary": "FBRX Server 1.4.4 comes with FBRX OS 2.5.0: the FBRX directory, changing a network's VLAN tag in FBRX Gate, and releasing a DHCP lease that works.",
+    "version": "1.4.5",
+    "released": "2026-11-25",
+    "summary": "FBRX Server 1.4.5: Bridge a port from the console, FBRX Time copies off the server, Ubuntu quick downloads in the ISO library, thin or thick VM disks, and long pastes into a VM that arrive as typed.",
     "notes": [
-      "The directory role (its Directory page): people, groups, administrators and password rules, and join codes for the computers that use them.",
-      "FBRX Gate: change the VLAN tag of an existing network; every network on it moves with it.",
-      "FBRX Gate: Release on a DHCP lease frees it.",
+      "Networks → Bridge a port… (administrators): makes bridge br0 on one of the server's ports (its DHCP or fixed address moves to the bridge, or a spare card), says what an outer hypervisor (VMware, Hyper-V, VirtualBox) must allow, and Restart now finishes it.",
+      "FBRX Time: a copy of each new image off the server, to a NAS share, an NFS export or a USB drive, tested before it is saved and changeable any time.",
+      "ISO library: quick downloads of Ubuntu 26.04 LTS Desktop and Server, the newest point release, checked against Ubuntu's checksums.",
+      "New VMs: thin or thick provisioned disks.",
+      "Long pastes into a VM's console arrive as typed.",
       "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
     ],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.5.0/fbrx-server-1.4.4.tar.gz",
-    "sha256": "bd7f6fa764792a47032db603415de8944ae5a521024538c201dfb11ee79e2362",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.5.0"
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/server-v1.4.5/fbrx-server-1.4.5.tar.gz",
+    "sha256": "726212ea8e0e91788dd69984ae12827f21068aa5e2dd15e6ee451f3ed839b464",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/server-v1.4.5"
   },
   "digger": {
     "version": "1.3.0",
