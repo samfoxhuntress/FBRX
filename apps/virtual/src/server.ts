@@ -1,5 +1,7 @@
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { hostname, networkInterfaces } from 'node:os';
+import { ServerAlerts } from './alerts/service';
+import { alertRoutes } from './routes/alerts';
 import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
@@ -120,6 +122,15 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   const key = loadMasterKey(config.dataDir);
   const hv = opts.hypervisor ?? makeHypervisor(config);
   const version = readVersion();
+  // Its alerts (FBRX Alert v1): the drives, and what the gate, FBRX Time and MiniDome report, below.
+  const alerts = new ServerAlerts({
+    db,
+    key,
+    host: hostname(),
+    log: (level, msg) => app.log[level](msg),
+    dirs: [...new Set([config.dataDir, config.imagesDir])],
+    gateProblems: config.roles.includes('gate') ? async () => (ctx.gate ? (await ctx.gate.engine.live()).problems : []) : undefined,
+  });
   const ctx: VirtualContext = {
     config,
     version,
@@ -138,6 +149,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     time: null,
     files: null,
     directory: null,
+    alerts,
     cliToken: randomBytes(32).toString('base64url'),
     log: app.log,
     tls: tls ? { fingerprint: tls.fingerprint, selfSigned: tls.selfSigned, notAfter: tls.notAfter } : null,
@@ -211,6 +223,11 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
           return r.delivered;
         },
         computers: async () => (await ctx.core.call<MeshNetworkComputer[]>('mesh.network.computers', {}, 'minidome', 20_000)).map((c) => ({ name: c.name, addresses: c.addresses, protection: c.protection })),
+        // Each new finding is an alert of its own (threats, devices that joined); MiniDome's page has the rest.
+        onFinding: (f) =>
+          void alerts
+            .event({ rule: `dome_${f.kind}`.slice(0, 64), subject: f.subject ?? undefined, role: 'minidome', severity: f.severity === 'info' ? 'info' : f.severity === 'warning' ? 'warning' : 'critical', title: f.title, detail: f.detail, yours: 'Look at it on the MiniDome page: resolve it, or block the device.' })
+            .catch(() => undefined),
         log: (level, msg) => app.log[level](msg),
       });
       ctx.dome.start();
@@ -234,6 +251,13 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
       // Copies of each new image off the server (Settings): a NAS, an NFS export or a drive plugged in.
       copier: opts.timeCopier ?? (config.time.mode === 'libvirt' ? new LinuxTimeCopier({ workDir: join(config.dataDir, 'time-work') }) : new SimulatedTimeCopier(join(config.dataDir, 'time-copies'))),
       key,
+      // A backup, check, restore or copy that fails is a problem until the same one next works.
+      onTask: (t) => {
+        const subject = `${t.kind}:${t.subject}`;
+        const what = { backup: 'backup', check: 'boot check', restore: 'restore', import: 'import', copy: 'copy off the server' }[t.kind] ?? t.kind;
+        if (t.state === 'failed') void alerts.raise({ rule: 'time_task_failed', subject, role: 'time', severity: 'warning', title: `FBRX Time: the ${what} of ${t.subject} failed`, detail: t.detail, yours: 'Open FBRX Time to see why (Fabrix can explain a failed check), then run it again.' }).catch(() => undefined);
+        else if (t.state === 'done') void alerts.clear('time_task_failed', subject).catch(() => undefined);
+      },
     });
     ctx.time = time;
     time.start();
@@ -301,6 +325,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   });
 
   app.get('/healthz', { logLevel: 'warn' }, async () => ({ ok: true, version, driver: hv.kind }));
+  alerts.start();
   await authRoutes(app, ctx);
   await vmRoutes(app, ctx);
   await storageRoutes(app, ctx);
@@ -317,6 +342,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   await commandRoutes(app, ctx);
   await terminalRoutes(app, ctx);
   await troubleshootRoutes(app, ctx);
+  await alertRoutes(app, ctx);
 
   if (config.consoleDir && existsSync(join(config.consoleDir, 'index.html'))) {
     await app.register(fastifyStatic, { root: config.consoleDir, index: 'index.html' });
@@ -349,6 +375,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     ctx,
     async close() {
       clearInterval(timer);
+      ctx.alerts.stop();
       ctx.time?.stop();
       ctx.files?.stop();
       ctx.dome?.stop();

@@ -119,3 +119,29 @@ export function fbrxAlertSyslog(a: FbrxAlert, o: { facility?: number } = {}): st
   const msg = `${a.state === 'resolved' ? 'All clear: ' : ''}${oneLine(a.title)}${a.detail && a.state !== 'resolved' ? ` - ${oneLine(a.detail)}` : ''} ${pairs}`;
   return `<${pri}>1 ${a.sentAt} ${printable(a.source.host, 255)} ${printable(a.source.app, 48)} - ${a.state.toUpperCase()} - ${msg}`;
 }
+
+// ------------------------------------------------------------------------------------------------- servers
+
+/** Where an FBRX Server sends its alerts: each channel from a severity up; an all-clear goes where its alert went. */
+export interface ServerAlertSettings {
+  email: { enabled: boolean; min: FbrxAlert['severity']; host: string; port: number; secure: boolean; user: string; from: string; to: string; passwordSet: boolean };
+  webhook: { enabled: boolean; min: FbrxAlert['severity']; url: string; secretSet: boolean };
+  syslog: { enabled: boolean; min: FbrxAlert['severity']; host: string; port: number; protocol: 'udp' | 'tcp' | 'tls' };
+}
+
+export const SERVER_ALERT_CHANNELS = ['email', 'webhook', 'syslog'] as const;
+export type ServerAlertChannel = (typeof SERVER_ALERT_CHANNELS)[number];
+
+/** One of a server's alerts as its console shows it: the alert, and how each channel took it (and its all-clear). */
+export interface ServerAlertRow {
+  alert: FbrxAlert;
+  deliveries: Partial<Record<ServerAlertChannel, string>>;
+  cleared: Partial<Record<ServerAlertChannel, string>>;
+}
+
+export interface ServerAlertsList {
+  /** Problems going on now. */
+  open: ServerAlertRow[];
+  /** The latest that are over, and things that happened once. */
+  recent: ServerAlertRow[];
+}

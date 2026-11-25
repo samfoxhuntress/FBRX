@@ -9,6 +9,7 @@ import { VmDetailPage } from './pages/vm-detail';
 import { StoragePage } from './pages/storage';
 import { NetworksPage } from './pages/networks';
 import { HardwarePage } from './pages/hardware';
+import { AlertsPage } from './pages/alerts';
 import { ServerPage } from './pages/server';
 import { AccessPage } from './pages/access';
 import { MeshAiPage } from './pages/mesh-ai';
@@ -124,6 +125,7 @@ function Console() {
     ...(app.has('time') ? ([{ id: 'time', label: 'FBRX Time', icon: 'history', section: 'Server' }] satisfies NavItem[]) : []),
     ...(app.has('files') ? ([{ id: 'files', label: 'File server', icon: 'folder', section: 'Server' }] satisfies NavItem[]) : []),
     ...(app.has('directory') ? ([{ id: 'directory', label: 'Directory', icon: 'users', section: 'Server' }] satisfies NavItem[]) : []),
+    { id: 'alerts', label: 'Alerts', icon: 'bell', section: 'Server' },
     { id: 'hardware', label: 'Hardware map', icon: 'cpu', section: 'Server' },
     { id: 'server', label: 'Server & BIOS', icon: 'server', section: 'Server' },
     ...(app.has('ai') ? ([{ id: 'fabrix', label: 'Fabrix', icon: 'agent', section: 'Server' }] satisfies NavItem[]) : []),
@@ -163,6 +165,8 @@ function Console() {
         return <NetworksPage />;
       case 'hardware':
         return <HardwarePage />;
+      case 'alerts':
+        return <AlertsPage />;
       case 'server':
         return <ServerPage tab={route.id} />;
       case 'fabrix':

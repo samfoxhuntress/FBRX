@@ -22,9 +22,9 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
   release.
 * Device consoles (FBRX OS and FBRX Digger 1.3.1): copy and paste (Ctrl+V, Ctrl+Shift+V, Shift+Insert, Cmd+V,
   right-click), and the console fits the window and scrolls its own lines. FBRX Server's Terminal tab fits the window
-  too (needs an FBRX Server release). The look waits for Sam's approval.
+  too (needs an FBRX Server release). The look was approved by Sam.
 * FBRX Alert v1 (2.6.0 chunk 1): all-clears, signed webhooks and syslog in FBRX OS and Digger. The look of Alerts →
-  Delivery waits for Sam's approval.
+  Delivery was approved by Sam.
 
 ## Released
 

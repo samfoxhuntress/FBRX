@@ -42,6 +42,8 @@ export interface DomeEngineOptions {
   fetchFeed?: (url: string) => Promise<string>;
   /** Tells the FBRX computer a finding is about (through FBRX Mesh); returns its name when it was told. */
   notify?: (f: DomeFinding) => Promise<string | null>;
+  /** Told of each new finding (for the server's alerts). */
+  onFinding?: (f: DomeFinding) => void;
   /** FBRX computers on the mesh, for the device list. */
   computers?: () => Promise<DomeComputer[]>;
   /** How long a new MiniDome learns the network before it reports new devices. */
@@ -267,6 +269,13 @@ export class DomeEngine {
     const signal = { ...s, title: s.title.replace('{device}', label) };
     const { finding, news } = this.o.store.record(signal, { name, network: lease?.network ?? known?.network ?? null, mac: s.mac ?? lease?.mac ?? known?.mac ?? null });
     if (news) this.log(finding.severity === 'info' ? 'info' : 'warn', `MiniDome: ${finding.title}`);
+    if (news) {
+      try {
+        this.o.onFinding?.(finding);
+      } catch {
+        /* the alert is not the finding */
+      }
+    }
     if (news && this.o.notify && this.settings().notifyComputers && DOME_SEVERITIES.indexOf(finding.severity) >= DOME_SEVERITIES.indexOf('warning') && finding.device.ip) {
       void this.o
         .notify(finding)

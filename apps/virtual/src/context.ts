@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger, FastifyReply, FastifyRequest } from 'fastify';
+import type { ServerAlerts } from './alerts/service';
 import type { VirtualRole, VirtualUser } from '@fbrx/shared';
 import type { Db } from '@fbrx/shared/node';
 import type { VirtualConfig } from './config';
@@ -42,6 +43,8 @@ export interface VirtualContext {
   time: TimeService | null;
   /** The file server (the files role): shares, priority for its traffic, backups to another device. */
   files: FilesService | null;
+  /** The server's alerts (FBRX Alert v1): e-mail, a signed webhook and syslog. */
+  alerts: ServerAlerts;
   /** The FBRX directory (the directory role): the same accounts on every computer that joins. */
   directory: DirectoryService | null;
   /** The command line's token (fbrx-gate, run as root on the server; accepted from this computer only). */

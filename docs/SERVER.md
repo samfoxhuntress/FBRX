@@ -510,6 +510,32 @@ What FBRX OS keeps to, whatever the server says:
 
 *Leave* takes the computer out of the directory; its accounts stay as they are.
 
+## Alerts
+
+**Alerts** (in the console's menu) lists what is going wrong on the server now and what was, and sends it to your
+e-mail, a webhook and a syslog server. A problem is said once, however long it lasts, and when it is over the places
+that heard about it get its **all-clear**, with when it started and ended.
+
+| What | When |
+| --- | --- |
+| The server's drives | The drive of the data or images folder has under 10% free (a warning), under 3% (critical); over at 12% |
+| FBRX Gate | Whatever the gate reports as wrong: the internet port without an address (critical: *The gate has lost the internet*), DHCP and DNS stopped, the firewall table not loaded, traffic shaping not in place |
+| FBRX Time | A backup, boot check, restore or copy that fails, until the same one next works |
+| MiniDome | Each new finding (a threat seen from a device, a device that joined), as something that happened once |
+
+Under **Where alerts go** (administrators), each channel has its own **Send** setting: everything, warnings and
+critical, or critical only.
+
+* **E-mail**, through your mail server (SMTP). The password is kept sealed on the server.
+* **Webhook**: each alert as FBRX Alert v1 JSON, signed with a secret you set (*Make one* makes a strong one; copy it
+  before you save, as it is not shown again). Your system checks the `FBRX-Signature` header, `t=<unix
+  time>,v1=<hex>`, where the hex is the HMAC-SHA256 of `<t>.<body>` with that secret, and refuses one more than five
+  minutes old. The same format as FBRX OS's *FBRX Alert (signed)* webhook ([COMMAND_CENTER.md](COMMAND_CENTER.md#alerts)).
+* **Syslog**: RFC 5424 over UDP, TCP or TLS, with the state (OPEN, RESOLVED, EVENT) as the message ID and `key=…` in
+  the text, so a SIEM can match a problem with its all-clear.
+
+**Send a test** tries a channel at once. Changes to where alerts go are in the audit log (never a password or secret).
+
 ## The hardware map
 
 *Hardware map* draws the server as it is wired: the processor sockets (NUMA nodes) with their cores on top, and the

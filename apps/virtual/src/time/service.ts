@@ -44,6 +44,8 @@ import type { TimeCopier } from './copy-out';
  */
 
 export interface TimeServiceOptions {
+  /** Told when a task has finished or failed (for the server's alerts). */
+  onTask?: (t: TimeTask) => void;
   db: Db;
   hv: Hypervisor;
   driver: TimeDriver;
@@ -489,6 +491,11 @@ export class TimeService {
       t.finishedAt = new Date().toISOString();
       this.saveTask(t);
       this.current = null;
+      try {
+        this.o.onTask?.(t);
+      } catch {
+        /* an alert is never worth a backup */
+      }
       void this.pump();
     }
   }

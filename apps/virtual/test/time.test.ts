@@ -134,9 +134,15 @@ describe('FBRX Time on FBRX Server', () => {
     const tasks = await settle();
     expect(tasks.find((t) => t.kind === 'check' && t.imageId === img.id)).toMatchObject({ state: 'failed', detail: expect.stringContaining('stopped by itself') });
     expect((await images('files-01'))[0].check).toMatchObject({ state: 'failed', screenshot: null });
+    // A check that fails is an alert (FBRX Alert v1) until the same check next works.
+    type Rows = Array<{ alert: { rule: string; title: string; state: string } }>;
+    const failedAlert = ((await req('GET', '/v1/alerts', viewer)).body.open as Rows).find((r) => r.alert.rule === 'time_task_failed');
+    expect(failedAlert?.alert).toMatchObject({ source: { role: 'time' }, state: 'open', title: expect.stringMatching(/boot check of .*files-01.* failed/) });
     driver.outcome = 'text';
     await req('POST', `/v1/time/images/${img.id}/check`, operator);
     await settle();
+    expect(((await req('GET', '/v1/alerts', viewer)).body.open as Rows).some((r) => r.alert.rule === 'time_task_failed')).toBe(false);
+    expect(((await req('GET', '/v1/alerts', viewer)).body.recent as Rows).find((r) => r.alert.rule === 'time_task_failed')?.alert.state).toBe('resolved');
     expect((await images('files-01'))[0].check).toMatchObject({ state: 'warning', detail: expect.stringContaining('only text'), network: { address: null } });
     expect((await images('files-01'))[0].check.detail).toContain('did not ask the test network for an address');
     // No AI on this server: nothing to ask.
