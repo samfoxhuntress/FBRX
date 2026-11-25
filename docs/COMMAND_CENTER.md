@@ -474,14 +474,34 @@ and its threshold changed (**Alerts → Rules**).
 | Desktop | Windows notifications |
 | Phone | Paired phones running FBRX Mobile |
 | Organization | The control plane's **Alerts & events** page (enrolled devices) |
-| Webhook | Slack, Microsoft Teams, Discord, ntfy or plain JSON |
+| Webhook | Slack, Microsoft Teams, Discord, ntfy, plain JSON, or **FBRX Alert (signed)** for your own systems |
 | E-mail | Your SMTP server; the password lives in Credentials (`FBRX_SMTP_PASSWORD`) |
+| Syslog | A log server or SIEM, in the standard syslog format (RFC 5424) over UDP, TCP or TLS |
 
 Quiet hours hold back desktop and e-mail alerts that are not critical; a cooldown stops the same alert repeating.
 Something that stays wrong until someone fixes it (an antivirus that is off or behind, a firewall that is off, a
 printer that needs attention) is said once, then at most once a day while it lasts, even after FBRX restarts or the
 inbox is cleared; once it is fixed, its alert leaves the inbox. Microsoft Defender's definitions only count while
 Defender is the antivirus in use.
+
+**Problems and their all-clear.** A problem that lasts (a drive running out of space, the processor busy or hot, the
+internet down, low battery, a paired device offline, an antivirus or firewall off, a printer in trouble) goes to the
+organization, webhooks, e-mail and syslog once. Reminders stay on this computer, and when the problem is over, the
+places that heard about it get its **all-clear**, with when it started and ended. Something that happens once (a
+threat found, a crash) has no all-clear. The internet coming back is the internet problem's all-clear, not separate
+news.
+
+**FBRX Alert v1** is the format behind it, the same for FBRX OS, FBRX Digger and, as they adopt it, FBRX Server and
+FBRX Command: a key that stays the same from a problem's alert to its all-clear, its state (`open`, `resolved` or
+`event`), severity, where it happened, what happened, what FBRX did and what is left for you, when it started and
+ended. With the **FBRX Alert (signed)** webhook format, each alert is posted as that JSON with an `FBRX-Signature`
+header, `t=<unix time>,v1=<hex>`, where the hex is the HMAC-SHA256 of `<t>.<body>` with the secret you saved in
+Credentials (`FBRX_ALERTS_WEBHOOK_SECRET` unless you change the name). Your system computes the same with the same
+secret to know the alert is genuine, and refuses one whose time is more than five minutes off.
+
+**Syslog** messages carry the severity (critical, warning, informational, and notice for an all-clear) on facility
+local0, the state (OPEN, RESOLVED, EVENT) as the message ID, and `key=…`, `rule=…`, `started=…` and `ended=…` in the
+text, so a SIEM can match a problem with its all-clear.
 
 ### Notifications
 

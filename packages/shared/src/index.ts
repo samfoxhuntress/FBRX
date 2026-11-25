@@ -13,6 +13,7 @@ export * from './protocol';
 export * from './api';
 export * from './agent-activity';
 export * from './ext';
+export * from './fbrx-alert';
 export * from './devices';
 export * from './fun';
 export * from './text-tools';

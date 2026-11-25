@@ -1,9 +1,11 @@
+import { createSocket } from 'node:dgram';
 import { createServer } from 'node:http';
 import { createServer as createTcpServer, type AddressInfo } from 'node:net';
 import { writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_PROVIDERS, type AgentEvent } from '@fbrx/shared';
+import { DEFAULT_PROVIDERS, FbrxAlertSchema, type AgentEvent } from '@fbrx/shared';
+import { verifyFbrxAlertSignature } from '@fbrx/shared/node';
 import { makeKernel, waitFor, USER } from './helpers';
 import { mockOpenAI } from './mock-llm';
 import { calc, convert } from '../src/spotlight/spotlight';
@@ -133,6 +135,69 @@ describe('alerts', () => {
     } finally {
       await cleanup();
       hook.close();
+    }
+  });
+
+  it('tells the outside about a problem once, then its all-clear, as signed FBRX Alerts', async () => {
+    const got: Array<{ body: string; sig: string }> = [];
+    const hook = createServer((req, res) => {
+      let b = '';
+      req.on('data', (c) => (b += c));
+      req.on('end', () => {
+        got.push({ body: b, sig: String(req.headers['fbrx-signature']) });
+        res.end('ok');
+      });
+    });
+    await new Promise<void>((r) => hook.listen(0, '127.0.0.1', () => r()));
+    const udp = createSocket('udp4');
+    const lines: string[] = [];
+    udp.on('message', (m) => lines.push(m.toString()));
+    await new Promise<void>((r) => udp.bind(0, '127.0.0.1', () => r()));
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      kernel.vault.set({ name: 'HOOK_SECRET', value: 'shh-secret' });
+      kernel.settings.update({
+        alerts: {
+          cooldownMinutes: 1,
+          routing: { info: ['inbox', 'webhook'], warning: ['inbox', 'webhook', 'syslog'], critical: ['inbox', 'webhook'] },
+          channels: { desktop: false, mobile: false, webhook: { enabled: true, url: `http://127.0.0.1:${(hook.address() as AddressInfo).port}/alerts`, format: 'fbrx', secretName: 'HOOK_SECRET' }, syslog: { enabled: true, host: '127.0.0.1', port: udp.address().port, protocol: 'udp' } },
+        },
+      });
+      const a = await kernel.alerts.fire('disk_low', 'Drive D: is running out of space', '2 GB free', { key: 'D:' });
+      expect(a?.deliveries).toMatchObject({ webhook: 'ok', syslog: 'ok' });
+      const first = FbrxAlertSchema.parse(JSON.parse(got[0]!.body));
+      expect(first).toMatchObject({ state: 'open', rule: 'disk_low', severity: 'warning', source: { app: 'fbrx-os' }, detail: '2 GB free' });
+      expect(first.key).toMatch(/\|disk_low\|D:$/);
+      expect(verifyFbrxAlertSignature(got[0]!.body, got[0]!.sig, 'shh-secret')).toBe(true);
+      // A reminder stays on this computer: the outside heard about it once.
+      (kernel.alerts as unknown as { last: Map<string, number> }).last.clear();
+      const again = await kernel.alerts.fire('disk_low', 'Drive D: is running out of space', '1 GB free', { key: 'D:' });
+      expect(again?.deliveries.inbox).toBe('ok');
+      expect(again?.deliveries.webhook).toBeUndefined();
+      expect(got.length).toBe(1);
+      // Over: the same key, resolved, to where the alert went.
+      expect(kernel.alerts.clear('disk_low', 'D:')).toBe(true);
+      await waitFor(() => got.length === 2 && lines.length === 2);
+      const clear = FbrxAlertSchema.parse(JSON.parse(got[1]!.body));
+      expect(clear).toMatchObject({ key: first.key, state: 'resolved', startedAt: first.startedAt });
+      expect(clear.endedAt).toBeTruthy();
+      expect(lines[1]).toContain('All clear: Drive D: is running out of space');
+      expect(kernel.alerts.clear('disk_low', 'D:')).toBe(false);
+      // Something that just happened is an event, with no all-clear to come.
+      await kernel.alerts.fire('shield_threat', 'FBRX Shield found a threat', 'invoice.pdf.exe', { key: 'f1' });
+      expect(FbrxAlertSchema.parse(JSON.parse(got[2]!.body)).state).toBe('event');
+      // The internet coming back is net_down's all-clear, not news of its own.
+      await kernel.alerts.fire('net_down', 'Internet connection lost', 'FBRX OS cannot reach the internet.');
+      expect(got.length).toBe(4);
+      const back = await kernel.alerts.fire('net_restored', 'Internet connection restored', 'Back online after about 3 minute(s).');
+      expect(back?.deliveries.webhook).toBeUndefined();
+      kernel.alerts.clear('net_down');
+      await waitFor(() => got.length === 5);
+      expect(JSON.parse(got[4]!.body)).toMatchObject({ rule: 'net_down', state: 'resolved', title: 'Internet connection lost' });
+    } finally {
+      await cleanup();
+      hook.close();
+      udp.close();
     }
   });
 

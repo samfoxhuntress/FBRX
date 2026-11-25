@@ -1117,6 +1117,7 @@ export class Kernel {
       // FBRX Digger tells about the network only; the internet connection too where FBRX OS is not on this computer
       // (so it is said once). Drives, processor, memory, battery and security are FBRX OS's to tell.
       allow: this.digger ? (id) => DIGGER_ALERTS.has(id) || (NET_ALERTS.has(id) && !this.apps.installed().includes('os')) : undefined,
+      app: this.digger ? 'fbrx-digger' : 'fbrx-os',
     });
     this.aicoord = new AiCoordination({
       shim: () => {

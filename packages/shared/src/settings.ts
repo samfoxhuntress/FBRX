@@ -357,7 +357,10 @@ export const SettingsSchema = z.object({
       desktop: z.boolean(),
       mobile: z.boolean(),
       organisation: z.boolean(),
-      webhook: z.object({ enabled: z.boolean(), url: z.string(), format: z.enum(['slack', 'teams', 'discord', 'ntfy', 'json']) }),
+      /** fbrx: FBRX Alert v1 JSON, signed with the vault secret named in secretName (its all-clears too). */
+      webhook: z.object({ enabled: z.boolean(), url: z.string(), format: z.enum(['slack', 'teams', 'discord', 'ntfy', 'json', 'fbrx']), secretName: z.string() }),
+      /** RFC 5424 syslog to a SIEM or log server: udp or tcp on 514, tls on 6514. */
+      syslog: z.object({ enabled: z.boolean(), host: z.string(), port: z.number().int().min(1).max(65535), protocol: z.enum(['udp', 'tcp', 'tls']) }),
       email: z.object({
         enabled: z.boolean(),
         host: z.string(),
@@ -708,10 +711,11 @@ export const DEFAULT_SETTINGS: Settings = {
       desktop: true,
       mobile: true,
       organisation: true,
-      webhook: { enabled: false, url: '', format: 'slack' },
+      webhook: { enabled: false, url: '', format: 'slack', secretName: 'FBRX_ALERTS_WEBHOOK_SECRET' },
+      syslog: { enabled: false, host: '', port: 514, protocol: 'udp' },
       email: { enabled: false, host: '', port: 587, secure: false, user: '', from: '', to: '', passwordSecret: 'FBRX_SMTP_PASSWORD' },
     },
-    routing: { info: ['inbox'], warning: ['inbox', 'desktop', 'mobile'], critical: ['inbox', 'desktop', 'mobile', 'organisation', 'webhook', 'email'] },
+    routing: { info: ['inbox', 'syslog'], warning: ['inbox', 'desktop', 'mobile', 'syslog'], critical: ['inbox', 'desktop', 'mobile', 'organisation', 'webhook', 'email', 'syslog'] },
     quietHours: { enabled: false, start: '22:00', end: '07:00' },
     cooldownMinutes: 30,
   },

@@ -291,7 +291,7 @@ export interface SpotlightItem {
 
 export const ALERT_SEVERITIES = ['info', 'warning', 'critical'] as const;
 export type AlertSeverity = (typeof ALERT_SEVERITIES)[number];
-export const ALERT_CHANNELS = ['inbox', 'desktop', 'mobile', 'organisation', 'webhook', 'email'] as const;
+export const ALERT_CHANNELS = ['inbox', 'desktop', 'mobile', 'organisation', 'webhook', 'email', 'syslog'] as const;
 export type AlertChannel = (typeof ALERT_CHANNELS)[number];
 export interface AlertRuleInfo {
   id: string;
