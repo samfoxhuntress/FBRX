@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, realpathSync } from 'node:fs';
 import { networkInterfaces } from 'node:os';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 
 /**
  * A bridge on one of the server's network ports, so virtual machines sit straight on that network (one more device
@@ -116,7 +116,7 @@ export function hostPorts(sysRoot = '/', nics = networkInterfaces()): HostPort[]
     .map((n) => {
       let bridge: string | null = null;
       try {
-        bridge = existsSync(join(dir, n, 'master')) ? realpathSync(join(dir, n, 'master')).split('/').pop()! : null;
+        bridge = existsSync(join(dir, n, 'master')) ? basename(realpathSync(join(dir, n, 'master'))) : null;
       } catch {
         bridge = null;
       }

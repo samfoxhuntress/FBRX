@@ -32,16 +32,20 @@ export class OrgMesh {
   private timer: NodeJS.Timeout | null = null;
   private running: Promise<void> | null = null;
   private last: OrgMeshState | null = null;
+  /** Set once FBRX stops: a roster pushed while it shuts down must not reach the closed database. */
+  private stopped = false;
 
   constructor(private readonly d: OrgMeshDeps) {}
 
   start(): void {
+    this.stopped = false;
     this.timer ??= setInterval(() => void this.sync(), EVERY_MS);
     this.timer.unref?.();
     void this.sync();
   }
 
   stop(): void {
+    this.stopped = true;
     if (this.timer) clearInterval(this.timer);
     this.timer = null;
   }
@@ -52,6 +56,7 @@ export class OrgMesh {
 
   /** Fetches the roster and applies it (one at a time; a second call waits for the first). */
   sync(): Promise<void> {
+    if (this.stopped) return Promise.resolve();
     this.running ??= this.run().finally(() => (this.running = null));
     return this.running;
   }

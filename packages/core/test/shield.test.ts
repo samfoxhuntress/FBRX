@@ -402,7 +402,7 @@ describe('FBRX Shield on a computer', () => {
     } finally {
       await cleanup();
     }
-  });
+  }, 60_000); // a whole kernel start, slow on Windows
 });
 
 describe('the threat feed after abuse.ch retired its keyless downloads', () => {

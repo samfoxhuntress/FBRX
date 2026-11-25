@@ -56,7 +56,7 @@ describe('copies of images off the server', () => {
     expect(mount.slice(0, 2)).toEqual(['mount', 'UUID=6F2A-91C4']);
     const rsync = calls.find((c) => c[0] === 'rsync')!;
     expect(rsync[1]).toBe('-rlt');
-    expect(rsync.at(-1)).toMatch(/FBRX Time\/files-01\/2026-11-23T010000-abcd1234\.part\/$/);
+    expect(rsync.at(-1)!.replace(/\\/g, '/')).toMatch(/FBRX Time\/files-01\/2026-11-23T010000-abcd1234\.part\/$/);
     expect(calls.at(-1)![0]).toBe('umount');
     // A drive that will not open is said in words, and nothing is left mounted.
     const failing: Runner = async (cmd) => (cmd === 'mount' ? { code: 32, out: '', err: "mount: /x: can't find UUID=6F2A-91C4." } : cmd === 'lsblk' ? { code: 0, out: '{"blockdevices":[]}', err: '' } : { code: 0, out: '', err: '' });
