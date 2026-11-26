@@ -2,7 +2,7 @@ import { createReadStream, existsSync, openSync, readSync, closeSync, rmSync } f
 import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import type { Readable } from 'node:stream';
-import { CommandResultSchema, DeviceEventSchema, EnrollRequestSchema, PROTOCOL_VERSION, VERTICALS, featuresFor, resolveAudience, type Audience, type DeviceToServerMessage, type Edition, type EnrollResponse, type HeartbeatResponse, type Vertical } from '@fbrx/shared';
+import { CommandResultSchema, DeviceEventSchema, EnrollRequestSchema, PROTOCOL_VERSION, VERTICALS, featuresFor, resolveAudience, type Audience, type DeviceToServerMessage, type Edition, type EnrollResponse, type HeartbeatResponse, type Vertical, FbrxAlertSchema } from '@fbrx/shared';
 import { randomToken, sha256Hex } from '@fbrx/shared/node';
 import type { AppContext } from '../context';
 import { ids } from '../context';
@@ -11,6 +11,7 @@ import { HttpError, badRequest, forbidden, notFound, unauthorized } from '../err
 import { resolveDeviceConfig } from '../services/device-config';
 import { parseJson } from './util';
 import { commandView, processCommandResult, processHeartbeat, recordDeviceEvent, takePendingCommands } from '../services/devices';
+import { legacyDeviceAlert } from '../services/alert-center';
 import { storeStream } from '../services/storage';
 import { stripeOf } from '../billing/stripe';
 import { scheduleSeatSync } from '../billing/tenant-billing';
@@ -213,6 +214,8 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
     const tenant = ctx.db.get<{ v: number }>('SELECT config_version AS v FROM tenants WHERE id = ?', d.tenant_id);
     socket.send(JSON.stringify({ type: 'hello', serverTime: new Date().toISOString(), configVersion: Number(tenant?.v ?? 0) }));
     for (const command of takePendingCommands(ctx, d.id)) socket.send(JSON.stringify({ type: 'command', command }));
+    // Organization alerts meant for this computer while it was away.
+    ctx.alerts.onDeviceOnline(d.id);
 
     let alive = true;
     socket.on('pong', () => (alive = true));
@@ -246,6 +249,19 @@ export async function deviceRoutes(app: FastifyInstance, ctx: AppContext) {
           case 'event': {
             const ev = DeviceEventSchema.parse(msg.event);
             recordDeviceEvent(ctx, d, ev.kind, ev.severity, ev.message, ev.data);
+            if (ev.kind === 'alert') {
+              // FBRX OS 2.6.0 and later send the FBRX Alert itself (its alert and its all-clear); older ones a line.
+              const sent = FbrxAlertSchema.safeParse((ev.data as { fbrxAlert?: unknown } | null)?.fbrxAlert);
+              ctx.alerts.ingest(d.tenant_id, sent.success ? sent.data : legacyDeviceAlert(d, ev), { deviceId: d.id });
+            }
+            break;
+          }
+          case 'org.alert.ack': {
+            const id = String(msg.alertId ?? '');
+            if (ctx.alerts.tenantOf(id) !== d.tenant_id) break;
+            const by = `${String(msg.by ?? 'someone').slice(0, 80)} on ${d.name}`;
+            ctx.alerts.acknowledge(id, by, typeof msg.note === 'string' ? msg.note : null);
+            ctx.audit.record({ type: 'device', id: d.id, label: `device:${d.name}`, tenantId: d.tenant_id, ip: req.ip }, 'alert.acknowledged', { type: 'alert', id, tenantId: d.tenant_id }, { by });
             break;
           }
         }

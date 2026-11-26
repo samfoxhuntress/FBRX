@@ -530,6 +530,13 @@ text, so a SIEM can match a problem with its all-clear.
 
 Presenter-safe mode still holds notifications back while you present.
 
+
+**Alerts from your organization.** On a computer in an organization, FBRX Command can send its alerts here (its
+rules name the computers, by tag or as help desk computers): they show as a notification and in the Alerts inbox,
+marked *From your organization*, with **Acknowledge**. Acknowledging tells FBRX Command that someone is on it (it
+stops reminding the next people) and marks it on every computer that shows it; only a person at the computer can do
+it, not the AI or a script. When the problem is over, the line turns into its all-clear. This computer's own alerts
+reach FBRX Command whole (*the organization* in Delivery), so it keeps each problem from its alert to its all-clear.
 ## This PC
 
 **This PC** (first in PC care) shows what the computer is made of, like a system-information tool: the make and model,

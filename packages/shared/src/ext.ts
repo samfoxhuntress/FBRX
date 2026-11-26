@@ -313,6 +313,8 @@ export interface AlertItem {
   createdAt: string;
   read: boolean;
   deliveries: Partial<Record<AlertChannel, string>>;
+  /** An organization alert from FBRX Command: acknowledging it here tells FBRX Command (and stops its escalation). */
+  org?: { alertId: string; state: 'open' | 'resolved' | 'event'; acknowledged: { by: string; at: string } | null };
 }
 
 // ------------------------------------------------------------------------------------------ PC care (Windows)
@@ -1345,6 +1347,8 @@ export interface ExtMethods {
   'alerts.rules': () => AlertRuleInfo[];
   'alerts.inbox': (p?: { limit?: number; unreadOnly?: boolean }) => AlertItem[];
   'alerts.markRead': (p: { id: string }) => Ok;
+  /** Acknowledges an alert from your organization (FBRX Command stops escalating it). */
+  'alerts.acknowledge': (p: { id: string; note?: string }) => AlertItem;
   'alerts.delete': (p: { id: string }) => Ok;
   'alerts.test': (p: { channel: AlertChannel }) => { ok: boolean; result: string };
   'alerts.counts': () => { unread: number; critical: number };
@@ -1749,6 +1753,7 @@ export interface ExtEvents {
 
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
+  'alerts.acknowledge',
   'pc.ejectDrive',
   'pc.driveSpeed',
   'pc.setMonitor',

@@ -74,6 +74,13 @@ export function fbrxAlertDuration(a: Pick<FbrxAlert, 'startedAt' | 'endedAt'>): 
   return h < 48 ? `${h} hours` : `${Math.round(h / 24)} days`;
 }
 
+const FBRX_ALERT_ROLES: Record<string, string> = { gate: 'FBRX Gate', minidome: 'MiniDome', time: 'FBRX Time', files: 'File server', directory: 'FBRX directory' };
+
+/** A server role as people read it ("gate" → "FBRX Gate"); a role without a name is shown as it came. */
+export function fbrxAlertRoleName(role: string): string {
+  return FBRX_ALERT_ROLES[role] ?? role;
+}
+
 /** The alert as a subject line and plain text, for e-mail and chat. */
 export function fbrxAlertText(a: FbrxAlert): { subject: string; text: string } {
   const tag = a.state === 'resolved' ? 'ALL CLEAR' : a.severity.toUpperCase();
@@ -144,4 +151,74 @@ export interface ServerAlertsList {
   open: ServerAlertRow[];
   /** The latest that are over, and things that happened once. */
   recent: ServerAlertRow[];
+}
+
+// ------------------------------------------------------------------------------------- organizations (FBRX Command)
+
+/**
+ * Who gets what in an organization (FBRX Command → Alerts): the alerts a rule takes (from a severity up, from these
+ * apps, about computers with these tags), whom it tells first (e-mail, and FBRX OS on chosen computers), its quiet
+ * hours (critical alerts come through), and whom it tells next when nobody acknowledges in time.
+ */
+export interface OrgAlertRule {
+  id: string;
+  name: string;
+  enabled: boolean;
+  min: FbrxAlert['severity'];
+  /** Only alerts from these apps (none: every app). */
+  apps: FbrxAlertApp[];
+  /** Only alerts about computers with one of these tags (none: any computer, and the servers). */
+  tags: string[];
+  /** E-mail addresses that hear each alert first (and its all-clear). */
+  emails: string[];
+  /** FBRX OS on computers with one of these tags shows it, with Acknowledge. */
+  computerTags: string[];
+  /** And on the help desk computers (Devices → Receives help desk tickets). */
+  helpdeskComputers: boolean;
+  /** No e-mail or notification between these times (critical alerts come through; the console always shows them). */
+  quiet: { enabled: boolean; from: string; to: string; timeZone: string };
+  /** Nobody acknowledged it within this many minutes: the next people hear it too (0: never). */
+  escalateAfterMinutes: number;
+  escalateEmails: string[];
+  escalateComputerTags: string[];
+}
+
+export const OrgAlertRuleSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  enabled: z.boolean(),
+  min: z.enum(ALERT_SEVERITIES),
+  apps: z.array(z.enum(FBRX_ALERT_APPS)).max(FBRX_ALERT_APPS.length),
+  tags: z.array(z.string().trim().min(1).max(64)).max(20),
+  emails: z.array(z.string().trim().email().max(200)).max(20),
+  computerTags: z.array(z.string().trim().min(1).max(64)).max(20),
+  helpdeskComputers: z.boolean(),
+  quiet: z.object({ enabled: z.boolean(), from: z.string().regex(/^\d{2}:\d{2}$/), to: z.string().regex(/^\d{2}:\d{2}$/), timeZone: z.string().min(1).max(64) }),
+  escalateAfterMinutes: z.number().int().min(0).max(7 * 24 * 60),
+  escalateEmails: z.array(z.string().trim().email().max(200)).max(20),
+  escalateComputerTags: z.array(z.string().trim().min(1).max(64)).max(20),
+});
+
+/** One of an organization's alerts as FBRX Command keeps it: the latest word on it, who heard it, who acknowledged it. */
+export interface OrgAlertRow {
+  id: string;
+  alert: FbrxAlert;
+  deviceId: string | null;
+  deviceName: string | null;
+  /** How many times it was said while it lasted (repeats are folded into one). */
+  count: number;
+  acknowledged: { by: string; at: string; note: string | null } | null;
+  escalatedAt: string | null;
+  /** Who heard it, in words ("e-mail it@example.com", "FBRX OS on RECEPTION-PC"), and what went wrong for any. */
+  notified: string[];
+}
+
+export interface OrgAlertsList {
+  open: OrgAlertRow[];
+  recent: OrgAlertRow[];
+}
+
+/** Where FBRX Servers (and anything else that speaks FBRX Alert v1) send their alerts to FBRX Command. */
+export interface OrgAlertInbound {
+  url: string;
+  secretSet: boolean;
 }

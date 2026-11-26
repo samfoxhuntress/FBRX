@@ -1,4 +1,5 @@
 import type { ScreenRecorder } from './services/screen-recorder';
+import type { AlertCenter } from './services/alert-center';
 import type { ScreenRelay } from './services/screen-relay';
 import type { FastifyBaseLogger } from 'fastify';
 import { newId } from '@fbrx/shared';
@@ -21,6 +22,8 @@ export interface AppContext {
   /** Recordings of remote screen sessions, for organizations that keep them. */
   recorder: ScreenRecorder;
   webhooks: WebhookDispatcher;
+  /** FBRX Alerts in each organization: who gets what, escalation, acknowledging (services/alert-center.ts). */
+  alerts: AlertCenter;
   /** Email to FBRX accounts (mail.ts). */
   mail: Mailer;
   version: string;

@@ -92,9 +92,21 @@ export function AlertsPage() {
                     </div>
                     <div className="fx-cell-sub">{a.body}</div>
                     <div className="fx-muted" style={{ fontSize: 11.5, marginTop: 2 }}>
-                      {timeAgo(a.createdAt)} · sent to {Object.keys(a.deliveries).map((c) => CHANNEL_LABEL[c as AlertChannel] ?? c).join(', ') || 'inbox'}
+                      {timeAgo(a.createdAt)} ·{' '}
+                      {a.org
+                        ? a.org.acknowledged
+                          ? `acknowledged by ${a.org.acknowledged.by}, ${timeAgo(a.org.acknowledged.at)}`
+                          : a.org.state === 'resolved'
+                            ? 'over'
+                            : 'nobody has acknowledged it yet'
+                        : `sent to ${Object.keys(a.deliveries).map((c) => CHANNEL_LABEL[c as AlertChannel] ?? c).join(', ') || 'inbox'}`}
                     </div>
                   </div>
+                  {a.org && !a.org.acknowledged && a.org.state !== 'resolved' && (
+                    <Button size="sm" icon="check" loading={busy === `ack-${a.id}`} onClick={() => void run(`ack-${a.id}`, () => call('alerts.acknowledge', { id: a.id }), 'Acknowledged: your organization knows someone is on it')}>
+                      Acknowledge
+                    </Button>
+                  )}
                   <AskButton iconOnly prompt="Explain this alert from FBRX on my PC: what it means, the likely cause, and what I should do. Check the current state with your tools first." context={{ when: a.createdAt, severity: a.severity, title: a.title, details: a.body }} />
                   {!a.read && <Button size="sm" variant="ghost" icon="check" aria-label="Mark read" onClick={() => void run(a.id, () => call('alerts.markRead', { id: a.id }))} />}
                   <Button size="sm" variant="ghost" icon="trash" aria-label="Delete" onClick={() => void run(a.id, () => call('alerts.delete', { id: a.id }))} />

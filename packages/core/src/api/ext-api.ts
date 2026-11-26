@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { userInfo } from 'node:os';
 import { basename, join } from 'node:path';
 import { openRemote, remoteViewers } from '../network/remote-desktop';
 import { systemInventory } from '../system/inventory';
@@ -210,6 +211,16 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
     // ----------------------------------------------------------------------------------------- alerts
     'alerts.rules': () => k.alerts.rules(),
     'alerts.inbox': (p) => k.alerts.inbox(z.object({ limit: z.number().int().optional(), unreadOnly: z.boolean().optional() }).parse(p ?? {})),
+    // An organization alert: FBRX Command hears it at once (its escalation stops), and so do the other computers.
+    'alerts.acknowledge': (p, ctx) => {
+      const q = z.object({ id: z.string(), note: z.string().max(500).optional() }).parse(p);
+      const item = k.alerts.inbox({ limit: 1000 }).find((a) => a.id === q.id);
+      if (!item?.org) throw new CoreError('NOT_FOUND', 'That is not an alert from your organization');
+      const by = k.settings.get().profile.name.trim() || userInfo().username || 'someone';
+      if (!k.fleet.acknowledgeAlert(item.org.alertId, by, q.note)) throw new CoreError('UNAVAILABLE', 'FBRX Command cannot be reached right now. Try again in a moment.');
+      k.audit.append({ category: 'alerts', action: 'org.acknowledged', actor: ctx.actor, outcome: 'success', details: { alertId: item.org.alertId } });
+      return k.alerts.acknowledgedHere(q.id, by);
+    },
     'alerts.markRead': (p) => {
       k.alerts.markRead(Id.parse(p).id);
       return { ok: true };

@@ -1,6 +1,7 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import '@fbrx/ui/styles.css';
+import './console.css';
 import { ErrorBoundary, ToastProvider } from '@fbrx/ui';
 import { App } from './app';
 

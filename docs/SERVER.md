@@ -534,6 +534,10 @@ critical, or critical only.
 * **Syslog**: RFC 5424 over UDP, TCP or TLS, with the state (OPEN, RESOLVED, EVENT) as the message ID and `key=…` in
   the text, so a SIEM can match a problem with its all-clear.
 
+**To your organization's FBRX Command**: in FBRX Command, **Alerts → From FBRX Servers → Make a secret**, then paste
+the address and the secret into the **Webhook** card here. The server's alerts then join the organization's, and FBRX
+Command's rules decide who hears them, with escalation and acknowledging ([ADMIN_CONSOLE.md](ADMIN_CONSOLE.md#alerts)).
+
 **Send a test** tries a channel at once. Changes to where alerts go are in the audit log (never a password or secret).
 
 ## The hardware map

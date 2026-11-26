@@ -631,6 +631,7 @@ export class Kernel {
         this.helpdesk.onPush(msg);
         this.messages.onPush(msg);
         if (msg.type === 'mesh.roster') void this.orgMesh.sync();
+        if (msg.type === 'org.alert') this.alerts.fromOrganisation(msg.alertId, msg.alert, msg.acknowledged);
       },
     });
     this.account = new AccountService({
@@ -1123,9 +1124,11 @@ export class Kernel {
       workspace: this.workspace,
       notify: (title, body, level, ruleId) => this.notify({ title, body, level, source: ruleId === 'update_available' ? 'updates' : 'alerts', open: ruleId === 'update_available' ? 'settings/updates' : 'alerts' }),
       toMobile: (a) => this.mesh.pushAlert(a),
-      toOrganisation: (a) => {
+      // The FBRX Alert itself rides along, so FBRX Command keeps one problem from its alert to its all-clear.
+      toOrganisation: (a, v) => {
         if (!this.fleet.enrolled) return false;
-        this.fleet.reportEvent({ kind: 'alert', severity: a.severity, message: `${a.title}: ${a.body}`.slice(0, 2000), data: { ruleId: a.ruleId }, at: a.createdAt });
+        const over = v.state === 'resolved';
+        this.fleet.reportEvent({ kind: 'alert', severity: over ? 'info' : a.severity, message: `${over ? 'All clear: ' : ''}${a.title}: ${a.body}`.slice(0, 2000), data: { ruleId: a.ruleId, fbrxAlert: v }, at: v.sentAt });
         return true;
       },
       secret: (name) => (this.vault.isUnlocked ? this.vault.get(name) : undefined),

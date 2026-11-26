@@ -1,7 +1,7 @@
 import { hostname } from 'node:os';
 import si from 'systeminformation';
 import nodemailer from 'nodemailer';
-import { fbrxAlertDuration, fbrxAlertKey, fbrxAlertText, newId, type AlertChannel, type AlertItem, type AlertRuleInfo, type AlertSeverity, type FbrxAlert, type FbrxAlertApp, type FbrxAlertState, type Settings } from '@fbrx/shared';
+import { fbrxAlertDuration, fbrxAlertKey, fbrxAlertRoleName, fbrxAlertText, newId, type AlertChannel, type AlertItem, type AlertRuleInfo, type AlertSeverity, type FbrxAlert, type FbrxAlertApp, type FbrxAlertState, type Settings } from '@fbrx/shared';
 import { postFbrxAlert, sendFbrxAlertSyslog } from '@fbrx/shared/node';
 import { CoreError, errorMessage } from '../errors';
 import type { EventBus } from '../events';
@@ -92,7 +92,7 @@ export interface AlertEngineDeps {
   /** Pushes an alert to paired phones; returns how many received it. */
   toMobile: (alert: AlertItem) => number;
   /** Forwards an alert to the organization's control plane; false when not enrolled. */
-  toOrganisation: (alert: AlertItem) => boolean;
+  toOrganisation: (alert: AlertItem, v: FbrxAlert) => boolean;
   secret: (name: string) => string | undefined;
   meshPeers: () => Array<{ id: string; name: string; online: boolean }>;
   /** What to tell the person about this computer's edition (its Pro trial ending, or over), once each. */
@@ -227,6 +227,65 @@ export class AlertEngine {
       "SELECT COUNT(*) AS unread, SUM(CASE WHEN severity = 'critical' THEN 1 ELSE 0 END) AS critical FROM alerts WHERE read = 0",
     );
     return { unread: r?.unread ?? 0, critical: r?.critical ?? 0 };
+  }
+
+  /**
+   * An organization alert from FBRX Command (this computer is one its rules name): it joins the inbox with
+   * Acknowledge, and the desktop shows it once. Its all-clear, or word that someone acknowledged it, updates the same
+   * entry.
+   */
+  fromOrganisation(alertId: string, a: FbrxAlert, acknowledged: { by: string; at: string } | null): AlertItem | null {
+    const ref = `org:${alertId}`;
+    const prev = this.d.db.get<any>('SELECT * FROM alerts WHERE ref = ?', ref);
+    const before = prev ? toAlert(prev) : null;
+    const org: NonNullable<AlertItem['org']> = { alertId, state: a.state, acknowledged };
+    const over = a.state === 'resolved';
+    const where = [a.source.computer ?? a.source.host, a.source.role ? fbrxAlertRoleName(a.source.role) : null].filter(Boolean).join(' · ');
+    const title = `${over ? 'All clear: ' : ''}${a.title}`.slice(0, 200);
+    const body = [!over ? a.detail : null, !over && a.yours ? `What is left for you: ${a.yours}` : null, `From your organization (FBRX Command)${where ? ` · ${where}` : ''}`]
+      .filter(Boolean)
+      .join('\n')
+      .slice(0, 2000);
+    const severity = over ? 'info' : a.severity;
+    let id: string;
+    if (prev) {
+      id = prev.id;
+      // News (its all-clear) makes it unread again; an acknowledgement does not.
+      const news = over && before?.org?.state !== 'resolved';
+      this.d.db.run('UPDATE alerts SET severity = ?, title = ?, body = ?, org = ?, read = CASE WHEN ? THEN 0 ELSE read END WHERE id = ?', severity, title, body, JSON.stringify(org), news ? 1 : 0, id);
+      if (news) this.d.notify(title, body, 'info', 'org');
+    } else {
+      if (over) return null;
+      id = newId('alrt');
+      this.d.db.run(
+        'INSERT INTO alerts (id, rule_id, severity, title, body, created_at, read, deliveries, ref, org) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?)',
+        id,
+        'org',
+        severity,
+        title,
+        body,
+        new Date().toISOString(),
+        '{}',
+        ref,
+        JSON.stringify(org),
+      );
+      const quiet = this.inQuietHours() && a.severity !== 'critical';
+      if (!acknowledged && !quiet) this.d.notify(title, body, a.severity === 'critical' ? 'error' : a.severity === 'warning' ? 'warning' : 'info', 'org');
+    }
+    const item = toAlert(this.d.db.get<any>('SELECT * FROM alerts WHERE id = ?', id));
+    this.d.events.emit('alerts.changed', this.counts());
+    return item;
+  }
+
+  /** Marks an organization alert acknowledged here (FBRX Command is told by the caller). */
+  acknowledgedHere(id: string, by: string): AlertItem {
+    const row = this.d.db.get<any>('SELECT * FROM alerts WHERE id = ?', id);
+    const item = row ? toAlert(row) : null;
+    if (!item?.org) throw new CoreError('NOT_FOUND', 'That is not an alert from your organization');
+    const org = { ...item.org, acknowledged: item.org.acknowledged ?? { by, at: new Date().toISOString() } };
+    this.d.db.run('UPDATE alerts SET org = ?, read = 1 WHERE id = ?', JSON.stringify(org), id);
+    this.d.events.emit('alerts.changed', this.counts());
+    return { ...item, org, read: true };
   }
 
   markRead(id: string): void {
@@ -367,7 +426,7 @@ export class AlertEngine {
       else await attempt('desktop', () => (this.d.notify(a.title, a.body, a.severity === 'critical' ? 'error' : a.severity === 'warning' ? 'warning' : 'info', a.ruleId), 'ok'));
     }
     if (routes.has('mobile') && ch.mobile && v.state !== 'resolved') await attempt('mobile', () => `${this.d.toMobile(a)} device(s)`);
-    if (routes.has('organisation') && ch.organisation) await attempt('organisation', () => (this.d.toOrganisation(a) ? 'ok' : 'not enrolled'));
+    if (routes.has('organisation') && ch.organisation) await attempt('organisation', () => (this.d.toOrganisation(a, v) ? 'ok' : 'not enrolled'));
     if (routes.has('webhook') && ch.webhook.enabled && ch.webhook.url) await attempt('webhook', () => this.sendWebhook(a, v));
     if (routes.has('email') && ch.email.enabled) {
       if (quiet) out.email = 'held (quiet hours)';
@@ -440,7 +499,7 @@ export class AlertEngine {
       else if (channel === 'syslog') result = await this.sendSyslog(v);
       else if (channel === 'desktop') this.d.notify(a.title, a.body, 'info', a.ruleId);
       else if (channel === 'mobile') result = `${this.d.toMobile(a)} device(s) reached`;
-      else if (channel === 'organisation') result = this.d.toOrganisation(a) ? 'sent to the control plane' : 'this device is not enrolled';
+      else if (channel === 'organisation') result = this.d.toOrganisation(a, v) ? 'sent to the control plane' : 'this device is not enrolled';
       else if (channel === 'inbox') await this.fire('test', a.title, a.body, { force: true });
       return { ok: true, result };
     } catch (err) {
@@ -591,5 +650,11 @@ function toAlert(r: any): AlertItem {
   } catch {
     /* ignore */
   }
-  return { id: r.id, ruleId: r.rule_id, severity: r.severity, title: r.title, body: r.body, createdAt: r.created_at, read: !!r.read, deliveries };
+  let org: AlertItem['org'];
+  try {
+    org = r.org ? JSON.parse(r.org) : undefined;
+  } catch {
+    org = undefined;
+  }
+  return { id: r.id, ruleId: r.rule_id, severity: r.severity, title: r.title, body: r.body, createdAt: r.created_at, read: !!r.read, deliveries, ...(org ? { org } : {}) };
 }

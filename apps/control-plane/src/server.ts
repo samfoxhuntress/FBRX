@@ -28,6 +28,8 @@ import { adminFleetRoutes } from './routes/admin-fleet';
 import { adminAssetRoutes } from './routes/admin-assets';
 import { ssoRoutes } from './routes/sso';
 import { helpdeskRoutes } from './routes/helpdesk';
+import { alertRoutes } from './routes/alerts';
+import { AlertCenter } from './services/alert-center';
 import { chatRoutes } from './routes/chat';
 import { meshRoutes } from './routes/mesh';
 import { commandRoutes } from './routes/command';
@@ -116,7 +118,16 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     log: app.log,
     tls: tls ? { fingerprint: tls.fingerprint, selfSigned: tls.selfSigned, notAfter: tls.notAfter } : null,
   };
-  const ctx: AppContext = { ...base, ...createContextHelpers(base) };
+  const alerts = new AlertCenter({
+    db,
+    master: keys.master,
+    sendToDevice: (id, msg) => realtime.sendToDevice(id, msg),
+    emitAdmin: (e) => realtime.emitAdmin(e),
+    webhook: (tenantId, event, payload) => base.webhooks.emit(tenantId, event, payload),
+    mail: (to, subject, text) => base.mail.send({ to, subject, text }),
+    log: (m, d) => app.log.warn(d, m),
+  });
+  const ctx: AppContext = { ...base, alerts, ...createContextHelpers({ ...base, alerts }) };
   ctx.audit.onAppend((entry) => ctx.realtime.emitAdmin({ type: 'audit', tenantId: entry.tenantId, entry }));
 
   await app.register(helmet, {
@@ -174,6 +185,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   await authRoutes(app, ctx);
   await ssoRoutes(app, ctx);
   await helpdeskRoutes(app, ctx);
+  await alertRoutes(app, ctx);
   await chatRoutes(app, ctx);
   await meshRoutes(app, ctx);
   await deviceRoutes(app, ctx);
@@ -246,7 +258,14 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     db.run('DELETE FROM device_metrics WHERE ts < ?', new Date(Date.now() - 30 * 86400_000).toISOString());
     db.run('DELETE FROM sessions WHERE expires_at < ?', new Date(Date.now() - 7 * 86400_000).toISOString());
   };
-  const timer = setInterval(sweep, 60_000);
+  const timer = setInterval(() => {
+    sweep();
+    try {
+      alerts.tick();
+    } catch (err) {
+      app.log.warn({ err }, 'Alert escalation pass failed');
+    }
+  }, 60_000);
   timer.unref();
   // Organizations in the cloud: their licenses follow their plans (renewals, ends), and the seats their computers.
   const reconcile = () => {

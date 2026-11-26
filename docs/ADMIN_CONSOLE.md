@@ -35,7 +35,8 @@ license with a kind also sets it. Unattended installs can pick the first tenant'
 | Fleet | **Overview** | Online/offline/alerting devices, agent runs, tool calls, policy denials and errors over 24 h, version and platform mix, recent alerts |
 | | **Devices** | Search and filter the fleet (student and child computers and help desk receivers are marked); select devices for bulk commands (sync, update, back up, restart service, notify, …); **Update everyone now**. A device's **Configuration** tab sets who uses it, whether it receives help desk tickets, its **Edition** (*Essentials only*, *Up to Pro*, *Up to Ultra*, or its group's: Ultra only ever comes from here) and its overrides; its header shows the edition it runs |
 | | Device detail | Live health and services, metrics charts, installed plugins, versions, audit chain head; run any command and watch its result; move to a group; set update channel or pin; who uses it (staff or student; parent or child at home); whether it receives help desk tickets; per-device overrides; its backups; retire |
-| | **Alerts & events** | Service failures, circuit breaks, policy denials, student and child safety alerts and other device events; acknowledge them |
+| | **Alerts** | What is going wrong across the organization now, and recently: each problem from its alert to its all-clear, who heard it and who acknowledged it; who gets what ([below](#alerts)) |
+| | **Device events** | Everything devices report as it happens: service failures, circuit breaks, policy denials, student and child safety alerts and other events; acknowledge them |
 | | **Help desk** | Every ticket sent from the organization's computers, its conversation and the computer's details; answer, take, change status and priority; which computers receive tickets |
 | | **Messages** | The *Everyone* conversation every computer sees in Messages: post to it, remove what does not belong ([MESSAGES.md](MESSAGES.md)) |
 | Configuration | **Profiles & groups** | Organization defaults: the kind (Work, School, Home), *New versions* (install automatically, tell people, off), the help desk on or off, Messages on or off, default profile and channel. **Quick setup** for the tenant's kind (Set up for work, for a school, for a family) until its groups exist. Profiles hold managed settings, governance policy and *locks* (paths users cannot change). Groups attach a profile, who uses the computers (staff or student; parent or child), the edition (*Essentials only*, *Up to Pro* or *Up to Ultra*: computers open in Essentials and their people switch up to it), *New versions*, an update channel and a pinned version. **FBRX Mesh**: the organization's computers mesh together without pairing codes, and the **hive** (which groups may use the AI of servers with the ai role), with the servers in it ([MESH.md](MESH.md#organizations)) |
@@ -98,6 +99,35 @@ next connect. The `ticket.created` and `ticket.updated` webhooks hand tickets to
 new versions by itself when nobody is using it, from FBRX Command's published releases (electron-updater) or from the
 GitHub repository it was installed from; **Tell people** offers them; **Off** stops the checks. **Devices → Update
 everyone now** sends `update.install` to every active computer (online ones start at once).
+
+## Alerts
+
+**Alerts** keeps every alert in the organization in one place: from its computers (FBRX OS and FBRX Digger), its FBRX
+Servers (their drives, FBRX Gate, MiniDome and FBRX Time) and FBRX Command itself (a service that stopped on a
+computer). Each problem is one line from its alert to its **all-clear**; the same problem said again is folded into
+it (*said 3 times*), and a thing that happened once (a threat found) is a line of its own. **Going on now** lists the
+problems still open, the worst first; **Recently** what is over. Operators and up can **Acknowledge** one, which says
+someone is on it.
+
+**Who gets what** (owners and administrators) is a list of rules. Every alert shows on the Alerts page; a rule also
+tells people:
+
+| Part of a rule | What it does |
+| --- | --- |
+| **Takes** | Everything, warnings and critical, or critical only |
+| **About computers tagged** / **From** | Only alerts about computers with these tags, and only from these apps (empty: all) |
+| **E-mail** | Each alert, then its all-clear, through FBRX Command's mail server |
+| **Shows in FBRX OS on computers tagged** | A notification on those computers (and, with the switch, on the help desk computers), and a line in their Alerts inbox with **Acknowledge**. A computer that is off gets the alerts still open when it is next online |
+| **Quiet hours** | Between these times (in the time zone you set) nothing goes out but critical alerts; what was held goes out when the hours are over, if it is still going on |
+| **Nobody acknowledged it within** | After these minutes, the next people hear it too (*Then also e-mail*, *And computers tagged*), marked *Not acknowledged* |
+
+Acknowledging, in the console or on a computer, stops the escalation and marks it on every computer that shows it.
+The all-clear reaches whoever heard the alert. **Send a test alert** sends one through the saved rules. The webhooks
+(Settings) get `alert.opened`, `alert.resolved`, `alert.acknowledged` and `alert.escalated` with the FBRX Alert.
+
+**From FBRX Servers**: *Make a secret* shows the address and a signing secret once. In each FBRX Server's console,
+**Alerts → Webhook**, paste both and choose which alerts to send ([SERVER.md](SERVER.md#alerts)); FBRX Command takes
+only alerts signed with that secret.
 
 ## Roles
 

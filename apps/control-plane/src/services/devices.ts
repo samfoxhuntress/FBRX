@@ -2,6 +2,7 @@ import { HeartbeatSchema, newId, type Heartbeat } from '@fbrx/shared';
 import type { AppContext } from '../context';
 import { parseJson } from '../routes/util';
 import { meshIdentityChanged } from '../routes/mesh';
+import { commandAlert } from './alert-center';
 
 export function deviceView(ctx: AppContext, d: any) {
   const hb = parseJson<Heartbeat | null>(d.heartbeat, null);
@@ -109,7 +110,15 @@ export function processHeartbeat(ctx: AppContext, deviceId: string, raw: unknown
   if (meshIdentityChanged(prev, hb)) ctx.realtime.broadcastToTenantDevices(d.tenant_id, { type: 'mesh.roster' });
   const prevFailed = new Set((prev?.status.services ?? []).filter((s) => s.state === 'failed').map((s) => s.name));
   for (const s of hb.status.services) {
-    if (s.state === 'failed' && !prevFailed.has(s.name)) recordDeviceEvent(ctx, d, 'service.failed', 'critical', `Service ${s.name} failed: ${s.message ?? 'no details'}`);
+    if (s.state === 'failed' && !prevFailed.has(s.name)) {
+      recordDeviceEvent(ctx, d, 'service.failed', 'critical', `Service ${s.name} failed: ${s.message ?? 'no details'}`);
+      ctx.alerts.ingest(d.tenant_id, commandAlert({ device: d, rule: 'service_failed', subject: s.name, state: 'open', severity: 'critical', title: `${s.name} stopped working on ${d.name}`, detail: s.message ?? undefined }), { deviceId: d.id });
+    }
+  }
+  // A service that failed runs again: its all-clear.
+  for (const name of prevFailed) {
+    const now = hb.status.services.find((s) => s.name === name);
+    if (now && now.state !== 'failed') ctx.alerts.ingest(d.tenant_id, commandAlert({ device: d, rule: 'service_failed', subject: name, state: 'resolved', severity: 'critical', title: `${name} stopped working on ${d.name}` }), { deviceId: d.id });
   }
   if (prev && prev.status.vaultState === 'unlocked' && hb.status.vaultState === 'locked') {
     recordDeviceEvent(ctx, d, 'vault.locked', 'warning', 'Credential vault is locked on this device');

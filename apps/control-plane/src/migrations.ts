@@ -644,4 +644,44 @@ export const CP_MIGRATIONS: Migration[] = [
       CREATE INDEX screen_recordings_tenant ON screen_recordings (tenant_id, started_at);
     `,
   },
+  {
+    version: 17,
+    name: 'org-alerts',
+    // FBRX Alerts in an organization: each alert (one row per problem, from its alert to its all-clear; events once),
+    // the rules for who gets what, and the secret FBRX Servers sign the alerts they send here with.
+    up: `
+      CREATE TABLE org_alerts (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        key TEXT NOT NULL,
+        state TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        device_id TEXT,
+        alert TEXT NOT NULL,
+        count INTEGER NOT NULL DEFAULT 1,
+        rules TEXT NOT NULL DEFAULT '[]',
+        targets TEXT NOT NULL DEFAULT '{}',
+        notified TEXT NOT NULL DEFAULT '[]',
+        held INTEGER NOT NULL DEFAULT 0,
+        acknowledged_by TEXT,
+        acknowledged_at TEXT,
+        ack_note TEXT,
+        escalated_at TEXT,
+        started_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX org_alerts_tenant ON org_alerts (tenant_id, state, updated_at);
+      CREATE INDEX org_alerts_key ON org_alerts (tenant_id, key, state);
+      CREATE TABLE org_alert_rules (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        rule TEXT NOT NULL,
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX org_alert_rules_tenant ON org_alert_rules (tenant_id, position);
+      ALTER TABLE tenants ADD COLUMN alert_inbound_secret TEXT;
+    `,
+  },
 ];

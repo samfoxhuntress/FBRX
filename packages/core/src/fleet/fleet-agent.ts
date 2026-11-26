@@ -493,6 +493,7 @@ export class FleetAgent {
       case 'helpdesk.changed':
       case 'chat.message':
       case 'mesh.roster':
+      case 'org.alert':
         this.d.onMessage?.(msg);
         break;
       case 'screen.call':
@@ -559,6 +560,11 @@ export class FleetAgent {
   /** Emits an event (alert/audit/state) to the control plane. */
   /** Events that could not be sent while offline; delivered when the connection is back. */
   private pendingEvents: DeviceEvent[] = [];
+
+  /** Someone here acknowledged an organization alert; false when FBRX Command cannot be reached right now. */
+  acknowledgeAlert(alertId: string, by: string, note?: string): boolean {
+    return this.send({ type: 'org.alert.ack', alertId, by, ...(note ? { note } : {}) });
+  }
 
   reportEvent(event: DeviceEvent) {
     if (!this.send({ type: 'event', event })) this.pendingEvents = [...this.pendingEvents, event].slice(-50);

@@ -22,6 +22,7 @@ import { WebhooksPage } from './pages/webhooks';
 import { AuditPage } from './pages/audit';
 import { RecordingsPage } from './pages/recordings';
 import { EventsPage } from './pages/events';
+import { AlertsPage } from './pages/alerts';
 import { AccountPage } from './pages/account';
 import { HelpdeskPage } from './pages/helpdesk';
 import { MessagesPage } from './pages/messages';
@@ -99,7 +100,8 @@ function Console() {
   const nav: NavItem[] = [
     { id: 'overview', label: 'Overview', icon: 'dashboard', section: 'Fleet' },
     { id: 'devices', label: 'Devices', icon: 'laptop', section: 'Fleet' },
-    { id: 'events', label: 'Alerts & events', icon: 'activity', section: 'Fleet' },
+    ...(app.can('alerts.read') ? [{ id: 'alerts', label: 'Alerts', icon: 'bell', section: 'Fleet' } as NavItem] : []),
+    { id: 'events', label: 'Device events', icon: 'activity', section: 'Fleet' },
     ...(app.can('helpdesk.read') ? [{ id: 'helpdesk', label: 'Help desk', icon: 'lifebuoy', section: 'Fleet' } as NavItem] : []),
     ...(app.can('messages.read') ? [{ id: 'messages', label: 'Messages', icon: 'message', section: 'Fleet' } as NavItem] : []),
     ...(app.can('config.manage') ? [{ id: 'governance', label: 'Governance', icon: 'shield', section: 'Configuration' } as NavItem] : []),
@@ -122,7 +124,7 @@ function Console() {
     ...(app.can('audit.read') ? [{ id: 'recordings', label: 'Screen recordings', icon: 'video', section: 'Access' } as NavItem] : []),
   ];
   const activeNav = route.page === 'device' ? 'devices' : route.page;
-  const needsTenant = !app.tenantId && !['overview', 'tenants', 'releases', 'account', 'accounts', 'cloud-ai', 'pricing', 'audit', 'licenses', 'devices', 'events', 'helpdesk'].includes(route.page);
+  const needsTenant = !app.tenantId && !['overview', 'tenants', 'releases', 'account', 'accounts', 'cloud-ai', 'pricing', 'audit', 'licenses', 'devices', 'events', 'alerts', 'helpdesk'].includes(route.page);
 
   const page = (() => {
     if (needsTenant) return <div className="fx-page"><h1>Select a tenant</h1><p className="fx-secondary">Choose an organization in the top bar to manage its configuration.</p></div>;
@@ -133,6 +135,8 @@ function Console() {
         return <DeviceDetailPage id={route.id!} />;
       case 'events':
         return <EventsPage />;
+      case 'alerts':
+        return <AlertsPage />;
       case 'helpdesk':
         return <HelpdeskPage />;
       case 'messages':

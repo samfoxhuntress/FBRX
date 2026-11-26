@@ -590,6 +590,14 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX assist_jobs_person ON assist_jobs (person_email, person_user, created_at);
     `,
   },
+  {
+    version: 20,
+    name: 'org-alerts',
+    // An organization alert from FBRX Command (its id there, its state, who acknowledged it), shown in the inbox.
+    up: `
+      ALTER TABLE alerts ADD COLUMN org TEXT;
+    `,
+  },
 ];
 
 export const SCHEMA_VERSION = MIGRATIONS[MIGRATIONS.length - 1].version;

@@ -1,0 +1,7 @@
+/* FBRX Command's own styles (the rest come from @fbrx/ui). */
+
+/* Alerts: one line per alert, what is going on first. */
+.cp-alerts { display: grid; gap: 0; }
+.cp-alert { padding: 10px 0; border-bottom: 1px solid var(--border); }
+.cp-alert:last-child { border-bottom: 0; }
+.cp-section { font-size: 15px; margin: 18px 0 8px; }

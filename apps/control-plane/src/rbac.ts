@@ -28,6 +28,10 @@ export const PERMISSIONS = {
   'webhooks.manage': ['superadmin', 'owner', 'admin'],
   'audit.read': ['superadmin', 'owner', 'admin'],
   /** Help desk tickets: everyone can read them; operators and up answer them. */
+  // FBRX Alerts: everyone sees them, operators acknowledge, administrators decide who gets what.
+  'alerts.read': ['superadmin', 'owner', 'admin', 'operator', 'viewer'],
+  'alerts.acknowledge': ['superadmin', 'owner', 'admin', 'operator'],
+  'alerts.manage': ['superadmin', 'owner', 'admin'],
   'helpdesk.read': ['superadmin', 'owner', 'admin', 'operator', 'viewer'],
   'helpdesk.manage': ['superadmin', 'owner', 'admin', 'operator'],
   /** Organization chat: everyone can read the organization-wide conversation; operators and up post to it and remove messages. */

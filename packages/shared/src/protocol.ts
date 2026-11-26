@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import type { FbrxAlert } from './fbrx-alert';
 import { PLATFORMS } from './constants';
 import { PolicySchema } from './policy';
 import type { DeviceCommand } from './commands';
@@ -219,14 +220,21 @@ export type ServerToDeviceMessage =
    * Remote screen for an administrator: start (the person at the computer is asked), the session, a picture, mouse and
    * keyboard, end. The computer answers each with screen.reply.
    */
-  | { type: 'screen.call'; callId: string; op: 'start' | 'session' | 'frame' | 'input' | 'end'; params: Record<string, unknown> };
+  | { type: 'screen.call'; callId: string; op: 'start' | 'session' | 'frame' | 'input' | 'end'; params: Record<string, unknown> }
+  /**
+   * An organization alert for the people at this computer (FBRX Command → Alerts → who gets what), its all-clear, or
+   * word that someone acknowledged it.
+   */
+  | { type: 'org.alert'; alertId: string; alert: FbrxAlert; acknowledged: { by: string; at: string } | null };
 
 export type DeviceToServerMessage =
   | { type: 'heartbeat'; heartbeat: Heartbeat }
   | { type: 'command.result'; commandId: string; result: CommandResult }
   | { type: 'event'; event: DeviceEvent }
   | { type: 'pong'; at: string }
-  | { type: 'screen.reply'; callId: string; ok: boolean; result?: unknown; error?: { code: string; message: string } };
+  | { type: 'screen.reply'; callId: string; ok: boolean; result?: unknown; error?: { code: string; message: string } }
+  /** Someone at this computer acknowledged an organization alert. */
+  | { type: 'org.alert.ack'; alertId: string; by: string; note?: string };
 
 /** Provisioning file dropped next to an installer (or passed via CLI) for zero-touch enrollment. */
 export const ProvisioningFileSchema = z.object({
