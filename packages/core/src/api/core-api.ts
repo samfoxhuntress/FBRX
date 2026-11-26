@@ -2,7 +2,7 @@ import { SETUP_USES } from '../ai/personas';
 import { readFile } from 'node:fs/promises';
 import { basename, isAbsolute } from 'node:path';
 import { z } from 'zod';
-import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, FILE_MIME, LOGIN_LIMITS, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, PERSONALITY_LIMITS, THINKING_LEVELS, APP_IDS, TOOLKIT_INPUT_KINDS, TOOLKIT_SYSTEMS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin } from '@fbrx/shared';
+import { ATTACHMENT_MAX_BYTES, ATTACHMENTS_PER_MESSAGE, AUDIENCES, FILE_MIME, LOGIN_LIMITS, AUTOMATION_INTERVAL, AUTOMATION_NOTIFY, EXT_USER_ONLY, IMAGE_MIME, MEMORY_CATEGORIES, PICTURE_EXTENSIONS, SCHEDULE_TIME_PATTERN, SECRET_KINDS, SNAPSHOT_MAX_BYTES, PERSONALITY_LIMITS, THINKING_LEVELS, APP_IDS, TOOLKIT_INPUT_KINDS, TOOLKIT_SYSTEMS, VERTICALS, fileExtension, type CoreMethod, type ExtMethods, type InvocationOrigin, type LocalApiInfo } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { Kernel } from '../kernel';
 import { validatePassphrase } from '../vault/vault';
@@ -11,6 +11,8 @@ import { setThinkingLevel } from '../ai/thinking';
 export interface CallContext {
   origin: InvocationOrigin;
   actor: string;
+  /** The caller stopped waiting (a Local API request whose app hung up): the work it started stops too. */
+  signal?: AbortSignal;
 }
 
 type Handler = (params: any, ctx: CallContext) => unknown | Promise<unknown>;
@@ -171,6 +173,28 @@ const AutomationInputSchema = z.object({
   enabled: z.boolean(),
 });
 
+/** The Local API as Settings shows it: switched on but not running, it says why. */
+function localApiInfo(k: Kernel, reveal: boolean): LocalApiInfo {
+  const info = k.localApi.info(reveal);
+  if (!info.enabled || info.running) return { ...info, problem: null, waitsForVault: false };
+  const svc = k.services.get('localapi');
+  const vault = k.vault.status();
+  let problem: string | null = null;
+  let waitsForVault = false;
+  if (svc?.state === 'disabled') problem = k.license.has('localapi') ? 'It is not available in this app.' : 'Your edition does not include the Local API.';
+  else if (vault.state === 'locked' && (svc?.state === 'stopped' || svc?.state === 'failed')) {
+    waitsForVault = true;
+    problem =
+      vault.lockReason === 'keyring'
+        ? 'It waits for your saved credentials, which are locked: FBRX OS was started outside your desktop session and cannot reach the keyring. Quit FBRX OS and open it from the desktop, or unlock them on the Vault page.'
+        : 'It waits for your saved credentials to be unlocked (Vault page): its access tokens are kept there.';
+  } else if (svc?.state === 'failed') {
+    problem = /EADDRINUSE/.test(svc.message ?? '') ? `Another program is using port ${info.port}. Close it, or choose another port here.` : (svc.message ?? 'It did not start.');
+  } else if (svc?.state === 'starting') problem = null;
+  else problem = svc?.message ?? 'It is not running.';
+  return { ...info, problem, waitsForVault };
+}
+
 export function buildCoreApi(k: Kernel): Record<string, Handler> {
   /** Sweeps the files of deleted chats' attachments once a delete is done, and passes its answer on. */
   const tidied = <T,>(result: T): T => {
@@ -327,7 +351,12 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     },
     'agent.runToCompletion': async (p, ctx) => {
       const q = z.object({ conversationId: z.string().optional(), message: z.string(), providerId: z.string().optional(), model: z.string().optional() }).parse(p);
-      return k.agent.runToCompletion({ ...q, origin: ctx.origin, actor: ctx.actor });
+      const run = k.agent.start({ ...q, origin: ctx.origin, actor: ctx.actor });
+      // The app that asked gave up: the run stops, so the model is free for what comes next.
+      const stop = () => k.agent.cancel(run.runId, 'The app that asked stopped waiting');
+      if (ctx.signal?.aborted) stop();
+      ctx.signal?.addEventListener('abort', stop, { once: true });
+      return run.done.finally(() => ctx.signal?.removeEventListener('abort', stop));
     },
     'ai.cancel': (p) => ({ cancelled: k.agent.cancel(z.object({ runId: z.string() }).parse(p).runId) }),
     'ai.runs': () => k.agent.activities(),
@@ -366,6 +395,8 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'runtime.status': () => k.runtime.status(),
     'runtime.start': () => k.runtime.start(),
     'runtime.stop': () => k.runtime.stop(),
+    'runtime.forceStop': () => k.runtime.forceStop(),
+    'runtime.giveUpClosing': () => ({ gaveUp: k.runtime.giveUpClosing() }),
     'runtime.catalog': () => k.models.catalog(),
     'runtime.addModel': (p) => {
       const q = z.object({ source: z.string().min(3).max(300), name: z.string().max(80).optional() }).parse(p);
@@ -435,7 +466,7 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       const { modelId } = z.object({ modelId: z.string() }).parse(p);
       if (!k.models.get(modelId)) throw new CoreError('NOT_FOUND', 'Model is not installed');
       k.settings.update({ runtime: { modelId } });
-      if (k.runtime.isRunning) {
+      if (k.runtime.loadedOrLoading) {
         await k.runtime.stop();
         await k.runtime.start();
       }
@@ -452,7 +483,7 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       const q = z.object({ name: z.string(), input: z.unknown() }).parse(p);
       // The emergency stop also stops other AI apps (MCP bridge, Local API automation) from using tools.
       if (ctx.origin !== 'user' && k.aiHalt()) throw new CoreError('UNAVAILABLE', 'The AI is on emergency stop on this computer');
-      const r = await k.gate.invoke(q.name, q.input ?? {}, { origin: ctx.origin, actor: ctx.actor });
+      const r = await k.gate.invoke(q.name, q.input ?? {}, { origin: ctx.origin, actor: ctx.actor, signal: ctx.signal });
       return { ok: r.ok, output: r.output, data: r.data, error: r.error, durationMs: r.durationMs };
     },
 
@@ -671,10 +702,10 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
     'release.install': () => k.release.install(),
     'release.uninstall': () => k.release.uninstall(),
 
-    'localapi.info': (p) => k.localApi.info(!!p?.revealToken),
+    'localapi.info': (p) => localApiInfo(k, !!p?.revealToken),
     'localapi.rotateToken': async () => {
       k.rotateLocalApiTokens();
-      return k.localApi.info(true);
+      return localApiInfo(k, true);
     },
   };
   return h;

@@ -49,7 +49,7 @@ export function ensureDataDirs(p: DataPaths): void {
 }
 
 /** Entries (relative to root) that are bound to this machine and excluded from snapshots. */
-export const MACHINE_LOCAL_ENTRIES = ['logs', 'runtime', 'tmp', 'snapshots', 'keychain.key', 'fbrx.db', 'fbrx.db-wal', 'fbrx.db-shm', '.restore-staging', '.pre-restore'];
+export const MACHINE_LOCAL_ENTRIES = ['logs', 'runtime', 'tmp', 'snapshots', 'keychain.key', 'keyring.json','fbrx.db', 'fbrx.db-wal', 'fbrx.db-shm', '.restore-staging', '.pre-restore'];
 
 export function defaultDataRoot(): string {
   if (process.env.FBRX_HOME) return resolve(process.env.FBRX_HOME);

@@ -32,6 +32,12 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
 * FBRX OS: each new backup AI practises taking over (the Learning screen as "Getting your backup AI ready"): it gets
   the learned profile, reads its tools, finishes a task the first AI began and calls a tool; the card shows Ready to
   take over or Needs a look, with Test again. Needs an FBRX OS release; the look waits for Sam's approval.
+* FBRX OS 2.5.x fixes from a Hermes setup on Ubuntu (Local API down after a relaunch, old models left running):
+  the vault finds its key in the keyring however FBRX was started (and never moves it out of the keyring); Settings →
+  Local API says why it is not running; switching models stops a model still loading, waits until the old one is
+  gone, and stops one an earlier FBRX left behind; an AI app's cancel (or a caller hanging up) stops the run; the
+  Closing window (progress, Stop it now, help and Go on/Quit anyway when stuck) on switch, Stop and quit. Needs an
+  FBRX OS release; the Closing window's look waits for Sam's approval.
 
 ## Released
 

@@ -1,6 +1,6 @@
 import { app, nativeImage, Notification, safeStorage, shell } from 'electron';
 import { execFile } from 'node:child_process';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { FileKeychain, defaultSpecialDirs, openMacSafeStorage, type KeychainAdapter, type MovedKeychain, type PlatformAdapter, type UpdateController } from '@fbrx/core';
 import { PRODUCT_NAME, type AppFlavor, type NotificationEvent } from '@fbrx/shared';
@@ -16,6 +16,7 @@ declare const __FBRX_ACCOUNT_SERVER__: string;
 /** Vault key protection via the OS keychain (macOS Keychain, Windows DPAPI, libsecret on Linux). */
 export class ElectronKeychain implements KeychainAdapter {
   readonly kind = 'os' as const;
+  constructor(readonly fallback: KeychainAdapter | null = null) {}
   available() {
     return safeStorage.isEncryptionAvailable() && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text');
   }
@@ -27,6 +28,36 @@ export class ElectronKeychain implements KeychainAdapter {
   }
 }
 
+/**
+ * Linux: the keyring FBRX used on this computer (written when it is used, read before the next start), so a start
+ * outside the desktop session (by another app, a terminal or a remote session, which leaves out the desktop's name)
+ * still reaches it. Machine-local: never copied to another computer.
+ */
+const KEYRING_FILE = 'keyring.json';
+const PASSWORD_STORES: Record<string, string> = { gnome_libsecret: 'gnome-libsecret', kwallet: 'kwallet', kwallet5: 'kwallet5', kwallet6: 'kwallet6' };
+
+function rememberedKeyring(dataDir: string): string | null {
+  try {
+    const backend = String((JSON.parse(readFileSync(join(dataDir, KEYRING_FILE), 'utf8')) as { backend?: string }).backend ?? '');
+    return PASSWORD_STORES[backend] ? backend : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Before the app is ready (Linux): started without the desktop's name, Chromium would not look for a keyring at all.
+ * Point it at the one FBRX used here, and at the session's message bus when the start left that out too.
+ */
+export function useRememberedKeyring(dataDir: string): void {
+  if (process.platform !== 'linux' || process.env.XDG_CURRENT_DESKTOP) return;
+  const backend = rememberedKeyring(dataDir);
+  if (!backend) return;
+  app.commandLine.appendSwitch('password-store', PASSWORD_STORES[backend]!);
+  const bus = typeof process.getuid === 'function' ? `/run/user/${process.getuid()}/bus` : null;
+  if (!process.env.DBUS_SESSION_BUS_ADDRESS && bus && existsSync(bus)) process.env.DBUS_SESSION_BUS_ADDRESS = `unix:path=${bus}`;
+}
+
 export function chooseKeychain(dataDir: string): KeychainAdapter {
   const file = new FileKeychain(join(dataDir, 'keychain.key'));
   // macOS: the Keychain asks for the Mac password whenever an updated (re-signed) FBRX opens its item, which happens
@@ -34,9 +65,23 @@ export function chooseKeychain(dataDir: string): KeychainAdapter {
   // (and the app runs with Chromium's mock keychain, so nothing else touches the Keychain either). For a password,
   // turn on "Ask for the vault password when FBRX OS starts".
   if (process.platform === 'darwin') return file;
-  const os = new ElectronKeychain();
-  // Linux desktops without a secret service fall back to a 0600 key file (documented in SECURITY.md).
-  return os.available() ? os : file;
+  // A key saved in the file (a start without the keyring) still opens, and then moves into the keyring.
+  const os = new ElectronKeychain(file);
+  if (os.available()) {
+    if (process.platform === 'linux') {
+      try {
+        const backend = safeStorage.getSelectedStorageBackend();
+        if (rememberedKeyring(dataDir) !== backend) writeFileSync(join(dataDir, KEYRING_FILE), JSON.stringify({ backend }), { mode: 0o600 });
+      } catch {
+        /* the next start finds the keyring the usual way */
+      }
+    }
+    return os;
+  }
+  // Linux desktops without a secret service fall back to a 0600 key file (documented in SECURITY.md). A key this
+  // computer kept in its keyring is only out of reach for this start: the vault waits instead of moving it.
+  if (process.platform === 'linux') file.unreachable = true;
+  return file;
 }
 
 /**

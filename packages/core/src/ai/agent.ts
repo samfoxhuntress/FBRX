@@ -242,10 +242,10 @@ export class AgentRuntime {
     return this.start(p).done;
   }
 
-  cancel(runId: string): boolean {
+  cancel(runId: string, reason = 'Canceled by user'): boolean {
     const r = this.runs.get(runId);
     if (!r) return false;
-    r.controller.abort(new CoreError('CANCELLED', 'Canceled by user'));
+    r.controller.abort(new CoreError('CANCELLED', reason));
     return true;
   }
 

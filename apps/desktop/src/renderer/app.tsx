@@ -16,6 +16,7 @@ import { DashboardPage } from './pages/dashboard';
 import { Onboarding } from './pages/onboarding';
 import { LearningScreen, useLearningScreen } from './learning-screen';
 import { VaultStartPrompt } from './vault-lock';
+import { ModelClosing } from './model-closing';
 import { UpdatePill } from './release';
 import { SpotlightView } from './pages/spotlight';
 import { ClipPicker } from './pages/clip-picker';
@@ -806,6 +807,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       </Shell>
       {fun && s.appearance.easterEggs && !presenter?.active && !DIGGER && <Bruce route={route} visits={s.appearance.gooseVisits} golden={!!trophies?.unlocked.golden} season={s.appearance.gooseSeason === 'auto' ? seasonNow() : s.appearance.gooseSeason} />}
       <VaultStartPrompt />
+      {!POPOUT && !DIGGER && <ModelClosing />}
       {hosts}
       {!POPOUT && !DIGGER && learningScreen.visible && learningScreen.status && <LearningScreen status={learningScreen.status} onClose={learningScreen.close} />}
       {showTour && (

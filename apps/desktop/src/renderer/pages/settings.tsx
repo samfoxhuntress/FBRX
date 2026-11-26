@@ -1415,7 +1415,7 @@ function License() {
 }
 
 function LocalApi() {
-  const info = useCore('localapi.info', { revealToken: true }, ['settings.changed']);
+  const info = useCore('localapi.info', { revealToken: true }, ['settings.changed', 'service.changed', 'vault.changed']);
   const { s, locked, patch } = useSettings();
   const { confirm, dialog } = useConfirm();
   const { run } = useAction();
@@ -1425,7 +1425,12 @@ function LocalApi() {
     <Grid cols={2}>
       <Card title="Local automation API" subtitle="Lets scripts, other apps and FBRX peers use the governed agent and tools">
         <div className="fx-form">
-          <Toggle checked={s.localApi.enabled} disabled={isLocked(locked, 'localApi.enabled')} onChange={(v) => void patch({ localApi: { enabled: v } })} label={i.running ? `Running on ${i.url}` : 'Enable Local API'} />
+          <Toggle checked={s.localApi.enabled} disabled={isLocked(locked, 'localApi.enabled')} onChange={(v) => void patch({ localApi: { enabled: v } })} label={i.running ? `Running on ${i.url}` : s.localApi.enabled ? 'On, but not running' : 'Enable Local API'} />
+          {i.problem && (
+            <Callout tone="warning" title="Not running" actions={i.waitsForVault ? <Button size="sm" icon="key" onClick={() => navigate('vault')}>Open the Vault page</Button> : undefined}>
+              {i.problem} Scripts and AI apps (through the FBRX MCP bridge) cannot reach FBRX OS until it runs.
+            </Callout>
+          )}
           <Field label="Port">
             <Input type="number" value={s.localApi.port} disabled={isLocked(locked, 'localApi.port')} onChange={(e) => void patch({ localApi: { port: Number(e.target.value) || 47821 } })} />
           </Field>

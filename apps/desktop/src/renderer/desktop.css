@@ -8206,3 +8206,12 @@ body.popout .fx-page-header p {
 .screen-setting { display: grid; gap: 6px; padding: 8px 0; border-top: 1px solid var(--border-subtle, rgba(127, 127, 127, 0.15)); }
 .screen-slider { display: grid; grid-template-columns: 90px 1fr 40px; align-items: center; gap: 8px; font-size: 13px; }
 .screen-slider input[type='range'] { width: 100%; accent-color: var(--accent); }
+
+/* Closing the local model (model-closing.tsx). */
+.model-closing p { margin: 0 0 10px; }
+.model-closing-bar { height: 8px; }
+.model-closing-bar > div { transition: width 0.2s linear; }
+.model-closing-time { font-size: 12px; margin-top: 6px; font-variant-numeric: tabular-nums; }
+.model-closing-help { margin-top: 14px; padding: 12px 14px; border-radius: 10px; background: color-mix(in srgb, var(--warning) 12%, transparent); }
+.model-closing-help ol { margin: 6px 0 8px; padding-left: 20px; display: grid; gap: 4px; }
+.model-closing-help p { margin: 0; font-size: 12.5px; }

@@ -76,11 +76,23 @@ export class Vault {
       // Never touch the old keychain on our own: on macOS that is exactly what made the system ask for a password.
       this.lockReason = 'moved';
       this.log.warn(`Vault key is still protected by ${this.moved!.label}; waiting for the person to bring it over`);
+    } else if (row.dek_keychain && this.keychain.unreachable && row.keychain_kind && row.keychain_kind !== this.keychain.kind) {
+      // Opening FBRX from the desktop unlocks it again; nothing here may move the key out of the keyring.
+      this.lockReason = 'keyring';
+      this.log.warn('Vault key is in the desktop keyring, which this start of FBRX cannot reach (started outside the desktop session)');
     } else if (row.dek_keychain && this.keychain.available()) {
+      // A key saved the other way on this computer (the key file, from a start without the keyring) is opened that
+      // way, then kept in the keyring.
+      const fallback = this.keychain.fallback;
+      const via = row.keychain_kind && row.keychain_kind !== this.keychain.kind && fallback?.kind === row.keychain_kind && fallback.available() ? fallback : this.keychain;
       try {
-        const dek = await this.keychain.unprotect(row.dek_keychain);
+        const dek = await via.unprotect(row.dek_keychain);
         this.assertKey(dek, row);
         this.dek = dek;
+        if (via !== this.keychain) {
+          await this.bindKeychain(dek);
+          this.log.info('Vault key moved into the keychain', { from: via.kind, to: this.keychain.kind });
+        }
         this.log.info('Vault unlocked with keychain', { keychain: this.keychain.kind });
       } catch {
         this.lockReason = 'keychain';
@@ -266,6 +278,9 @@ export class Vault {
 
   private async bindKeychain(dek: Buffer): Promise<void> {
     if (!this.keychain.available()) return;
+    // A key in the keyring, out of reach for this start only, stays there for the next start from the desktop.
+    const kept = this.keyRow()?.keychain_kind;
+    if (this.keychain.unreachable && kept && kept !== this.keychain.kind && this.keyRow()?.dek_keychain) return;
     this.db.run(
       'UPDATE vault_keys SET dek_keychain = ?, keychain_kind = ?, updated_at = ? WHERE id = ?',
       await this.keychain.protect(dek),

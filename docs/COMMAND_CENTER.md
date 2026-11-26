@@ -768,6 +768,18 @@ unloaded after 20 idle minutes (**Unload the local model when idle**: 5 minutes 
 window in small batches rather than token by token, and the system monitor samples every 10 seconds instead of 2
 while the window is hidden.
 
+**Closing the model.** Switching models, **Stop**, and quitting FBRX OS close the model first and wait until it is
+gone, so its memory and its port are free and two models never run side by side (a model still loading is stopped
+too). FBRX asks it to stop and gives it 5 seconds, then stops it by force. When that takes more than a moment, a
+**Closing** window shows how far it got, with **Stop it now** (its memory is freed at once; an answer it is still
+writing is lost). If even force does not end it within 10 seconds, the window says it is stuck, offers **Try to stop
+it again** and **Go on without waiting** (on quit, **Quit anyway**, which it does by itself after a minute), and what
+else to try: wait a minute (a large model can be waiting for the disk), close other large programs, end
+`llama-server` yourself (Task Manager on Windows, Activity Monitor on macOS, `kill -9` with the process number shown
+on Linux), or restart the computer. A model left behind (FBRX closed by force, or a close it went on without) is
+stopped the next time FBRX loads one; another program on the model's port is named instead of being taken for the
+model.
+
 ## New versions
 
 FBRX OS looks for new versions in its online repository a minute and a half after it starts and every six hours

@@ -161,6 +161,11 @@ Points at another workstation's Local API with that machine's **agent-scoped** t
 Enable in **Settings → Local API**. It listens on `http://127.0.0.1:47821` (remote access is opt-in) and accepts two
 tokens shown on that page: **full** and **agent** (agent runs and tool calls only). Rotate them there.
 
+Switched on but not running, the page says why: most often it waits for your saved credentials to be unlocked (its
+tokens are kept in the vault), or another program has the port. A request whose caller hangs up before the answer
+(an AI app that cancelled, or gave up waiting) stops the agent run or tool call it started, so the model is free for
+the next one; the FBRX MCP bridge passes an AI app's cancel on the same way.
+
 ```bash
 TOKEN=...   # from Settings → Local API, or `fbrx-headless token`
 

@@ -369,7 +369,7 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
 
       {status.vault.state === 'locked' && (
         <Callout
-          tone={status.vault.lockReason === 'keychain' ? 'warning' : 'info'}
+          tone={status.vault.lockReason === 'keychain' || status.vault.lockReason === 'keyring' ? 'warning' : 'info'}
           title={status.vault.lockReason === 'moved' ? 'Bring your saved credentials over' : 'Your saved credentials are locked'}
           actions={<Button size="sm" onClick={() => navigate('vault')}>{status.vault.lockReason === 'moved' ? 'Bring them over' : 'Unlock'}</Button>}
         >
@@ -377,7 +377,9 @@ export function DashboardPage({ status, agentName, easterEggs, who }: { status: 
             ? `They are still in ${status.vault.movedFrom}, which FBRX no longer uses (it kept asking for your Mac password). One click brings them over.`
             : status.vault.lockReason === 'keychain'
               ? "This computer could not open your credentials (for example after copying the data folder). Enter your recovery passphrase to unlock."
-              : 'Enter your vault passphrase to use them.'}
+              : status.vault.lockReason === 'keyring'
+                ? 'FBRX OS was started outside your desktop session, so it cannot reach the keyring they are kept in. Quit FBRX OS and open it from the desktop.'
+                : 'Enter your vault passphrase to use them.'}
         </Callout>
       )}
       {starter?.state === 'preparing' ? (

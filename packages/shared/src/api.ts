@@ -48,9 +48,11 @@ export interface ServiceStatus {
 /**
  * Why the vault is locked: "password" = it asks for the vault password at every start (by choice); "moved" = the key
  * is still protected by a keychain FBRX no longer uses (the Mac Keychain before 1.8.1) and can be brought over;
- * "keychain" = this computer's keychain could not open it (use the recovery passphrase); "manual" = locked by hand.
+ * "keychain" = this computer's keychain could not open it (use the recovery passphrase); "manual" = locked by hand;
+ * "keyring" = the key is in the desktop's keyring (Linux), which this start of FBRX cannot reach because it was started
+ * outside the desktop session (by another app, a terminal or a remote session): opening FBRX from the desktop unlocks.
  */
-export type VaultLockReason = 'password' | 'moved' | 'keychain' | 'manual';
+export type VaultLockReason = 'password' | 'moved' | 'keychain' | 'manual' | 'keyring';
 
 export interface VaultStatus {
   state: 'uninitialized' | 'locked' | 'unlocked';
@@ -360,6 +362,28 @@ export interface RuntimeStatus {
   /** The model's context window in tokens (on Auto, what this computer gives the current model). */
   contextSize?: number | null;
   contextAuto?: boolean;
+  /** A model being closed (switching models, quitting, Stop), while it lets go of its memory. */
+  closing?: RuntimeClosing | null;
+}
+
+/**
+ * Closing the local model: asked to stop (stopping), stopped by force when it does not in time (forcing), and stuck
+ * when even that does not end it (the app then offers a kill switch and what else to try).
+ */
+export interface RuntimeClosing {
+  modelName: string;
+  pid: number | null;
+  startedAt: string;
+  stage: 'stopping' | 'forcing' | 'stuck';
+  /** When this stage began. */
+  stageAt: string;
+  /** How long it is given to stop by itself before it is stopped by force, then to end once forced. */
+  graceMs: number;
+  forceMs: number;
+  /** Stop it now was asked: no waiting for it to finish. */
+  forced: boolean;
+  /** quit: FBRX OS is quitting and waits for it. */
+  why: 'quit' | null;
 }
 
 /** The model a new computer starts with, ready before the first question (small and quick: about 1 GB). */
@@ -612,6 +636,10 @@ export interface LocalApiInfo {
   port: number;
   url: string;
   token: string | null;
+  /** Switched on but not running: why, in words (the vault is locked, the port is taken…). */
+  problem?: string | null;
+  /** It waits for the vault: the Vault page unlocks it. */
+  waitsForVault?: boolean;
 }
 
 export interface EffectiveSettings {
@@ -799,6 +827,10 @@ export interface CoreMethods extends ExtMethods {
   'runtime.status': () => RuntimeStatus;
   'runtime.start': () => RuntimeStatus;
   'runtime.stop': () => RuntimeStatus;
+  /** Stop it now: the model being closed (or running) is stopped by force, its memory let go at once. */
+  'runtime.forceStop': () => RuntimeStatus;
+  /** Go on without waiting for a model that will not stop (FBRX stops it at the next start). */
+  'runtime.giveUpClosing': () => { gaveUp: boolean };
   'runtime.catalog': () => CatalogModel[];
   /** Adds a model from Hugging Face to the catalog ("owner/name" with an optional ":QUANT"), after checking its files. */
   'runtime.addModel': (p: { source: string; name?: string }) => CatalogModel;

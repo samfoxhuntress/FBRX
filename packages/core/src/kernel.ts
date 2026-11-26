@@ -1254,7 +1254,8 @@ export class Kernel {
       this.settings.onChange((next, prev) => {
         if (!prev || !this.started) return;
         const rt = JSON.stringify(next.settings.runtime) !== JSON.stringify(prev.runtime);
-        if (rt && this.runtime.isRunning) void this.services.restart('runtime');
+        // A model loading counts: it is stopped too, so the new one does not wait on it (or run beside it).
+        if (rt && this.runtime.loadedOrLoading) void this.services.restart('runtime');
         if (JSON.stringify(next.settings.localApi) !== JSON.stringify(prev.localApi)) void this.services.restart('localapi');
       }),
     );
@@ -1322,7 +1323,15 @@ export class Kernel {
         const v = this.vault.status();
         // Locked on purpose until the person enters the vault password: not a problem worth an alert.
         if (v.lockReason === 'password' || v.lockReason === 'manual') return { state: 'running', message: 'Locked until you enter the vault password' };
-        return { state: 'degraded', message: v.lockReason === 'moved' ? `Saved credentials are still in ${v.movedFrom}: open the Vault page to bring them over` : 'Locked: enter the recovery passphrase on the Vault page' };
+        return {
+          state: 'degraded',
+          message:
+            v.lockReason === 'moved'
+              ? `Saved credentials are still in ${v.movedFrom}: open the Vault page to bring them over`
+              : v.lockReason === 'keyring'
+                ? 'Locked: FBRX OS was started outside the desktop session and cannot reach the keyring. Quit it and open it from the desktop'
+                : 'Locked: enter the recovery passphrase on the Vault page',
+        };
       },
     });
     s.register({
@@ -2192,7 +2201,7 @@ export class Kernel {
     const local = ai.providers.find((x) => x.type === 'local-runtime');
     if (!local) throw new CoreError('UNAVAILABLE', 'This computer has no built-in runtime provider');
     this.settings.update({ runtime: { enabled: true, modelId }, ai: { providers: ai.providers.map((x) => (x.id === local.id ? { ...x, enabled: true } : x)), defaultProvider: local.id, defaultModel: '' } });
-    if (this.runtime.isRunning) await this.runtime.stop();
+    if (this.runtime.loadedOrLoading) await this.runtime.stop();
     // Starts now when the runtime is there (otherwise at the first question, once it is installed).
     if (this.runtime.status().state === 'stopped') await this.runtime.start().catch(() => undefined);
     return this.runtime.status();

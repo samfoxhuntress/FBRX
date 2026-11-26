@@ -14,6 +14,14 @@ export interface KeychainAdapter {
   available(): boolean;
   protect(data: Buffer): Promise<string>;
   unprotect(blob: string): Promise<Buffer>;
+  /** Opens keys this computer saved the other way (the key file, when there was no keyring then); see Vault.open. */
+  fallback?: KeychainAdapter | null;
+  /**
+   * The computer's keyring cannot be reached by this start (Linux: no secret service, which is how a start outside the
+   * desktop session looks). A key the vault kept in the keyring then waits for a start that reaches it, rather than
+   * being moved elsewhere.
+   */
+  unreachable?: boolean;
 }
 
 /**
@@ -134,6 +142,7 @@ export interface PlatformAdapter {
 export class FileKeychain implements KeychainAdapter {
   readonly kind = 'file' as const;
   private key: Buffer | null = null;
+  unreachable = false;
 
   constructor(private readonly file: string) {}
 

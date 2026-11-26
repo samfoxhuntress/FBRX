@@ -56,6 +56,13 @@ so users cannot change them. `mode: audit` lets you trial a stricter policy and 
   the computer): FBRX asks the `security` tool for the "FBRX OS Safe Storage" item (macOS may ask for the Mac
   password then), decrypts the old wrapping itself (Chromium's OSCrypt format) and re-protects the key with the
   key file. **Start over** (`vault.reset`) deletes every credential and restarts.
+* **Linux keeps the key in the desktop's keyring** (GNOME Keyring or KWallet, through the secret service), or in a
+  key file (mode 0600) on a computer without one. FBRX notes which keyring it used (`keyring.json`, never copied to
+  another computer), so a start outside the desktop session (by another app, a terminal or a remote session, which
+  leaves out the desktop's name) still reaches it. When it cannot (no session bus to reach it by), the vault stays
+  locked and says why instead of asking for the recovery passphrase: quit FBRX OS and open it from the desktop.
+  Unlocking with the recovery passphrase meanwhile leaves the key in the keyring for the next start. A key a start
+  without a keyring saved in the key file is opened from it and moved into the keyring.
 * **Ask for the password at every start** (`vault.passwordOnStart`): the data key is then kept only under the
   vault passphrase and the computer-bound copy is deleted, so the vault stays locked after every start until the
   passphrase is entered (FBRX asks when it opens). Services that need credentials wait for the unlock instead of

@@ -36,6 +36,19 @@ export function LockedNotice({ status: s, onStartOver, compact }: { status: Vaul
       </Callout>
     );
   }
+  if (s.lockReason === 'keyring') {
+    return (
+      <Callout tone="warning" title="FBRX OS cannot reach your keyring">
+        Your saved credentials are kept in this computer&apos;s keyring, and FBRX OS was started outside your desktop session (by another app, a terminal or a remote session), so it cannot open it. Quit FBRX OS and open it from the desktop: they unlock by themselves.
+        {s.hasRecovery && (
+          <>
+            <div style={{ marginTop: 8 }}>Or unlock them for now with your recovery passphrase (they stay in the keyring for next time).</div>
+            {passField('Recovery passphrase')}
+          </>
+        )}
+      </Callout>
+    );
+  }
   if (s.lockReason === 'password' || s.lockReason === 'manual') {
     return (
       <Callout tone="info" title="Saved credentials are locked">

@@ -7,7 +7,7 @@ import { hostname, userInfo } from 'node:os';
 import { Kernel, toCoreError } from '@fbrx/core';
 import { MANAGED_PREFERENCES_DOMAIN, TIER_NAMES, expandMacro, notificationDelivery, notificationKind, provisioningFromPreferences, shouldNotify, type NotificationEvent } from '@fbrx/shared';
 import { APP_NAME, FLAVOR } from './flavor';
-import { createElectronPlatform, openExternalSafe, systemNotification } from './platform';
+import { createElectronPlatform, openExternalSafe, systemNotification, useRememberedKeyring } from './platform';
 import { ElectronUpdateController } from './updater';
 import { ClipHistory } from './clip-history';
 import { PasteKeys } from './paste-keys';
@@ -72,6 +72,9 @@ app.setAppUserModelId('com.fbrx.os');
 // macOS: never touch the Keychain (see chooseKeychain): Chromium would otherwise open "FBRX OS Safe Storage" for its
 // own cookie encryption, and an updated, re-signed app makes macOS ask for the Mac password every time.
 if (process.platform === 'darwin') app.commandLine.appendSwitch('use-mock-keychain');
+// Linux: started outside the desktop session (another app, a terminal, a remote session), FBRX still reaches the keyring
+// it keeps the vault key in.
+useRememberedKeyring(dataDir);
 // Shared memory lets the on-device speech engines (Whisper, the natural voices) use several processor threads. The
 // app's windows only show FBRX's own pages.
 app.commandLine.appendSwitch('enable-features', 'SharedArrayBuffer');
@@ -921,8 +924,29 @@ app.whenReady().then(async () => {
   app.on('activate', () => showWindow());
 });
 
-app.on('before-quit', () => {
+/** The local model closes before FBRX quits, in the window (with Stop it now, and Quit anyway when it is stuck). */
+let modelClosed = false;
+/** A model stuck past this is left behind on quit: FBRX stops it the next time it loads one. */
+const QUIT_MODEL_WAIT_MS = 60_000;
+
+app.on('before-quit', (e) => {
   if (!primary) return;
+  if (kernel && !modelClosed && kernel.runtime.loadedOrLoading) {
+    e.preventDefault();
+    modelClosed = true;
+    quitting = true;
+    const k = kernel;
+    showWindow();
+    const giveUp = setTimeout(() => k.runtime.giveUpClosing(), QUIT_MODEL_WAIT_MS);
+    void k.runtime
+      .stop(null, { why: 'quit' })
+      .catch(() => undefined)
+      .finally(() => {
+        clearTimeout(giveUp);
+        app.quit();
+      });
+    return;
+  }
   quitting = true;
   globalShortcut.unregisterAll();
   spotlight?.destroy();

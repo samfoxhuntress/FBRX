@@ -187,7 +187,12 @@ export class LocalApiServer {
     if (!scope) return this.json(res, 401, { error: { code: 'UNAUTHENTICATED', message: 'Missing or invalid token' } });
     // The console names the person signed in to it (for the audit log).
     const who = String(req.headers['x-fbrx-actor'] ?? '').replace(/[^\w.@-]/g, '').slice(0, 64) || 'admin';
-    const ctx: CallContext = scope === 'console' ? { origin: 'user', actor: `console:${who}` } : { origin: 'api', actor: `localapi:${scope}` };
+    // The caller hanging up before the answer (an AI app that cancelled or gave up) stops the work it asked for.
+    const hangUp = new AbortController();
+    res.on('close', () => {
+      if (!res.writableFinished) hangUp.abort();
+    });
+    const ctx: CallContext = scope === 'console' ? { origin: 'user', actor: `console:${who}`, signal: hangUp.signal } : { origin: 'api', actor: `localapi:${scope}`, signal: hangUp.signal };
     try {
       if (req.method === 'GET' && url.pathname === '/v1/events') {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });
