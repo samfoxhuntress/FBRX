@@ -29,6 +29,9 @@ roadmap doc (see `ROADMAP.md`) or fixed and removed from here.
   signed webhook and syslog. Needs an FBRX Server release; the look waits for Sam's approval.
 * FBRX OS: model fallbacks (AI models → If the model fails): a second and third choice carry on with the same
   conversation when the model fails mid-run. Needs an FBRX OS release; the look waits for Sam's approval.
+* FBRX OS: each new backup AI practises taking over (the Learning screen as "Getting your backup AI ready"): it gets
+  the learned profile, reads its tools, finishes a task the first AI began and calls a tool; the card shows Ready to
+  take over or Needs a look, with Test again. Needs an FBRX OS release; the look waits for Sam's approval.
 
 ## Released
 

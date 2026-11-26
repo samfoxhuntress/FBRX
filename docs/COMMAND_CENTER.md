@@ -877,6 +877,18 @@ graphics card with enough memory for the model is the biggest speed-up of all.
   choice is left, the chat says what went wrong, and **Mesh Assist** can still hand the task to another computer
   ([MESH.md](MESH.md#mesh-assist-computers-lending-each-other-their-ai)).
 
+  **Each choice practises before it is needed.** Once you save one, the *Learning your computer* screen comes up as
+  *Getting your backup AI ready*: FBRX wakes it up, gives it what it already learned about this computer (nothing is
+  read again; a cloud AI gets it without what identifies the computer), has a model on this computer or your network
+  read its instructions and tools, and then has it **practise a handover**. A task is half done by the first AI (it
+  asked the clock, and the clock's answer is in the conversation, with a code made up for the practice): the backup
+  must finish it from that answer, not start again. Then it is asked something only a tool can answer, and must call
+  one. Nothing on the computer changes, the tools it asks for are not run, and a cloud AI counts what it reads like
+  any question. The card then shows each choice as **Ready to take over** (with how long it took) or **Needs a look**,
+  with what is wrong in words: it did not answer (a wrong key, say), it answered without what the first AI had found
+  (it would start tasks over), or it did not use FBRX's tools (it could finish an answer but not do things on the
+  computer). **Test again** practises once more.
+
 The chat's model list shows the same installed models. If a chat asks Ollama for a model it does not have, the error
 names the installed ones. Each answer in a chat shows the model that wrote it and how long it took from your question,
 so two AIs are easy to compare.

@@ -527,6 +527,23 @@ export class Kernel {
       },
       prepare: (agent, report, signal) => this.prepareAgent(agent, report, signal),
       warm: (report, signal) => this.agent.warmUp({ signal, onReading: (read, of) => of > 0 && report(`Reading its instructions and tools (${Math.min(100, Math.round((read / of) * 100))}%)`) }),
+      // The backup AIs (AI models → If the model fails) practise taking over once each, when they are chosen.
+      backups: () => this.backupAgents().flatMap((b) => (b.agent ? [b.agent] : [])),
+      prepareBackup: async (agent, report, signal) => {
+        const { provider, config } = this.providers.resolve(agent.providerId, agent.model || undefined);
+        if (config.type === 'local-runtime' && !this.runtime.isRunning) {
+          report('Starting the model on this computer');
+          const st = await this.runtime.start();
+          if (st.state !== 'running') throw new Error(st.message ?? 'The model did not start');
+          return;
+        }
+        report(`Checking that ${agent.label} answers`);
+        const h = await provider.health(signal);
+        if (!h.ok) throw new Error(h.message ?? `${agent.label} did not answer`);
+      },
+      warmBackup: (agent, report, signal) =>
+        this.agent.warmUp({ signal, providerId: agent.providerId, model: agent.model, onReading: (read, of) => of > 0 && report(`Reading its instructions and tools (${Math.min(100, Math.round((read / of) * 100))}%)`) }),
+      rehearse: (agent, report, signal) => this.agent.rehearseHandover({ providerId: agent.providerId, model: agent.model, signal, onStatus: report }),
     });
     this.automations = new AutomationService({
       db: this.db,
@@ -1582,6 +1599,28 @@ export class Kernel {
     this.learningTimer.unref?.();
   }
 
+  /** An AI as Learning your computer names it: where it runs and what to call it. */
+  private describeAi(r: ReturnType<ProviderManager['resolve']>): Omit<LearningAgent, 'key' | 'persona'> {
+    const { config, model } = r;
+    const near = (url?: string) => /^https?:\/\/(localhost|127\.|\[?::1)/i.test(url ?? '');
+    const where: LearningAgent['where'] = config.cloud ? 'the cloud' : config.type === 'local-runtime' ? 'this computer' : config.type === 'mesh' ? 'another of your computers' : near(config.baseUrl) ? 'this computer' : 'your network';
+    const label = config.type === 'local-runtime' ? (this.models.get(model)?.name ?? model) : model && config.type !== 'mesh' ? `${model} (${config.name})` : config.name;
+    return { providerId: config.id, model, label, where, cloud: !!config.cloud };
+  }
+
+  /** The backup AIs (AI models → If the model fails), each as the AI it is now (null when it cannot be used now). */
+  backupAgents(): Array<{ providerId: string; model: string; agent: LearningAgent | null }> {
+    return (this.settings.get().ai.fallbacks ?? []).map((f) => {
+      try {
+        const r = this.providers.resolve(f.providerId, f.model || undefined);
+        if (!r.config.enabled) return { ...f, agent: null };
+        return { ...f, agent: { key: `${r.config.id}:${r.model}`, ...this.describeAi(r), persona: null } };
+      } catch {
+        return { ...f, agent: null };
+      }
+    });
+  }
+
   /** The AI the agent uses now, for Learning your computer (null when there is none yet). */
   private learningAgent(): LearningAgent | null {
     const ai = this.settings.get().ai;
@@ -1595,9 +1634,7 @@ export class Kernel {
       return cfg?.type === 'local-runtime' && st.state === 'preparing' ? { key: `${cfg.id}:starter`, providerId: cfg.id, model: '', label: st.modelName, where: 'this computer', cloud: false } : null;
     }
     const { config, model } = r;
-    const near = (url?: string) => /^https?:\/\/(localhost|127\.|\[?::1)/i.test(url ?? '');
-    const where: LearningAgent['where'] = config.cloud ? 'the cloud' : config.type === 'local-runtime' ? 'this computer' : config.type === 'mesh' ? 'another of your computers' : near(config.baseUrl) ? 'this computer' : 'your network';
-    const label = config.type === 'local-runtime' ? (this.models.get(model)?.name ?? model) : model && config.type !== 'mesh' ? `${model} (${config.name})` : config.name;
+    const { where, label } = this.describeAi(r);
     // A new agent is another AI or another persona: either way the AI is learned for again.
     let persona: string | null = null;
     try {

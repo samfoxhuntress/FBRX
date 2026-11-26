@@ -20,6 +20,7 @@ const USER_ONLY = new Set<string>([
   'apps.open',
   'apps.get',
   'learning.start',
+  'learning.practise',
   'vault.reveal',
   'vault.initialize',
   'vault.changeRecovery',
@@ -412,6 +413,15 @@ export function buildCoreApi(k: Kernel): Record<string, Handler> {
       return k.learning.status();
     },
     'learning.background': () => k.learning.background(),
+    'learning.backups': () => {
+      const checks = k.learning.backupChecks();
+      return k.backupAgents().map((b) => ({ providerId: b.providerId, model: b.model, key: b.agent?.key ?? null, label: b.agent?.label ?? null, check: b.agent ? (checks[b.agent.key] ?? null) : null }));
+    },
+    'learning.practise': (p) => {
+      const { key } = z.object({ key: z.string().min(1).max(300) }).parse(p);
+      if (!k.learning.practise(key)) throw new CoreError('NOT_FOUND', 'That backup AI cannot be used now');
+      return k.learning.status();
+    },
     'learning.profile': () => {
       const local = k.learning.profile(false);
       const cloud = k.learning.profile(true);

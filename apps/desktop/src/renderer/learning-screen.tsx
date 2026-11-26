@@ -75,7 +75,18 @@ export function LearningScreen({ status, onClose }: { status: LearningStatus; on
   const pct = ready ? 100 : Math.round(((done + running) / total) * 100);
   const quip = quips[n % quips.length];
   const who = status.agent ? `${status.agent.label}, on ${status.agent.where}` : agentName;
-  const title = ready ? 'Ready for action' : status.reason === 'agent' ? 'Getting your new agent up to speed' : 'Learning your computer';
+  const backup = status.reason === 'backup';
+  const title = backup
+    ? ready
+      ? status.message
+        ? 'Your backup AI needs a look'
+        : 'Your backup is ready'
+      : 'Getting your backup AI ready'
+    : ready
+      ? 'Ready for action'
+      : status.reason === 'agent'
+        ? 'Getting your new agent up to speed'
+        : 'Learning your computer';
   const goOn = () => {
     if (ready) onClose();
     else void call('learning.background').then(onClose, onClose);
@@ -93,7 +104,13 @@ export function LearningScreen({ status, onClose }: { status: LearningStatus; on
           {title}
         </h1>
         <p className="learn-who">
-          {ready ? (status.summary ?? who) : `${agentName}${status.agent?.persona && status.agent.persona !== 'your own' ? ` (${status.agent.persona})` : ''} is getting to know this computer, with ${who}`}
+          {backup
+            ? ready
+              ? (status.summary ?? who)
+              : `${status.agent ? `${status.agent.label}, on ${status.agent.where},` : agentName} is practising taking over from ${status.primary ?? agentName}, in case it ever stops answering`
+            : ready
+              ? (status.summary ?? who)
+              : `${agentName}${status.agent?.persona && status.agent.persona !== 'your own' ? ` (${status.agent.persona})` : ''} is getting to know this computer, with ${who}`}
         </p>
         {!ready && (
           <p key={n} className="learn-quip" aria-live="polite">
@@ -112,7 +129,7 @@ export function LearningScreen({ status, onClose }: { status: LearningStatus; on
         <div className="learn-actions">
           {ready ? (
             <Button variant="primary" icon="sparkles" onClick={onClose} autoFocus>
-              Start chatting
+              {backup ? 'Done' : 'Start chatting'}
             </Button>
           ) : (
             <Button variant="ghost" onClick={goOn}>
@@ -121,7 +138,11 @@ export function LearningScreen({ status, onClose }: { status: LearningStatus; on
           )}
         </div>
         <p className="learn-note">
-          {ready
+          {backup
+            ? ready
+              ? 'AI models → If the model fails shows how each backup did, and tests it again.'
+              : `It answers two practice questions: nothing on the computer is changed, and the tools it asks for are not run.${status.agent?.cloud ? ' The cloud AI counts what it reads, like any question.' : ''}`
+            : ready
             ? `Settings → Agent shows what ${agentName} knows, and learns it again.`
             : status.agent?.cloud
               ? 'Nothing on the computer is changed. The cloud AI gets what it learns without the computer’s name, serial number or addresses.'

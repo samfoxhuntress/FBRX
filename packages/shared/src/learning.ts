@@ -8,7 +8,7 @@ import { normalText } from './personality';
  * profile, and has the model read its instructions and tools once, so the first answer comes ready.
  */
 
-export type LearningStepId = 'agent' | 'hardware' | 'system' | 'network' | 'fbrx' | 'context' | 'warmup';
+export type LearningStepId = 'agent' | 'hardware' | 'system' | 'network' | 'fbrx' | 'context' | 'warmup' | 'knows' | 'handover';
 export type LearningStepState = 'waiting' | 'running' | 'done' | 'skipped' | 'failed';
 
 export interface LearningStep {
@@ -22,7 +22,7 @@ export interface LearningStep {
 /**
  * Why it learns: setup (or the first start of a version that learns), a new AI, an old profile, or the person asked.
  */
-export type LearningReason = 'setup' | 'agent' | 'refresh' | 'manual';
+export type LearningReason = 'setup' | 'agent' | 'refresh' | 'manual' | 'backup';
 
 /** The AI the profile is for. */
 export interface LearningAgent {
@@ -54,6 +54,8 @@ export interface LearningStatus {
   summary: string | null;
   /** What did not work (the AI not ready yet, say), in plain words. */
   message: string | null;
+  /** Getting a backup AI ready: the AI it would take over from. */
+  primary?: string | null;
 }
 
 export const LEARNING_STEPS: ReadonlyArray<{ id: LearningStepId; label: string }> = [
@@ -65,6 +67,49 @@ export const LEARNING_STEPS: ReadonlyArray<{ id: LearningStepId; label: string }
   { id: 'context', label: 'Writing what it learned' },
   { id: 'warmup', label: 'Reading its instructions and tools' },
 ];
+
+/**
+ * Getting a backup AI ready (AI models → If the model fails): the same screen, shorter. The computer is not read again:
+ * the backup gets the profile already learned. It wakes up, reads its instructions and tools, and practises taking over
+ * a task the first AI began.
+ */
+export const BACKUP_STEPS: ReadonlyArray<{ id: LearningStepId; label: string }> = [
+  { id: 'agent', label: 'Waking up the backup AI' },
+  { id: 'knows', label: 'Giving it what FBRX knows about this computer' },
+  { id: 'warmup', label: 'Reading its instructions and tools' },
+  { id: 'handover', label: 'Practising a handover' },
+];
+
+/** Bumped when the handover practice changes, so each backup is practised again. */
+export const BACKUP_CHECK_VERSION = 1;
+
+/** How a backup AI did when it practised taking over. */
+export interface BackupCheck {
+  version: number;
+  key: string;
+  label: string;
+  at: string;
+  /** Ready to take over: it answered, from what the first AI had found, and can use FBRX's tools. */
+  ok: boolean;
+  /** How long it took to finish the task it took over. */
+  seconds: number | null;
+  /** It answered from what the first AI had found, instead of starting over. */
+  kept: boolean;
+  /** It can call FBRX's tools. */
+  tools: boolean;
+  /** What is wrong, in plain words (null when ready). */
+  message: string | null;
+}
+
+/** A backup AI as AI models shows it: the choice, the AI it is now, and how it did when it practised. */
+export interface BackupChoice {
+  providerId: string;
+  model: string;
+  /** The AI it resolves to (provider and model), or null when it cannot be used now. */
+  key: string | null;
+  label: string | null;
+  check: BackupCheck | null;
+}
 
 /** What FBRX read, from which the profile is written (kept on this computer). */
 export interface ComputerFacts {

@@ -1,4 +1,4 @@
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { arch, hostname, platform } from 'node:os';
 import {
   addressAs,
@@ -624,8 +624,8 @@ export class AgentRuntime {
    * (one token at most), runs no tool and keeps nothing in a conversation. A cloud AI is not asked: it would cost the
    * person, and keeps nothing for long.
    */
-  async warmUp(o: { signal: AbortSignal; onReading?: (read: number, of: number) => void }): Promise<'warmed' | 'skipped'> {
-    const { provider, config, model } = this.d.providers.resolve();
+  async warmUp(o: { signal: AbortSignal; onReading?: (read: number, of: number) => void; providerId?: string; model?: string }): Promise<'warmed' | 'skipped'> {
+    const { provider, config, model } = this.d.providers.resolve(o.providerId, o.model || undefined);
     if (config.cloud || this.d.halt?.()) return 'skipped';
     const offline = this.d.settings.get().ai.newChatsOffline;
     const focused = agentFit(config, provider).tools === 'focused';
@@ -640,6 +640,62 @@ export class AgentRuntime {
       if (chunk.type === 'done' && chunk.finishReason === 'error') throw new Error(chunk.message || 'The model did not answer');
     }
     return 'warmed';
+  }
+
+  /**
+   * A backup AI practises taking over (AI models → If the model fails), with the instructions and tools a real handover
+   * sends. First a task the first AI began: the person asked the time, the first AI called the clock, and the clock's
+   * answer (with a code made up for this practice) is there; the backup must finish from it, not start again. Then a
+   * question only a tool can answer: it must call one. Nothing runs (its tool calls are not carried out) and nothing is
+   * kept in a conversation; what a cloud AI reads is counted like any other use.
+   */
+  async rehearseHandover(o: { providerId: string; model: string; signal: AbortSignal; onStatus?: (text: string) => void }): Promise<{ seconds: number; kept: boolean; tools: boolean }> {
+    const { provider, config, model } = this.d.providers.resolve(o.providerId, o.model || undefined);
+    const offline = this.d.settings.get().ai.newChatsOffline;
+    const focused = agentFit(config, provider).tools === 'focused';
+    const available = this.availableTools(undefined, offline);
+    const system = this.systemPrompt(offline, '', !!config.cloud);
+    const usage: TokenUsage = { inputTokens: 0, outputTokens: 0 };
+    const ask = async (messages: ProviderMessage[], question: string) => {
+      const tools = this.wireTools(focused ? shortlistTools(available, [question]) : available, focused);
+      let text = '';
+      let calls = 0;
+      for await (const chunk of provider.chat({ model, messages: [{ role: 'system', content: system }, ...messages], tools, maxTokens: 400, reasoning: false, signal: o.signal })) {
+        if (chunk.type === 'text') text += chunk.delta;
+        else if (chunk.type === 'tool_call') calls++;
+        else if (chunk.type === 'reading' && chunk.of > 0) o.onStatus?.(`Reading the task (${Math.min(100, Math.round((chunk.read / chunk.of) * 100))}%)`);
+        else if (chunk.type === 'usage') {
+          usage.inputTokens += chunk.inputTokens;
+          usage.outputTokens += chunk.outputTokens;
+        } else if (chunk.type === 'done' && chunk.finishReason === 'error') throw new Error(chunk.message || 'It did not answer');
+      }
+      return { text, calls };
+    };
+    try {
+      // 1. Taking over a task half done.
+      o.onStatus?.('Taking over a task the first AI began');
+      const code = randomBytes(2).toString('hex').toUpperCase();
+      const question = 'What time is it on this computer? Tell me the clock code too.';
+      const clock = toWireName('time.now');
+      const started = Date.now();
+      const taken = await ask(
+        [
+          { role: 'user', content: question },
+          { role: 'assistant', content: '', toolCalls: [{ id: 'call_first_ai', name: clock, arguments: {} }] },
+          { role: 'tool', toolCallId: 'call_first_ai', name: clock, content: JSON.stringify({ time: '10:41', clockCode: code }) },
+        ],
+        question,
+      );
+      const seconds = (Date.now() - started) / 1000;
+      const kept = !taken.calls && taken.text.toUpperCase().includes(code);
+      // 2. Using FBRX's tools.
+      o.onStatus?.('Checking it can use FBRX’s tools');
+      const toolQuestion = 'How much free space is left on the drives of this computer?';
+      const used = await ask([{ role: 'user', content: toolQuestion }], toolQuestion);
+      return { seconds, kept, tools: used.calls > 0 };
+    } finally {
+      this.d.usage?.record({ providerId: config.id, model, cloud: !!config.cloud, usage });
+    }
   }
 
   async context(p: { conversationId?: string; providerId?: string; model?: string }): Promise<ContextReading> {

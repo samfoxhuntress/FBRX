@@ -234,29 +234,71 @@ export function RuntimePage() {
  */
 function Fallbacks({ providers, fallbacks, locked }: { providers: ProviderStatus[]; fallbacks: Array<{ providerId: string; model: string }>; locked: boolean }) {
   const { run, busy } = useAction();
+  const backups = useCore('learning.backups', undefined, ['learning.changed', 'settings.changed']);
+  const learning = useCore('learning.status', undefined, ['learning.changed']).data;
   const empty = { providerId: '', model: '' };
   const [rows, setRows] = useState(() => [fallbacks[0] ?? empty, fallbacks[1] ?? empty]);
+  // Saved somewhere else (another window, FBRX Command): the card follows.
+  const savedKey = JSON.stringify(fallbacks);
+  useEffect(() => setRows([fallbacks[0] ?? empty, fallbacks[1] ?? empty]), [savedKey]); // eslint-disable-line react-hooks/exhaustive-deps
   const options = [{ value: '', label: 'None' }, ...providers.filter((p) => p.enabled).map((p) => ({ value: p.id, label: `${p.name}${p.cloud ? ' (cloud)' : ''}` }))];
   const set = (i: number, v: Partial<(typeof rows)[number]>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...v } : r)));
   const changed = JSON.stringify(rows.filter((r) => r.providerId)) !== JSON.stringify(fallbacks);
   return (
     <Card
       title="If the model fails"
-      subtitle="When the model answering stops working (out of credits, overloaded, down, or the connection drops in the middle of an answer), the next one here carries on with the same conversation: your request, every reply and every result so far. An offline chat skips cloud models."
+      subtitle="When the model answering stops working (out of credits, overloaded, down, or the connection drops in the middle of an answer), the next one here carries on with the same conversation: your request, every reply and every result so far. An offline chat skips cloud models. Each choice practises taking over once it is saved."
     >
       <div className="fx-form">
-        {['Second choice', 'Third choice'].map((label, i) => (
-          <div className="fx-row" key={label}>
-            <Field label={label}>
-              <Select value={rows[i]!.providerId} disabled={locked} options={options} onChange={(e) => set(i, { providerId: e.target.value, model: '' })} />
-            </Field>
-            {rows[i]!.providerId ? (
-              <Field label="Model">
-                <ModelPicker providerId={rows[i]!.providerId} value={rows[i]!.model} onChange={(m) => set(i, { model: m })} defaultLabel="Its own model" ariaLabel={`${label} model`} />
-              </Field>
-            ) : null}
-          </div>
-        ))}
+        {['Second choice', 'Third choice'].map((label, i) => {
+          // How the saved choice did when it practised taking over (once it is saved, it practises by itself).
+          const saved = fallbacks[i] && fallbacks[i]!.providerId === rows[i]!.providerId && fallbacks[i]!.model === rows[i]!.model ? backups.data?.[i] : undefined;
+          const check = saved?.check ?? null;
+          const practising = learning?.state === 'learning' && learning.reason === 'backup' && learning.agent?.key === saved?.key;
+          return (
+            <div key={label}>
+              <div className="fx-row">
+                <Field label={label}>
+                  <Select value={rows[i]!.providerId} disabled={locked} options={options} onChange={(e) => set(i, { providerId: e.target.value, model: '' })} />
+                </Field>
+                {rows[i]!.providerId ? (
+                  <Field label="Model">
+                    <ModelPicker providerId={rows[i]!.providerId} value={rows[i]!.model} onChange={(m) => set(i, { model: m })} defaultLabel="Its own model" ariaLabel={`${label} model`} />
+                  </Field>
+                ) : null}
+              </div>
+              {saved && (
+                <div className="fx-row" style={{ gap: 8, alignItems: 'center', marginTop: 6, fontSize: 13 }}>
+                  {!saved.key ? (
+                    <Status tone="warning">Cannot be used now (switched off, blocked or not set up)</Status>
+                  ) : practising ? (
+                    <Status tone="busy">Practising a handover…</Status>
+                  ) : check?.ok ? (
+                    <>
+                      <Status tone="good">Ready to take over</Status>
+                      <span className="fx-muted">
+                        Practised {formatDay(check.at)}: took over a task in {check.seconds} s and kept what was done
+                      </span>
+                    </>
+                  ) : check ? (
+                    <>
+                      <Status tone="warning">Needs a look</Status>
+                      <span className="fx-muted">{check.message}</span>
+                    </>
+                  ) : (
+                    <span className="fx-muted">Not practised yet</span>
+                  )}
+                  <span className="fx-spacer" />
+                  {saved.key && !practising && (
+                    <Button size="sm" icon="refresh" onClick={() => void run(`practise-${i}`, () => call('learning.practise', { key: saved.key! }))}>
+                      {check ? 'Test again' : 'Practise now'}
+                    </Button>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
         <div className="fx-actions">
           <Button variant="primary" disabled={locked || !changed} loading={busy === 'fallbacks'} onClick={() => void run('fallbacks', () => call('settings.update', { patch: { ai: { fallbacks: rows.filter((r) => r.providerId) } } }), 'Saved')}>
             Save

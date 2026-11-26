@@ -27,7 +27,7 @@ import type { Settings } from './settings';
 import type { UpdateChannel } from './constants';
 import type { ReleaseCheck } from './release';
 import type { EditionStatus, Vertical } from './editions';
-import type { LearningStatus } from './learning';
+import type { BackupChoice, LearningStatus } from './learning';
 
 export type DeepPartial<T> = T extends (infer U)[] ? U[] : T extends object ? { [K in keyof T]?: DeepPartial<T[K]> } : T;
 
@@ -836,6 +836,10 @@ export interface CoreMethods extends ExtMethods {
   'learning.start': (p?: { reason?: 'setup' | 'manual' }) => LearningStatus;
   /** Goes on learning without the full screen (the person wants to get on). */
   'learning.background': () => LearningStatus;
+  /** The backup AIs (AI models → If the model fails) and how each did when it practised taking over. */
+  'learning.backups': () => BackupChoice[];
+  /** Has a backup AI practise taking over again, on the full screen. */
+  'learning.practise': (p: { key: string }) => LearningStatus;
   /** What the AI knows about this computer: the profile a model here reads, and the one a cloud AI reads. */
   'learning.profile': () => { learnedAt: string | null; agent: string | null; local: string | null; cloud: string | null };
 

@@ -10,7 +10,7 @@ const agentA: LearningAgent = { key: 'local:qwen', providerId: 'local', model: '
 const inv = { os: { name: 'Linux', version: '6', build: null, arch: 'x64', hostname: 'box', uptimeHours: 1 }, cpu: { name: 'CPU X', cores: 4, threads: 8 }, memory: { totalBytes: 8 * 1024 ** 3, usedBytes: 0, modules: [], slots: null }, system: { manufacturer: null, model: null, serial: null, kind: null, virtual: true }, drives: [], volumes: [], graphics: [], displays: [], network: [], battery: null } as unknown as SystemInventory;
 
 /** A learning service on its own, with what it reads and the AI it gets ready made up. */
-function make(o: Partial<{ agent: LearningAgent | null; enabled: boolean; prepare: LearningDeps['prepare']; inventory: () => Promise<SystemInventory> }> = {}) {
+function make(o: Partial<{ agent: LearningAgent | null; enabled: boolean; prepare: LearningDeps['prepare']; inventory: () => Promise<SystemInventory>; extra: Partial<LearningDeps> }> = {}) {
   const store = new Map<string, unknown>();
   const calls: string[] = [];
   const events = new EventBus();
@@ -31,9 +31,102 @@ function make(o: Partial<{ agent: LearningAgent | null; enabled: boolean; prepar
     },
     prepare: o.prepare ?? (async (a, report) => (calls.push('prepare'), report('Starting'), a)),
     warm: async (report) => (calls.push('warm'), report('Reading its instructions and tools (50%)'), 'warmed'),
+    ...o.extra,
   });
   return { learning, store, calls, seen, setAgent: (a: LearningAgent | null) => (agent = a) };
 }
+
+const backupB: LearningAgent = { key: 'cloudy:big', providerId: 'cloudy', model: 'big', label: 'big (Cloudy)', where: 'the cloud', cloud: true };
+
+describe('Getting a backup AI ready', () => {
+  it('has a new backup practise taking over once, on the screen, without reading the computer again', async () => {
+    let backups: LearningAgent[] = [];
+    let rehearsal = { seconds: 2.34, kept: true, tools: true };
+    const { learning, calls, seen } = make({
+      extra: {
+        backups: () => backups,
+        prepareBackup: async (a, report) => void (calls.push(`prepare ${a.key}`), report('Checking that it answers')),
+        warmBackup: async () => (calls.push('warm backup'), 'skipped'),
+        rehearse: async (a, report) => (calls.push(`rehearse ${a.key}`), report('Taking over a task the first AI began'), rehearsal),
+      },
+    });
+    await learning.start('setup', true);
+    expect(learning.needed()).toBeNull();
+    // A backup is chosen: it practises, after the computer was learned.
+    backups = [backupB];
+    expect(learning.needed()).toMatchObject({ reason: 'backup', screen: true, backup: { key: 'cloudy:big' } });
+    calls.length = 0;
+    seen.length = 0;
+    learning.check();
+    await waitFor(() => learning.status().state === 'ready' && learning.status().reason === 'backup');
+    expect(calls).toEqual(['prepare cloudy:big', 'warm backup', 'rehearse cloudy:big']);
+    const s = learning.status();
+    expect(s).toMatchObject({ reason: 'backup', screen: true, agent: { key: 'cloudy:big' }, primary: 'Qwen3 8B', message: null });
+    expect(s.steps.map((x) => [x.id, x.state])).toEqual([
+      ['agent', 'done'],
+      ['knows', 'done'],
+      ['warmup', 'done'],
+      ['handover', 'done'],
+    ]);
+    expect(s.steps.find((x) => x.id === 'knows')?.detail).toContain('without what identifies the computer');
+    expect(s.summary).toBe('big (Cloudy) is ready to take over from Qwen3 8B: it picked up a task in 2.3 s and kept what was done.');
+    expect(learning.backupChecks()['cloudy:big']).toMatchObject({ ok: true, seconds: 2.3, kept: true, tools: true, message: null });
+    expect(seen.some((x) => x.state === 'learning' && x.steps.some((st) => st.id === 'handover' && st.detail === 'Taking over a task the first AI began'))).toBe(true);
+    // Once is enough; Test again practises again, and says what is wrong in words.
+    expect(learning.needed()).toBeNull();
+    rehearsal = { seconds: 4, kept: false, tools: true };
+    await learning.practise('cloudy:big');
+    expect(learning.status().message).toBe('big (Cloudy) answered, but not from what the first AI had found: when it takes over, it may start the task again.');
+    expect(learning.backupChecks()['cloudy:big']).toMatchObject({ ok: false, kept: false });
+    expect(learning.practise('nobody')).toBeNull();
+  });
+
+  it('says a backup is not ready when it does not answer, and skips what is left', async () => {
+    const { learning } = make({
+      extra: {
+        backups: () => [backupB],
+        prepareBackup: async () => {
+          throw new Error('Invalid API key');
+        },
+        rehearse: async () => ({ seconds: 1, kept: true, tools: true }),
+      },
+    });
+    await learning.start('setup', true);
+    await learning.practise('cloudy:big');
+    const s = learning.status();
+    expect(s.steps.map((x) => x.state)).toEqual(['failed', 'skipped', 'skipped', 'skipped']);
+    expect(s.message).toBe('big (Cloudy) is not ready to take over: Invalid API key');
+    expect(learning.backupChecks()['cloudy:big']).toMatchObject({ ok: false, seconds: null });
+  });
+
+  it('practises a real handover: a backup that finishes from what the first AI found, and one that starts over', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    // A backup that reads the clock's answer in the conversation, and calls a tool when asked about the drives.
+    const good = await mockOpenAI((body) => {
+      const found = (body.messages as Array<{ role: string; content: string }>).find((m) => m.role === 'tool');
+      if (found) return { text: `It is 10:41, clock code ${JSON.parse(found.content).clockCode}.` };
+      return { tool: { name: body.tools[0].function.name, args: {} } };
+    });
+    // One that ignores what was found and asks the clock again.
+    const forgetful = await mockOpenAI((body) => ({ tool: { name: body.tools[0].function.name, args: {} } }));
+    try {
+      kernel.settings.update({ ai: { providers: [...DEFAULT_PROVIDERS, { id: 'good', type: 'openai-compatible', name: 'Good', enabled: true, baseUrl: `${good.url}/v1`, cloud: false }, { id: 'forgetful', type: 'openai-compatible', name: 'Forgetful', enabled: true, baseUrl: `${forgetful.url}/v1`, cloud: false }] } });
+      const signal = new AbortController().signal;
+      const ok = await kernel.agent.rehearseHandover({ providerId: 'good', model: 'g', signal });
+      expect(ok).toMatchObject({ kept: true, tools: true });
+      expect(ok.seconds).toBeGreaterThanOrEqual(0);
+      // What it was handed: the system instructions, the question, the first AI's tool call and what the tool found.
+      const handed = good.requests.find((q) => q.body?.messages)!.body.messages as Array<{ role: string }>;
+      expect(handed.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'tool']);
+      expect(await kernel.agent.rehearseHandover({ providerId: 'forgetful', model: 'f', signal })).toMatchObject({ kept: false, tools: true });
+      // Nothing was kept in a conversation.
+      expect(kernel.conversations.list().length).toBe(0);
+    } finally {
+      await Promise.all([good.close(), forgetful.close()]);
+      await cleanup();
+    }
+  });
+});
 
 describe('Learning your computer', () => {
   it('learns after setup: the AI first, then the computer, then the AI reads it all once', async () => {
