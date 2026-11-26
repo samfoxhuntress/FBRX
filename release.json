@@ -1,53 +1,46 @@
 {
   "product": "FBRX OS",
   "stage": "Beta",
-  "version": "2.5.0",
+  "version": "2.5.1",
   "codename": "Weft",
-  "released": "2026-11-17",
+  "released": "2026-11-26",
   "importance": "recommended",
-  "summary": "FBRX 2.5.0 Beta (Weft): the FBRX apps with FBRX Digger for the advanced network tools, remote screen to your own computers and from FBRX Command, the FBRX directory, Devices in This PC, and the Lab in every edition.",
+  "summary": "FBRX 2.5.1 Beta (Weft): a second and third AI that carry on when the model fails (and practise first), closing the local model safely, alerts with all-clears to webhooks and syslog, copy and paste in the device consoles, and fixes for the Local API on Linux.",
   "notes": [
-    "FBRX apps (Settings → FBRX apps): FBRX Digger is the network toolkit, with Ultra. Scans, consoles, network environments and adapter settings move there; the Network Center keeps the full network check, Wi-Fi, speed, Bluetooth and printers, and its Digger tab opens Digger or offers the download. Fabrix runs the everyday checks itself and offers Open Digger or Get Digger for more.",
-    "Remote screen (Pro): see or use your other computers over FBRX Mesh. The person there says yes each time, unless you let one of your own computers in without asking, and a red bar with Stop shows while it lasts.",
-    "FBRX Command's administrators can see or use a computer's screen for support, with a ticket number and the person's yes; organizations can keep recordings, and the person is told before answering.",
-    "Remote desktop on Linux (Settings → Remote desktop, Pro): sets up the system's own remote desktop so any RDP app can sign in, also on a server with nobody at it.",
-    "The FBRX directory: the same accounts, groups, administrators and password rules on every computer that joins an FBRX Server (Settings → Directory). Changes are applied through the system's own administrator prompt.",
-    "This PC → Devices (Pro): screens, graphics cards, external drives with Eject and a speed test, the USB tree with the speed each device runs at, printers with their ink and toner, and screen brightness, contrast and input.",
-    "The Lab in every edition: in Essentials, Show the Lab (Settings → General) adds the Terminal with the command line and FBRX/1; from Pro the Lab is in the menu with the device consoles. Organizations can turn the Terminal off.",
-    "Learning your computer: after setup and when you pick a new AI model, FBRX gets the AI ready with what it needs to know about this computer, so the first answer comes ready.",
-    "Mesh is in Pro, and Black Hole Edition can be bought by one person, not only an organization.",
-    "Fabrix never sees your saved passwords, keeps the right tools at hand in long chats, says plainly what it cannot do, and can quote Bible verses word for word, offline.",
-    "The Black Hole theme, and Bruce the Goose, who now plays hide-and-seek inside the FBRX window.",
-    "FBRX Shield's threat feed uses abuse.ch's keyed export (a free key, in Credentials); the abuse.ch key is only ever sent to abuse.ch."
+    "If the model fails (AI models): a second and third choice carry on with the same conversation when the model stops answering (out of credits, overloaded, down). An offline chat never falls back to a cloud model.",
+    "Each backup AI practises taking over once it is saved: it must pick up a task the first AI began and use FBRX's tools. AI models shows Ready to take over or Needs a look, with Test again.",
+    "Closing the local model: switching models, Stop and quitting wait until the old model is gone, a model still loading is stopped too, and one left behind is stopped before the next loads. The Closing window shows how far it got, with Stop it now, and what to try if it is stuck.",
+    "Linux: FBRX reaches the keyring that keeps your saved credentials even when another app or a terminal starts it, so the Local API starts; Settings → Local API says why when it does not.",
+    "AI apps: when an app cancels or stops waiting, FBRX stops the task it asked for, so the model is free again. Hermes Agent's setup can be brought over (persona, memories, skills, MCP servers), and AI coordination connects OpenAI Codex CLI.",
+    "Alerts: a problem is said once, then its all-clear when it is over; webhooks in the FBRX Alert format, signed, and syslog over UDP, TCP or TLS for a log server or SIEM (Alerts → Delivery).",
+    "Device consoles (FBRX Digger): copy and paste as in other terminals, and the console fits the window and scrolls its own lines."
   ],
-  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.5.0.zip",
-  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.5.0",
+  "download": "https://github.com/samfoxhuntress/FBRX/archive/refs/tags/v2.5.1.zip",
+  "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.5.1",
   "server": {
-    "version": "1.4.5",
-    "released": "2026-11-25",
-    "summary": "FBRX Server 1.4.5: Bridge a port from the console, FBRX Time copies off the server, Ubuntu quick downloads in the ISO library, thin or thick VM disks, and long pastes into a VM that arrive as typed.",
+    "version": "1.4.6",
+    "released": "2026-11-26",
+    "summary": "FBRX Server 1.4.6: alerts for the server and its roles by e-mail, a signed webhook or syslog, each problem said once and then its all-clear, and a Terminal tab that fits the window.",
     "notes": [
-      "Networks → Bridge a port… (administrators): makes bridge br0 on one of the server's ports (its DHCP or fixed address moves to the bridge, or a spare card), says what an outer hypervisor (VMware, Hyper-V, VirtualBox) must allow, and Restart now finishes it.",
-      "FBRX Time: a copy of each new image off the server, to a NAS share, an NFS export or a USB drive, tested before it is saved and changeable any time.",
-      "ISO library: quick downloads of Ubuntu 26.04 LTS Desktop and Server, the newest point release, checked against Ubuntu's checksums.",
-      "New VMs: thin or thick provisioned disks.",
-      "Long pastes into a VM's console arrive as typed.",
+      "Alerts (a new page in the console): what goes wrong on the server's drives, FBRX Gate, MiniDome and FBRX Time, going on now and recently.",
+      "Where alerts go (administrators): e-mail through your mail server, a webhook signed with FBRX-Signature, and syslog over UDP, TCP or TLS, each from the severity you choose; an all-clear goes wherever its alert went.",
+      "The Terminal tab fits the window and scrolls its own lines.",
       "From 1.1: sudo fbrx-server update check, then sudo fbrx-server update commit."
     ],
-    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/server-v1.4.5/fbrx-server-1.4.5.tar.gz",
-    "sha256": "726212ea8e0e91788dd69984ae12827f21068aa5e2dd15e6ee451f3ed839b464",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/server-v1.4.5"
+    "bundle": "https://github.com/samfoxhuntress/FBRX/releases/download/v2.5.1/fbrx-server-1.4.6.tar.gz",
+    "sha256": "1bf78075242aeed4e8bbccb6b8cb9153f192ef5f9ee4bbfa183e2951a04531da",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/v2.5.1"
   },
   "digger": {
-    "version": "1.3.0",
-    "released": "2026-11-17",
-    "summary": "FBRX Digger 1.3.0: the network toolkit of the FBRX apps, with Ultra, taking over FBRX Endpoint's advanced network tools and its saved connections.",
+    "version": "1.3.1",
+    "released": "2026-11-26",
+    "summary": "FBRX Digger 1.3.1: copy and paste in the device consoles, consoles that fit the window, and the same edition as FBRX Endpoint during support.",
     "notes": [
-      "Digger runs at the edition FBRX Endpoint's license gives this computer, and needs Ultra.",
-      "Your saved connections and network environments come over from FBRX Endpoint once, without passwords or keys.",
-      "Fabrix in Digger has the scan, console and environment tools that moved here."
+      "Device consoles: select and press Ctrl+C to copy; Ctrl+V, Ctrl+Shift+V, Shift+Insert or right-click to paste. The console fits the window and scrolls its own lines.",
+      "While FBRX Endpoint is in support mode, Digger runs at the same edition until support ends.",
+      "Digger raises only network alerts; the computer's own health alerts come from FBRX Endpoint."
     ],
-    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.3.0",
-    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.3.0"
+    "download": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.3.1",
+    "page": "https://github.com/samfoxhuntress/FBRX/releases/tag/digger-v1.3.1"
   }
 }
