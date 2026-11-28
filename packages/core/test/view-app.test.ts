@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest';
+import { mkdirSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import WebSocket from 'ws';
 import { FBRX_APPS, VIEW_PAGES, type ViewOpen } from '@fbrx/shared';
-import { makeKernel, tempDir, USER } from './helpers';
+import { makeKernel, tempDir, USER, waitFor } from './helpers';
 import { decodeRDCleanPathResponse, encodeRDCleanPathRequest } from '../src/view/rdcleanpath';
 import { parseConnectionFile } from '../src/view/imports';
 
@@ -96,6 +98,26 @@ describe('FBRX View', () => {
     expect(await kernel.call('view.snippets', {}, USER)).toEqual([{ id: list[0]!.id, name: 'Interfaces', text: 'show ip interface brief' }]);
     await expect(kernel.call('view.saveSnippet', { name: 'x', text: 'reboot' }, { origin: 'agent', actor: 'agent' })).rejects.toBeTruthy();
     expect(await kernel.call('view.removeSnippet', { id: list[0]!.id }, USER)).toEqual([]);
+  });
+
+  it('takes a connection FBRX Endpoint hands over ("Open in View"), once and only while it is fresh', async () => {
+    const apps = tempDir('fbrx-apps-');
+    const endpointDir = join(apps, 'FBRX OS');
+    mkdirSync(endpointDir);
+    const exec = join(apps, 'FBRX Endpoint.exe');
+    writeFileSync(exec, '');
+    writeFileSync(join(endpointDir, 'app.json'), JSON.stringify({ id: 'os', version: '2.6.0', exec, at: new Date().toISOString() }));
+    const request = (id: string, at: Date) => writeFileSync(join(endpointDir, 'view-request.json'), JSON.stringify({ id, at: at.toISOString(), protocol: 'rdp', host: '10.0.0.5', username: 'sam', label: 'Front desk' }));
+    request('vr_old', new Date(Date.now() - 10 * 60_000));
+    const { kernel, cleanup } = await makeKernel({ platform: { flavor: 'view', endpointDataDir: endpointDir, appsDir: apps, shell: 'desktop' } });
+    cleanups.push(cleanup);
+    expect(kernel.takeViewRequest()).toBeNull();
+    request('vr_1', new Date());
+    expect(await waitFor(() => kernel.takeViewRequest(), 6000)).toEqual({ protocol: 'rdp', host: '10.0.0.5', username: 'sam', label: 'Front desk' });
+    // Once.
+    await new Promise((r) => setTimeout(r, 2500));
+    expect(kernel.takeViewRequest()).toBeNull();
+    expect(kernel.audit.query({ limit: 50 }).some((e) => e.action === 'view.handedOver')).toBe(true);
   });
 
   it('is FBRX View’s alone', async () => {

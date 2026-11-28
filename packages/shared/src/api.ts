@@ -5,6 +5,7 @@
  * authenticated Local API (HTTP + WebSocket), and the fleet agent maps remote commands onto it. Every
  * method is validated and audited by the core before it runs.
  */
+import type { ViewRequest } from './view';
 import type { LicenseStatus } from './license';
 import type { AppId, AppStatus } from './apps';
 import type { AccountDevice, AccountStatus, InvitationPreview, LocalAccountStatus } from './accounts';
@@ -861,6 +862,8 @@ export interface CoreMethods extends ExtMethods {
   'apps.list': () => AppStatus[];
   /** Opens an installed FBRX app (the person at the computer only). */
   'apps.open': (p: { id: AppId }) => { opened: AppId };
+  /** Opens a connection in FBRX View (installed here): View opens, with its connect dialog filled in. */
+  'apps.openInView': (p: ViewRequest) => { opened: AppId };
   /** Downloads the app's installer for this computer from its GitHub release, checks it and opens it. */
   'apps.get': (p: { id: AppId }) => { file: string; name: string };
   'learning.status': () => LearningStatus;
@@ -1084,6 +1087,8 @@ export interface CoreEvents extends ExtEvents {
   'browser.changed': BrowserState;
   'updates.changed': UpdateStatus;
   'release.changed': ReleaseCheck;
+  /** FBRX View: FBRX Endpoint or FBRX Digger asked it to open a connection. */
+  'view.request': ViewRequest;
   notification: NotificationEvent;
 }
 export type CoreEventName = keyof CoreEvents;

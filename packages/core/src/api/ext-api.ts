@@ -879,6 +879,7 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       k.audit.append({ category: 'network', action: 'view.open', actor: 'user', target: `${q.protocol}://${q.host}:${port}`, outcome: 'success', details: { username: username || null, savedLogin: !!saved } });
       return { protocol: q.protocol, url: t.url, token: t.token, destination: t.destination, username: dom ? dom[2]! : username, domain: dom ? dom[1]! : null, password: q.password ?? saved ?? '', saved: !!saved, bookmark };
     },
+    'view.pending': () => k.takeViewRequest(),
     'view.snippets': () => k.meta.get<ViewSnippet[]>('view.snippets') ?? [],
     'view.saveSnippet': (p) => {
       const q = z.object({ id: z.string().max(40).optional(), name: z.string().trim().min(1).max(80), text: z.string().min(1).max(4000) }).parse(p);

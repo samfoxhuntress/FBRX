@@ -20,6 +20,9 @@ usual one (3389 for remote desktop, 5900 for screen sharing, 22 for SSH, 23 for 
 Each connection is kept in the list on the left; click one to connect again. **Find a connection** searches by name,
 address, user or kind.
 
+From FBRX Endpoint or FBRX Digger, **Open in FBRX View** on a remote desktop or screen sharing connection opens View
+with that connection filled in; you connect from there.
+
 **Import** (the arrow beside *New*) brings in connections from a Remote Desktop file (`.rdp`) or a Remote Desktop
 Manager export (`.rdm`, XML): remote desktop, VNC, SSH and Telnet entries, with their names, addresses, ports and user
 names (and the folder they were in, in the connection's notes). Passwords are never imported: View asks once, then keeps

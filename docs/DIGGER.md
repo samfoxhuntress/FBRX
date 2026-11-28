@@ -22,7 +22,8 @@ network tool FBRX has and nothing else. It runs on Windows, macOS and Linux, bes
 * **Remote desktop and screen sharing**: a computer's desktop over RDP, or its screen over VNC, from a scan (when it
   has port 3389 or 5900 open) or *New connection*. It opens in this computer's own viewer (Remote Desktop Connection
   on Windows, Screen Sharing on a Mac, FreeRDP, Remmina or a VNC viewer on Linux), which asks for the password: Digger
-  keeps none. They go in Saved connections like the consoles.
+  keeps none. They go in Saved connections like the consoles. With **FBRX View** installed (it comes with Ultra too),
+  **Open in FBRX View** draws it inside View instead, with its login kept in View's vault (see [VIEW.md](VIEW.md)).
 * **Terminal**: this computer's command line (PowerShell, Command Prompt or the shell) with the reference panel, and
   the device consoles. FBRX Endpoint keeps a Terminal of its own in every edition (the command line and FBRX/1, and
   from Pro the device consoles), for when Digger is not there.
@@ -105,6 +106,7 @@ desktop** (RDP) and **Screen sharing** (VNC) next to SSH and Telnet. FBRX opens 
 address and user name filled in: Remote Desktop Connection on Windows, a remote desktop app or Screen Sharing on a
 Mac, FreeRDP, Remmina or a VNC viewer on Linux. The viewer asks for the password; FBRX keeps none. When no viewer is
 installed, FBRX says what to install. The connection is kept in Saved connections, where one click opens it again.
+With FBRX View installed, **Open in FBRX View** draws the remote screen inside View instead.
 
 ### Device consoles
 

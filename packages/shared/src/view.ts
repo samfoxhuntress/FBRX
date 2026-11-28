@@ -13,6 +13,18 @@ export const VIEW_VERSION = '1.0.0';
 /** The pages View shows: its connections and sessions, its settings, and the chat while FBRX Endpoint's AI is there. */
 export const VIEW_PAGES = ['view', 'settings', 'agent'] as const;
 
+/** A connection FBRX Endpoint or FBRX Digger hands to FBRX View ("Open in View"): where, and who as, never a password. */
+export interface ViewRequest {
+  protocol: 'rdp' | 'vnc' | 'ssh' | 'telnet';
+  host: string;
+  port?: number;
+  username?: string;
+  label?: string;
+}
+
+/** The file an app writes in its own data folder for FBRX View to pick up. */
+export const VIEW_REQUEST_FILE = 'view-request.json';
+
 /** The settings tabs that apply to View. */
 export const VIEW_SETTINGS = ['general', 'appearance', 'updates', 'logs'] as const;
 

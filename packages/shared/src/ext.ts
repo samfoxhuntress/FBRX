@@ -1,3 +1,4 @@
+import type { ViewRequest } from './view';
 import type { VpnCheck, VpnProfile, VpnStatus } from './vpn';
 import type { TrophyState } from './fun';
 import type { VoiceDownloadId } from './settings';
@@ -1522,6 +1523,8 @@ export interface ExtMethods {
    * or the one saved in the vault. The person at the computer only: never the AI.
    */
   'view.open': (p: { protocol: RemoteProtocol; host: string; port?: number; username?: string; password?: string; label?: string }) => ViewOpen;
+  /** FBRX View's window: the connection FBRX Endpoint or FBRX Digger handed over since it last asked, if any. */
+  'view.pending': () => ViewRequest | null;
   /** FBRX View's quick commands: saved commands typed into a console with one click (without Enter). */
   'view.snippets': () => ViewSnippet[];
   'view.saveSnippet': (p: { id?: string; name: string; text: string }) => ViewSnippet[];

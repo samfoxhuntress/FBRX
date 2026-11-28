@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ConnectionProtocol, ConsoleBookmark, ConsoleSession, RemoteProtocol, ViewOpen } from '@fbrx/shared';
 import { Button, Callout, Empty, Field, Icons, Input, Modal, Status, Toggle, timeAgo, useToast, type IconName } from '@fbrx/ui';
-import { call } from '../client';
+import { call, onEvent } from '../client';
 import { ConnectDialog, ConsoleScreen, KIND, KindSwitch, useFillHeight, type ConnectTarget } from '../consoles';
 import { useConsoleSessions, useCore } from '../hooks';
 import { askAgent } from '../widgets';
@@ -25,6 +25,19 @@ export function ViewPage() {
   const [filter, setFilter] = useState('');
   const toast = useToast();
   const fileRef = useRef<HTMLInputElement>(null);
+
+  // A connection FBRX Endpoint or FBRX Digger handed over ("Open in View"): its connect dialog, filled in.
+  useEffect(() => {
+    const show = (r: { protocol: ConnectionProtocol; host: string; port?: number; username?: string; label?: string } | null) =>
+      r && setConnect({ host: r.host, protocol: r.protocol, port: r.port, username: r.username ?? null, name: r.label ?? null });
+    void call('view.pending').then(show).catch(() => undefined);
+    return onEvent('view.request', (r) => {
+      void call('view.pending').catch(() => undefined);
+      show(r);
+      bookmarks.reload();
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /** A Remote Desktop file (.rdp) or a Remote Desktop Manager export: its connections, never its passwords. */
   const importFile = async (f: File) => {

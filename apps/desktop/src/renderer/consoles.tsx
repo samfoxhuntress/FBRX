@@ -99,6 +99,22 @@ function RemoteDialog({ target, protocol, onKind, onClose }: { target?: ConnectT
   const viewers = useCore('remote.viewers');
   const v = viewers.data?.find((x) => x.protocol === protocol);
   const toast = useToast();
+  // FBRX View, when it is installed here and the edition has it: the same connection drawn inside an app.
+  const apps = useCore('apps.list');
+  const view = apps.data?.find((a) => a.id === 'view' && a.installed && a.unlocked);
+  const inView = async () => {
+    setBusy(true);
+    setError(null);
+    try {
+      await call('apps.openInView', { protocol, host: host.trim(), port: Number(port) || undefined, username: user.trim() || undefined, label: target?.name ?? undefined });
+      toast.success('Opened in FBRX View', 'Its connect dialog is filled in there.');
+      onClose();
+    } catch (e) {
+      setError((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
   const [host, setHost] = useState(target?.host ?? '');
   const [port, setPort] = useState(target?.port && target.port !== KIND[protocol].port ? String(target.port) : '');
   const [user, setUser] = useState(target?.username ?? '');
@@ -134,6 +150,11 @@ function RemoteDialog({ target, protocol, onKind, onClose }: { target?: ConnectT
           <Button variant="ghost" onClick={onClose}>
             Cancel
           </Button>
+          {view && (
+            <Button icon="monitor" loading={busy} disabled={!host.trim()} onClick={() => void inView()} title="Draw it inside FBRX View, with the login kept in its vault">
+              Open in FBRX View
+            </Button>
+          )}
           <Button variant="primary" icon="external" loading={busy} disabled={!host.trim() || !v?.available} onClick={() => void open()}>
             Open
           </Button>

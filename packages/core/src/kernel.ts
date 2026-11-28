@@ -46,6 +46,8 @@ import {
   type AgentAdoptChoice,
   type AgentAdoptResult,
   type AgentSetupPreview,
+  VIEW_REQUEST_FILE,
+  type ViewRequest,
 } from '@fbrx/shared';
 import { AppRegistry, HANDOVER_FILE } from './apps/app-registry';
 import { ComputerLearning } from './ai/learning';
@@ -1608,6 +1610,8 @@ export class Kernel {
           this.log.warn('Could not bring saved connections over from FBRX Endpoint', { error: errorMessage(err) });
         }
       }
+      // FBRX View: the connections FBRX Endpoint and FBRX Digger hand over ("Open in View").
+      if (this.view) this.watchViewRequests();
     }
     // FBRX Digger and FBRX View leave out what is FBRX Endpoint's (its AI, messages, organization, account, support,
     // automations).
@@ -1854,6 +1858,7 @@ export class Kernel {
     this.screen.stop();
     await this.diggerLink?.stop();
     await this.viewProxyInstance?.close();
+    if (this.viewRequestTimer) clearInterval(this.viewRequestTimer);
     this.release.stop();
     this.account.stop();
     this.support.stop();
@@ -2398,6 +2403,48 @@ export class Kernel {
       this.audit.append({ category: 'network', action: 'apps.adopted', actor: this.view ? 'view' : 'digger', outcome: 'success', details: { connections, environments } });
     }
     return { connections, environments };
+  }
+
+  private viewRequestTimer: NodeJS.Timeout | null = null;
+  private viewPending: ViewRequest | null = null;
+
+  /**
+   * FBRX View: looks every two seconds for a connection FBRX Endpoint or FBRX Digger handed over (a file in their
+   * data folder, VIEW_REQUEST_FILE), each once and only a fresh one. View fills in its connect dialog with it: the
+   * person still connects.
+   */
+  private watchViewRequests(): void {
+    const seen = new Set<string>();
+    const look = () => {
+      for (const app of ['os', 'digger'] as const) {
+        const r = this.apps.fromApp(app, VIEW_REQUEST_FILE);
+        if (!r || typeof r.id !== 'string' || seen.has(r.id)) continue;
+        seen.add(r.id);
+        if (!(Date.now() - Date.parse(String(r.at)) < 120_000)) continue;
+        const protocol = r.protocol;
+        if ((protocol !== 'rdp' && protocol !== 'vnc' && protocol !== 'ssh' && protocol !== 'telnet') || typeof r.host !== 'string' || !/^[A-Za-z0-9.:_-]{1,253}$/.test(r.host)) continue;
+        const req: ViewRequest = {
+          protocol,
+          host: r.host,
+          ...(typeof r.port === 'number' && Number.isInteger(r.port) && r.port > 0 && r.port < 65536 ? { port: r.port } : {}),
+          ...(typeof r.username === 'string' && r.username.length <= 128 ? { username: r.username } : {}),
+          ...(typeof r.label === 'string' ? { label: r.label.slice(0, 120) } : {}),
+        };
+        this.viewPending = req;
+        this.events.emit('view.request', req);
+        this.audit.append({ category: 'network', action: 'view.handedOver', actor: app === 'os' ? 'endpoint' : 'digger', target: `${req.protocol}://${req.host}`, outcome: 'success' });
+      }
+    };
+    look();
+    this.viewRequestTimer = setInterval(look, 2000);
+    this.viewRequestTimer.unref?.();
+  }
+
+  /** FBRX View's window: the connection handed over since it last asked (once). */
+  takeViewRequest(): ViewRequest | null {
+    const r = this.viewPending;
+    this.viewPending = null;
+    return r;
   }
 
   /** FBRX View's proxy: every connection, refusal and end goes in the audit log. */

@@ -90,9 +90,9 @@ export class AppRegistry {
     }
   }
 
-  /** FBRX Endpoint: writes a file in its data folder for the other FBRX apps on this computer (its user's alone). */
+  /** Writes a file in this app's data folder for the other FBRX apps on this computer (its user's alone). */
   share(file: string, data: unknown): void {
-    if (this.d.self !== 'os' || !this.d.appsDir) return;
+    if (!this.d.appsDir) return;
     try {
       writeFileSync(join(this.d.dataDir, file), `${JSON.stringify(data, null, 2)}\n`, { mode: 0o600 });
     } catch (err) {
@@ -102,9 +102,14 @@ export class AppRegistry {
 
   /** Another app: a file FBRX Endpoint shared, when Endpoint is installed on this computer (null otherwise). */
   fromEndpoint(file: string): Record<string, unknown> | null {
-    if (this.d.self === 'os' || !this.d.appsDir || !this.presence('os')) return null;
+    return this.fromApp('os', file);
+  }
+
+  /** A file another FBRX app installed on this computer shared (null when there is none). */
+  fromApp(id: AppId, file: string): Record<string, unknown> | null {
+    if (this.d.self === id || !this.d.appsDir || !this.presence(id)) return null;
     try {
-      const raw = JSON.parse(readFileSync(join(this.d.appsDir, FBRX_APPS.os.folder, file), 'utf8')) as unknown;
+      const raw = JSON.parse(readFileSync(join(this.d.appsDir, FBRX_APPS[id].folder, file), 'utf8')) as unknown;
       return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : null;
     } catch {
       return null;
