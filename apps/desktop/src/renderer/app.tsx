@@ -549,8 +549,9 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const nav: NavItem[] = SIDE_APP
     ? SIDE.pages.flatMap((id) => {
         const item = byId.get(id);
-        // The chat opens from the top bar's Ask button, while FBRX Endpoint's AI is there.
-        if (!item || id === 'agent') return [];
+        // The chat opens from the top bar's Ask button, while FBRX Endpoint's AI is there. FBRX View shows FBRX Server
+        // with Black Hole Edition.
+        if (!item || id === 'agent' || (VIEW && item.need && !atLeast(tier, item.need))) return [];
         const { need: _n, ...rest } = item;
         return [{ ...rest, section: SIDE.section }];
       })
@@ -633,6 +634,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     // AI is there to answer it.
     if (VIEW) {
       if (route === 'settings') return <SettingsPage onRerunSetup={() => setForceOnboarding(true)} />;
+      if (route === 'server') return blackhole ? <ServerPage /> : <UltraOnly need="blackhole" title="FBRX Server" what="Your FBRX Servers and their consoles, in View." />;
       if (route === 'agent' && diggerAi) return <AgentPage agentName={agentName} />;
       return <ViewPage />;
     }

@@ -87,7 +87,8 @@ export const FBRX_APPS: Record<AppId, FbrxAppInfo> = {
     built: true,
     pages: VIEW_PAGES,
     settings: VIEW_SETTINGS,
-    takes: [],
+    // FBRX Server moves into View (Black Hole Edition); Endpoint's page points there and keeps working meanwhile.
+    takes: ['server'],
     tag: 'view-v',
     icon: 'view-icon.png',
   },

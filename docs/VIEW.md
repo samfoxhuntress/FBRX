@@ -57,12 +57,17 @@ connection in the list means its login is saved. Passwords are never shown to Fa
 * Every connection, refusal and end is in the audit log, with the address and the amount of data, never the
   password.
 
+## FBRX Server
+
+With **Black Hole Edition**, View has the **FBRX Server** page: your servers (their console and a command line, at home
+or through FBRX VPN), letting Fabrix look at one, and setting up a new one. The servers saved in FBRX Endpoint come
+along the first time View starts, with the certificate you trusted for each (sign in to each console again; Fabrix's
+access to a server is set up again from View). FBRX Endpoint's FBRX Server page points to View, and keeps working
+meanwhile. The installer ISO and bundle stay with FBRX Endpoint's installers for now.
+
 ## Fabrix in View
 
 With FBRX Endpoint running on the same computer, View's Fabrix thinks with Endpoint's AI (nothing leaves the computer
 for it). **Ask** in the top bar opens the chat; **Ask Fabrix** on a console tab shares that console with it, so it can
 read what is on screen and help.
 
-## Not there yet
-
-FBRX Server inside View (Black Hole Edition) is coming in 2.6.0.

@@ -1601,7 +1601,12 @@ export class Kernel {
         this.apps.shareLicense(this.license.shared());
         this.disposers.push(this.events.on('license.changed', () => this.apps.shareLicense(this.license.shared())));
         // Its saved connections and network environments go to FBRX Digger (2.5.0), without passwords or keys.
-        this.apps.share(HANDOVER_FILE, { connections: this.consoles.bookmarks().map(({ passwordSaved: _p, ...b }) => b), environments: this.netenv.exportSaved() });
+        // Its saved FBRX Servers go to FBRX View (2.6.0): where they are and the certificate trusted, no sign-ins.
+        this.apps.share(HANDOVER_FILE, {
+          connections: this.consoles.bookmarks().map(({ passwordSaved: _p, ...b }) => b),
+          environments: this.netenv.exportSaved(),
+          servers: this.servers.list().map((s) => ({ name: s.name, host: s.host, port: s.port, notes: s.notes, fingerprint: s.fingerprint })),
+        });
       } else {
         // Never in the way of Digger starting: what could not be taken in stays in Endpoint.
         try {
@@ -2395,8 +2400,24 @@ export class Kernel {
       seen.add(k);
       return true;
     });
-    // Network environments are FBRX Digger's; FBRX View takes the saved connections only.
+    // Network environments are FBRX Digger's; FBRX View takes the saved connections and the FBRX Servers.
     const environments = this.digger ? this.netenv.adopt(envs) : 0;
+    if (this.view) {
+      const known = new Set(this.servers.list().map((s) => `server|${s.host}|${s.port}`));
+      for (const raw of Array.isArray(h.servers) ? h.servers.slice(0, 100) : []) {
+        const s = (raw ?? {}) as Record<string, unknown>;
+        const k = `server|${String(s.host)}|${String(s.port)}`;
+        if (seen.has(k) || known.has(k) || typeof s.host !== 'string') continue;
+        seen.add(k);
+        try {
+          const saved = this.servers.save({ name: text(s.name), address: s.host, port: typeof s.port === 'number' ? s.port : undefined, notes: text(s.notes) });
+          if (typeof s.fingerprint === 'string') this.servers.trust(saved.id, s.fingerprint);
+          connections++;
+        } catch {
+          // Not a valid server: left out.
+        }
+      }
+    }
     this.meta.set('apps.adopted', [...seen].slice(-2000));
     if (connections || environments) {
       this.log.info('Brought over from FBRX Endpoint', { connections, environments });

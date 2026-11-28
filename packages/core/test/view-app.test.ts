@@ -15,7 +15,8 @@ describe('FBRX View', () => {
 
   it('is the app family’s remote desktop app, at Ultra', () => {
     expect(FBRX_APPS.view).toMatchObject({ name: 'FBRX View', edition: 'ultra', built: true, tag: 'view-v' });
-    expect(VIEW_PAGES).toEqual(['view', 'settings', 'agent']);
+    expect(VIEW_PAGES).toEqual(['view', 'server', 'settings', 'agent']);
+    expect(FBRX_APPS.view.takes).toEqual(['server']);
   });
 
   it('runs none of Endpoint’s background work, and its AI has the consoles’ tools but no network tools', async () => {
@@ -109,9 +110,13 @@ describe('FBRX View', () => {
     writeFileSync(join(endpointDir, 'app.json'), JSON.stringify({ id: 'os', version: '2.6.0', exec, at: new Date().toISOString() }));
     const request = (id: string, at: Date) => writeFileSync(join(endpointDir, 'view-request.json'), JSON.stringify({ id, at: at.toISOString(), protocol: 'rdp', host: '10.0.0.5', username: 'sam', label: 'Front desk' }));
     request('vr_old', new Date(Date.now() - 10 * 60_000));
+    // Endpoint's saved FBRX Servers come along: where, and the certificate trusted.
+    const fp = Array.from({ length: 32 }, (_, i) => (i * 7).toString(16).padStart(2, '0').toUpperCase()).join(':');
+    writeFileSync(join(endpointDir, 'apps-handover.json'), JSON.stringify({ connections: [], environments: [], servers: [{ name: 'Office server', host: '192.168.1.20', port: 9443, notes: '', fingerprint: fp }, { host: 'not a host!' }] }));
     const { kernel, cleanup } = await makeKernel({ platform: { flavor: 'view', endpointDataDir: endpointDir, appsDir: apps, shell: 'desktop' } });
     cleanups.push(cleanup);
     expect(kernel.takeViewRequest()).toBeNull();
+    expect(kernel.servers.list()).toEqual([expect.objectContaining({ name: 'Office server', host: '192.168.1.20', port: 9443, fingerprint: fp })]);
     request('vr_1', new Date());
     expect(await waitFor(() => kernel.takeViewRequest(), 6000)).toEqual({ protocol: 'rdp', host: '10.0.0.5', username: 'sam', label: 'Front desk' });
     // Once.

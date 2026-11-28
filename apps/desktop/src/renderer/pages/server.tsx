@@ -2,7 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { inCidr, isIPv4, SERVER_BROWSER_PARTITION, type SavedServer, type ServerCheck, type ServerResourceFile, type ServerSuggestion } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Icons, InfoTip, Input, Markdown, Modal, Page, Spinner, Status, TextArea, formatBytes, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call } from '../client';
-import { navigate, POPOUT, routeArg } from '../app';
+import { navigate, POPOUT, routeArg, SIDE_APP } from '../app';
+import { AppHandoffCard } from '../apps';
 import { ConnectDialog, ConsoleScreen } from '../consoles';
 import { useAgentName, useConsoleSessions, useCore } from '../hooks';
 
@@ -41,6 +42,8 @@ export function ServerPage() {
   }
   return (
     <Page title="FBRX Server" description="FBRX OS for servers: any 64-bit PC or server with Debian 13 underneath, running FBRX Virtual and the roles you pick (AI, gate, MiniDome). Reach your servers here (their console and a command line, at home or through FBRX VPN), or set up a new one.">
+      {/* FBRX Server moves into FBRX View (2.6.0): Endpoint says so, and its page keeps working meanwhile. */}
+      {!SIDE_APP && <AppHandoffCard page="server" note="FBRX Server moves into FBRX View, beside your remote desktops; your servers come along." />}
       <YourServers servers={saved.data?.servers ?? null} suggestions={saved.data?.suggestions ?? []} reload={() => void saved.reload()} />
       <SetUp />
     </Page>
@@ -572,7 +575,11 @@ function SetUp() {
       {!r.available ? (
         <Card title="Not included in this copy">
           <p className="fx-secondary">
-            This FBRX was built without the FBRX Server resources. Get the installer ISO from the <b>FBRX Server ISO</b> workflow in GitHub Actions, or install FBRX again with that download in your Downloads folder and it comes along.
+            {SIDE_APP ? (
+              <>The installer ISO, the bundle for a Debian 13 server and the guides come with FBRX Endpoint&rsquo;s installers for now: open its FBRX Server page to set up a new server. Your servers are here.</>
+            ) : (
+              <>This FBRX was built without the FBRX Server resources. Get the installer ISO from the <b>FBRX Server ISO</b> workflow in GitHub Actions, or install FBRX again with that download in your Downloads folder and it comes along.</>
+            )}
           </p>
         </Card>
       ) : (
