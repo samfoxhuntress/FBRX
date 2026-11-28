@@ -82,7 +82,7 @@ export function fbrxAlertDuration(a: Pick<FbrxAlert, 'startedAt' | 'endedAt'>): 
   return h < 48 ? `${h} hours` : `${Math.round(h / 24)} days`;
 }
 
-const FBRX_ALERT_ROLES: Record<string, string> = { gate: 'FBRX Gate', minidome: 'MiniDome', time: 'FBRX Time', files: 'File server', directory: 'FBRX directory' };
+const FBRX_ALERT_ROLES: Record<string, string> = { gate: 'FBRX Gate', minidome: 'MiniDome', time: 'FBRX Time', files: 'File server', directory: 'FBRX directory', ha: 'High availability' };
 
 /** A server role as people read it ("gate" → "FBRX Gate"); a role without a name is shown as it came. */
 export function fbrxAlertRoleName(role: string): string {

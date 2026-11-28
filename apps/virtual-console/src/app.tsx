@@ -1,7 +1,7 @@
 import { Suspense, lazy, useEffect, useState } from 'react';
-import { Button, ErrorBoundary, Icons, Shell, Spinner, type NavItem } from '@fbrx/ui';
+import { Button, Callout, ErrorBoundary, Icons, Shell, Spinner, type NavItem } from '@fbrx/ui';
 import { api, session, setUnauthorizedHandler } from './api';
-import { AppStateProvider, useApp, useRoute, type Me } from './state';
+import { AppStateProvider, useApp, usePoll, useRoute, type Me } from './state';
 import { LoginPage, SetupPage } from './pages/login';
 import { OverviewPage } from './pages/overview';
 import { VmsPage } from './pages/vms';
@@ -27,6 +27,8 @@ import { FilesPage } from './pages/files';
 import { DirectoryPage } from './pages/directory';
 import { RolesPage } from './pages/roles';
 import { CommandPage } from './pages/command';
+import { HaPage } from './pages/ha';
+import { HA_STATE_NAMES, type HaStatus } from '@fbrx/shared';
 
 // The terminal brings xterm.js along: loaded when opened.
 const TerminalPage = lazy(() => import('./pages/terminal').then((m) => ({ default: m.TerminalPage })));
@@ -132,6 +134,7 @@ function Console() {
     { id: 'mesh', label: 'Mesh & AI', icon: 'sparkles', section: 'Server' },
     { id: 'command', label: 'FBRX Command', icon: 'globe', section: 'Server' },
     { id: 'roles', label: 'Roles', icon: 'layers', section: 'Server' },
+    { id: 'ha', label: 'High availability', icon: 'repeat', section: 'Server' },
     ...(app.can('admin') ? [{ id: 'terminal', label: 'Terminal', icon: 'terminal', section: 'Server' } as NavItem] : []),
     ...(app.can('admin') ? [{ id: 'access', label: 'Users & audit', icon: 'users', section: 'Access' } as NavItem] : []),
   ];
@@ -183,6 +186,8 @@ function Console() {
         return <RolesPage />;
       case 'command':
         return <CommandPage />;
+      case 'ha':
+        return <HaPage />;
       case 'terminal':
         return (
           <Suspense fallback={<Spinner />}>
@@ -222,9 +227,39 @@ function Console() {
       }
     >
       <ErrorBoundary resetKey={`${route.page}/${route.id ?? ''}/${route.tab ?? ''}`}>
+        {current !== 'ha' && <HaBanner onOpen={() => go('ha')} />}
         {app.has('gate') && <GateBanner />}
         {page}
       </ErrorBoundary>
     </Shell>
+  );
+}
+
+/** On the standby (or a stopped server) of a pair: changes are made on the active one. */
+function HaBanner({ onOpen }: { onOpen: () => void }) {
+  const st = usePoll<HaStatus>('/v1/ha', 5000);
+  const s = st.data;
+  if (!s?.partner || s.me.state === 'active') return null;
+  const p = s.partner;
+  const serving = p.heard && p.state === 'active';
+  return (
+    <Callout
+      tone={s.me.state === 'stopped' ? 'critical' : 'info'}
+      title={serving ? `This is the standby: ${p.name} serves` : `${HA_STATE_NAMES[s.me.state]}: ${s.me.name} is not serving`}
+      actions={
+        <>
+          {serving && (
+            <Button size="sm" icon="external" onClick={() => window.open(p.url, '_blank', 'noopener')}>
+              Open {p.name}
+            </Button>
+          )}
+          <Button size="sm" variant="ghost" onClick={onOpen}>
+            High availability
+          </Button>
+        </>
+      }
+    >
+      {serving ? `Make changes on ${p.name}: this server keeps its copy and takes over if it stops answering.` : 'Changes wait until this server or its partner serves again.'}
+    </Callout>
   );
 }

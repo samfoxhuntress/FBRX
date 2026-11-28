@@ -41,6 +41,8 @@ export interface AlertInput {
   detail?: string;
   done?: string;
   yours?: string;
+  /** What happened, step by step (a takeover's), for the incident report. */
+  steps?: Array<{ at: string; text: string }>;
 }
 
 export interface ServerAlertsOptions {
@@ -72,6 +74,7 @@ interface Row {
   ended_at: string | null;
   deliveries: string;
   cleared: string;
+  steps: string | null;
 }
 
 function driveSpace(dir: string): { freePct: number; freeBytes: number; device: string } | null {
@@ -97,6 +100,8 @@ export class ServerAlerts {
       started_at TEXT NOT NULL, ended_at TEXT, deliveries TEXT NOT NULL DEFAULT '{}', cleared TEXT NOT NULL DEFAULT '{}'
     );
     CREATE INDEX IF NOT EXISTS server_alerts_key ON server_alerts (key, state);`);
+    // Steps came with high availability (2.6.0).
+    if (!o.db.all<{ name: string }>('PRAGMA table_info(server_alerts)').some((c) => c.name === 'steps')) o.db.exec('ALTER TABLE server_alerts ADD COLUMN steps TEXT');
   }
 
   start(): void {
@@ -179,8 +184,13 @@ export class ServerAlerts {
       ...(r.yours ? { yours: r.yours } : {}),
       startedAt: r.started_at,
       ...(r.ended_at ? { endedAt: r.ended_at } : {}),
+      ...(r.steps ? { steps: (JSON.parse(r.steps) as Array<{ at: string; text: string }>).slice(-50) } : {}),
       sentAt: new Date().toISOString(),
     };
+  }
+
+  private static steps(steps: AlertInput['steps']): string | null {
+    return steps?.length ? JSON.stringify(steps.slice(-50).map((s) => ({ at: s.at, text: s.text.slice(0, 300) }))) : null;
   }
 
   private openRow(key: string): Row | null {
@@ -204,10 +214,11 @@ export class ServerAlerts {
       ended_at: null,
       deliveries: '{}',
       cleared: '{}',
+      steps: ServerAlerts.steps(i.steps),
     };
     this.o.db.run(
-      'INSERT INTO server_alerts (id, key, state, severity, rule, subject, role, title, detail, done, yours, started_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
-      r.id, r.key, r.state, r.severity, r.rule, r.subject, r.role, r.title, r.detail, r.done, r.yours, r.started_at,
+      'INSERT INTO server_alerts (id, key, state, severity, rule, subject, role, title, detail, done, yours, started_at, steps) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      r.id, r.key, r.state, r.severity, r.rule, r.subject, r.role, r.title, r.detail, r.done, r.yours, r.started_at, r.steps,
     );
     this.o.db.run(`DELETE FROM server_alerts WHERE state != 'open' AND id NOT IN (SELECT id FROM server_alerts WHERE state != 'open' ORDER BY started_at DESC LIMIT ${KEEP})`);
     return r;
@@ -228,13 +239,18 @@ export class ServerAlerts {
     return this.v1(r);
   }
 
-  /** The problem is over: its all-clear goes to the channels that took its alert. False when it was not open. */
-  async clear(rule: string, subject?: string | null): Promise<boolean> {
+  /**
+   * The problem is over: its all-clear goes to the channels that took its alert. False when it was not open. How it
+   * ended (detail) and its last steps go with it.
+   */
+  async clear(rule: string, subject?: string | null, end: { detail?: string; steps?: AlertInput['steps'] } = {}): Promise<boolean> {
     const r = this.openRow(this.keyOf(rule, subject));
     if (!r) return false;
     r.state = 'resolved';
     r.ended_at = new Date().toISOString();
-    this.o.db.run("UPDATE server_alerts SET state = 'resolved', ended_at = ? WHERE id = ?", r.ended_at, r.id);
+    if (end.detail) r.detail = end.detail.slice(0, 2000);
+    if (end.steps?.length) r.steps = ServerAlerts.steps([...(r.steps ? (JSON.parse(r.steps) as Array<{ at: string; text: string }>) : []), ...end.steps]);
+    this.o.db.run("UPDATE server_alerts SET state = 'resolved', ended_at = ?, detail = ?, steps = ? WHERE id = ?", r.ended_at, r.detail, r.steps, r.id);
     const told = Object.entries(JSON.parse(r.deliveries) as Record<string, string>)
       .filter(([, v]) => v === 'ok')
       .map(([c]) => c as ServerAlertChannel);

@@ -17,6 +17,7 @@ import type { DomeEngine } from '@fbrx/dome/node';
 import type { TimeService } from './time/service';
 import type { FilesService } from './files/service';
 import type { DirectoryService } from './directory/service';
+import type { HaService } from './ha/service';
 import { allows } from './auth';
 import { forbidden, unauthorized } from './errors';
 
@@ -47,6 +48,8 @@ export interface VirtualContext {
   alerts: ServerAlerts;
   /** The FBRX directory (the directory role): the same accounts on every computer that joins. */
   directory: DirectoryService | null;
+  /** High availability: this server and its partner as one pair (not paired: it serves on its own). */
+  ha: HaService;
   /** The command line's token (fbrx-gate, run as root on the server; accepted from this computer only). */
   cliToken: string;
   log: FastifyBaseLogger;

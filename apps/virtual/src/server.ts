@@ -26,7 +26,7 @@ import { ConsoleTickets } from './console-proxy';
 import { CoreLink } from './core-link';
 import { HostMeshMark, runNft, type NftRunner } from './mesh-mark';
 import { bearer, type VirtualContext } from './context';
-import { VirtualError } from './errors';
+import { VirtualError, conflict } from './errors';
 import { loadTls } from './tls';
 import type { Hypervisor } from './drivers/types';
 import { ISOS_POOL } from './drivers/types';
@@ -47,6 +47,8 @@ import { timeRoutes } from './routes/time';
 import { filesRoutes } from './routes/files';
 import { directoryRoutes } from './routes/directory';
 import { DirectoryService } from './directory/service';
+import { HaService } from './ha/service';
+import { haRoutes } from './routes/ha';
 import { readEnv, roleRoutes } from './routes/roles';
 import { hostBridgeRoutes } from './routes/host-bridge';
 import { commandRoutes, commandRule } from './routes/command';
@@ -131,6 +133,22 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     dirs: [...new Set([config.dataDir, config.imagesDir])],
     gateProblems: config.roles.includes('gate') ? async () => (ctx.gate ? (await ctx.gate.engine.live()).problems : []) : undefined,
   });
+  // High availability: what the roles do when this server starts or stops serving comes with each role's copy.
+  const ha = new HaService({
+    db,
+    key,
+    name: hostname(),
+    version,
+    port: config.port,
+    heartbeatPort: config.ha.heartbeatPort,
+    bind: config.ha.bind,
+    fingerprint: tls?.fingerprint ?? null,
+    alerts,
+    heartbeatMs: config.ha.heartbeatMs,
+    handBackAfterMs: config.ha.handBackAfterMs,
+    roles: { activate: async () => [], deactivate: async () => [] },
+    log: (level, msg) => app.log[level](msg),
+  });
   const ctx: VirtualContext = {
     config,
     version,
@@ -149,6 +167,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     time: null,
     files: null,
     directory: null,
+    ha,
     alerts,
     cliToken: randomBytes(32).toString('base64url'),
     log: app.log,
@@ -311,6 +330,10 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     if (!req.user && local && req.token && req.token.length === ctx.cliToken.length && timingSafeEqual(Buffer.from(req.token), Buffer.from(ctx.cliToken))) {
       req.user = { id: 'cli', username: 'root', name: 'Command line (root)', role: 'admin', createdAt: new Date(0).toISOString(), lastLoginAt: null };
     }
+    // The standby of a pair keeps a copy of the active one: changes are made there (the pair's own calls aside).
+    if (req.method !== 'GET' && req.method !== 'HEAD' && !ctx.ha.serving() && !/^\/v1\/(ha|auth|setup)(\/|\?|$)/.test(req.url)) {
+      throw conflict(`${hostname()} is not the active server of its high-availability pair: make changes on ${ctx.ha.partnerName()} (${ctx.ha.partnerUrl()})`);
+    }
   });
 
   app.setErrorHandler((err, req, reply) => {
@@ -326,6 +349,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
 
   app.get('/healthz', { logLevel: 'warn' }, async () => ({ ok: true, version, driver: hv.kind }));
   alerts.start();
+  await ha.start();
   await authRoutes(app, ctx);
   await vmRoutes(app, ctx);
   await storageRoutes(app, ctx);
@@ -343,6 +367,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   await terminalRoutes(app, ctx);
   await troubleshootRoutes(app, ctx);
   await alertRoutes(app, ctx);
+  await haRoutes(app, ctx);
 
   if (config.consoleDir && existsSync(join(config.consoleDir, 'index.html'))) {
     await app.register(fastifyStatic, { root: config.consoleDir, index: 'index.html' });
@@ -375,6 +400,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     ctx,
     async close() {
       clearInterval(timer);
+      ctx.ha.stop();
       ctx.alerts.stop();
       ctx.time?.stop();
       ctx.files?.stop();

@@ -101,4 +101,18 @@ export const VIRTUAL_MIGRATIONS: Migration[] = [
       );
     `,
   },
+  {
+    version: 4,
+    name: 'high availability',
+    // What happened to the pair (paired, takeovers, switchovers, hand-backs), each with its steps.
+    up: `
+      CREATE TABLE ha_events (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        at TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        text TEXT NOT NULL,
+        steps TEXT NOT NULL DEFAULT '[]'
+      );
+    `,
+  },
 ];

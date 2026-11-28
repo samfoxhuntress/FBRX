@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { execFileSync } from 'node:child_process';
 import type { TerminalConfig } from './host-terminal';
-import { DEFAULT_LOCAL_API_PORT, isCidr, isIPv4, networkOf, parseCidr, VIRTUAL_DEFAULT_PORT } from '@fbrx/shared';
+import { DEFAULT_LOCAL_API_PORT, HA_HEARTBEAT_MS, HA_HEARTBEAT_PORT, isCidr, isIPv4, networkOf, parseCidr, VIRTUAL_DEFAULT_PORT } from '@fbrx/shared';
 
 /** An IPv4 address with its network size (192.168.50.1/24), or null. */
 const cidr4 = (s: string | undefined): string | null => (s && s.includes('/') && parseCidr(s)?.family === 4 ? s : null);
@@ -82,6 +82,11 @@ export interface VirtualConfig {
    * unless FBRX_V_TERMINAL=on. Sessions are recorded to recordDir (FBRX_V_TERMINAL_RECORD=off not to), kept keepDays.
    */
   terminal: TerminalConfig;
+  /**
+   * High availability: the heartbeat's UDP port and the address it listens on, how often it goes out, and how long the
+   * primary is back as the standby before the work goes back to it by itself (when the pair hands back by itself).
+   */
+  ha: { heartbeatPort: number; bind: string; heartbeatMs: number; handBackAfterMs: number };
 }
 
 function hasVirsh(): boolean {
@@ -168,6 +173,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env, overrides: Part
       shell: env.FBRX_V_TERMINAL_SHELL ?? '/bin/bash',
       recordDir: env.FBRX_V_TERMINAL_RECORD === 'off' ? null : resolve(dataDir, 'terminal'),
       keepDays: Math.max(1, Number(env.FBRX_V_TERMINAL_KEEP_DAYS ?? 30) || 30),
+    },
+    ha: {
+      heartbeatPort: Number(env.FBRX_V_HA_PORT ?? HA_HEARTBEAT_PORT),
+      bind: env.FBRX_V_HA_BIND ?? '0.0.0.0',
+      heartbeatMs: Math.min(1000, Math.max(20, Number(env.FBRX_V_HA_BEAT_MS ?? HA_HEARTBEAT_MS) || HA_HEARTBEAT_MS)),
+      handBackAfterMs: Math.max(1000, Number(env.FBRX_V_HA_HANDBACK_MS ?? 60_000) || 60_000),
     },
     ...overrides,
   };

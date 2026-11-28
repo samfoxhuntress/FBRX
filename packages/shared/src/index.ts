@@ -38,6 +38,7 @@ export * from './files';
 export * from './directory';
 export * from './remote';
 export * from './personality';
+export * from './ha';
 export * from './virtual';
 export * from './mesh-assist';
 export * from './net';
