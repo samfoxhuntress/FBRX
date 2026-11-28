@@ -5,6 +5,7 @@ import type { GatePaths } from '../render/paths';
 import type { GateCommit, GateLive, GateState } from '../types';
 import { checkConfig, type GateCheck } from '../validate';
 import type { GateApplier } from './applier';
+import type { GateHa } from '../ha';
 import { GateError } from './errors';
 import type { GateStore } from './store';
 
@@ -15,6 +16,14 @@ export interface GateEngineOptions {
   /** The configuration to start editing from on a gate that has none yet. */
   initial: () => GateConfig;
   log?: (level: 'info' | 'warn' | 'error', msg: string) => void;
+  /**
+   * In a high-availability pair: whether this server serves (the active one) and the pair's links (null until this
+   * server has an address of its own in each network). The standby applies the configuration with DHCP stopped and
+   * the gateway links down; without its own addresses it applies nothing (it would take the gateway's).
+   */
+  ha?: () => { paired: boolean; serving: boolean; ha: GateHa | null };
+  /** After each apply (the pair switches the gateway links on the active server). */
+  onApplied?: (c: GateConfig) => Promise<void>;
 }
 
 interface PendingConfirm {
@@ -97,8 +106,41 @@ export class GateEngine {
     return this.o.paths;
   }
 
+  private pair() {
+    return this.o.ha?.() ?? { paired: false, serving: true, ha: null };
+  }
+
   private rendered(c: GateConfig | null): GateRendered | null {
-    return c ? render(c, this.paths()) : null;
+    return c ? render(c, this.paths(), this.pair().ha) : null;
+  }
+
+  /** What was applied last (so the next apply removes the links it no longer has). */
+  private lastApplied: GateRendered | null = null;
+
+  /** Whether this server applies the gate now (not the standby of a pair that lacks its own addresses). */
+  private applies(): boolean {
+    const p = this.pair();
+    return !p.paired || p.serving || !!p.ha;
+  }
+
+  private async applyNow(r: GateRendered, previous: GateRendered | null, c: GateConfig): Promise<string[]> {
+    const notes = await this.o.applier.apply(r, previous, c, { dns: this.pair().serving ? 'serve' : 'off' });
+    this.lastApplied = r;
+    await this.o.onApplied?.(c);
+    return notes;
+  }
+
+  /**
+   * Applies what runs again (a high-availability pair: the standby after the copy brought a new commit, a takeover,
+   * a server's own addresses changed). Nothing, on a standby that lacks its own addresses.
+   */
+  applyRunning(): Promise<string[]> {
+    return this.serial(async () => {
+      const run = this.running();
+      if (!run || !this.applies()) return [];
+      this.notes = await this.applyNow(this.rendered(run)!, this.lastApplied, run);
+      return this.notes;
+    });
   }
 
   commit(o: { by: string; comment?: string; confirmMinutes?: number }): Promise<GateCommit> {
@@ -112,7 +154,7 @@ export class GateEngine {
       const prev = this.running();
       const changes = diffConfig(prev ?? {}, config).length;
       if (prev && changes === 0) throw new GateError('Nothing to commit: the candidate is what runs', 'CONFLICT');
-      const next = render(config, this.paths());
+      const next = render(config, this.paths(), this.pair().ha);
       const before = this.rendered(prev);
       await this.o.applier.check(next).catch((e) => {
         throw new GateError((e as Error).message, 'INVALID');
@@ -121,11 +163,11 @@ export class GateEngine {
       const minutes = o.confirmMinutes && o.confirmMinutes > 0 ? Math.min(o.confirmMinutes, 60) : 0;
       const deadline = minutes ? new Date(Date.now() + minutes * 60_000).toISOString() : null;
       try {
-        this.notes = await this.o.applier.apply(next, before, config);
+        this.notes = await this.applyNow(next, before, config);
       } catch (e) {
         const message = (e as Error).message;
         this.log('error', `Gate commit failed, putting the previous configuration back: ${message}`);
-        if (prev) await this.o.applier.apply(before!, next, prev).catch((err) => this.log('error', `Putting it back failed too: ${(err as Error).message}`));
+        if (prev) await this.applyNow(before!, next, prev).catch((err) => this.log('error', `Putting it back failed too: ${(err as Error).message}`));
         else await this.o.applier.clear(next).catch(() => undefined);
         this.o.store.addCommit({ by: o.by, comment: o.comment ?? '', status: 'failed', confirmBy: null, error: message, changes, config, previousId: prevId });
         throw new GateError(`It could not be applied, so nothing changed: ${message}`, 'APPLY');
@@ -174,7 +216,7 @@ export class GateEngine {
       const c = this.o.store.commit(p.commitId);
       const prev = c?.previousId ? this.o.store.commit(c.previousId)?.config ?? null : null;
       const now = this.rendered(c?.config ?? null);
-      if (prev) this.notes = await this.o.applier.apply(render(prev, this.paths()), now, prev);
+      if (prev) this.notes = await this.applyNow(this.rendered(prev)!, now, prev);
       else await this.o.applier.clear(now);
       this.o.store.setStatus(p.commitId, 'rolled-back', reason);
       this.o.store.setMeta('running_id', c?.previousId ?? null);
@@ -240,9 +282,9 @@ export class GateEngine {
       return;
     }
     const run = this.running();
-    if (run) {
+    if (run && this.applies()) {
       await this.serial(async () => {
-        this.notes = await this.o.applier.apply(render(run, this.paths()), null, run);
+        this.notes = await this.applyNow(this.rendered(run)!, null, run);
       }).catch((e) => this.log('error', `Gate configuration not applied at start: ${(e as Error).message}`));
     }
   }

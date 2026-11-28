@@ -13,3 +13,4 @@ export { IFB } from './render/qos';
 export * from './types';
 export * from './path';
 export * from './whatif';
+export * from './ha';

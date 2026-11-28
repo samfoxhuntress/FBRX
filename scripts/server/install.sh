@@ -412,12 +412,18 @@ if has_role gate; then
   fi
   # dnsmasq-utils: dhcp_release, for letting a device's address go from the console.
   GATE_PKGS="nftables dnsmasq dnsmasq-utils wireguard-tools"
-  # MiniDome follows new connections with conntrack's event stream.
-  if has_role minidome; then GATE_PKGS="$GATE_PKGS conntrack"; fi
+  # MiniDome follows new connections with conntrack's event stream; conntrackd keeps open connections in step with
+  # the other server of a high-availability pair.
+  GATE_PKGS="$GATE_PKGS conntrack conntrackd"
   # Newer Debian ships systemd-networkd on its own.
   if apt-cache "${APT_CFG[@]}" show systemd-networkd >/dev/null 2>&1; then GATE_PKGS="$GATE_PKGS systemd-networkd"; fi
   # shellcheck disable=SC2086
   apt_install $GATE_PKGS
+  # conntrackd runs only in a pair, with the settings FBRX Gate writes then.
+  if [ ! -f /etc/conntrackd/.fbrx-gate ]; then
+    systemctl disable --now conntrackd.service >/dev/null 2>&1 || true
+    mkdir -p /etc/conntrackd && : >/etc/conntrackd/.fbrx-gate
+  fi
 fi
 if has_role time; then
   say "Installing FBRX Time's tools (the backup folder for computers: Samba)"

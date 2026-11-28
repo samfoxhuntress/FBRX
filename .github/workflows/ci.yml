@@ -56,7 +56,7 @@ jobs:
       - name: Install libvirt, QEMU and UEFI firmware
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends libvirt-daemon-system libvirt-clients qemu-system-x86 qemu-utils ovmf dnsmasq-base nftables iproute2 conntrack busybox shellcheck wireguard-tools >/dev/null
+          sudo apt-get install -y -qq --no-install-recommends libvirt-daemon-system libvirt-clients qemu-system-x86 qemu-utils ovmf dnsmasq-base nftables iproute2 conntrack conntrackd busybox shellcheck wireguard-tools >/dev/null
           sudo systemctl start libvirtd
           sudo virsh -c qemu:///system net-start default || true
       - run: npm ci --no-audit --no-fund
@@ -74,8 +74,9 @@ jobs:
           sudo scripts/server/test-debian-firstboot.sh "$(ls -d dist/fbrx-server-*/ | head -1)"
       - name: FBRX Gate as a real router, FBRX MiniDome listening to it, and Prefer Mesh marking (network namespaces)
         # As root: namespaces, nftables, dnsmasq, tc and conntrack (FBRX MiniDome listening to the gate). VLANs and cake
-        # are used where the runner's kernel has them.
-        run: sudo -E env "PATH=$PATH" npx vitest run packages/gate/test/netns.integration.test.ts packages/core/test/mesh-network.test.ts
+        # are used where the runner's kernel has them. Then a high-availability pair of gates: the active one pulled in
+        # the middle of a download, the standby taking over with the open connections conntrackd kept in step.
+        run: sudo -E env "PATH=$PATH" npx vitest run packages/gate/test/netns.integration.test.ts packages/gate/test/ha-netns.integration.test.ts packages/core/test/mesh-network.test.ts
       - name: FBRX Virtual against the real hypervisor
         # As root, like FBRX Server, against libvirt's system hypervisor (after the build, so root leaves no files in
         # the way). Software emulation keeps it independent of the runner's KVM.

@@ -22,8 +22,11 @@ export interface GateApplier {
   readonly kind: 'linux' | 'simulated';
   /** Refuses settings the system would not take (before anything changes). */
   check(r: GateRendered): Promise<void>;
-  /** Makes them so. Returns notes worth showing (a fallback taken, say). */
-  apply(r: GateRendered, previous: GateRendered | null, c: GateConfig): Promise<string[]>;
+  /**
+   * Makes them so. Returns notes worth showing (a fallback taken, say). With dns "off" (the standby of a
+   * high-availability pair) DHCP and DNS are set up but not started.
+   */
+  apply(r: GateRendered, previous: GateRendered | null, c: GateConfig, o?: { dns?: 'serve' | 'off' }): Promise<string[]>;
   /** Takes away everything the gate set up. */
   clear(previous: GateRendered | null): Promise<void>;
   live(c: GateConfig | null): Promise<GateLive>;
@@ -164,6 +167,11 @@ export interface LinuxApplierOptions {
   run?: Runner;
   /** Restarts dnsmasq once its file is written (default: systemctl restart dnsmasq). */
   restartDns?: (confFile: string) => Promise<void>;
+  /** Stops dnsmasq (default: systemctl stop dnsmasq): on the standby of a high-availability pair. */
+  stopDns?: () => Promise<void>;
+  /** (Re)starts conntrackd with its file (default: systemctl restart conntrackd), and stops it (a pair no more). */
+  restartConntrackd?: (confFile: string) => Promise<void>;
+  stopConntrackd?: () => Promise<void>;
   /** Where dnsmasq reads the file (default <root>/etc/dnsmasq.d/fbrx-gate.conf). */
   dnsmasqConf?: string;
 }
@@ -178,12 +186,15 @@ export class LinuxApplier implements GateApplier {
   private readonly root: string;
   private readonly networkdDir: string;
   private readonly dnsmasqConf: string;
+  /** conntrackd's settings (a high-availability pair). */
+  readonly conntrackdConf: string;
 
   constructor(private readonly o: LinuxApplierOptions) {
     this.run = o.run ?? runCommand;
     this.root = o.root ?? '/';
     this.networkdDir = join(this.root, 'etc/systemd/network');
     this.dnsmasqConf = o.dnsmasqConf ?? join(this.root, 'etc/dnsmasq.d/fbrx-gate.conf');
+    this.conntrackdConf = join(this.root, 'etc/conntrackd/conntrackd.conf');
   }
 
   private async must(cmd: string, args: string[], what: string): Promise<RunResult> {
@@ -297,7 +308,7 @@ export class LinuxApplier implements GateApplier {
     return { publicKey: wgPublicKey(readFileSync(file, 'utf8')) };
   }
 
-  async apply(r: GateRendered, previous: GateRendered | null, c: GateConfig): Promise<string[]> {
+  async apply(r: GateRendered, previous: GateRendered | null, c: GateConfig, o: { dns?: 'serve' | 'off' } = {}): Promise<string[]> {
     const notes: string[] = [];
     this.dirs();
 
@@ -350,18 +361,64 @@ export class LinuxApplier implements GateApplier {
     // The firewall is loaded again at every start, before the network comes up.
     if (this.o.mode === 'networkd') await this.run('systemctl', ['enable', 'fbrx-gate-firewall.service']);
 
-    // DHCP and DNS (switched on for the next start too).
+    // DHCP and DNS (switched on for the next start too); on the standby of a pair, ready but stopped.
     this.write(this.dnsmasqConf, r.dnsmasq);
-    if (this.o.restartDns) await this.o.restartDns(this.dnsmasqConf);
+    if (o.dns === 'off') await this.stopDns();
+    else if (this.o.restartDns) await this.o.restartDns(this.dnsmasqConf);
     else {
       await this.run('systemctl', ['enable', 'dnsmasq']);
       await this.must('systemctl', ['restart', 'dnsmasq'], 'dnsmasq');
+    }
+
+    // A high-availability pair: the open connections kept in step with the partner (conntrackd).
+    if (r.conntrackd) {
+      this.write(this.conntrackdConf, r.conntrackd);
+      if (this.o.restartConntrackd) await this.o.restartConntrackd(this.conntrackdConf);
+      else {
+        await this.run('systemctl', ['enable', 'conntrackd']);
+        const ok = await this.run('systemctl', ['restart', 'conntrackd']);
+        if (ok.code !== 0) notes.push('conntrackd did not start, so a takeover breaks open connections: sudo apt install conntrackd (journalctl -u conntrackd says why)');
+      }
+    } else if (previous?.conntrackd) {
+      if (this.o.stopConntrackd) await this.o.stopConntrackd();
+      else {
+        await this.run('systemctl', ['disable', 'conntrackd']);
+        await this.run('systemctl', ['stop', 'conntrackd']);
+      }
     }
 
     // Traffic shaping.
     notes.push(...(await this.qos(r, previous)));
     this.write(join(this.o.paths.etcDir, 'qos.json'), JSON.stringify(r.qos, null, 2));
     return notes;
+  }
+
+  /** Stops DHCP and DNS (the standby of a high-availability pair). */
+  async stopDns(): Promise<void> {
+    if (this.o.stopDns) await this.o.stopDns();
+    else {
+      await this.run('systemctl', ['disable', 'dnsmasq']);
+      await this.run('systemctl', ['stop', 'dnsmasq']);
+    }
+  }
+
+  /** Starts DHCP and DNS (the server of a high-availability pair that takes over). */
+  async startDns(): Promise<void> {
+    if (this.o.restartDns) await this.o.restartDns(this.dnsmasqConf);
+    else {
+      await this.run('systemctl', ['enable', 'dnsmasq']);
+      await this.must('systemctl', ['restart', 'dnsmasq'], 'dnsmasq');
+    }
+  }
+
+  /** How it is run (systemd-networkd keeps links; ip commands set them right away). */
+  get mode(): 'networkd' | 'iproute' {
+    return this.o.mode;
+  }
+
+  /** Runs a command the way this applier does (inside a test's network namespace too). */
+  exec(cmd: string, args: string[]): Promise<RunResult> {
+    return this.run(cmd, args);
   }
 
   private async pinSwitchMac(bridge: string, port: string): Promise<void> {
