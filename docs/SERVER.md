@@ -540,6 +540,61 @@ Command's rules decide who hears them, with escalation and acknowledging ([ADMIN
 
 **Send a test** tries a channel at once. Changes to where alerts go are in the audit log (never a password or secret).
 
+## High availability
+
+Two FBRX Servers (virtual machines or hosts) can work as one **pair**: the **active** one serves, and the **standby**
+keeps a copy and takes over when the active one stops answering, in about a second. Open **High availability** in the
+console's menu.
+
+**Pairing.** On the server that will be the standby, **Make a pairing code** (it lasts 30 minutes). On the other one
+(the primary), **Pair with a standby**: give the standby's address, check that the certificate shown is the one the
+standby shows next to its code, and type the code. Both must run the same FBRX Server version. From then on the two
+talk only over HTTPS that both check. What the standby kept before is replaced by the primary's copy, and the standby
+takes the primary's key, so passwords sealed on one open on the other.
+
+**Who serves.** The two hear each other several times a second, on the network and on a **dedicated link** (a cable
+between the two) when you give each its address there. When the standby hears nothing for the **takeover time** (a
+second unless you change it) it takes over. Takeovers, a partner gone quiet, and a standby falling behind are
+[alerts](#alerts), each with what happened step by step, so they reach FBRX Command's incident report.
+
+**The third vote.** If the network between the two breaks while both still run, each could think the other is gone.
+A **third vote** prevents that: FBRX Command, or a third FBRX Server (**High availability → Be a third vote → Make a
+third-vote key**, then add it on the pair's active server under **Third vote**). The active server holds the pair
+from the third vote and renews it several times a second; the standby takes over only once the third vote gives it
+the pair, and an active server that can reach neither its partner nor the third vote stops serving first. So the two
+never serve at once. Without a third vote the page says what that risks. For a pair of gates, put the third vote on
+your own network (not on the internet beyond the gate), so the standby can still reach it when the gate is down. And
+not FBRX Command on the pair itself: it would stop with the active server. In FBRX Command, **Alerts → High
+availability: third vote** makes the key ([ADMIN_CONSOLE.md](ADMIN_CONSOLE.md#alerts)).
+
+**What is copied.** Each change is copied to the standby as it is made, role by role, and the page shows how far behind
+each is: console accounts and where alerts go, FBRX Gate (its configuration and every commit), MiniDome's findings, FBRX
+Time's catalog (the backups stay where they are kept), the directory and the file server's settings. FBRX Command, when
+both have the command role (below). Virtual machines and the files in shares are not copied yet. What belongs to one
+server stays with it: its management controller, its own alerts and audit log. Changes are made on the active server;
+the standby's console says so, with a link to the active one.
+
+**FBRX Gate in a pair.** Each network's gateway address moves to the active server, with the same MAC address, so
+devices never notice; the internet port moves too, so the provider sees the same machine (on DHCP, both ask by that
+MAC address, so the provider gives the same lease). The open connections, DHCP's leases and the configuration are kept
+in step, so a download in progress carries on. Give **each** server an address of its own in each of the gate's
+networks (**FBRX Gate in the pair** on the page, on each server): until both have, a takeover applies the gate's whole
+configuration (several seconds) and the standby leaves the gate alone.
+
+**FBRX Command in a pair.** With the command role on both servers, FBRX Command runs on the active one only: its
+database is copied to the standby as it changes, with its keys, its certificate and its settings, so on a takeover it
+starts there as the same Command, with the same certificate the computers trust, in a few seconds. Computers must
+reach it at an address that moves with the pair: on a gate pair, the gate's address in a network (the installer's
+`--command-address`); otherwise a name in your DNS that you point at the server that serves. The page says when its
+address stays on one server. Both servers need the command role; one that does not have it is left out of the copy,
+and the page says so.
+
+**Switch over and hand back.** **Switch over** hands the work to the standby on purpose (a drill, or before an
+update); it waits until the standby has every change. **Hand back** returns it to the primary, or turn on *Hand the
+work back to the primary by itself*. **End the pair** (on either server) leaves both on their own: the active one
+keeps serving; the standby keeps its copy but serves nothing new until it restarts, so if both have the gate role,
+change the standby's gate addresses first.
+
 ## The hardware map
 
 *Hardware map* draws the server as it is wired: the processor sockets (NUMA nodes) with their cores on top, and the

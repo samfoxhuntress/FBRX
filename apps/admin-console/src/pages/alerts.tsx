@@ -334,6 +334,79 @@ function FromServers() {
   );
 }
 
+interface WitnessKey {
+  id: string;
+  label: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  holding: boolean;
+}
+
+/**
+ * FBRX Command as the third vote of the organization's FBRX Server pairs (high availability): a key per pair, pasted
+ * on the pair's active server, so the two never both serve.
+ */
+function ThirdVote() {
+  const app = useApp();
+  const { run, busy } = useAction();
+  const q = useQuery<{ keys: WitnessKey[]; url: string | null; fingerprint: string | null }>('/v1/admin/ha/witness');
+  const [label, setLabel] = useState('');
+  const [made, setMade] = useState<{ key: string; url: string | null; fingerprint: string | null } | null>(null);
+  if (!q.data) return null;
+  return (
+    <Card title="High availability: third vote" subtitle="For each pair of FBRX Servers, FBRX Command decides which one serves when the two cannot hear each other, so they never both do">
+      <div className="fx-form">
+        {q.data.keys.length ? (
+          <div className="cp-witness">
+            {q.data.keys.map((k) => (
+              <div key={k.id} className="cp-witness-row">
+                <b>{k.label}</b>
+                <span className="fx-muted">{k.lastUsedAt ? `asked ${timeAgo(k.lastUsedAt)}` : 'not asked yet'}</span>
+                {k.holding ? <Status tone="good">A server holds the pair</Status> : <Status tone="neutral">Nobody holds it now</Status>}
+                {app.can('alerts.manage') && (
+                  <Button size="sm" variant="ghost" icon="trash" aria-label={`Remove the key of ${k.label}`} loading={busy === `d:${k.id}`} onClick={() => void run(`d:${k.id}`, () => api('DELETE', `/v1/admin/ha/witness/keys/${k.id}`).then(q.reload))} />
+                )}
+              </div>
+            ))}
+          </div>
+        ) : (
+          <div className="fx-muted">No pair uses FBRX Command as its third vote yet.</div>
+        )}
+        {made && (
+          <Callout tone="info" title="Shown once: add it on the pair's active server (High availability → Third vote)">
+            <div className="fx-form">
+              {made.url && (
+                <Field label="Address">
+                  <CopyText value={made.url} />
+                </Field>
+              )}
+              {made.fingerprint && (
+                <Field label="Certificate">
+                  <code style={{ fontSize: 12, wordBreak: 'break-all' }}>{made.fingerprint}</code>
+                </Field>
+              )}
+              <Field label="Key">
+                <CopyText value={made.key} secret />
+              </Field>
+            </div>
+          </Callout>
+        )}
+        {app.can('alerts.manage') && (
+          <div className="fx-actions">
+            <Input value={label} placeholder="Which pair (Office servers)" maxLength={80} onChange={(e) => setLabel(e.target.value)} style={{ maxWidth: 260 }} />
+            <Button loading={busy === 'make'} onClick={() => void run('make', () => api<{ key: string; url: string | null; fingerprint: string | null }>('POST', '/v1/admin/ha/witness/keys', { label }).then((r) => (setMade(r), setLabel(''), q.reload())))}>
+              Make a third-vote key
+            </Button>
+          </div>
+        )}
+        <div className="fx-muted" style={{ fontSize: 12.5 }}>
+          A pair of gates must reach FBRX Command without going through the gate, and a pair cannot be its own third vote: run FBRX Command on another server in your network.
+        </div>
+      </div>
+    </Card>
+  );
+}
+
 /** FBRX Command → Alerts: the organization's alerts, who gets what, and FBRX Servers' alerts. */
 export function AlertsPage({ reportId, onCloseReport }: { reportId?: string | null; onCloseReport?: () => void } = {}) {
   const app = useApp();
@@ -358,6 +431,7 @@ export function AlertsPage({ reportId, onCloseReport }: { reportId?: string | nu
         <>
           <WhoGetsWhat />
           <FromServers />
+          <ThirdVote />
         </>
       )}
     </Page>

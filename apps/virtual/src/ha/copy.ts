@@ -26,7 +26,13 @@ export interface CopySource {
   name: string;
   label: string;
   db: Db;
-  tables: CopyTable[];
+  /** Its tables (a function: looked up again when the database's tables change). */
+  tables: CopyTable[] | (() => CopyTable[]);
+  /**
+   * The database belongs to another program that changes its own tables when it is updated (FBRX Command): checked
+   * now and then, and when its tables changed the triggers are made again and the standby gets a full copy.
+   */
+  watchSchema?: boolean;
 }
 
 /** A change: its number in the journal, the table, upsert or delete, and the row (or its key). */
@@ -54,7 +60,8 @@ export interface CopyAck {
   name: string;
   epoch: string | null;
   seq: number;
-  need?: 'snapshot';
+  /** snapshot: send everything again; absent: this server does not have that role (nothing to copy to). */
+  need?: 'snapshot' | 'absent';
 }
 
 interface TableInfo {
@@ -74,6 +81,8 @@ interface Outbound {
   snapshotSince: number | null;
   lastSentAt: number;
   lastAckAt: number | null;
+  /** The standby does not have the role: asked again now and then, and not waited for. */
+  absent: boolean;
 }
 
 /** Each source's journal (two sources may share a database: the settings table holds several roles' state). */
@@ -86,6 +95,9 @@ const MAX_JOURNAL = 100_000;
 const PART_BYTES = 1_000_000;
 /** With nothing new, the standby still hears that its copy is current this often. */
 const IDLE_MARK_MS = 1000;
+/** How often a standby without a role is asked again, and another program's tables checked for changes. */
+const ABSENT_ASK_MS = 30_000;
+const SCHEMA_CHECK_MS = 5000;
 
 const q = (id: string) => `"${id.replace(/"/g, '""')}"`;
 const lit = (v: string) => `'${v.replace(/'/g, "''")}'`;
@@ -96,6 +108,7 @@ export class HaCopy {
   private readonly out = new Map<string, Outbound>();
   private readonly parts = new Map<string, { id: string; got: Map<number, CopyBatch['snapshot']> }>();
   private infos = new Map<string, TableInfo[]>();
+  private readonly schemas = new Map<string, { sig: string; checkedAt: number }>();
 
   constructor(
     private readonly sources: CopySource[],
@@ -109,7 +122,7 @@ export class HaCopy {
   private tables(s: CopySource): TableInfo[] {
     let t = this.infos.get(s.name);
     if (!t) {
-      t = s.tables
+      t = (typeof s.tables === 'function' ? s.tables() : s.tables)
         .map((ct) => {
           const cols = s.db.all<{ name: string; type: string; pk: number }>(`PRAGMA table_info(${q(ct.name)})`);
           return { name: ct.name, cols: cols.map((c) => c.name), pk: cols.filter((c) => c.pk > 0).sort((a, b) => a.pk - b.pk).map((c) => c.name), blob: new Set(cols.filter((c) => /BLOB/i.test(c.type)).map((c) => c.name)), only: ct.only };
@@ -124,14 +137,47 @@ export class HaCopy {
 
   /** This server serves: its changes are journaled from now on, in a new run (the standby gets a full copy first). */
   becomeActive(): void {
-    for (const s of this.sources) {
-      this.infos.delete(s.name);
-      this.dropTriggers(s);
-      s.db.exec(`CREATE TABLE IF NOT EXISTS ${journalOf(s)} (seq INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, tbl TEXT NOT NULL, op TEXT NOT NULL, row TEXT NOT NULL); DELETE FROM ${journalOf(s)};`);
-      this.installTriggers(s);
-      this.out.set(s.name, { epoch: randomBytes(8).toString('base64url'), partner: null, snapshotSince: null, lastSentAt: -Infinity, lastAckAt: null });
-    }
+    for (const s of this.sources) this.startJournal(s);
     this.mode = 'active';
+  }
+
+  /** A new run of a source's journal: its triggers made again, and the standby gets a full copy first. */
+  private startJournal(s: CopySource) {
+    this.infos.delete(s.name);
+    this.dropTriggers(s);
+    s.db.exec(`CREATE TABLE IF NOT EXISTS ${journalOf(s)} (seq INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, tbl TEXT NOT NULL, op TEXT NOT NULL, row TEXT NOT NULL); DELETE FROM ${journalOf(s)};`);
+    this.installTriggers(s);
+    if (s.watchSchema) this.schemas.set(s.name, { sig: this.schemaOf(s), checkedAt: mono() });
+    this.out.set(s.name, { epoch: randomBytes(8).toString('base64url'), partner: null, snapshotSince: null, lastSentAt: -Infinity, lastAckAt: null, absent: false });
+  }
+
+  /** The database's tables as they are made (not its triggers, which change with each run). */
+  private schemaOf(s: CopySource): string {
+    return s.db.get<{ sig: string | null }>(`SELECT group_concat(name || ':' || coalesce(sql, ''), ';') AS sig FROM (SELECT name, sql FROM sqlite_master WHERE type IN ('table', 'index') AND name NOT LIKE 'ha_journal_%' ORDER BY name)`)?.sig ?? '';
+  }
+
+  /** Another program's tables changed (it was updated): the copy starts again from a full copy. */
+  private checkSchemas() {
+    const now = mono();
+    for (const s of this.sources) {
+      const w = this.schemas.get(s.name);
+      if (!s.watchSchema || !w || now - w.checkedAt < SCHEMA_CHECK_MS) continue;
+      w.checkedAt = now;
+      if (this.schemaOf(s) === w.sig) continue;
+      this.log('info', `High availability: ${s.label}'s tables changed (it was updated): the standby gets a full copy`);
+      this.startJournal(s);
+    }
+  }
+
+  /** A source's tables changed here (another program's, brought to this version): looked up again. */
+  refresh(name: string): void {
+    this.infos.delete(name);
+  }
+
+  /** On the standby: forget where this copy is, so the active server sends everything again (it may differ now). */
+  forget(name: string): void {
+    const s = this.sources.find((x) => x.name === name);
+    s?.db.run(`DELETE FROM ${STATE} WHERE name = ?`, name);
   }
 
   /** The standby: no journal (what it applies is the active one's). */
@@ -180,11 +226,16 @@ export class HaCopy {
   /** The next batches to send: a part of a full copy, or what changed (or, with nothing new, a mark now and then). */
   outgoing(force = false): CopyBatch[] {
     if (this.mode !== 'active') return [];
+    this.checkSchemas();
     const now = mono();
     const at = new Date().toISOString();
     const out: CopyBatch[] = [];
     for (const s of this.sources) {
       const o = this.out.get(s.name)!;
+      if (o.absent) {
+        if (now - o.lastSentAt >= ABSENT_ASK_MS) out.push({ name: s.name, epoch: o.epoch, after: -1, at });
+        continue;
+      }
       if (!o.partner) {
         out.push({ name: s.name, epoch: o.epoch, after: -1, at });
         continue;
@@ -245,6 +296,13 @@ export class HaCopy {
       const s = this.sources.find((x) => x.name === a.name);
       if (!o || !s) continue;
       o.lastAckAt = mono();
+      o.absent = a.need === 'absent';
+      if (o.absent) {
+        o.partner = null;
+        o.snapshotSince = null;
+        s.db.run(`DELETE FROM ${journalOf(s)}`);
+        continue;
+      }
       if (a.need === 'snapshot' || a.epoch !== o.epoch) {
         o.partner = { epoch: a.epoch, seq: a.seq };
         o.snapshotSince ??= mono();
@@ -258,6 +316,10 @@ export class HaCopy {
     // A journal the standby will never catch up on: a full copy instead.
     for (const s of this.sources) {
       const o = this.out.get(s.name)!;
+      if (o.absent) {
+        s.db.run(`DELETE FROM ${journalOf(s)}`);
+        continue;
+      }
       const n = s.db.get<{ n: number }>(`SELECT COUNT(*) AS n FROM ${journalOf(s)}`)?.n ?? 0;
       if (n > MAX_JOURNAL) {
         s.db.run(`DELETE FROM ${journalOf(s)}`);
@@ -271,6 +333,7 @@ export class HaCopy {
     if (this.mode !== 'active') return true;
     return this.sources.every((s) => {
       const o = this.out.get(s.name)!;
+      if (o.absent) return true;
       if (!o.partner || o.snapshotSince !== null || o.partner.epoch !== o.epoch) return false;
       return !s.db.get(`SELECT 1 FROM ${journalOf(s)} WHERE seq > ? LIMIT 1`, o.partner.seq);
     });
@@ -288,6 +351,7 @@ export class HaCopy {
     const now = Date.now();
     return this.sources.map((s) => {
       const o = this.out.get(s.name)!;
+      if (o.absent) return { name: s.name, label: s.label, state: 'absent', behind: 0, behindMs: null, currentAt: null };
       if (!o.partner) return { name: s.name, label: s.label, state: 'waiting', behind: 0, behindMs: null, currentAt: null };
       if (o.snapshotSince !== null) return { name: s.name, label: s.label, state: 'full-copy', behind: 0, behindMs: Math.round(mono() - o.snapshotSince), currentAt: null };
       const w = s.db.get<{ n: number; first: string | null }>(`SELECT COUNT(*) AS n, MIN(at) AS first FROM ${journalOf(s)} WHERE seq > ?`, o.partner.seq);
@@ -313,7 +377,7 @@ export class HaCopy {
   receive(batches: CopyBatch[]): CopyAck[] {
     return batches.map((b) => {
       const s = this.sources.find((x) => x.name === b.name);
-      if (!s) return { name: b.name, epoch: null, seq: 0, need: 'snapshot' as const };
+      if (!s) return { name: b.name, epoch: null, seq: 0, need: 'absent' as const };
       const st = s.db.get<{ epoch: string; seq: number }>(`SELECT epoch, seq FROM ${STATE} WHERE name = ?`, s.name) ?? null;
       const here = (need?: 'snapshot'): CopyAck => {
         const now = s.db.get<{ epoch: string; seq: number }>(`SELECT epoch, seq FROM ${STATE} WHERE name = ?`, s.name);
@@ -345,6 +409,7 @@ export class HaCopy {
     held.got.set(p.part, p);
     if (held.got.size < p.parts) return { name: s.name, epoch: null, seq: 0 };
     this.parts.delete(s.name);
+    if (s.watchSchema) this.infos.delete(s.name);
     const tables = this.tables(s);
     s.db.tx(() => {
       s.db.exec('PRAGMA defer_foreign_keys = ON');
@@ -365,6 +430,7 @@ export class HaCopy {
   }
 
   private apply(s: CopySource, e: CopyEntry) {
+    if (s.watchSchema && !this.tables(s).some((x) => x.name === e.t)) this.infos.delete(s.name);
     const t = this.tables(s).find((x) => x.name === e.t);
     if (!t) return;
     if (e.o === 'u') this.upsert(s, t, e.r);

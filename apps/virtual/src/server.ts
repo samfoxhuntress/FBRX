@@ -49,6 +49,7 @@ import { filesRoutes } from './routes/files';
 import { directoryRoutes } from './routes/directory';
 import { DirectoryService } from './directory/service';
 import { HaService } from './ha/service';
+import { CommandHa } from './ha/command';
 import { HaCopy, type CopySource } from './ha/copy';
 import { haRoutes } from './routes/ha';
 import { readEnv, roleRoutes } from './routes/roles';
@@ -135,6 +136,9 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     dirs: [...new Set([config.dataDir, config.imagesDir])],
     gateProblems: config.roles.includes('gate') ? async () => (ctx.gate ? (await ctx.gate.engine.live()).problems : []) : undefined,
   });
+  // FBRX Command on this server (the command role): in a pair it runs on the active server only, on its copy.
+  const commandHa = config.roles.includes('command') ? new CommandHa({ envFile: config.command.envFile, secretsFile: config.command.secretsFile }) : null;
+  let commandSource: CopySource | null = null;
   // High availability: what the roles do when this server starts or stops serving comes with each role's copy.
   const gateRole = {
     activate: async (_reason: string): Promise<Array<{ at: string; text: string }>> => [],
@@ -155,11 +159,16 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     heartbeatMs: config.ha.heartbeatMs,
     handBackAfterMs: config.ha.handBackAfterMs,
     // Each role's half of a takeover (FBRX Gate's below); the others serve from their copy as it is.
+    // Command starts once the gate's addresses are here (computers reach it at one of them), and stops first.
     roles: {
-      activate: async (reason) => gateRole.activate(reason),
-      deactivate: async (reason) => gateRole.deactivate(reason),
+      activate: async (reason) => [...(await gateRole.activate(reason)), ...((await commandHa?.activate()) ?? [])],
+      deactivate: async (reason) => [...((await commandHa?.deactivate()) ?? []), ...(await gateRole.deactivate(reason))],
     },
-    files: config.roles.includes('gate') && config.gate.mode === 'linux' ? [{ name: 'dhcp-leases', path: join(DEFAULT_PATHS.varDir, 'dnsmasq.leases') }] : [],
+    files: [...(config.roles.includes('gate') && config.gate.mode === 'linux' ? [{ name: 'dhcp-leases', path: join(DEFAULT_PATHS.varDir, 'dnsmasq.leases') }] : []), ...(commandHa?.files() ?? [])],
+    warnings: (witnessUrl, partner) => [
+      ...(commandHa && !commandSource ? ['FBRX Command is not copied: it had not started yet when this console did. Restart the console (sudo systemctl restart fbrx-virtual).'] : []),
+      ...(commandHa?.warnings(witnessUrl, (gateRole.status()?.networks ?? []).map((n) => n.gateway.split('/')[0]!), partner) ?? []),
+    ],
     gateStatus: () => gateRole.status(),
     onGateChange: () => void ctx.gate?.engine.applyRunning().catch((e) => app.log.warn(`FBRX Gate: ${(e as Error).message}`)),
     log: (level, msg) => app.log[level](msg),
@@ -451,6 +460,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
   // data. What belongs to one server (its management controller, its interrupt placements, its own alerts and audit
   // log, the pair's own settings) stays with it.
   const setting = (...values: string[]) => ({ name: 'settings', only: { column: 'key', values } });
+  commandSource = commandHa?.source() ?? null;
   const sources: CopySource[] = [
     { name: 'server', label: 'Accounts and alert settings', db, tables: [{ name: 'users' }, { name: 'app_tokens' }, setting('alerts.settings')] },
     ...(gateStore ? [{ name: 'gate', label: 'FBRX Gate', db: gateStore.db, tables: [{ name: 'gate_candidate' }, { name: 'gate_commits' }, { name: 'gate_meta' }] }] : []),
@@ -458,8 +468,16 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     ...(ctx.time ? [{ name: 'time', label: 'FBRX Time’s catalog', db, tables: [{ name: 'time_jobs' }, { name: 'time_images' }, setting('time.settings')] }] : []),
     ...(ctx.directory ? [{ name: 'directory', label: 'Directory', db, tables: [setting('directory.state')] }] : []),
     ...(ctx.files ? [{ name: 'files', label: 'File server settings', db, tables: [setting('files.state')] }] : []),
+    ...(commandSource ? [commandSource] : []),
   ];
-  ha.useCopy(new HaCopy(sources, (level, msg) => app.log[level](msg), (name) => name === 'gate' && gateRole.prepare()));
+  const copy = new HaCopy(sources, (level, msg) => app.log[level](msg), (name) => name === 'gate' && gateRole.prepare());
+  if (commandHa) {
+    commandHa.onStandby = (ran) => {
+      copy.refresh('command');
+      if (ran) copy.forget('command');
+    };
+  }
+  ha.useCopy(copy);
   await ha.start();
   await authRoutes(app, ctx);
   await vmRoutes(app, ctx);

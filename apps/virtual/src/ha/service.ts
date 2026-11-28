@@ -1,6 +1,6 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
-import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { chmodSync, chownSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { isIPv4 } from 'node:net';
 import type { Agent } from 'node:https';
@@ -148,8 +148,13 @@ export interface HaServiceOptions {
    * opens. The server seals its own few secrets (its management controller's) with it first, then changes the key.
    */
   adoptKey?: (key: Buffer, old: Buffer) => void;
-  /** Files copied to the standby as they change (DHCP's leases), each with its name and where it is. */
-  files?: Array<{ name: string; path: string }>;
+  /**
+   * Files copied to the standby as they change (DHCP's leases, FBRX Command's keys), each with its name and where it
+   * is. The standby keeps its file's owner and mode; a new one is its folder's owner's, readable by it only if secret.
+   */
+  files?: Array<{ name: string; path: string; secret?: boolean }>;
+  /** What the roles say could go wrong in the pair (FBRX Command's address, its third vote), for the page. */
+  warnings?: (witnessUrl: string | null, partner: string) => string[];
   /** FBRX Gate on this server, for the page. */
   gateStatus?: () => HaStatus['gate'];
   /** This server's own addresses for the gate changed (the gate applies again). */
@@ -384,6 +389,8 @@ export class HaService {
       if (p.partner.version !== this.o.version) warnings.push(`The two run different FBRX Server versions (${this.o.version} here, ${p.partner.version} on ${p.partner.name}): update the older one.`);
       if (!this.hears(now) && this.state !== 'starting') warnings.push(`${p.partner.name} is not answering.`);
       if (p.witness && this.state === 'active' && this.lease.error) warnings.push(`The third vote does not answer: ${this.lease.error}`);
+      for (const v of this.o.copy?.views() ?? []) if (v.state === 'absent') warnings.push(`${p.partner.name} does not have ${v.label}: nothing of it is copied, and a takeover leaves it out.`);
+      warnings.push(...(this.o.warnings?.(p.witness?.url ?? null, p.partner.name) ?? []));
     }
     const code = this.get<StoredCode>(KEY.code);
     const events = this.events(40);
@@ -990,7 +997,7 @@ export class HaService {
     const copied = () => this.o.copy?.caughtUp() ?? true;
     for (const until = mono() + CATCH_UP_MS; !copied() && mono() < until; ) await new Promise((r) => setTimeout(r, this.heartbeatMs));
     if (!copied()) {
-      const behind = (this.o.copy?.views() ?? []).filter((v) => v.state !== 'caught-up').map((v) => v.label.toLowerCase());
+      const behind = (this.o.copy?.views() ?? []).filter((v) => v.state !== 'caught-up' && v.state !== 'absent').map((v) => v.label.toLowerCase());
       throw conflict(`${p.partner.name} is still copying (${behind.join(', ')}): try again when it has caught up`);
     }
     if (this.busy) throw conflict('The pair is busy: try again in a moment');
@@ -1043,9 +1050,25 @@ export class HaService {
         const { name, data } = z.object({ name: z.string().max(40), data: z.string().max(16 * 1024 * 1024) }).parse(m);
         const f = (this.o.files ?? []).find((x) => x.name === name);
         if (!f) throw notFound(`No file called ${name} here`);
-        mkdirSync(dirname(f.path), { recursive: true });
-        writeFileSync(`${f.path}.ha-tmp`, Buffer.from(data, 'base64'));
-        renameSync(`${f.path}.ha-tmp`, f.path);
+        mkdirSync(dirname(f.path), { recursive: true, mode: 0o700 });
+        // Its owner and mode stay as they are here (FBRX Command reads its keys as its own user).
+        const was = (() => {
+          try {
+            return statSync(f.path);
+          } catch {
+            return null;
+          }
+        })();
+        const owner = was ?? statSync(dirname(f.path));
+        const tmp = `${f.path}.ha-tmp`;
+        writeFileSync(tmp, Buffer.from(data, 'base64'));
+        chmodSync(tmp, was ? was.mode & 0o777 : f.secret ? 0o600 : 0o644);
+        try {
+          chownSync(tmp, owner.uid, owner.gid);
+        } catch {
+          /* not root (tests): it stays this program's */
+        }
+        renameSync(tmp, f.path);
         return { ok: true };
       }
       case 'copy': {

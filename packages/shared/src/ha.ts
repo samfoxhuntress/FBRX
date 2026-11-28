@@ -95,8 +95,11 @@ export const HA_DEFAULT_SETTINGS: HaSettings = { takeoverMs: HA_TAKEOVER_MS, aut
 export interface HaCopyView {
   name: string;
   label: string;
-  /** waiting: not heard from the other yet; full-copy: everything is being copied again; copying: changes on the way. */
-  state: 'caught-up' | 'copying' | 'full-copy' | 'waiting';
+  /**
+   * waiting: not heard from the other yet; full-copy: everything is being copied again; copying: changes on the way;
+   * absent: the standby does not have this role (nothing is copied, and a takeover leaves it out).
+   */
+  state: 'caught-up' | 'copying' | 'full-copy' | 'waiting' | 'absent';
   /** Changes the standby does not have yet, and for how long the oldest has waited (ms). */
   behind: number;
   behindMs: number | null;

@@ -1,5 +1,6 @@
 import type { ScreenRecorder } from './services/screen-recorder';
 import type { AlertCenter } from './services/alert-center';
+import type { CommandWitness } from './services/ha-witness';
 import type { ScreenRelay } from './services/screen-relay';
 import type { FastifyBaseLogger } from 'fastify';
 import { newId } from '@fbrx/shared';
@@ -24,6 +25,8 @@ export interface AppContext {
   webhooks: WebhookDispatcher;
   /** FBRX Alerts in each organization: who gets what, escalation, acknowledging (services/alert-center.ts). */
   alerts: AlertCenter;
+  /** The third vote of the organization's FBRX Server pairs (high availability). */
+  witness: CommandWitness;
   /** Email to FBRX accounts (mail.ts). */
   mail: Mailer;
   version: string;

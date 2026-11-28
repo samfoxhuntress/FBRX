@@ -29,6 +29,8 @@ import { adminAssetRoutes } from './routes/admin-assets';
 import { ssoRoutes } from './routes/sso';
 import { helpdeskRoutes } from './routes/helpdesk';
 import { alertRoutes } from './routes/alerts';
+import { haRoutes } from './routes/ha';
+import { CommandWitness } from './services/ha-witness';
 import { AlertCenter } from './services/alert-center';
 import { chatRoutes } from './routes/chat';
 import { meshRoutes } from './routes/mesh';
@@ -128,7 +130,8 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     log: (m, d) => app.log.warn(d, m),
     publicUrl: () => base.config.publicUrl || null,
   });
-  const ctx: AppContext = { ...base, alerts, ...createContextHelpers({ ...base, alerts }) };
+  const witness = new CommandWitness(db, keys.master);
+  const ctx: AppContext = { ...base, alerts, witness, ...createContextHelpers({ ...base, alerts, witness }) };
   ctx.audit.onAppend((entry) => ctx.realtime.emitAdmin({ type: 'audit', tenantId: entry.tenantId, entry }));
 
   await app.register(helmet, {
@@ -187,6 +190,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   await ssoRoutes(app, ctx);
   await helpdeskRoutes(app, ctx);
   await alertRoutes(app, ctx);
+  await haRoutes(app, ctx);
   await chatRoutes(app, ctx);
   await meshRoutes(app, ctx);
   await deviceRoutes(app, ctx);

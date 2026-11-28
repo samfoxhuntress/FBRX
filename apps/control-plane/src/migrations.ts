@@ -700,4 +700,27 @@ export const CP_MIGRATIONS: Migration[] = [
       CREATE INDEX org_alert_timeline_alert ON org_alert_timeline (alert_id, id);
     `,
   },
+  {
+    version: 19,
+    name: 'ha-witness',
+    // FBRX Command as the third vote of the organization's FBRX Server pairs: a key per pair (its secret sealed), and
+    // who holds each pair's lease (so a restart does not forget it).
+    up: `
+      CREATE TABLE ha_witness_keys (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        secret TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT
+      );
+      CREATE INDEX ha_witness_keys_tenant ON ha_witness_keys (tenant_id);
+      CREATE TABLE ha_witness_leases (
+        id TEXT PRIMARY KEY,
+        holder TEXT,
+        term INTEGER NOT NULL,
+        lease_ms INTEGER NOT NULL
+      );
+    `,
+  },
 ];

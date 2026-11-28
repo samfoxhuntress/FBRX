@@ -46,3 +46,8 @@
   color: var(--text-muted);
   white-space: nowrap;
 }
+
+/* Alerts → High availability: third vote, one line per pair. */
+.cp-witness { display: grid; gap: 0; }
+.cp-witness-row { display: grid; grid-template-columns: minmax(0, 1fr) auto auto auto; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid var(--border); }
+.cp-witness-row:last-child { border-bottom: 0; }

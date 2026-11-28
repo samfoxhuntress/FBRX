@@ -136,6 +136,13 @@ The all-clear reaches whoever heard the alert. **Send a test alert** sends one t
 **Alerts → Webhook**, paste both and choose which alerts to send ([SERVER.md](SERVER.md#alerts)); FBRX Command takes
 only alerts signed with that secret.
 
+**High availability: third vote** (on the same page) makes FBRX Command the third vote of a pair of FBRX Servers
+([SERVER.md](SERVER.md#high-availability)), so the two never both serve. Name the pair and **Make a third-vote key**:
+the address, the certificate and the key are shown once. On the pair's active server, **High availability → Third
+vote**, paste them. Each key is for one pair; the list says when each pair last asked and whether a server holds it
+now, and removing a key ends it (the pair then has no third vote). A pair of gates must reach FBRX Command without
+going through the gate, and a pair cannot be its own third vote: run FBRX Command on another server in your network.
+
 ## Roles
 
 | Permission | superadmin | owner | admin | operator | viewer |

@@ -289,6 +289,7 @@ function Copy({ s }: { s: HaStatus }) {
     if (c.state === 'caught-up') return ['Up to date', 'good'];
     if (c.state === 'full-copy') return [`Copying everything${c.behindMs ? ` (${secs(c.behindMs)})` : ''}`, 'neutral'];
     if (c.state === 'waiting') return [`Waiting for ${s.partner!.name}`, 'neutral'];
+    if (c.state === 'absent') return [`${s.partner!.name} does not have this role`, 'warning'];
     return [`${c.behind} change${c.behind === 1 ? '' : 's'} on the way${c.behindMs ? ` (${secs(c.behindMs)})` : ''}`, (c.behindMs ?? 0) > 60_000 ? 'warning' : 'neutral'];
   };
   return (
@@ -424,7 +425,7 @@ function ThirdVote({ s, reload }: { s: HaStatus; reload: () => Promise<void> }) 
           ]}
         />
       ) : (
-        <p className="fx-secondary">{s.me.state === 'active' ? 'On FBRX Command (Settings → High availability) or another FBRX Server (High availability → Be a third vote), make a third-vote key, then add it here.' : 'Add it on the active server.'}</p>
+        <p className="fx-secondary">{s.me.state === 'active' ? 'On FBRX Command (Alerts → High availability: third vote) or another FBRX Server (High availability → Be a third vote), make a third-vote key, then add it here.' : 'Add it on the active server.'}</p>
       )}
       {open && <ThirdVoteDialog onClose={() => setOpen(false)} reload={reload} />}
       {dialog}
