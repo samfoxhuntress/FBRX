@@ -13,6 +13,17 @@ export type PinErrorCode = 'FORBIDDEN' | 'TIMEOUT' | 'INVALID_ARGUMENT' | 'CANCE
 export type PinErrorFactory = (code: PinErrorCode, message: string) => Error;
 const plainError: PinErrorFactory = (code, message) => Object.assign(new Error(message), { code });
 
+/** TLS errors that mean "no authority vouches for this certificate" (self-signed, or signed by a private CA). */
+const UNTRUSTED_CERT = /SELF_SIGNED|UNABLE_TO_VERIFY|UNABLE_TO_GET_ISSUER|CERT_UNTRUSTED|ERR_TLS_CERT_ALTNAME_INVALID|self[- ]signed/i;
+
+/** A connection failed because nobody vouches for the server's certificate (fetch hides it a few causes deep). */
+export function untrustedCertificate(err: unknown): boolean {
+  for (let e = err as { code?: string; message?: string; cause?: unknown } | undefined, i = 0; e && i < 4; e = e.cause as typeof e, i++) {
+    if (UNTRUSTED_CERT.test(`${e.code ?? ''} ${e.message ?? ''}`)) return true;
+  }
+  return false;
+}
+
 export const normalizeFingerprint = (fp: string) => fp.replace(/[^0-9a-f]/gi, '').toUpperCase();
 export const formatFingerprint = (fp: string) => normalizeFingerprint(fp).match(/.{2}/g)?.join(':') ?? '';
 export const sameFingerprint = (a: string | null | undefined, b: string | null | undefined) => !!a && !!b && normalizeFingerprint(a) === normalizeFingerprint(b);

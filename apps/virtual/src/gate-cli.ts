@@ -4,7 +4,7 @@ import { request as httpRequest } from 'node:http';
 import { request as httpsRequest } from 'node:https';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { addPath, deletePath, getPath, netDevice, parseValue, setPath, type GateCommit, type GateConfig, type GateIssue, type GateLive, type GateState } from '@fbrx/gate';
+import { addPath, deletePath, getPath, netDevice, parseValue, renumberNetwork, setPath, type GateCommit, type GateConfig, type GateIssue, type GateLive, type GateState } from '@fbrx/gate';
 import { loadConfig } from './config';
 
 /**
@@ -26,9 +26,14 @@ const HELP = `fbrx-gate: FBRX Gate's command line
   confirm                        keep a commit made with "confirmed"
   rollback <commit>              go back to an earlier commit
   rollback now                   undo the commit waiting to be confirmed, now
+  renumber <network> <address>   move a network to other addresses; its range, reservations, forwards and rules
+                                 follow                renumber lan 192.168.50.1/24
+  wan dhcp                       the internet port takes its address from the modem or router
+  wan static <address> <gateway> a fixed internet address    wan static 203.0.113.2/29 203.0.113.1
   reset                          throw the edits away
   history                        commits, newest first
   leases                         devices that got an address
+  release <address|mac>          let a device's address go (it keeps it until it next asks)
   preview nftables|dnsmasq|networkd
                                  the files the configuration turns into
 
@@ -179,6 +184,21 @@ async function main(argv: string[]): Promise<number> {
       }
       return 0;
     }
+    case 'renumber': {
+      if (rest.length !== 2) throw new Error('Usage: fbrx-gate renumber <network> <address>   (like renumber lan 192.168.50.1/24)');
+      const s = await state();
+      await save(renumberNetwork(s.candidate, rest[0], rest[1]));
+      console.log(dim('Then: fbrx-gate commit (devices get their new addresses as their leases renew; restart them to hurry it).'));
+      return 0;
+    }
+    case 'wan': {
+      const s = await state();
+      const wan = s.candidate.wan;
+      if (rest[0] === 'dhcp' && rest.length === 1) await save({ ...s.candidate, wan: { interface: wan.interface, mode: 'dhcp', ping: wan.ping } });
+      else if (rest[0] === 'static' && rest.length === 3) await save({ ...s.candidate, wan: { ...wan, mode: 'static', address: rest[1], gateway: rest[2] } });
+      else throw new Error('Usage: fbrx-gate wan dhcp · fbrx-gate wan static <address/size> <gateway>   (like wan static 203.0.113.2/29 203.0.113.1)');
+      return 0;
+    }
     case 'check':
       printCheck(await state());
       return 0;
@@ -240,6 +260,18 @@ async function main(argv: string[]): Promise<number> {
       const live = await api<GateLive>('GET', '/v1/gate/live');
       if (!live.leases.length) console.log(dim('No leases.'));
       for (const l of live.leases) console.log(`${l.address.padEnd(16)} ${l.mac}  ${(l.name ?? '').padEnd(24)} ${l.network ?? ''}  ${l.expires ? `until ${new Date(l.expires).toLocaleString()}` : 'reserved'}`);
+      return 0;
+    }
+    case 'release': {
+      const which = (rest[0] ?? '').toLowerCase();
+      if (!which) throw new Error('Which one? fbrx-gate release <address|mac> (fbrx-gate leases lists them)');
+      const live = await api<GateLive>('GET', '/v1/gate/live');
+      const found = live.leases.filter((l) => l.address === which || l.mac === which);
+      if (!found.length) throw new Error(`No lease for ${which} (fbrx-gate leases lists them)`);
+      for (const l of found) {
+        await api('POST', '/v1/gate/leases/release', { mac: l.mac, address: l.address });
+        console.log(`Released ${l.address} (${l.mac}${l.name ? `, ${l.name}` : ''}). It keeps it until it next asks for an address.`);
+      }
       return 0;
     }
     case 'preview': {

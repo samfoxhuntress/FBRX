@@ -1,10 +1,12 @@
 import { useEffect, useRef, useState } from 'react';
 import type { HostInfo, HwTopology, IsoImage, VirtualNetwork, VmDetail, VmSnapshot } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, formatDate, formatDuration, Grid, InfoTip, Input, KeyValue, Page, Select, Table, Tabs, Toggle, useAction, useConfirm, useToast } from '@fbrx/ui';
+import { Button, Callout, Card, Empty, Field, formatDate, formatDuration, Grid, InfoTip, Input, KeyValue, Modal, Page, Select, Table, Tabs, TextArea, Toggle, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, usePoll, useRoute } from '../state';
 import { gb, mb, networkLabel, networkOptions, osName, Pct, PowerButtons, VmStateBadge } from './common';
 import { DescriptionEditor } from './vms';
+import { AskAiButton, describeFor } from '../ask-ai';
+import { keysFor, MAX_PASTE, typeKeys } from '../type-text';
 
 type Tab = 'summary' | 'console' | 'snapshots' | 'placement' | 'settings';
 
@@ -23,7 +25,16 @@ export function VmDetailPage({ id, tab }: { id: string; tab?: string }) {
         </span>
       }
       description={v.description || `${osName(v.os)} · ${v.cpus} CPU · ${mb(v.memoryMb)} · ${gb(v.diskGb)}`}
-      actions={<PowerButtons vm={v} onDone={() => void vm.reload()} />}
+      actions={
+        <>
+          <AskAiButton
+            what={`the virtual machine ${v.name}`}
+            question={`Look at the virtual machine ${v.name} on this server. Is anything wrong or worth changing (its resources, disks, network, state)? What would you do?`}
+            details={() => describeFor({ ...v, isoName: v.isoName ?? undefined })}
+          />
+          <PowerButtons vm={v} onDone={() => void vm.reload()} />
+        </>
+      }
     >
       {v.restartNeeded && <Callout tone="info">Some changes are saved and take effect when this machine next starts (shut it down and start it, a restart inside it is not enough).</Callout>}
       <Tabs<Tab>
@@ -118,6 +129,7 @@ function ConsoleTab({ vm }: { vm: VmDetail }) {
   const [status, setStatus] = useState<'idle' | 'connecting' | 'connected' | 'closed'>('idle');
   const [error, setError] = useState<string | null>(null);
   const [nonce, setNonce] = useState(0);
+  const [pasting, setPasting] = useState(false);
   const live = vm.state === 'running' || vm.state === 'paused';
   const simulated = app.me.driver === 'simulated';
 
@@ -160,6 +172,9 @@ function ConsoleTab({ vm }: { vm: VmDetail }) {
       subtitle={status === 'connected' ? 'Click into the screen to type. Your keyboard goes to the machine.' : status === 'connecting' ? 'Connecting…' : 'Not connected'}
       actions={
         <>
+          <Button size="sm" icon="clipboard" disabled={status !== 'connected'} onClick={() => setPasting(true)} title="Type text from this computer into the machine">
+            Paste
+          </Button>
           <Button size="sm" icon="zap" disabled={status !== 'connected'} onClick={() => rfbRef.current?.sendCtrlAltDel()}>
             Ctrl+Alt+Del
           </Button>
@@ -174,7 +189,76 @@ function ConsoleTab({ vm }: { vm: VmDetail }) {
     >
       {error && <Callout tone="critical">{error}</Callout>}
       <div ref={box} className="vt-screen" />
+      {pasting && (
+        <PasteModal
+          vmName={vm.name}
+          onType={(keys, o) => (rfbRef.current ? typeKeys(rfbRef.current, keys, o) : Promise.resolve(0))}
+          onClose={() => {
+            setPasting(false);
+            rfbRef.current?.focus();
+          }}
+        />
+      )}
     </Card>
+  );
+}
+
+/**
+ * Paste: the text from this computer's clipboard (or typed in), shown first, then typed into the machine key by key
+ * as on a US keyboard, so it reaches any screen, from a BIOS setting to a login prompt.
+ */
+function PasteModal({ vmName, onType, onClose }: { vmName: string; onType: (keys: ReturnType<typeof keysFor>['keys'], o: { signal: AbortSignal; onProgress: (n: number) => void }) => Promise<number>; onClose: () => void }) {
+  const [text, setText] = useState('');
+  const [typing, setTyping] = useState<{ done: number; of: number } | null>(null);
+  const stop = useRef<AbortController | null>(null);
+  const { keys, skipped } = keysFor(text.slice(0, MAX_PASTE));
+
+  // The browser may let the page read the clipboard (it asks first); otherwise the person pastes into the box.
+  useEffect(() => {
+    void navigator.clipboard?.readText().then(
+      (t) => setText((cur) => cur || t),
+      () => undefined,
+    );
+  }, []);
+
+  const type = async () => {
+    const ctrl = new AbortController();
+    stop.current = ctrl;
+    setTyping({ done: 0, of: keys.length });
+    await onType(keys, { signal: ctrl.signal, onProgress: (done) => setTyping({ done, of: keys.length }) });
+    stop.current = null;
+    onClose();
+  };
+  const close = () => {
+    stop.current?.abort();
+    onClose();
+  };
+
+  return (
+    <Modal
+      title={`Paste into ${vmName}`}
+      description="Types the text into the machine as if on a US keyboard. Click where it should go in the machine's screen first."
+      onClose={close}
+      footer={
+        typing ? (
+          <>
+            <span className="fx-muted">Typing… {typing.done} of {typing.of}</span>
+            <Button onClick={close}>Stop</Button>
+          </>
+        ) : (
+          <>
+            <Button variant="ghost" onClick={close}>Cancel</Button>
+            <Button variant="primary" icon="clipboard" disabled={!keys.length} onClick={() => void type()}>
+              Type it
+            </Button>
+          </>
+        )
+      }
+    >
+      <Field label="Text" help={text.length > MAX_PASTE ? `Only the first ${MAX_PASTE.toLocaleString()} characters are typed.` : skipped ? `${skipped} character${skipped === 1 ? '' : 's'} a US keyboard cannot type (accented letters, emoji…) will be left out.` : 'Paste here (Ctrl+V) if it is empty.'}>
+        <TextArea rows={8} value={text} disabled={!!typing} onChange={(e) => setText(e.target.value)} placeholder="Paste or type what to send" spellCheck={false} />
+      </Field>
+    </Modal>
   );
 }
 

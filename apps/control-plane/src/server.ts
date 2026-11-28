@@ -18,6 +18,7 @@ import { CpAudit } from './audit';
 import { Realtime } from './realtime';
 import { WebhookDispatcher } from './services/webhooks';
 import { createContextHelpers, ids, type AppContext } from './context';
+import { createMailer } from './mail';
 import { HttpError } from './errors';
 import { authRoutes } from './routes/auth';
 import { deviceRoutes } from './routes/device';
@@ -27,17 +28,35 @@ import { adminFleetRoutes } from './routes/admin-fleet';
 import { adminAssetRoutes } from './routes/admin-assets';
 import { ssoRoutes } from './routes/sso';
 import { helpdeskRoutes } from './routes/helpdesk';
+import { alertRoutes } from './routes/alerts';
+import { haRoutes } from './routes/ha';
+import { CommandWitness } from './services/ha-witness';
+import { AlertCenter } from './services/alert-center';
 import { chatRoutes } from './routes/chat';
+import { meshRoutes } from './routes/mesh';
+import { commandRoutes } from './routes/command';
+import { accountRoutes } from './routes/accounts';
+import { billingAdminRoutes } from './routes/billing-admin';
+import { cloudAiRoutes } from './routes/cloud-ai';
+import { screenRoutes } from './routes/screen';
+import { ScreenRecorder } from './services/screen-recorder';
+import { ScreenRelay } from './services/screen-relay';
+import { stripeOf } from './billing/stripe';
+import { rememberStripePrice } from './billing/pricing';
+import { scheduleSeatSync, syncSeats, syncTenantLicense } from './billing/tenant-billing';
+import { tenantScope } from './auth';
+import { CommandUpdater } from './services/command-update';
 import { slugify } from './routes/util';
 import { loadTls } from './tls';
 
+/** The FBRX release FBRX Command was built from (the same version as FBRX OS); from source, the FBRX folder's. */
 function readVersion(): string {
   if (process.env.FBRX_CP_VERSION) return process.env.FBRX_CP_VERSION;
   try {
     let dir = dirname(fileURLToPath(import.meta.url));
     for (let i = 0; i < 5; i++) {
-      const pj = join(dir, 'package.json');
-      if (existsSync(pj)) return JSON.parse(readFileSync(pj, 'utf8')).version;
+      const fbrx = join(dir, 'apps', 'desktop', 'package.json');
+      if (existsSync(fbrx)) return JSON.parse(readFileSync(fbrx, 'utf8')).version;
       dir = dirname(dir);
     }
   } catch {
@@ -46,12 +65,25 @@ function readVersion(): string {
   return '1.0.0';
 }
 
+/** How long closing waits for requests under way before it closes their connections. */
+const CLOSE_GRACE_MS = 2000;
+
 export interface BuiltServer {
   app: FastifyInstance;
   ctx: AppContext;
   /** Also answers on http://127.0.0.1:<port> (the console on this computer, no certificate warning). Resolves with the port. */
   listenLocal(port: number): Promise<number>;
   close(): Promise<void>;
+}
+
+/**
+ * Idle connections stay open 72 seconds, as Fastify sets for servers it makes itself (with serverFactory it does not).
+ * Node's own 5 seconds races computers that reuse a connection after a busy moment: the server closes it just as the
+ * next request goes out, and that request fails ("fetch failed", ECONNRESET).
+ */
+function keepAlive(server: Server): Server {
+  server.keepAliveTimeout = 72_000;
+  return server;
 }
 
 export async function buildServer(config: Config): Promise<BuiltServer> {
@@ -65,7 +97,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     // One request handler for the main server (HTTPS when FBRX Command has a certificate) and the local listener.
     serverFactory: (h) => {
       handler = h;
-      return (tls ? createHttpsServer({ key: tls.key, cert: tls.cert }, h) : createHttpServer(h)) as Server;
+      return keepAlive((tls ? createHttpsServer({ key: tls.key, cert: tls.cert }, h) : createHttpServer(h)) as Server);
     },
   }) as unknown as FastifyInstance;
   let local: Server | null = null;
@@ -73,18 +105,33 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   db.migrate(CP_MIGRATIONS);
   const keys = loadKeys(config.dataDir);
   const version = readVersion();
+  const realtime = new Realtime();
   const base = {
     config,
     db,
     keys,
     audit: new CpAudit(db),
-    realtime: new Realtime(),
+    realtime,
+    screen: new ScreenRelay(realtime),
+    recorder: new ScreenRecorder(db, config.dataDir),
     webhooks: new WebhookDispatcher(db, keys.master, version, (m, d) => app.log.warn(d, m)),
+    mail: createMailer(config.cloud.mail, app.log),
     version,
     log: app.log,
     tls: tls ? { fingerprint: tls.fingerprint, selfSigned: tls.selfSigned, notAfter: tls.notAfter } : null,
   };
-  const ctx: AppContext = { ...base, ...createContextHelpers(base) };
+  const alerts = new AlertCenter({
+    db,
+    master: keys.master,
+    sendToDevice: (id, msg) => realtime.sendToDevice(id, msg),
+    emitAdmin: (e) => realtime.emitAdmin(e),
+    webhook: (tenantId, event, payload) => base.webhooks.emit(tenantId, event, payload),
+    mail: (to, subject, text) => base.mail.send({ to, subject, text }),
+    log: (m, d) => app.log.warn(d, m),
+    publicUrl: () => base.config.publicUrl || null,
+  });
+  const witness = new CommandWitness(db, keys.master);
+  const ctx: AppContext = { ...base, alerts, witness, ...createContextHelpers({ ...base, alerts, witness }) };
   ctx.audit.onAppend((entry) => ctx.realtime.emitAdmin({ type: 'audit', tenantId: entry.tenantId, entry }));
 
   await app.register(helmet, {
@@ -117,16 +164,52 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     return reply.status(status).send({ error: { code: status === 429 ? 'RATE_LIMITED' : 'ERROR', message: status >= 500 ? 'Internal server error' : (err as Error).message } });
   });
 
+  // The website (its own origin) calls the account and billing API from the browser: CORS for those routes only.
+  const websiteApi = /^\/v1\/(plans|accounts(\/|$)|billing\/(checkout|portal)$)/;
+  app.addHook('onRequest', async (req, reply) => {
+    const origin = req.headers.origin;
+    if (!origin || !config.cloud.websiteOrigins.includes(origin) || !websiteApi.test(req.url.split('?')[0]!)) return;
+    reply.header('access-control-allow-origin', origin);
+    reply.header('vary', 'Origin');
+    reply.header('access-control-allow-headers', 'authorization, content-type');
+    reply.header('access-control-allow-methods', 'GET, POST, DELETE, OPTIONS');
+    reply.header('access-control-max-age', '600');
+    if (req.method === 'OPTIONS') return reply.status(204).send();
+  });
+  // Each Stripe price found under one of FBRX's lookup keys is remembered: it stays that product once its key moves.
+  const stripe = stripeOf(config.cloud);
+  if (stripe) stripe.onPrice = (priceId, productId) => rememberStripePrice(ctx.db, priceId, productId);
+  // An organization's computers changed (their editions, their groups, members): its plan's seats follow.
+  app.addHook('onResponse', async (req, reply) => {
+    if (req.method === 'GET' || reply.statusCode >= 400 || !req.principal || !/^\/v1\/admin\/(devices|groups|members)\b/.test(req.url)) return;
+    const tenantId = tenantScope(req);
+    if (tenantId) scheduleSeatSync(ctx, stripeOf(config.cloud), tenantId);
+  });
   app.get('/healthz', { logLevel: 'warn' }, async () => ({ ok: true, version }));
   await authRoutes(app, ctx);
   await ssoRoutes(app, ctx);
   await helpdeskRoutes(app, ctx);
+  await alertRoutes(app, ctx);
+  await haRoutes(app, ctx);
   await chatRoutes(app, ctx);
+  await meshRoutes(app, ctx);
   await deviceRoutes(app, ctx);
   await updateRoutes(app, ctx);
   await app.register(async (scoped) => adminOrgRoutes(scoped, ctx));
   await app.register(async (scoped) => adminFleetRoutes(scoped, ctx));
   await adminAssetRoutes(app, ctx);
+  await accountRoutes(app, ctx);
+  await cloudAiRoutes(app, ctx);
+  await screenRoutes(app, ctx);
+  await app.register(async (scoped) => billingAdminRoutes(scoped, ctx));
+  const updater = new CommandUpdater({
+    version,
+    db,
+    dataDir: config.dataDir,
+    log: (level, msg, data) => app.log[level](data ?? {}, msg),
+  });
+  await app.register(async (scoped) => commandRoutes(scoped, ctx, updater));
+  if (!config.devMode) updater.start();
 
   if (config.adminConsoleDir && existsSync(join(config.adminConsoleDir, 'index.html'))) {
     await app.register(fastifyStatic, { root: config.adminConsoleDir, index: 'index.html' });
@@ -139,7 +222,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   }
 
   // First-run: bootstrap from env, or require a setup token.
-  const users = Number(db.get<{ n: number }>('SELECT COUNT(*) AS n FROM users')?.n ?? 0);
+  const users = Number(db.get<{ n: number }>("SELECT COUNT(*) AS n FROM users WHERE role = 'superadmin'")?.n ?? 0);
   if (users === 0 && config.bootstrapAdmin) {
     const b = config.bootstrapAdmin;
     const now = new Date().toISOString();
@@ -163,21 +246,52 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
   }
 
   // Housekeeping.
+  ctx.recorder.recover();
+  let recordingsSweptAt = 0;
   const sweep = () => {
+    // Recordings past the days their organization keeps them, once an hour.
+    if (Date.now() - recordingsSweptAt > 3600_000) {
+      recordingsSweptAt = Date.now();
+      try {
+        ctx.recorder.sweep();
+      } catch (err) {
+        app.log.warn({ err }, 'Could not remove old screen recordings');
+      }
+    }
     const now = new Date().toISOString();
     db.run("UPDATE commands SET status = 'expired', completed_at = ? WHERE status IN ('queued','sent') AND expires_at IS NOT NULL AND expires_at < ?", now, now);
     db.run('DELETE FROM device_metrics WHERE ts < ?', new Date(Date.now() - 30 * 86400_000).toISOString());
     db.run('DELETE FROM sessions WHERE expires_at < ?', new Date(Date.now() - 7 * 86400_000).toISOString());
   };
-  const timer = setInterval(sweep, 60_000);
+  const timer = setInterval(() => {
+    sweep();
+    try {
+      alerts.tick();
+    } catch (err) {
+      app.log.warn({ err }, 'Alert escalation pass failed');
+    }
+  }, 60_000);
   timer.unref();
+  // Organizations in the cloud: their licenses follow their plans (renewals, ends), and the seats their computers.
+  const reconcile = () => {
+    for (const t of db.all<{ id: string }>("SELECT id FROM tenants WHERE billing = 'cloud' AND status = 'active'")) {
+      try {
+        syncTenantLicense(ctx, t.id);
+      } catch (err) {
+        app.log.warn({ err, tenant: t.id }, 'Could not bring the organization license up to date');
+      }
+      void syncSeats(ctx, stripeOf(config.cloud), t.id).catch((err) => app.log.warn({ err, tenant: t.id }, 'Could not update the plan with the computers'));
+    }
+  };
+  const billingTimer = setInterval(reconcile, 15 * 60_000);
+  billingTimer.unref();
 
   return {
     app,
     ctx,
     listenLocal(port: number) {
       return new Promise<number>((resolve, reject) => {
-        const s = createHttpServer((req, res) => handler!(req, res));
+        const s = keepAlive(createHttpServer((req, res) => handler!(req, res)));
         // Live updates in the console: hand WebSocket upgrades to the main server's handler.
         s.on('upgrade', (req, socket, head) => app.server.emit('upgrade', req, socket, head));
         s.once('error', reject);
@@ -189,10 +303,22 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     },
     async close() {
       clearInterval(timer);
+      ctx.recorder.closeAll();
+      clearInterval(billingTimer);
+      updater.stop();
       ctx.realtime.closeAll();
-      if (local) await new Promise<void>((r) => local!.close(() => r()));
-      local?.closeAllConnections?.();
-      await app.close();
+      // Requests under way get a moment to finish; then every connection goes, also ones that never sent a request (a
+      // browser's spare connection), which closing would otherwise wait on until they time out.
+      const force = setTimeout(() => {
+        local?.closeAllConnections();
+        app.server.closeAllConnections();
+      }, CLOSE_GRACE_MS);
+      try {
+        if (local) await new Promise<void>((r) => local!.close(() => r()));
+        await app.close();
+      } finally {
+        clearTimeout(force);
+      }
       db.close();
     },
   };

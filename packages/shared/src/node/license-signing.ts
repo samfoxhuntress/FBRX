@@ -40,6 +40,9 @@ export type LicenseVerification =
   | { ok: true; payload: LicensePayload; expired: boolean }
   | { ok: false; error: string };
 
+/** Why a license signed with a key this build does not embed (another FBRX Command's, say) does not count. */
+export const UNTRUSTED_LICENSE = 'License signature is not trusted by this build';
+
 export function verifyLicense(key: string, publicKeysPem: readonly string[], now = new Date()): LicenseVerification {
   const parts = key.trim().split('.');
   if (parts.length !== 3 || parts[0] !== LICENSE_PREFIX) return { ok: false, error: 'Malformed license key' };
@@ -57,7 +60,7 @@ export function verifyLicense(key: string, publicKeysPem: readonly string[], now
       return false;
     }
   });
-  if (!trusted) return { ok: false, error: 'License signature is not trusted by this build' };
+  if (!trusted) return { ok: false, error: UNTRUSTED_LICENSE };
   let payload: LicensePayload;
   try {
     payload = LicensePayloadSchema.parse(JSON.parse(new TextDecoder().decode(base64UrlDecode(parts[1]))));
@@ -73,6 +76,8 @@ export function licenseStatusFrom(
   publicKeysPem: readonly string[],
   source: LicenseStatus['source'],
   appMajorVersion: number,
+  /** This computer's install id: a key made for another install does not count here. */
+  installId?: string | null,
 ): LicenseStatus {
   const base: LicenseStatus = {
     state: 'unlicensed',
@@ -103,7 +108,8 @@ export function licenseStatusFrom(
     commandUrl: p.command?.url ?? null,
     vertical: p.vertical ?? null,
   };
-  if (v.expired) return { ...base, ...info, state: 'expired', message: 'License has expired; running with Community features' };
+  if (v.expired) return { ...base, ...info, state: 'expired', message: 'This license has expired: until it is renewed, this computer runs the free features (Essentials on its own, up to Pro in an organization)' };
+  if (p.installId && installId && p.installId !== installId) return { ...base, ...info, state: 'invalid', message: 'This license is for another computer' };
   if (p.maxMajorVersion !== null && appMajorVersion > p.maxMajorVersion) {
     return { ...base, ...info, state: 'invalid', message: `License covers versions up to ${p.maxMajorVersion}.x` };
   }

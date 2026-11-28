@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import type { VirtualNetwork, VmSummary } from '@fbrx/shared';
+import type { HostBridgeStatus, VirtualNetwork, VmSummary } from '@fbrx/shared';
 import { Button, Callout, Card, ChoiceCards, Empty, Field, Icons, InfoTip, Input, Modal, Page, Status, useAction, useConfirm, type IconName } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, usePoll, useRoute } from '../state';
@@ -56,10 +56,7 @@ export function NetworksPage() {
               </Button>
             </>
           ) : (
-            <>
-              Make a bridge on a port: run the installer again with <span className="mono">--bridge eno1</span> (the port cabled to your network) and restart. Machines on it get addresses
-              from your router.
-            </>
+            <BridgeHint />
           )}
         </Callout>
       )}
@@ -74,6 +71,116 @@ export function NetworksPage() {
       )}
       {creating && <NewNetwork onClose={() => setCreating(false)} onDone={() => void nets.reload()} />}
     </Page>
+  );
+}
+
+const MODE_WORDS: Record<HostBridgeStatus['ports'][number]['mode'], string> = {
+  dhcp: 'address from your router (DHCP)',
+  static: 'fixed address',
+  manual: 'no address of its own',
+  none: 'not set up: a spare card for machines',
+  other: 'set up by hand',
+};
+
+/** What it takes, on the hypervisor this server runs on, for machines on its bridge to reach the network. */
+const OUTER_WORDS: Record<Exclude<HostBridgeStatus['outer'], null>, string> = {
+  vmware:
+    'This server is itself a VMware virtual machine. In vSphere, the port group of its network card must allow Promiscuous mode, MAC address changes and Forged transmits (or turn on MAC learning on a distributed switch); otherwise machines on the bridge get no address.',
+  'hyper-v': 'This server is itself a Hyper-V virtual machine. Turn on MAC address spoofing for its network adapter (its Settings → Network Adapter → Advanced Features); otherwise machines on the bridge get no address.',
+  virtualbox: 'This server is itself a VirtualBox virtual machine. Set its network adapter to Bridged with Promiscuous Mode: Allow All; otherwise machines on the bridge get no address.',
+  kvm: 'This server is itself a virtual machine. Its host must let its network card carry other addresses (on Proxmox, no MAC filter on the bridge it uses).',
+  other: 'This server is itself a virtual machine. Its host must let its network card carry other addresses (promiscuous mode, or MAC address spoofing); otherwise machines on the bridge get no address.',
+};
+
+/** The badge's words without a gate: a bridge on a port, made from here, and the restart it needs. */
+function BridgeHint() {
+  const app = useApp();
+  const admin = app.can('admin');
+  const st = usePoll<HostBridgeStatus>(admin ? '/v1/networks/host-bridge' : null, 15000);
+  const [open, setOpen] = useState(false);
+  const { busy, run } = useAction();
+  const { confirm, dialog } = useConfirm();
+  const restart = async () => {
+    if (await confirm({ title: 'Restart the server now?', body: 'Virtual machines stop with it, and those set to start with the server start again. This console comes back in a minute or two.', confirmLabel: 'Restart', danger: true }))
+      void run('restart', () => api('POST', '/v1/server/restart'), 'The server is restarting');
+  };
+  const pending = st.data?.pending;
+  if (pending)
+    return (
+      <>
+        The bridge on <span className="mono">{pending.port}</span> is saved. Restart the server for it to take over; machines can then be put on it.{' '}
+        {st.data?.canRestart && (
+          <Button size="sm" variant="primary" icon="refresh" loading={busy === 'restart'} onClick={() => void restart()}>
+            Restart now
+          </Button>
+        )}
+        {dialog}
+      </>
+    );
+  return (
+    <>
+      Make a bridge on the port cabled to your network: machines on it are devices there, with addresses from your router.{' '}
+      {admin ? (
+        <Button size="sm" icon="plus" disabled={st.data ? !st.data.canMake : true} title={st.data?.why ?? undefined} onClick={() => setOpen(true)}>
+          Bridge a port…
+        </Button>
+      ) : (
+        'An administrator can make one here.'
+      )}
+      {st.data?.why && !st.data.canMake && <div className="fx-help" style={{ marginTop: 6 }}>{st.data.why}</div>}
+      {open && st.data && <BridgeDialog st={st.data} onClose={() => setOpen(false)} onDone={() => void st.reload()} />}
+    </>
+  );
+}
+
+function BridgeDialog({ st, onClose, onDone }: { st: HostBridgeStatus; onClose: () => void; onDone: () => void }) {
+  const usable = st.ports.filter((p) => p.usable);
+  // The port the server already reaches your network on is the usual one.
+  const [port, setPort] = useState((usable.find((p) => p.addresses.length) ?? usable[0])?.name ?? '');
+  const { busy, run } = useAction();
+  const chosen = st.ports.find((p) => p.name === port);
+  return (
+    <Modal
+      title="Bridge a port to your network"
+      description="Virtual machines on the bridge sit on that network like any other device, with addresses from its router. Any number of machines share the port with the server."
+      onClose={onClose}
+      footer={
+        <>
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant="primary" loading={busy === 'make'} disabled={!chosen?.usable} onClick={() => void run('make', () => api('POST', '/v1/networks/host-bridge', { port }).then(() => (onDone(), onClose())), 'Bridge saved: restart the server to finish')}>
+            Make the bridge
+          </Button>
+        </>
+      }
+    >
+      <div className="fx-form">
+        <Field label="Port">
+          <div style={{ display: 'grid', gap: 8 }}>
+            {st.ports.map((p) => (
+              <label key={p.name} className="fx-row" style={{ gap: 10, alignItems: 'flex-start', opacity: p.usable ? 1 : 0.55, cursor: p.usable ? 'pointer' : 'default' }}>
+                <input type="radio" name="port" checked={port === p.name} disabled={!p.usable} onChange={() => setPort(p.name)} style={{ marginTop: 4 }} />
+                <span>
+                  <b className="mono">{p.name}</b> <Status tone={p.up ? 'good' : 'neutral'}>{p.up ? 'Connected' : 'No link'}</Status>
+                  <br />
+                  <span className="fx-muted">
+                    {p.addresses.length ? p.addresses.join(', ') : 'No address'} · {MODE_WORDS[p.mode]}
+                    {p.mac ? ` · ${p.mac}` : ''}
+                    {p.note ? ` · ${p.note}` : ''}
+                  </span>
+                </span>
+              </label>
+            ))}
+          </div>
+        </Field>
+        {chosen && (chosen.mode === 'dhcp' || chosen.mode === 'static') && (
+          <Callout tone="info">
+            The server keeps its address: {chosen.mode === 'dhcp' ? 'the bridge asks your router with the same card, so it usually gets the same one' : 'the fixed address moves from the port to the bridge'}. The console drops for a moment while the server restarts.
+          </Callout>
+        )}
+        {st.outer && <Callout tone="warning" title="One more step on the host">{OUTER_WORDS[st.outer]}</Callout>}
+        <div className="fx-help">It is saved now and takes over when the server restarts (the old settings are kept in /etc/network/interfaces.fbrx-backup).</div>
+      </div>
+    </Modal>
   );
 }
 

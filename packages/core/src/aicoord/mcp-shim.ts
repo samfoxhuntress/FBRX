@@ -19,11 +19,17 @@ function connection(): { url: string; token: string } {
     const j = JSON.parse(readFileSync(join(DATA_DIR, 'localapi-agent.json'), 'utf8'));
     return { url: String(j.url), token: String(j.token) };
   } catch {
-    throw new Error('FBRX OS is not running, or its Local API is turned off (FBRX OS → AI coordination).');
+    // The file is written once the Local API runs: FBRX OS closed, the Local API switched off, or waiting (for its
+    // saved credentials to be unlocked, say) all look the same from here; Settings → Local API in FBRX OS says which.
+    throw new Error('FBRX OS is not running, or its Local API is not running (FBRX OS → Settings → Local API says why).');
   }
 }
 
-async function api(path: string, body: unknown): Promise<any> {
+/**
+ * A call to FBRX OS. signal: the AI app cancelled (or gave up waiting): the request is dropped, and FBRX OS stops the
+ * work it started for it instead of keeping the model busy.
+ */
+async function api(path: string, body: unknown, signal?: AbortSignal): Promise<any> {
   const { url, token } = connection();
   let res: Response;
   try {
@@ -31,9 +37,11 @@ async function api(path: string, body: unknown): Promise<any> {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
       body: JSON.stringify(body),
-      signal: AbortSignal.timeout(15 * 60_000),
+      signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(15 * 60_000)]) : AbortSignal.timeout(15 * 60_000),
     });
-  } catch {
+  } catch (err) {
+    if (signal?.aborted) throw new Error('Cancelled: FBRX OS stopped the task.');
+    if ((err as Error).name === 'TimeoutError') throw new Error('FBRX OS did not answer within 15 minutes; the task was stopped.');
     throw new Error('FBRX OS is not running. Open FBRX OS and try again.');
   }
   const j: any = await res.json().catch(() => ({}));
@@ -69,17 +77,17 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   return { tools: out };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (req) => {
+server.setRequestHandler(CallToolRequestSchema, async (req, extra) => {
   const name = req.params.name;
   const args = (req.params.arguments ?? {}) as Record<string, unknown>;
   try {
     // ask_fabric: the tool's name before the agent was renamed, still used by apps that cached the tool list.
     if (name === 'ask_fabrix' || name === 'ask_fabric') {
-      const r = await api('/v1/agent/run', { prompt: String(args.prompt ?? '') });
+      const r = await api('/v1/agent/run', { prompt: String(args.prompt ?? '') }, extra.signal);
       return { content: [{ type: 'text', text: String(r.answer ?? r.error ?? '') || '(no answer)' }], isError: r.status !== 'completed' };
     }
     const tool = names.get(name) ?? name.replace(/__/g, '.');
-    const r = await api(`/v1/tools/${encodeURIComponent(tool)}`, { input: args });
+    const r = await api(`/v1/tools/${encodeURIComponent(tool)}`, { input: args }, extra.signal);
     return { content: [{ type: 'text', text: String(r.output ?? '').slice(0, 100_000) }], isError: !r.ok };
   } catch (err) {
     return { content: [{ type: 'text', text: (err as Error).message }], isError: true };

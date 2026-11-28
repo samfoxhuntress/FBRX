@@ -21,7 +21,7 @@ export function EventsPage() {
   const events = useQuery<Ev[]>(`/v1/admin/events?limit=300${severity ? `&severity=${severity}` : ''}`, [], (e) => e.type === 'device.event');
   const { run } = useAction();
   return (
-    <Page title="Alerts & events" description="Service failures, vault locks, hardware identity changes and audit anomalies reported by devices, in real time.">
+    <Page title="Device events" description="Everything devices report, as it happens: service failures, vault locks, hardware identity changes, audit anomalies and their alerts. Alerts (in Fleet) keeps each problem from its alert to its all-clear, with who heard it.">
       <div className="fx-row">
         <div style={{ width: 220 }}>
           <Select aria-label="Severity" value={severity} onChange={(e) => setSeverity(e.target.value)} options={[{ value: '', label: 'All severities' }, { value: 'critical', label: 'Critical' }, { value: 'warning', label: 'Warning' }, { value: 'info', label: 'Info' }]} />

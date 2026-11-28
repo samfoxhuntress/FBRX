@@ -32,12 +32,15 @@ export function buildDomainXml(b: DomainBuild): string {
   const cdDev = win ? 'sdb' : 'sda';
   const nicModel = win ? 'e1000e' : 'virtio';
   const nicSource = spec.network.kind === 'bridge' ? `<source bridge='${esc(spec.network.source)}'/>` : `<source network='${esc(spec.network.source)}'/>`;
+  // UEFI from flash with the machine's own settings (NVRAM): otherwise libvirt may pick a stateless build, such as the
+  // AMD SEV firmware on Ubuntu 26.04, which keeps no settings and which libvirt's AppArmor helper refuses to load.
   const firmware = uefi
     ? `
     <firmware>
       <feature enabled='${secure ? 'yes' : 'no'}' name='secure-boot'/>
       <feature enabled='${secure ? 'yes' : 'no'}' name='enrolled-keys'/>
-    </firmware>`
+    </firmware>
+    <loader type='pflash'/>`
     : '';
   const lines = [
     `<domain type='${b.domainType}'>`,
@@ -70,7 +73,8 @@ export function buildDomainXml(b: DomainBuild): string {
     `  <on_crash>destroy</on_crash>`,
     `  <devices>`,
     `    <disk type='file' device='disk'>`,
-    `      <driver name='qemu' type='qcow2' discard='unmap'/>`,
+    // A thin disk gives space back when the guest frees it; a thick one keeps all of it.
+    `      <driver name='qemu' type='qcow2'${spec.provisioning === 'thick' ? '' : " discard='unmap'"}/>`,
     `      <source file='${esc(b.diskPath)}'/>`,
     `      <target dev='${diskDev}' bus='${diskBus}'/>`,
     `    </disk>`,

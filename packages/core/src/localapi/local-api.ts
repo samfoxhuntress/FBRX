@@ -1,11 +1,14 @@
 import { createServer, type IncomingMessage, type Server, type ServerResponse } from 'node:http';
-import { AGENT_SCOPE_METHODS, PRODUCT_NAME, type CoreMethod, type LocalApiInfo } from '@fbrx/shared';
+import { AGENT_SCOPE_METHODS, ATTACHMENT_MAX_BYTES, PRODUCT_NAME, type CoreMethod, type LocalApiInfo } from '@fbrx/shared';
 import { safeEqual } from '@fbrx/shared/node';
 import { CoreError, toCoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
 import type { SettingsService } from '../settings/settings-service';
 import type { CallContext } from '../api/core-api';
+
+/** The largest request: an attached file (FBRX Server's console sends them here), as base64, with room to spare. */
+const MAX_BODY = Math.ceil((ATTACHMENT_MAX_BYTES * 4) / 3) + 1024 * 1024;
 
 export interface LocalApiDeps {
   call: (method: string, params: unknown, ctx: CallContext) => Promise<unknown>;
@@ -114,7 +117,7 @@ export class LocalApiServer {
     if (!this.sseClients.size) return;
     const data = `event: ${event}\ndata: ${JSON.stringify(payload)}\n\n`;
     for (const c of this.sseClients) {
-      if ((c as ServerResponse & { fbrxScope?: Scope }).fbrxScope === 'agent' && !['agent', 'approval.requested', 'approval.resolved'].includes(event)) continue;
+      if ((c as ServerResponse & { fbrxScope?: Scope }).fbrxScope === 'agent' && !['agent', 'agent.runs', 'approval.requested', 'approval.resolved'].includes(event)) continue;
       c.write(data);
     }
   }
@@ -158,7 +161,7 @@ export class LocalApiServer {
     let size = 0;
     for await (const chunk of req) {
       size += (chunk as Buffer).length;
-      if (size > 2 * 1024 * 1024) throw new CoreError('INVALID_ARGUMENT', 'Request body too large');
+      if (size > MAX_BODY) throw new CoreError('INVALID_ARGUMENT', 'Request body too large');
       chunks.push(chunk as Buffer);
     }
     if (!size) return {};
@@ -184,7 +187,12 @@ export class LocalApiServer {
     if (!scope) return this.json(res, 401, { error: { code: 'UNAUTHENTICATED', message: 'Missing or invalid token' } });
     // The console names the person signed in to it (for the audit log).
     const who = String(req.headers['x-fbrx-actor'] ?? '').replace(/[^\w.@-]/g, '').slice(0, 64) || 'admin';
-    const ctx: CallContext = scope === 'console' ? { origin: 'user', actor: `console:${who}` } : { origin: 'api', actor: `localapi:${scope}` };
+    // The caller hanging up before the answer (an AI app that cancelled or gave up) stops the work it asked for.
+    const hangUp = new AbortController();
+    res.on('close', () => {
+      if (!res.writableFinished) hangUp.abort();
+    });
+    const ctx: CallContext = scope === 'console' ? { origin: 'user', actor: `console:${who}`, signal: hangUp.signal } : { origin: 'api', actor: `localapi:${scope}`, signal: hangUp.signal };
     try {
       if (req.method === 'GET' && url.pathname === '/v1/events') {
         res.writeHead(200, { 'content-type': 'text/event-stream', 'cache-control': 'no-store', connection: 'keep-alive' });

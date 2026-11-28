@@ -11,7 +11,12 @@ export function AccessPage() {
   return (
     <Page title="Users & audit" description="Who can sign in to FBRX Virtual, and everything they did.">
       <Tabs active={tab} onChange={setTab} tabs={[{ id: 'users', label: 'Users' }, { id: 'audit', label: 'Audit log' }, { id: 'me', label: 'My password' }]} />
-      {tab === 'users' && <Users />}
+      {tab === 'users' && (
+        <>
+          <Users />
+          <Apps />
+        </>
+      )}
       {tab === 'audit' && <Audit />}
       {tab === 'me' && <MyPassword />}
     </Page>
@@ -60,6 +65,54 @@ function Users() {
         ]}
       />
       {editing && <UserModal user={editing === 'new' ? null : editing} onClose={() => setEditing(null)} onDone={() => void users.reload()} />}
+      {dialog}
+    </Card>
+  );
+}
+
+interface AppToken {
+  id: string;
+  name: string;
+  createdBy: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
+/**
+ * Apps with access: Fabrix on a computer that was let look at this server (FBRX OS → FBRX Server → Let Fabrix look), to
+ * troubleshoot the network. Each can only look (a viewer), never change; revoke one and it is locked out at once.
+ */
+function Apps() {
+  const { busy, run } = useAction();
+  const { confirm, dialog } = useConfirm();
+  const apps = usePoll<{ tokens: AppToken[] }>('/v1/auth/app-tokens', 30000);
+  if (!apps.data?.tokens.length) return null;
+  return (
+    <Card title="Apps with access" subtitle="They can look at this server, its gate and MiniDome, but never change anything." flush>
+      <Table
+        rows={apps.data.tokens}
+        rowKey={(t) => t.id}
+        columns={[
+          { key: 'n', header: 'App', render: (t) => <div><div className="fx-cell-title">{t.name}</div><div className="fx-cell-sub">Let in by {t.createdBy} {timeAgo(t.createdAt)}</div></div> },
+          { key: 'l', header: 'Last looked', render: (t) => (t.lastUsedAt ? timeAgo(t.lastUsedAt) : 'Not yet') },
+          {
+            key: 'x',
+            header: '',
+            render: (t) => (
+              <Button
+                size="sm"
+                variant="danger"
+                loading={busy === t.id}
+                onClick={async () => {
+                  if (await confirm({ title: `Revoke ${t.name}?`, body: 'It can no longer look at this server.', confirmLabel: 'Revoke', danger: true })) await run(t.id, async () => { await api('DELETE', `/v1/auth/app-tokens/${t.id}`); await apps.reload(); });
+                }}
+              >
+                Revoke
+              </Button>
+            ),
+          },
+        ]}
+      />
       {dialog}
     </Card>
   );

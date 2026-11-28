@@ -1,5 +1,6 @@
 import type { CSSProperties } from 'react';
 import mark from './fbrx-mark.json';
+import labs from './fhl-wordmark.json';
 
 const { inset, radius, stroke } = mark.frame;
 const side = mark.size - 2 * inset;
@@ -18,5 +19,35 @@ export function FbrxMark({ size = 30, tile = false, className, style, title = 'F
       <rect x={inset} y={inset} width={side} height={side} rx={radius} fill="none" stroke={tile ? '#fff' : 'currentColor'} strokeWidth={stroke} />
       <path d={mark.letters} fill={tile ? '#fff' : 'currentColor'} fillRule="evenodd" />
     </svg>
+  );
+}
+
+/** The maker of FBRX, for About pages and footers. */
+export const MAKER = 'Fox Huntress Labs';
+
+/**
+ * The Fox Huntress Labs wordmark (FBRX's maker), in the current text color so it suits light and dark: the wordmark's
+ * shape masks a block of that color.
+ */
+export function LabsMark({ width = 160, className, style }: { width?: number; className?: string; style?: CSSProperties }) {
+  return (
+    <span
+      role="img"
+      aria-label={MAKER}
+      className={className}
+      style={{
+        display: 'inline-block',
+        width,
+        height: Math.round((width * labs.height) / labs.width),
+        backgroundColor: 'currentColor',
+        WebkitMaskImage: `url(${labs.mask})`,
+        maskImage: `url(${labs.mask})`,
+        WebkitMaskSize: '100% 100%',
+        maskSize: '100% 100%',
+        WebkitMaskRepeat: 'no-repeat',
+        maskRepeat: 'no-repeat',
+        ...style,
+      }}
+    />
   );
 }

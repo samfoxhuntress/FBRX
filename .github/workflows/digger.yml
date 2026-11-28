@@ -1,0 +1,145 @@
+# FBRX Digger: the FBRX Network Center on its own, built from the same code as FBRX OS (scripts/package.mjs --digger,
+# electron-builder.digger.yml) for macOS, Windows and Linux. With "release", the installers are published as a GitHub
+# release tagged digger-v<version> (never marked the repository's latest: that stays FBRX OS). The version is
+# DIGGER_VERSION in packages/shared/src/digger.ts. Signing works as in release.yml, with the same secrets.
+name: FBRX Digger
+
+on:
+  workflow_dispatch:
+    inputs:
+      release:
+        description: Publish a GitHub release (digger-v<version>) with the installers
+        type: boolean
+        default: false
+      installers:
+        description: Installers to build. Run again with the others to add them to the same release
+        type: choice
+        options: [all, Windows, macOS, Linux]
+        default: all
+
+permissions:
+  contents: write
+
+jobs:
+  meta:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.v.outputs.version }}
+      desktop: ${{ steps.v.outputs.desktop }}
+    steps:
+      - uses: actions/checkout@v5
+      - id: v
+        shell: bash
+        run: |
+          V=$(node -e "console.log(/DIGGER_VERSION = '([^']+)'/.exec(require('fs').readFileSync('packages/shared/src/digger.ts', 'utf8'))[1])")
+          echo "version=$V" >> "$GITHUB_OUTPUT"
+          D='[{"name":"macOS","os":"macos-latest","platform":"darwin","flag":"--mac"},{"name":"Windows","os":"windows-latest","platform":"win32","flag":"--win"},{"name":"Linux","os":"ubuntu-latest","platform":"linux","flag":"--linux"}]'
+          P="${{ inputs.installers }}"
+          if [[ -n "$P" && "$P" != "all" ]]; then D=$(jq -c --arg p "$P" 'map(select(.name == $p))' <<<"$D"); fi
+          echo "desktop=$D" >> "$GITHUB_OUTPUT"
+          echo "Building FBRX Digger $V; installers: $(jq -r 'map(.name) | join(", ")' <<<"$D")"
+
+  desktop:
+    needs: meta
+    name: Digger (${{ matrix.name }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include: ${{ fromJSON(needs.meta.outputs.desktop) }}
+    env:
+      GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Package
+        shell: bash
+        env:
+          CSC_LINK: ${{ matrix.platform == 'darwin' && secrets.MAC_CSC_LINK || secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ matrix.platform == 'darwin' && secrets.MAC_CSC_KEY_PASSWORD || secrets.WIN_CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          AZURE_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          AZURE_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          AZURE_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          AZURE_SIGNING_ENDPOINT: ${{ secrets.AZURE_SIGNING_ENDPOINT }}
+          AZURE_SIGNING_ACCOUNT: ${{ secrets.AZURE_SIGNING_ACCOUNT }}
+          AZURE_CERT_PROFILE: ${{ secrets.AZURE_CERT_PROFILE }}
+          WIN_PUBLISHER_NAME: ${{ secrets.WIN_PUBLISHER_NAME }}
+        run: |
+          if [[ "${{ matrix.platform }}" == "linux" ]]; then
+            # Linux packages are not code-signed: the release's checksums (latest-linux.yml) vouch for them.
+            unset CSC_LINK CSC_KEY_PASSWORD
+            exec npm run package:digger -w @fbrx/desktop -- --linux
+          fi
+          EXTRA=()
+          SIGNED=""
+          if [[ "${{ matrix.platform }}" == "win32" ]]; then
+            if [[ -n "$WIN_PUBLISHER_NAME" ]]; then EXTRA+=("-c.win.signtoolOptions.publisherName=$WIN_PUBLISHER_NAME"); fi
+            if [[ -n "$AZURE_CLIENT_ID" && -n "$AZURE_SIGNING_ACCOUNT" && -n "$AZURE_CERT_PROFILE" ]]; then
+              if [[ -z "$WIN_PUBLISHER_NAME" ]]; then echo "::error::Set WIN_PUBLISHER_NAME to the subject name on your Trusted Signing certificate."; exit 1; fi
+              unset CSC_LINK CSC_KEY_PASSWORD
+              EXTRA=(
+                "-c.win.azureSignOptions.publisherName=$WIN_PUBLISHER_NAME"
+                "-c.win.azureSignOptions.endpoint=${AZURE_SIGNING_ENDPOINT:-https://eus.codesigning.azure.net/}"
+                "-c.win.azureSignOptions.codeSigningAccountName=$AZURE_SIGNING_ACCOUNT"
+                "-c.win.azureSignOptions.certificateProfileName=$AZURE_CERT_PROFILE"
+              )
+              SIGNED="Azure Trusted Signing"
+            elif [[ -n "$CSC_LINK" ]]; then SIGNED="certificate file"; fi
+          else
+            if [[ -n "$CSC_LINK" ]]; then SIGNED="Developer ID certificate"; fi
+            if [[ -n "$CSC_LINK" && -n "$APPLE_ID" ]]; then EXTRA+=("-c.mac.notarize=true"); SIGNED="$SIGNED + notarization"; fi
+          fi
+          if [[ -z "$SIGNED" ]]; then
+            unset CSC_LINK CSC_KEY_PASSWORD
+            export CSC_IDENTITY_AUTO_DISCOVERY=false
+            echo "::warning::No signing configured; building unsigned ${{ matrix.name }} packages (Gatekeeper and SmartScreen will warn)."
+          else
+            echo "Signing ${{ matrix.name }} packages with: $SIGNED"
+          fi
+          npm run package:digger -w @fbrx/desktop -- ${{ matrix.flag }} "${EXTRA[@]}"
+      - name: Check the Linux packages' file modes
+        if: matrix.platform == 'linux'
+        run: scripts/check-linux-packages.sh "apps/desktop/release/digger-${{ needs.meta.outputs.version }}"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: digger-${{ matrix.platform }}
+          path: |
+            apps/desktop/release/digger-${{ needs.meta.outputs.version }}/*.dmg
+            apps/desktop/release/digger-${{ needs.meta.outputs.version }}/*.zip
+            apps/desktop/release/digger-${{ needs.meta.outputs.version }}/*.exe
+            apps/desktop/release/digger-${{ needs.meta.outputs.version }}/*.AppImage
+            apps/desktop/release/digger-${{ needs.meta.outputs.version }}/*.deb
+          if-no-files-found: error
+
+  publish:
+    needs: [meta, desktop]
+    # Publishes what was built even when a platform got no machine (GitHub's Mac runners are scarce); run the workflow
+    # again with that platform to add it to the same release.
+    if: ${{ !cancelled() && inputs.release && needs.meta.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: digger-*
+          path: dist-digger
+          merge-multiple: true
+      - name: Checksums
+        run: cd dist-digger && sha256sum * > SHA256SUMS.txt && cat SHA256SUMS.txt
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: digger-v${{ needs.meta.outputs.version }}
+          target_commitish: ${{ github.sha }}
+          name: FBRX Digger ${{ needs.meta.outputs.version }}
+          make_latest: false
+          files: dist-digger/*
+          body: |
+            FBRX Digger ${{ needs.meta.outputs.version }}: the FBRX Network Center on its own. Device scans and their
+            comparison, ping and trace route, the speed test, the Wi-Fi channel planner, DNS and port checks, device
+            consoles (SSH, Telnet) and network environments, in one small app. See docs/DIGGER.md.

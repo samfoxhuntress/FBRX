@@ -1,10 +1,16 @@
 import { networkOf, prefixToMask, parseCidr } from '@fbrx/shared';
 import { netDevice, type GateConfig } from '../model';
+import { haAliases, type GateHa } from '../ha';
 import { WG_IFACE } from './nftables';
 import type { GatePaths } from './paths';
 
-/** dnsmasq: DHCP for each network, DNS for all of them (local names, blocking, a question log for MiniDome). */
-export function renderDnsmasq(c: GateConfig, paths: GatePaths): string {
+/**
+ * dnsmasq: DHCP for each network, DNS for all of them (local names, blocking, a question log for MiniDome). In a
+ * high-availability pair it answers on the gateway links, so the address it answers from moves with them.
+ */
+export function renderDnsmasq(c: GateConfig, paths: GatePaths, ha?: GateHa | null): string {
+  const alias = haAliases(c, ha);
+  const dev = (n: GateConfig['networks'][number]) => alias.get(netDevice(n)) ?? netDevice(n);
   const L: string[] = [
     '# FBRX Gate: DHCP and DNS. Made by FBRX Gate from its configuration: changes here are overwritten.',
     'port=53',
@@ -17,7 +23,7 @@ export function renderDnsmasq(c: GateConfig, paths: GatePaths): string {
     `domain=${c.dns.domain}`,
     'expand-hosts',
     'bind-dynamic',
-    ...c.networks.map((n) => `interface=${netDevice(n)}`),
+    ...c.networks.map((n) => `interface=${dev(n)}`),
     ...(c.vpn.enabled ? [`interface=${WG_IFACE}`] : []),
     'cache-size=10000',
     'dhcp-authoritative',
@@ -26,7 +32,7 @@ export function renderDnsmasq(c: GateConfig, paths: GatePaths): string {
   for (const n of c.networks) {
     const gw = n.address.split('/')[0];
     const mask = prefixToMask(parseCidr(n.address)!.prefix);
-    L.push(`# ${n.name}: ${networkOf(n.address)} on ${netDevice(n)}${n.vmSwitch ? ` (${n.interface} and virtual machines)` : ''}`);
+    L.push(`# ${n.name}: ${networkOf(n.address)} on ${dev(n)}${n.vmSwitch ? ` (${n.interface} and virtual machines)` : ''}`);
     if (n.dhcp.enabled) {
       L.push(`dhcp-range=set:${n.name},${n.dhcp.start},${n.dhcp.end},${mask},${n.dhcp.leaseHours}h`);
       L.push(`dhcp-option=tag:${n.name},option:router,${gw}`);
@@ -36,7 +42,7 @@ export function renderDnsmasq(c: GateConfig, paths: GatePaths): string {
     for (const r of n.dhcp.reservations) L.push(`dhcp-host=${r.mac.toLowerCase()},${r.address}${r.name ? `,${r.name}` : ''}`);
   }
   // The gate answers to its own name in each network.
-  for (const n of c.networks) L.push(`interface-name=${c.hostname}.${c.dns.domain},${netDevice(n)}/4`);
+  for (const n of c.networks) L.push(`interface-name=${c.hostname}.${c.dns.domain},${dev(n)}/4`);
   for (const r of c.dns.records) {
     const name = r.name.includes('.') ? r.name : `${r.name},${r.name}.${c.dns.domain}`;
     L.push(`host-record=${name},${r.address}`);

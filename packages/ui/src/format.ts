@@ -33,6 +33,12 @@ export function formatDate(iso: string | null | undefined): string {
   return new Date(iso).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 }
 
+/** "November 13, 2026": a day, written out. */
+export function formatDay(iso: string | null | undefined): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString(undefined, { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
 export function formatDuration(seconds: number | null | undefined): string {
   if (seconds === null || seconds === undefined) return '—';
   const d = Math.floor(seconds / 86400);

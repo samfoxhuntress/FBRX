@@ -25,6 +25,8 @@ export function userView(u: any) {
     sso: !!u.sso_subject,
     /** Has a password (accounts made for single sign-on may not). */
     hasPassword: !!u.password_hash,
+    /** Remote screen is switched on for them (with an operator role or above). */
+    remoteControl: !!u.remote_control,
     lastLoginAt: u.last_login_at,
     createdAt: u.created_at,
   };
@@ -34,7 +36,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AppContext) {
   const auth = adminAuth(ctx);
 
   app.get('/v1/setup/status', async () => ({
-    needsSetup: Number(ctx.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM users')?.n ?? 0) === 0,
+    needsSetup: Number(ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM users WHERE role = 'superadmin'")?.n ?? 0) === 0,
     version: ctx.version,
   }));
 
@@ -50,7 +52,7 @@ export async function authRoutes(app: FastifyInstance, ctx: AppContext) {
         password: PasswordSchema,
       })
       .parse(req.body);
-    if (Number(ctx.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM users')?.n ?? 0) > 0) throw forbidden('Setup has already been completed');
+    if (Number(ctx.db.get<{ n: number }>("SELECT COUNT(*) AS n FROM users WHERE role = 'superadmin'")?.n ?? 0) > 0) throw forbidden('Setup has already been completed');
     if (!ctx.config.setupToken || !safeEqual(body.setupToken.trim(), ctx.config.setupToken)) {
       throw unauthorized('That is not the setup token. Use the one-time setup token the FBRX Command installer showed (after "Setup token"), or the one printed in the server log on first start.');
     }
@@ -85,12 +87,14 @@ export async function authRoutes(app: FastifyInstance, ctx: AppContext) {
     };
     if (!u || u.status !== 'active') throw fail('unknown or disabled user');
     if (u.locked_until && u.locked_until > new Date().toISOString()) throw unauthorized('Account temporarily locked after repeated failures. Try again later.');
+    // A console user made for an FBRX account signs in with the account's password.
+    const hash: string = u.account_id ? (ctx.db.get<{ password_hash: string }>("SELECT password_hash FROM accounts WHERE id = ? AND status = 'active'", u.account_id)?.password_hash ?? '') : u.password_hash;
     // Organizations can require Google / Microsoft sign-in; accounts made for it have no password at all.
-    if (passwordBlockedBySso(ctx, u) || !u.password_hash) {
+    if (passwordBlockedBySso(ctx, u) || !hash) {
       ctx.audit.record({ type: 'user', id: u.id, label: u.email, tenantId: u.tenant_id, ip: req.ip }, 'auth.login.failed', {}, { reason: 'single sign-on required' });
       throw unauthorized('Your organization signs in with Google or Microsoft. Use the button below.');
     }
-    if (!(await verifyPassword(body.password, u.password_hash))) {
+    if (!(await verifyPassword(body.password, hash))) {
       const fails = Number(u.failed_logins) + 1;
       ctx.db.run(
         'UPDATE users SET failed_logins = ?, locked_until = ? WHERE id = ?',
@@ -119,7 +123,9 @@ export async function authRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get('/v1/auth/me', { preHandler: auth }, async (req) => {
     const p = req.principal!;
-    const permissions = (Object.keys(PERMISSIONS) as Permission[]).filter((perm) => can(p.role, perm));
+    // Remote screen also needs the switch on the person's own user.
+    const remote = p.kind === 'user' && !!ctx.db.get<{ remote_control: number }>('SELECT remote_control FROM users WHERE id = ?', p.id)?.remote_control;
+    const permissions = (Object.keys(PERMISSIONS) as Permission[]).filter((perm) => can(p.role, perm) && (perm !== 'devices.remote' || remote));
     const tenants =
       p.role === 'superadmin'
         ? ctx.db.all<any>("SELECT id, name, slug, status, COALESCE(vertical, 'business') AS vertical FROM tenants ORDER BY name")

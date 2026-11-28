@@ -1,6 +1,7 @@
 import type { HostInfo, StoragePool, VmSummary } from '@fbrx/shared';
 import { Callout, Card, Empty, formatDuration, Grid, KeyValue, Meter, StatTile, Table, Button } from '@fbrx/ui';
 import { usePoll, useRoute } from '../state';
+import { AskAiButton, describeFor } from '../ask-ai';
 import { gb, mb, osName, Pct, PowerButtons, VmStateBadge } from './common';
 
 export function OverviewPage() {
@@ -28,7 +29,11 @@ export function OverviewPage() {
         </div>
       </div>
       {h?.warnings.map((w) => (
-        <Callout key={w} tone={w.startsWith('Simulated') ? 'info' : 'warning'}>
+        <Callout
+          key={w}
+          tone={w.startsWith('Simulated') ? 'info' : 'warning'}
+          actions={!w.startsWith('Simulated') && <AskAiButton what="this warning" question="This server shows the warning below. What does it mean for my virtual machines, and how do I fix it, step by step?" details={() => describeFor({ warning: w, server: `${h.vendor ?? ''} ${h.model ?? ''}`.trim(), processor: h.cpu.model, os: h.os, kernel: h.kernel, hypervisor: h.hypervisor })} />}
+        >
           {w}
         </Callout>
       ))}

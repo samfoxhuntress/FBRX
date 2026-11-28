@@ -1,49 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
-import type { AgentEvent, AgentPhase, TokenUsage } from '@fbrx/shared';
+import type { AgentPhase, RunActivity } from '@fbrx/shared';
 import { Icons, type IconName } from '@fbrx/ui';
 
 /**
  * What the agent is doing while it works: the current step (asking the model, thinking, using a tool, waiting for
- * your approval, writing), a timeline of the steps so far, time and tokens, and its thinking as it streams in.
+ * your approval, writing), a timeline of the steps so far, time and tokens, and its thinking as it streams in. The
+ * activity itself comes from the core (RunActivity, folded from the run's events), so it is the same whenever the
+ * chat is opened.
  */
-
-export interface ActivityEntry {
-  phase: AgentPhase;
-  detail: string;
-  at: number;
-}
-
-export interface Activity {
-  runId: string;
-  startedAt: number;
-  entries: ActivityEntry[];
-  step: number;
-  maxSteps: number;
-  usage: TokenUsage;
-  /** Thinking for the current step (resets when the model starts a new reply). */
-  thinking: string;
-  thinkingFor: string | null;
-}
-
-export function newActivity(runId: string): Activity {
-  return { runId, startedAt: Date.now(), entries: [], step: 0, maxSteps: 0, usage: { inputTokens: 0, outputTokens: 0 }, thinking: '', thinkingFor: null };
-}
-
-/** Folds an agent event into the activity (returns the same object when nothing changed). */
-export function reduceActivity(a: Activity | null, e: AgentEvent): Activity | null {
-  if (e.type === 'run.started') return newActivity(e.runId);
-  if (!a || !('runId' in e) || e.runId !== a.runId) return a;
-  if (e.type === 'run.progress') {
-    const last = a.entries[a.entries.length - 1];
-    const entries = last && last.phase === e.phase && last.detail === e.detail ? a.entries : [...a.entries.slice(-59), { phase: e.phase, detail: e.detail, at: Date.now() }];
-    return { ...a, entries, step: e.step, maxSteps: e.maxSteps, usage: e.usage };
-  }
-  if (e.type === 'thinking.delta') {
-    return e.messageId === a.thinkingFor ? { ...a, thinking: (a.thinking + e.delta).slice(-20_000) } : { ...a, thinking: e.delta, thinkingFor: e.messageId };
-  }
-  if (e.type === 'run.completed' || e.type === 'run.failed' || e.type === 'run.cancelled') return null;
-  return a;
-}
 
 const PHASE: Record<AgentPhase, { label: string; icon: IconName }> = {
   model: { label: 'Starting', icon: 'sparkles' },
@@ -60,7 +24,7 @@ function seconds(ms: number): string {
   return s < 60 ? `${s}s` : `${Math.floor(s / 60)}m ${String(s % 60).padStart(2, '0')}s`;
 }
 
-export function ActivityPanel({ activity, agentName, showThinking }: { activity: Activity; agentName: string; showThinking: boolean }) {
+export function ActivityPanel({ activity, agentName, showThinking }: { activity: RunActivity; agentName: string; showThinking: boolean }) {
   const [, tick] = useState(0);
   const [open, setOpen] = useState(true);
   const [stepsOpen, setStepsOpen] = useState(false);
@@ -75,11 +39,11 @@ export function ActivityPanel({ activity, agentName, showThinking }: { activity:
   }, [activity.thinking]);
 
   const now = Date.now();
-  const current = activity.entries[activity.entries.length - 1];
+  const current = activity.steps[activity.steps.length - 1];
   const phase = current ? PHASE[current.phase] : PHASE.model;
   const Ico = Icons[phase.icon];
   const tokens = activity.usage.inputTokens + activity.usage.outputTokens;
-  const done = activity.entries.slice(0, -1);
+  const done = activity.steps.slice(0, -1);
   return (
     <div className={`activity phase-${current?.phase ?? 'model'}`} aria-live="polite">
       <div className="activity-head">
@@ -119,7 +83,7 @@ export function ActivityPanel({ activity, agentName, showThinking }: { activity:
                 <li key={`${e.at}-${i}`}>
                   <Icons.check size={12} />
                   <span>{e.detail}</span>
-                  <span className="activity-dur">{seconds((activity.entries[i + 1]?.at ?? now) - e.at)}</span>
+                  <span className="activity-dur">{seconds((activity.steps[i + 1]?.at ?? now) - e.at)}</span>
                 </li>
               ))}
             </ol>

@@ -71,8 +71,8 @@ export const PROFILE_SETTINGS: ProfileSetting[] = [
   { path: 'ai.showThinking', area: 'ai', kind: 'toggle', label: 'Show what the agent is doing', help: 'Shows the agent’s steps and reasoning while it works, so people see why it does what it does.' },
   { path: 'ai.agentName', area: 'ai', kind: 'text', label: 'The agent’s name', help: 'What the agent is called throughout the app (Fabrix unless you change it).' },
   // Fun and look
-  { path: 'appearance.easterEggs', area: 'fun', kind: 'toggle', label: 'Easter eggs, jokes and the goose', help: 'Hidden extras, jokes from the agent, trophies and the Silly Goose. Off keeps work strictly work.' },
-  { path: 'appearance.gooseVisits', area: 'fun', kind: 'toggle', label: 'The goose drops by on its own', help: 'Now and then the Silly Goose walks across the screen without being asked.' },
+  { path: 'appearance.easterEggs', area: 'fun', kind: 'toggle', label: 'Easter eggs, jokes and Bruce the Goose', help: 'Hidden extras, jokes from the agent, trophies and Bruce the Goose. Off keeps work strictly work.' },
+  { path: 'appearance.gooseVisits', area: 'fun', kind: 'toggle', label: 'Bruce peeks out on his own', help: 'Now and then Bruce the Goose peeks out from behind a card or button in the FBRX window, without being asked.' },
   { path: 'appearance.splash', area: 'fun', kind: 'toggle', label: 'Start-up animation', help: 'The FBRX logo is stitched in when the app opens.' },
   { path: 'appearance.splashSound', area: 'fun', kind: 'toggle', label: 'Start-up sound', help: 'A short chime when the app opens.' },
   {
@@ -170,6 +170,25 @@ export const PROFILE_SETTINGS: ProfileSetting[] = [
   { path: 'updates.channel', area: 'updates', kind: 'select', label: 'Update channel', help: 'Stable for everyone; beta and dev get new versions sooner and are less tested.', options: UPDATE_CHANNELS.map((c) => ({ value: c, label: c[0].toUpperCase() + c.slice(1) })) },
   { path: 'updates.autoDownload', area: 'updates', kind: 'toggle', label: 'Download updates by themselves', help: 'New versions download in the background. A group’s Automatic updates setting decides installing.' },
   // Everyday
+  {
+    path: 'lab.terminal',
+    area: 'protection',
+    kind: 'toggle',
+    label: 'Allow the Terminal',
+    help: 'The Terminal for the person at the computer: PowerShell or the command prompt, FBRX/1 and, from Pro, device consoles. Off hides it and FBRX refuses it, whatever the edition; lock it so nobody turns it back on. What the agent may run is set in the policy, not here.',
+  },
+  {
+    path: 'lab.show',
+    area: 'everyday',
+    kind: 'select',
+    label: 'The Lab in the menu',
+    help: 'The Lab holds the Terminal (and, by edition, the virtual lab and FBRX Server). Automatic: in the advanced menu, not in the simple one.',
+    options: [
+      { value: 'auto', label: 'Automatic' },
+      { value: 'on', label: 'Shown' },
+      { value: 'off', label: 'Hidden' },
+    ],
+  },
   { path: 'general.launchAtLogin', area: 'everyday', kind: 'toggle', label: 'Start with the computer', help: 'FBRX opens (in the tray) when the person signs in.' },
   { path: 'general.minimizeToTray', area: 'everyday', kind: 'toggle', label: 'Keep running in the tray', help: 'Closing the window keeps FBRX running in the tray, so alerts and the mesh keep working.' },
   { path: 'voice.readReplies', area: 'everyday', kind: 'toggle', label: 'Read replies aloud', help: 'The agent reads its answers aloud after a spoken question.' },

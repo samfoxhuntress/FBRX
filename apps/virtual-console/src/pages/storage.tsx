@@ -3,6 +3,7 @@ import type { IsoDownload, IsoImage, StoragePool, StorageVolume } from '@fbrx/sh
 import { Button, Callout, Card, Empty, Field, formatBytes, formatDate, Grid, Input, Meter, Modal, Page, Table, Tabs, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { api, upload } from '../api';
 import { useApp, usePoll } from '../state';
+import { AskAiButton, describeFor } from '../ask-ai';
 import { gb } from './common';
 
 export function StoragePage() {
@@ -25,6 +26,8 @@ function IsoLibrary() {
   const [uploading, setUploading] = useState<{ name: string; fraction: number; abort: AbortController } | null>(null);
   const [fetchOpen, setFetchOpen] = useState(false);
   const op = app.can('operator');
+  // Quick downloads: the major operating systems' installers (the server picks the newest release and checks it).
+  const catalog = usePoll<{ catalog: Array<{ id: string; name: string; note: string }> }>(op ? '/v1/isos/catalog' : null, 3_600_000);
   const pick = async (f: File) => {
     const name = f.name.replace(/[^A-Za-z0-9._+()-]/g, '-').replace(/^[^A-Za-z0-9]+/, '');
     if (!/\.(iso|img)$/i.test(name)) return toast.error('Choose an .iso or .img file');
@@ -61,6 +64,16 @@ function IsoLibrary() {
           )
         }
       >
+        {op && !!catalog.data?.catalog.length && (
+          <div style={{ padding: 12, flexWrap: 'wrap' }} className="fx-row">
+            <span className="fx-muted">Quick downloads</span>
+            {catalog.data.catalog.map((c) => (
+              <Button key={c.id} size="sm" icon="download" title={c.note} loading={busy === c.id} onClick={() => void run(c.id, async () => { await api('POST', `/v1/isos/catalog/${c.id}`); await data.reload(); }, `${c.name} is downloading`)}>
+                {c.name}
+              </Button>
+            ))}
+          </div>
+        )}
         {uploading && (
           <div style={{ padding: 12 }} className="fx-row">
             <div style={{ flex: 1 }}>
@@ -176,7 +189,12 @@ function Pools() {
             key={p.name}
             title={p.role === 'images' ? 'Virtual disks' : p.role === 'isos' ? 'ISO library' : p.name}
             subtitle={<span className="mono">{p.path ?? p.type}</span>}
-            actions={<Button size="sm" onClick={() => setOpen(open === p.name ? null : p.name)}>{open === p.name ? 'Hide files' : 'Files'}</Button>}
+            actions={
+              <>
+                <AskAiButton what={`the storage ${p.name}`} question="Look at this storage on the server: how full it is and what holds the space. Should I free or add space, and how?" details={() => describeFor({ ...p })} />
+                <Button size="sm" onClick={() => setOpen(open === p.name ? null : p.name)}>{open === p.name ? 'Hide files' : 'Files'}</Button>
+              </>
+            }
           >
             {!p.active && <Callout tone="warning">This pool is not active.</Callout>}
             <Meter label={`${gb(p.allocationGb)} used of ${gb(p.capacityGb)} · ${gb(p.availableGb)} free`} value={p.allocationGb} max={p.capacityGb || 1} />

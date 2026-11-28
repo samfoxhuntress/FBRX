@@ -1,16 +1,22 @@
-import { app, Notification, safeStorage, shell } from 'electron';
+import { app, nativeImage, Notification, safeStorage, shell } from 'electron';
 import { execFile } from 'node:child_process';
-import { join } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+import { dirname, join } from 'node:path';
 import { FileKeychain, defaultSpecialDirs, openMacSafeStorage, type KeychainAdapter, type MovedKeychain, type PlatformAdapter, type UpdateController } from '@fbrx/core';
-import type { NotificationEvent } from '@fbrx/shared';
+import { PRODUCT_NAME, type AppFlavor, type NotificationEvent } from '@fbrx/shared';
+import { documentRenderer } from './document-renderer';
+import { createScreenShare } from './screen-share';
 
 declare const __FBRX_LICENSE_PUBKEYS__: string[];
 /** Microsoft app (client) ID for Outlook / Microsoft 365 calendars, from FBRX_MS_CLIENT_ID at build time. */
 declare const __FBRX_MS_CLIENT_ID__: string;
+/** The FBRX Command FBRX accounts live on (FBRX's cloud), embedded at build time. */
+declare const __FBRX_ACCOUNT_SERVER__: string;
 
 /** Vault key protection via the OS keychain (macOS Keychain, Windows DPAPI, libsecret on Linux). */
 export class ElectronKeychain implements KeychainAdapter {
   readonly kind = 'os' as const;
+  constructor(readonly fallback: KeychainAdapter | null = null) {}
   available() {
     return safeStorage.isEncryptionAvailable() && (process.platform !== 'linux' || safeStorage.getSelectedStorageBackend() !== 'basic_text');
   }
@@ -22,6 +28,36 @@ export class ElectronKeychain implements KeychainAdapter {
   }
 }
 
+/**
+ * Linux: the keyring FBRX used on this computer (written when it is used, read before the next start), so a start
+ * outside the desktop session (by another app, a terminal or a remote session, which leaves out the desktop's name)
+ * still reaches it. Machine-local: never copied to another computer.
+ */
+const KEYRING_FILE = 'keyring.json';
+const PASSWORD_STORES: Record<string, string> = { gnome_libsecret: 'gnome-libsecret', kwallet: 'kwallet', kwallet5: 'kwallet5', kwallet6: 'kwallet6' };
+
+function rememberedKeyring(dataDir: string): string | null {
+  try {
+    const backend = String((JSON.parse(readFileSync(join(dataDir, KEYRING_FILE), 'utf8')) as { backend?: string }).backend ?? '');
+    return PASSWORD_STORES[backend] ? backend : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Before the app is ready (Linux): started without the desktop's name, Chromium would not look for a keyring at all.
+ * Point it at the one FBRX used here, and at the session's message bus when the start left that out too.
+ */
+export function useRememberedKeyring(dataDir: string): void {
+  if (process.platform !== 'linux' || process.env.XDG_CURRENT_DESKTOP) return;
+  const backend = rememberedKeyring(dataDir);
+  if (!backend) return;
+  app.commandLine.appendSwitch('password-store', PASSWORD_STORES[backend]!);
+  const bus = typeof process.getuid === 'function' ? `/run/user/${process.getuid()}/bus` : null;
+  if (!process.env.DBUS_SESSION_BUS_ADDRESS && bus && existsSync(bus)) process.env.DBUS_SESSION_BUS_ADDRESS = `unix:path=${bus}`;
+}
+
 export function chooseKeychain(dataDir: string): KeychainAdapter {
   const file = new FileKeychain(join(dataDir, 'keychain.key'));
   // macOS: the Keychain asks for the Mac password whenever an updated (re-signed) FBRX opens its item, which happens
@@ -29,9 +65,23 @@ export function chooseKeychain(dataDir: string): KeychainAdapter {
   // (and the app runs with Chromium's mock keychain, so nothing else touches the Keychain either). For a password,
   // turn on "Ask for the vault password when FBRX OS starts".
   if (process.platform === 'darwin') return file;
-  const os = new ElectronKeychain();
-  // Linux desktops without a secret service fall back to a 0600 key file (documented in SECURITY.md).
-  return os.available() ? os : file;
+  // A key saved in the file (a start without the keyring) still opens, and then moves into the keyring.
+  const os = new ElectronKeychain(file);
+  if (os.available()) {
+    if (process.platform === 'linux') {
+      try {
+        const backend = safeStorage.getSelectedStorageBackend();
+        if (rememberedKeyring(dataDir) !== backend) writeFileSync(join(dataDir, KEYRING_FILE), JSON.stringify({ backend }), { mode: 0o600 });
+      } catch {
+        /* the next start finds the keyring the usual way */
+      }
+    }
+    return os;
+  }
+  // Linux desktops without a secret service fall back to a 0600 key file (documented in SECURITY.md). A key this
+  // computer kept in its keyring is only out of reach for this start: the vault waits instead of moving it.
+  if (process.platform === 'linux') file.unreachable = true;
+  return file;
 }
 
 /**
@@ -55,13 +105,22 @@ export function macMovedKeychain(): MovedKeychain | null {
   };
 }
 
+/** A notification in the system's notification center (Windows' Action Center, macOS Notification Center). */
+export function systemNotification(n: NotificationEvent, o: { silent: boolean; onClick: () => void }): boolean {
+  if (!Notification.isSupported()) return false;
+  const note = new Notification({ title: n.title, body: n.body, silent: o.silent });
+  note.on('click', o.onClick);
+  note.show();
+  return true;
+}
+
 export function createElectronPlatform(o: {
   dataDir: string;
   updates: UpdateController | null;
+  /** Shows a notification: where and with what sound is the desktop app's choice (deliverNotification). */
   onNotify: (n: NotificationEvent) => void;
-  /** Shows the window on a page (a notification was clicked). */
-  onOpen?: (route: string) => void;
   requestRestart: (reason: string) => void;
+  flavor: AppFlavor;
 }): PlatformAdapter {
   const resources = app.isPackaged ? process.resourcesPath : join(app.getAppPath(), 'resources');
   const workerDir = app.isPackaged ? join(app.getAppPath().replace(/app\.asar$/, 'app.asar.unpacked'), 'dist', 'main') : join(app.getAppPath(), 'dist', 'main');
@@ -69,6 +128,14 @@ export function createElectronPlatform(o: {
   if (process.env.FBRX_LICENSE_PUBLIC_KEY && !app.isPackaged) keys.push(process.env.FBRX_LICENSE_PUBLIC_KEY.replace(/\\n/g, '\n'));
   return {
     shell: 'desktop',
+    flavor: o.flavor,
+    // FBRX Digger and FBRX View find FBRX Endpoint's AI through Endpoint's data folder (FBRX_ENDPOINT_HOME in
+    // development).
+    endpointDataDir: o.flavor !== 'os' ? (process.env.FBRX_ENDPOINT_HOME ?? join(app.getPath('appData'), PRODUCT_NAME)) : null,
+    // The FBRX apps find each other through their data folders, side by side (FBRX_APPS_HOME in development).
+    appsDir: process.env.FBRX_APPS_HOME ?? app.getPath('appData'),
+    // An AppImage runs from a temporary mount: the file to start again is APPIMAGE.
+    appExec: app.isPackaged ? (process.env.APPIMAGE ?? process.execPath) : (process.env.FBRX_APP_EXEC ?? null),
     appVersion: app.getVersion(),
     devMode: !app.isPackaged || process.env.FBRX_DEV_MODE === '1',
     keychain: chooseKeychain(o.dataDir),
@@ -77,32 +144,51 @@ export function createElectronPlatform(o: {
     pluginWorkerPath: join(workerDir, 'plugin-worker.mjs'),
     licensePublicKeys: keys,
     microsoftClientId: (typeof __FBRX_MS_CLIENT_ID__ !== 'undefined' && __FBRX_MS_CLIENT_ID__) || process.env.FBRX_MS_CLIENT_ID || null,
+    accountServer: (typeof __FBRX_ACCOUNT_SERVER__ !== 'undefined' && __FBRX_ACCOUNT_SERVER__) || process.env.FBRX_ACCOUNT_SERVER || null,
     sandboxPlugins: process.env.FBRX_PLUGIN_SANDBOX !== '0',
     updates: o.updates,
     meshMobileDir: join(workerDir, 'mobile'),
     vendorDbFile: join(workerDir, 'oui-vendors.tsv.gz'),
     mcpShim: { command: process.execPath, args: [join(workerDir, 'fbrx-mcp.mjs')], env: { ELECTRON_RUN_AS_NODE: '1' } },
+    renderer: documentRenderer,
+    images: {
+      thumbnail: (data, side) => {
+        const image = nativeImage.createFromBuffer(data);
+        const { width, height } = image.getSize();
+        const scale = Math.min(1, side / Math.max(width, height, 1));
+        return image.resize({ width: Math.max(1, Math.round(width * scale)), height: Math.max(1, Math.round(height * scale)), quality: 'good' }).toJPEG(82);
+      },
+    },
+    trash: (path: string) => shell.trashItem(path),
+    screenShare: createScreenShare(),
     specialDirs: () => {
       const d = defaultSpecialDirs();
       try {
         const home = app.getPath('home');
         // Without XDG user folders, Linux reports the home folder itself; use the usual folder inside it instead.
-        const pick = (name: 'documents' | 'desktop' | 'downloads') => {
+        const pick = (name: 'documents' | 'desktop' | 'downloads' | 'pictures') => {
           const p = app.getPath(name);
           return p && p !== home ? p : d[name];
         };
-        return { home, documents: pick('documents'), desktop: pick('desktop'), downloads: pick('downloads') };
+        return { home, documents: pick('documents'), desktop: pick('desktop'), downloads: pick('downloads'), pictures: pick('pictures') };
       } catch {
         return d;
       }
     },
-    notify: (n) => {
-      o.onNotify(n);
-      if (!Notification.isSupported()) return;
-      const note = new Notification({ title: n.title, body: n.body, silent: n.level === 'info' });
-      if (n.open && o.onOpen) note.on('click', () => o.onOpen!(n.open!));
-      note.show();
+    ownDirs: () => {
+      const dirs = [dirname(process.execPath), resources, app.getPath('userData')];
+      // The update cache (electron-updater names it in app-update.yml), under the local app data folder.
+      try {
+        const yml = join(resources, 'app-update.yml');
+        const name = existsSync(yml) ? /^updaterCacheDirName:\s*(\S+)/m.exec(readFileSync(yml, 'utf8'))?.[1] : null;
+        const base = process.platform === 'win32' ? process.env.LOCALAPPDATA : process.platform === 'darwin' ? join(app.getPath('home'), 'Library', 'Caches') : process.env.XDG_CACHE_HOME || join(app.getPath('home'), '.cache');
+        if (name && base) dirs.push(join(base, name.replace(/^["']|["']$/g, '')));
+      } catch {
+        /* no update cache */
+      }
+      return dirs;
     },
+    notify: (n) => o.onNotify(n),
     requestRestart: o.requestRestart,
   };
 }

@@ -3,9 +3,10 @@ import { z } from 'zod';
 import { networkOf } from '@fbrx/shared';
 import { bridgeName } from '@fbrx/gate';
 import { audited, need, type VirtualContext } from '../context';
-import { conflict } from '../errors';
+import { conflict, notFound } from '../errors';
 import { ISOS_POOL } from '../drivers/types';
 import { ISO_NAME_RE } from '../isos';
+import { isoCatalog, resolveIso } from '../iso-catalog';
 
 const POOL_RE = /^[A-Za-z0-9._-]{1,64}$/;
 const NET_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{0,14}$/;
@@ -56,6 +57,21 @@ export async function storageRoutes(app: FastifyInstance, ctx: VirtualContext) {
     need(req, 'operator');
     const body = z.object({ url: z.string().url().max(2000), name: z.string().regex(ISO_NAME_RE, 'ISO names end in .iso or .img') }).parse(req.body);
     return audited(ctx, req, 'iso.download', body.name, () => ctx.isos.download(body.url, body.name), { url: body.url });
+  });
+
+  // Quick downloads: the major operating systems' installers, the newest release, checked against its checksum.
+  app.get('/v1/isos/catalog', async (req) => {
+    need(req, 'viewer');
+    return { catalog: isoCatalog().map(({ id, name, note }) => ({ id, name, note })) };
+  });
+
+  app.post('/v1/isos/catalog/:id', async (req) => {
+    need(req, 'operator');
+    const { id } = z.object({ id: z.string().max(80) }).parse(req.params);
+    const entry = isoCatalog().find((e) => e.id === id);
+    if (!entry) throw notFound('No such quick download');
+    const r = await resolveIso(entry);
+    return audited(ctx, req, 'iso.download', r.name, () => ctx.isos.download(r.url, r.name, fetch, r.sha256), { url: r.url, sha256: r.sha256 });
   });
 
   app.delete('/v1/isos/downloads/:id', async (req) => {

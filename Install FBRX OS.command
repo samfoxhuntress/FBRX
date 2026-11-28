@@ -4,7 +4,22 @@
 # installed system-wide), then starts the setup wizard in scripts/setup/wizard.mjs ("Install FBRX Command.command"
 # runs this file with FBRX_SETUP_SCRIPT set to scripts/setup/command.mjs).
 set -u
+SELF="$(cd "$(dirname "$0")" && pwd)/$(basename "$0")"
 cd "$(dirname "$0")" || exit 1
+
+# Started from a Linux file manager ("Run as a Program") there is no window, so nothing it says can be seen: open one
+# (FBRX_IN_TERMINAL=1 keeps it where it is).
+if [ "$(uname -s)" = Linux ] && [ ! -t 1 ] && [ -z "${FBRX_IN_TERMINAL:-}" ] && [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ]; then
+  RUN=(env FBRX_IN_TERMINAL=1 "FBRX_SETUP_SCRIPT=${FBRX_SETUP_SCRIPT:-}" bash "$SELF" "$@")
+  for t in gnome-terminal ptyxis kgx konsole xfce4-terminal xterm x-terminal-emulator; do
+    command -v "$t" >/dev/null 2>&1 || continue
+    case "$t" in
+      gnome-terminal | ptyxis | kgx) exec "$t" -- "${RUN[@]}" ;;
+      xfce4-terminal) exec "$t" -x "${RUN[@]}" ;;
+      *) exec "$t" -e "${RUN[@]}" ;;
+    esac
+  done
+fi
 
 fail() {
   echo

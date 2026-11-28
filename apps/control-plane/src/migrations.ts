@@ -404,4 +404,323 @@ export const CP_MIGRATIONS: Migration[] = [
       ALTER TABLE tenants ADD COLUMN chat_enabled INTEGER NOT NULL DEFAULT 1;
     `,
   },
+  {
+    version: 6,
+    name: 'org-mesh',
+    // The organization's computers mesh together (FBRX Command vouches for their keys); the hive is who may use the
+    // servers' AI ({ groups: "all" | [group ids] }, null = everyone).
+    up: `
+      ALTER TABLE tenants ADD COLUMN mesh_auto INTEGER NOT NULL DEFAULT 1;
+      ALTER TABLE tenants ADD COLUMN hive TEXT;
+    `,
+  },
+  {
+    version: 7,
+    name: 'device-edition',
+    // The most a computer may run (essentials, basic = Pro, ultra), over its group's; null = its group's.
+    up: `ALTER TABLE devices ADD COLUMN tier TEXT;`,
+  },
+  {
+    version: 8,
+    name: 'accounts-billing',
+    // FBRX accounts (people, in the cloud), their sign-ins on computers and phones, what they bought (entitlements, one
+    // per subscription item or store purchase) and which organizations they belong to. billing_events makes each
+    // provider notification count once.
+    up: `
+      CREATE TABLE accounts (
+        id TEXT PRIMARY KEY,
+        email TEXT NOT NULL UNIQUE COLLATE NOCASE,
+        name TEXT NOT NULL,
+        password_hash TEXT NOT NULL,
+        status TEXT NOT NULL DEFAULT 'active',
+        app_account_token TEXT NOT NULL UNIQUE,
+        stripe_customer_id TEXT UNIQUE,
+        failed_logins INTEGER NOT NULL DEFAULT 0,
+        locked_until TEXT,
+        last_login_at TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE account_sessions (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        label TEXT NOT NULL DEFAULT '',
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        last_seen_at TEXT,
+        revoked_at TEXT
+      );
+      CREATE TABLE entitlements (
+        id TEXT PRIMARY KEY,
+        account_id TEXT REFERENCES accounts(id) ON DELETE CASCADE,
+        tenant_id TEXT REFERENCES tenants(id) ON DELETE CASCADE,
+        product_id TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        tier TEXT,
+        source TEXT NOT NULL,
+        external_id TEXT NOT NULL,
+        status TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        period_end TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL,
+        UNIQUE (source, external_id, product_id)
+      );
+      CREATE INDEX cp_entitlements_account ON entitlements (account_id);
+      CREATE INDEX cp_entitlements_tenant ON entitlements (tenant_id);
+      CREATE TABLE tenant_members (
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        tier TEXT NOT NULL DEFAULT 'essentials',
+        created_at TEXT NOT NULL,
+        PRIMARY KEY (tenant_id, account_id)
+      );
+      CREATE TABLE billing_events (
+        id TEXT PRIMARY KEY,
+        source TEXT NOT NULL,
+        type TEXT NOT NULL,
+        received_at TEXT NOT NULL
+      );
+      ALTER TABLE tenants ADD COLUMN stripe_customer_id TEXT;
+    `,
+  },
+  {
+    version: 9,
+    name: 'account-devices',
+    // A member signing in on a computer enrolls it with a one-time token carrying the edition their organization gave
+    // them; the computer remembers whose it is.
+    up: `
+      ALTER TABLE enrollment_tokens ADD COLUMN tier TEXT;
+      ALTER TABLE enrollment_tokens ADD COLUMN account_id TEXT;
+      ALTER TABLE devices ADD COLUMN account_id TEXT;
+    `,
+  },
+  {
+    version: 10,
+    name: 'cloud-tenants',
+    // billing: 'manual' (the operator issues licenses) or 'cloud' (the organization pays for its FBRX Command plan and
+    // its computers). A console user made for an FBRX account signs in with the account's password.
+    up: `
+      ALTER TABLE tenants ADD COLUMN billing TEXT NOT NULL DEFAULT 'manual';
+      ALTER TABLE users ADD COLUMN account_id TEXT;
+    `,
+  },
+  {
+    version: 11,
+    name: 'account-recovery-devices',
+    // An FBRX account's confirmed email, the one-time links sent to it (confirming it, resetting the password; only
+    // their hashes are kept), and what each sign-in is: a computer, a phone or the website, and which install.
+    up: `
+      ALTER TABLE accounts ADD COLUMN email_verified_at TEXT;
+      CREATE TABLE account_tokens (
+        id TEXT PRIMARY KEY,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        purpose TEXT NOT NULL,
+        token_hash TEXT NOT NULL UNIQUE,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        used_at TEXT
+      );
+      CREATE INDEX cp_account_tokens_account ON account_tokens (account_id);
+      ALTER TABLE account_sessions ADD COLUMN kind TEXT NOT NULL DEFAULT 'computer';
+      ALTER TABLE account_sessions ADD COLUMN platform TEXT;
+      ALTER TABLE account_sessions ADD COLUMN app_version TEXT;
+      ALTER TABLE account_sessions ADD COLUMN install_id TEXT;
+      CREATE INDEX cp_account_sessions_account ON account_sessions (account_id);
+    `,
+  },
+  {
+    version: 12,
+    name: 'invitations',
+    // An organization invites someone without a confirmed FBRX account by email: a one-time code (only its hash is
+    // kept) that makes or confirms the account and adds it as a member at the edition given here.
+    up: `
+      CREATE TABLE invitations (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        email TEXT NOT NULL,
+        tier TEXT NOT NULL,
+        code_hash TEXT NOT NULL UNIQUE,
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        expires_at TEXT NOT NULL,
+        accepted_at TEXT,
+        account_id TEXT
+      );
+      CREATE INDEX cp_invitations_tenant ON invitations (tenant_id);
+    `,
+  },
+  {
+    version: 13,
+    name: 'cloud-ai',
+    // FBRX Cloud AI: what each account used each month (token counts only, never what was said), what the operator set
+    // for an account (its own monthly limit, extra tokens, turned off, the limit lifted for a month), and promo codes
+    // (extra tokens, an edition for some days) with the accounts that used them, once each.
+    up: `
+      CREATE TABLE ai_usage (
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        month TEXT NOT NULL,
+        input_tokens INTEGER NOT NULL DEFAULT 0,
+        output_tokens INTEGER NOT NULL DEFAULT 0,
+        counted INTEGER NOT NULL DEFAULT 0,
+        requests INTEGER NOT NULL DEFAULT 0,
+        PRIMARY KEY (account_id, month)
+      );
+      CREATE INDEX cp_ai_usage_month ON ai_usage (month);
+      CREATE TABLE ai_accounts (
+        account_id TEXT PRIMARY KEY REFERENCES accounts(id) ON DELETE CASCADE,
+        monthly_limit INTEGER,
+        credit INTEGER NOT NULL DEFAULT 0,
+        off INTEGER NOT NULL DEFAULT 0,
+        lifted_month TEXT,
+        note TEXT NOT NULL DEFAULT '',
+        updated_at TEXT NOT NULL
+      );
+      CREATE TABLE promo_codes (
+        id TEXT PRIMARY KEY,
+        code TEXT NOT NULL,
+        code_key TEXT NOT NULL UNIQUE,
+        tokens INTEGER NOT NULL DEFAULT 0,
+        tier TEXT,
+        days INTEGER,
+        max_redemptions INTEGER,
+        redemptions INTEGER NOT NULL DEFAULT 0,
+        expires_at TEXT,
+        disabled_at TEXT,
+        note TEXT NOT NULL DEFAULT '',
+        created_by TEXT NOT NULL,
+        created_at TEXT NOT NULL
+      );
+      CREATE TABLE promo_redemptions (
+        promo_id TEXT NOT NULL REFERENCES promo_codes(id) ON DELETE CASCADE,
+        account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        redeemed_at TEXT NOT NULL,
+        PRIMARY KEY (promo_id, account_id)
+      );
+    `,
+  },
+  {
+    version: 14,
+    name: 'mdm-addon',
+    // The MDM add-on: a group's computers are managed with it (and counted for it, at the price the operator sets).
+    up: `
+      ALTER TABLE groups ADD COLUMN mdm INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
+  {
+    version: 15,
+    name: 'remote-screen',
+    // Remote screen is switched on administrator by administrator (it also needs an operator role or above).
+    up: `
+      ALTER TABLE users ADD COLUMN remote_control INTEGER NOT NULL DEFAULT 0;
+    `,
+  },
+  {
+    version: 16,
+    name: 'screen-recording',
+    // Organizations may keep recordings of their remote screen sessions (off until an owner or administrator turns it
+    // on), for the days they choose; the pictures are files in the data folder, these rows say whose they are.
+    up: `
+      ALTER TABLE tenants ADD COLUMN screen_recording INTEGER NOT NULL DEFAULT 0;
+      ALTER TABLE tenants ADD COLUMN screen_recording_days INTEGER NOT NULL DEFAULT 30;
+      CREATE TABLE screen_recordings (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        session_id TEXT NOT NULL,
+        device_id TEXT NOT NULL,
+        device_name TEXT NOT NULL,
+        admin_id TEXT NOT NULL,
+        admin TEXT NOT NULL,
+        ticket TEXT NOT NULL,
+        reason TEXT NOT NULL DEFAULT '',
+        mode TEXT NOT NULL,
+        started_at TEXT NOT NULL,
+        ended_at TEXT,
+        frames INTEGER NOT NULL DEFAULT 0,
+        bytes INTEGER NOT NULL DEFAULT 0,
+        input_used INTEGER NOT NULL DEFAULT 0,
+        cut TEXT
+      );
+      CREATE INDEX screen_recordings_tenant ON screen_recordings (tenant_id, started_at);
+    `,
+  },
+  {
+    version: 17,
+    name: 'org-alerts',
+    // FBRX Alerts in an organization: each alert (one row per problem, from its alert to its all-clear; events once),
+    // the rules for who gets what, and the secret FBRX Servers sign the alerts they send here with.
+    up: `
+      CREATE TABLE org_alerts (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        key TEXT NOT NULL,
+        state TEXT NOT NULL,
+        severity TEXT NOT NULL,
+        device_id TEXT,
+        alert TEXT NOT NULL,
+        count INTEGER NOT NULL DEFAULT 1,
+        rules TEXT NOT NULL DEFAULT '[]',
+        targets TEXT NOT NULL DEFAULT '{}',
+        notified TEXT NOT NULL DEFAULT '[]',
+        held INTEGER NOT NULL DEFAULT 0,
+        acknowledged_by TEXT,
+        acknowledged_at TEXT,
+        ack_note TEXT,
+        escalated_at TEXT,
+        started_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX org_alerts_tenant ON org_alerts (tenant_id, state, updated_at);
+      CREATE INDEX org_alerts_key ON org_alerts (tenant_id, key, state);
+      CREATE TABLE org_alert_rules (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+        rule TEXT NOT NULL,
+        position INTEGER NOT NULL DEFAULT 0,
+        created_at TEXT NOT NULL,
+        updated_at TEXT NOT NULL
+      );
+      CREATE INDEX org_alert_rules_tenant ON org_alert_rules (tenant_id, position);
+      ALTER TABLE tenants ADD COLUMN alert_inbound_secret TEXT;
+    `,
+  },
+  {
+    version: 18,
+    name: 'org-alert-timeline',
+    // The incident report: what happened to each alert, in order (opened, told, held, escalated, acknowledged, its
+    // steps, its all-clear). Kept as long as its alert.
+    up: `
+      CREATE TABLE org_alert_timeline (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        alert_id TEXT NOT NULL,
+        at TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        text TEXT NOT NULL
+      );
+      CREATE INDEX org_alert_timeline_alert ON org_alert_timeline (alert_id, id);
+    `,
+  },
+  {
+    version: 19,
+    name: 'ha-witness',
+    // FBRX Command as the third vote of the organization's FBRX Server pairs: a key per pair (its secret sealed), and
+    // who holds each pair's lease (so a restart does not forget it).
+    up: `
+      CREATE TABLE ha_witness_keys (
+        id TEXT PRIMARY KEY,
+        tenant_id TEXT NOT NULL,
+        label TEXT NOT NULL,
+        secret TEXT NOT NULL,
+        created_at TEXT NOT NULL,
+        last_used_at TEXT
+      );
+      CREATE INDEX ha_witness_keys_tenant ON ha_witness_keys (tenant_id);
+      CREATE TABLE ha_witness_leases (
+        id TEXT PRIMARY KEY,
+        holder TEXT,
+        term INTEGER NOT NULL,
+        lease_ms INTEGER NOT NULL
+      );
+    `,
+  },
 ];

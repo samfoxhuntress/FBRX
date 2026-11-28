@@ -1,17 +1,26 @@
 import { useEffect, useState } from 'react';
 import { ALERT_CHANNELS, type AlertChannel, type AlertSeverity, type Settings } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Input, Page, Select, Status, Tabs, Toggle, timeAgo, useAction, useToast } from '@fbrx/ui';
-import { call } from '../client';
+import { call, openExternal } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { IS_WINDOWS, navigate } from '../app';
 import { AskButton, askAgent } from '../widgets';
+import { NotificationsTab } from './alerts-notifications';
 
-const CHANNEL_LABEL: Record<AlertChannel, string> = { inbox: 'Inbox', desktop: 'Desktop', mobile: 'Phone', organisation: 'Organization', webhook: 'Webhook', email: 'Email' };
+const CHANNEL_LABEL: Record<AlertChannel, string> = { inbox: 'Inbox', desktop: 'Desktop', mobile: 'Phone', organisation: 'Organization', webhook: 'Webhook', email: 'Email', syslog: 'Syslog' };
+const WEBHOOK_FORMATS = [
+  { value: 'slack', label: 'Slack' },
+  { value: 'teams', label: 'Microsoft Teams' },
+  { value: 'discord', label: 'Discord' },
+  { value: 'ntfy', label: 'ntfy' },
+  { value: 'json', label: 'JSON' },
+  { value: 'fbrx', label: 'FBRX Alert (signed)' },
+];
 const SEV: AlertSeverity[] = ['info', 'warning', 'critical'];
 type Alerts = Settings['alerts'];
 
 export function AlertsPage() {
-  const [tab, setTab] = useState<'inbox' | 'rules' | 'delivery'>('inbox');
+  const [tab, setTab] = useState<'inbox' | 'rules' | 'notifications' | 'delivery'>('inbox');
   const [unreadOnly, setUnreadOnly] = useState(false);
   const inbox = useCore('alerts.inbox', { limit: 300, unreadOnly }, ['alerts.changed']);
   const rules = useCore('alerts.rules', undefined, ['settings.changed']);
@@ -64,6 +73,7 @@ export function AlertsPage() {
         tabs={[
           { id: 'inbox', label: 'Inbox' },
           { id: 'rules', label: 'Rules' },
+          { id: 'notifications', label: 'Notifications' },
           { id: 'delivery', label: 'Delivery' },
         ]}
         active={tab}
@@ -82,9 +92,26 @@ export function AlertsPage() {
                     </div>
                     <div className="fx-cell-sub">{a.body}</div>
                     <div className="fx-muted" style={{ fontSize: 11.5, marginTop: 2 }}>
-                      {timeAgo(a.createdAt)} · sent to {Object.keys(a.deliveries).map((c) => CHANNEL_LABEL[c as AlertChannel] ?? c).join(', ') || 'inbox'}
+                      {timeAgo(a.createdAt)} ·{' '}
+                      {a.org
+                        ? a.org.acknowledged
+                          ? `acknowledged by ${a.org.acknowledged.by}, ${timeAgo(a.org.acknowledged.at)}`
+                          : a.org.state === 'resolved'
+                            ? 'over'
+                            : 'nobody has acknowledged it yet'
+                        : `sent to ${Object.keys(a.deliveries).map((c) => CHANNEL_LABEL[c as AlertChannel] ?? c).join(', ') || 'inbox'}`}
                     </div>
                   </div>
+                  {a.org && !a.org.acknowledged && a.org.state !== 'resolved' && (
+                    <Button size="sm" icon="check" loading={busy === `ack-${a.id}`} onClick={() => void run(`ack-${a.id}`, () => call('alerts.acknowledge', { id: a.id }), 'Acknowledged: your organization knows someone is on it')}>
+                      Acknowledge
+                    </Button>
+                  )}
+                  {a.org?.report && (
+                    <Button size="sm" variant="ghost" icon="file" onClick={() => openExternal(a.org!.report!)} title="What happened, in order, in FBRX Command">
+                      Incident report
+                    </Button>
+                  )}
                   <AskButton iconOnly prompt="Explain this alert from FBRX on my PC: what it means, the likely cause, and what I should do. Check the current state with your tools first." context={{ when: a.createdAt, severity: a.severity, title: a.title, details: a.body }} />
                   {!a.read && <Button size="sm" variant="ghost" icon="check" aria-label="Mark read" onClick={() => void run(a.id, () => call('alerts.markRead', { id: a.id }))} />}
                   <Button size="sm" variant="ghost" icon="trash" aria-label="Delete" onClick={() => void run(a.id, () => call('alerts.delete', { id: a.id }))} />
@@ -126,6 +153,8 @@ export function AlertsPage() {
           ))}
         </Grid>
       )}
+
+      {tab === 'notifications' && settings.data && <NotificationsTab settings={settings.data.settings} locked={locked} />}
 
       {tab === 'delivery' && cfg && (
         <>
@@ -199,19 +228,56 @@ export function AlertsPage() {
                 </div>
               </div>
             </Card>
-            <Card title="Webhook" subtitle="Slack, Microsoft Teams, Discord, ntfy or any JSON endpoint">
+            <Card title="Webhook" subtitle="Slack, Microsoft Teams, Discord, ntfy, any JSON endpoint, or FBRX Alerts signed for your own systems">
               <div className="fx-grid" style={{ gap: 10 }}>
                 <Toggle checked={cfg.channels.webhook.enabled} onChange={(v) => void save({ channels: { ...cfg.channels, webhook: { ...cfg.channels.webhook, enabled: v } } })} label="Send alerts to a webhook" />
                 <div className="fx-row">
                   <Field label="Format">
-                    <Select value={cfg.channels.webhook.format} onChange={(e) => void save({ channels: { ...cfg.channels, webhook: { ...cfg.channels.webhook, format: e.target.value as Alerts['channels']['webhook']['format'] } } })} options={['slack', 'teams', 'discord', 'ntfy', 'json']} />
+                    <Select value={cfg.channels.webhook.format} onChange={(e) => void save({ channels: { ...cfg.channels, webhook: { ...cfg.channels.webhook, format: e.target.value as Alerts['channels']['webhook']['format'] } } })} options={WEBHOOK_FORMATS} />
                   </Field>
                   <Field label="URL">
                     <Input value={cfg.channels.webhook.url} placeholder="https://hooks.slack.com/…" onChange={(e) => setCfg({ ...cfg, channels: { ...cfg.channels, webhook: { ...cfg.channels.webhook, url: e.target.value } } })} onBlur={() => void save({ channels: cfg.channels })} />
                   </Field>
                 </div>
+                {cfg.channels.webhook.format === 'fbrx' && (
+                  <Callout tone="info" actions={<Button size="sm" onClick={() => navigate('vault')}>Credentials</Button>}>
+                    Each alert, and the all-clear when a problem is over, is sent as FBRX Alert v1 JSON signed with the secret saved in Credentials as <code>{cfg.channels.webhook.secretName}</code>. Your system checks the <code>FBRX-Signature</code> header with the same secret.
+                  </Callout>
+                )}
                 <div>
                   <Button size="sm" loading={busy === 'test-webhook'} onClick={() => void test('webhook')}>Send a test</Button>
+                </div>
+              </div>
+            </Card>
+            <Card title="Syslog" subtitle="To a log server or SIEM, in the standard syslog format (RFC 5424)">
+              <div className="fx-grid" style={{ gap: 10 }}>
+                <Toggle checked={cfg.channels.syslog.enabled} onChange={(v) => void save({ channels: { ...cfg.channels, syslog: { ...cfg.channels.syslog, enabled: v } } })} label="Send alerts to a syslog server" />
+                <div className="fx-row">
+                  <Field label="Server">
+                    <Input value={cfg.channels.syslog.host} placeholder="logs.example.lan" onChange={(e) => setCfg({ ...cfg, channels: { ...cfg.channels, syslog: { ...cfg.channels.syslog, host: e.target.value } } })} onBlur={() => void save({ channels: cfg.channels })} />
+                  </Field>
+                  <Field label="Protocol">
+                    <Select
+                      value={cfg.channels.syslog.protocol}
+                      onChange={(e) => {
+                        const protocol = e.target.value as Alerts['channels']['syslog']['protocol'];
+                        // The usual port follows the protocol unless one was chosen.
+                        const port = [514, 6514].includes(cfg.channels.syslog.port) ? (protocol === 'tls' ? 6514 : 514) : cfg.channels.syslog.port;
+                        void save({ channels: { ...cfg.channels, syslog: { ...cfg.channels.syslog, protocol, port } } });
+                      }}
+                      options={[
+                        { value: 'udp', label: 'UDP' },
+                        { value: 'tcp', label: 'TCP' },
+                        { value: 'tls', label: 'TLS' },
+                      ]}
+                    />
+                  </Field>
+                  <Field label="Port">
+                    <Input type="number" value={cfg.channels.syslog.port} onChange={(e) => setCfg({ ...cfg, channels: { ...cfg.channels, syslog: { ...cfg.channels.syslog, port: Number(e.target.value) } } })} onBlur={() => void save({ channels: cfg.channels })} />
+                  </Field>
+                </div>
+                <div>
+                  <Button size="sm" loading={busy === 'test-syslog'} onClick={() => void test('syslog')}>Send a test</Button>
                 </div>
               </div>
             </Card>

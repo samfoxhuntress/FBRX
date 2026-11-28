@@ -1,16 +1,24 @@
 import { useEffect, useState } from 'react';
 import type { AiAppInfo } from '@fbrx/shared';
-import { Button, Callout, Card, Empty, Field, Grid, Icons, Page, Select, Spinner, Status, TextArea, useAction, useToast } from '@fbrx/ui';
+import { Button, Callout, Card, Empty, Field, Grid, Icons, Markdown, Page, Select, Spinner, Status, TextArea, useAction, useToast } from '@fbrx/ui';
 import { call } from '../client';
 import { useCore } from '../hooks';
-import { Markdown } from '../markdown';
 import { navigate } from '../app';
+import { AdoptHermes } from './aicoord-adopt';
 
 const KIND: Record<string, string> = { 'desktop-app': 'Desktop app', cli: 'Command line', ide: 'Code editor', 'local-server': 'Local AI server' };
+
+/** Where a connected app shows the FBRX tools, for the apps where that is not obvious. */
+const FIND_TOOLS: Record<string, string> = {
+  'claude-desktop': 'In Claude, the FBRX tools appear under the tools (slider) button in the chat box as "fbrx".',
+  hermes: 'In Hermes, run /reload-mcp (or start it again): the FBRX tools appear named mcp_fbrx_….',
+  codex: 'Start Codex again: /mcp in Codex lists the FBRX tools.',
+};
 
 export function AiCoordPage({ agentName }: { agentName: string }) {
   const [apps, setApps] = useState<AiAppInfo[] | null>(null);
   const [scanning, setScanning] = useState(false);
+  const [adopting, setAdopting] = useState(false);
   const bridge = useCore('aicoord.bridge', undefined, ['service.changed', 'settings.changed']);
   const providers = useCore('ai.providers', undefined, ['settings.changed']);
   const { run, busy } = useAction();
@@ -83,9 +91,9 @@ export function AiCoordPage({ agentName }: { agentName: string }) {
                   </div>
                   <div className="fx-cell-sub">{a.found ? a.evidence : 'Not found on this computer'}</div>
                   {a.found && a.note && <div className="fx-cell-sub" style={{ marginTop: 2 }}>{a.note}</div>}
-                  {a.bridged && a.id === 'claude-desktop' && !tests[a.id] && (
+                  {a.bridged && FIND_TOOLS[a.id] && !tests[a.id] && (
                     <div className="fx-cell-sub" style={{ marginTop: 2 }}>
-                      In Claude, the FBRX tools appear under the tools (slider) button in the chat box as "fbrx". Ask for example: "Use FBRX to check my disk space", or "Ask Fabrix what is slowing my PC down".
+                      {FIND_TOOLS[a.id]} Ask for example: "Use FBRX to check my disk space", or "Ask Fabrix what is slowing my PC down".
                     </div>
                   )}
                   {tests[a.id] && tests[a.id] !== 'running' && (
@@ -98,6 +106,11 @@ export function AiCoordPage({ agentName }: { agentName: string }) {
                 {a.bridged && (
                   <Button size="sm" variant="ghost" icon="activity" loading={tests[a.id] === 'running'} onClick={() => void test(a.id)} title="Start the FBRX bridge the way this app does and check that it answers">
                     Test
+                  </Button>
+                )}
+                {a.id === 'hermes' && a.found && (
+                  <Button size="sm" variant="ghost" icon="download" title="Its persona, memories, skills and MCP servers, into FBRX" onClick={() => setAdopting(true)}>
+                    Bring its setup over…
                   </Button>
                 )}
                 {a.found && a.launchable && (
@@ -184,6 +197,7 @@ export function AiCoordPage({ agentName }: { agentName: string }) {
           )}
         </Card>
       </Grid>
+      {adopting && <AdoptHermes onClose={() => setAdopting(false)} />}
     </Page>
   );
 }

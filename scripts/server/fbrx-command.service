@@ -1,0 +1,38 @@
+[Unit]
+Description=FBRX Command (the "command" role of FBRX Server: the organization's computers, settings, policy and updates)
+Documentation=https://github.com/samfoxhuntress/fbrx/blob/main/docs/SERVER.md
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=fbrx-command
+Group=fbrx-command
+Environment=HOME=/var/lib/fbrx-command
+Environment=FBRX_ADMIN_CONSOLE_DIR=/opt/fbrx-server/fbrx-command/admin-console
+# Its address, port and certificate mode, and its secrets (the setup token): from the installer, kept by updates.
+EnvironmentFile=/etc/fbrx-command/fbrx-command.env
+EnvironmentFile=/etc/fbrx-command/secrets.env
+ExecStart=/opt/fbrx-server/node/bin/node /opt/fbrx-server/fbrx-command/server.mjs
+WorkingDirectory=/opt/fbrx-server/fbrx-command
+StateDirectory=fbrx-command
+StateDirectoryMode=0700
+Restart=on-failure
+RestartSec=3
+# Its own unprivileged account: only its data folder (database, keys, certificate, uploads) is writable.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/fbrx-command
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+UMask=0077
+LimitNOFILE=65536
+
+[Install]
+WantedBy=multi-user.target

@@ -1,11 +1,36 @@
 # Calendar
 
-**Studio → Calendar** puts your Outlook / Microsoft 365 calendars and any calendar link side by side, as an agenda or a
-week. FBRX reminds you before meetings, today's meetings run along the top of FBRX Glass, and Fabrix can tell you
-what is on, find a free hour and (with your approval) add an event. It is in every edition, including student and
-child computers (a school timetable link, for example).
+**Studio → Calendar** is your **FBRX calendar**, kept on this computer, with shared calendars beside it as add-ons
+(Outlook / Microsoft 365, and calendar links from Google, Apple, a school or a team). See it as an agenda, a week or a
+month. FBRX reminds you before events, today's events run along the top of Dash, and Fabrix can tell you what is on,
+find a free hour and (with your approval) add an event. It is in every edition, including student and child computers
+(a school timetable link, for example).
 
-## Two ways to add a calendar
+## The FBRX calendar
+
+It is always there and needs no account: **New event** (or double-click an hour in Week, a day in Month) adds one.
+
+* **Repeats:** every day, every weekday, every week, every month (a month without that day, like the 31st, is
+  skipped) or every year, until a day or for good. Editing or deleting a repeating event changes all of it.
+* **About:** an event can be about a **project**, a **note**, a **task** or an **automation**. *Open project* (or note,
+  task, automation) in the event jumps to it.
+* **Color coding:** an event takes the color of what it is about, so a project's work reads at a glance:
+  1. a color you pick for the event itself;
+  2. else its **project's** color (the project it is about, or the project its note or task is in);
+  3. else the color of what it is: **automations** violet, **notes** amber, **tasks** teal, and what **Fabrix** added
+     in honey;
+  4. else the calendar's color.
+
+  **Colors** beside the calendar says what each color on screen stands for.
+* **What FBRX knows of your days** is on it too, each a calendar you can hide under *Calendars*: open **tasks** by their
+  due date, active **projects** by their deadline, and when your **automations** run (every run of a daily one; the
+  next run of one that repeats every few minutes or hours). These show as free time: they never block a meeting or
+  bring a reminder.
+* Events are kept on this computer (and in its backups); hide the whole calendar with its switch.
+
+## Shared calendars (add-ons)
+
+Two kinds, under *Calendars → Add a shared calendar*:
 
 | | Outlook / Microsoft 365 | Calendar link |
 | --- | --- | --- |
@@ -27,16 +52,19 @@ A link is a credential (anyone with it can read the calendar), so FBRX keeps it 
 ## Using it
 
 * **Agenda** lists two weeks from today, grouped by day; **Week** is a time grid with all-day events on top,
-  overlapping meetings side by side, tentative ones striped and a line at the current time. Double-click an empty hour
-  in Week to add an event there.
-* Click an event for where, who organized it, which calendar, how it shows (busy, tentative, free, away), and
-  **Join meeting**, **Open in Outlook**, **Delete** (Outlook events you can edit) and **Prepare with Fabrix**.
-* **Calendars** (beside the view): show or hide each account and each Outlook calendar, rename and recolor, update
-  now, remove. A calendar that cannot be updated says why; when Microsoft ended the sign-in (a new password, access
-  removed) it offers **Sign in again**.
+  overlapping meetings side by side, tentative ones striped and a line at the current time; **Month** shows six weeks
+  with each day's first events (your automations' runs last), and a day's number opens its week. Double-click an empty
+  hour in Week, or a day in Month, to add an event there.
+* Click an event for what it is about, how it repeats, where, who organized it, which calendar, how it shows (busy,
+  tentative, free, away), and **Edit** (FBRX events), **Open project** (or note, task, automation), **Join meeting**,
+  **Open in Outlook**, **Delete** (FBRX events, and Outlook events you can edit) and **Prepare with Fabrix**.
+* **Calendars** (beside the view): show or hide the FBRX calendar and each of its four (your events, tasks due,
+  project deadlines, automations), each shared account and each Outlook calendar; rename and recolor; update now;
+  remove a shared one. A calendar that cannot be updated says why; when Microsoft ended the sign-in (a new password,
+  access removed) it offers **Sign in again**.
 * **Calendar settings:** remind me (never, 5, 10, 15 or 30 minutes before), update every 5–60 minutes, and the
   Microsoft sign-in details.
-* **FBRX Glass** shows what is left today (with *Join* when a meeting is about to start), the split-flap board
+* **Dash** shows what is left today (with *Join* when a meeting is about to start), the split-flap board
   announces the next one, and *Plan my day* fits your tasks around your meetings.
 
 FBRX keeps the last week and the next two months on the computer. Repeating events are expanded (Outlook does it for
@@ -49,9 +77,10 @@ Outlook's Windows zone names).
 | --- | --- | --- |
 | `calendar.agenda` | read | What is on, day by day, optionally filtered by a word |
 | `calendar.free_time` | read | Open stretches during working hours (events marked free and all-day events do not block time) |
-| `calendar.create_event` | write | Adds an event to an Outlook calendar; never invites anyone. Goes through approvals like any change |
+| `calendar.create_event` | write | Adds an event to the FBRX calendar (or an Outlook calendar the person names); it can repeat and be about a project, whose color it takes. Never invites anyone. Goes through approvals like any change |
 
-The tools only appear when a calendar is connected. Sign-in tokens and links are never visible to the agent.
+What Fabrix adds is marked as Fabrix's (honey, unless it is about a project). The tools are there unless every calendar
+is hidden. Sign-in tokens and links are never visible to the agent.
 
 ## Plugins
 

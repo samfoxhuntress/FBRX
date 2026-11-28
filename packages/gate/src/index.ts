@@ -12,3 +12,5 @@ export { DEFAULT_PATHS, type GatePaths } from './render/paths';
 export { IFB } from './render/qos';
 export * from './types';
 export * from './path';
+export * from './whatif';
+export * from './ha';

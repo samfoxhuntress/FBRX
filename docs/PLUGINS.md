@@ -161,6 +161,11 @@ Points at another workstation's Local API with that machine's **agent-scoped** t
 Enable in **Settings → Local API**. It listens on `http://127.0.0.1:47821` (remote access is opt-in) and accepts two
 tokens shown on that page: **full** and **agent** (agent runs and tool calls only). Rotate them there.
 
+Switched on but not running, the page says why: most often it waits for your saved credentials to be unlocked (its
+tokens are kept in the vault), or another program has the port. A request whose caller hangs up before the answer
+(an AI app that cancelled, or gave up waiting) stops the agent run or tool call it started, so the model is free for
+the next one; the FBRX MCP bridge passes an AI app's cancel on the same way.
+
 ```bash
 TOKEN=...   # from Settings → Local API, or `fbrx-headless token`
 
@@ -191,5 +196,6 @@ when the vault is locked, …). Calls made through the Local API are audited wit
 | `fs.write_file`, `fs.make_dir`, `fs.delete_file` | write | Guardian blocks writes into system locations |
 | `shell.run` | execute | Blocked patterns, timeout, working-directory confinement |
 | `http.request` | network | Domain allow/block lists, private-network and rebinding protection |
-| `system.info`, `system.processes`, `system.notify`, `time.now`, `fbrx.status`, `fbrx.audit_recent` | read | |
+| `system.info`, `system.processes`, `system.notify`, `time.now`, `fbrx.status`, `fbrx.audit_recent` | read | A notification's title starts with the AI's name; at most 3 a minute and 20 an hour |
+| `mesh.consult` | network | Sends the question to another computer's AI; an offline chat asks to go online first |
 | `memory.remember`, `memory.recall`, `memory.forget` | write / read / write | Long-term memory stored locally; allowed without approval by the built-in policy rule |

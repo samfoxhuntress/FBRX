@@ -3,6 +3,7 @@ import { UPDATE_CHANNELS } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Input, Modal, Page, Select, Status, Table, TextArea, Toggle, formatBytes, formatDate, useAction } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
+import { CommandUpdateCard } from './command-update';
 
 interface Release {
   id: string;
@@ -43,6 +44,7 @@ export function ReleasesPage() {
         )
       }
     >
+      <CommandUpdateCard />
       {manage && (
         <Callout tone="info" title="Automate from CI">
           The release workflow (<code>.github/workflows/release.yml</code>) builds signed installers on macOS and Windows and runs <code>scripts/publish-release.mjs</code> to upload them here with an API key.

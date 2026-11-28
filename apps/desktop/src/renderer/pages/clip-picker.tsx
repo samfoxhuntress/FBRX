@@ -5,14 +5,18 @@ import { bridge, clipHistory, type ClipEntry } from '../client';
 import { useCore } from '../hooks';
 
 /**
- * The clipboard history window (the Ctrl+Alt+Z macro), like Windows' Win+V: your recent copies, newest first.
+ * The clipboard history window (the Ctrl+Alt+Z macro), like Windows' Win+V: your recent copies of text and pictures,
+ * newest first.
  *
- * - W / S or ↑ / ↓ move through the list.
- * - Tab and ~ slide right and left through ways to paste the chosen copy: as copied, cleaned up, on one line,
+ * - ↑ / ↓ move through the list.
+ * - Tab and ~ slide right and left through ways to paste the chosen text: as copied, cleaned up, on one line,
  *   UPPERCASE…, then your saved clipboard transforms.
- * - Typing anything else searches (then W and S type as letters; the arrows still move).
+ * - Typing searches, from the first letter.
  * - Enter pastes it into the app you were in. Delete removes it, Ctrl+P pins it, Esc clears the search or closes.
  */
+
+/** What a search can find in a copy: its text, or for a picture the word "picture" and its size. */
+const searchable = (e: ClipEntry) => (e.image ? `picture image ${e.image.width}x${e.image.height}` : e.text).toLowerCase();
 
 const shortcut = (accel: string) => accel.replace(/CommandOrControl|Control/g, 'Ctrl').replace(/Command/g, '⌘').replace(/Option/g, 'Alt');
 
@@ -57,10 +61,10 @@ export function ClipPicker() {
   const items = useMemo(() => {
     const all = state?.entries ?? [];
     const needle = q.trim().toLowerCase();
-    return needle ? all.filter((e) => e.text.toLowerCase().includes(needle)) : all;
+    return needle ? all.filter((e) => searchable(e).includes(needle)) : all;
   }, [state, q]);
   const current = items[Math.min(sel, items.length - 1)];
-  const formats = useMemo(() => (current ? pasteFormats(current.text, settings?.clipboard.macros ?? []) : []), [current, settings?.clipboard.macros]);
+  const formats = useMemo(() => (current?.text ? pasteFormats(current.text, settings?.clipboard.macros ?? []) : []), [current, settings?.clipboard.macros]);
   const format = formats[Math.min(fmt, formats.length - 1)];
 
   useEffect(() => setFmt(0), [current?.id]);
@@ -75,8 +79,9 @@ export function ClipPicker() {
   }, [fmt, current?.id]);
 
   const close = () => void bridge.clipPicker?.('hide');
-  const paste = async (text: string) => {
-    const r = (await bridge.clipPicker?.('paste', text)) as { pasted: boolean } | undefined;
+  /** Pastes text, or a copy from the history by its id (a picture). */
+  const paste = async (what: string | number) => {
+    const r = (await bridge.clipPicker?.('paste', what)) as { pasted: boolean } | undefined;
     if (r && !r.pasted) {
       setNote(bridge.platform === 'darwin' ? 'Copied. Press ⌘V to paste.' : 'Copied. Press Ctrl+V to paste.');
       setTimeout(close, 900);
@@ -104,11 +109,12 @@ export function ClipPicker() {
       } else if (k === 'Enter') {
         e.preventDefault();
         if (!state?.enabled) void enable();
+        else if (current?.image) void paste(current.id);
         else if (format) void paste(format.text);
-      } else if (k === 'ArrowDown' || (!typing && (k === 's' || k === 'S'))) {
+      } else if (k === 'ArrowDown') {
         e.preventDefault();
         move(1);
-      } else if (k === 'ArrowUp' || (!typing && (k === 'w' || k === 'W'))) {
+      } else if (k === 'ArrowUp') {
         e.preventDefault();
         move(-1);
       } else if (k === 'Tab') {
@@ -184,7 +190,7 @@ export function ClipPicker() {
       {!state ? null : !state.enabled ? (
         <div className="cp-empty">
           <b>Clipboard history is off</b>
-          <span>Turn it on and FBRX keeps your last 50 copies so you can paste any of them again. Kept in memory only, never saved to disk; copies that password managers mark as secret are skipped.</span>
+          <span>Turn it on and FBRX keeps your last 50 copies, text and pictures, so you can paste any of them again. Kept in memory only, never saved to disk; copies that password managers mark as secret are skipped.</span>
           <button className="fx-btn primary sm" onClick={() => void enable()}>
             Turn on (Enter)
           </button>
@@ -192,7 +198,7 @@ export function ClipPicker() {
       ) : !items.length ? (
         <div className="cp-empty">
           <b>{q ? 'Nothing matches' : 'Nothing copied yet'}</b>
-          <span>{q ? 'Try another word, or Esc to clear the search.' : 'Copy some text anywhere and it shows up here, newest first.'}</span>
+          <span>{q ? 'Try another word, or Esc to clear the search.' : 'Copy text or a picture anywhere and it shows up here, newest first.'}</span>
         </div>
       ) : (
         <>
@@ -205,12 +211,20 @@ export function ClipPicker() {
                 className={`cp-item${e === current ? ' on' : ''}${e.pinned ? ' pinned' : ''}`}
                 onMouseDown={(ev) => ev.preventDefault()}
                 onClick={() => setSel(i)}
-                onDoubleClick={() => void paste(e === current && format ? format.text : e.text)}
+                onDoubleClick={() => void paste(e.image ? e.id : e === current && format ? format.text : e.text)}
               >
-                <span className={`cp-text${masked ? ' cp-masked' : ''}`}>{masked ? mask(e.text) : e.text.length > 400 ? `${e.text.slice(0, 400)}…` : e.text}</span>
+                {e.image ? (
+                  masked ? (
+                    <span className="cp-text cp-masked">Picture (hidden while presenting)</span>
+                  ) : (
+                    <img className="cp-image" src={e.image.thumb} alt={`Copied picture, ${e.image.width} by ${e.image.height}`} draggable={false} />
+                  )
+                ) : (
+                  <span className={`cp-text${masked ? ' cp-masked' : ''}`}>{masked ? mask(e.text) : e.text.length > 400 ? `${e.text.slice(0, 400)}…` : e.text}</span>
+                )}
                 <span className="cp-meta">
                   {e.pinned && <Icons.bookmark size={11} />} {timeAgo(e.at)}
-                  {e.text.includes('\n') ? ` · ${e.text.split('\n').length} lines` : ''}
+                  {e.image ? ` · picture ${e.image.width} × ${e.image.height}` : e.text.includes('\n') ? ` · ${e.text.split('\n').length} lines` : ''}
                 </span>
               </button>
             ))}
@@ -233,7 +247,7 @@ export function ClipPicker() {
           )}
         </>
       )}
-      <div className="cp-foot">{note ?? (searching ? '↑ ↓ move · Tab ~ format · Enter paste · Esc clear' : 'W S move · Tab ~ format · type to search · Enter paste · Esc close')}</div>
+      <div className="cp-foot">{note ?? (searching ? '↑ ↓ move · Tab ~ format · Enter paste · Esc clear' : '↑ ↓ move · Tab ~ format · type to search · Enter paste · Esc close')}</div>
     </div>
   );
 }

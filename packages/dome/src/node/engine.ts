@@ -19,6 +19,9 @@ import {
 import type { DomeSensor } from './sensors';
 import type { DomeStore } from './store';
 
+const FLOW_WINDOW_MS = 60 * 60_000;
+const FLOW_KEEP = 3000;
+
 /** FBRX computers on FBRX Mesh, as the core on this server knows them. */
 export interface DomeComputer {
   name: string;
@@ -39,6 +42,8 @@ export interface DomeEngineOptions {
   fetchFeed?: (url: string) => Promise<string>;
   /** Tells the FBRX computer a finding is about (through FBRX Mesh); returns its name when it was told. */
   notify?: (f: DomeFinding) => Promise<string | null>;
+  /** Told of each new finding (for the server's alerts). */
+  onFinding?: (f: DomeFinding) => void;
   /** FBRX computers on the mesh, for the device list. */
   computers?: () => Promise<DomeComputer[]>;
   /** How long a new MiniDome learns the network before it reports new devices. */
@@ -84,6 +89,8 @@ export class DomeEngine {
   private timers: NodeJS.Timeout[] = [];
   private buckets = new Map<number, number>();
   private counts = { dns: 0, flows: 0 };
+  /** The distinct connections of the last hour (at most FLOW_KEEP), for FBRX Gate's What If to replay. */
+  private flows = new Map<string, { proto: 'tcp' | 'udp'; src: string; dst: string; dport: number; count: number; last: number }>();
   private since = new Date().toISOString();
   private running = false;
   private ctxCache: { at: number; ctx: DetectContext } | null = null;
@@ -196,9 +203,40 @@ export class DomeEngine {
       this.counts.dns++;
       const m = Math.floor(e.at / 60_000);
       this.buckets.set(m, (this.buckets.get(m) ?? 0) + 1);
-    } else if (e.type === 'flow') this.counts.flows++;
+    } else if (e.type === 'flow') {
+      this.counts.flows++;
+      this.keepFlow(e);
+    }
     else if (e.type === 'lease' || e.type === 'neighbor') this.device(e, c);
     for (const s of this.detectors.handle(e)) this.signal(s);
+  }
+
+  private keepFlow(e: Extract<DomeEvent, { type: 'flow' }>) {
+    const key = `${e.proto} ${e.src} ${e.dst} ${e.dport}`;
+    const f = this.flows.get(key);
+    if (f) {
+      f.count++;
+      f.last = e.at;
+      this.flows.delete(key);
+      this.flows.set(key, f);
+      return;
+    }
+    this.flows.set(key, { proto: e.proto, src: e.src, dst: e.dst, dport: e.dport, count: 1, last: e.at });
+    // Oldest first in the map: drop what is over an hour old, or the oldest past the limit.
+    const old = e.at - FLOW_WINDOW_MS;
+    for (const [k, v] of this.flows) {
+      if (this.flows.size <= FLOW_KEEP && v.last >= old) break;
+      this.flows.delete(k);
+    }
+  }
+
+  /** The distinct connections of the last hour, busiest first. */
+  recentFlows(): Array<{ proto: 'tcp' | 'udp'; src: string; dst: string; dport: number; count: number; lastAt: string }> {
+    const old = Date.now() - FLOW_WINDOW_MS;
+    return [...this.flows.values()]
+      .filter((f) => f.last >= old)
+      .sort((a, b) => b.count - a.count)
+      .map((f) => ({ proto: f.proto, src: f.src, dst: f.dst, dport: f.dport, count: f.count, lastAt: new Date(f.last).toISOString() }));
   }
 
   /** A device seen on one of the gate's networks (the internet side's router is not one). */
@@ -231,6 +269,13 @@ export class DomeEngine {
     const signal = { ...s, title: s.title.replace('{device}', label) };
     const { finding, news } = this.o.store.record(signal, { name, network: lease?.network ?? known?.network ?? null, mac: s.mac ?? lease?.mac ?? known?.mac ?? null });
     if (news) this.log(finding.severity === 'info' ? 'info' : 'warn', `MiniDome: ${finding.title}`);
+    if (news) {
+      try {
+        this.o.onFinding?.(finding);
+      } catch {
+        /* the alert is not the finding */
+      }
+    }
     if (news && this.o.notify && this.settings().notifyComputers && DOME_SEVERITIES.indexOf(finding.severity) >= DOME_SEVERITIES.indexOf('warning') && finding.device.ip) {
       void this.o
         .notify(finding)

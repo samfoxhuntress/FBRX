@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import type { CoreEventName, CoreMethod, CoreMethods } from '@fbrx/shared';
-import { call, onAnyEvent } from './client';
+import type { CoreEventName, CoreMethod, CoreMethods, StarterAiStatus } from '@fbrx/shared';
+import { call, onAnyEvent, onEvent } from './client';
 
 type Params<M extends CoreMethod> = Parameters<CoreMethods[M]>[0];
 type Result<M extends CoreMethod> = Awaited<ReturnType<CoreMethods[M]>>;
@@ -44,6 +44,18 @@ export function useCore<M extends CoreMethod>(method: M, params?: Params<M>, eve
     return () => clearInterval(i);
   }, [intervalMs, reload]);
   return { data, error, reload, setData };
+}
+
+/** The AI getting ready on a new computer: the starter model, downloaded once (StarterAi in the core). */
+export function useStarterAi() {
+  const [st, setSt] = useState<StarterAiStatus | null>(null);
+  useEffect(() => {
+    void call('ai.starter')
+      .then(setSt)
+      .catch(() => undefined);
+    return onEvent('ai.starter', setSt);
+  }, []);
+  return st;
 }
 
 export function useInterval(fn: () => void, ms: number) {

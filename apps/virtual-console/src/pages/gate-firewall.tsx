@@ -3,6 +3,7 @@ import type { GateConfig, GateForward, GateRule } from '@fbrx/gate';
 import { Button, Card, ChoiceCards, Empty, Field, formatNumber, Grid, Input, Modal, Select, Status, Table, Toggle, useConfirm } from '@fbrx/ui';
 import { draftIssues, inItem, useGate } from '../gate-state';
 import { useApp } from '../state';
+import { AskAiButton, describeFor } from '../ask-ai';
 import { ACCESS_WORDS, GatePage, IssueList, newId, zoneWords } from './gate-common';
 
 const ACTION_TONE = { accept: 'good', drop: 'critical', reject: 'warning' } as const;
@@ -30,7 +31,23 @@ export function GateFirewallPage() {
       title="Firewall"
       description="Who may reach what. Each network's access sets the basics; rules here add exceptions, top to bottom, first match wins. Port forwards let something on the internet reach one device inside."
       actions={
-        admin && (
+        <>
+          {g.info && (
+            <AskAiButton
+              what="FBRX Gate's firewall"
+              question="Look at the firewall: each network's access, the rules (in order, first match wins) and the port forwards, with how often each rule was hit. Is anything risky, unused or in the wrong order? What would you change?"
+              details={() => {
+                const c = g.info!.state.running ?? g.info!.state.candidate;
+                return describeFor({
+                  networks: c.networks.map((n) => `${n.name} (${n.purpose}): access ${n.access}${n.manage ? ', may manage the gate' : ''}`),
+                  rules: c.firewall.rules.map((r, i) => `${i + 1}. ${r.enabled ? '' : '(off) '}${r.name}: ${r.from} → ${r.to} ${r.proto}${r.ports ? ` ${r.ports}` : ''}${r.source ? ` from ${r.source}` : ''}${r.destination ? ` to ${r.destination}` : ''} → ${r.action}, hit ${hits(`rule:${r.id}`) ?? '?'} times`),
+                  forwards: c.firewall.forwards.map((f) => `${f.enabled ? '' : '(off) '}${f.name}: ${f.proto} ${f.port} → ${f.to}${f.toPort ? `:${f.toPort}` : ''}${f.source ? ` only from ${f.source}` : ''}`),
+                  sshToGate: c.management.ssh,
+                });
+              }}
+            />
+          )}
+          {admin && (
           <>
             <Button icon="plus" onClick={() => setForward('new')}>
               Port forward
@@ -39,7 +56,8 @@ export function GateFirewallPage() {
               New rule
             </Button>
           </>
-        )
+          )}
+        </>
       }
     >
       {(info) => {

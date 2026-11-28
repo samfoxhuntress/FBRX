@@ -37,7 +37,7 @@ export class PolicyEngine {
 
   constructor(
     private readonly db: Db,
-    private readonly dirs: () => SpecialDirs & { workspace: string; data: string },
+    private readonly dirs: () => SpecialDirs & { workspace: string; data: string; appData?: string[] },
     private readonly events?: EventBus,
   ) {}
 
@@ -151,6 +151,7 @@ export class PolicyEngine {
         denyPatterns: policy.filesystem.denyPatterns,
         readOnly: policy.filesystem.readOnly,
         dataDir: this.dirs().data,
+        appDataDirs: this.dirs().appData,
       });
       if (!check.ok) hard.push(check.reason!);
     }

@@ -44,20 +44,18 @@ export interface SpeedometerProps {
   unit: string;
   /** Small line under the unit (the test phase, or a remark). */
   label?: string;
-  /** Lightning and a blue glow (for 1.21 gigawatts). */
-  flux?: boolean;
   /** Scale labels; defaults to the Mbps marks. */
   marks?: string[];
 }
 
-export function Speedometer({ fraction, value, unit, label, flux = false, marks }: SpeedometerProps) {
+export function Speedometer({ fraction, value, unit, label, marks }: SpeedometerProps) {
   const f = Math.max(0, Math.min(1, fraction));
   const labels = marks ?? SPEED_MARKS.map((m) => (m >= 1000 ? `${m / 1000}G` : String(m)));
   const n = labels.length - 1;
   const ticks: Array<{ deg: number; major: boolean }> = [];
   for (let i = 0; i <= n * 5; i++) ticks.push({ deg: START + (SWEEP * i) / (n * 5), major: i % 5 === 0 });
   return (
-    <svg className={`speedo${flux ? ' flux' : ''}`} viewBox="0 0 300 300" role="img" aria-label={`${value} ${unit}${label ? `, ${label}` : ''}`}>
+    <svg className="speedo" viewBox="0 0 300 300" role="img" aria-label={`${value} ${unit}${label ? `, ${label}` : ''}`}>
       <defs>
         <radialGradient id="speedo-face" cx="50%" cy="38%" r="70%">
           <stop offset="0" stopColor="#1d2430" />
@@ -105,13 +103,6 @@ export function Speedometer({ fraction, value, unit, label, flux = false, marks 
           </text>
         );
       })}
-      {flux && (
-        <g className="speedo-bolts" fill="none" stroke="#dff1ff" strokeWidth="2.4" strokeLinejoin="round">
-          <path d="M70 70 l18 16 -9 4 20 20" />
-          <path d="M232 64 l-16 20 10 2 -18 22" />
-          <path d="M150 30 l-6 18 8 0 -6 20" />
-        </g>
-      )}
       <g className="speedo-needle" style={{ transform: `rotate(${START + SWEEP * f}deg)` }}>
         <path d={`M ${CX - 14} ${CY - 3.5} L ${CX + 104} ${CY - 0.8} L ${CX + 108} ${CY} L ${CX + 104} ${CY + 0.8} L ${CX - 14} ${CY + 3.5} Z`} fill="#ff5a3c" />
       </g>

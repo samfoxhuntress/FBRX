@@ -1,0 +1,168 @@
+import { describe, expect, it } from 'vitest';
+import { DEFAULT_PROVIDERS, THINKING_BUDGETS } from '@fbrx/shared';
+import { briefDescription, shortlistTools } from '../src/ai/tool-shortlist';
+import { agentFit } from '../src/ai/agent-fit';
+import { OpenAICompatibleProvider } from '../src/ai/providers/openai-compatible';
+import { localFetch } from '../src/util/local-fetch';
+import type { ToolSpec } from '../src/tools/types';
+import { makeKernel, waitFor, USER } from './helpers';
+import { mockOpenAI } from './mock-llm';
+
+const tool = (name: string, title = name): ToolSpec => ({ name, title, description: `${title} does a thing. More words about it.`, risk: 'read', source: 'builtin', sourceId: null, inputSchema: { type: 'object' }, run: async () => ({ output: '' }) });
+const TOOLS = ['time.now', 'memory.remember', 'memory.recall', 'fbrx.help', 'fs.read_file', 'fs.list_dir', 'docs.create', 'web.search', 'shield.scan', 'pc.live_status', 'weather.forecast'].map((n) => tool(n, n === 'weather.forecast' ? 'Weather forecast' : n));
+const names = (t: ToolSpec[]) => t.map((x) => x.name);
+
+describe('a local model reads less, so it answers sooner', () => {
+  it('gets the tools the conversation is about, in the order subjects came up', () => {
+    expect(names(shortlistTools(TOOLS, ['hi there']))).toEqual(['time.now', 'memory.remember', 'memory.recall', 'fbrx.help']);
+    expect(names(shortlistTools(TOOLS, ['search the web for the news']))).toEqual(['time.now', 'memory.remember', 'memory.recall', 'fbrx.help', 'web.search']);
+    // A later subject adds its tools at the end, so the start of the request stays the same.
+    const first = names(shortlistTools(TOOLS, ['open the file on my desktop']));
+    const later = names(shortlistTools(TOOLS, ['open the file on my desktop', 'is it a virus?']));
+    expect(later.slice(0, first.length)).toEqual(first);
+    expect(later.slice(first.length)).toEqual(['shield.scan']);
+    // A plugin's tool comes in when its name or title comes up.
+    expect(names(shortlistTools(TOOLS, ["what's the weather tomorrow?"]))).toContain('weather.forecast');
+    // "What is my IP?" brings in the network tools, however it is put (and "ship" or "tip" do not).
+    const net = [...TOOLS, tool('net.ip_address')];
+    for (const ask of ['What is my IP?', 'whats my ip', 'my IP address please', 'show ipconfig', 'what is my gateway']) expect(names(shortlistTools(net, [ask]))).toContain('net.ip_address');
+    for (const ask of ['ship it', 'any tips?']) expect(names(shortlistTools(net, [ask]))).not.toContain('net.ip_address');
+    expect(briefDescription('Reads a file. Only text files; binary files are refused.')).toBe('Reads a file.');
+    expect(briefDescription('x'.repeat(400), 50)).toHaveLength(50);
+  });
+
+  it('keeps up in a long chat: the latest request gets its tools, the oldest subject goes (Noah, round two)', async () => {
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      const all = kernel.registry.list();
+      const offered = (chat: string[]) => names(shortlistTools(all, chat));
+      const moving = ['How many tasks do I have left this week?', "Add 'Book movers' to the moving project.", 'Also my laptop battery is bulging, is that bad?', 'Text my wife that I will be late.'];
+      const packing = [...moving, 'Save my packing list as packing.txt on my desktop: socks, shirts, chargers.'];
+      expect(offered(packing)).toContain('fs.write_file');
+      expect(offered([...packing, 'Then clean up my desktop.'])).toContain('fs.list_dir');
+      const scam = ["Someone from 'Microsoft' just called and said my computer has a virus.", 'OK. Can you check whether I actually have a virus?', 'The caller told me to open router-tips.txt in my Downloads. What does it say?'];
+      expect(offered(scam)).toContain('fs.read_file');
+      // A file's name is not the request: router-tips.txt brings in the files, not the network tools.
+      expect(offered(scam).filter((n) => n.startsWith('net.'))).toEqual([]);
+      expect(offered([...scam, "What's our saved Wi-Fi password? I want to change it after all this."])).toContain('passwords.find');
+      for (const chat of [packing, scam]) expect(offered(chat)).toHaveLength(24);
+      // What stays keeps its place: only the oldest subject's tools go, and the new ones join at the end.
+      const before = offered(scam.slice(0, 2));
+      const after = offered(scam);
+      expect(after.filter((n) => before.includes(n))).toEqual(before.filter((n) => after.includes(n)));
+      expect(after.slice(-6)).toEqual(expect.arrayContaining(['fs.read_file', 'fs.list_dir']));
+      // Common words in a title ("Read your personality") bring in nothing; the subject does.
+      expect(offered(['Can you read me your last answer again?'])).not.toContain('personality.read');
+      expect(offered(['Change your personality to be more cheerful'])).toContain('personality.update');
+    } finally {
+      await cleanup();
+    }
+  });
+
+  it('brings in Shield and the security check-up however people ask about their antivirus', () => {
+    const tools = [...TOOLS, tool('shield.status'), tool('pc.security_status')];
+    for (const ask of ['Quick one: is real-time protection on?', "Quick one: is my antivirus's real-time protection on?", 'Quick one: is my antivirus on right now?', 'Is Defender protecting me?'])
+      expect(names(shortlistTools(tools, [ask]))).toEqual(expect.arrayContaining(['shield.status', 'pc.security_status']));
+    expect(names(shortlistTools(tools, ['my laptop is slow']))).toContain('pc.live_status');
+    expect(names(shortlistTools(tools, ['my laptop is slow']))).not.toContain('pc.security_status');
+  });
+
+  it('asks a model on this computer to answer without thinking first, unless told it may', async () => {
+    const llm = await mockOpenAI(() => ({ text: 'ok' }));
+    try {
+      const local = new OpenAICompatibleProvider({ id: 'rt', type: 'local-runtime', baseUrl: `${llm.url}/v1`, apiKey: () => undefined });
+      for await (const _ of local.chat({ model: 'm', messages: [{ role: 'user', content: 'hi' }], tools: [], reasoning: false, signal: AbortSignal.timeout(5000) }));
+      for await (const _ of local.chat({ model: 'm', messages: [{ role: 'user', content: 'hi' }], tools: [], reasoning: true, signal: AbortSignal.timeout(5000) }));
+      const lan = new OpenAICompatibleProvider({ id: 'lan', type: 'openai-compatible', baseUrl: `${llm.url}/v1`, apiKey: () => undefined });
+      for await (const _ of lan.chat({ model: 'm', messages: [{ role: 'user', content: 'hi' }], tools: [], reasoning: false, signal: AbortSignal.timeout(5000) }));
+      const bodies = llm.requests.filter((r) => r.path.endsWith('/chat/completions')).map((r) => r.body);
+      expect(bodies[0].chat_template_kwargs).toEqual({ enable_thinking: false });
+      expect(bodies[1].chat_template_kwargs).toEqual({ enable_thinking: true });
+      // Only the built-in runtime is told (another server may not know the setting).
+      expect(bodies[2].chat_template_kwargs).toBeUndefined();
+    } finally {
+      await llm.close();
+    }
+    expect([THINKING_BUDGETS.quick.localThinking, THINKING_BUDGETS.everyday.localThinking, THINKING_BUDGETS.thorough.localThinking]).toEqual([false, false, true]);
+  });
+
+  it('fits what it shows to how much the agent holds, or to what the person chose', () => {
+    expect(agentFit({}, { historyBudgetChars: 20_480 })).toEqual({ tools: 'focused' }); // 8K tokens
+    expect(agentFit({}, { historyBudgetChars: 81_920 })).toEqual({ tools: 'all' }); // 32K tokens on a server
+    // The model on this computer reads at the computer's pace: the short list, however much it holds.
+    expect(agentFit({ type: 'local-runtime' }, { historyBudgetChars: 81_920 })).toEqual({ tools: 'focused' });
+    expect(agentFit({ type: 'local-runtime', tools: 'all' }, { historyBudgetChars: 81_920 })).toEqual({ tools: 'all' });
+    expect(agentFit({}, { historyBudgetChars: 2_500_000 })).toEqual({ tools: 'all' }); // a cloud AI
+    expect(agentFit({ tools: 'all' }, { historyBudgetChars: 20_480 })).toEqual({ tools: 'all' });
+    expect(agentFit({ tools: 'focused' }, { historyBudgetChars: 2_500_000 })).toEqual({ tools: 'focused' });
+  });
+
+  it('sends a small model a short list of tools and a roomy one them all; what it remembers rides with the message for both', async () => {
+    const llm = await mockOpenAI(() => ({ text: 'Done.' }));
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      const provider = (id: string, cloud: boolean) => ({ id, type: 'openai-compatible' as const, name: id, enabled: true, baseUrl: `${llm.url}/v1`, cloud });
+      kernel.settings.update({ ai: { defaultProvider: 'lan', defaultModel: 'mock-model', providers: [...DEFAULT_PROVIDERS, provider('lan', false), provider('far', true)] }, memory: { enabled: true, longTerm: true } } as never);
+      await kernel.call('memory.add', { content: 'Prefers short answers' }, USER);
+      const ask = async (message: string, providerId: string) => {
+        const before = llm.requests.length;
+        const { runId } = (await kernel.call('ai.chat', { message, providerId, model: 'mock-model' }, USER)) as { runId: string };
+        await waitFor(() => llm.requests.length > before && !kernel.agent.activities().some((a) => a.runId === runId));
+        return llm.requests.at(-1)!.body;
+      };
+      const local = await ask('why is my computer so slow?', 'lan');
+      const toolNames = local.tools.map((t: { function: { name: string } }) => t.function.name);
+      expect(toolNames).toContain('system__processes');
+      expect(toolNames).not.toContain('web__search');
+      // At most the short list's 24 (MAX_TOOLS), skills' tools included: on Windows the slow-computer skill adds its own.
+      expect(toolNames.length).toBeLessThanOrEqual(24);
+      // What it remembers rides with the person's message; the instructions stay the same from one request to the next.
+      expect(local.messages[0].content).not.toContain('Prefers short answers');
+      // So do the AI Toolkit's actions and the skills that fit (here "Busiest programs" and "Computer feels slow").
+      expect(local.messages.at(-1).content).toMatch(/^<memory>[\s\S]*Prefers short answers[\s\S]*<\/memory>\n\n<toolkit>\n- kit\.busiest_programs: [^\n]*\n<\/toolkit>\n\n<skills>\n### Computer feels slow[\s\S]*<\/skills>\n\nwhy is my computer so slow\?$/);
+      const cloud = await ask('why is my computer so slow?', 'far');
+      expect(cloud.tools.length).toBeGreaterThan(40);
+      // The same instructions for both, so a cloud AI's prompt cache holds across the conversation too.
+      expect(cloud.messages[0].content).toBe(local.messages[0].content);
+      expect(cloud.messages.at(-1).content).toContain('Prefers short answers');
+    } finally {
+      await cleanup();
+      await llm.close();
+    }
+  });
+
+  it('says how far a model on this computer has read a long request, and waits for no clock', async () => {
+    const llm = await mockOpenAI(() => ({ text: 'Your address is 192.168.10.195.', reading: 4000 }));
+    const { kernel, cleanup } = await makeKernel();
+    try {
+      // The built-in runtime is asked for its reading progress; the chunks become "reading".
+      const local = new OpenAICompatibleProvider({ id: 'rt', type: 'local-runtime', baseUrl: `${llm.url}/v1`, apiKey: () => undefined, readingProgress: true, fetch: localFetch });
+      const chunks: any[] = [];
+      for await (const c of local.chat({ model: 'm', messages: [{ role: 'user', content: 'hi' }], tools: [], signal: AbortSignal.timeout(5000) })) chunks.push(c);
+      expect(llm.requests.at(-1).body.return_progress).toBe(true);
+      expect(chunks.filter((c) => c.type === 'reading')).toEqual([{ type: 'reading', read: 1000, of: 4000 }, { type: 'reading', read: 2000, of: 4000 }, { type: 'reading', read: 4000, of: 4000 }]);
+      expect(chunks.filter((c) => c.type === 'text').map((c) => c.delta).join('')).toBe('Your address is 192.168.10.195.');
+
+      // In a chat: "Reading your request: 1,000 of 4,000 tokens" while it reads.
+      kernel.settings.update({ ai: { defaultProvider: 'lan', defaultModel: 'mock-model', providers: [...DEFAULT_PROVIDERS, { id: 'lan', type: 'openai-compatible', name: 'lan', enabled: true, baseUrl: `${llm.url}/v1`, cloud: false }] } } as never);
+      const said: string[] = [];
+      const off = kernel.events.on('agent', (e: any) => e.type === 'run.progress' && said.push(e.detail));
+      const ask = async (message: string, conversationId?: string) => {
+        const r = (await kernel.call('ai.chat', { message, providerId: 'lan', model: 'mock-model', ...(conversationId ? { conversationId } : {}) }, USER)) as { runId: string; conversationId: string };
+        await waitFor(() => !kernel.agent.activities().some((a) => a.runId === r.runId));
+        return r.conversationId;
+      };
+      const id = await ask('What is my IP address?');
+      off();
+      expect(said).toContain('Reading your request: 1,000 of 4,000 tokens');
+
+      // Asked again after a run that got no answer: the question is not added twice.
+      kernel.conversations.append(id, { role: 'user', content: 'Set my static IP to 192.168.10.195' });
+      await ask('Set my static IP to 192.168.10.195', id);
+      expect(kernel.conversations.messages(id).filter((m) => m.role === 'user').map((m) => m.content)).toEqual(['What is my IP address?', 'Set my static IP to 192.168.10.195']);
+    } finally {
+      await cleanup();
+      await llm.close();
+    }
+  });
+});

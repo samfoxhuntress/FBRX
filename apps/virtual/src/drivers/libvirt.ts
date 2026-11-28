@@ -289,7 +289,13 @@ export class LibvirtHypervisor implements Hypervisor {
     if (spec.firmware === 'uefi' && !info.uefi) throw badRequest('UEFI firmware (OVMF) is not installed on this server');
     const pool = spec.pool ?? IMAGES_POOL;
     const volume = `${spec.name}.qcow2`;
-    await this.run(['vol-create-as', pool, volume, `${spec.diskGb}G`, '--format', 'qcow2']).catch((e) => {
+    // Thick provisioned: the whole size is allocated now (qemu-img preallocation=falloc), so it must fit.
+    const thick = spec.provisioning === 'thick';
+    if (thick) {
+      const free = (await this.pools()).find((p) => p.name === pool)?.availableGb;
+      if (free !== undefined && free < spec.diskGb) throw badRequest(`A thick-provisioned ${spec.diskGb} GB disk takes all of it now, and ${pool} has ${Math.floor(free)} GB free. Make it smaller, or thin provisioned.`);
+    }
+    await this.run(['vol-create-as', pool, volume, `${spec.diskGb}G`, '--format', 'qcow2', ...(thick ? ['--allocation', `${spec.diskGb}G`, '--prealloc-metadata'] : [])]).catch((e) => {
       throw e instanceof VirtualError && e.status === 409 ? conflict(`A disk called ${volume} already exists in ${pool}`) : e;
     });
     const diskPath = (await this.run(['vol-path', '--pool', pool, volume])).trim();

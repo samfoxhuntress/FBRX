@@ -1,84 +1,11 @@
 import { useState } from 'react';
-import type { FolderUsage, PhysicalDiskInfo } from '@fbrx/shared';
-import { BarList, Button, Callout, Card, Empty, Grid, Input, KeyValue, Meter, Modal, Page, Spinner, Status, Tabs, formatBytes, useAction, useConfirm, useToast, advancedLabel } from '@fbrx/ui';
-import { call, pickFile } from '../client';
+import type { PhysicalDiskInfo } from '@fbrx/shared';
+import { Button, Callout, Card, Empty, Grid, Input, KeyValue, Meter, Modal, Page, Spinner, Status, Tabs, formatBytes, useAction, useConfirm, useToast, advancedLabel } from '@fbrx/ui';
+import { call } from '../client';
 import { useCore } from '../hooks';
 import { IS_WINDOWS, navigate } from '../app';
 import { AskButton } from '../widgets';
-
-function Analyzer() {
-  const home = useCore('files.home');
-  const [path, setPath] = useState('');
-  const [usage, setUsage] = useState<FolderUsage | null>(null);
-  const { run, busy } = useAction();
-  const analyze = async (p: string) => {
-    setPath(p);
-    const r = await run('analyze', () => call('storage.analyze', { path: p }));
-    if (r) setUsage(r);
-  };
-  return (
-    <Card title="What is using space?" subtitle="Sizes of the folders inside a folder, and its largest files">
-      <div className="fx-actions" style={{ marginBottom: 12 }}>
-        <div style={{ flex: 1, minWidth: 240 }}>
-          <Input className="mono" placeholder="Folder to analyze" value={path} onChange={(e) => setPath(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && void analyze(path)} />
-        </div>
-        <Button icon="folder" onClick={async () => { const p = await pickFile({ kind: 'folder', title: 'Folder to analyze' }); if (p) void analyze(p); }}>
-          Choose…
-        </Button>
-        {(home.data?.places ?? []).slice(0, 4).map((p) => (
-          <Button key={p.path} size="sm" onClick={() => void analyze(p.path)}>
-            {p.name}
-          </Button>
-        ))}
-        <Button variant="primary" loading={busy === 'analyze'} disabled={!path} onClick={() => void analyze(path)}>
-          Analyze
-        </Button>
-      </div>
-      {busy === 'analyze' && <Spinner />}
-      {usage && busy !== 'analyze' && (
-        <Grid cols={2}>
-          <div>
-            <div className="fx-label" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-              <span style={{ flex: 1 }}>
-                {formatBytes(usage.total)} in {usage.files.toLocaleString()} files{usage.partial ? ' (stopped early: very large folder)' : ''}
-              </span>
-              <AskButton
-                label="What can I delete?"
-                prompt={`This is what is using space in ${usage.path} on my PC. Explain what the big folders and files are, which are safe to delete or move, and which I should keep. Do not delete anything without asking.`}
-                context={{ total: formatBytes(usage.total), folders: usage.children.slice(0, 20).map((c) => ({ name: c.name, size: formatBytes(c.size), folder: c.dir })), largest: usage.largest.slice(0, 15).map((f) => ({ path: f.path, size: formatBytes(f.size) })) }}
-              />
-            </div>
-            <BarList items={usage.children.slice(0, 15).map((c) => ({ key: c.path, label: `${c.dir ? '📁 ' : ''}${c.name}`, value: c.size }))} format={formatBytes} />
-            <div className="fx-actions" style={{ marginTop: 8 }}>
-              {usage.children
-                .filter((c) => c.dir)
-                .slice(0, 6)
-                .map((c) => (
-                  <Button key={c.path} size="sm" variant="ghost" onClick={() => void analyze(c.path)}>
-                    Open {c.name}
-                  </Button>
-                ))}
-            </div>
-          </div>
-          <div>
-            <div className="fx-label">Largest files</div>
-            <div className="fx-list" style={{ maxHeight: 360, overflow: 'auto' }}>
-              {usage.largest.map((f) => (
-                <div key={f.path} className="fx-list-item" style={{ fontSize: 12.5 }}>
-                  <span className="mono" style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={f.path}>
-                    {f.path}
-                  </span>
-                  <span>{formatBytes(f.size)}</span>
-                  <Button size="sm" variant="ghost" icon="external" aria-label="Open" onClick={() => void call('files.open', { path: f.path })} />
-                </div>
-              ))}
-            </div>
-          </div>
-        </Grid>
-      )}
-    </Card>
-  );
-}
+import { SpaceHogsCard, SpaceMapCard } from './space-map';
 
 function Disks() {
   const disks = useCore('storage.disks');
@@ -308,7 +235,8 @@ export function StoragePage({ advanced }: { advanced: boolean }) {
               <Spinner />
             )}
           </Card>
-          <Analyzer />
+          <SpaceMapCard />
+          <SpaceHogsCard />
           {!IS_WINDOWS && <Callout tone="info">Drive maintenance (optimize, check, partitions, BitLocker) is available on Windows.</Callout>}
           {IS_WINDOWS && !advanced && (
             <Callout tone="info" actions={<Button size="sm" onClick={() => navigate('settings/appearance')}>Settings</Button>}>

@@ -1,4 +1,4 @@
-import { newId, type GuardianFinding, type ToolInvokeResult } from '@fbrx/shared';
+import { DIGGER_ONLY_TOOLS, cleanToolText, newId, type GuardianFinding, type ToolInvokeResult } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { AuditLog } from '../audit/audit-log';
 import type { Logger } from '../logger';
@@ -64,7 +64,11 @@ export class ToolGate {
       return { ok: false, status: 'denied', output: `Denied: ${reason}`, error: reason, durationMs: Date.now() - started, findings, callId };
     };
 
-    if (!tool) return deny(`Unknown tool "${name}"`);
+    if (!tool) {
+      // FBRX Endpoint asked for one of FBRX Digger's tools (2.5.0): say where it is, so Fabrix can say it too.
+      if (DIGGER_ONLY_TOOLS.includes(name)) return deny(`${name} is in FBRX Digger, the app with the advanced network tools (it comes with Endpoint Ultra). Tell the person to open FBRX Digger from Network Center → Digger, and use the everyday network tools here meanwhile (net.diagnose, net.ping, net.port_check, net.traceroute, net.scan_lan).`);
+      return deny(`Unknown tool "${name}"`);
+    }
     const blocked = ctx.origin === 'agent' ? this.d.agentToolsBlocked?.() : null;
     if (blocked) return deny(blocked);
     if (tool.feature && !this.d.license.has(tool.feature)) return deny(`Tool requires the "${tool.feature}" license feature`);
@@ -100,7 +104,14 @@ export class ToolGate {
     const needsApproval = decision.action === 'ask' || findings.some((f) => f.severity === 'warning');
     // A person invoking a tool directly from the UI is the approval.
     if (needsApproval && ctx.origin !== 'user') {
-      const reason = decision.action === 'ask' ? decision.reason : `Guardian: ${findings.map((f) => f.message).join('; ')}`;
+      let note: string | null = null;
+      try {
+        note = tool.note?.(input) ?? null;
+      } catch {
+        /* the card goes without it */
+      }
+      const why = decision.action === 'ask' ? decision.reason : `Guardian: ${findings.map((f) => f.message).join('; ')}`;
+      const reason = note ? `${why}. ${note}` : why;
       hooks.onAwaitingApproval?.({ findings, reason });
       const policy = this.d.policy.policy;
       const answer = await this.d.approvals.request(
@@ -146,7 +157,9 @@ export class ToolGate {
         runId: ctx.runId ?? null,
         signal: controller.signal,
       });
-      const redacted = this.d.redactor.redact(out.output);
+      // Invisible and direction-changing characters go, and text dressed as FBRX's own notice is marked as the
+      // output's.
+      const redacted = this.d.redactor.redact(cleanToolText(out.output));
       const outputFindings = this.d.guardian.scanOutput(redacted.text);
       const durationMs = Date.now() - started;
       this.d.audit.append({

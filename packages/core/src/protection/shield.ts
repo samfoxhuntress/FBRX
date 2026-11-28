@@ -1,10 +1,10 @@
 import { createCipheriv, createDecipheriv, createHash, randomBytes } from 'node:crypto';
-import { createReadStream, createWriteStream, existsSync, mkdirSync, watch, type FSWatcher } from 'node:fs';
+import { createReadStream, createWriteStream, existsSync, mkdirSync, readFileSync, watch, type FSWatcher } from 'node:fs';
 import { chmod, lstat, open, opendir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, extname, join, resolve, sep } from 'node:path';
+import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { pipeline } from 'node:stream/promises';
-import { newId, type Settings, type ShieldAction, type ShieldDetection, type ShieldEngine as EngineName, type ShieldStatus, type ShieldVerdict } from '@fbrx/shared';
+import { FEED_KEY_PLACEHOLDER, newId, protectionFeed, type Settings, type ShieldAction, type ShieldDetection, type ShieldEngine as EngineName, type ShieldStatus, type ShieldVerdict } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 import type { Logger } from '../logger';
 import type { MetaStore } from '../storage/meta';
@@ -28,7 +28,12 @@ import { scanCommand } from './products';
  * soon as they arrive. It does not (yet) block programs as they start: on Windows, Microsoft Defender keeps doing that.
  */
 
-export const SHIELD_ENGINE_VERSION = '1.0';
+/** 1.1: FBRX's own files are never flagged, and packages' code (node_modules) does not count as downloaded. */
+export const SHIELD_ENGINE_VERSION = '1.1';
+
+/** abuse.ch's exports need a free key since November 2026. */
+const NEEDS_KEY =
+  'abuse.ch, where the threat database comes from, now asks for a free Auth-Key: get one at auth.abuse.ch and add it in Credentials as ABUSECH_AUTH_KEY (in FBRX Command, add it once as an organization secret for every computer).';
 
 const MAX_HASH_BYTES = 100 * 1024 * 1024;
 const MAX_SCRIPT_BYTES = 2 * 1024 * 1024;
@@ -45,6 +50,8 @@ const MACRO_OOXML = ['docm', 'xlsm', 'pptm', 'dotm', 'xltm', 'docx', 'xlsx', 'pp
 /** Photos, music and video: not where malware lives, and hashing them would make scans crawl. */
 const NO_HASH = ['mp4', 'mov', 'mkv', 'avi', 'wmv', 'm4v', 'mp3', 'flac', 'wav', 'm4a', 'aac', 'ogg', 'jpg', 'jpeg', 'png', 'gif', 'heic', 'webp', 'bmp', 'tif', 'tiff', 'psd', 'raw', 'cr2', 'nef', 'arw'];
 const PARTIAL_DOWNLOAD = /\.(?:crdownload|part|partial|download|opdownload|tmp)$|^\.com\.google\.chrome/i;
+/** Code a package manager installed (npm and the like): not something a person downloaded and might open. */
+const PACKAGED = /[\\/]node_modules[\\/]/i;
 
 /** The standard antivirus test string, assembled so this file is not itself a test file. */
 const EICAR = ['X5O!P%@AP[4\\PZX54(P^)7CC)7}$', 'EICAR-STANDARD-ANTIVIRUS-TEST-FILE!$H+H*'].join('');
@@ -199,7 +206,7 @@ export interface ShieldDeps {
   internet: () => boolean;
   /** Vault secrets: VIRUSTOTAL_API_KEY, ABUSECH_AUTH_KEY. */
   secret: (name: string) => string | undefined;
-  /** Never scanned (FBRX's own data folder). */
+  /** Never scanned: FBRX's own folders (its data, where it is installed, its update cache). */
   skip: () => string[];
   /** Downloads, desktop and the temp folder: files there count as downloaded. */
   landing: () => string[];
@@ -225,6 +232,8 @@ export class Shield {
   private readonly pending = new Map<string, NodeJS.Timeout>();
   private readonly seen = new Map<string, string>();
   private signatureCount: number | null = null;
+  /** Folders known to be (or not to be) the top of a copy of FBRX's source or build. */
+  private readonly fbrxRoots = new Map<string, boolean>();
 
   constructor(private readonly d: ShieldDeps) {
     mkdirSync(d.dir, { recursive: true });
@@ -232,8 +241,42 @@ export class Shield {
 
   // ------------------------------------------------------------------------------------------- verdicts
 
-  private excluded(file: string): boolean {
+  /** FBRX's own folders and the person's exclusions. */
+  private skipped(file: string): boolean {
     return [...this.d.skip(), ...this.d.settings().exclusions].some((x) => x && under(file, x));
+  }
+
+  /** The top of a copy of FBRX itself: its source (the release zip, a clone) or a build of it. */
+  private isFbrxRoot(dir: string): boolean {
+    let v = this.fbrxRoots.get(dir);
+    if (v === undefined) {
+      v = false;
+      try {
+        if (existsSync(join(dir, 'apps', 'desktop'))) v = (JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as { name?: string }).name === 'fbrx-os';
+      } catch {
+        v = false;
+      }
+      if (this.fbrxRoots.size > 50_000) this.fbrxRoots.clear();
+      this.fbrxRoots.set(dir, v);
+    }
+    return v;
+  }
+
+  /** Inside a copy of FBRX's source or build, wherever it is (Downloads, say). */
+  private inFbrxTree(file: string): boolean {
+    let dir = dirname(file);
+    for (let i = 0; i < 32; i++) {
+      if (this.isFbrxRoot(dir)) return true;
+      const up = dirname(dir);
+      if (up === dir) return false;
+      dir = up;
+    }
+    return false;
+  }
+
+  /** Never looked at: FBRX's own files and folders, and the person's exclusions. */
+  excluded(file: string): boolean {
+    return this.skipped(file) || this.inFbrxTree(file);
   }
 
   private allowed(sha256: string): boolean {
@@ -261,7 +304,7 @@ export class Shield {
       if (sig) return done(v('malware', 'signature', sig.name || 'Known malware', `Its fingerprint is in FBRX Shield's threat database (${sig.source}).`));
     }
     if (!this.d.settings().heuristics) return done(null);
-    const downloaded = !!o.downloaded || this.d.landing().some((dir) => under(file, dir)) || (await fromInternet(file));
+    const downloaded = !PACKAGED.test(file) && (!!o.downloaded || this.d.landing().some((dir) => under(file, dir)) || (await fromInternet(file)));
     let found: ShieldVerdict | null = null;
 
     if (BIDI.test(name)) found = v('suspicious', 'heuristic', 'Disguised file name', 'Its name uses hidden right-to-left characters, a trick to make a program look like a document.');
@@ -425,6 +468,52 @@ export class Shield {
     return this.setAction(id, 'allowed');
   }
 
+  /**
+   * Trusts many findings at once: the ones picked, or every suspicious one still waiting (in one folder, if named).
+   * Malware is only trusted when picked by hand.
+   */
+  allowMany(p: { ids?: string[]; folder?: string }): { allowed: number; ids: string[] } {
+    const rows = p.ids?.length
+      ? p.ids.map((id) => this.d.db.get<DetectionRow>("SELECT * FROM shield_detections WHERE id = ? AND action = 'open'", id)).filter((r): r is DetectionRow => !!r)
+      : this.d.db.all<DetectionRow>("SELECT * FROM shield_detections WHERE action = 'open' AND kind != 'malware'").filter((r) => !p.folder || under(r.path, p.folder));
+    const now = new Date().toISOString();
+    this.d.db.tx(() => {
+      for (const r of rows) {
+        if (r.sha256) this.d.db.run('INSERT OR REPLACE INTO shield_allow (sha256, path, at) VALUES (?, ?, ?)', r.sha256, r.path, now);
+        this.d.db.run("UPDATE shield_detections SET action = 'allowed', action_at = ? WHERE id = ?", now, r.id);
+      }
+    });
+    return { allowed: rows.length, ids: rows.map((r) => r.id) };
+  }
+
+  /**
+   * Looks at the findings still waiting again, with today's rules: ones FBRX Shield would no longer flag (FBRX's own
+   * files, packages' code) are cleared, and ones whose file is gone are closed. Returns what it cleared.
+   */
+  async recheck(signal?: AbortSignal): Promise<{ cleared: number; gone: number; ids: string[] }> {
+    const open = this.d.db.all<DetectionRow>("SELECT * FROM shield_detections WHERE action = 'open'");
+    let cleared = 0;
+    let gone = 0;
+    const ids: string[] = [];
+    for (const r of open) {
+      if (signal?.aborted) break;
+      const st = await stat(r.path).catch(() => null);
+      if (!st?.isFile()) {
+        this.setAction(r.id, 'deleted');
+        gone++;
+        ids.push(r.id);
+        continue;
+      }
+      const still = this.excluded(r.path) ? null : (await this.verdictFor(r.path).catch(() => null))?.verdict;
+      if (!still) {
+        this.setAction(r.id, 'allowed');
+        cleared++;
+        ids.push(r.id);
+      }
+    }
+    return { cleared, gone, ids };
+  }
+
   /** A finding: recorded, quarantined when it is malware and that is wanted, and passed on. */
   async handle(file: string, r: FileVerdict, source: ShieldDetection['source'], quarantine: boolean): Promise<ShieldDetection> {
     let det = this.record(file, r, source);
@@ -467,7 +556,8 @@ export class Shield {
       tick();
     };
     const walk = async (dir: string): Promise<void> => {
-      if (o.signal.aborted || this.excluded(dir)) return;
+      // A copy of FBRX itself (its source or a build, in Downloads, say) is skipped whole.
+      if (o.signal.aborted || this.skipped(dir) || this.isFbrxRoot(dir)) return;
       let handle;
       try {
         handle = await opendir(dir);
@@ -478,14 +568,14 @@ export class Shield {
       for await (const ent of handle) {
         if (o.signal.aborted) break;
         const full = join(dir, ent.name);
-        if (ent.isSymbolicLink() || this.excluded(full)) continue;
+        if (ent.isSymbolicLink() || this.skipped(full)) continue;
         if (ent.isDirectory()) await walk(full);
         else if (ent.isFile()) await visit(full);
       }
     };
     for (const t of targets) {
       const st = await stat(t).catch(() => null);
-      if (!st) continue;
+      if (!st || this.inFbrxTree(t)) continue;
       if (st.isDirectory()) await walk(t);
       else if (st.isFile() && !this.excluded(t)) await visit(t);
     }
@@ -531,12 +621,21 @@ export class Shield {
   importSignatures(text: string, source: string): { added: number; total: number } {
     const now = new Date().toISOString();
     let added = 0;
+    // A CSV export (MalwareBazaar's) names its columns on a "#" line: the malware's name is its signature column.
+    let columns: string[] | null = null;
     this.d.db.tx(() => {
       for (const line of text.split(/\r?\n/)) {
-        if (!line || line.startsWith('#')) continue;
-        const m = /\b([a-fA-F0-9]{64})\b(?:[\s,;"]+([^"\r\n]{1,120}))?/.exec(line);
+        if (!line) continue;
+        if (line.startsWith('#')) {
+          if (/sha256_hash/.test(line)) columns = [...line.matchAll(/"?([a-z0-9_]+)"?\s*(?:,|$)/gi)].map((c) => c[1].toLowerCase());
+          continue;
+        }
+        const fields = columns ? [...line.matchAll(/"([^"]*)"/g)].map((f) => f[1]) : null;
+        const hash = fields && columns ? fields[columns.indexOf('sha256_hash')] : undefined;
+        const m = hash && /^[a-fA-F0-9]{64}$/.test(hash) ? ([hash, hash, fields![columns!.indexOf('signature')]] as const) : /\b([a-fA-F0-9]{64})\b(?:[\s,;"]+([^"\r\n]{1,120}))?/.exec(line);
         if (!m) continue;
-        const name = m[2]?.trim().replace(/^["']|["']$/g, '') || null;
+        const raw = m[2]?.trim().replace(/^["']|["']$/g, '');
+        const name = raw && !/^(n\/a|null|none|unknown)$/i.test(raw) ? raw.slice(0, 120) : null;
         added += this.d.db.run('INSERT OR IGNORE INTO shield_signatures (sha256, name, source, added_at) VALUES (?, ?, ?, ?)', m[1].toLowerCase(), name && !/^[a-f0-9]{32,}$/i.test(name) ? name : null, source, now).changes;
       }
     });
@@ -546,13 +645,21 @@ export class Shield {
 
   /** Brings the threat database up to date from the feed. */
   async updateSignatures(): Promise<{ added: number; total: number }> {
-    const url = this.d.settings().feedUrl.trim();
-    if (!url) throw new CoreError('INVALID_ARGUMENT', 'No threat feed is set.');
+    const feed = protectionFeed(this.d.settings().feedUrl);
+    if (!feed) throw new CoreError('INVALID_ARGUMENT', 'No threat feed is set.');
     if (!this.d.internet()) throw new CoreError('POLICY_DENIED', 'Internet access is blocked by policy.');
-    const key = this.d.secret('ABUSECH_AUTH_KEY');
+    const key = this.d.secret('ABUSECH_AUTH_KEY')?.trim();
     try {
-      const res = await fetch(url, { headers: { 'user-agent': `FBRX-Shield/${SHIELD_ENGINE_VERSION}`, ...(key ? { 'Auth-Key': key } : {}) }, signal: AbortSignal.timeout(120_000) });
-      if (res.status === 401 || res.status === 403) throw new Error('The threat feed asked for a key. Add your free abuse.ch Auth-Key in Credentials as ABUSECH_AUTH_KEY.');
+      // The key goes to abuse.ch only, over https, never to another feed's server: in the address where abuse.ch's
+      // exports ask for it there (the address is never shown), or as a header.
+      const target = new URL(feed.split(FEED_KEY_PLACEHOLDER).join('key'));
+      const abuse = target.protocol === 'https:' && /(^|\.)abuse\.ch$/i.test(target.hostname);
+      if (feed.includes(FEED_KEY_PLACEHOLDER) && !abuse) throw new Error('Only an abuse.ch feed over https can take the abuse.ch key in its address: set the feed back to the default in Security → FBRX Shield.');
+      if (feed.includes(FEED_KEY_PLACEHOLDER) && !key) throw new Error(NEEDS_KEY);
+      const url = feed.split(FEED_KEY_PLACEHOLDER).join(encodeURIComponent(key ?? ''));
+      const res = await fetch(url, { headers: { 'user-agent': `FBRX-Shield/${SHIELD_ENGINE_VERSION}`, ...(key && abuse ? { 'Auth-Key': key } : {}) }, signal: AbortSignal.timeout(120_000) });
+      if (res.status === 401 || res.status === 403) throw new Error(key ? 'The threat feed did not accept the abuse.ch Auth-Key (ABUSECH_AUTH_KEY in Credentials): check it at auth.abuse.ch.' : NEEDS_KEY);
+      if (res.status === 410) throw new Error('The threat feed’s address was retired (HTTP 410). Set the feed back to the default in Security → FBRX Shield.');
       if (!res.ok) throw new Error(`The threat feed answered HTTP ${res.status}.`);
       const buf = Buffer.from(await res.arrayBuffer());
       if (buf.length > MAX_FEED_BYTES) throw new Error('The threat feed is too large.');
@@ -578,10 +685,10 @@ export class Shield {
         }
       })();
       const r = this.importSignatures(text, host);
-      this.d.meta.set('shield.signatures', { at: new Date().toISOString(), error: null });
+      this.d.meta.set('shield.signatures', { at: new Date().toISOString(), error: null, failedAt: null });
       return r;
     } catch (err) {
-      this.d.meta.set('shield.signatures', { at: this.d.meta.get<{ at: string | null }>('shield.signatures')?.at ?? null, error: errorMessage(err) });
+      this.d.meta.set('shield.signatures', { at: this.d.meta.get<{ at: string | null }>('shield.signatures')?.at ?? null, error: errorMessage(err), failedAt: new Date().toISOString() });
       throw err instanceof CoreError ? err : new CoreError('UNAVAILABLE', errorMessage(err));
     }
   }
@@ -639,6 +746,19 @@ export class Shield {
     if (this.seen.size > 5000) this.seen.clear();
     const r = await this.verdictFor(file, { downloaded: true });
     if (r.verdict && this.watchers.length) await this.handle(file, r, 'download', true);
+  }
+
+  /**
+   * A file FBRX Browser just finished downloading: checked as a download (the rules for files from the internet
+   * apply), malware quarantined when that is on, and the finding passed on, exactly as the Downloads watcher does.
+   * The watcher then skips the same file.
+   */
+  async checkDownload(file: string): Promise<ShieldDetection | null> {
+    const st = await stat(file).catch(() => null);
+    if (!st?.isFile() || this.excluded(file)) return null;
+    this.seen.set(file, `${st.size}:${st.mtimeMs}`);
+    const r = await this.verdictFor(file, { downloaded: true });
+    return r.verdict ? this.handle(file, r, 'download', true) : null;
   }
 
   /** Checks one file on request (Security → Check a file, the agent). */

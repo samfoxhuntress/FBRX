@@ -35,11 +35,11 @@ export function AdvancedTag({ label = 'Ultra', title = 'Part of FBRX Endpoint Ul
   );
 }
 
-/** A tab label with the Ultra tag. */
-export function advancedLabel(label: ReactNode): ReactNode {
+/** A tab label with the Ultra tag (or the Black Hole Edition one). */
+export function advancedLabel(label: ReactNode, blackHole = false): ReactNode {
   return (
     <>
-      {label} <AdvancedTag />
+      {label} {blackHole ? <AdvancedTag label="Black Hole Edition" title="Part of FBRX Endpoint Black Hole Edition" /> : <AdvancedTag />}
     </>
   );
 }
@@ -47,6 +47,8 @@ export function advancedLabel(label: ReactNode): ReactNode {
 export function Shell(props: {
   /** The product name beside the logo (FBRX OS unless told otherwise). */
   brandName?: ReactNode;
+  /** Another app's own logo in place of FBRX's (FBRX Digger's mole). */
+  brandMark?: ReactNode;
   brandSub?: string;
   /** Clicks on the logo (the desktop app counts them for an easter egg). */
   onBrandClick?: () => void;
@@ -69,11 +71,11 @@ export function Shell(props: {
     <div className={cx('fx-shell', props.groups && 'grouped', collapsed && 'collapsed')}>
       <aside className="fx-sidebar">
         <div className="fx-brand">
-          <FbrxMark className={cx('fx-brand-mark', props.brandClassName)} onClick={props.onBrandClick} />
+          {props.brandMark ?? <FbrxMark className={cx('fx-brand-mark', props.brandClassName)} onClick={props.onBrandClick} />}
           {!collapsed && (
             <div>
               <div className="fx-brand-name">{props.brandName ?? 'FBRX OS'}</div>
-              <div className="fx-brand-sub">{props.brandSub ?? 'Fabrics Operating System'}</div>
+              <div className="fx-brand-sub">{props.brandSub ?? 'FBRX OS'}</div>
             </div>
           )}
         </div>
@@ -112,7 +114,7 @@ export function Shell(props: {
 function NavButton({ item, active, onClick }: { item: NavItem; active: boolean; onClick: () => void }) {
   const Ico = Icons[item.icon];
   return (
-    <button className={cx('fx-nav-item', active && 'active')} onClick={onClick} aria-current={active ? 'page' : undefined}>
+    <button className={cx('fx-nav-item', active && 'active')} onClick={onClick} aria-current={active ? 'page' : undefined} data-nav={item.id} data-section={item.section}>
       <Ico />
       <span>{item.label}</span>
       {item.tag && <span className="fx-adv-tag">{item.tag}</span>}
@@ -157,7 +159,7 @@ function GroupedNav({ groups, active, onNavigate, collapsed }: { groups: NavGrou
         const count = g.items.reduce((n, i) => n + (i.count ?? 0), 0);
         const flying = collapsed && flyout?.id === g.id;
         return (
-          <div key={g.id} className={cx('fx-group', isOpen && 'open', current === g.id && 'here')}>
+          <div key={g.id} className={cx('fx-group', isOpen && 'open', current === g.id && 'here')} data-group={g.id}>
             <button
               className="fx-group-head"
               aria-expanded={collapsed ? flying : isOpen}
@@ -536,7 +538,9 @@ export function JsonEditor({ value, onChange, rows = 12, onValidity }: { value: 
   } catch (e) {
     error = (e as Error).message;
   }
-  useEffect(() => onValidity?.(!error), [error, onValidity]);
+  useEffect(() => {
+    onValidity?.(!error);
+  }, [error, onValidity]);
   return (
     <div className="fx-field">
       <TextArea code rows={rows} value={value} onChange={(e) => onChange(e.target.value)} />
@@ -747,18 +751,28 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const [items, setItems] = useState<ToastItem[]>([]);
   const push = useCallback((t: Omit<ToastItem, 'id'>) => {
     const id = Date.now() + Math.random();
-    setItems((xs) => [...xs.slice(-4), { ...t, id }]);
+    // The same notice again replaces the one showing, so a repeated one does not stack.
+    setItems((xs) => [...xs.filter((x) => x.title !== t.title || x.body !== t.body).slice(-3), { ...t, id }]);
     setTimeout(() => setItems((xs) => xs.filter((x) => x.id !== id)), t.tone === 'critical' || t.action ? 9000 : 5000);
   }, []);
+  const close = (id: number) => setItems((xs) => xs.filter((x) => x.id !== id));
   return (
     <ToastCtx.Provider value={push}>
       {children}
       <div className="fx-toasts" aria-live="polite">
+        {items.length > 1 && (
+          <button type="button" className="fx-toasts-clear" onClick={() => setItems([])}>
+            Clear all
+          </button>
+        )}
         {items.map((t) => {
           const Ico = Icons[t.tone === 'good' ? 'checkCircle' : t.tone === 'critical' ? 'octagon' : t.tone === 'warning' ? 'alert' : 'info'];
           return (
             <div className="fx-toast" key={t.id}>
               {t.icon ?? <Ico size={18} style={{ color: t.tone === 'info' ? 'var(--accent)' : `var(--${t.tone})`, flex: 'none' }} />}
+              <button type="button" className="fx-toast-close" aria-label="Close this notification" title="Close" onClick={() => close(t.id)}>
+                <Icons.x size={14} />
+              </button>
               <div>
                 <div className="fx-toast-title">{t.title}</div>
                 {t.body && <div className="fx-secondary">{t.body}</div>}

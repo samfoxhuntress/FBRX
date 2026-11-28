@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { isIPv4, MESH_TRAFFIC_CLASSES, parseCidr } from '@fbrx/shared';
+import { cidrsOverlap, inCidr, intToIPv4, ipv4ToInt, isIPv4, MESH_TRAFFIC_CLASSES, networkOf, parseCidr } from '@fbrx/shared';
 
 /**
  * The FBRX Gate configuration: everything the firewall does, in one document. People (the console, the fbrx-gate
@@ -187,10 +187,45 @@ export const GateConfigSchema = z.object({
 });
 export type GateConfig = z.infer<typeof GateConfigSchema>;
 
-/** A first configuration: the internet on one port (DHCP), your network on another, nothing else open. */
-export function starterConfig(o: { hostname?: string; wan: string; lan: string; lanAddress?: string; vmSwitch?: boolean } = { wan: 'eth0', lan: 'eth1' }): GateConfig {
-  const lan = o.lanAddress ?? '192.168.1.1/24';
-  const base = lan.split('/')[0].split('.').slice(0, 3).join('.');
+/**
+ * Addresses a new gate's network may take, in order. Home routers and providers' boxes mostly use 192.168.0.x or
+ * 192.168.1.x, and a gate behind one gets an address there on its internet port: its own network must be another one.
+ */
+export const LAN_CHOICES = ['192.168.1.1/24', '192.168.10.1/24', '192.168.50.1/24', '192.168.88.1/24', '10.10.0.1/24', '172.20.0.1/24'] as const;
+
+/** The first address in LAN_CHOICES whose network overlaps none of `avoid` (networks or single addresses). */
+export function pickLanAddress(avoid: string[]): string {
+  const nets = avoid.map((a) => (a.includes('/') ? a : `${a}/32`)).filter((a) => parseCidr(a)?.family === 4);
+  return LAN_CHOICES.find((c) => !nets.some((n) => cidrsOverlap(c, n))) ?? '10.250.0.1/24';
+}
+
+/** The usual range handed out in a network: .100 to .199 in a /24, else the upper three quarters. */
+export function dhcpRange(cidr: string): { start: string; end: string } {
+  const c = parseCidr(cidr);
+  if (!c || c.family !== 4 || c.prefix > 30) return { start: '', end: '' };
+  const first = ipv4ToInt(networkOf(cidr).split('/')[0]) + 1;
+  const last = first + 2 ** (32 - c.prefix) - 3;
+  if (c.prefix === 24) return { start: intToIPv4(first + 99), end: intToIPv4(first + 198) };
+  return { start: intToIPv4(first + Math.max(1, Math.floor((last - first + 1) / 4))), end: intToIPv4(last - 1) };
+}
+
+export interface StarterOptions {
+  hostname?: string;
+  wan: string;
+  lan: string;
+  /** The gate's address in your network (default: the first of LAN_CHOICES clear of `avoid`). */
+  lanAddress?: string;
+  /** Networks the LAN must stay clear of: the internet port's own, the management network. */
+  avoid?: string[];
+  /** A fixed internet address (default: DHCP from the modem or router). */
+  wanStatic?: { address: string; gateway: string } | null;
+  vmSwitch?: boolean;
+}
+
+/** A first configuration: the internet on one port (DHCP or a fixed address), your network on another, nothing else open. */
+export function starterConfig(o: StarterOptions = { wan: 'eth0', lan: 'eth1' }): GateConfig {
+  const avoid = [...(o.avoid ?? []), ...(o.wanStatic ? [o.wanStatic.address] : [])];
+  const lan = o.lanAddress ?? pickLanAddress(avoid);
   return {
     version: 1,
     hostname: o.hostname ?? 'fbrx-gate',
@@ -198,7 +233,7 @@ export function starterConfig(o: { hostname?: string; wan: string; lan: string; 
       { name: o.wan, kind: 'ethernet', mtu: 1500, description: 'Internet' },
       { name: o.lan, kind: 'ethernet', mtu: 1500, description: 'Your network' },
     ],
-    wan: { interface: o.wan, mode: 'dhcp', ping: false },
+    wan: o.wanStatic ? { interface: o.wan, mode: 'static', address: o.wanStatic.address, gateway: o.wanStatic.gateway, ping: false } : { interface: o.wan, mode: 'dhcp', ping: false },
     networks: [
       {
         name: 'lan',
@@ -207,7 +242,7 @@ export function starterConfig(o: { hostname?: string; wan: string; lan: string; 
         address: lan,
         access: 'full',
         manage: true,
-        dhcp: { enabled: true, start: `${base}.100`, end: `${base}.199`, leaseHours: 12, reservations: [] },
+        dhcp: { enabled: true, ...dhcpRange(lan), leaseHours: 12, reservations: [] },
         description: 'Your network',
         vmSwitch: o.vmSwitch ?? false,
       },
@@ -218,6 +253,38 @@ export function starterConfig(o: { hostname?: string; wan: string; lan: string; 
     qos: { enabled: false, upload: 20, download: 0, preferMesh: { enabled: true, trafficClass: 'af41', port: 47800, networks: [] } },
     management: { ssh: true, consolePort: 9443 },
   };
+}
+
+/**
+ * Moves a network to other addresses (192.168.1.1/24 to 192.168.50.1/24, say): the gate's address, the range handed
+ * out, reservations, port forwards, firewall rules and names pointing inside it follow, each keeping its place in the
+ * network. Returns a new configuration; the sizes must match so every address has a place to go.
+ */
+export function renumberNetwork(c: GateConfig, name: string, address: string): GateConfig {
+  const net = c.networks.find((n) => n.name === name);
+  if (!net) throw new Error(`There is no network ${name}`);
+  const from = parseCidr(net.address);
+  const to = parseCidr(address);
+  if (!from || !to || to.family !== 4) throw new Error('Enter the new address like 192.168.50.1/24');
+  if (from.prefix !== to.prefix) throw new Error(`The new network must be the same size (/${from.prefix}); change the size in the console`);
+  const oldBase = ipv4ToInt(networkOf(net.address).split('/')[0]);
+  const newBase = ipv4ToInt(networkOf(address).split('/')[0]);
+  const move = (ip: string) => (isIPv4(ip) && inCidr(ip, net.address) ? intToIPv4(newBase + (ipv4ToInt(ip) - oldBase)) : ip);
+  const moveCidr = (cidr: string | undefined) => {
+    if (!cidr) return cidr;
+    const [ip, size] = cidr.split('/');
+    return Number(size) >= from.prefix && inCidr(ip, net.address) ? `${move(ip)}/${size}` : cidr;
+  };
+  const next = structuredClone(c);
+  const n = next.networks.find((x) => x.name === name)!;
+  n.address = address;
+  n.dhcp.start = move(n.dhcp.start);
+  n.dhcp.end = move(n.dhcp.end);
+  n.dhcp.reservations = n.dhcp.reservations.map((r) => ({ ...r, address: move(r.address) }));
+  next.firewall.forwards = next.firewall.forwards.map((f) => ({ ...f, to: move(f.to) }));
+  next.firewall.rules = next.firewall.rules.map((r) => ({ ...r, source: moveCidr(r.source), destination: moveCidr(r.destination) }));
+  next.dns.records = next.dns.records.map((r) => ({ ...r, address: move(r.address) }));
+  return next;
 }
 
 /** Network presets the console offers when adding one (a VLAN on the LAN port). */

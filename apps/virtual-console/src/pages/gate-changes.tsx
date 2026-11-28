@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { checkConfig, type GateChange, type GateCommit, type GateConfig, type GateState, type NetworkdFile, type QosPlan } from '@fbrx/gate';
+import { checkConfig, type WhatIfReport, type GateChange, type GateCommit, type GateConfig, type GateState, type NetworkdFile, type QosPlan } from '@fbrx/gate';
 import { Button, Callout, Card, Empty, Field, Input, JsonEditor, Modal, Select, Status, Table, Tabs, timeAgo, Toggle, useConfirm, useToast, type StatusTone } from '@fbrx/ui';
 import { api } from '../api';
 import { useGate } from '../gate-state';
 import { useApp, usePoll } from '../state';
 import { GatePage, IssueList } from './gate-common';
+import { WhatIfCard } from './gate-whatif';
 
 const KIND_TONE: Record<GateChange['kind'], StatusTone> = { added: 'good', removed: 'critical', changed: 'info' };
 const KIND_WORDS: Record<GateChange['kind'], string> = { added: 'Added', removed: 'Removed', changed: 'Changed' };
@@ -49,6 +50,7 @@ export function GateChangesPage() {
   const [previewTab, setPreviewTab] = useState<PreviewTab>('nftables');
   const [text, setText] = useState(false);
   const [viewing, setViewing] = useState<GateCommit | null>(null);
+  const [whatIf, setWhatIf] = useState<WhatIfReport | null>(null);
   const admin = app.can('admin');
 
   const act = async (key: string, fn: () => Promise<{ state: GateState; notes?: string[] }>, done: string) => {
@@ -125,6 +127,7 @@ export function GateChangesPage() {
                 </div>
               )}
             </Card>
+            {s.changes.length > 0 && s.errors.length === 0 && <WhatIfCard stamp={JSON.stringify(s.changes)} onReport={setWhatIf} />}
             {(s.errors.length > 0 || s.warnings.length > 0) && (
               <Card title={s.errors.length ? `${s.errors.length} problem${s.errors.length === 1 ? '' : 's'} to fix before a commit` : 'Worth a look'}>
                 <IssueList errors={s.errors} warnings={s.warnings} />
@@ -150,6 +153,16 @@ export function GateChangesPage() {
                         disabled={!canCommit}
                         loading={busy === 'commit'}
                         onClick={async () => {
+                          // What If found the change cuts this console off: say so, and never without a trial.
+                          if (whatIf?.summary.youCutOff && s.changes.length > 0) {
+                            const ok = await confirm({
+                              title: 'This change cuts you off from this console',
+                              body: <p className="fx-secondary">{trial ? `It commits on trial: if you cannot reach the console to keep it, the old configuration comes back by itself in ${minutes} minutes.` : 'Turn the trial on first: without it, only the gate\'s own screen can undo this.'}</p>,
+                              confirmLabel: trial ? 'Commit on trial' : 'Commit anyway',
+                              danger: true,
+                            });
+                            if (!ok) return;
+                          }
                           if (await act('commit', () => api('POST', '/v1/gate/commit', { comment, confirmMinutes: trial ? minutes : 0 }), trial ? `Committed on trial: keep it within ${minutes} minutes` : 'Committed')) setComment('');
                         }}
                       >

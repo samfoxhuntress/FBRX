@@ -1,8 +1,10 @@
 import { z } from 'zod';
+import type { FbrxAlert } from './fbrx-alert';
 import { PLATFORMS } from './constants';
 import { PolicySchema } from './policy';
 import type { DeviceCommand } from './commands';
 import { AUDIENCES, type DeviceEdition } from './editions';
+import { TIERS } from './license';
 import type { OrgChatMessage } from './messages';
 
 /** Hardware/OS facts a device reports at enrollment and in heartbeats. */
@@ -15,6 +17,8 @@ export const DeviceFactsSchema = z.object({
   appVersion: z.string().max(64),
   /** Stable, non-reversible fingerprint of the hardware (sha256 of machine identifiers). */
   machineId: z.string().max(128),
+  /** The FBRX install's own id (Settings → License): what a support pass for this computer is made for. */
+  installId: z.string().max(80).optional(),
 });
 export type DeviceFacts = z.infer<typeof DeviceFactsSchema>;
 
@@ -58,6 +62,8 @@ export const HeartbeatSchema = z.object({
     vaultState: z.string(),
     licenseEdition: z.string(),
     licenseState: z.string(),
+    /** The edition it runs (FBRX Endpoint 1.9.6+): essentials, basic (Pro) or ultra. */
+    editionTier: z.enum(TIERS).optional(),
     activeAgentRuns: z.number().int(),
     pendingApprovals: z.number().int(),
     agentRuns24h: z.number().int(),
@@ -80,9 +86,75 @@ export const HeartbeatSchema = z.object({
       })
       .nullable()
       .optional(),
+    /** Whole-computer images (FBRX Time, Windows; FBRX Endpoint 1.9.8+): set up or not, and the last one. */
+    imageBackup: z
+      .object({
+        configured: z.boolean(),
+        lastAt: z.string().nullable(),
+        ok: z.boolean().nullable(),
+        running: z.boolean(),
+      })
+      .nullable()
+      .optional(),
+    /** Remote desktop (xrdp) on a Linux computer (2.5.0+): whether it runs, its port and local addresses. */
+    xrdp: z
+      .object({
+        installed: z.boolean(),
+        running: z.boolean(),
+        port: z.number().int(),
+        // Plain IPv4 addresses only: FBRX Command writes one into a connection file.
+        addresses: z.array(z.string().regex(/^\d{1,3}(\.\d{1,3}){3}$/)).max(16),
+        root: z.boolean(),
+      })
+      .nullable()
+      .optional(),
+    /** This computer on FBRX Mesh, so FBRX Command can introduce the organization's computers to each other (1.9.5+). */
+    mesh: z
+      .object({
+        enabled: z.boolean(),
+        running: z.boolean(),
+        /** Its mesh key (base64) and fingerprint: the identity the other computers trust. */
+        publicKey: z.string().max(100),
+        fingerprint: z.string().max(100),
+        port: z.number().int().min(1).max(65535),
+        addresses: z.array(z.string().max(64)).max(16),
+        roles: z.array(z.string().max(32)).max(16),
+      })
+      .nullable()
+      .optional(),
   }),
 });
 export type Heartbeat = z.infer<typeof HeartbeatSchema>;
+
+/**
+ * An organization's computer on FBRX Mesh, as FBRX Command introduces it: the organization vouches for its key, so
+ * the computers trust each other without pairing codes. "permissions" is what it may do on the computer that asked.
+ */
+export interface OrgMeshPeer {
+  deviceId: string;
+  name: string;
+  publicKey: string;
+  fingerprint: string;
+  port: number;
+  addresses: string[];
+  roles: string[];
+  permissions: Partial<Record<'status' | 'chat' | 'ask' | 'approve' | 'workspace' | 'alerts' | 'control' | 'assist' | 'command' | 'network', boolean>>;
+}
+
+/** The organization's mesh for one computer (GET /v1/device/mesh/roster). */
+export interface OrgMeshRoster {
+  /** The organization meshes its computers (when off, introduced computers are forgotten). */
+  enabled: boolean;
+  tenantId: string;
+  tenantName: string;
+  peers: OrgMeshPeer[];
+}
+
+/** Who may use the organization's server AI (the hive): every group, or the groups listed. */
+export interface HivePolicy {
+  groups: 'all' | string[];
+}
+export const DEFAULT_HIVE: HivePolicy = { groups: 'all' };
 
 export interface HeartbeatResponse {
   serverTime: string;
@@ -141,13 +213,28 @@ export type ServerToDeviceMessage =
   /** A help desk ticket this computer asked or receives changed (new ticket, reply, status). */
   | { type: 'helpdesk.changed'; ticketId: string; number: number; reason: 'created' | 'message' | 'updated'; subject: string }
   /** A message for this computer (Messages, organization chat). */
-  | { type: 'chat.message'; message: OrgChatMessage };
+  | { type: 'chat.message'; message: OrgChatMessage }
+  /** The organization's mesh changed (a computer joined or left, or the settings): fetch the roster again. */
+  | { type: 'mesh.roster' }
+  /**
+   * Remote screen for an administrator: start (the person at the computer is asked), the session, a picture, mouse and
+   * keyboard, end. The computer answers each with screen.reply.
+   */
+  | { type: 'screen.call'; callId: string; op: 'start' | 'session' | 'frame' | 'input' | 'end'; params: Record<string, unknown> }
+  /**
+   * An organization alert for the people at this computer (FBRX Command → Alerts → who gets what), its all-clear, or
+   * word that someone acknowledged it.
+   */
+  | { type: 'org.alert'; alertId: string; alert: FbrxAlert; acknowledged: { by: string; at: string } | null };
 
 export type DeviceToServerMessage =
   | { type: 'heartbeat'; heartbeat: Heartbeat }
   | { type: 'command.result'; commandId: string; result: CommandResult }
   | { type: 'event'; event: DeviceEvent }
-  | { type: 'pong'; at: string };
+  | { type: 'pong'; at: string }
+  | { type: 'screen.reply'; callId: string; ok: boolean; result?: unknown; error?: { code: string; message: string } }
+  /** Someone at this computer acknowledged an organization alert. */
+  | { type: 'org.alert.ack'; alertId: string; by: string; note?: string };
 
 /** Provisioning file dropped next to an installer (or passed via CLI) for zero-touch enrollment. */
 export const ProvisioningFileSchema = z.object({

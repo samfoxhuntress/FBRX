@@ -35,20 +35,12 @@ import type { SettingsService } from '../settings/settings-service';
 import type { PolicyEngine } from '../governance/policy-engine';
 import type { LicenseService } from '../license/license-service';
 import type { Vault } from '../vault/vault';
+import type { ScreenHost } from '../remote/screen-host';
 import type { UpdateController } from '../platform';
 import { sleep } from '../util/misc';
-import { formatFingerprint, peerCertificate, pinnedAgent, pinnedFetch } from '../util/pinned-tls';
+import { formatFingerprint, peerCertificate, pinnedAgent, pinnedFetch, untrustedCertificate } from '../util/pinned-tls';
 
 const CERT_CHANGED = "FBRX Command presented a different certificate than the one this computer trusts. If FBRX Command was reinstalled, disconnect and join again with its new address and fingerprint.";
-
-/** TLS errors that mean "no authority vouches for this certificate" (self-signed, or signed by a private CA). */
-const UNTRUSTED_CERT = /SELF_SIGNED|UNABLE_TO_VERIFY|UNABLE_TO_GET_ISSUER|CERT_UNTRUSTED|ERR_TLS_CERT_ALTNAME_INVALID|self[- ]signed/i;
-const certProblem = (err: unknown): boolean => {
-  for (let e = err as { code?: string; message?: string; cause?: unknown } | undefined, i = 0; e && i < 4; e = e.cause as typeof e, i++) {
-    if (UNTRUSTED_CERT.test(`${e.code ?? ''} ${e.message ?? ''}`)) return true;
-  }
-  return false;
-};
 
 const TOKEN_SECRET = 'fbrx.fleet.deviceToken';
 
@@ -69,6 +61,8 @@ export interface FleetDeps {
   executeCommand: (cmd: DeviceCommand) => Promise<unknown>;
   /** Live notices from FBRX Command other than commands and configuration (help desk tickets). */
   onMessage?: (msg: ServerToDeviceMessage) => void;
+  /** This computer's screen, for FBRX Command's administrators (the person here is always asked). */
+  screen?: ScreenHost;
 }
 
 class UnauthorizedError extends Error {}
@@ -135,6 +129,18 @@ export class FleetAgent {
     const t = this.d.vault.get(TOKEN_SECRET, { allowInternal: true });
     if (!t) throw new CoreError('UNAUTHENTICATED', 'Device credential missing; re-enroll this device');
     return t;
+  }
+
+  /**
+   * This computer in its organization and the credential that proves it, for the FBRX account to make it the signed-in
+   * member's (AccountService); null when it is in none, or the vault is locked.
+   */
+  credentials(): { serverUrl: string; fingerprint: string | null; tenantId: string; deviceId: string; deviceToken: string } | null {
+    const m = this.d.meta;
+    const [serverUrl, tenantId, deviceId] = [this.serverUrl, m.get<string>('fleet.tenantId'), this.deviceId];
+    if (!serverUrl || !tenantId || !deviceId || !this.d.vault.isUnlocked) return null;
+    const deviceToken = this.d.vault.get(TOKEN_SECRET, { allowInternal: true });
+    return deviceToken ? { serverUrl, fingerprint: this.serverFingerprint, tenantId, deviceId, deviceToken } : null;
   }
 
   authHeaders(): Record<string, string> {
@@ -239,7 +245,7 @@ export class FleetAgent {
       res = pin ? await pinnedFetch(enrollUrl, init, pinnedAgent(pin, `FBRX Command at ${base.host} presented a different certificate than the fingerprint you were given. Check the address and fingerprint in FBRX Command → Deploy & enroll.`)) : await fetch(enrollUrl, init);
     } catch (err) {
       if (err instanceof CoreError) throw err;
-      if (!pin && base.protocol === 'https:' && certProblem(err)) {
+      if (!pin && base.protocol === 'https:' && untrustedCertificate(err)) {
         throw new CoreError('FORBIDDEN', `FBRX Command at ${base.host} uses its own certificate. Check its fingerprint (FBRX Command → Deploy & enroll) and trust it to join.`);
       }
       throw new CoreError('UNAVAILABLE', `FBRX Command could not be reached at ${base.host}: ${errorMessage(err)}`);
@@ -486,8 +492,44 @@ export class FleetAgent {
         break;
       case 'helpdesk.changed':
       case 'chat.message':
+      case 'mesh.roster':
+      case 'org.alert':
         this.d.onMessage?.(msg);
         break;
+      case 'screen.call':
+        await this.screenCall(msg);
+        break;
+    }
+  }
+
+  /**
+   * An administrator's remote screen, through FBRX Command: never without the person here saying yes, always with a
+   * ticket number, and only ever the sessions FBRX Command started.
+   */
+  private async screenCall(msg: Extract<ServerToDeviceMessage, { type: 'screen.call' }>) {
+    const reply = (ok: boolean, result?: unknown, error?: { code: string; message: string }) => this.send({ type: 'screen.reply', callId: String(msg.callId).slice(0, 80), ok, ...(ok ? { result } : { error }) });
+    try {
+      const host = this.d.screen;
+      if (!host) throw new CoreError('UNAVAILABLE', 'This computer cannot share its screen');
+      const p = msg.params ?? {};
+      const text = (v: unknown, n: number) => (typeof v === 'string' ? v.replace(/[\u0000-\u001f\u007f]/g, ' ').trim().slice(0, n) : '');
+      if (msg.op === 'start') {
+        const ticket = text(p.ticket, 40);
+        if (!ticket) throw new CoreError('INVALID_ARGUMENT', 'A ticket number is needed');
+        const admin = text(p.admin, 120) || 'An administrator';
+        // FBRX Command says when it keeps a recording; the person is told before they answer.
+        const session = await host.request({ kind: 'command', name: admin, admin, ticket, reason: text(p.reason, 300) || undefined, recorded: p.recorded === true }, p.mode === 'control' ? 'control' : 'view', { unattended: false });
+        return reply(true, session);
+      }
+      const id = text(p.id, 80);
+      if (host.session(id).viewer.kind !== 'command') throw new CoreError('NOT_FOUND', 'That screen session is over');
+      if (msg.op === 'session') return reply(true, host.session(id));
+      if (msg.op === 'frame') return reply(true, await host.frame(id, { after: typeof p.after === 'number' ? p.after : undefined, display: typeof p.display === 'number' ? p.display : undefined, maxWidth: typeof p.maxWidth === 'number' ? p.maxWidth : undefined }));
+      if (msg.op === 'input') return reply(true, await host.input(id, p.events as never));
+      if (msg.op === 'end') return reply(true, host.end(id, 'viewer'));
+      throw new CoreError('INVALID_ARGUMENT', 'Unknown screen call');
+    } catch (e) {
+      reply(false, undefined, { code: e instanceof CoreError ? e.code : 'INTERNAL', message: errorMessage(e).slice(0, 300) });
     }
   }
 
@@ -518,6 +560,11 @@ export class FleetAgent {
   /** Emits an event (alert/audit/state) to the control plane. */
   /** Events that could not be sent while offline; delivered when the connection is back. */
   private pendingEvents: DeviceEvent[] = [];
+
+  /** Someone here acknowledged an organization alert; false when FBRX Command cannot be reached right now. */
+  acknowledgeAlert(alertId: string, by: string, note?: string): boolean {
+    return this.send({ type: 'org.alert.ack', alertId, by, ...(note ? { note } : {}) });
+  }
 
   reportEvent(event: DeviceEvent) {
     if (!this.send({ type: 'event', event })) this.pendingEvents = [...this.pendingEvents, event].slice(-50);

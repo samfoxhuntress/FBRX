@@ -1,7 +1,12 @@
-import { TASK_PRIORITIES, TASK_STATUSES } from '@fbrx/shared';
+import si from 'systeminformation';
+import { REPORTED_NAMES_NOTE, TASK_PRIORITIES, TASK_STATUSES, cleanName, quoteName, type PrinterSupply, type UsbNode } from '@fbrx/shared';
 import type { AlertEngine } from '../../alerts/alert-engine';
 import type { NetDiag } from '../../network/netdiag';
+import { stackText } from '../../network/stack-check';
 import { checkLink } from '../../security/linkcheck';
+import { spaceHogs } from '../../system/space';
+import { defaultSupplies, deviceReport } from '../../system/devices';
+import { usbFindings, usbTree } from '../../system/usb-tree';
 import type { SystemMonitor } from '../../system/system-monitor';
 import { IS_WIN } from '../../windows/ps';
 import * as sec from '../../windows/security';
@@ -16,7 +21,15 @@ const tool = (t: Omit<ToolSpec, 'source' | 'sourceId'>): ToolSpec => ({ source: 
 
 /** Notes, tasks, projects and snippets for the agent. They stay inside FBRX OS (allowed by a built-in rule). */
 export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
-  const project = (name?: string) => (name ? (w.listProjects().find((p) => p.name.toLowerCase() === name.toLowerCase() || p.id === name)?.id ?? null) : undefined);
+  const named = (name: string) => w.listProjects().find((p) => p.name.toLowerCase() === name.trim().toLowerCase() || p.id === name);
+  /** The project a call names (by name or id). One that does not exist is an error, never a silent "no project". */
+  const project = (name?: string): string | undefined => {
+    if (!name) return undefined;
+    const p = named(name);
+    if (!p) throw new Error(`No project is called "${name}". workspace.list_projects lists them; workspace.create_project makes one.`);
+    return p.id;
+  };
+  const inProject = (id: string | null | undefined) => (id ? ` in project "${w.getProject(id).name}"` : '');
   return [
     tool({
       name: 'workspace.list_tasks',
@@ -50,7 +63,7 @@ export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
       },
       async run(i) {
         const t = w.saveTask({ title: i.title, details: i.details, priority: i.priority, due: i.due, projectId: project(i.project) ?? null });
-        return { output: `Added task "${t.title}" (id ${t.id})`, data: t };
+        return { output: `Added task "${t.title}" (id ${t.id})${inProject(t.projectId)}`, data: t };
       },
     }),
     tool({
@@ -89,7 +102,7 @@ export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
     tool({
       name: 'workspace.create_note',
       title: 'Create note',
-      description: 'Save a note (Markdown) in the FBRX workspace.',
+      description: 'Save a note (Markdown) in the FBRX workspace, in a project when one is named (it must exist: create it first with workspace.create_project).',
       risk: 'write',
       inputSchema: {
         type: 'object',
@@ -98,7 +111,7 @@ export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
       },
       async run(i) {
         const n = w.saveNote({ title: i.title, content: i.content, tags: i.tags, projectId: project(i.project) ?? null });
-        return { output: `Saved note "${n.title}" (id ${n.id})`, data: n };
+        return { output: `Saved note "${n.title}" (id ${n.id})${inProject(n.projectId)}`, data: n };
       },
     }),
     tool({
@@ -114,6 +127,28 @@ export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
       },
     }),
     tool({
+      name: 'workspace.create_project',
+      title: 'Create project',
+      description: 'Make a project in the FBRX workspace (Projects), to gather notes, tasks and chats. One with the same name is reused, not made twice. Due dates use YYYY-MM-DD.',
+      risk: 'write',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          name: { type: 'string', minLength: 1, maxLength: 120 },
+          description: { type: 'string', maxLength: 5000 },
+          due: { type: 'string', pattern: '^\\d{4}-\\d{2}-\\d{2}$' },
+          milestones: { type: 'array', items: { type: 'string', maxLength: 200 }, maxItems: 30 },
+        },
+        required: ['name'],
+      },
+      async run(i) {
+        const had = named(i.name);
+        if (had) return { output: `Project "${had.name}" already exists (id ${had.id}): use it.`, data: had };
+        const p = w.saveProject({ name: i.name, description: i.description, due: i.due ?? null, milestones: (i.milestones ?? []).map((title: string) => ({ title })) });
+        return { output: `Created project "${p.name}" (id ${p.id})`, data: p };
+      },
+    }),
+    tool({
       name: 'workspace.list_projects',
       title: 'List projects',
       description: 'Projects with their task progress, overdue tasks and milestones.',
@@ -123,7 +158,7 @@ export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
         const ps = w.listProjects();
         return {
           output: ps.length
-            ? ps.map((p) => `- ${p.name} [${p.status}] ${p.done}/${p.tasks} tasks done${p.overdue ? `, ${p.overdue} overdue` : ''}${p.due ? `, due ${p.due.slice(0, 10)}` : ''}${p.milestones.length ? `; milestones: ${p.milestones.map((m) => `${m.done ? '✓' : '○'} ${m.title}`).join(', ')}` : ''}`).join('\n')
+            ? ps.map((p) => `- ${p.name} (id ${p.id}) [${p.status}] ${p.done}/${p.tasks} tasks done${p.overdue ? `, ${p.overdue} overdue` : ''}${p.due ? `, due ${p.due.slice(0, 10)}` : ''}${p.milestones.length ? `; milestones: ${p.milestones.map((m) => `${m.done ? '✓' : '○'} ${m.title}`).join(', ')}` : ''}`).join('\n')
             : 'No projects',
           data: ps,
         };
@@ -161,8 +196,12 @@ export function workspaceTools(w: WorkspaceStore): ToolSpec[] {
 export interface PcToolDeps {
   monitor: SystemMonitor;
   net: NetDiag;
+  /** The network tools' Ultra parts (and always in FBRX Digger). */
+  networkTools: () => boolean;
   alerts: AlertEngine;
   virustotalKey: () => string | undefined;
+  /** Whether a tool exists here, so the network check's next steps name only real ones. */
+  hasTool: (name: string) => boolean;
 }
 
 /** PC care and network diagnostics for the agent. */
@@ -210,6 +249,107 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       },
     }),
     tool({
+      name: 'pc.devices',
+      title: 'Devices',
+      description:
+        "This computer's devices of one kind, with their state: printers (status, waiting jobs, the default, its address, ink or toner levels where the printer reports them), sound (speakers, headphones and microphones, which is the default), Bluetooth (the adapter and paired devices, connected or not), screens (each display, how it is connected, its resolution against its best, its maker and year), graphics (each card, its driver, and its heat and load where it reports them), drives (USB and other external drives, their health) or USB (each controller, hub and device with the speed it runs at and its power; a USB 3 device at USB 2 speed is called out). The first look for \"the printer won't print\", \"no sound\", \"my headphones won't connect\", \"the second screen is black\", \"my games stutter\", \"my USB drive won't show up\".",
+      risk: 'read',
+      timeoutMs: 60_000,
+      inputSchema: { type: 'object', properties: { kind: { type: 'string', enum: ['printers', 'sound', 'bluetooth', 'screens', 'graphics', 'drives', 'usb'] } }, required: ['kind'] },
+      async run(i) {
+        const lines: string[] = [];
+        let data: unknown;
+        switch (i.kind) {
+          // This PC → Devices (2.5.0): graphics cards and external drives, with what looks wrong and the fix.
+          case 'graphics':
+          case 'drives': {
+            const r = await deviceReport();
+            const kind = i.kind === 'graphics' ? 'graphics' : 'drive';
+            if (i.kind === 'graphics') {
+              data = r.graphics;
+              if (!r.graphics.length) lines.push('No graphics card was reported.');
+              for (const g of r.graphics) lines.push(`${quoteName(g.name)}: driver ${g.driver ? quoteName(g.driver) : 'not reported'}${g.vramMB ? `, ${g.vramMB} MB of memory` : ''}${g.temperatureC !== null ? `, ${g.temperatureC} °C` : ''}${g.loadPct !== null ? `, ${g.loadPct}% busy` : ''}${g.driverPage ? `; drivers: ${g.driverPage}` : ''}`);
+            } else {
+              data = r.externalDrives;
+              if (!r.externalDrives.length) lines.push('No USB or other external drive is plugged in (or this system does not report it).');
+              for (const x of r.externalDrives) lines.push(`${quoteName(x.name)} (${x.device}): ${Math.round(x.bytes / 1e9)} GB${x.interface ? `, ${x.interface}` : ''}, health ${x.health ?? 'not reported'}${x.mounts.length ? `, at ${x.mounts.map((m) => `${quoteName(m.mount)}${m.fs ? ` (${m.fs})` : ''}`).join(', ')}` : ', not opened (no volume mounted)'}`);
+            }
+            for (const f of r.findings.filter((x) => x.device === kind)) lines.push(`Needs a look: ${f.title}. ${f.detail}`);
+            break;
+          }
+          case 'printers': {
+            const list = IS_WIN ? await d.net.printers() : ((await si.printer().catch(() => [])) as any[]).map((p) => ({ name: p.name, status: p.status, isDefault: !!p.default, port: p.uri ?? '', ip: null, jobs: 0, driver: p.model ?? '', shared: !!p.shared }));
+            data = list;
+            if (!list.length) lines.push('No printers are set up on this computer.');
+            // Ink and toner over IPP (this computer's print service or the printer on the network), a few seconds each.
+            const levels = await Promise.all(
+              list.slice(0, 8).map((p) =>
+                Promise.race([
+                  defaultSupplies({ name: p.name, uri: /^(ipps?|https?):\/\//i.test(p.port ?? '') ? p.port : null, host: p.ip ?? null }).catch(() => null),
+                  new Promise<null>((r) => setTimeout(() => r(null), 6000)),
+                ]),
+              ),
+            );
+            data = list.map((p, n) => ({ ...p, supplies: levels[n] ?? null }));
+            const supplyText = (x: PrinterSupply) => `${quoteName(x.name)} ${x.level !== null ? `${x.level}%` : 'some left'}${x.low ? (x.kind === 'waste' ? ' (nearly full)' : ' (low)') : ''}`;
+            list.forEach((p, n) => {
+              lines.push(`${quoteName(p.name)}${p.isDefault ? ' (default)' : ''}: ${cleanName(p.status) || 'status unknown'}${p.jobs ? `, ${p.jobs} job(s) waiting` : ''}${p.ip ? `, at ${cleanName(p.ip)}` : p.port ? `, port ${quoteName(p.port)}` : ''}${p.driver ? `, driver ${quoteName(p.driver)}` : ''}`);
+              const s = levels[n];
+              if (s?.length) lines.push(`  Ink or toner: ${s.map(supplyText).join(', ')}`);
+            });
+            break;
+          }
+          case 'sound': {
+            const list = (await si.audio().catch(() => [])) as any[];
+            data = list;
+            if (!list.length) lines.push('No sound devices were found (or this system does not report them).');
+            for (const a of list) lines.push(`${quoteName(a.name)}${a.default ? ' (default)' : ''}: ${[a.in ? 'input' : '', a.out ? 'output' : ''].filter(Boolean).join(' and ') || cleanName(a.type) || 'device'}${a.status ? `, ${cleanName(a.status)}` : ''}${a.interfaceType ? `, ${cleanName(a.interfaceType)}` : ''}`);
+            break;
+          }
+          case 'bluetooth': {
+            const b = await d.net.bluetooth();
+            data = b;
+            lines.push(b.adapters.length ? `Adapter: ${b.adapters.map((x) => quoteName(x)).join(', ')}` : IS_WIN ? 'No Bluetooth adapter found: it may be off, disabled or missing a driver.' : 'Adapter: not reported here.');
+            if (!b.devices.length) lines.push('No paired devices.');
+            for (const x of b.devices) lines.push(`${quoteName(x.name)}: ${x.connected ? 'connected' : 'paired, not connected'}${x.battery != null ? `, battery ${x.battery}%` : ''} (${cleanName(x.kind)})`);
+            break;
+          }
+          case 'screens': {
+            const g = (await si.graphics().catch(() => ({ controllers: [], displays: [] }))) as any;
+            data = g;
+            for (const c of g.controllers ?? []) lines.push(`Graphics: ${quoteName(c.model)}${c.vram ? `, ${c.vram} MB` : ''}${c.driverVersion ? `, driver ${cleanName(c.driverVersion)}` : ''}`);
+            if (!(g.displays ?? []).length) lines.push('No displays are reported.');
+            for (const x of g.displays ?? []) lines.push(`Display ${x.model || x.deviceName ? quoteName(x.model || x.deviceName) : '?'}${x.main ? ' (main)' : ''}: ${cleanName(x.connection) || 'connection unknown'}, ${x.currentResX && x.currentResY ? `${x.currentResX}×${x.currentResY}` : 'resolution unknown'}${x.currentRefreshRate ? ` at ${x.currentRefreshRate} Hz` : ''}`);
+            break;
+          }
+          default: {
+            const tree = await usbTree();
+            if (tree.length) {
+              // The tree, indented by hub, with the speed each runs at: "on a USB 2 port" can be said from it.
+              data = tree;
+              const speed = (m: number | null) => (m === null ? '' : m >= 1000 ? `${m / 1000} Gb/s` : `${m} Mb/s`);
+              const walk = (n: UsbNode, depth: number) => {
+                if (lines.length >= 80) return;
+                const bits = [speed(n.speedMbps), n.maxPowerMa ? `${n.maxPowerMa} mA` : ''].filter(Boolean).join(', ');
+                lines.push(`${'  '.repeat(depth)}- ${quoteName(n.name)}${n.vendor ? ` (made by ${quoteName(n.vendor)})` : ''}${bits ? `: ${bits}` : ''}`);
+                n.children.forEach((c) => walk(c, depth + 1));
+              };
+              tree.forEach((n) => walk(n, 0));
+              for (const f of usbFindings(tree)) lines.push(`Needs a look: ${quoteName(f.title.replace(/ runs at USB 2 speed$/, ''))} runs at USB 2 speed. ${f.detail}`);
+              break;
+            }
+            const list = (await si.usb().catch(() => [])) as any[];
+            data = list;
+            if (!list.length) lines.push('No USB devices are reported.');
+            for (const u of list.slice(0, 60)) lines.push(`${u.name ? quoteName(u.name) : 'USB device'}${u.manufacturer ? ` (made by ${quoteName(u.manufacturer)})` : ''}${u.type ? `: ${cleanName(u.type)}` : ''}`);
+          }
+        }
+        // Every kind but screens can carry a name someone nearby (or a device) chose.
+        if (lines.some((l) => l.includes('"'))) lines.push(REPORTED_NAMES_NOTE);
+        return { output: lines.join('\n'), data };
+      },
+    }),
+    tool({
       name: 'pc.clean_temp',
       title: 'Clean temporary files',
       description: 'Delete temporary files older than one day from the user temp folder.',
@@ -218,6 +358,45 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       async run() {
         const r = await storage.cleanTemp();
         return { output: `Freed ${gb(r.freed)}; ${r.skipped} item(s) skipped (in use or recent)`, data: r };
+      },
+    }),
+    tool({
+      name: 'net.diagnose',
+      title: 'Full network check',
+      description:
+        'Why the network or internet is not working, layer by layer: the adapter and Wi-Fi signal, the router, the IP address, the internet past the router, names (DNS), secure web traffic and proxies, then real websites (sign-in pages, the clock). Says where it first breaks, what to do first, the commands to see each layer by hand, and the next tool to call. Call it first for "my internet is down", "the network is not working", "websites will not load". Give target to check one site or address too.',
+      risk: 'network',
+      timeoutMs: 90_000,
+      inputSchema: { type: 'object', properties: { target: { type: 'string', description: 'A site or address the person cannot reach (optional)' } } },
+      async run(i) {
+        const r = await d.net.diagnose({ target: typeof i.target === 'string' && i.target.trim() ? i.target : undefined, online: true, has: d.hasTool });
+        return { output: stackText(r, IS_WIN ? 'windows' : process.platform === 'darwin' ? 'mac' : 'linux'), data: r };
+      },
+    }),
+    tool({
+      name: 'net.ip_address',
+      title: 'My IP address',
+      description:
+        "This computer's IP addresses: its address on the local network (and on each network adapter, with the MAC address), the gateway, the DNS servers, and its public address on the internet. The answer to \"what is my IP\".",
+      risk: 'network',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          public: { type: 'boolean', default: true, description: 'Also look up the public (internet) address' },
+          adapters: { type: 'boolean', default: false, description: 'List every network adapter, not just the one in use' },
+        },
+      },
+      async run(i) {
+        const [ctx, pub] = await Promise.all([d.net.context(), i.public === false ? null : d.net.publicIp().catch(() => null)]);
+        const inUse = ctx.interfaces.find((x) => x.ip === ctx.ip);
+        const lines = [
+          `Local IP address: ${ctx.ip ?? 'not connected'}${inUse ? ` (${inUse.name}${inUse.netmask ? `, mask ${inUse.netmask}` : ''})` : ''}`,
+          ...(pub ? [`Public IP address: ${pub.ip ?? 'could not be found'}${pub.isp ? ` (${pub.isp}${pub.location ? `, ${pub.location}` : ''})` : ''}`] : []),
+          `Gateway: ${ctx.gateway ?? 'none'}`,
+          `DNS servers: ${ctx.dns.join(', ') || 'none'}`,
+          ...(i.adapters ? ctx.interfaces.map((x) => `Adapter ${x.name}: ${x.ip}${x.mac ? `, MAC ${x.mac}` : ''}${x.type ? `, ${x.type}` : ''}${x.up ? '' : ' (down)'}`) : []),
+        ];
+        return { output: lines.join('\n'), data: { ...ctx, public: pub } };
       },
     }),
     tool({
@@ -241,7 +420,7 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       async run(i) {
         const r = await d.net.traceroute(i.host, `tool-${Date.now()}`);
         return {
-          output: r.hops.map((h) => `${h.hop}. ${h.ip ?? '*'} ${h.name ? `(${h.name}) ` : ''}${h.avg != null ? `${h.avg} ms ` : ''}[${h.role}]${h.org ? ` ${h.org}` : ''}${h.location ? `, ${h.location}` : ''}`).join('\n') || 'No hops',
+          output: r.hops.map((h) => `${h.hop}. ${h.ip ?? '*'} ${h.name ? `(${quoteName(h.name)}) ` : ''}${h.avg != null ? `${h.avg} ms ` : ''}[${h.role}]${h.org ? ` ${quoteName(h.org)}` : ''}${h.location ? `, ${cleanName(h.location)}` : ''}`).join('\n') || 'No hops',
           data: r,
         };
       },
@@ -278,7 +457,7 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       async run() {
         const s = await d.net.scan(`tool-${Date.now()}`, undefined, 'Scan by Fabrix');
         return {
-          output: `${s.devices.length} devices on ${s.subnet}:\n${s.devices.map((x) => `- ${x.ip} ${x.typeLabel}${x.name ? ` "${x.name}"` : ''}${x.vendor ? ` (${x.vendor})` : ''}${x.ports.length ? ` ports ${x.ports.join(',')}` : ''}`).join('\n')}`,
+          output: `${s.devices.length} devices on ${s.subnet}:\n${s.devices.map((x) => `- ${x.ip} ${x.typeLabel}${x.name ? ` ${quoteName(x.name)}` : ''}${x.vendor ? ` (made by ${quoteName(x.vendor)})` : ''}${x.ports.length ? ` ports ${x.ports.join(',')}` : ''}`).join('\n')}${s.devices.some((x) => x.name || x.vendor) ? `\n${REPORTED_NAMES_NOTE}` : ''}`,
           data: s,
         };
       },
@@ -305,6 +484,40 @@ export function pcTools(d: PcToolDeps): ToolSpec[] {
       async run() {
         const r = await d.net.speedTest(`tool-${Date.now()}`);
         return { output: `Download ${r.downloadMbps} Mbps, upload ${r.uploadMbps} Mbps, latency ${r.latencyMs ?? '—'} ms, jitter ${r.jitterMs ?? '—'} ms (${r.server})`, data: r };
+      },
+    }),
+    tool({
+      name: 'net.wifi_channels',
+      title: 'Wi-Fi channels',
+      description: "The Wi-Fi networks around, this network's signal and channel, how busy each channel is, and which channel it should use with the reason (the channel planner).",
+      risk: 'read',
+      inputSchema: { type: 'object', properties: {} },
+      async run() {
+        const r = await d.net.wifiChannels({ ultra: d.networkTools() });
+        const c = r.connected;
+        const lines = [
+          c ? `Connected to ${quoteName(c.ssid)} on channel ${c.channel ?? '?'} (${c.band ?? '?'})${c.signalDbm !== null ? `, signal ${c.signalDbm} dBm` : ''}` : 'Not connected to Wi-Fi',
+          `${r.points.length} access points around`,
+          ...r.bands.flatMap((b) => [`${b.band}: ${b.mine !== null ? `yours on ${b.mine}` : 'not used by you'}; best ${b.best?.channel ?? '—'}${b.width ? `; width ${b.width.mhz} MHz` : ''}`, ...b.advice.map((a) => `  - ${a}`)]),
+          r.router ? `Router settings: http://${r.router}` : '',
+          c ? REPORTED_NAMES_NOTE : '',
+        ];
+        return { output: lines.filter(Boolean).join('\n'), data: { connected: r.connected, bands: r.bands.map(({ channels: _c, ...b }) => b), router: r.router } };
+      },
+    }),
+    tool({
+      name: 'pc.space_hogs',
+      title: 'Space hogs',
+      description: 'Caches, AI models, games and backups taking a lot of space on this computer, what each is, and which ones can be cleared because they come back by themselves (Storage → Space hogs).',
+      risk: 'read',
+      timeoutMs: 120_000,
+      inputSchema: { type: 'object', properties: {} },
+      async run() {
+        const hogs = await spaceHogs();
+        return {
+          output: hogs.length ? hogs.map((h) => `- ${h.label}: ${gb(h.size)} (${h.path}). ${h.what}${h.action === 'clear' ? ' Can be cleared in Storage → Space hogs.' : ''}`).join('\n') : 'None of the usual places holds more than 50 MB.',
+          data: hogs,
+        };
       },
     }),
     tool({

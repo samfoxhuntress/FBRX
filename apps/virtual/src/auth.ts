@@ -16,6 +16,14 @@ interface UserRow {
   last_login_at: string | null;
 }
 
+export interface AppToken {
+  id: string;
+  name: string;
+  createdBy: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+}
+
 const toUser = (r: UserRow): VirtualUser => ({ id: r.id, username: r.username, name: r.name, role: (VIRTUAL_ROLES as readonly string[]).includes(r.role) ? (r.role as VirtualRole) : 'viewer', createdAt: r.created_at, lastLoginAt: r.last_login_at });
 
 /** What each role may do. Viewers look; operators run virtual machines; administrators change the server itself. */
@@ -112,6 +120,7 @@ export class Auth {
   /** The signed-in person behind a session token, or null. */
   session(token: string | null | undefined): VirtualUser | null {
     if (!token) return null;
+    if (token.startsWith('fbvapp_')) return this.appSession(token);
     const r = this.db.get<UserRow & { expires_at: string }>('SELECT u.*, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id WHERE s.token_hash = ?', sha256Hex(token));
     if (!r) return null;
     if (r.expires_at < new Date().toISOString()) {
@@ -123,6 +132,44 @@ export class Auth {
 
   logout(token: string): void {
     this.db.run('DELETE FROM sessions WHERE token_hash = ?', sha256Hex(token));
+  }
+
+  // ----------------------------------------------------------------------------------------- app access
+
+  /**
+   * Read-only access for an app (Fabrix on a computer, to look at the gate and MiniDome): a viewer that is not a person
+   * and lasts until an administrator (or the app itself) revokes it. Only its hash is kept.
+   */
+  createAppToken(name: string, by: string): { id: string; name: string; token: string } {
+    const clean = name.replace(/[^\p{L}\p{N} ._()'’-]/gu, '').trim().slice(0, 80);
+    if (!clean) throw badRequest('Give the app a name');
+    if ((this.db.get<{ n: number }>('SELECT COUNT(*) AS n FROM app_tokens')?.n ?? 0) >= 50) throw conflict('50 apps have access already: revoke one first');
+    const id = randomUUID();
+    const token = randomToken('fbvapp');
+    this.db.run('INSERT INTO app_tokens (id, name, token_hash, created_by, created_at) VALUES (?,?,?,?,?)', id, clean, sha256Hex(token), by, new Date().toISOString());
+    return { id, name: clean, token };
+  }
+
+  listAppTokens(): AppToken[] {
+    return this.db
+      .all<{ id: string; name: string; created_by: string; created_at: string; last_used_at: string | null }>('SELECT id, name, created_by, created_at, last_used_at FROM app_tokens ORDER BY created_at')
+      .map((r) => ({ id: r.id, name: r.name, createdBy: r.created_by, createdAt: r.created_at, lastUsedAt: r.last_used_at }));
+  }
+
+  revokeAppToken(id: string): string {
+    const r = this.db.get<{ name: string }>('SELECT name FROM app_tokens WHERE id = ?', id);
+    if (!r) throw notFound('That app has no access');
+    this.db.run('DELETE FROM app_tokens WHERE id = ?', id);
+    return r.name;
+  }
+
+  /** The app behind an app token, as a viewer, or null. */
+  private appSession(token: string): VirtualUser | null {
+    const r = this.db.get<{ id: string; name: string; created_at: string; last_used_at: string | null }>('SELECT id, name, created_at, last_used_at FROM app_tokens WHERE token_hash = ?', sha256Hex(token));
+    if (!r) return null;
+    const now = new Date();
+    if (!r.last_used_at || now.getTime() - Date.parse(r.last_used_at) > 5 * 60_000) this.db.run('UPDATE app_tokens SET last_used_at = ? WHERE id = ?', now.toISOString(), r.id);
+    return { id: `app:${r.id}`, username: `app:${r.name}`, name: r.name, role: 'viewer', createdAt: r.created_at, lastLoginAt: r.last_used_at };
   }
 
   sweep(): void {

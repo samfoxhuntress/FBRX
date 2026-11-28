@@ -166,6 +166,17 @@ describe('mesh pairing and permissions', () => {
       expect(A.kernel.workspace.listTasks()[0].title).toBe('From my phone');
       const sync = await phone.rpc('sync');
       expect(sync).toMatchObject({ name: 'pc-47814', approvals: [], jobs: [] });
+      // Home on the phone: the computer's edition, its split-flap board and the notes from FBRX.
+      expect(sync.home).toMatchObject({ tier: 'blackhole', agentName: 'Fabrix', board: expect.any(Array), notes: expect.arrayContaining([expect.objectContaining({ id: 'models', action: { label: 'AI models', to: 'models' } })]) });
+      A.kernel.meta.set('edition.chosen', 'essentials');
+      A.kernel.license.refresh();
+      const ess = (await phone.rpc('sync')).home;
+      expect(ess.tier).toBe('essentials');
+      expect(ess.notes.map((n: any) => n.id)).toEqual(expect.arrayContaining(['upgrade-standard', 'upgrade-ultra']));
+      expect(ess.board.at(-1)).toEqual(['FBRX ESSENTIALS', 'FREE, ALWAYS']);
+      // The AI models, from the phone (a phone that may ask may pick the model).
+      expect(await phone.rpc('models')).toEqual({ current: null, installed: [] });
+      await expect(phone.rpc('models.use', { id: 'nope' })).rejects.toMatchObject({ code: 'NOT_FOUND' });
 
       // Alerts reach the phone through its outbox.
       A.kernel.settings.update({ alerts: { routing: { warning: ['inbox', 'mobile'] } } });

@@ -80,6 +80,7 @@ function NewVmModal({ onClose, onCreated }: { onClose: () => void; onCreated: (v
   const [cpus, setCpus] = useState(2);
   const [memoryGb, setMemoryGb] = useState(2);
   const [diskGb, setDiskGb] = useState(20);
+  const [provisioning, setProvisioning] = useState<'thin' | 'thick'>('thin');
   const [iso, setIso] = useState('');
   const [firmware, setFirmware] = useState<'uefi' | 'bios'>('uefi');
   const [secureBoot, setSecureBoot] = useState(false);
@@ -106,7 +107,7 @@ function NewVmModal({ onClose, onCreated }: { onClose: () => void; onCreated: (v
   const create = () =>
     run('create', async () => {
       const [kind, source] = network.split(':') as ['network' | 'bridge', string];
-      const spec: VmCreateSpec = { name, os, cpus, memoryMb: Math.round(memoryGb * 1024), diskGb, iso: iso || null, network: { kind, source }, firmware, secureBoot: firmware === 'uefi' && secureBoot, tpm, startNow, autostart, description: description.trim() || undefined };
+      const spec: VmCreateSpec = { name, os, cpus, memoryMb: Math.round(memoryGb * 1024), diskGb, provisioning, iso: iso || null, network: { kind, source }, firmware, secureBoot: firmware === 'uefi' && secureBoot, tpm, startNow, autostart, description: description.trim() || undefined };
       const vm = await api<VmDetail>('POST', '/v1/vms', spec);
       toast.success(`${vm.name} is ready`, startNow ? 'Open its screen to install the operating system.' : undefined);
       onCreated(vm);
@@ -153,10 +154,16 @@ function NewVmModal({ onClose, onCreated }: { onClose: () => void; onCreated: (v
           <Field label="Memory (GB)" help={freeGb !== null ? `About ${freeGb} GB free now.` : undefined}>
             <Input type="number" min={0.25} step={0.25} value={memoryGb} onChange={(e) => setMemoryGb(Number(e.target.value))} />
           </Field>
-          <Field label="Disk (GB)" help="Grows as it fills (thin).">
+          <Field label="Disk (GB)">
             <Input type="number" min={1} value={diskGb} onChange={(e) => setDiskGb(Math.max(1, Math.round(Number(e.target.value))))} />
           </Field>
         </Grid>
+        <Field
+          label="Disk provisioning"
+          help={provisioning === 'thin' ? 'Uses space only as the VM writes data, up to the size above. Saves space; the storage can run out if many VMs fill up at once.' : `Allocates all ${diskGb} GB on the server now, so the space is guaranteed and the disk never has to grow.`}
+        >
+          <Select value={provisioning} onChange={(e) => setProvisioning(e.target.value as 'thin' | 'thick')} options={[{ value: 'thin', label: 'Thin provisioned (dynamically expanding)' }, { value: 'thick', label: 'Thick provisioned (fixed size)' }]} />
+        </Field>
         <Grid cols={2}>
           <Field label="Install from" help={(isos.data?.isos.length ?? 0) === 0 ? 'The ISO library is empty: add installers in Storage & ISOs.' : 'Put in the virtual CD drive.'}>
             <Select value={iso} onChange={(e) => setIso(e.target.value)} options={[{ value: '', label: 'Nothing (empty CD drive)' }, ...(isos.data?.isos ?? []).map((i) => ({ value: i.name, label: i.name }))]} />

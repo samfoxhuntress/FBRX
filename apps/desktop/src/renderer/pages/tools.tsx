@@ -113,7 +113,7 @@ function PluginsTab() {
   const unlicensed = license.data && !license.data.features.includes('plugins');
   return (
     <>
-      {unlicensed && <Callout tone="warning" title="Plugins are not included in your license">Upgrade to Pro or Enterprise, or enroll with your organization, to install plugins.</Callout>}
+      {unlicensed && <Callout tone="warning" title="Plugins are not included in your license">Plugins come with Ultra and Black Hole Edition, or through your organization’s FBRX Command.</Callout>}
       <div className="fx-actions">
         <Button icon="file" loading={busy === 'i'} disabled={!!unlicensed} onClick={() => void install('file')}>
           Install package (.tgz)

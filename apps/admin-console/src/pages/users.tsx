@@ -13,6 +13,7 @@ interface User {
   mfaEnabled: boolean;
   sso: boolean;
   hasPassword: boolean;
+  remoteControl?: boolean;
   lastLoginAt: string | null;
 }
 type Provider = 'google' | 'microsoft' | 'oidc';
@@ -136,14 +137,14 @@ export function UsersPage() {
 }
 
 function UserEditor({ user, roles, hasSso, onClose, onSaved }: { user: Partial<User>; roles: string[]; hasSso: boolean; onClose: () => void; onSaved: () => void }) {
-  const [f, setF] = useState({ name: user.name ?? '', email: user.email ?? '', role: user.role ?? 'operator', password: '', disabled: user.status === 'disabled', resetMfa: false });
+  const [f, setF] = useState({ name: user.name ?? '', email: user.email ?? '', role: user.role ?? 'operator', password: '', disabled: user.status === 'disabled', resetMfa: false, remoteControl: !!user.remoteControl });
   const { busy, run } = useAction();
   const save = () =>
     run(
       's',
       () =>
         user.id
-          ? api('PATCH', `/v1/admin/users/${user.id}`, { name: f.name, role: f.role, status: f.disabled ? 'disabled' : 'active', password: f.password || undefined, resetMfa: f.resetMfa || undefined }).then(onSaved)
+          ? api('PATCH', `/v1/admin/users/${user.id}`, { name: f.name, role: f.role, status: f.disabled ? 'disabled' : 'active', password: f.password || undefined, resetMfa: f.resetMfa || undefined, remoteControl: f.remoteControl }).then(onSaved)
           : api('POST', '/v1/admin/users', { name: f.name, email: f.email, role: f.role, password: f.password || undefined }).then(onSaved),
       'User saved',
     );
@@ -181,6 +182,13 @@ function UserEditor({ user, roles, hasSso, onClose, onSaved }: { user: Partial<U
         {user.id && (
           <>
             <Toggle checked={f.disabled} onChange={(v) => setF({ ...f, disabled: v })} label="Disable sign-in" />
+            {f.role !== 'viewer' && (
+              <Toggle
+                checked={f.remoteControl}
+                onChange={(v) => setF({ ...f, remoteControl: v })}
+                label="Remote screen: may ask to see and use a computer's screen (with a ticket number; the person at the computer says yes each time)"
+              />
+            )}
             {user.mfaEnabled && <Toggle checked={f.resetMfa} onChange={(v) => setF({ ...f, resetMfa: v })} label="Reset MFA (user must enroll again)" />}
           </>
         )}

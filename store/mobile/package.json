@@ -1,0 +1,26 @@
+{
+  "name": "fbrx-mobile-store",
+  "version": "2.0.0",
+  "private": true,
+  "description": "FBRX Mobile for the app stores: the phone web app from packages/core/mobile in a native shell, with in-app purchases.",
+  "license": "UNLICENSED",
+  "type": "module",
+  "scripts": {
+    "build": "node --import tsx scripts/build.mjs",
+    "sync": "node --import tsx scripts/build.mjs && cap sync",
+    "assets": "capacitor-assets generate --ios --android --iconBackgroundColor '#0a0a0a' --iconBackgroundColorDark '#0a0a0a' --splashBackgroundColor '#0a0a0a' --splashBackgroundColorDark '#0a0a0a'",
+    "ios": "node --import tsx scripts/build.mjs && cap sync ios && cap open ios",
+    "android": "node --import tsx scripts/build.mjs && cap sync android && cap open android"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.5.3",
+    "@capacitor/barcode-scanner": "3.1.2",
+    "@capacitor/core": "^8.5.3",
+    "@capacitor/ios": "^8.5.3",
+    "fbrx-purchases": "file:./plugins/fbrx-purchases"
+  },
+  "devDependencies": {
+    "@capacitor/assets": "^3.0.5",
+    "@capacitor/cli": "^8.5.3"
+  }
+}

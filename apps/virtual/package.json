@@ -1,6 +1,6 @@
 {
   "name": "@fbrx/virtual",
-  "version": "0.1.0",
+  "version": "1.4.6",
   "private": true,
   "description": "FBRX Virtual: the hypervisor FBRX Server runs (KVM through libvirt), with server hardware and BIOS management",
   "type": "module",
@@ -20,12 +20,14 @@
     "@fbrx/shared": "1.0.0",
     "fast-xml-parser": "^5.3.0",
     "fastify": "^5.12.5",
+    "nodemailer": "^10.6.1",
     "qrcode": "^1.5.4",
     "systeminformation": "^5.33.15",
     "ws": "^8.18.3",
     "zod": "^4.1.12"
   },
   "devDependencies": {
+    "@types/nodemailer": "^8.0.2",
     "@types/qrcode": "^1.5.6"
   }
 }

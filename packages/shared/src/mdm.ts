@@ -128,6 +128,9 @@ export function windowsScript(i: Omit<MdmInput, 'uuids'> & { installerUrl?: stri
     ...(i.serverFingerprint ? { serverFingerprint: i.serverFingerprint } : {}),
   };
   const ps = (s: string) => s.replace(/'/g, "''");
+  // FBRX Command's own certificate is trusted for a download from FBRX Command only: the current release may come
+  // from FBRX's downloads instead (Deploy & enroll), with an ordinary certificate.
+  const pin = i.serverFingerprint && i.installerUrl && i.installerUrl.startsWith(i.serverUrl.replace(/\/+$/, '')) ? i.serverFingerprint : null;
   return `# FBRX OS for ${i.organization} (${i.label}): join FBRX Command and install for all users.
 # Intune: package this script with FBRX-OS-Setup-<version>.exe as a Win32 app (IntuneWinAppUtil), install command
 #   powershell.exe -ExecutionPolicy Bypass -NoProfile -File Install-FBRX.ps1
@@ -144,8 +147,8 @@ $setup = Get-ChildItem -Path $PSScriptRoot -Filter 'FBRX-OS-Setup-*.exe' -ErrorA
 $installerUrl = '${ps(i.installerUrl ?? '')}'
 if (-not $setup -and $installerUrl) {
   $target = Join-Path $env:TEMP 'FBRX-OS-Setup.exe'
-${i.serverFingerprint ? `  # FBRX Command uses its own certificate: trust that one certificate (by its SHA-256 fingerprint) and no other.
-  [Net.ServicePointManager]::ServerCertificateValidationCallback = { param($s, $c) ([Security.Cryptography.X509Certificates.X509Certificate2]$c).GetCertHashString([Security.Cryptography.HashAlgorithmName]::SHA256) -eq '${i.serverFingerprint.replace(/[^0-9a-f]/gi, '').toUpperCase()}' }
+${pin ? `  # FBRX Command uses its own certificate: trust that one certificate (by its SHA-256 fingerprint) and no other.
+  [Net.ServicePointManager]::ServerCertificateValidationCallback = { param($s, $c) ([Security.Cryptography.X509Certificates.X509Certificate2]$c).GetCertHashString([Security.Cryptography.HashAlgorithmName]::SHA256) -eq '${pin.replace(/[^0-9a-f]/gi, '').toUpperCase()}' }
 ` : ''}  Invoke-WebRequest -Uri $installerUrl -OutFile $target -UseBasicParsing
   $setup = Get-Item $target
 }

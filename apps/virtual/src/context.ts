@@ -1,4 +1,5 @@
 import type { FastifyBaseLogger, FastifyReply, FastifyRequest } from 'fastify';
+import type { ServerAlerts } from './alerts/service';
 import type { VirtualRole, VirtualUser } from '@fbrx/shared';
 import type { Db } from '@fbrx/shared/node';
 import type { VirtualConfig } from './config';
@@ -13,6 +14,10 @@ import type { CoreLink } from './core-link';
 import type { HostMeshMark } from './mesh-mark';
 import type { GateEngine, GateApplier } from '@fbrx/gate/node';
 import type { DomeEngine } from '@fbrx/dome/node';
+import type { TimeService } from './time/service';
+import type { FilesService } from './files/service';
+import type { DirectoryService } from './directory/service';
+import type { HaService } from './ha/service';
 import { allows } from './auth';
 import { forbidden, unauthorized } from './errors';
 
@@ -35,6 +40,16 @@ export interface VirtualContext {
   gate: { engine: GateEngine; applier: GateApplier } | null;
   /** FBRX MiniDome (the minidome role, on a gate). */
   dome: DomeEngine | null;
+  /** FBRX Time (the time role): image backups and boot checks. */
+  time: TimeService | null;
+  /** The file server (the files role): shares, priority for its traffic, backups to another device. */
+  files: FilesService | null;
+  /** The server's alerts (FBRX Alert v1): e-mail, a signed webhook and syslog. */
+  alerts: ServerAlerts;
+  /** The FBRX directory (the directory role): the same accounts on every computer that joins. */
+  directory: DirectoryService | null;
+  /** High availability: this server and its partner as one pair (not paired: it serves on its own). */
+  ha: HaService;
   /** The command line's token (fbrx-gate, run as root on the server; accepted from this computer only). */
   cliToken: string;
   log: FastifyBaseLogger;

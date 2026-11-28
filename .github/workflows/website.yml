@@ -1,0 +1,70 @@
+# Builds the FBRX website (apps/website) on every change to it and, from the default branch, publishes it to
+# Cloudflare Pages once that is set up. Without it, the built site is kept as the run's artifact: download it and
+# upload it to any static host.
+#
+# Repository variables (Settings → Secrets and variables → Actions → Variables):
+#   FBRX_ACCOUNT_SERVER          the FBRX account server (https://account.<your domain>, internal/CLOUD.md)
+#   FBRX_SITE_URL                the website's own address (https://<your domain>): canonical links and the sitemap
+#   FBRX_SUPPORT_EMAIL, FBRX_STATUS_URL, FBRX_INSTALLERS_SIGNED   optional, see apps/website/build.mjs
+#   CLOUDFLARE_ACCOUNT_ID        the Cloudflare account the site is published in
+#   CLOUDFLARE_PAGES_PROJECT     the Cloudflare Pages project's name (one made with Direct Upload)
+# Repository secret:
+#   CLOUDFLARE_API_TOKEN         an API token with the "Cloudflare Pages: Edit" permission
+name: Website
+
+on:
+  push:
+    branches: [main, "claude/**"]
+    paths:
+      - apps/website/**
+      - packages/shared/src/**
+      - docs/assets/**
+      - release.json
+      - .github/workflows/website.yml
+  workflow_dispatch:
+
+concurrency:
+  group: website-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+env:
+  ELECTRON_SKIP_BINARY_DOWNLOAD: "1"
+
+jobs:
+  website:
+    runs-on: ubuntu-latest
+    env:
+      HAS_PAGES_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci --no-audit --no-fund
+      - name: Build
+        run: npm run build -w @fbrx/website
+        env:
+          FBRX_ACCOUNT_SERVER: ${{ vars.FBRX_ACCOUNT_SERVER }}
+          FBRX_SITE_URL: ${{ vars.FBRX_SITE_URL }}
+          FBRX_SUPPORT_EMAIL: ${{ vars.FBRX_SUPPORT_EMAIL }}
+          FBRX_STATUS_URL: ${{ vars.FBRX_STATUS_URL }}
+          FBRX_INSTALLERS_SIGNED: ${{ vars.FBRX_INSTALLERS_SIGNED }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: website
+          path: apps/website/dist
+          if-no-files-found: error
+      - name: Publish to Cloudflare Pages
+        if: github.ref_name == github.event.repository.default_branch && vars.CLOUDFLARE_PAGES_PROJECT != '' && env.HAS_PAGES_TOKEN == 'true'
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy apps/website/dist --project-name=${{ vars.CLOUDFLARE_PAGES_PROJECT }} --branch=main --commit-dirty=true
+      - name: Not published
+        if: github.ref_name != github.event.repository.default_branch || vars.CLOUDFLARE_PAGES_PROJECT == '' || env.HAS_PAGES_TOKEN != 'true'
+        run: echo "The site is built (the website artifact). It is published from the default branch once CLOUDFLARE_PAGES_PROJECT, CLOUDFLARE_ACCOUNT_ID and the CLOUDFLARE_API_TOKEN secret are set."

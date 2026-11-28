@@ -2,8 +2,8 @@ import { execFile } from 'node:child_process';
 import { chmodSync, existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { inCidr, intToIPv4, ipv4ToInt } from '@fbrx/shared';
-import { bridgeName, type GateConfig } from '../model';
+import { inCidr, intToIPv4, ipv4ToInt, networkOf } from '@fbrx/shared';
+import { bridgeName, pickLanAddress, type GateConfig } from '../model';
 import { linkNames, type GateRendered } from '../render/index';
 import { NFT_TABLE, WG_IFACE } from '../render/nftables';
 import type { GatePaths } from '../render/paths';
@@ -22,8 +22,11 @@ export interface GateApplier {
   readonly kind: 'linux' | 'simulated';
   /** Refuses settings the system would not take (before anything changes). */
   check(r: GateRendered): Promise<void>;
-  /** Makes them so. Returns notes worth showing (a fallback taken, say). */
-  apply(r: GateRendered, previous: GateRendered | null, c: GateConfig): Promise<string[]>;
+  /**
+   * Makes them so. Returns notes worth showing (a fallback taken, say). With dns "off" (the standby of a
+   * high-availability pair) DHCP and DNS are set up but not started.
+   */
+  apply(r: GateRendered, previous: GateRendered | null, c: GateConfig, o?: { dns?: 'serve' | 'off' }): Promise<string[]>;
   /** Takes away everything the gate set up. */
   clear(previous: GateRendered | null): Promise<void>;
   live(c: GateConfig | null): Promise<GateLive>;
@@ -31,6 +34,11 @@ export interface GateApplier {
   vpnKey(): Promise<{ publicKey: string }>;
   /** This computer's network ports, to choose from. */
   systemInterfaces(): Promise<SystemInterface[]>;
+  /**
+   * Forgets a device's lease (on the port `device` that gave it), so the address is free again. The device keeps
+   * using it until it next asks for one.
+   */
+  releaseLease(device: string, lease: Pick<GateLease, 'mac' | 'address'>): Promise<void>;
 }
 
 export interface SystemInterface {
@@ -105,6 +113,13 @@ export class SimulatedApplier implements GateApplier {
     return ['eno1', 'eno2', 'eno3', 'eno4'].map((name, i) => ({ name, mac: `02:fb:00:00:01:0${i + 1}`, up: i < 2, speed: i < 2 ? 1000 : null, kind: 'ethernet' as const }));
   }
 
+  /** Leases let go of (mac address): they stay away until the device would ask again. */
+  readonly released = new Set<string>();
+
+  async releaseLease(_device: string, lease: Pick<GateLease, 'mac' | 'address'>): Promise<void> {
+    this.released.add(`${lease.mac} ${lease.address}`);
+  }
+
   async live(c: GateConfig | null): Promise<GateLive> {
     const live = emptyLive();
     if (!c) return live;
@@ -121,7 +136,7 @@ export class SimulatedApplier implements GateApplier {
       ...(n.dhcp.enabled
         ? visitors.slice(0, 2 + (n.name.length % 3)).map((v, k) => ({ expires: new Date((Math.floor(t / 3600) + 1 + k) * 3600_000).toISOString(), mac: `02:fb:${n.name.length.toString(16).padStart(2, '0')}:00:10:${(k + 1).toString(16).padStart(2, '0')}`, address: intToIPv4(ipv4ToInt(n.dhcp.start) + k), name: `${v}-${n.name}`, network: n.name }))
         : []),
-    ]);
+    ]).filter((l) => !l.expires || !this.released.has(`${l.mac} ${l.address}`));
     for (const r of c.firewall.rules) live.counters[`rule:${r.id}`] = { packets: Math.round(t % 997), bytes: Math.round((t % 997) * 600) };
     live.counters['default:input'] = { packets: Math.round(t % 4093), bytes: Math.round((t % 4093) * 80) };
     live.counters['default:forward'] = { packets: Math.round(t % 211), bytes: Math.round((t % 211) * 120) };
@@ -139,6 +154,9 @@ export class SimulatedApplier implements GateApplier {
 
 // ------------------------------------------------------------------------------------------------ Linux
 
+/** Where wg may read a key on Ubuntu 26.04 (its AppArmor profile allows nowhere else). */
+const WG_KEY_DIR = '/etc/wireguard';
+
 export interface LinuxApplierOptions {
   paths: GatePaths;
   /** "networkd" (FBRX Server: kept across restarts) or "iproute" (applied directly; tests and systems without it). */
@@ -149,6 +167,11 @@ export interface LinuxApplierOptions {
   run?: Runner;
   /** Restarts dnsmasq once its file is written (default: systemctl restart dnsmasq). */
   restartDns?: (confFile: string) => Promise<void>;
+  /** Stops dnsmasq (default: systemctl stop dnsmasq): on the standby of a high-availability pair. */
+  stopDns?: () => Promise<void>;
+  /** (Re)starts conntrackd with its file (default: systemctl restart conntrackd), and stops it (a pair no more). */
+  restartConntrackd?: (confFile: string) => Promise<void>;
+  stopConntrackd?: () => Promise<void>;
   /** Where dnsmasq reads the file (default <root>/etc/dnsmasq.d/fbrx-gate.conf). */
   dnsmasqConf?: string;
 }
@@ -163,12 +186,15 @@ export class LinuxApplier implements GateApplier {
   private readonly root: string;
   private readonly networkdDir: string;
   private readonly dnsmasqConf: string;
+  /** conntrackd's settings (a high-availability pair). */
+  readonly conntrackdConf: string;
 
   constructor(private readonly o: LinuxApplierOptions) {
     this.run = o.run ?? runCommand;
     this.root = o.root ?? '/';
     this.networkdDir = join(this.root, 'etc/systemd/network');
     this.dnsmasqConf = o.dnsmasqConf ?? join(this.root, 'etc/dnsmasq.d/fbrx-gate.conf');
+    this.conntrackdConf = join(this.root, 'etc/conntrackd/conntrackd.conf');
   }
 
   private async must(cmd: string, args: string[], what: string): Promise<RunResult> {
@@ -177,10 +203,54 @@ export class LinuxApplier implements GateApplier {
     return r;
   }
 
+  /** A system service the gate relies on: switched on for the next start, and running now. */
+  private async ensureService(unit: string, what: string): Promise<void> {
+    if ((await this.run('systemctl', ['is-enabled', '--quiet', unit])).code !== 0) await this.run('systemctl', ['enable', unit]);
+    if ((await this.run('systemctl', ['is-active', '--quiet', unit])).code !== 0) await this.must('systemctl', ['start', unit], what);
+  }
+
   private write(file: string, content: string, mode = 0o644) {
     mkdirSync(dirname(file), { recursive: true });
     writeFileSync(file, content, { mode });
     chmodSync(file, mode);
+  }
+
+  private leaseFile() {
+    return join(this.o.paths.varDir, 'dnsmasq.leases');
+  }
+
+  private holds(lease: Pick<GateLease, 'mac' | 'address'>): boolean {
+    try {
+      return parseLeases(readFileSync(this.leaseFile(), 'utf8'), null).some((l) => l.mac === lease.mac && l.address === lease.address);
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * dnsmasq's own way first: dhcp_release (dnsmasq-utils) tells it the device let the address go. Without it, or when
+   * the lease is still there after that, dnsmasq stops for a moment while the line comes out of its lease file.
+   */
+  async releaseLease(device: string, lease: Pick<GateLease, 'mac' | 'address'>): Promise<void> {
+    if (!this.holds(lease)) return;
+    const r = await this.run('dhcp_release', [device, lease.address, lease.mac]);
+    if (r.code === 0) {
+      for (let i = 0; i < 20 && this.holds(lease); i++) await new Promise((ok) => setTimeout(ok, 100));
+      if (!this.holds(lease)) return;
+    }
+    await this.must('systemctl', ['stop', 'dnsmasq'], 'dnsmasq did not stop');
+    try {
+      const file = this.leaseFile();
+      const kept = readFileSync(file, 'utf8')
+        .split('\n')
+        .filter((line) => {
+          const f = line.trim().split(/\s+/);
+          return !(f[1]?.toLowerCase() === lease.mac && f[2] === lease.address);
+        });
+      writeFileSync(file, kept.join('\n'));
+    } finally {
+      await this.must('systemctl', ['start', 'dnsmasq'], 'dnsmasq did not start again');
+    }
   }
 
   private dirs() {
@@ -238,7 +308,7 @@ export class LinuxApplier implements GateApplier {
     return { publicKey: wgPublicKey(readFileSync(file, 'utf8')) };
   }
 
-  async apply(r: GateRendered, previous: GateRendered | null, c: GateConfig): Promise<string[]> {
+  async apply(r: GateRendered, previous: GateRendered | null, c: GateConfig, o: { dns?: 'serve' | 'off' } = {}): Promise<string[]> {
     const notes: string[] = [];
     this.dirs();
 
@@ -251,17 +321,20 @@ export class LinuxApplier implements GateApplier {
 
     // Ports, VLANs and addresses.
     if (this.o.mode === 'networkd') {
+      // systemd-networkd runs the ports: on, and kept on (Debian installs it switched off).
+      await this.ensureService('systemd-networkd', 'systemd-networkd did not start');
       mkdirSync(this.networkdDir, { recursive: true });
       const keep = new Set(r.networkd.map((f) => f.name));
       for (const f of readdirSync(this.networkdDir)) if (f.startsWith('10-fbrx-') && !keep.has(f)) rmSync(join(this.networkdDir, f));
       for (const f of r.networkd) this.write(join(this.networkdDir, f.name), f.content, f.mode);
       // systemd-networkd reads the VPN key file as its own user.
       if (c.vpn.enabled) await this.run('chgrp', ['systemd-network', join(this.o.paths.etcDir, 'wg-fbrx.key')]);
-      // A virtual switch taken away is deleted here (systemd-networkd leaves links it no longer has files for), which
-      // frees its port; a port joining a switch gives its address up to it.
-      const bridges = (rr: GateRendered | null) => new Set((rr?.networkd ?? []).map((f) => /^10-fbrx-(br-[a-z0-9-]+)\.netdev$/.exec(f.name)?.[1]).filter((b): b is string => !!b));
-      const nowBridges = bridges(r);
-      for (const b of bridges(previous)) if (!nowBridges.has(b)) await this.run('ip', ['link', 'del', 'dev', b]);
+      // A virtual switch, VLAN or tunnel taken away (a VLAN whose tag changed is a new one) is deleted here:
+      // systemd-networkd leaves links it no longer has files for. That frees a switch's port; a port joining a switch
+      // gives its address up to it.
+      const netdevs = (rr: GateRendered | null) => new Set((rr?.networkd ?? []).map((f) => /^10-fbrx-([A-Za-z0-9._-]+)\.netdev$/.exec(f.name)?.[1]).filter((b): b is string => !!b));
+      const nowNetdevs = netdevs(r);
+      for (const b of netdevs(previous)) if (!nowNetdevs.has(b)) await this.run('ip', ['link', 'del', 'dev', b]);
       for (const n of c.networks) if (n.vmSwitch) await this.run('ip', ['-4', 'addr', 'flush', 'dev', n.interface, 'scope', 'global']);
       await this.must('networkctl', ['reload'], 'systemd-networkd');
       const names = [...new Set(r.networkd.map((f) => f.name.replace(/^10-fbrx-/, '').replace(/\.(network|netdev)$/, '')))];
@@ -285,15 +358,67 @@ export class LinuxApplier implements GateApplier {
     this.write(nft, r.nftables, 0o640);
     await this.must('nft', ['-f', nft], 'The firewall rules');
 
-    // DHCP and DNS.
+    // The firewall is loaded again at every start, before the network comes up.
+    if (this.o.mode === 'networkd') await this.run('systemctl', ['enable', 'fbrx-gate-firewall.service']);
+
+    // DHCP and DNS (switched on for the next start too); on the standby of a pair, ready but stopped.
     this.write(this.dnsmasqConf, r.dnsmasq);
-    if (this.o.restartDns) await this.o.restartDns(this.dnsmasqConf);
-    else await this.must('systemctl', ['restart', 'dnsmasq'], 'dnsmasq');
+    if (o.dns === 'off') await this.stopDns();
+    else if (this.o.restartDns) await this.o.restartDns(this.dnsmasqConf);
+    else {
+      await this.run('systemctl', ['enable', 'dnsmasq']);
+      await this.must('systemctl', ['restart', 'dnsmasq'], 'dnsmasq');
+    }
+
+    // A high-availability pair: the open connections kept in step with the partner (conntrackd).
+    if (r.conntrackd) {
+      this.write(this.conntrackdConf, r.conntrackd);
+      if (this.o.restartConntrackd) await this.o.restartConntrackd(this.conntrackdConf);
+      else {
+        await this.run('systemctl', ['enable', 'conntrackd']);
+        const ok = await this.run('systemctl', ['restart', 'conntrackd']);
+        if (ok.code !== 0) notes.push('conntrackd did not start, so a takeover breaks open connections: sudo apt install conntrackd (journalctl -u conntrackd says why)');
+      }
+    } else if (previous?.conntrackd) {
+      if (this.o.stopConntrackd) await this.o.stopConntrackd();
+      else {
+        await this.run('systemctl', ['disable', 'conntrackd']);
+        await this.run('systemctl', ['stop', 'conntrackd']);
+      }
+    }
 
     // Traffic shaping.
     notes.push(...(await this.qos(r, previous)));
     this.write(join(this.o.paths.etcDir, 'qos.json'), JSON.stringify(r.qos, null, 2));
     return notes;
+  }
+
+  /** Stops DHCP and DNS (the standby of a high-availability pair). */
+  async stopDns(): Promise<void> {
+    if (this.o.stopDns) await this.o.stopDns();
+    else {
+      await this.run('systemctl', ['disable', 'dnsmasq']);
+      await this.run('systemctl', ['stop', 'dnsmasq']);
+    }
+  }
+
+  /** Starts DHCP and DNS (the server of a high-availability pair that takes over). */
+  async startDns(): Promise<void> {
+    if (this.o.restartDns) await this.o.restartDns(this.dnsmasqConf);
+    else {
+      await this.run('systemctl', ['enable', 'dnsmasq']);
+      await this.must('systemctl', ['restart', 'dnsmasq'], 'dnsmasq');
+    }
+  }
+
+  /** How it is run (systemd-networkd keeps links; ip commands set them right away). */
+  get mode(): 'networkd' | 'iproute' {
+    return this.o.mode;
+  }
+
+  /** Runs a command the way this applier does (inside a test's network namespace too). */
+  exec(cmd: string, args: string[]): Promise<RunResult> {
+    return this.run(cmd, args);
   }
 
   private async pinSwitchMac(bridge: string, port: string): Promise<void> {
@@ -313,10 +438,14 @@ export class LinuxApplier implements GateApplier {
   private async wireguardIproute(c: GateConfig): Promise<string[]> {
     const add = await this.run('ip', ['link', 'add', 'dev', WG_IFACE, 'type', 'wireguard']);
     if (add.code !== 0 && !/File exists/.test(add.err)) return [`VPN: this kernel has no WireGuard (${add.err.trim()})`];
-    const key = join(this.o.paths.etcDir, 'wg-fbrx.key');
+    // wg reads the private key from a file, and Ubuntu 26.04's AppArmor lets it read only below /etc/wireguard: the key
+    // is there, readable by root alone, for just as long as wg takes to read it.
+    mkdirSync(WG_KEY_DIR, { recursive: true, mode: 0o700 });
+    const key = join(WG_KEY_DIR, `${WG_IFACE}.key`);
+    this.write(key, readFileSync(join(this.o.paths.etcDir, 'wg-fbrx.key'), 'utf8'), 0o600);
     const args = ['set', WG_IFACE, 'private-key', key, 'listen-port', String(c.vpn.port)];
     for (const p of c.vpn.peers) args.push('peer', p.publicKey, 'allowed-ips', `${p.address}/32`, ...(p.keepalive ? ['persistent-keepalive', String(p.keepalive)] : []));
-    const wg = await this.run('wg', args);
+    const wg = await this.run('wg', args).finally(() => rmSync(key, { force: true }));
     if (wg.code !== 0) return [`VPN: ${wg.err.trim() || 'wg failed'} (install wireguard-tools)`];
     await this.run('ip', ['addr', 'replace', c.vpn.address, 'dev', WG_IFACE]);
     await this.run('ip', ['link', 'set', 'dev', WG_IFACE, 'up']);
@@ -419,9 +548,18 @@ export class LinuxApplier implements GateApplier {
       const routes = (await json<Array<{ gateway?: string; dev?: string }>>('ip', ['-j', 'route', 'show', 'default'])) ?? [];
       live.wan.gateway = routes.find((r) => r.dev === c.wan.interface)?.gateway ?? routes[0]?.gateway ?? null;
       if (!live.wan.address) live.problems.push('The internet port has no address yet');
+      // Behind a router that hands out the same addresses as one of the gate's networks, nothing gets through.
+      const wanCidr = live.interfaces.find((i) => i.name === c.wan.interface)?.addresses[0];
+      const clash = live.wan.address ? c.networks.find((n) => inCidr(live.wan.address!, n.address)) : undefined;
+      if (clash && wanCidr) {
+        const free = pickLanAddress([wanCidr, ...c.networks.filter((n) => n !== clash).map((n) => n.address), ...(c.vpn.enabled ? [c.vpn.address] : [])]);
+        live.problems.push(
+          `The internet port got ${live.wan.address}, inside your network ${clash.name} (${networkOf(clash.address)}): the router in front of the gate uses the same addresses. Move ${clash.name}, like sudo fbrx-gate renumber ${clash.name} ${free} (or under Networks), then commit.`,
+        );
+      }
     }
     try {
-      live.leases = parseLeases(readFileSync(join(this.o.paths.varDir, 'dnsmasq.leases'), 'utf8'), c);
+      live.leases = parseLeases(readFileSync(this.leaseFile(), 'utf8'), c);
     } catch {
       /* no leases yet */
     }
@@ -440,6 +578,24 @@ export class LinuxApplier implements GateApplier {
       if (!rootQ) live.problems.push('Traffic shaping is on but not in place');
     }
     live.dns.running = (await this.run('pgrep', ['-x', 'dnsmasq'])).code === 0;
+    if (c && this.o.mode === 'networkd') {
+      if (!live.dns.running) live.problems.push('DHCP and DNS (dnsmasq) are not running: sudo systemctl enable --now dnsmasq (journalctl -u dnsmasq says why it stopped)');
+      if ((await this.run('systemctl', ['is-active', '--quiet', 'systemd-networkd'])).code !== 0) live.problems.push('systemd-networkd is not running, so the ports keep no settings: sudo systemctl enable --now systemd-networkd');
+      try {
+        if (readFileSync('/proc/sys/net/ipv4/ip_forward', 'utf8').trim() === '0') live.problems.push('Routing is off in the kernel (net.ipv4.ip_forward): commit again, or sudo sysctl -w net.ipv4.ip_forward=1');
+      } catch {
+        /* not Linux */
+      }
+      // The system's own network settings must leave the gate's ports alone, or two programs fight over them.
+      try {
+        const ifaces = readFileSync(join(this.root, 'etc/network/interfaces'), 'utf8');
+        for (const i of c.interfaces.filter((x) => x.kind === 'ethernet')) {
+          if (new RegExp(`^\\s*iface\\s+${i.name.replace(/[.]/g, '\\.')}(\\s|$)`, 'm').test(ifaces)) live.problems.push(`/etc/network/interfaces still sets up ${i.name}, which the gate runs: put a # before its lines (auto, iface, address…) and restart`);
+        }
+      } catch {
+        /* no ifupdown */
+      }
+    }
     try {
       live.conntrack = Number(readFileSync('/proc/sys/net/netfilter/nf_conntrack_count', 'utf8').trim());
     } catch {
