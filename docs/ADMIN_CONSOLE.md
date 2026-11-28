@@ -109,6 +109,13 @@ it (*said 3 times*), and a thing that happened once (a threat found) is a line o
 problems still open, the worst first; **Recently** what is over. Operators and up can **Acknowledge** one, which says
 someone is on it.
 
+**Report** on an alert opens its **incident report**: what happened to it, in order (when it started and where, each
+person and computer told and when, quiet hours that held it, the escalation, who acknowledged it and their note, the
+steps the server that sent it reported, such as a takeover's, and its all-clear), with how long it lasted and how soon
+someone took it. **Copy** puts it on the clipboard as text and **Download** saves it as a Markdown file, for a ticket
+or a post-mortem. Every alert FBRX Command sends on (by e-mail, to FBRX OS and to your webhooks) carries the link to its
+report, which opens after signing in. Reports are kept as long as their alerts (90 days after they are over).
+
 **Who gets what** (owners and administrators) is a list of rules. Every alert shows on the Alerts page; a rule also
 tells people:
 

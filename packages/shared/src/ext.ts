@@ -315,7 +315,13 @@ export interface AlertItem {
   read: boolean;
   deliveries: Partial<Record<AlertChannel, string>>;
   /** An organization alert from FBRX Command: acknowledging it here tells FBRX Command (and stops its escalation). */
-  org?: { alertId: string; state: 'open' | 'resolved' | 'event'; acknowledged: { by: string; at: string } | null };
+  org?: {
+    alertId: string;
+    state: 'open' | 'resolved' | 'event';
+    acknowledged: { by: string; at: string } | null;
+    /** Its incident report in FBRX Command (a sign-in there opens it). */
+    report?: string | null;
+  };
 }
 
 // ------------------------------------------------------------------------------------------ PC care (Windows)

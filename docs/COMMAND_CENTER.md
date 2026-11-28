@@ -494,7 +494,8 @@ news.
 **FBRX Alert v1** is the format behind it, the same for FBRX OS, FBRX Digger and, as they adopt it, FBRX Server and
 FBRX Command: a key that stays the same from a problem's alert to its all-clear, its state (`open`, `resolved` or
 `event`), severity, where it happened, what happened, what FBRX did and what is left for you, when it started and
-ended. With the **FBRX Alert (signed)** webhook format, each alert is posted as that JSON with an `FBRX-Signature`
+ended, and, when there is one, the link to its incident report (`report`) and the steps the sender knows (`steps`, a
+takeover's, say). With the **FBRX Alert (signed)** webhook format, each alert is posted as that JSON with an `FBRX-Signature`
 header, `t=<unix time>,v1=<hex>`, where the hex is the HMAC-SHA256 of `<t>.<body>` with the secret you saved in
 Credentials (`FBRX_ALERTS_WEBHOOK_SECRET` unless you change the name). Your system computes the same with the same
 secret to know the alert is genuine, and refuses one whose time is more than five minutes off.
@@ -535,7 +536,8 @@ Presenter-safe mode still holds notifications back while you present.
 rules name the computers, by tag or as help desk computers): they show as a notification and in the Alerts inbox,
 marked *From your organization*, with **Acknowledge**. Acknowledging tells FBRX Command that someone is on it (it
 stops reminding the next people) and marks it on every computer that shows it; only a person at the computer can do
-it, not the AI or a script. When the problem is over, the line turns into its all-clear. This computer's own alerts
+it, not the AI or a script. When the problem is over, the line turns into its all-clear. **Incident report** opens
+what happened to it, in order, in FBRX Command (signing in there opens it). This computer's own alerts
 reach FBRX Command whole (*the organization* in Delivery), so it keeps each problem from its alert to its all-clear.
 ## This PC
 

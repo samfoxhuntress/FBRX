@@ -182,4 +182,34 @@ describe('FBRX Alerts in an organization', () => {
     await expect(postFbrxAlert(`${base}/v1/alerts/inbound/ten_nope`, a, inbound.body.secret)).rejects.toThrow('HTTP 401');
     expect((await call('GET', '/v1/admin/alerts/inbound')).body).toEqual({ url: inbound.body.url, secretSet: true });
   });
+
+  it('keeps an incident report for each alert: what happened, in order, linked from the alert', async () => {
+    await call('PUT', '/v1/admin/alerts/rules', { rules: [rule({ computerTags: [] })] });
+    const key = fbrxAlertKey('fbrx-server', 'srv-office', 'ha_takeover');
+    const started = new Date(Date.now() - 5 * 60_000).toISOString();
+    // A step written with the sender's own offset (+02:00) still sorts by when it happened.
+    const moved = new Date(Date.parse(started) + 30_000 + 2 * 3_600_000).toISOString().replace('Z', '+02:00');
+    const a = alert({ key, title: 'The standby took over the gate', source: { app: 'fbrx-server', host: 'srv-office', role: 'gate' }, startedAt: started, steps: [{ at: started, text: 'The primary stopped answering (3 heartbeats missed)' }, { at: moved, text: 'The standby took the gate address' }] });
+    const row = server.ctx.alerts.ingest(tenantId, a)!;
+    expect(row.alert.report).toBe(`${base}/#/alerts/${row.id}`);
+    server.ctx.alerts.ingest(tenantId, { ...a, id: 'fa_again1', sentAt: new Date().toISOString() });
+    server.ctx.alerts.ingest(tenantId, { ...a, id: 'fa_again2', sentAt: new Date().toISOString(), severity: 'critical' });
+    server.ctx.alerts.acknowledge(row.id, 'Robin', 'On it');
+    server.ctx.alerts.ingest(tenantId, { ...a, id: 'fa_over', state: 'resolved', steps: [...a.steps!, { at: new Date().toISOString(), text: 'The gate moved back to the primary; no downloads were lost' }], endedAt: new Date().toISOString() });
+
+    const r = await call('GET', `/v1/admin/alerts/${row.id}/report`);
+    expect(r.status).toBe(200);
+    const kinds = (r.body.timeline as Array<{ kind: string; text: string }>).map((e) => e.kind);
+    expect(kinds[0]).toBe('opened');
+    expect(kinds).toEqual(expect.arrayContaining(['step', 'told', 'repeated', 'worse', 'acknowledged', 'resolved']));
+    expect(kinds.filter((k) => k === 'step')).toHaveLength(3);
+    expect(r.body.timeline[2]).toMatchObject({ kind: 'step', text: 'The standby took the gate address', at: new Date(moved).toISOString() });
+    expect(kinds.at(-1)).toBe('resolved');
+    expect(r.body.lastedMs).toBeGreaterThan(4 * 60_000);
+    expect(r.body.acknowledgedAfterMs).toBeGreaterThan(4 * 60_000);
+    expect(r.body.markdown).toContain('# Incident report: The standby took over the gate');
+    expect(r.body.markdown).toContain('Acknowledged by Robin: On it');
+    expect(r.body.markdown).toContain('no downloads were lost');
+    expect((await call('GET', '/v1/admin/alerts/alr_nope/report')).status).toBe(404);
+  });
 });

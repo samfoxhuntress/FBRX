@@ -1,10 +1,13 @@
 import { randomBytes } from 'node:crypto';
 import {
   OrgAlertRuleSchema,
+  fbrxAlertDuration,
   fbrxAlertKey,
   fbrxAlertText,
   newId,
   type FbrxAlert,
+  type OrgAlertEvent,
+  type OrgAlertReport,
   type OrgAlertInbound,
   type OrgAlertRow,
   type OrgAlertRule,
@@ -29,6 +32,8 @@ export interface AlertCenterDeps {
   webhook: (tenantId: string, event: AlertWebhookEvent, payload: unknown) => void;
   mail: (to: string, subject: string, text: string) => Promise<void>;
   log: (msg: string, data?: unknown) => void;
+  /** FBRX Command's address, for the incident report's link in each alert it sends on. */
+  publicUrl?: () => string | null;
   now?: () => Date;
 }
 
@@ -161,7 +166,10 @@ export class AlertCenter {
       if (!row) return null;
       const opened = json<FbrxAlert>(row.alert, alert);
       const over: FbrxAlert = { ...alert, startedAt: opened.startedAt, endedAt: alert.endedAt ?? now };
-      this.d.db.run("UPDATE org_alerts SET state = 'resolved', alert = ?, held = 0, updated_at = ? WHERE id = ?", JSON.stringify(over), now, row.id);
+      this.d.db.run("UPDATE org_alerts SET state = 'resolved', alert = ?, held = 0, updated_at = ? WHERE id = ?", JSON.stringify({ ...over, report: opened.report }), now, row.id);
+      this.steps(row.id, alert);
+      const lasted = fbrxAlertDuration(over);
+      this.record(row.id, 'resolved', `All clear${lasted ? ` after ${lasted}` : ''}${alert.detail ? `: ${alert.detail}` : ''}`);
       const done = this.get(row.id)!;
       this.allClear(done, targetsOf(row.targets));
       this.d.webhook(tenantId, 'alert.resolved', { alert: over, id: row.id });
@@ -172,9 +180,12 @@ export class AlertCenter {
       if (row) {
         const worse = RANK[alert.severity] > RANK[row.severity];
         const kept = json<FbrxAlert>(row.alert, alert);
+        this.steps(row.id, alert);
+        if (worse) this.record(row.id, 'worse', `Got worse: ${alert.severity}${alert.detail ? `. ${alert.detail}` : ''}`);
+        else this.repeated(row.id, Number(row.count) + 1);
         this.d.db.run(
           'UPDATE org_alerts SET alert = ?, severity = ?, count = count + 1, updated_at = ? WHERE id = ?',
-          JSON.stringify({ ...alert, startedAt: kept.startedAt }),
+          JSON.stringify({ ...alert, startedAt: kept.startedAt, report: kept.report }),
           worse ? alert.severity : row.severity,
           now,
           row.id,
@@ -185,6 +196,9 @@ export class AlertCenter {
       }
     }
     const id = newId('alr');
+    // Every alert FBRX Command sends on links its incident report (the sender's own report link is kept).
+    const base = this.d.publicUrl?.()?.replace(/\/+$/, '');
+    const withReport: FbrxAlert = alert.report || !base ? alert : { ...alert, report: `${base}/#/alerts/${id}` };
     this.d.db.run(
       'INSERT INTO org_alerts (id, tenant_id, key, state, severity, device_id, alert, started_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?)',
       id,
@@ -193,10 +207,13 @@ export class AlertCenter {
       alert.state,
       alert.severity,
       deviceId,
-      JSON.stringify(alert),
+      JSON.stringify(withReport),
       alert.startedAt,
       now,
     );
+    this.record(id, 'opened', `${alert.state === 'event' ? 'Happened' : 'Started'}: ${alert.title} (${alert.severity}, from ${[alert.source.computer ?? alert.source.host, alert.source.role].filter(Boolean).join(' · ')})`, alert.startedAt);
+    this.steps(id, alert);
+    alert = withReport;
     this.route(this.raw(id)!, 'alert');
     this.d.webhook(tenantId, 'alert.opened', { alert, id, deviceId });
     return this.changed(this.get(id)!);
@@ -207,6 +224,7 @@ export class AlertCenter {
     if (!row) throw new Error('Unknown alert');
     if (!row.acknowledged_at) {
       this.d.db.run('UPDATE org_alerts SET acknowledged_by = ?, acknowledged_at = ?, ack_note = ? WHERE id = ?', by.slice(0, 120), this.now().toISOString(), note?.slice(0, 500) || null, id);
+      this.record(id, 'acknowledged', `Acknowledged by ${by.slice(0, 120)}${note ? `: ${note.slice(0, 500)}` : ''}`);
       const view = this.get(id)!;
       // The computers that show it mark it acknowledged too.
       for (const deviceId of targetsOf(row.targets).devices) this.sendTo(deviceId, view);
@@ -256,6 +274,7 @@ export class AlertCenter {
       const rules = this.rulesFor(row);
       if (row.held && rules.every((r) => !inQuietHours(r.quiet, at))) {
         this.d.db.run('UPDATE org_alerts SET held = 0 WHERE id = ?', row.id);
+        this.record(row.id, 'released', 'Quiet hours over: told now');
         this.route(this.raw(row.id)!, 'alert', { again: true });
       }
       if (!row.escalated_at) {
@@ -263,6 +282,7 @@ export class AlertCenter {
         const due = rules.filter((r) => r.escalateAfterMinutes > 0 && age >= r.escalateAfterMinutes && (r.escalateEmails.length || r.escalateComputerTags.length));
         if (due.length) {
           this.d.db.run('UPDATE org_alerts SET escalated_at = ? WHERE id = ?', at.toISOString(), row.id);
+          this.record(row.id, 'escalated', `Nobody acknowledged it within ${Math.min(...due.map((r) => r.escalateAfterMinutes))} minutes: the next people are told`);
           this.route(this.raw(row.id)!, 'escalation', { rules: due });
           const view = this.get(row.id)!;
           this.d.webhook(row.tenant_id, 'alert.escalated', { alert: view.alert, id: row.id });
@@ -270,7 +290,63 @@ export class AlertCenter {
         }
       }
     }
-    this.d.db.run("DELETE FROM org_alerts WHERE state != 'open' AND updated_at < ?", new Date(at.getTime() - KEEP_DAYS * 86_400_000).toISOString());
+    const gone = this.d.db.run("DELETE FROM org_alerts WHERE state != 'open' AND updated_at < ?", new Date(at.getTime() - KEEP_DAYS * 86_400_000).toISOString());
+    if (gone.changes) this.d.db.run('DELETE FROM org_alert_timeline WHERE alert_id NOT IN (SELECT id FROM org_alerts)');
+  }
+
+  // ------------------------------------------------------------------------------------------- the report
+
+  /** One line of an alert's incident report. */
+  private record(id: string, kind: OrgAlertEvent['kind'], text: string, at = this.now().toISOString()): void {
+    // In UTC, so the lines sort by time whatever offset the sender wrote.
+    this.d.db.run('INSERT INTO org_alert_timeline (alert_id, at, kind, text) VALUES (?,?,?,?)', id, new Date(at).toISOString(), kind, text.slice(0, 600));
+  }
+
+  /** Said again: one line, kept up to date ("Said again: 12 times"), so a chatty problem stays readable. */
+  private repeated(id: string, count: number): void {
+    const last = this.d.db.get<{ id: number; kind: string }>('SELECT id, kind FROM org_alert_timeline WHERE alert_id = ? ORDER BY id DESC LIMIT 1', id);
+    const text = `Said again: ${count} times so far`;
+    if (last?.kind === 'repeated') this.d.db.run('UPDATE org_alert_timeline SET at = ?, text = ? WHERE id = ?', this.now().toISOString(), text, last.id);
+    else this.record(id, 'repeated', text);
+  }
+
+  /** The steps the sender told (a takeover's), each once. */
+  private steps(id: string, alert: FbrxAlert): void {
+    for (const s of alert.steps ?? []) {
+      const seen = this.d.db.get('SELECT 1 FROM org_alert_timeline WHERE alert_id = ? AND kind = ? AND at = ? AND text = ?', id, 'step', new Date(s.at).toISOString(), s.text.slice(0, 600));
+      if (!seen) this.record(id, 'step', s.text, s.at);
+    }
+  }
+
+  /** The incident report of one alert. */
+  report(id: string): OrgAlertReport | null {
+    const row = this.get(id);
+    if (!row) return null;
+    const timeline = this.d.db.all<OrgAlertEvent>('SELECT at, kind, text FROM org_alert_timeline WHERE alert_id = ? ORDER BY at, id', id);
+    const a = row.alert;
+    const start = Date.parse(a.startedAt);
+    const lastedMs = a.state === 'resolved' && a.endedAt ? Math.max(0, Date.parse(a.endedAt) - start) : null;
+    const acknowledgedAfterMs = row.acknowledged ? Math.max(0, Date.parse(row.acknowledged.at) - start) : null;
+    const where = [row.deviceName ?? a.source.computer ?? a.source.host, a.source.role].filter(Boolean).join(' · ');
+    const mins = (ms: number) => (ms < 60_000 ? `${Math.round(ms / 1000)} seconds` : ms < 7_200_000 ? `${Math.round(ms / 60_000)} minutes` : `${(ms / 3_600_000).toFixed(1)} hours`);
+    const markdown = [
+      `# Incident report: ${a.title}`,
+      '',
+      `* **Where:** ${where}`,
+      `* **How bad:** ${a.severity}`,
+      `* **Started:** ${a.startedAt}`,
+      a.state === 'resolved' ? `* **All clear:** ${a.endedAt ?? ''}${lastedMs != null ? ` (it lasted ${mins(lastedMs)})` : ''}` : a.state === 'open' ? '* **Still going on**' : '* **Happened once**',
+      row.acknowledged ? `* **Acknowledged:** by ${row.acknowledged.by}${acknowledgedAfterMs != null ? `, ${mins(acknowledgedAfterMs)} after it started` : ''}${row.acknowledged.note ? ` (${row.acknowledged.note})` : ''}` : '* **Acknowledged:** not yet',
+      ...(a.detail ? ['', a.detail] : []),
+      ...(a.done ? ['', `**What was already done:** ${a.done}`] : []),
+      ...(a.yours ? ['', `**What was left to do:** ${a.yours}`] : []),
+      '',
+      '## Timeline',
+      '',
+      ...timeline.map((e) => `* ${e.at}: ${e.text}`),
+      '',
+    ].join('\n');
+    return { row, timeline, lastedMs, acknowledgedAfterMs, markdown };
   }
 
   // ------------------------------------------------------------------------------------------- delivering
@@ -344,7 +420,10 @@ export class AlertCenter {
     for (const r of rules) {
       if (inQuietHours(r.quiet, at) && row.severity !== 'critical') {
         held = true;
-        if (!notified.includes(`held for quiet hours (${r.name})`)) notified.push(`held for quiet hours (${r.name})`);
+        if (!notified.includes(`held for quiet hours (${r.name})`)) {
+          notified.push(`held for quiet hours (${r.name})`);
+          this.record(row.id, 'held', `Held for quiet hours (${r.name})`);
+        }
         continue;
       }
       const emails = kind === 'escalation' ? r.escalateEmails : r.emails;
@@ -354,6 +433,7 @@ export class AlertCenter {
         seenEmails.add(to.toLowerCase());
         if (!targets.emails.includes(to.toLowerCase())) targets.emails.push(to.toLowerCase());
         notified.push(`${kind === 'escalation' ? 'escalated to ' : ''}e-mail ${to}`);
+        this.record(row.id, 'told', `${kind === 'escalation' ? 'Escalated to ' : 'Told '}${to} by e-mail${o.fresh ? ' (again: it got worse)' : ''}`);
         void this.d.mail(to, `${prefix}${text.subject}`, text.text).catch((err: Error) => this.note(row.id, `e-mail ${to} failed: ${err.message}`));
       }
       for (const dev of devices) {
@@ -362,6 +442,7 @@ export class AlertCenter {
         if (!targets.devices.includes(dev.id)) targets.devices.push(dev.id);
         const online = this.sendTo(dev.id, view);
         notified.push(`${kind === 'escalation' ? 'escalated to ' : ''}FBRX OS on ${dev.name}${online ? '' : ' (when it is next online)'}`);
+        this.record(row.id, 'told', `${kind === 'escalation' ? 'Escalated to ' : 'Shown in '}FBRX OS on ${dev.name}${online ? '' : ' (when it is next online)'}${o.fresh ? ' (again: it got worse)' : ''}`);
       }
     }
     this.d.db.run('UPDATE org_alerts SET targets = ?, notified = ?, held = ? WHERE id = ?', JSON.stringify(targets), JSON.stringify(notified.slice(-60)), held ? 1 : 0, row.id);
@@ -378,6 +459,7 @@ export class AlertCenter {
     const row = this.raw(id);
     if (!row) return;
     this.d.db.run('UPDATE org_alerts SET notified = ? WHERE id = ?', JSON.stringify([...json<string[]>(row.notified, []), line].slice(-60)), id);
+    this.record(id, 'failed', line.charAt(0).toUpperCase() + line.slice(1));
     this.d.log('Alert delivery failed', { id, line });
   }
 }

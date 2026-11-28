@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
-import { FBRX_ALERT_APPS, fbrxAlertDuration, fbrxAlertRoleName, type FbrxAlertApp, type OrgAlertInbound, type OrgAlertRow, type OrgAlertRule, type OrgAlertsList } from '@fbrx/shared';
-import { Button, Callout, Card, CopyText, Empty, Field, Input, Page, Select, Status, Toggle, formatDate, timeAgo, useAction, useToast } from '@fbrx/ui';
+import { FBRX_ALERT_APPS, fbrxAlertDuration, fbrxAlertRoleName, type FbrxAlertApp, type OrgAlertInbound, type OrgAlertReport, type OrgAlertRow, type OrgAlertRule, type OrgAlertsList } from '@fbrx/shared';
+import { Button, Callout, Card, CopyText, Empty, Field, Input, Modal, Page, Select, Status, Toggle, formatDate, timeAgo, useAction, useToast } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, useQuery } from '../state';
 
@@ -41,6 +41,90 @@ const blank = (): Omit<OrgAlertRule, 'id'> & { id?: string } => ({
   escalateComputerTags: [],
 });
 
+const KIND_TONE: Record<OrgAlertReport['timeline'][number]['kind'], 'neutral' | 'good' | 'warning' | 'critical'> = {
+  opened: 'warning',
+  repeated: 'neutral',
+  worse: 'critical',
+  told: 'neutral',
+  held: 'neutral',
+  released: 'neutral',
+  escalated: 'warning',
+  acknowledged: 'good',
+  step: 'neutral',
+  failed: 'critical',
+  resolved: 'good',
+};
+const span = (ms: number) => (ms < 60_000 ? `${Math.round(ms / 1000)} s` : ms < 7_200_000 ? `${Math.round(ms / 60_000)} min` : `${(ms / 3_600_000).toFixed(1)} h`);
+
+/** The incident report: the alert, what happened to it in order, and the same as text to copy or download. */
+function IncidentReport({ id, onClose }: { id: string; onClose: () => void }) {
+  const report = useQuery<OrgAlertReport>(`/v1/admin/alerts/${encodeURIComponent(id)}/report`, [id], (e) => e.type === 'alert.updated');
+  const toast = useToast();
+  const r = report.data;
+  const download = () => {
+    if (!r) return;
+    const blob = new Blob([r.markdown], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `incident-${r.row.alert.startedAt.slice(0, 10)}-${r.row.id}.md`;
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+  };
+  return (
+    <Modal
+      title={r ? `Incident report: ${r.row.alert.title}` : 'Incident report'}
+      description={r ? `${r.row.alert.state === 'open' ? 'Still going on' : r.row.alert.state === 'resolved' ? 'Over' : 'Happened once'} · started ${formatDate(r.row.alert.startedAt)}` : undefined}
+      onClose={onClose}
+      wide
+      footer={
+        <>
+          <Button variant="ghost" icon="copy" disabled={!r} onClick={() => r && void navigator.clipboard.writeText(r.markdown).then(() => toast.success('Copied', 'The report as text, ready to paste.'))}>
+            Copy
+          </Button>
+          <Button variant="ghost" icon="download" disabled={!r} onClick={download}>
+            Download
+          </Button>
+          <Button onClick={onClose}>Close</Button>
+        </>
+      }
+    >
+      {report.error ? (
+        <Callout tone="critical">{report.error}</Callout>
+      ) : !r ? (
+        <Empty title="Loading…" />
+      ) : (
+        <div className="cp-report">
+          <div className="cp-report-facts">
+            <div>
+              <small>Lasted</small>
+              <b>{r.lastedMs != null ? span(r.lastedMs) : r.row.alert.state === 'open' ? 'Still going on' : '—'}</b>
+            </div>
+            <div>
+              <small>Acknowledged after</small>
+              <b>{r.acknowledgedAfterMs != null ? span(r.acknowledgedAfterMs) : 'Not yet'}</b>
+            </div>
+            <div>
+              <small>People and computers told</small>
+              <b>{r.timeline.filter((e) => e.kind === 'told').length}</b>
+            </div>
+          </div>
+          <ol className="cp-timeline">
+            {r.timeline.map((e, i) => (
+              <li key={i} className={`cp-timeline-${e.kind}`}>
+                <span className="cp-timeline-at" title={formatDate(e.at)}>
+                  {new Date(e.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
+                </span>
+                <Status tone={KIND_TONE[e.kind]}>{e.kind === 'told' ? 'Told' : e.kind.charAt(0).toUpperCase() + e.kind.slice(1)}</Status>
+                <span>{e.text}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 function AlertLine({ row, onAck }: { row: OrgAlertRow; onAck?: () => void }) {
   const a = row.alert;
   const where = [row.deviceName ?? a.source.computer ?? a.source.host, a.source.role ? fbrxAlertRoleName(a.source.role) : null].filter(Boolean).join(' · ');
@@ -76,6 +160,9 @@ function AlertLine({ row, onAck }: { row: OrgAlertRow; onAck?: () => void }) {
             Acknowledge
           </Button>
         ) : null}
+        <Button size="sm" variant="ghost" icon="file" onClick={() => (location.hash = `#/alerts/${encodeURIComponent(row.id)}`)}>
+          Report
+        </Button>
       </div>
     </div>
   );
@@ -248,7 +335,7 @@ function FromServers() {
 }
 
 /** FBRX Command → Alerts: the organization's alerts, who gets what, and FBRX Servers' alerts. */
-export function AlertsPage() {
+export function AlertsPage({ reportId, onCloseReport }: { reportId?: string | null; onCloseReport?: () => void } = {}) {
   const app = useApp();
   const { run } = useAction();
   const alerts = useQuery<OrgAlertsList>('/v1/admin/alerts', [], (e) => e.type === 'alert.updated');
@@ -256,6 +343,7 @@ export function AlertsPage() {
   const canAck = app.can('alerts.acknowledge');
   return (
     <Page title="Alerts" description="What goes wrong across the organization (its computers, FBRX Servers and FBRX Command itself) is said once, then its all-clear when it is over. You decide who hears it.">
+      {reportId && <IncidentReport id={reportId} onClose={() => onCloseReport?.()} />}
       <Card title="Going on now">
         {alerts.data && !alerts.data.open.length ? (
           <Empty title="Nothing is wrong">When something goes wrong, it shows here until it is over.</Empty>

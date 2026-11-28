@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { ALERT_CHANNELS, type AlertChannel, type AlertSeverity, type Settings } from '@fbrx/shared';
 import { Button, Callout, Card, Empty, Field, Grid, Input, Page, Select, Status, Tabs, Toggle, timeAgo, useAction, useToast } from '@fbrx/ui';
-import { call } from '../client';
+import { call, openExternal } from '../client';
 import { isLocked, useCore } from '../hooks';
 import { IS_WINDOWS, navigate } from '../app';
 import { AskButton, askAgent } from '../widgets';
@@ -105,6 +105,11 @@ export function AlertsPage() {
                   {a.org && !a.org.acknowledged && a.org.state !== 'resolved' && (
                     <Button size="sm" icon="check" loading={busy === `ack-${a.id}`} onClick={() => void run(`ack-${a.id}`, () => call('alerts.acknowledge', { id: a.id }), 'Acknowledged: your organization knows someone is on it')}>
                       Acknowledge
+                    </Button>
+                  )}
+                  {a.org?.report && (
+                    <Button size="sm" variant="ghost" icon="file" onClick={() => openExternal(a.org!.report!)} title="What happened, in order, in FBRX Command">
+                      Incident report
                     </Button>
                   )}
                   <AskButton iconOnly prompt="Explain this alert from FBRX on my PC: what it means, the likely cause, and what I should do. Check the current state with your tools first." context={{ when: a.createdAt, severity: a.severity, title: a.title, details: a.body }} />

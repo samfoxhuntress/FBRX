@@ -126,6 +126,7 @@ export async function buildServer(config: Config): Promise<BuiltServer> {
     webhook: (tenantId, event, payload) => base.webhooks.emit(tenantId, event, payload),
     mail: (to, subject, text) => base.mail.send({ to, subject, text }),
     log: (m, d) => app.log.warn(d, m),
+    publicUrl: () => base.config.publicUrl || null,
   });
   const ctx: AppContext = { ...base, alerts, ...createContextHelpers({ ...base, alerts }) };
   ctx.audit.onAppend((entry) => ctx.realtime.emitAdmin({ type: 'audit', tenantId: entry.tenantId, entry }));

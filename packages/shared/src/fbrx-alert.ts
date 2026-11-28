@@ -50,6 +50,14 @@ export const FbrxAlertSchema = z.object({
   sentAt: when,
   /** The incident report, when there is one. */
   report: z.string().url().max(500).optional(),
+  /**
+   * What happened, step by step, when the sender knows it (a takeover: what failed, what moved, how long it took, what
+   * was lost). It goes into the incident report; older apps ignore it.
+   */
+  steps: z
+    .array(z.object({ at: when, text: z.string().min(1).max(300) }))
+    .max(50)
+    .optional(),
 });
 export type FbrxAlert = z.infer<typeof FbrxAlertSchema>;
 
@@ -210,6 +218,25 @@ export interface OrgAlertRow {
   escalatedAt: string | null;
   /** Who heard it, in words ("e-mail it@example.com", "FBRX OS on RECEPTION-PC"), and what went wrong for any. */
   notified: string[];
+}
+
+/** One line of an incident report: what happened to the alert, and when. */
+export interface OrgAlertEvent {
+  at: string;
+  kind: 'opened' | 'repeated' | 'worse' | 'told' | 'held' | 'released' | 'escalated' | 'acknowledged' | 'step' | 'failed' | 'resolved';
+  text: string;
+}
+
+/** The incident report: the alert, what happened to it in order, how long it lasted and how soon someone took it. */
+export interface OrgAlertReport {
+  row: OrgAlertRow;
+  timeline: OrgAlertEvent[];
+  /** From its start to its all-clear (null while it lasts, or for an event). */
+  lastedMs: number | null;
+  /** From its start to the first acknowledgement. */
+  acknowledgedAfterMs: number | null;
+  /** The report as text (Markdown), to copy or download. */
+  markdown: string;
 }
 
 export interface OrgAlertsList {

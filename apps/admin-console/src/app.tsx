@@ -136,7 +136,7 @@ function Console() {
       case 'events':
         return <EventsPage />;
       case 'alerts':
-        return <AlertsPage />;
+        return <AlertsPage reportId={route.id} onCloseReport={() => go('alerts')} />;
       case 'helpdesk':
         return <HelpdeskPage />;
       case 'messages':

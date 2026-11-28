@@ -50,6 +50,16 @@ export async function alertRoutes(app: FastifyInstance, ctx: AppContext) {
       return ctx.alerts.list(tenantScope(req));
     });
 
+    /** The incident report: what happened to the alert, in order, and the same as text to copy or download. */
+    admin.get('/v1/admin/alerts/:id/report', async (req) => {
+      requirePerm(req, 'alerts.read');
+      const { id } = req.params as { id: string };
+      const tenantId = ctx.alerts.tenantOf(id);
+      if (!tenantId) throw notFound('Unknown alert');
+      assertTenantAccess(req, tenantId);
+      return ctx.alerts.report(id);
+    });
+
     admin.post('/v1/admin/alerts/:id/acknowledge', async (req) => {
       const p = requirePerm(req, 'alerts.acknowledge');
       const { id } = req.params as { id: string };

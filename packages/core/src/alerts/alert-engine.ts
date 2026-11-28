@@ -238,7 +238,7 @@ export class AlertEngine {
     const ref = `org:${alertId}`;
     const prev = this.d.db.get<any>('SELECT * FROM alerts WHERE ref = ?', ref);
     const before = prev ? toAlert(prev) : null;
-    const org: NonNullable<AlertItem['org']> = { alertId, state: a.state, acknowledged };
+    const org: NonNullable<AlertItem['org']> = { alertId, state: a.state, acknowledged, report: a.report && /^https?:\/\//i.test(a.report) ? a.report : null };
     const over = a.state === 'resolved';
     const where = [a.source.computer ?? a.source.host, a.source.role ? fbrxAlertRoleName(a.source.role) : null].filter(Boolean).join(' · ');
     const title = `${over ? 'All clear: ' : ''}${a.title}`.slice(0, 200);

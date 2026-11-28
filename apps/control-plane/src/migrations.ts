@@ -684,4 +684,20 @@ export const CP_MIGRATIONS: Migration[] = [
       ALTER TABLE tenants ADD COLUMN alert_inbound_secret TEXT;
     `,
   },
+  {
+    version: 18,
+    name: 'org-alert-timeline',
+    // The incident report: what happened to each alert, in order (opened, told, held, escalated, acknowledged, its
+    // steps, its all-clear). Kept as long as its alert.
+    up: `
+      CREATE TABLE org_alert_timeline (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        alert_id TEXT NOT NULL,
+        at TEXT NOT NULL,
+        kind TEXT NOT NULL,
+        text TEXT NOT NULL
+      );
+      CREATE INDEX org_alert_timeline_alert ON org_alert_timeline (alert_id, id);
+    `,
+  },
 ];
