@@ -97,7 +97,8 @@ describe.runIf(can)('FBRX Gate in a high-availability pair (network namespaces)'
           if (!conntrackd) return;
           await inGate('conntrackd', ['-C', conf, '-k']);
           await wait(200);
-          await inGate('conntrackd', ['-C', conf, '-d']);
+          const r = await inGate('conntrackd', ['-C', conf, '-d']);
+          if (r.code !== 0) console.log(`conntrackd (${k}) did not start: ${r.err || r.out}`);
         },
       });
       const ha: GateHa = { own: { lan: `${own}/24` }, vrid: 7, heartbeatPort: 9454, link: null, partner: [other], sync: { iface: 'lan0', own, partner: other } };
@@ -145,6 +146,13 @@ describe.runIf(can)('FBRX Gate in a high-availability pair (network namespaces)'
     procs.push(client);
     const exited = new Promise((r) => client.once('exit', r));
     await wait(2000);
+    // What each conntrackd has (printed, for when this fails in CI).
+    const ctd = async (k: 'a' | 'b', flag: string) => {
+      const r = await runCommand('ip', ['netns', 'exec', k === 'a' ? NS.a : NS.b, 'conntrackd', '-C', gates[k].applier.conntrackdConf, flag]);
+      return `${r.code} ${(r.out + r.err).trim().slice(0, 1500)}`;
+    };
+    console.log('A conntrackd stats:', await ctd('a', '-s'));
+    console.log('B external cache:', await ctd('b', '-e'));
     // Gate A loses power: off both networks at once. Gate B takes over.
     inNs(NS.a, 'ip', 'link', 'set', 'wan0', 'down');
     inNs(NS.a, 'ip', 'link', 'set', 'lan0', 'down');
@@ -152,6 +160,8 @@ describe.runIf(can)('FBRX Gate in a high-availability pair (network namespaces)'
     gates.b.serving = true;
     const steps = await gates.b.switch.up(gates.b.engine.running()!, gates.b.ha);
     const took = performance.now() - t0;
+    console.log('B steps:', steps.join(' | '));
+    console.log('B table:', (await runCommand('ip', ['netns', 'exec', NS.b, 'conntrack', '-L'])).out.slice(0, 1500));
     expect(took).toBeLessThan(1000);
     expect(steps.join(' | ')).toMatch(/Open connections taken over from the other server.*gateway address moved here and was announced: 192\.168\.77\.1 \(lan\)/);
     await exited;

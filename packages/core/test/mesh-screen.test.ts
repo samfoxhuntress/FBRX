@@ -28,11 +28,11 @@ beforeAll(async () => {
   L = await makeKernel({ platform: { screenShare: share } });
   kd = D.kernel;
   kl = L.kernel;
-  kd.settings.update({ mesh: { enabled: true, port: 47861 }, general: { deviceName: 'desk' } });
-  kl.settings.update({ mesh: { enabled: true, port: 47862 }, general: { deviceName: 'laptop' } });
+  kd.settings.update({ mesh: { enabled: true, port: 47891 }, general: { deviceName: 'desk' } });
+  kl.settings.update({ mesh: { enabled: true, port: 47892 }, general: { deviceName: 'laptop' } });
   await waitFor(() => kd.mesh.running && kl.mesh.running);
   const pairing = (await kl.call('mesh.startPairing', undefined, USER)) as { code: string };
-  laptopOnDesk = ((await kd.call('mesh.pair', { code: pairing.code, host: '127.0.0.1:47862' }, USER)) as { id: string }).id;
+  laptopOnDesk = ((await kd.call('mesh.pair', { code: pairing.code, host: '127.0.0.1:47892' }, USER)) as { id: string }).id;
   deskOnLaptop = kl.mesh.devices()[0].id;
 }, 60_000);
 

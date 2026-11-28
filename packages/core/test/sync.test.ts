@@ -5,7 +5,7 @@ import type { Kernel } from '../src/kernel';
 
 /** Two computers on FBRX Mesh, paired with each other. */
 async function twoComputers() {
-  const made = await Promise.all([47831, 47832].map(async (port) => {
+  const made = await Promise.all([47841, 47842].map(async (port) => {
     const k = await makeKernel();
     k.kernel.settings.update({ mesh: { enabled: true, port }, general: { deviceName: `pc-${port}` } });
     await waitFor(() => k.kernel.mesh.running);
@@ -13,7 +13,7 @@ async function twoComputers() {
   }));
   const [a, b] = made.map((m) => m.kernel);
   const pairing = (await a.call('mesh.startPairing', undefined, USER)) as { code: string };
-  const peerOfB = (await b.call('mesh.pair', { code: pairing.code, host: '127.0.0.1:47831' }, USER)) as { id: string };
+  const peerOfB = (await b.call('mesh.pair', { code: pairing.code, host: '127.0.0.1:47841' }, USER)) as { id: string };
   const peerOfA = a.mesh.devices()[0];
   return { a, b, aSeesB: peerOfA.id, bSeesA: peerOfB.id, cleanup: () => Promise.all(made.map((m) => m.cleanup())) };
 }
@@ -27,9 +27,9 @@ describe('FBRX Sync, computer to computer', () => {
     const { a, b, aSeesB, bSeesA, cleanup } = await twoComputers();
     try {
       // Nothing until this computer allows it, then nothing until the other one does too.
-      await expect(a.call('sync.now', { id: aSeesB }, USER)).rejects.toThrow(/Allow Sync for pc-47832 first/);
+      await expect(a.call('sync.now', { id: aSeesB }, USER)).rejects.toThrow(/Allow Sync for pc-47842 first/);
       await a.call('mesh.setPermissions', { id: aSeesB, permissions: { sync: true } }, USER);
-      await expect(a.call('sync.now', { id: aSeesB }, USER)).rejects.toThrow(/pc-47832 does not allow syncing with this computer yet/);
+      await expect(a.call('sync.now', { id: aSeesB }, USER)).rejects.toThrow(/pc-47842 does not allow syncing with this computer yet/);
       await b.call('mesh.setPermissions', { id: bSeesA, permissions: { sync: true } }, USER);
       // Only the person at the computer starts it, never the agent.
       await expect(a.call('sync.now', { id: aSeesB }, { origin: 'agent', actor: 'agent' } as never)).rejects.toMatchObject({ code: 'FORBIDDEN', message: expect.stringMatching(/only be performed by a person/) });
@@ -100,7 +100,7 @@ describe('FBRX Sync, computer to computer', () => {
       for (const k of [a, b]) {
         const list = notes(k);
         expect(list.find((x) => x.id === n.id)?.content).toBe('tent, sleeping bags');
-        expect(list.find((x) => x.title === 'Packing list (copy from pc-47831)')?.content).toBe('tent, stove');
+        expect(list.find((x) => x.title === 'Packing list (copy from pc-47841)')?.content).toBe('tent, stove');
         expect(list).toHaveLength(2);
       }
 
