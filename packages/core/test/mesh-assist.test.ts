@@ -3,7 +3,7 @@ import type { AddressInfo } from 'node:net';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { userInfo } from 'node:os';
 import { DEFAULT_POLICY, DEFAULT_PROVIDERS, type AssistLogEntry, type AssistQueue, type AssistSession, type AssistTally, type Policy } from '@fbrx/shared';
-import { makeKernel, waitFor, USER } from './helpers';
+import { makeKernel, waitFor, USER, freePort } from './helpers';
 import { isCapacityError } from '../src/mesh/mesh-assist';
 import type { Kernel } from '../src/kernel';
 
@@ -44,6 +44,7 @@ let A: Awaited<ReturnType<typeof makeKernel>>;
 let B: Awaited<ReturnType<typeof makeKernel>>;
 let ka: Kernel;
 let kb: Kernel;
+let portA = 0;
 let modelA: Awaited<ReturnType<typeof model>>;
 let modelB: Awaited<ReturnType<typeof model>>;
 let scriptA: (body: any) => ReturnType<Parameters<typeof model>[0]> = () => ({ text: 'A here.' });
@@ -62,8 +63,10 @@ beforeAll(async () => {
   B = await makeKernel();
   ka = A.kernel;
   kb = B.kernel;
-  ka.settings.update({ mesh: { enabled: true, port: 47831 }, general: { deviceName: 'server-a' } });
-  kb.settings.update({ mesh: { enabled: true, port: 47832 }, general: { deviceName: 'server-b' } });
+  // Free ports of their own: a fixed one can be taken by another test's connection running at the same time.
+  portA = await freePort();
+  ka.settings.update({ mesh: { enabled: true, port: portA }, general: { deviceName: 'server-a' } });
+  kb.settings.update({ mesh: { enabled: true, port: await freePort() }, general: { deviceName: 'server-b' } });
   await waitFor(() => ka.mesh.running && kb.mesh.running);
   useModel(ka, modelA.url);
   useModel(kb, modelB.url);
@@ -72,7 +75,7 @@ beforeAll(async () => {
     k.assist.setAdmin(false);
   }
   const pairing = (await ka.call('mesh.startPairing', undefined, USER)) as any;
-  const peer = (await kb.call('mesh.pair', { code: pairing.code, host: '127.0.0.1:47831' }, USER)) as any;
+  const peer = (await kb.call('mesh.pair', { code: pairing.code, host: `127.0.0.1:${portA}` }, USER)) as any;
   aOnB = peer.id;
   bOnA = ka.mesh.devices()[0].id;
 }, 60_000);

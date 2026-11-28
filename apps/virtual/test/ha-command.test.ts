@@ -10,9 +10,19 @@ import { HaCopy, type CopySource } from '../src/ha/copy';
 // FBRX Command in a high-availability pair: its database copied to the standby, with the tables an update brings, and
 // Command running on the active server only.
 const dirs: string[] = [];
+const opened: CopySource[] = [];
 afterAll(() => {
+  // Closed first: Windows does not delete a database that is still open.
+  for (const s of opened) s.db.close();
   for (const d of dirs) rmSync(d, { recursive: true, force: true });
 });
+
+/** Command's database, as FBRX Virtual opens it for the copy (closed when the tests are done). */
+function open(c: CommandHa): CopySource {
+  const s = c.source()!;
+  opened.push(s);
+  return s;
+}
 
 /** A server with the command role: Command's settings, and its database as Command makes it. */
 function server(name: string, run: RunCommand = async () => ({ code: 3, out: '' })) {
@@ -38,8 +48,8 @@ function pump(active: HaCopy, standby: HaCopy) {
 
 describe('FBRX Command in a pair', () => {
   it('copies all of Command’s tables but the third vote’s leases, and everything again when an update changes them', () => {
-    const a = server('a').source()!;
-    const b = server('b').source()!;
+    const a = open(server('a'));
+    const b = open(server('b'));
     a.db.run("INSERT INTO meta (key, value) VALUES ('org', 'Fox Lab')");
     a.db.run("INSERT INTO ha_witness_leases (id, holder, term, lease_ms) VALUES ('k1', 'node-a', 1, 1000)");
     const A = new HaCopy([a], () => undefined);
@@ -71,8 +81,8 @@ describe('FBRX Command in a pair', () => {
   });
 
   it('leaves out a role the standby does not have, and does not wait for it', () => {
-    const a = server('only-a').source()!;
-    const other: CopySource = { ...server('other').source()!, name: 'other', label: 'Other' };
+    const a = open(server('only-a'));
+    const other: CopySource = { ...open(server('other')), name: 'other', label: 'Other' };
     const A = new HaCopy([a], () => undefined);
     const B = new HaCopy([other], () => undefined);
     A.becomeActive();
@@ -96,7 +106,7 @@ describe('FBRX Command in a pair', () => {
       return { code: 0, out: '' };
     };
     const c = server('svc', run);
-    c.source();
+    open(c);
     const standby: boolean[] = [];
     c.onStandby = (ran) => standby.push(ran);
     expect((await c.deactivate()).map((s) => s.text)).toEqual([expect.stringMatching(/^FBRX Command stopped here/)]);
