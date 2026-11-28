@@ -100,6 +100,8 @@ export class HaCopy {
   constructor(
     private readonly sources: CopySource[],
     private readonly log: (level: 'info' | 'warn', msg: string) => void,
+    /** On the standby: a source's copy changed (the gate applies the new commit, ready to take over). */
+    private readonly onApplied?: (source: string) => void,
   ) {
     for (const s of sources) s.db.exec(`CREATE TABLE IF NOT EXISTS ${STATE} (name TEXT PRIMARY KEY, epoch TEXT NOT NULL, seq INTEGER NOT NULL, at TEXT NOT NULL)`);
   }
@@ -328,6 +330,7 @@ export class HaCopy {
         const seq = fresh.length ? fresh.at(-1)!.s : st.seq;
         s.db.run(`UPDATE ${STATE} SET seq = ?, at = ? WHERE name = ?`, seq, b.at, s.name);
       });
+      if (fresh.length) this.onApplied?.(s.name);
       return here();
     });
   }
@@ -357,6 +360,7 @@ export class HaCopy {
       s.db.run(`INSERT INTO ${STATE} (name, epoch, seq, at) VALUES (?, ?, ?, ?) ON CONFLICT(name) DO UPDATE SET epoch = excluded.epoch, seq = excluded.seq, at = excluded.at`, s.name, b.epoch, p.upTo, b.at);
     });
     this.log('info', `High availability: a full copy of ${s.label.toLowerCase()} came from the active server`);
+    this.onApplied?.(s.name);
     return { name: s.name, epoch: b.epoch, seq: p.upTo };
   }
 

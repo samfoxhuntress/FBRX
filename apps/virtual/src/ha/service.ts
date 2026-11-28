@@ -1,5 +1,7 @@
 import { createHash, randomBytes, randomInt, timingSafeEqual } from 'node:crypto';
 import { lookup } from 'node:dns/promises';
+import { mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { dirname } from 'node:path';
 import { isIPv4 } from 'node:net';
 import type { Agent } from 'node:https';
 import { z } from 'zod';
@@ -60,7 +62,9 @@ import type { CopyAck, CopyBatch, HaCopy } from './copy';
  * what it did, and those steps go into the pair's history and into the takeover's alert (its incident report).
  */
 
-const KEY = { pair: 'ha.pair', code: 'ha.code', keys: 'ha.witness.keys', leases: 'ha.witness.leases' } as const;
+const KEY = { pair: 'ha.pair', code: 'ha.code', keys: 'ha.witness.keys', leases: 'ha.witness.leases', gate: 'ha.gate' } as const;
+/** Files the active server keeps the standby's copy of (DHCP's leases) are looked at this often. */
+const FILES_EVERY_MS = 1000;
 const CODE_MS = 30 * 60_000;
 const KEEP_EVENTS = 300;
 /** The standby's code is valid for this long, for this many tries. */
@@ -144,6 +148,12 @@ export interface HaServiceOptions {
    * opens. The server seals its own few secrets (its management controller's) with it first, then changes the key.
    */
   adoptKey?: (key: Buffer, old: Buffer) => void;
+  /** Files copied to the standby as they change (DHCP's leases), each with its name and where it is. */
+  files?: Array<{ name: string; path: string }>;
+  /** FBRX Gate on this server, for the page. */
+  gateStatus?: () => HaStatus['gate'];
+  /** This server's own addresses for the gate changed (the gate applies again). */
+  onGateChange?: () => void;
 }
 
 const JoinSchema = z.object({
@@ -163,7 +173,7 @@ const JoinSchema = z.object({
   key: z.string().regex(/^[A-Za-z0-9+/]{43}=$/),
 });
 
-const PeerSchema = z.object({ pair: z.string(), from: z.string(), op: z.enum(['take', 'switchover', 'config', 'unpair', 'hello', 'copy']) }).passthrough();
+const PeerSchema = z.object({ pair: z.string(), from: z.string(), op: z.enum(['take', 'switchover', 'config', 'unpair', 'hello', 'copy', 'file']) }).passthrough();
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -199,6 +209,9 @@ export class HaService {
   private aloneRaised = false;
   private witnessRaised = false;
   private copying = false;
+  private filesCheckedAt = -Infinity;
+  /** The last change of each file the standby has (on the active server). */
+  private filesSent = new Map<string, number>();
   private behindRaised = false;
   private lastCopyError = 0;
   /** Tests: paths that drop what goes out or comes in. */
@@ -207,6 +220,9 @@ export class HaService {
   readonly witness: HaWitness;
 
   constructor(private readonly o: HaServiceOptions) {
+    // Known from the start: a paired server serves nothing until the pair has decided (the gate asks early).
+    this.pair = this.get<StoredPair>(KEY.pair);
+    if (this.pair) this.state = 'starting';
     this.hb = new Heartbeat({ port: o.heartbeatPort, bind: o.bind, secret: () => (this.pair ? this.secret() : null), onBeat: (b) => this.onBeat(b), log: o.log });
     this.witness = new HaWitness({
       secretOf: (id) => {
@@ -312,6 +328,25 @@ export class HaService {
     return this.pair?.partner.name ?? null;
   }
 
+  /** What the gate needs of the pair (null: not paired). */
+  pairNet(): { pairId: string; partnerIp: string; partnerLink: string | null; myLink: string | null } | null {
+    const p = this.pair;
+    if (!p) return null;
+    return { pairId: p.pairId, partnerIp: p.partner.network.split(':')[0]!, partnerLink: p.partner.link?.split(':')[0] ?? null, myLink: p.settings.linkAddress };
+  }
+
+  /** This server's own address in each of the gate's networks (by network name): its own, never copied. */
+  gateOwn(): Record<string, string> {
+    return this.get<Record<string, string>>(KEY.gate) ?? {};
+  }
+
+  setGateOwn(own: Record<string, string>): HaStatus {
+    const clean = Object.fromEntries(Object.entries(own).filter(([k, v]) => /^[a-z][a-z0-9-]{0,30}$/.test(k) && typeof v === 'string' && v.trim()).map(([k, v]) => [k, v.trim()]));
+    this.put(KEY.gate, clean);
+    this.o.onGateChange?.();
+    return this.status();
+  }
+
   partnerUrl(): string | null {
     return this.pair?.partner.url ?? null;
   }
@@ -373,6 +408,7 @@ export class HaService {
       paths,
       witness: p?.witness ? { url: p.witness.url, fingerprint: p.witness.fingerprint, ok: this.lease.ok, lastAt: this.lease.lastAt, holder: this.lease.holder, error: this.lease.error } : null,
       copy: p ? (this.o.copy?.views() ?? []) : [],
+      gate: this.o.gateStatus?.() ?? null,
       settings: p?.settings ?? HA_DEFAULT_SETTINGS,
       code: !p && code && Date.parse(code.expiresAt) > Date.now() && code.tries > 0 ? { expiresAt: code.expiresAt } : null,
       witnessKeys: this.keys().map(({ secret: _s, ...k }) => k),
@@ -531,10 +567,10 @@ export class HaService {
     this.hb.stop();
     this.resetHeard();
     this.setState('single');
-    this.event('unpaired', text);
+    // A standby that leaves keeps its copy but does not start serving it: its gate would take the gateway address the
+    // other server still holds. Changes can be made on it again (it is a server of its own now).
+    this.event('unpaired', wasActive ? text : `${text}. ${this.o.name} keeps its copy and serves nothing new until it restarts: if it has the gate role and the other server still serves the same networks, change its gate's addresses first.`);
     for (const rule of ['ha_partner_lost', 'ha_takeover', 'ha_stopped', 'ha_third_vote', 'ha_behind']) void this.o.alerts.clear(rule).catch(() => undefined);
-    // A standby that leaves serves what it has, like any single server.
-    if (!wasActive) void this.o.roles.activate('This server left its pair').catch(() => undefined);
   }
 
   private static unheard() {
@@ -693,6 +729,10 @@ export class HaService {
         if (hears && b?.st === 'standby') {
           void this.ship();
           this.watchCopy();
+          if (now - this.filesCheckedAt >= FILES_EVERY_MS) {
+            this.filesCheckedAt = now;
+            void this.sendFiles();
+          }
         }
         const caughtUp = this.o.copy?.caughtUp() ?? true;
         if (p.settings.autoHandBack && caughtUp && p.preference === 'standby' && b?.pr === 'primary' && this.partnerStandbySince !== null && now - this.partnerStandbySince > (this.o.handBackAfterMs ?? 60_000) && !switching) {
@@ -762,6 +802,7 @@ export class HaService {
       const asOf = this.o.copy?.copyAsOf() ?? null;
       if (kind === 'takeover' && this.o.copy) at(asOf ? `Its copy of ${p.partner.name}'s data was current as of ${seconds(Math.max(0, Date.now() - Date.parse(asOf)))} before` : `It had no complete copy of ${p.partner.name}'s data yet`);
       this.o.copy?.becomeActive();
+      this.filesSent.clear();
       this.setState('active');
       steps.push(...(await this.o.roles.activate(reason).catch((e) => [{ at: iso(), text: `A role did not start: ${(e as Error).message}` }])));
       at(`${this.o.name} is serving`);
@@ -833,6 +874,25 @@ export class HaService {
       }
     } finally {
       this.copying = false;
+    }
+  }
+
+  /** Files that changed since the standby got them (DHCP's leases), sent whole: they are small. */
+  private async sendFiles(): Promise<void> {
+    for (const f of this.o.files ?? []) {
+      let mtime = 0;
+      try {
+        mtime = statSync(f.path).mtimeMs;
+      } catch {
+        continue;
+      }
+      if (this.filesSent.get(f.name) === mtime) continue;
+      try {
+        await this.peer('file', { name: f.name, data: readFileSync(f.path).toString('base64') }, 10_000);
+        this.filesSent.set(f.name, mtime);
+      } catch {
+        /* next time */
+      }
     }
   }
 
@@ -978,6 +1038,16 @@ export class HaService {
     switch (m.op) {
       case 'hello':
         return { ok: true, state: this.state };
+      case 'file': {
+        if (this.state === 'active') throw conflict(`${this.o.name} is the active server: it keeps its own files`);
+        const { name, data } = z.object({ name: z.string().max(40), data: z.string().max(16 * 1024 * 1024) }).parse(m);
+        const f = (this.o.files ?? []).find((x) => x.name === name);
+        if (!f) throw notFound(`No file called ${name} here`);
+        mkdirSync(dirname(f.path), { recursive: true });
+        writeFileSync(`${f.path}.ha-tmp`, Buffer.from(data, 'base64'));
+        renameSync(`${f.path}.ha-tmp`, f.path);
+        return { ok: true };
+      }
       case 'copy': {
         if (this.state === 'active') throw conflict(`${this.o.name} is the active server: it does not take a copy`);
         const { batches } = z.object({ batches: z.array(z.object({ name: z.string().max(40) }).passthrough()).max(20) }).parse(m);

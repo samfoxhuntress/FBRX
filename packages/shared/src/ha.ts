@@ -114,6 +114,12 @@ export interface HaStatus {
   witness: HaWitnessView | null;
   /** The roles' data: how it is copied, role by role. */
   copy: HaCopyView[];
+  /**
+   * FBRX Gate on this server (when it has the gate role): its networks with their gateway address (which moves to the
+   * active server) and this server's own address in each, what keeps it from moving in a second, and where the open
+   * connections go.
+   */
+  gate?: { networks: Array<{ name: string; gateway: string; own: string | null }>; problem: string | null; sync: string | null } | null;
   settings: HaSettings;
   /** A pairing code this server made, while it is open. */
   code: { expiresAt: string } | null;

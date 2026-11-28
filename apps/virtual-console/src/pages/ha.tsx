@@ -226,6 +226,7 @@ function Pair({ s, reload }: { s: HaStatus; reload: () => Promise<void> }) {
         </div>
       </Card>
       {s.copy.length > 0 && <Copy s={s} />}
+      {s.gate && <GateCard s={s} reload={reload} />}
       <Settings s={s} reload={reload} />
       <ThirdVote s={s} reload={reload} />
       {app.can('admin') && (
@@ -307,6 +308,34 @@ function Copy({ s }: { s: HaStatus }) {
           },
         ]}
       />
+    </Card>
+  );
+}
+
+/** FBRX Gate in the pair: this server's own address in each network (the gateway address moves between the two). */
+function GateCard({ s, reload }: { s: HaStatus; reload: () => Promise<void> }) {
+  const app = useApp();
+  const g = s.gate!;
+  const [own, setOwn] = useState<Record<string, string>>(() => Object.fromEntries(g.networks.map((n) => [n.name, n.own ?? ''])));
+  const { run, busy } = useAction();
+  const changed = g.networks.some((n) => (own[n.name] ?? '') !== (n.own ?? ''));
+  return (
+    <Card title="FBRX Gate in the pair" subtitle="Each network’s gateway address moves to the server that serves. Each server also keeps an address of its own in each network; set this server’s here, and the other server’s on its own page.">
+      {g.problem ? <Callout tone="warning" title="The gate does not move in a second yet">{g.problem}. Until it has one, the server that takes over applies the gate’s whole configuration (several seconds), and the standby leaves the gate alone.</Callout> : <Callout tone="good">The gate moves in about a second{g.sync ? `, with its open connections (kept in step over ${g.sync})` : ''}.</Callout>}
+      <div className="fx-form">
+        {g.networks.map((n) => (
+          <Field key={n.name} label={`${n.name}: this server’s own address`} help={`The gateway address ${n.gateway.split('/')[0]} moves between the two; give this server another one in ${n.gateway.replace(/\.\d+\//, '.0/')}, with its size.`}>
+            <Input value={own[n.name] ?? ''} placeholder={n.gateway.replace(/\.\d+\//, '.2/')} style={{ maxWidth: 220 }} disabled={!app.can('admin')} onChange={(e) => setOwn({ ...own, [n.name]: e.target.value })} />
+          </Field>
+        ))}
+        {app.can('admin') && (
+          <div className="fx-actions">
+            <Button size="sm" variant="primary" disabled={!changed} loading={busy === 'gate'} onClick={() => void run('gate', () => api('PUT', '/v1/ha/gate', { own }).then(reload), 'Saved: the gate applies it')}>
+              Save
+            </Button>
+          </div>
+        )}
+      </div>
     </Card>
   );
 }

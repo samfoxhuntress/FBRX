@@ -138,6 +138,22 @@ describe('high availability: the standby’s copy', () => {
     expect(B.s.ctx.ha.status().copy.every((c) => c.state === 'caught-up' && c.currentAt)).toBe(true);
   });
 
+  it('asks each server for an address of its own in each of the gate’s networks', async () => {
+    const g = A.s.ctx.ha.status().gate!;
+    expect(g.networks.length).toBeGreaterThan(0);
+    expect(g.problem).toMatch(/address of its own in/);
+    const lan = g.networks[0]!;
+    const base = lan.gateway.split('/')[0]!.split('.').slice(0, 3).join('.');
+    const prefix = lan.gateway.split('/')[1];
+    // The gateway's own address is refused; another one is fine.
+    expect((await A.call('PUT', '/v1/ha/gate', { own: { [lan.name]: lan.gateway } })).body.gate.problem).toMatch(/gateway address, which moves/);
+    const ok = (await A.call('PUT', '/v1/ha/gate', { own: { [lan.name]: `${base}.2/${prefix}` } })).body as HaStatus;
+    expect(ok.gate).toMatchObject({ problem: null, networks: [expect.objectContaining({ own: `${base}.2/${prefix}` })] });
+    // Each server's own: not copied to the other.
+    await sleep(300);
+    expect(B.s.ctx.ha.gateOwn()).toEqual({});
+  });
+
   it('copies each change as it is made', async () => {
     const t0 = Date.now();
     await A.call('POST', '/v1/directory/users', { username: 'kim', password: 'Abcdefgh12345' });

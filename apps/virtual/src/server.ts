@@ -2,7 +2,7 @@ import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'n
 import { hostname, networkInterfaces } from 'node:os';
 import { ServerAlerts } from './alerts/service';
 import { alertRoutes } from './routes/alerts';
-import { randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createServer as createHttpServer, type Server } from 'node:http';
 import { createServer as createHttpsServer } from 'node:https';
 import { dirname, join } from 'node:path';
@@ -33,8 +33,9 @@ import { ISOS_POOL } from './drivers/types';
 import { LibvirtHypervisor } from './drivers/libvirt';
 import { SimulatedHypervisor } from './drivers/simulated';
 import { NoHypervisor } from './drivers/none';
-import { DEFAULT_PATHS, starterConfig, type GateConfig } from '@fbrx/gate';
-import { GateEngine, GateStore, LinuxApplier, SimulatedApplier, type GateApplier } from '@fbrx/gate/node';
+import { DEFAULT_PATHS, haProblem, netDevice, starterConfig, type GateConfig, type GateHa } from '@fbrx/gate';
+import { GateEngine, GateHaSwitch, GateStore, LinuxApplier, SimulatedApplier, type GateApplier } from '@fbrx/gate/node';
+import { networkOf, parseCidr } from '@fbrx/shared';
 import { authRoutes } from './routes/auth';
 import { vmRoutes } from './routes/vms';
 import { storageRoutes } from './routes/storage';
@@ -135,6 +136,12 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     gateProblems: config.roles.includes('gate') ? async () => (ctx.gate ? (await ctx.gate.engine.live()).problems : []) : undefined,
   });
   // High availability: what the roles do when this server starts or stops serving comes with each role's copy.
+  const gateRole = {
+    activate: async (_reason: string): Promise<Array<{ at: string; text: string }>> => [],
+    deactivate: async (_reason: string): Promise<Array<{ at: string; text: string }>> => [],
+    status: (): ReturnType<NonNullable<ConstructorParameters<typeof HaService>[0]['gateStatus']>> => null,
+    prepare: (): void => undefined,
+  };
   const ha = new HaService({
     db,
     key,
@@ -147,7 +154,14 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     alerts,
     heartbeatMs: config.ha.heartbeatMs,
     handBackAfterMs: config.ha.handBackAfterMs,
-    roles: { activate: async () => [], deactivate: async () => [] },
+    // Each role's half of a takeover (FBRX Gate's below); the others serve from their copy as it is.
+    roles: {
+      activate: async (reason) => gateRole.activate(reason),
+      deactivate: async (reason) => gateRole.deactivate(reason),
+    },
+    files: config.roles.includes('gate') && config.gate.mode === 'linux' ? [{ name: 'dhcp-leases', path: join(DEFAULT_PATHS.varDir, 'dnsmasq.leases') }] : [],
+    gateStatus: () => gateRole.status(),
+    onGateChange: () => void ctx.gate?.engine.applyRunning().catch((e) => app.log.warn(`FBRX Gate: ${(e as Error).message}`)),
     log: (level, msg) => app.log[level](msg),
     adoptKey: (k, old) => {
       if (process.env.FBRX_V_MASTER_KEY) throw conflict('This server’s key is set by FBRX_V_MASTER_KEY: set the same one on both servers');
@@ -196,15 +210,45 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
 
   // FBRX Gate: the gate role.
   let gateStore: GateStore | null = null;
+  // In a high-availability pair: the pair's links (null: not paired, or this server lacks its own addresses).
+  const gateHa = (c: GateConfig | null): GateHa | null => {
+    const net = ha.pairNet();
+    if (!net || !c) return null;
+    const g: GateHa = { own: ha.gateOwn(), vrid: 1 + (createHash('sha256').update(net.pairId).digest()[0]! % 200), heartbeatPort: config.ha.heartbeatPort, link: null, partner: [net.partnerIp, ...(net.partnerLink ? [net.partnerLink] : [])], sync: null };
+    if (haProblem(c, g)) return null;
+    // Open connections go over the dedicated link when there is one, else over the network the partner is on.
+    if (net.myLink && net.partnerLink) {
+      const iface = Object.entries(networkInterfaces()).find(([, a]) => a?.some((x) => x.address === net.myLink))?.[0];
+      if (iface) g.sync = { iface, own: net.myLink, partner: net.partnerLink };
+    }
+    if (!g.sync) {
+      const n = c.networks.find((x) => networkOf(g.own[x.name]!) === networkOf(`${net.partnerIp}/${parseCidr(g.own[x.name]!)?.prefix ?? 24}`));
+      if (n) g.sync = { iface: netDevice(n), own: g.own[n.name]!.split('/')[0]!, partner: net.partnerIp };
+    }
+    return g;
+  };
+  // What the last apply or takeover did (its steps), and which commit this server last applied.
+  let gateSteps: string[] = [];
+  let gatePrepared: number | null = null;
   if (config.roles.includes('gate')) {
     gateStore = new GateStore(join(config.dataDir, 'gate.db'));
     const applier = opts.gateApplier ?? (config.gate.mode === 'simulated' ? new SimulatedApplier() : new LinuxApplier({ paths: DEFAULT_PATHS, mode: 'networkd' }));
-    const engine = new GateEngine({
-      store: gateStore,
+    const store = gateStore;
+    const engine: GateEngine = new GateEngine({
+      store,
       applier,
       paths: DEFAULT_PATHS,
       initial: () => gateStarter(config),
       log: (level, msg) => app.log[level](msg),
+      ha: () => ({ paired: !!ha.pairNet(), serving: ha.serving(), ha: gateHa(store.meta<number>('running_id') ? engine.running() : null) }),
+      // In a pair, after each apply the gateway links and the internet port are on (active) or off (standby).
+      onApplied: async (c) => {
+        gatePrepared = store.meta<number>('running_id');
+        const g = gateHa(c);
+        if (!g || !(applier instanceof LinuxApplier)) return;
+        const sw = new GateHaSwitch(applier);
+        gateSteps = ha.serving() ? await sw.up(c, g) : await sw.down(c, g);
+      },
     });
     ctx.gate = { engine, applier };
     await engine.start();
@@ -306,6 +350,53 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     ctx.files.start();
   }
 
+  // FBRX Gate's half of a high-availability takeover. The standby has the whole configuration applied (links down,
+  // DHCP stopped), so taking over only switches the gateway links and the internet port on: about a second. Without
+  // its own addresses in each network it applies the configuration in full when it takes over (several seconds).
+  let prepareTimer: NodeJS.Timeout | null = null;
+  gateRole.activate = async () => {
+    const gate = ctx.gate;
+    const run = gate?.engine.running();
+    if (!gate || !run) return [];
+    const at = () => new Date().toISOString();
+    gateSteps = [];
+    const g = gateHa(run);
+    if (g && gate.applier instanceof LinuxApplier && gatePrepared === gateStore!.meta<number>('running_id')) gateSteps = await new GateHaSwitch(gate.applier).up(run, g);
+    else {
+      await gate.engine.applyRunning();
+      if (!g) gateSteps.push('Its whole configuration applied here (give each server an address of its own in each network, so the gate moves in a second)');
+    }
+    return gateSteps.map((text) => ({ at: at(), text: `FBRX Gate: ${text}` }));
+  };
+  gateRole.deactivate = async () => {
+    const gate = ctx.gate;
+    const run = gate?.engine.running();
+    if (!gate || !(gate.applier instanceof LinuxApplier)) return [];
+    const g = gateHa(run ?? null);
+    const steps = run && g ? await new GateHaSwitch(gate.applier).down(run, g) : (await gate.applier.stopDns(), ['DHCP and DNS stopped']);
+    return steps.map((text) => ({ at: new Date().toISOString(), text: `FBRX Gate: ${text}` }));
+  };
+  gateRole.status = () => {
+    const gate = ctx.gate;
+    if (!gate) return null;
+    const c = gate.engine.running() ?? gate.engine.candidate();
+    const own = ha.gateOwn();
+    const paired = !!ha.pairNet();
+    const g = gateHa(c);
+    return {
+      networks: c.networks.map((n) => ({ name: n.name, gateway: n.address, own: own[n.name] ?? null })),
+      problem: paired ? haProblem(c, { own, vrid: 1, heartbeatPort: config.ha.heartbeatPort, link: null, partner: [], sync: null }) : null,
+      sync: g?.sync ? `${g.sync.iface} (${g.sync.own} → ${g.sync.partner})` : null,
+    };
+  };
+  // On the standby, a commit that came with the copy is applied (links down, DHCP stopped), ready to take over.
+  gateRole.prepare = () => {
+    if (!ctx.gate || ha.serving()) return;
+    if (prepareTimer) clearTimeout(prepareTimer);
+    prepareTimer = setTimeout(() => void ctx.gate?.engine.applyRunning().catch((e) => app.log.warn(`FBRX Gate (standby): ${(e as Error).message}`)), 500);
+    prepareTimer.unref?.();
+  };
+
   // The FBRX directory: the directory role.
   if (config.roles.includes('directory')) ctx.directory = new DirectoryService({ db, key, defaultName: hostname() });
 
@@ -368,7 +459,7 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     ...(ctx.directory ? [{ name: 'directory', label: 'Directory', db, tables: [setting('directory.state')] }] : []),
     ...(ctx.files ? [{ name: 'files', label: 'File server settings', db, tables: [setting('files.state')] }] : []),
   ];
-  ha.useCopy(new HaCopy(sources, (level, msg) => app.log[level](msg)));
+  ha.useCopy(new HaCopy(sources, (level, msg) => app.log[level](msg), (name) => name === 'gate' && gateRole.prepare()));
   await ha.start();
   await authRoutes(app, ctx);
   await vmRoutes(app, ctx);

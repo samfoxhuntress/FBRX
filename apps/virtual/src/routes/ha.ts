@@ -82,6 +82,13 @@ export async function haRoutes(app: FastifyInstance, ctx: VirtualContext) {
     return audited(ctx, req, 'ha.settings', null, () => ctx.ha.setSettings(i), i);
   });
 
+  /** This server's own address in each of the gate's networks (each server sets its own). */
+  app.put('/v1/ha/gate', async (req) => {
+    need(req, 'admin');
+    const { own } = z.object({ own: z.record(z.string().regex(/^[a-z][a-z0-9-]{0,30}$/), z.string().trim().max(64)) }).parse(req.body);
+    return audited(ctx, req, 'ha.gate', null, () => ctx.ha.setGateOwn(own), { own });
+  });
+
   app.put('/v1/ha/witness', async (req) => {
     need(req, 'admin');
     const i = z.object({ url: z.string().trim().min(1).max(300), fingerprint: z.string().trim().max(200).nullable().optional(), key: z.string().trim().min(10).max(200) }).parse(req.body);
