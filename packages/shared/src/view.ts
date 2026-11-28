@@ -20,21 +20,20 @@ export const VIEW_SETTINGS = ['general', 'appearance', 'updates', 'logs'] as con
 export const VIEW_TOOLS: readonly string[] = ['device_console.sessions', 'device_console.read', 'device_console.send'];
 
 /**
- * View's icon: a screen on its stand with an open eye in it, drawn in one line of FBRX's honey-to-red on black, like
- * Digger's mole. The window and installer icons are drawn from it (apps/desktop/build/view-icon.svg and .png), and
- * the sidebar shows it.
+ * View's icon: a viewfinder's four corners around a mouse pointer (seeing another screen and using it), in FBRX's
+ * honey-to-red on black, like Digger's mole. The window and installer icons are drawn from it
+ * (apps/desktop/build/view-icon.svg and .png), and the sidebar shows it.
  */
 export const VIEW_ICON_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024">
   <defs>
-    <linearGradient id="vw-ink" gradientUnits="userSpaceOnUse" x1="232" y1="232" x2="792" y2="800"><stop offset="0" stop-color="#ffb547"/><stop offset="0.5" stop-color="#ff8a3d"/><stop offset="1" stop-color="#ff4d5e"/></linearGradient>
+    <linearGradient id="vw-ink" gradientUnits="userSpaceOnUse" x1="232" y1="232" x2="792" y2="792"><stop offset="0" stop-color="#ffb547"/><stop offset="0.5" stop-color="#ff8a3d"/><stop offset="1" stop-color="#ff4d5e"/></linearGradient>
   </defs>
   <rect x="64" y="64" width="896" height="896" rx="200" fill="#0b0b0c"/>
-  <g fill="none" stroke="url(#vw-ink)" stroke-width="40" stroke-linecap="round" stroke-linejoin="round">
-    <rect x="212" y="236" width="600" height="404" rx="52"/>
-    <path d="M452 640L428 760M572 640L596 760"/>
-    <path d="M356 780H668"/>
-    <path d="M330 438C392 356 632 356 694 438C632 520 392 520 330 438Z"/>
+  <g fill="none" stroke="url(#vw-ink)" stroke-width="44" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M232 372V300a68 68 0 0 1 68 -68H372"/>
+    <path d="M652 232H724a68 68 0 0 1 68 68V372"/>
+    <path d="M792 652V724a68 68 0 0 1 -68 68H652"/>
+    <path d="M372 792H300a68 68 0 0 1 -68 -68V652"/>
   </g>
-  <circle cx="512" cy="438" r="50" fill="url(#vw-ink)"/>
-  <circle cx="530" cy="420" r="14" fill="#0b0b0c"/>
+  <path d="M440 372V646L508 584L558 690L606 668L556 564L648 556Z" fill="url(#vw-ink)" stroke="url(#vw-ink)" stroke-width="28" stroke-linejoin="round"/>
 </svg>`;
