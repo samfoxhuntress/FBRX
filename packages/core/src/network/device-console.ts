@@ -272,7 +272,8 @@ export class DeviceConsoles {
     const port = input.port ?? DEFAULT_PORTS[input.protocol];
     if (!Number.isInteger(port) || port < 1 || port > 65535) throw new CoreError('INVALID_ARGUMENT', 'Port must be 1-65535');
     const username = input.username?.trim() || null;
-    if (username && !/^[^\s:@]{1,64}$/.test(username)) throw new CoreError('INVALID_ARGUMENT', 'Invalid user name');
+    // A remote desktop user may be DOMAIN\name or name@domain.
+    if (username && !(input.protocol === 'rdp' ? /^[^\s:]{1,128}$/ : /^[^\s:@]{1,64}$/).test(username)) throw new CoreError('INVALID_ARGUMENT', 'Invalid user name');
     const all = this.d.meta.get<Array<Omit<ConsoleBookmark, 'passwordSaved'>>>(BOOKMARKS) ?? [];
     // The same device and user is one entry, whether it is changed by id or found again by a connection.
     const same = (b: Omit<ConsoleBookmark, 'passwordSaved'>) => b.host === host && b.port === port && b.protocol === input.protocol && b.username === username;

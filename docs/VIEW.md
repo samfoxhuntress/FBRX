@@ -20,6 +20,11 @@ usual one (3389 for remote desktop, 5900 for screen sharing, 22 for SSH, 23 for 
 Each connection is kept in the list on the left; click one to connect again. **Find a connection** searches by name,
 address, user or kind.
 
+**Import** (the arrow beside *New*) brings in connections from a Remote Desktop file (`.rdp`) or a Remote Desktop
+Manager export (`.rdm`, XML): remote desktop, VNC, SSH and Telnet entries, with their names, addresses, ports and user
+names (and the folder they were in, in the connection's notes). Passwords are never imported: View asks once, then keeps
+them if you say so. Folders, web pages and other kinds of entries are left out, and View says how many.
+
 ## In a session
 
 * **Ctrl+Alt+Del** and **Start key** (the Windows key) are sent to the other computer; the keyboard and mouse work as
@@ -29,6 +34,8 @@ address, user or kind.
 * **Disconnect** ends it; a session that ends by itself, or cannot connect, says why, with **Reconnect**, and
   **Ask Fabrix** helps find out why when it will not connect.
 * Every tab keeps its session while you look at another.
+* **Quick commands** (console tabs): the commands you type often, saved once (*Edit quick commands*) and typed into the
+  console with one click. They are typed without Enter, so you read them first and press Enter yourself.
 
 ## Passwords
 
@@ -55,5 +62,4 @@ read what is on screen and help.
 
 ## Not there yet
 
-Importing `.rdp` files and Remote Desktop Manager exports, quick commands, and FBRX Server inside View (Black Hole
-Edition) are coming in 2.6.0.
+FBRX Server inside View (Black Hole Edition) is coming in 2.6.0.

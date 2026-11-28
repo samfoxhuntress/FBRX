@@ -3,6 +3,7 @@ import WebSocket from 'ws';
 import { FBRX_APPS, VIEW_PAGES, type ViewOpen } from '@fbrx/shared';
 import { makeKernel, tempDir, USER } from './helpers';
 import { decodeRDCleanPathResponse, encodeRDCleanPathRequest } from '../src/view/rdcleanpath';
+import { parseConnectionFile } from '../src/view/imports';
 
 describe('FBRX View', () => {
   const cleanups: Array<() => Promise<void>> = [];
@@ -55,6 +56,46 @@ describe('FBRX View', () => {
     expect(res.error).toMatchObject({ httpStatusCode: 403 });
     const audit = kernel.audit.query({ limit: 50 }).map((e) => e.action);
     expect(audit).toEqual(expect.arrayContaining(['view.open', 'view.session.refused']));
+  });
+
+  it('reads Remote Desktop files and Remote Desktop Manager exports, never their passwords', () => {
+    const rdp = 'screen mode id:i:2\r\nfull address:s:dc01.office.lan:3390\r\nusername:s:sam\r\ndomain:s:OFFICE\r\npassword 51:b:01000000D08C9DDF\r\n';
+    const utf16 = Buffer.concat([Buffer.from([0xff, 0xfe]), Buffer.from(rdp, 'utf16le')]);
+    expect(parseConnectionFile(utf16, 'Domain controller.rdp')).toEqual({
+      connections: [{ label: 'Domain controller', host: 'dc01.office.lan', port: 3390, protocol: 'rdp', username: 'OFFICE\\sam', notes: 'From a Remote Desktop file' }],
+      skipped: 0,
+    });
+    const rdm = `<?xml version="1.0"?><ArrayOfConnection>
+      <Connection><ConnectionType>Group</ConnectionType><Name>Servers</Name></Connection>
+      <Connection><ConnectionType>RDPConfigured</ConnectionType><Group>Servers</Group><Name>File &amp; print</Name><Url>10.0.0.5</Url><RDP><UserName>admin</UserName><Domain>OFFICE</Domain></RDP><Password>secret-blob</Password></Connection>
+      <Connection><ConnectionType>SSHShell</ConnectionType><Name>Core switch</Name><Terminal><Host>10.0.0.2</Host><HostPort>2222</HostPort><Username>netadmin</Username></Terminal></Connection>
+      <Connection><ConnectionType>VNC</ConnectionType><Name>Lab Mac</Name><Url>10.0.0.9:5901</Url></Connection>
+      <Connection><ConnectionType>WebBrowser</ConnectionType><Name>Router</Name><Url>https://10.0.0.1</Url></Connection>
+    </ArrayOfConnection>`;
+    const r = parseConnectionFile(Buffer.from(rdm), 'export.rdm');
+    expect(r.skipped).toBe(2);
+    expect(r.connections).toEqual([
+      { label: 'File & print', host: '10.0.0.5', port: null, protocol: 'rdp', username: 'OFFICE\\admin', notes: 'From Remote Desktop Manager (folder Servers)' },
+      { label: 'Core switch', host: '10.0.0.2', port: 2222, protocol: 'ssh', username: 'netadmin', notes: 'From Remote Desktop Manager' },
+      { label: 'Lab Mac', host: '10.0.0.9', port: 5901, protocol: 'vnc', username: null, notes: 'From Remote Desktop Manager' },
+    ]);
+    expect(JSON.stringify(r)).not.toContain('secret');
+    expect(() => parseConnectionFile(Buffer.from('hello'), 'notes.txt')).toThrow(/imports Remote Desktop files/);
+  });
+
+  it('imports into the saved connections, and keeps quick commands', async () => {
+    const { kernel, cleanup } = await makeKernel({ platform: { flavor: 'view', endpointDataDir: tempDir() } });
+    cleanups.push(cleanup);
+    const data = Buffer.from('full address:s:10.0.0.7\nusername:s:sam@office.lan\n').toString('base64');
+    const r = (await kernel.call('view.import', { fileName: 'pc.rdp', data }, USER)) as { added: number; bookmarks: Array<{ host: string; username: string; protocol: string }> };
+    expect(r.added).toBe(1);
+    expect(r.bookmarks[0]).toMatchObject({ host: '10.0.0.7', username: 'sam@office.lan', protocol: 'rdp' });
+    await expect(kernel.call('view.import', { fileName: 'x.txt', data: Buffer.from('nothing').toString('base64') }, USER)).rejects.toMatchObject({ code: 'INVALID_ARGUMENT' });
+
+    const list = (await kernel.call('view.saveSnippet', { name: 'Interfaces', text: 'show ip interface brief' }, USER)) as Array<{ id: string }>;
+    expect(await kernel.call('view.snippets', {}, USER)).toEqual([{ id: list[0]!.id, name: 'Interfaces', text: 'show ip interface brief' }]);
+    await expect(kernel.call('view.saveSnippet', { name: 'x', text: 'reboot' }, { origin: 'agent', actor: 'agent' })).rejects.toBeTruthy();
+    expect(await kernel.call('view.removeSnippet', { id: list[0]!.id }, USER)).toEqual([]);
   });
 
   it('is FBRX View’s alone', async () => {

@@ -766,6 +766,13 @@ export interface ConsoleLogin {
   savedAt: string;
 }
 /** A device in Saved connections: one click to connect again, with its guide and (if saved) its password. */
+/** One of FBRX View's quick commands. */
+export interface ViewSnippet {
+  id: string;
+  name: string;
+  text: string;
+}
+
 /** A remote desktop FBRX View is about to draw: where its window connects, and the login it uses. */
 export interface ViewOpen {
   protocol: RemoteProtocol;
@@ -1515,6 +1522,12 @@ export interface ExtMethods {
    * or the one saved in the vault. The person at the computer only: never the AI.
    */
   'view.open': (p: { protocol: RemoteProtocol; host: string; port?: number; username?: string; password?: string; label?: string }) => ViewOpen;
+  /** FBRX View's quick commands: saved commands typed into a console with one click (without Enter). */
+  'view.snippets': () => ViewSnippet[];
+  'view.saveSnippet': (p: { id?: string; name: string; text: string }) => ViewSnippet[];
+  'view.removeSnippet': (p: { id: string }) => ViewSnippet[];
+  /** FBRX View: saved connections from a Remote Desktop file (.rdp) or a Remote Desktop Manager export (base64). */
+  'view.import': (p: { fileName: string; data: string }) => { added: number; skipped: number; bookmarks: ConsoleBookmark[] };
   /** FBRX View: remembers a remote desktop login that worked (encrypted in the vault). */
   'view.saveLogin': (p: { protocol: RemoteProtocol; host: string; port: number; username?: string; password: string }) => Ok;
   'net.port': (p: { host: string; port: number }) => { open: boolean; ms: number | null };
@@ -1782,6 +1795,9 @@ export interface ExtEvents {
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
   'view.open',
   'view.saveLogin',
+  'view.import',
+  'view.saveSnippet',
+  'view.removeSnippet',
   'alerts.acknowledge',
   'pc.ejectDrive',
   'pc.driveSpeed',

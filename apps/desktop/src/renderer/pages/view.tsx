@@ -24,6 +24,24 @@ export function ViewPage() {
   const [connect, setConnect] = useState<ConnectTarget | null>(null);
   const [filter, setFilter] = useState('');
   const toast = useToast();
+  const fileRef = useRef<HTMLInputElement>(null);
+
+  /** A Remote Desktop file (.rdp) or a Remote Desktop Manager export: its connections, never its passwords. */
+  const importFile = async (f: File) => {
+    try {
+      const bytes = new Uint8Array(await f.arrayBuffer());
+      let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+      const r = await call('view.import', { fileName: f.name, data: btoa(bin) });
+      toast.success(
+        `${r.added} connection${r.added === 1 ? '' : 's'} added`,
+        `${r.skipped ? `${r.skipped} left out (folders, other kinds, or entries without an address). ` : ''}Passwords are never imported: View asks once, then keeps them if you say so.`,
+      );
+      bookmarks.reload();
+    } catch (e) {
+      toast.error('Could not import it', (e as Error).message);
+    }
+  };
 
   const add = (t: Tab) => {
     setTabs((all) => [...all.filter((x) => x.id !== t.id), t]);
@@ -64,6 +82,18 @@ export function ViewPage() {
           <Button variant="primary" icon="plus" onClick={() => setConnect({})} title="New connection">
             New
           </Button>
+          <Button variant="ghost" icon="upload" onClick={() => fileRef.current?.click()} title="Import a Remote Desktop file (.rdp) or a Remote Desktop Manager export" aria-label="Import connections" />
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".rdp,.rdm,.xml"
+            hidden
+            onChange={(e) => {
+              const f = e.target.files?.[0];
+              e.target.value = '';
+              if (f) void importFile(f);
+            }}
+          />
         </div>
         {list.length === 0 ? (
           <Empty title={filter ? 'Nothing matches' : 'No connections yet'}>{filter ? 'Try another name or address.' : 'Connect to a computer or a device; it is kept here.'}</Empty>
@@ -562,11 +592,98 @@ function ConsoleTab({ session }: { session: ConsoleSession | null }) {
           {session.host}
         </span>
         <span className="fx-spacer" />
+        {session.state === 'open' && <QuickCommands sessionId={session.id} />}
         <Button size="sm" variant="ghost" icon="sparkles" onClick={() => askAgent('Look at my console session in FBRX View and help me with it.', { console: session.id, host: session.host, protocol: session.protocol })}>
           Ask Fabrix
         </Button>
       </div>
       <ConsoleScreen session={session} />
     </div>
+  );
+}
+
+/** Saved commands typed into the console with one click, without Enter: you read it, then press Enter. */
+function QuickCommands({ sessionId }: { sessionId: string }) {
+  const snippets = useCore('view.snippets');
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const toast = useToast();
+  const type = (text: string) => {
+    setOpen(false);
+    void call('console.write', { id: sessionId, data: text.replace(/\r?\n$/, '') }).catch((e) => toast.error('Could not type it', (e as Error).message));
+  };
+  return (
+    <span className="view-qc-wrap">
+      <Button size="sm" variant="ghost" icon="list" onClick={() => setOpen(!open)} aria-expanded={open}>
+        Quick commands
+      </Button>
+      {open && (
+        <div className="view-qc" role="menu">
+          {(snippets.data ?? []).length === 0 && <p className="fx-muted">None yet: add the commands you type often.</p>}
+          {(snippets.data ?? []).map((q) => (
+            <button key={q.id} type="button" role="menuitem" onClick={() => type(q.text)} title={q.text}>
+              <b>{q.name}</b>
+              <code>{q.text.split('\n')[0]}</code>
+            </button>
+          ))}
+          <Button
+            size="sm"
+            variant="ghost"
+            icon="edit"
+            onClick={() => {
+              setOpen(false);
+              setEditing(true);
+            }}
+          >
+            Edit quick commands
+          </Button>
+        </div>
+      )}
+      {editing && <QuickCommandsEditor list={snippets.data ?? []} onChanged={() => snippets.reload()} onClose={() => setEditing(false)} />}
+    </span>
+  );
+}
+
+function QuickCommandsEditor({ list, onChanged, onClose }: { list: Array<{ id: string; name: string; text: string }>; onChanged: () => void; onClose: () => void }) {
+  const [name, setName] = useState('');
+  const [text, setText] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const add = async () => {
+    setError(null);
+    try {
+      await call('view.saveSnippet', { name: name.trim(), text });
+      setName('');
+      setText('');
+      onChanged();
+    } catch (e) {
+      setError((e as Error).message);
+    }
+  };
+  return (
+    <Modal title="Quick commands" description="Typed into the console with one click, without Enter, so you can read them first." onClose={onClose} footer={<Button onClick={onClose}>Done</Button>}>
+      <div className="fx-form">
+        {list.map((q) => (
+          <div key={q.id} className="view-qc-row">
+            <span>
+              <b>{q.name}</b>
+              <code>{q.text}</code>
+            </span>
+            <Button size="sm" variant="ghost" icon="trash" aria-label={`Remove ${q.name}`} onClick={() => void call('view.removeSnippet', { id: q.id }).then(onChanged)} />
+          </div>
+        ))}
+        <div className="fx-row">
+          <Field label="Name">
+            <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Show interfaces" />
+          </Field>
+          <Field label="Command">
+            <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="show ip interface brief" />
+          </Field>
+        </div>
+        <Button icon="plus" disabled={!name.trim() || !text} onClick={() => void add()}>
+          Add
+        </Button>
+        {error && <Callout tone="critical">{error}</Callout>}
+      </div>
+    </Modal>
   );
 }

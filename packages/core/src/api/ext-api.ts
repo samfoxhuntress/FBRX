@@ -40,7 +40,9 @@ import {
   TIERS,
   remoteInputProblem,
 } from '@fbrx/shared';
+import { newId, type ConsoleBookmark, type ViewSnippet } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
+import { parseConnectionFile } from '../view/imports';
 import type { Kernel } from '../kernel';
 import { checkLink } from '../security/linkcheck';
 import { eventLogs, queryEvents } from '../system/events';
@@ -876,6 +878,42 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       const dom = /^([^\\]+)\\(.+)$/.exec(username);
       k.audit.append({ category: 'network', action: 'view.open', actor: 'user', target: `${q.protocol}://${q.host}:${port}`, outcome: 'success', details: { username: username || null, savedLogin: !!saved } });
       return { protocol: q.protocol, url: t.url, token: t.token, destination: t.destination, username: dom ? dom[2]! : username, domain: dom ? dom[1]! : null, password: q.password ?? saved ?? '', saved: !!saved, bookmark };
+    },
+    'view.snippets': () => k.meta.get<ViewSnippet[]>('view.snippets') ?? [],
+    'view.saveSnippet': (p) => {
+      const q = z.object({ id: z.string().max(40).optional(), name: z.string().trim().min(1).max(80), text: z.string().min(1).max(4000) }).parse(p);
+      const all = k.meta.get<ViewSnippet[]>('view.snippets') ?? [];
+      const id = q.id && all.some((s) => s.id === q.id) ? q.id : newId('qc');
+      const next = [...all.filter((s) => s.id !== id), { id, name: q.name, text: q.text }].slice(-200);
+      k.meta.set('view.snippets', next);
+      return next;
+    },
+    'view.removeSnippet': (p) => {
+      const { id } = z.object({ id: z.string().max(40) }).parse(p);
+      const next = (k.meta.get<ViewSnippet[]>('view.snippets') ?? []).filter((s) => s.id !== id);
+      k.meta.set('view.snippets', next);
+      return next;
+    },
+    'view.import': (p) => {
+      if (!k.view) throw new CoreError('FORBIDDEN', 'Importing connections is FBRX View’s');
+      const q = z.object({ fileName: z.string().max(260), data: z.string().max(6 * 1024 * 1024) }).parse(p);
+      let parsed;
+      try {
+        parsed = parseConnectionFile(Buffer.from(q.data, 'base64'), q.fileName);
+      } catch (err) {
+        throw new CoreError('INVALID_ARGUMENT', errorMessage(err));
+      }
+      let skipped = parsed.skipped;
+      const bookmarks: ConsoleBookmark[] = [];
+      for (const c of parsed.connections) {
+        try {
+          bookmarks.push(k.consoles.saveBookmark({ label: c.label, host: c.host, port: c.port ?? undefined, protocol: c.protocol, username: c.username, notes: c.notes }));
+        } catch {
+          skipped++;
+        }
+      }
+      k.audit.append({ category: 'network', action: 'view.import', actor: 'user', outcome: 'success', details: { file: q.fileName.slice(0, 120), added: bookmarks.length, skipped } });
+      return { added: bookmarks.length, skipped, bookmarks };
     },
     'view.saveLogin': (p) => {
       if (!k.view) throw new CoreError('FORBIDDEN', 'Remote desktops drawn in the app are FBRX View’s');
