@@ -148,7 +148,11 @@ export function renderNftables(c: GateConfig, ha?: GateHa | null): string {
   add(`  }`);
   add(`  chain srcnat {`);
   add(`    type nat hook postrouting priority srcnat; policy accept;`);
-  add(`    oifname ${wan} meta nfproto ipv4 masquerade`);
+  // In a pair with a fixed internet address, SNAT to it rather than masquerade: when the internet port goes down,
+  // Linux ends every masqueraded connection through it (and the old server tells its partner they ended), so the
+  // connections the new active server was sent would be gone before it takes them over.
+  if (ha && c.wan.mode === 'static' && c.wan.address) add(`    oifname ${wan} meta nfproto ipv4 snat ip to ${c.wan.address.split('/')[0]}`);
+  else add(`    oifname ${wan} meta nfproto ipv4 masquerade`);
   add(`  }`);
 
   // -------------------------------------------------------------------------------------- Prefer Mesh

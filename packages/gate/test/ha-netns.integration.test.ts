@@ -152,16 +152,17 @@ describe.runIf(can)('FBRX Gate in a high-availability pair (network namespaces)'
       return `${r.code} ${(r.out + r.err).trim().slice(0, 1500)}`;
     };
     console.log('A conntrackd stats:', await ctd('a', '-s'));
-    console.log('B external cache:', await ctd('b', '-e'));
     // Gate A loses power: off both networks at once. Gate B takes over.
     inNs(NS.a, 'ip', 'link', 'set', 'wan0', 'down');
     inNs(NS.a, 'ip', 'link', 'set', 'lan0', 'down');
+    console.log('B external cache:', await ctd('b', '-e'));
     const t0 = performance.now();
     gates.b.serving = true;
     const steps = await gates.b.switch.up(gates.b.engine.running()!, gates.b.ha);
     const took = performance.now() - t0;
     console.log('B steps:', steps.join(' | '));
     console.log('B table:', (await runCommand('ip', ['netns', 'exec', NS.b, 'conntrack', '-L'])).out.slice(0, 1500));
+    console.log('B log:', (() => { try { return readFileSync(join(dir, 'b', 'log', 'conntrackd.log'), 'utf8').slice(-2500); } catch (e) { return String(e); } })());
     expect(took).toBeLessThan(1000);
     expect(steps.join(' | ')).toMatch(/Open connections taken over from the other server.*gateway address moved here and was announced: 192\.168\.77\.1 \(lan\)/);
     await exited;

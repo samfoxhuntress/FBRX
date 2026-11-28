@@ -39,7 +39,8 @@ export function renderNetworkd(c: GateConfig, paths: GatePaths, ha?: GateHa | nu
       if (c.wan.mode === 'dhcp') lines.push('DHCP=ipv4');
       else lines.push(`Address=${c.wan.address}`, `Gateway=${c.wan.gateway}`);
       lines.push('IPv6AcceptRA=no', 'LinkLocalAddressing=no');
-      if (c.wan.mode === 'dhcp') lines.push('', '[DHCPv4]', 'UseDNS=no', 'UseNTP=yes');
+      // In a pair, both servers ask by the internet port's shared MAC address, so the provider gives the same lease.
+      if (c.wan.mode === 'dhcp') lines.push('', '[DHCPv4]', 'UseDNS=no', 'UseNTP=yes', ...(ha ? ['ClientIdentifier=mac'] : []));
     } else {
       // A network machines may join: the port (or VLAN) is one more port on its bridge, which holds the address.
       if (net?.vmSwitch) lines.push(`Bridge=${bridgeName(net)}`);

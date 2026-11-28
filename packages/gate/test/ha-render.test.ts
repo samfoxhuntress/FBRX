@@ -29,6 +29,13 @@ describe('FBRX Gate in a high-availability pair: what it renders', () => {
     expect(r.nftables).toContain('iifname { "eno2", "fbrxv0" } oifname "eno1" accept comment "internet:lan"');
     expect(r.nftables).toContain('udp dport 9454 accept comment "ha:heartbeat"');
     expect(r.nftables).toContain('ip saddr 192.168.50.3 udp dport 3780 accept comment "ha:connections"');
+    // DHCP on the internet port: both servers ask by its shared MAC address.
+    expect(file('10-fbrx-eno1.network')).toContain('ClientIdentifier=mac');
+    // A fixed internet address: SNAT to it, so a takeover does not end the connections.
+    const fixed = config();
+    fixed.wan = { ...fixed.wan, mode: 'static', address: '203.0.113.2/24', gateway: '203.0.113.1' };
+    expect(render(fixed, paths, ha).nftables).toContain('oifname "eno1" meta nfproto ipv4 snat ip to 203.0.113.2');
+    expect(render(fixed, paths).nftables).toContain('oifname "eno1" meta nfproto ipv4 masquerade');
     // The open connections go to the partner; the gate's own addresses stay out of it.
     expect(r.conntrackd).toMatch(/IPv4_address 192\.168\.50\.2\n\s+IPv4_Destination_Address 192\.168\.50\.3/);
     expect(r.conntrackd).toMatch(/Address Ignore \{[\s\S]*IPv4_address 192\.168\.50\.1[\s\S]*\}/);
