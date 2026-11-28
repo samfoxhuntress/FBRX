@@ -60,7 +60,6 @@ const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 interface Node {
   s: BuiltVirtual;
   port: number;
-  token: string;
   dir: string;
   call: <T = any>(method: string, url: string, body?: unknown) => Promise<{ status: number; body: T }>;
 }
@@ -85,12 +84,18 @@ async function node(name: string): Promise<Node> {
   });
   const s = await buildServer(config, {});
   await s.app.listen({ port, host: '127.0.0.1' });
-  const token = (await s.app.inject({ method: 'POST', url: '/v1/auth/login', payload: { username: 'sam', password: 'correct horse battery' } })).json().token as string;
-  const call = async (method: string, url: string, body?: unknown) => {
+  const login = async () => (await s.app.inject({ method: 'POST', url: '/v1/auth/login', payload: { username: 'sam', password: 'correct horse battery' } })).json().token as string;
+  let token = await login();
+  const call = async (method: string, url: string, body?: unknown, again = true): Promise<{ status: number; body: any }> => {
     const r = await s.app.inject({ method: method as 'GET', url, headers: { authorization: `Bearer ${token}` }, payload: body as never });
+    // The standby's console accounts are the active one's copy: sign in again after a full copy.
+    if (r.statusCode === 401 && again) {
+      token = await login();
+      return call(method, url, body, false);
+    }
     return { status: r.statusCode, body: r.body ? JSON.parse(r.body) : null };
   };
-  return { s, port, token, dir, call };
+  return { s, port, dir, call };
 }
 
 describe('an FBRX Server pair', () => {

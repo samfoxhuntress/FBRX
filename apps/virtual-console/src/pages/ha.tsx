@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { HA_STATE_NAMES, type HaEvent, type HaPath, type HaState, type HaStatus } from '@fbrx/shared';
+import { HA_STATE_NAMES, type HaCopyView, type HaEvent, type HaPath, type HaState, type HaStatus } from '@fbrx/shared';
 import { Badge, Button, Callout, Card, CopyText, Empty, Field, formatDate, Input, KeyValue, Modal, Page, Status, Table, timeAgo, Toggle, useAction, useConfirm } from '@fbrx/ui';
 import { api } from '../api';
 import { useApp, usePoll } from '../state';
@@ -225,6 +225,7 @@ function Pair({ s, reload }: { s: HaStatus; reload: () => Promise<void> }) {
           )}
         </div>
       </Card>
+      {s.copy.length > 0 && <Copy s={s} />}
       <Settings s={s} reload={reload} />
       <ThirdVote s={s} reload={reload} />
       {app.can('admin') && (
@@ -274,6 +275,39 @@ function PathLine({ path }: { path: HaPath }) {
         {path.name === 'link' ? 'Dedicated link' : 'Network'} · {path.up ? 'heard' : 'silent'}
       </small>
     </div>
+  );
+}
+
+const secs = (ms: number) => (ms < 60_000 ? `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)} s` : `${Math.round(ms / 60_000)} min`);
+
+/** Role by role: on the active server how far behind the standby is; on the standby how current its copy is. */
+function Copy({ s }: { s: HaStatus }) {
+  const active = s.me.state === 'active';
+  const words = (c: HaCopyView): [string, 'good' | 'neutral' | 'warning'] => {
+    if (!active) return c.currentAt ? [`Current as of ${timeAgo(c.currentAt)}`, 'good'] : ['No copy yet', 'warning'];
+    if (c.state === 'caught-up') return ['Up to date', 'good'];
+    if (c.state === 'full-copy') return [`Copying everything${c.behindMs ? ` (${secs(c.behindMs)})` : ''}`, 'neutral'];
+    if (c.state === 'waiting') return [`Waiting for ${s.partner!.name}`, 'neutral'];
+    return [`${c.behind} change${c.behind === 1 ? '' : 's'} on the way${c.behindMs ? ` (${secs(c.behindMs)})` : ''}`, (c.behindMs ?? 0) > 60_000 ? 'warning' : 'neutral'];
+  };
+  return (
+    <Card title={active ? `What ${s.partner!.name} has` : 'This server’s copy'} subtitle={active ? 'Each change is copied to the standby as it is made, role by role.' : `Copied from ${s.partner!.name} as it changes. Virtual machines and the files in shares are not copied yet.`} flush>
+      <Table<HaCopyView>
+        rows={s.copy}
+        rowKey={(c) => c.name}
+        columns={[
+          { key: 'l', header: 'Role', render: (c) => <b>{c.label}</b> },
+          {
+            key: 's',
+            header: '',
+            render: (c) => {
+              const [text, tone] = words(c);
+              return <Status tone={tone}>{text}</Status>;
+            },
+          },
+        ]}
+      />
+    </Card>
   );
 }
 

@@ -22,3 +22,16 @@ export function loadMasterKey(dataDir: string, env: NodeJS.ProcessEnv = process.
   }
   return k;
 }
+
+/** High availability: the standby takes its primary's key when paired (so what one sealed, the other opens). */
+export function writeMasterKey(dataDir: string, key: Uint8Array): void {
+  const dir = join(dataDir, 'keys');
+  mkdirSync(dir, { recursive: true, mode: 0o700 });
+  const file = join(dir, 'master.key');
+  writeFileSync(file, Buffer.from(key).toString('base64'), { mode: 0o600 });
+  try {
+    chmodSync(file, 0o600);
+  } catch {
+    /* windows */
+  }
+}

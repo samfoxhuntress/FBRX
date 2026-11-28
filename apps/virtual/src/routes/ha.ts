@@ -13,7 +13,8 @@ import { VirtualError, badRequest } from '../errors';
 const signature = (h: string | string[] | undefined) => (Array.isArray(h) ? h[0] : h);
 
 export async function haRoutes(app: FastifyInstance, ctx: VirtualContext) {
-  app.addContentTypeParser(HA_SIGNED_TYPE, { parseAs: 'string', bodyLimit: 64 * 1024 }, (_req, body, done) => done(null, body));
+  // A full copy goes in parts of about a megabyte (written as JSON, a little more).
+  app.addContentTypeParser(HA_SIGNED_TYPE, { parseAs: 'string', bodyLimit: 16 * 1024 * 1024 }, (_req, body, done) => done(null, body));
 
   app.get('/v1/ha', async (req) => {
     need(req, 'viewer');

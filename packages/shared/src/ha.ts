@@ -91,6 +91,19 @@ export type HaSettings = z.infer<typeof HaSettingsSchema>;
 
 export const HA_DEFAULT_SETTINGS: HaSettings = { takeoverMs: HA_TAKEOVER_MS, autoHandBack: false, linkAddress: null };
 
+/** How a role's copy stands: on the active server how far behind the standby is, on the standby how current it is. */
+export interface HaCopyView {
+  name: string;
+  label: string;
+  /** waiting: not heard from the other yet; full-copy: everything is being copied again; copying: changes on the way. */
+  state: 'caught-up' | 'copying' | 'full-copy' | 'waiting';
+  /** Changes the standby does not have yet, and for how long the oldest has waited (ms). */
+  behind: number;
+  behindMs: number | null;
+  /** On the standby: its copy is current as of then. */
+  currentAt: string | null;
+}
+
 export interface HaStatus {
   /** Whether this server can be paired (it needs HTTPS). */
   available: boolean;
@@ -99,6 +112,8 @@ export interface HaStatus {
   partner: HaPartner | null;
   paths: HaPath[];
   witness: HaWitnessView | null;
+  /** The roles' data: how it is copied, role by role. */
+  copy: HaCopyView[];
   settings: HaSettings;
   /** A pairing code this server made, while it is open. */
   code: { expiresAt: string } | null;

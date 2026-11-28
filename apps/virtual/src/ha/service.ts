@@ -39,6 +39,7 @@ import {
 import type { ServerAlerts } from '../alerts/service';
 import { badRequest, conflict, forbidden, notFound, unauthorized } from '../errors';
 import { Heartbeat, type Beat, type HaPathName } from './heartbeat';
+import type { CopyAck, CopyBatch, HaCopy } from './copy';
 
 /**
  * FBRX Server high availability: this server and its partner as one pair.
@@ -68,6 +69,10 @@ const CODE_TRIES = 10;
 const ALONE_ALERT_MS = 5_000;
 /** The third vote silent this long before it is an alert. */
 const WITNESS_ALERT_MS = 30_000;
+/** The standby's copy this far behind before it is an alert. */
+const BEHIND_ALERT_MS = 60_000;
+/** Before switching over, how long to wait for the standby to catch up. */
+const CATCH_UP_MS = 10_000;
 
 interface Partner {
   nodeId: string;
@@ -132,6 +137,13 @@ export interface HaServiceOptions {
   heartbeatMs?: number;
   /** How long the primary has been back as the standby before the work is handed back by itself. */
   handBackAfterMs?: number;
+  /** The roles' data, copied to the standby. */
+  copy?: HaCopy;
+  /**
+   * The standby takes its primary's key when paired, so what one sealed (a mail password, a NAS sign-in) the other
+   * opens. The server seals its own few secrets (its management controller's) with it first, then changes the key.
+   */
+  adoptKey?: (key: Buffer, old: Buffer) => void;
 }
 
 const JoinSchema = z.object({
@@ -147,9 +159,11 @@ const JoinSchema = z.object({
     linkAddress: z.string().max(64).nullable(),
   }),
   settings: HaSettingsSchema,
+  /** The primary's key (base64, 32 bytes). */
+  key: z.string().regex(/^[A-Za-z0-9+/]{43}=$/),
 });
 
-const PeerSchema = z.object({ pair: z.string(), from: z.string(), op: z.enum(['take', 'switchover', 'config', 'unpair', 'hello']) }).passthrough();
+const PeerSchema = z.object({ pair: z.string(), from: z.string(), op: z.enum(['take', 'switchover', 'config', 'unpair', 'hello', 'copy']) }).passthrough();
 
 const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const same = (a: string, b: string) => a.length === b.length && timingSafeEqual(Buffer.from(a), Buffer.from(b));
@@ -184,6 +198,9 @@ export class HaService {
   private takeoverOpen = true;
   private aloneRaised = false;
   private witnessRaised = false;
+  private copying = false;
+  private behindRaised = false;
+  private lastCopyError = 0;
   /** Tests: paths that drop what goes out or comes in. */
   private dropped = { send: new Set<HaPathName>(), receive: new Set<HaPathName>(), witness: false };
   /** The witness this server hosts for other pairs. */
@@ -220,9 +237,11 @@ export class HaService {
   async start(): Promise<void> {
     this.pair = this.get<StoredPair>(KEY.pair);
     this.startedAt = mono();
+    if (!this.pair) this.o.copy?.off();
     if (this.pair) {
       // Nothing is served until the pair has decided who serves.
       this.setState('starting');
+      this.o.copy?.becomeStandby();
       await this.o.roles.deactivate('Starting: waiting to hear the partner').catch(() => undefined);
       await this.hb.start();
     }
@@ -353,6 +372,7 @@ export class HaService {
         : null,
       paths,
       witness: p?.witness ? { url: p.witness.url, fingerprint: p.witness.fingerprint, ok: this.lease.ok, lastAt: this.lease.lastAt, holder: this.lease.holder, error: this.lease.error } : null,
+      copy: p ? (this.o.copy?.views() ?? []) : [],
       settings: p?.settings ?? HA_DEFAULT_SETTINGS,
       code: !p && code && Date.parse(code.expiresAt) > Date.now() && code.tries > 0 ? { expiresAt: code.expiresAt } : null,
       witnessKeys: this.keys().map(({ secret: _s, ...k }) => k),
@@ -394,7 +414,7 @@ export class HaService {
     const pairId = randomBytes(12).toString('base64url');
     const nodeId = randomBytes(12).toString('base64url');
     const settings: HaSettings = { ...HA_DEFAULT_SETTINGS, linkAddress };
-    const body = JSON.stringify({ code: i.code, pairId, node: { nodeId, name: this.o.name, port: this.o.port, heartbeatPort: this.o.heartbeatPort, fingerprint: this.o.fingerprint, version: this.o.version, linkAddress }, settings } satisfies z.infer<typeof JoinSchema>);
+    const body = JSON.stringify({ code: i.code, pairId, node: { nodeId, name: this.o.name, port: this.o.port, heartbeatPort: this.o.heartbeatPort, fingerprint: this.o.fingerprint, version: this.o.version, linkAddress }, settings, key: Buffer.from(this.o.key).toString('base64') } satisfies z.infer<typeof JoinSchema>);
     let r: Response;
     try {
       r = await this.https(`${url}/v1/ha/join`, { method: 'POST', headers: { 'content-type': 'application/json' }, body, signal: AbortSignal.timeout(15_000) }, i.fingerprint);
@@ -446,6 +466,7 @@ export class HaService {
     if (i.node.version !== this.o.version) throw conflict(`Both servers must run the same FBRX Server version (${this.o.version} here, ${i.node.version} there)`);
     const ip = plainIp(remoteAddress);
     if (!isIPv4(ip)) throw badRequest('The primary must reach this server over IPv4');
+    this.adoptKey(Buffer.from(i.key, 'base64'));
     const secret = randomBytes(32).toString('base64url');
     this.pair = {
       pairId: i.pairId,
@@ -471,10 +492,24 @@ export class HaService {
     this.resetHeard();
     this.startedAt = mono();
     this.setState('starting');
+    // What it kept goes: the primary's copy comes in full.
+    this.o.copy?.off();
+    this.o.copy?.becomeStandby();
     void this.hb.start();
     void this.o.roles.deactivate(`Paired as the standby of ${i.node.name}`).catch(() => undefined);
     this.event('paired', `Paired with ${i.node.name}: ${i.node.name} is the primary, ${this.o.name} the standby`);
     return { secret, node: { nodeId: this.pair.nodeId, name: this.o.name, version: this.o.version, heartbeatPort: this.o.heartbeatPort, linkAddress: null } };
+  }
+
+  /** The standby takes the primary's key (its own sealed secrets re-sealed with it first). */
+  private adoptKey(k: Buffer) {
+    if (k.length !== 32) throw badRequest('The primary’s key is not right');
+    const old = Buffer.from(this.o.key);
+    if (old.equals(k)) return;
+    const keys = this.keys().map((w) => ({ ...w, secret: sealString(k, openString(old, w.secret, 'ha.witness'), 'ha.witness') }));
+    if (this.o.adoptKey) this.o.adoptKey(k, old);
+    else this.o.key.set(k);
+    this.put(KEY.keys, keys);
   }
 
   /** Leaves the pair (and tells the partner, when it answers). The active server keeps serving. */
@@ -492,11 +527,12 @@ export class HaService {
     if (p.witness && wasActive) void this.witnessCall(true).catch(() => undefined);
     this.pair = null;
     this.save();
+    this.o.copy?.off();
     this.hb.stop();
     this.resetHeard();
     this.setState('single');
     this.event('unpaired', text);
-    for (const rule of ['ha_partner_lost', 'ha_takeover', 'ha_stopped', 'ha_third_vote']) void this.o.alerts.clear(rule).catch(() => undefined);
+    for (const rule of ['ha_partner_lost', 'ha_takeover', 'ha_stopped', 'ha_third_vote', 'ha_behind']) void this.o.alerts.clear(rule).catch(() => undefined);
     // A standby that leaves serves what it has, like any single server.
     if (!wasActive) void this.o.roles.activate('This server left its pair').catch(() => undefined);
   }
@@ -654,7 +690,12 @@ export class HaService {
           break;
         }
         await this.watchPartner(now, hears);
-        if (p.settings.autoHandBack && p.preference === 'standby' && b?.pr === 'primary' && this.partnerStandbySince !== null && now - this.partnerStandbySince > (this.o.handBackAfterMs ?? 60_000) && !switching) {
+        if (hears && b?.st === 'standby') {
+          void this.ship();
+          this.watchCopy();
+        }
+        const caughtUp = this.o.copy?.caughtUp() ?? true;
+        if (p.settings.autoHandBack && caughtUp && p.preference === 'standby' && b?.pr === 'primary' && this.partnerStandbySince !== null && now - this.partnerStandbySince > (this.o.handBackAfterMs ?? 60_000) && !switching) {
           await this.switchover('the pair (hand back by itself)', 'handback').catch((e) => this.o.log('warn', `High availability: handing back failed: ${(e as Error).message}`));
         }
         break;
@@ -718,6 +759,9 @@ export class HaService {
       } else p.term = Math.max(p.term, this.heard.beat?.t ?? 0) + 1;
       this.save();
       const was = this.state;
+      const asOf = this.o.copy?.copyAsOf() ?? null;
+      if (kind === 'takeover' && this.o.copy) at(asOf ? `Its copy of ${p.partner.name}'s data was current as of ${seconds(Math.max(0, Date.now() - Date.parse(asOf)))} before` : `It had no complete copy of ${p.partner.name}'s data yet`);
+      this.o.copy?.becomeActive();
       this.setState('active');
       steps.push(...(await this.o.roles.activate(reason).catch((e) => [{ at: iso(), text: `A role did not start: ${(e as Error).message}` }])));
       at(`${this.o.name} is serving`);
@@ -740,6 +784,7 @@ export class HaService {
   private async demote(kind: 'starting' | 'standby' | 'both-active', reason: string): Promise<HaStep[]> {
     const was = this.state;
     this.setState('standby');
+    this.o.copy?.becomeStandby();
     const steps = was === 'active' || was === 'stopped' ? await this.o.roles.deactivate(reason).catch((e) => [{ at: iso(), text: `A role did not stop: ${(e as Error).message}` }]) : [];
     if (kind === 'both-active') this.event('both-active', reason, steps);
     if (was === 'stopped') void this.o.alerts.clear('ha_stopped', undefined, { detail: `${this.pair?.partner.name} serves; ${this.o.name} is the standby.` }).catch(() => undefined);
@@ -750,12 +795,60 @@ export class HaService {
     this.busy = true;
     try {
       this.setState('stopped');
+      this.o.copy?.becomeStandby();
       const steps = await this.o.roles.deactivate(reason).catch((e) => [{ at: iso(), text: `A role did not stop: ${(e as Error).message}` }]);
       this.nextTry = mono() + this.takeoverMs;
       this.event('stopped', reason, steps);
       void this.o.alerts.raise({ rule: 'ha_stopped', role: 'ha', severity: 'critical', title: `${this.o.name} stopped serving`, detail: reason, yours: `Check the network around ${this.o.name}, ${this.pair?.partner.name} and the third vote.`, steps }).catch(() => undefined);
     } finally {
       this.busy = false;
+    }
+  }
+
+  // ------------------------------------------------------------------------------------------- copying
+
+  /** The roles' data to copy (set once the roles are up, before start). */
+  useCopy(c: HaCopy): void {
+    this.o.copy = c;
+  }
+
+  /** Sends the standby what changed (a full copy first when it needs one). */
+  private async ship(force = false): Promise<void> {
+    const c = this.o.copy;
+    if (!c || (this.copying && !force)) return;
+    while (this.copying) await new Promise((r) => setTimeout(r, 10));
+    this.copying = true;
+    try {
+      for (const parts of c.snapshots()) {
+        let last: CopyAck[] = [];
+        for (const part of parts) last = (await this.peer<{ acks: CopyAck[] }>('copy', { batches: [part] }, 60_000)).acks;
+        c.acked(last);
+      }
+      const batches = c.outgoing(force);
+      if (batches.length) c.acked((await this.peer<{ acks: CopyAck[] }>('copy', { batches }, 30_000)).acks);
+    } catch (e) {
+      if (Date.now() - this.lastCopyError > 30_000) {
+        this.lastCopyError = Date.now();
+        this.o.log('warn', `High availability: copying to ${this.pair?.partner.name} failed: ${(e as Error).message}`);
+      }
+    } finally {
+      this.copying = false;
+    }
+  }
+
+  /** The standby falling far behind is an alert; caught up again, its all-clear. */
+  private watchCopy() {
+    const c = this.o.copy;
+    const p = this.pair;
+    if (!c || !p) return;
+    const late = c.views().filter((v) => v.state !== 'caught-up' && (v.behindMs ?? 0) > BEHIND_ALERT_MS);
+    if (late.length && !this.behindRaised) {
+      this.behindRaised = true;
+      const worst = Math.max(...late.map((v) => v.behindMs ?? 0));
+      void this.o.alerts.raise({ rule: 'ha_behind', role: 'ha', severity: 'warning', title: `${p.partner.name} is falling behind: its copy is ${seconds(worst)} old`, detail: `Behind on ${late.map((v) => v.label.toLowerCase()).join(', ')}. If ${this.o.name} stopped now, what changed since would be missing on ${p.partner.name}.`, yours: `Check the network between ${this.o.name} and ${p.partner.name}, and that ${p.partner.name} has room on its drive.` }).catch(() => undefined);
+    } else if (this.behindRaised && c.caughtUp()) {
+      this.behindRaised = false;
+      void this.o.alerts.clear('ha_behind', undefined, { detail: `${p.partner.name} has caught up.` }).catch(() => undefined);
     }
   }
 
@@ -833,6 +926,13 @@ export class HaService {
     const ready = () => this.mutual() && this.heard.beat?.st === 'standby';
     for (const until = mono() + 2 * this.takeoverMs; !ready() && mono() < until; ) await new Promise((r) => setTimeout(r, this.heartbeatMs));
     if (!ready()) throw conflict(`${p.partner.name} is not ready to take over (it has to be heard as the standby)`);
+    // And it has everything: nothing is lost by switching over.
+    const copied = () => this.o.copy?.caughtUp() ?? true;
+    for (const until = mono() + CATCH_UP_MS; !copied() && mono() < until; ) await new Promise((r) => setTimeout(r, this.heartbeatMs));
+    if (!copied()) {
+      const behind = (this.o.copy?.views() ?? []).filter((v) => v.state !== 'caught-up').map((v) => v.label.toLowerCase());
+      throw conflict(`${p.partner.name} is still copying (${behind.join(', ')}): try again when it has caught up`);
+    }
     if (this.busy) throw conflict('The pair is busy: try again in a moment');
     this.busy = true;
     this.switchingUntil = mono() + 30_000;
@@ -840,7 +940,10 @@ export class HaService {
     const at = (text: string) => steps.push({ at: iso(), text });
     try {
       at(kind === 'handback' ? `${by} handed the work back to ${p.partner.name}` : `${by} switched over to ${p.partner.name}`);
+      // The last changes go first; from now on nothing changes here.
       this.setState('standby');
+      await this.ship(true);
+      this.o.copy?.becomeStandby();
       steps.push(...(await this.o.roles.deactivate(`Switching over to ${p.partner.name}`).catch((e) => [{ at: iso(), text: `A role did not stop: ${(e as Error).message}` }])));
       if (p.witness) {
         await this.witnessCall(true).catch(() => undefined);
@@ -875,6 +978,11 @@ export class HaService {
     switch (m.op) {
       case 'hello':
         return { ok: true, state: this.state };
+      case 'copy': {
+        if (this.state === 'active') throw conflict(`${this.o.name} is the active server: it does not take a copy`);
+        const { batches } = z.object({ batches: z.array(z.object({ name: z.string().max(40) }).passthrough()).max(20) }).parse(m);
+        return { acks: this.o.copy?.receive(batches as unknown as CopyBatch[]) ?? [] };
+      }
       case 'take': {
         const { kind, steps } = z.object({ kind: z.enum(['switchover', 'handback']), steps: z.array(z.object({ at: z.string(), text: z.string().max(300) })).max(50) }).parse(m);
         // Already serving (it saw nobody was): the same outcome.

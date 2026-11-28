@@ -62,6 +62,12 @@ export class BmcService {
     this.save(null);
   }
 
+  /** The server's key changes (it became the standby of a pair): its controller's password is sealed with the new one. */
+  reseal(oldKey: Uint8Array, newKey: Uint8Array): void {
+    const s = this.saved();
+    if (s) this.save({ ...s, password: sealString(newKey, openString(oldKey, s.password, 'bmc'), 'bmc') });
+  }
+
   client(): Redfish {
     const s = this.saved();
     if (!s) throw conflict('Connect the management controller first (Server → Connect)');

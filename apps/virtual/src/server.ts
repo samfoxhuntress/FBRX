@@ -16,7 +16,7 @@ import { ZodError } from 'zod';
 import { Db } from '@fbrx/shared/node';
 import type { VirtualConfig } from './config';
 import { VIRTUAL_MIGRATIONS } from './migrations';
-import { loadMasterKey } from './keys';
+import { loadMasterKey, writeMasterKey } from './keys';
 import { Audit } from './audit';
 import { Auth } from './auth';
 import { IsoLibrary } from './isos';
@@ -48,6 +48,7 @@ import { filesRoutes } from './routes/files';
 import { directoryRoutes } from './routes/directory';
 import { DirectoryService } from './directory/service';
 import { HaService } from './ha/service';
+import { HaCopy, type CopySource } from './ha/copy';
 import { haRoutes } from './routes/ha';
 import { readEnv, roleRoutes } from './routes/roles';
 import { hostBridgeRoutes } from './routes/host-bridge';
@@ -148,6 +149,12 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
     handBackAfterMs: config.ha.handBackAfterMs,
     roles: { activate: async () => [], deactivate: async () => [] },
     log: (level, msg) => app.log[level](msg),
+    adoptKey: (k, old) => {
+      if (process.env.FBRX_V_MASTER_KEY) throw conflict('This server’s key is set by FBRX_V_MASTER_KEY: set the same one on both servers');
+      ctx.bmc.reseal(old, k);
+      key.set(k);
+      writeMasterKey(config.dataDir, k);
+    },
   });
   const ctx: VirtualContext = {
     config,
@@ -349,6 +356,19 @@ export async function buildServer(config: VirtualConfig, opts: BuildOptions = {}
 
   app.get('/healthz', { logLevel: 'warn' }, async () => ({ ok: true, version, driver: hv.kind }));
   alerts.start();
+  // What high availability copies to the standby, role by role: the pair's settings and accounts, and each role's
+  // data. What belongs to one server (its management controller, its interrupt placements, its own alerts and audit
+  // log, the pair's own settings) stays with it.
+  const setting = (...values: string[]) => ({ name: 'settings', only: { column: 'key', values } });
+  const sources: CopySource[] = [
+    { name: 'server', label: 'Accounts and alert settings', db, tables: [{ name: 'users' }, { name: 'app_tokens' }, setting('alerts.settings')] },
+    ...(gateStore ? [{ name: 'gate', label: 'FBRX Gate', db: gateStore.db, tables: [{ name: 'gate_candidate' }, { name: 'gate_commits' }, { name: 'gate_meta' }] }] : []),
+    ...(domeStore ? [{ name: 'minidome', label: 'MiniDome', db: domeStore.db, tables: [{ name: 'dome_findings' }, { name: 'dome_devices' }, { name: 'dome_meta' }] }] : []),
+    ...(ctx.time ? [{ name: 'time', label: 'FBRX Time’s catalog', db, tables: [{ name: 'time_jobs' }, { name: 'time_images' }, setting('time.settings')] }] : []),
+    ...(ctx.directory ? [{ name: 'directory', label: 'Directory', db, tables: [setting('directory.state')] }] : []),
+    ...(ctx.files ? [{ name: 'files', label: 'File server settings', db, tables: [setting('files.state')] }] : []),
+  ];
+  ha.useCopy(new HaCopy(sources, (level, msg) => app.log[level](msg)));
   await ha.start();
   await authRoutes(app, ctx);
   await vmRoutes(app, ctx);
