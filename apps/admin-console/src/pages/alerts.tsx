@@ -12,6 +12,7 @@ const SEVERITY = [
 const APP_NAMES: Record<FbrxAlertApp, string> = {
   'fbrx-os': 'FBRX OS',
   'fbrx-digger': 'FBRX Digger',
+  'fbrx-view': 'FBRX View',
   'fbrx-server': 'FBRX Server',
   'fbrx-gate': 'FBRX Gate',
   'fbrx-minidome': 'MiniDome',

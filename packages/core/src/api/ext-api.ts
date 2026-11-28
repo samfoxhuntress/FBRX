@@ -856,6 +856,33 @@ export function buildExtApi(k: Kernel): Record<keyof ExtMethods, Handler> {
       k.audit.append({ category: 'network', action: 'remote.open', actor: 'user', target: `${q.protocol}://${q.host}${q.port ? `:${q.port}` : ''}`, outcome: 'success', details: { viewer: r.viewer } });
       return { viewer: r.viewer, bookmark };
     },
+    'view.open': async (p) => {
+      if (!k.view) throw new CoreError('FORBIDDEN', 'Remote desktops drawn in the app are FBRX View’s');
+      const q = z
+        .object({
+          protocol: z.enum(['rdp', 'vnc']),
+          host: z.string().trim().min(1).max(253).regex(/^[A-Za-z0-9.:_-]+$/, 'Enter an IP address or host name'),
+          port: z.number().int().min(1).max(65535).optional(),
+          username: z.string().trim().max(128).optional(),
+          password: z.string().max(512).optional(),
+          label: z.string().max(200).optional(),
+        })
+        .parse(p);
+      const port = q.port ?? (q.protocol === 'rdp' ? 3389 : 5900);
+      const username = q.username ?? '';
+      const saved = q.password ? null : k.consoles.remotePassword(q.protocol, q.host, port, username);
+      const bookmark = k.consoles.saveBookmark({ host: q.host, port, protocol: q.protocol, username: username || null, label: q.label, connected: true });
+      const t = await k.viewProxy().ticket(q.protocol, q.host, port);
+      const dom = /^([^\\]+)\\(.+)$/.exec(username);
+      k.audit.append({ category: 'network', action: 'view.open', actor: 'user', target: `${q.protocol}://${q.host}:${port}`, outcome: 'success', details: { username: username || null, savedLogin: !!saved } });
+      return { protocol: q.protocol, url: t.url, token: t.token, destination: t.destination, username: dom ? dom[2]! : username, domain: dom ? dom[1]! : null, password: q.password ?? saved ?? '', saved: !!saved, bookmark };
+    },
+    'view.saveLogin': (p) => {
+      if (!k.view) throw new CoreError('FORBIDDEN', 'Remote desktops drawn in the app are FBRX View’s');
+      const q = z.object({ protocol: z.enum(['rdp', 'vnc']), host: z.string().trim().min(1).max(253), port: z.number().int().min(1).max(65535), username: z.string().trim().max(128).optional(), password: z.string().min(1).max(512) }).parse(p);
+      k.consoles.rememberRemoteLogin(q.protocol, q.host, q.port, q.username ?? '', q.password);
+      return { ok: true };
+    },
     'console.removeBookmark': (p) => {
       const q = z.object({ id: z.string().min(1).max(64), forgetPassword: z.boolean().optional() }).parse(p);
       k.consoles.removeBookmark(q.id, q.forgetPassword);

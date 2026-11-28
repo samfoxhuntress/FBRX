@@ -5,6 +5,7 @@ import {
   BROWSER_SEARCH_ENGINES,
   DEFAULT_PRICE_BOOK,
   DIGGER_SETTINGS,
+  VIEW_SETTINGS,
   EDITION_PLANS,
   IMAGE_GENERATORS,
   IMAGE_SIZES,
@@ -44,7 +45,7 @@ import {
 import { AdvancedTag, Button, Callout, Card, CopyText, Field, Grid, Icons, Input, KeyValue, Page, Select, Status, TextArea, Toggle, formatDate, useAction, useConfirm, useToast, type IconName } from '@fbrx/ui';
 import { bridge, call } from '../client';
 import { isLocked, useCore } from '../hooks';
-import { DIGGER, IS_WINDOWS, navigate, routeArg } from '../app';
+import { DIGGER, IS_WINDOWS, SIDE_APP, VIEW, navigate, routeArg } from '../app';
 import { PRESETS, TEXTURE_NAMES, playStartupSound, presetAllowed, resolvedMode, resolvedTexture, textureImage, themeAccent } from '../theme';
 import { BrucePreview, peekBruce, seasonNow } from '../fun';
 import { TrophyBadge, TrophyCase } from '../trophies';
@@ -73,7 +74,7 @@ function Locked({ show }: { show: boolean }) {
 
 type SectionId = 'general' | 'appearance' | 'presenting' | 'messages' | 'agent' | 'personality' | 'memory' | 'skills' | 'voice' | 'snippets' | 'macros' | 'spotlight' | 'browser' | 'trophies' | 'updates' | 'account' | 'edition' | 'license' | 'apps' | 'directory' | 'remote' | 'api' | 'logs';
 /** FBRX Digger's settings: what applies to a network toolkit. */
-const DIGGER_TABS: readonly string[] = DIGGER_SETTINGS;
+const DIGGER_TABS: readonly string[] = VIEW ? VIEW_SETTINGS : DIGGER_SETTINGS;
 const SECTIONS: Array<{ id: SectionId; label: string; icon: IconName; group: string; ultra?: boolean; basicLabel?: string; notEssentials?: boolean; linux?: boolean }> = [
   { id: 'general', label: 'General', icon: 'settings', group: 'You' },
   { id: 'appearance', label: 'Appearance', icon: 'palette', group: 'You' },
@@ -111,7 +112,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   const funUnlocked = useCore('settings.get', undefined, ['settings.changed']).data?.settings.appearance.funUnlocked ?? false;
   const learner = useLearner();
   const vertical = useVertical();
-  const sections = SECTIONS.filter((x) => (DIGGER ? DIGGER_TABS.includes(x.id) : learner ? LEARNER_SECTIONS.has(x.id) : (ultra || !x.ultra) && !(tier === 'essentials' && x.notEssentials) && (!x.linux || bridge.platform === 'linux')));
+  const sections = SECTIONS.filter((x) => (SIDE_APP ? DIGGER_TABS.includes(x.id) : learner ? LEARNER_SECTIONS.has(x.id) : (ultra || !x.ultra) && !(tier === 'essentials' && x.notEssentials) && (!x.linux || bridge.platform === 'linux')));
   const [picked, setTab] = useState<SectionId>(() => sectionFromRoute() ?? 'general');
   const tab = sections.some((x) => x.id === picked) ? picked : 'general';
   // A link to a section (such as "See it" on a trophy) while Settings is already open.
@@ -127,7 +128,7 @@ export function SettingsPage({ onRerunSetup }: { onRerunSetup: () => void }) {
   return (
     <Page title="Settings" description={`How FBRX looks and behaves on this computer. Settings your ${vertical === 'home' ? 'family' : 'organization'} manages show a lock.`}>
       {/* FBRX Digger has no editions: every network tool, always. */}
-      {!DIGGER && <EditionCard />}
+      {!SIDE_APP && <EditionCard />}
       <div className="settings-layout">
         <nav className="settings-nav" aria-label="Settings sections">
           {sections.map((x) => {

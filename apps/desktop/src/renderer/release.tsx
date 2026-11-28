@@ -1,10 +1,10 @@
 import { useState } from 'react';
-import { DIGGER_NAME, TIER_NAMES, codenameFor, displayVersion, type ReleaseCheck } from '@fbrx/shared';
+import { DIGGER_NAME, TIER_NAMES, VIEW_NAME, codenameFor, displayVersion, type ReleaseCheck } from '@fbrx/shared';
 import { Button, Callout, Card, Icons, KeyValue, LabsMark, Modal, Status, Toggle, timeAgo, useAction, useConfirm, useToast } from '@fbrx/ui';
 import { bridge, call, openExternal } from './client';
 import { useCore } from './hooks';
 import { useTier } from './edition';
-import { DIGGER } from './app';
+import { DIGGER, SIDE_APP, VIEW } from './app';
 
 /**
  * New versions published in the FBRX repository: a pill in the top bar, a dialog with what's new, and the panel in
@@ -172,12 +172,12 @@ export function ReleasePanel({ checkRepo, locked, onToggle, autoInstall }: { che
 /** The version, as shown in Settings → About. */
 export function AboutVersion({ version }: { version: string }) {
   const tier = useTier();
-  // FBRX Digger has its own versions (DIGGER_VERSION) and no editions or codenames.
-  const code = DIGGER ? null : codenameFor(version);
+  // FBRX Digger and FBRX View have their own versions and no editions or codenames.
+  const code = SIDE_APP ? null : codenameFor(version);
   return (
     <div className="about-version">
       <div className="about-version-name">
-        {DIGGER ? DIGGER_NAME : TIER_NAMES[tier]} <b>{DIGGER ? version : displayVersion(version)}</b>
+        {DIGGER ? DIGGER_NAME : VIEW ? VIEW_NAME : TIER_NAMES[tier]} <b>{SIDE_APP ? version : displayVersion(version)}</b>
       </div>
       <div className="fx-muted" style={{ fontSize: 12 }}>Built on FBRX OS.</div>
       {code && (

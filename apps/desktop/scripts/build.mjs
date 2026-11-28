@@ -71,6 +71,7 @@ copyFileSync(join(app, 'build', 'icon.png'), join(mobileOut, 'icon.png'));
 // FBRX Digger's window icon (the same build, packaged by electron-builder.digger.yml).
 mkdirSync(join(app, 'dist/assets'), { recursive: true });
 copyFileSync(join(app, 'build', 'digger-icon.png'), join(app, 'dist/assets/digger-icon.png'));
+copyFileSync(join(app, 'build', 'view-icon.png'), join(app, 'dist/assets/view-icon.png'));
 
 // Voice input's speech engine (ONNX Runtime for WebAssembly), served to the app from fbrx-voice://ort/ so nothing
 // is fetched from a CDN. It must be the exact build the bundled transformers.js expects.

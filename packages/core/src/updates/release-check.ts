@@ -5,7 +5,7 @@ import { join } from 'node:path';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { z } from 'zod';
-import { DIGGER_NAME, RELEASE_MANIFEST_URL, ReleaseManifestSchema, compareSemver, type AppFlavor, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
+import { DIGGER_NAME, RELEASE_MANIFEST_URL, VIEW_NAME, ReleaseManifestSchema, compareSemver, type AppFlavor, type ReleaseCheck, type ReleaseInfo, type Settings } from '@fbrx/shared';
 import { CoreError } from '../errors';
 import type { EventBus } from '../events';
 import type { Logger } from '../logger';
@@ -42,14 +42,14 @@ export interface ReleaseCheckerDeps {
   launchInstaller?: (root: string) => string;
   /** A good moment to install by itself (nobody presenting, the agent idle, the computer not in use). */
   quiet?: () => boolean;
-  /** FBRX Digger follows its own entry in release.json, and is downloaded from its release page. */
+  /** FBRX Digger and FBRX View follow their own entries in release.json, and are downloaded from their release pages. */
   flavor?: AppFlavor;
 }
 
 export class ReleaseChecker {
   private state: ReleaseCheck;
-  /** The other apps' latest releases from the last check, for "Get" (only Digger has its own so far). */
-  private others: { digger?: { version: string; download: string } } = {};
+  /** The other apps' latest releases from the last check, for "Get" (Digger and View have their own). */
+  private others: { digger?: { version: string; download: string }; view?: { version: string; download: string } } = {};
   private timer: NodeJS.Timeout | null = null;
   private busy: Promise<ReleaseCheck> | null = null;
 
@@ -82,7 +82,7 @@ export class ReleaseChecker {
   }
 
   /** The other apps' latest releases, as the last check read them. */
-  apps(): { digger?: { version: string; download: string } } {
+  apps(): { digger?: { version: string; download: string }; view?: { version: string; download: string } } {
     return this.others;
   }
 
@@ -108,10 +108,14 @@ export class ReleaseChecker {
     try {
       const res = await fetch(this.manifestUrl, { headers: { 'user-agent': `FBRX-OS/${this.d.appVersion}`, 'cache-control': 'no-cache' }, signal: AbortSignal.timeout(20_000) });
       if (!res.ok) throw new Error(`The release list answered ${res.status}`);
-      // What is new in FBRX Command is for FBRX Command; FBRX Digger reads its own entry.
-      const { command: _command, digger, ...os } = ReleaseManifestSchema.parse(await res.json());
-      this.others = digger ? { digger: { version: digger.version, download: digger.download } } : {};
-      const latest: ReleaseInfo | null = this.d.flavor === 'digger' ? (digger ? { ...digger, stage: '', codename: '', importance: 'recommended' } : null) : os;
+      // What is new in FBRX Command is for FBRX Command; FBRX Digger and FBRX View read their own entries.
+      const { command: _command, digger, view, ...os } = ReleaseManifestSchema.parse(await res.json());
+      this.others = {
+        ...(digger ? { digger: { version: digger.version, download: digger.download } } : {}),
+        ...(view ? { view: { version: view.version, download: view.download } } : {}),
+      };
+      const own = this.d.flavor === 'digger' ? digger : this.d.flavor === 'view' ? view : null;
+      const latest: ReleaseInfo | null = this.d.flavor === 'digger' || this.d.flavor === 'view' ? (own ? { ...own, stage: '', codename: '', importance: 'recommended' } : null) : os;
       const newer = !!latest && compareSemver(latest.version, this.d.appVersion) > 0;
       this.set({ state: newer ? 'available' : 'current', latest, checkedAt: new Date().toISOString(), message: null });
       if (!latest) return this.status();
@@ -120,7 +124,7 @@ export class ReleaseChecker {
       if (newer && !this.d.settings().updates.autoInstall && this.d.settings().updates.skipVersion !== latest.version && this.readState().notified !== latest.version) {
         this.writeState({ notified: latest.version });
         await this.d.notify(
-          this.d.flavor === 'digger' ? `${DIGGER_NAME} ${latest.version} is available` : `FBRX OS ${latest.stage} ${latest.version} is available`,
+          this.d.flavor === 'digger' ? `${DIGGER_NAME} ${latest.version} is available` : this.d.flavor === 'view' ? `${VIEW_NAME} ${latest.version} is available` : `FBRX OS ${latest.stage} ${latest.version} is available`,
           `${latest.summary || 'A new version is ready.'} Open Settings → Updates to install it when it suits you.`,
           latest.version,
         );
@@ -180,8 +184,8 @@ export class ReleaseChecker {
   }
 
   installRoot(): string | null {
-    // Digger is installed from its own installers: a new version is downloaded from its release page.
-    if (this.d.flavor === 'digger') return null;
+    // Digger and View are installed from their own installers: a new version is downloaded from its release page.
+    if (this.d.flavor === 'digger' || this.d.flavor === 'view') return null;
     try {
       const { root } = JSON.parse(readFileSync(join(this.d.dataRoot, INSTALL_SOURCE_FILE), 'utf8')) as { root?: string };
       return root && existsSync(join(root, 'package-lock.json')) && existsSync(join(root, 'apps', 'desktop')) ? root : null;

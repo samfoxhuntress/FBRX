@@ -19,6 +19,7 @@ export * from './fun';
 export * from './text-tools';
 export * from './release';
 export * from './digger';
+export * from './view';
 export * from './skills';
 export * from './toolkit';
 export * from './netenv';

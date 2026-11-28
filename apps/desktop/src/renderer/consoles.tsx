@@ -8,7 +8,7 @@ import { bridge, call, onEvent, readClipboard, writeClipboard } from './client';
 import { menuFor } from './context-menu';
 import { useAgentName, useConsoleSessions, useCore } from './hooks';
 import { askAgent } from './widgets';
-import { DIGGER } from './app';
+import { DIGGER, VIEW } from './app';
 
 // ------------------------------------------------------------------------------------ session output
 
@@ -29,7 +29,7 @@ const webUrl = (host: string, port: number) => `${[80, 8080, 5000, 8000].include
  * (which has no Terminal page).
  */
 export function consoleRoute(id?: string): string {
-  return DIGGER ? `network/consoles${id ? `/${id}` : ''}` : `terminal/console${id ? `/${id}` : ''}`;
+  return DIGGER ? `network/consoles${id ? `/${id}` : ''}` : VIEW ? `view${id ? `/${id}` : ''}` : `terminal/console${id ? `/${id}` : ''}`;
 }
 
 // ---------------------------------------------------------------------------------- connect dialog
@@ -50,24 +50,39 @@ export interface ConnectTarget {
 }
 
 /** How each kind of connection is named, and its usual port. */
-const KIND: Record<ConnectionProtocol, { label: string; port: number }> = { ssh: { label: 'SSH', port: 22 }, telnet: { label: 'Telnet', port: 23 }, rdp: { label: 'Remote desktop', port: 3389 }, vnc: { label: 'Screen sharing', port: 5900 } };
+export const KIND: Record<ConnectionProtocol, { label: string; port: number }> = { ssh: { label: 'SSH', port: 22 }, telnet: { label: 'Telnet', port: 23 }, rdp: { label: 'Remote desktop', port: 3389 }, vnc: { label: 'Screen sharing', port: 5900 } };
 const isRemote = (p: ConnectionProtocol | undefined): p is RemoteProtocol => p === 'rdp' || p === 'vnc';
 
 /**
  * Connect to a device or a computer: a console (SSH or Telnet) here in FBRX, or remote desktop (RDP) and screen
  * sharing (VNC) in this computer's own viewer.
  */
-export function ConnectDialog({ target, onClose, onConnected }: { target?: ConnectTarget; onClose: () => void; onConnected: (s: ConsoleSession) => void }) {
+export function ConnectDialog({
+  target,
+  onClose,
+  onConnected,
+  remote,
+}: {
+  target?: ConnectTarget;
+  onClose: () => void;
+  onConnected: (s: ConsoleSession) => void;
+  /** FBRX View: its own dialog for remote desktops, drawn in the app (instead of this computer's viewer). */
+  remote?: (p: { protocol: RemoteProtocol; target?: ConnectTarget; onKind: (p: ConnectionProtocol) => void; onClose: () => void }) => React.ReactNode;
+}) {
   const [kind, setKind] = useState<ConnectionProtocol>(target?.protocol ?? (target?.ports && !target.ports.includes(22) && !target.ports.includes(23) ? (target.ports.includes(3389) ? 'rdp' : target.ports.includes(5900) ? 'vnc' : 'ssh') : target?.ports && !target.ports.includes(22) && target.ports.includes(23) ? 'telnet' : 'ssh'));
   return isRemote(kind) ? (
-    <RemoteDialog key={kind} target={target} protocol={kind} onKind={setKind} onClose={onClose} />
+    remote ? (
+      <>{remote({ protocol: kind, target, onKind: setKind, onClose })}</>
+    ) : (
+      <RemoteDialog key={kind} target={target} protocol={kind} onKind={setKind} onClose={onClose} />
+    )
   ) : (
     <ConsoleConnect key="console" target={{ ...target, protocol: kind }} onKind={setKind} onClose={onClose} onConnected={onConnected} />
   );
 }
 
 /** The four ways to connect, as one switch. */
-function KindSwitch({ value, onChange, disabled }: { value: ConnectionProtocol; onChange: (p: ConnectionProtocol) => void; disabled?: boolean }) {
+export function KindSwitch({ value, onChange, disabled }: { value: ConnectionProtocol; onChange: (p: ConnectionProtocol) => void; disabled?: boolean }) {
   return (
     <div className="seg" role="group" aria-label="Connect with">
       {(['ssh', 'telnet', 'rdp', 'vnc'] as const).map((p) => (

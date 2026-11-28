@@ -10,7 +10,7 @@ import { ALERT_SEVERITIES } from './ext';
  */
 
 export const FBRX_ALERT_VERSION = 1;
-export const FBRX_ALERT_APPS = ['fbrx-os', 'fbrx-digger', 'fbrx-server', 'fbrx-gate', 'fbrx-minidome', 'fbrx-command'] as const;
+export const FBRX_ALERT_APPS = ['fbrx-os', 'fbrx-digger', 'fbrx-view', 'fbrx-server', 'fbrx-gate', 'fbrx-minidome', 'fbrx-command'] as const;
 export type FbrxAlertApp = (typeof FBRX_ALERT_APPS)[number];
 /** open: a problem that lasts until it is over; resolved: its all-clear; event: something that happened once. */
 export const FBRX_ALERT_STATES = ['open', 'resolved', 'event'] as const;

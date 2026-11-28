@@ -3,7 +3,7 @@
 The plan of record lives in one living doc, **FBRX Roadmap and Architecture**:
 https://claude.ai/artifact/VkBUyhwd4QJYn82CGGxhFS
 
-It holds what the current release carries and waits on, the app family from 2.5.0 (the Endpoint, Digger Pro, FBRX Reach,
+It holds what the current release carries and waits on, the app family from 2.5.0 (the Endpoint, Digger Pro, FBRX View,
 FBRX Browser, FBRX Shield, FBRX Sandbox) and how one codebase builds them, the release-by-release plan to 3.0, the
 Devices plan, the decisions waiting on Sam, and a change log.
 

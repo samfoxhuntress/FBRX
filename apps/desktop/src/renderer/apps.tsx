@@ -1,4 +1,4 @@
-import { DIGGER_ICON_SVG, FBRX_APPS, TIER_SHORT, handoffFor, type AppId, type AppStatus } from '@fbrx/shared';
+import { DIGGER_ICON_SVG, FBRX_APPS, VIEW_ICON_SVG, TIER_SHORT, handoffFor, type AppId, type AppStatus } from '@fbrx/shared';
 import { Button, Card, Icons, Status, useAction, useToast } from '@fbrx/ui';
 import { call, openExternal } from './client';
 import { useCore } from './hooks';
@@ -20,6 +20,7 @@ export function useApps() {
 /** An app's icon: Digger's mole, FBRX's mark for the Endpoint, a lettered tile for the apps still to come. */
 export function AppIcon({ id, size = 40 }: { id: AppId; size?: number }) {
   if (id === 'digger') return <span className="app-icon" style={{ width: size, height: size }} dangerouslySetInnerHTML={{ __html: DIGGER_ICON_SVG }} aria-hidden />;
+  if (id === 'view') return <span className="app-icon" style={{ width: size, height: size }} dangerouslySetInnerHTML={{ __html: VIEW_ICON_SVG }} aria-hidden />;
   return (
     <span className={`app-icon tile ${id}`} style={{ width: size, height: size, fontSize: size * 0.42 }} aria-hidden>
       {id === 'os' ? 'FB' : FBRX_APPS[id].short[0]}

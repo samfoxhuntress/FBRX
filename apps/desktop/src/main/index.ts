@@ -6,7 +6,7 @@ import { Readable } from 'node:stream';
 import { hostname, userInfo } from 'node:os';
 import { Kernel, toCoreError } from '@fbrx/core';
 import { MANAGED_PREFERENCES_DOMAIN, TIER_NAMES, expandMacro, notificationDelivery, notificationKind, provisioningFromPreferences, shouldNotify, type NotificationEvent } from '@fbrx/shared';
-import { APP_NAME, FLAVOR } from './flavor';
+import { APP_ICON, APP_NAME, FLAVOR, SIDE_APP } from './flavor';
 import { createElectronPlatform, openExternalSafe, systemNotification, useRememberedKeyring } from './platform';
 import { ElectronUpdateController } from './updater';
 import { ClipHistory } from './clip-history';
@@ -237,10 +237,10 @@ function createWindow() {
     autoHideMenuBar: true,
     // The window buttons sit in the sidebar's top strip, above the FBRX logo (see data-platform="darwin" in the CSS).
     ...(process.platform === 'darwin' ? { trafficLightPosition: { x: 18, y: 18 } } : {}),
-    icon: asset(FLAVOR === 'digger' ? 'digger-icon.png' : 'icon.png'),
+    icon: asset(APP_ICON),
     webPreferences: {
       preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
-      // The renderer knows which app it is (FBRX OS or FBRX Digger) before it draws anything.
+      // The renderer knows which app it is (FBRX OS, FBRX Digger or FBRX View) before it draws anything.
       additionalArguments: [`--fbrx-flavor=${FLAVOR}`],
       contextIsolation: true,
       sandbox: true,
@@ -352,10 +352,10 @@ function popOut(route: string, o: { wide?: boolean } = {}) {
     show: false,
     backgroundColor: windowBackground(),
     autoHideMenuBar: true,
-    icon: asset(FLAVOR === 'digger' ? 'digger-icon.png' : 'icon.png'),
+    icon: asset(APP_ICON),
     webPreferences: {
       preload: join(app.getAppPath(), 'dist', 'preload', 'index.cjs'),
-      // The renderer knows which app it is (FBRX OS or FBRX Digger) before it draws anything.
+      // The renderer knows which app it is (FBRX OS, FBRX Digger or FBRX View) before it draws anything.
       additionalArguments: [`--fbrx-flavor=${FLAVOR}`],
       contextIsolation: true,
       sandbox: true,
@@ -466,9 +466,9 @@ function bindKey(current: string | null, next: string | null, run: () => void, w
   return null;
 }
 
-/** (Re)binds the macros from settings: Spotlight and the clipboard history. FBRX Digger leaves the keyboard alone. */
+/** (Re)binds the macros from settings: Spotlight and the clipboard history. Digger and View leave the keyboard alone. */
 function bindMacroKeys() {
-  if (FLAVOR === 'digger') return;
+  if (SIDE_APP) return;
   const s = kernel?.settings.get();
   spotlightKey = bindKey(spotlightKey, s?.spotlight.enabled ? s.spotlight.hotkey : null, showSpotlight, 'Spotlight');
   pickerKey = bindKey(pickerKey, s?.clipboard.hotkey || null, showClipPicker, 'Clipboard history');
@@ -615,8 +615,8 @@ function hideClipPicker() {
 
 function trayMenu() {
   if (!tray || !kernel) return;
-  // FBRX Digger: its name and version, open it, quit (no editions, approvals or FBRX Endpoint's tools).
-  if (FLAVOR === 'digger') {
+  // FBRX Digger and FBRX View: the name and version, open it, quit (no editions, approvals or FBRX Endpoint's tools).
+  if (SIDE_APP) {
     tray.setContextMenu(
       Menu.buildFromTemplate([
         { label: `${APP_NAME} ${app.getVersion()}`, enabled: false },
@@ -825,8 +825,8 @@ function registerIpc() {
   ipcMain.handle('fbrx:browser', (e, action: unknown, url?: unknown) => {
     // Endpoint Essentials is the AI on its own; the browser comes with Pro and up (and on learners' computers).
     if (!trusted(e) || action !== 'open') return false;
-    // FBRX Digger has no browser of its own: the page opens in the computer's browser.
-    if (FLAVOR === 'digger') return typeof url === 'string' && /^https?:\/\//i.test(url) ? (void shell.openExternal(url), true) : false;
+    // FBRX Digger and FBRX View have no browser of their own: the page opens in the computer's browser.
+    if (SIDE_APP) return typeof url === 'string' && /^https?:\/\//i.test(url) ? (void shell.openExternal(url), true) : false;
     if (kernel?.license.status().tier === 'essentials') return false;
     openBrowserWindow(browserDeps(), typeof url === 'string' && /^https?:\/\//i.test(url) ? url : undefined);
     return true;

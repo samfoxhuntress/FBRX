@@ -1,6 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import type { NotificationEvent, PresenterStatus, SystemStatus, Tier } from '@fbrx/shared';
-import { DIGGER_AI_PROVIDER, DIGGER_ICON_SVG, DIGGER_PAGES, TIER_NAMES, TIER_SHORT, addressAs, atLeast, displayVersion, funEnabled, labShown, type ProviderStatus } from '@fbrx/shared';
+import { DIGGER_AI_PROVIDER, DIGGER_ICON_SVG, DIGGER_PAGES, VIEW_ICON_SVG, VIEW_PAGES, TIER_NAMES, TIER_SHORT, addressAs, atLeast, displayVersion, funEnabled, labShown, type ProviderStatus } from '@fbrx/shared';
 import { Button, Card, Empty, ErrorBoundary, FBRX_MARK, FbrxMark, Icons, Page, Shell, Spinner, Status, useToast, type IconName, type NavGroup, type NavItem } from '@fbrx/ui';
 import { bridge, call, onEvent, openExternal } from './client';
 import { playChime } from './notify-sound';
@@ -13,6 +13,7 @@ import { Bruce } from './bruce';
 import { SnapOverlay } from './snap-overlay';
 import { TrophyBadge } from './trophies';
 import { DashboardPage } from './pages/dashboard';
+import { ViewPage } from './pages/view';
 import { Onboarding } from './pages/onboarding';
 import { LearningScreen, useLearningScreen } from './learning-screen';
 import { VaultStartPrompt } from './vault-lock';
@@ -136,7 +137,7 @@ let ownWindows: Record<string, boolean> = {};
 export function navigate(to: string) {
   const page = to.split('/')[0];
   // FBRX Digger has no browser of its own: a router's or device's page opens in the computer's browser.
-  if (page === 'browser' && DIGGER) {
+  if (page === 'browser' && SIDE_APP) {
     const url = to.split('/').slice(1).join('/');
     if (/^https?:\/\//i.test(url)) void openExternal(url);
     return;
@@ -179,16 +180,34 @@ function useRoute(): Route {
 export const IS_WINDOWS = bridge.platform === 'win32';
 /** FBRX Digger: the Network Center on its own, every network tool included, nothing else. */
 export const DIGGER = bridge.flavor === 'digger';
+/** FBRX View: the remote desktop app. */
+export const VIEW = bridge.flavor === 'view';
+/** FBRX Digger or FBRX View: an app of the family beside FBRX Endpoint, with its license and its AI. */
+export const SIDE_APP = DIGGER || VIEW;
+/** The side app's name, its line under the name, its pages and its sidebar section. */
+const SIDE = VIEW
+  ? { name: 'FBRX View', sub: 'Every way into your machines', pages: VIEW_PAGES as readonly string[], section: 'View', svg: VIEW_ICON_SVG }
+  : { name: 'FBRX Digger', sub: 'Every network tool', pages: DIGGER_PAGES as readonly string[], section: 'Digger', svg: DIGGER_ICON_SVG };
 
 /** FBRX Digger's mole, where FBRX OS shows its logo. */
 export function DiggerMark({ size = 30, className = 'fx-brand-mark' }: { size?: number; className?: string }) {
   return <span className={`${className} digger-mark`} style={{ width: size, height: size }} role="img" aria-label="FBRX Digger" dangerouslySetInnerHTML={{ __html: DIGGER_ICON_SVG }} />;
 }
 
+/** FBRX View's screen with an eye, where FBRX OS shows its logo. */
+export function ViewMark({ size = 30, className = 'fx-brand-mark' }: { size?: number; className?: string }) {
+  return <span className={`${className} digger-mark`} style={{ width: size, height: size }} role="img" aria-label="FBRX View" dangerouslySetInnerHTML={{ __html: VIEW_ICON_SVG }} />;
+}
+
+/** This side app's mark. */
+function SideMark(p: { size?: number; className?: string }) {
+  return VIEW ? <ViewMark {...p} /> : <DiggerMark {...p} />;
+}
+
 /**
- * FBRX Digger comes with Endpoint Ultra. It runs at the edition FBRX Endpoint's license gives this computer, so until
- * that is Ultra it says what it needs, and looks again every few seconds: a purchase or a sign-in in FBRX Endpoint
- * opens Digger by itself.
+ * FBRX Digger and FBRX View come with Endpoint Ultra. They run at the edition FBRX Endpoint's license gives this
+ * computer, so until that is Ultra they say what they need, and look again every few seconds: a purchase or a sign-in
+ * in FBRX Endpoint opens them by themselves.
  */
 function DiggerLocked() {
   const license = useCore('license.status', undefined, ['license.changed'], 10_000);
@@ -200,12 +219,14 @@ function DiggerLocked() {
   return (
     <div className="digger-locked">
       <div className="digger-locked-card">
-        <DiggerMark size={72} className="digger-locked-mark" />
-        <h1>FBRX Digger comes with {TIER_NAMES.ultra}</h1>
+        <SideMark size={72} className="digger-locked-mark" />
+        <h1>
+          {SIDE.name} comes with {TIER_NAMES.ultra}
+        </h1>
         <p>
           {pro
-            ? `FBRX Endpoint on this computer runs ${TIER_SHORT.basic}. Digger opens with ${TIER_SHORT.ultra} or ${TIER_SHORT.blackhole}: change your edition in FBRX Endpoint (Settings → Edition) and Digger opens by itself.`
-            : `Digger runs at the edition of FBRX Endpoint on this computer. Install FBRX Endpoint and sign in to your FBRX account with ${TIER_SHORT.ultra} (or ${TIER_SHORT.blackhole}), and Digger opens by itself.`}
+            ? `FBRX Endpoint on this computer runs ${TIER_SHORT.basic}. ${SIDE.name} opens with ${TIER_SHORT.ultra} or ${TIER_SHORT.blackhole}: change your edition in FBRX Endpoint (Settings → Edition) and ${SIDE.name} opens by itself.`
+            : `${SIDE.name} runs at the edition of FBRX Endpoint on this computer. Install FBRX Endpoint and sign in to your FBRX account with ${TIER_SHORT.ultra} (or ${TIER_SHORT.blackhole}), and ${SIDE.name} opens by itself.`}
         </p>
         <div className="digger-locked-actions">
           {!pro && (
@@ -237,14 +258,14 @@ function Splash({ tier }: { tier: Tier | undefined }) {
     return () => document.removeEventListener('visibilitychange', onChange);
   }, [visible]);
   if (gone || !visible) return null;
-  // FBRX Digger has no editions: its mole and its own name.
-  if (DIGGER)
+  // FBRX Digger and FBRX View have no editions: their mark and their own name.
+  if (SIDE_APP)
     return (
       <div className="splash" aria-hidden>
         <div>
-          <DiggerMark size={116} className="splash-logo splash-mole" />
-          <div className="splash-word">FBRX Digger</div>
-          <div className="splash-sub">Every network tool</div>
+          <SideMark size={116} className="splash-logo splash-mole" />
+          <div className="splash-word">{SIDE.name}</div>
+          <div className="splash-sub">{SIDE.sub}</div>
         </div>
       </div>
     );
@@ -296,8 +317,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const { data: trophies } = useCore('fun.trophies', undefined, ['fun.trophy']);
   const { data: alertCounts } = useCore('alerts.counts', undefined, ['alerts.changed'], 60_000);
   // The AI providers (the top bar's model); in FBRX Digger, whether FBRX Endpoint's AI is there, looked for more often.
-  const { data: providers } = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed'], DIGGER ? 15_000 : 60_000);
-  const diggerAi = DIGGER && !!providers?.find((p) => p.id === DIGGER_AI_PROVIDER.id)?.available;
+  const { data: providers } = useCore('ai.providers', undefined, ['settings.changed', 'runtime.changed', 'policy.changed'], SIDE_APP ? 15_000 : 60_000);
+  const diggerAi = SIDE_APP && !!providers?.find((p) => p.id === DIGGER_AI_PROVIDER.id)?.available;
   // The Help desk tab's number: new tickets in the queue on a receiver, tickets waiting on you everywhere else.
   const hd = useCore('helpdesk.status', undefined, ['fleet.changed']).data;
   const hdList = useCore('helpdesk.tickets', { scope: hd?.receiver ? 'queue' : 'mine', state: 'open' }, ['helpdesk.changed', 'fleet.changed'], 300_000).data;
@@ -311,7 +332,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   // Learning your computer, on the full screen after setup and for each new AI.
   const learningScreen = useLearningScreen();
   // FBRX Digger follows FBRX Endpoint's edition while open too: it locks again if Endpoint drops below Ultra.
-  const diggerLicense = useCore('license.status', undefined, ['license.changed'], DIGGER ? 15_000 : undefined);
+  const diggerLicense = useCore('license.status', undefined, ['license.changed'], SIDE_APP ? 15_000 : undefined);
   // The Essentials walkthrough: closed for this window once finished or skipped; it waits for the start-up animation.
   const [tourClosed, setTourClosed] = useState(false);
   const [tourReady, setTourReady] = useState(false);
@@ -407,7 +428,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const blackhole = atLeast(tier, 'blackhole');
   const fun = funEnabled(settings?.settings, tier);
   useEffect(() => {
-    if (status) document.title = DIGGER ? 'FBRX Digger' : (status.edition?.productName ?? TIER_NAMES[tier]);
+    if (status) document.title = SIDE_APP ? SIDE.name : (status.edition?.productName ?? TIER_NAMES[tier]);
   }, [status, tier]);
   useKonami(
     fun,
@@ -451,8 +472,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   const s = settings.settings;
   const showSplash = firstStart && s.appearance.splash;
   // FBRX Digger, without Endpoint Ultra on this computer: what it needs.
-  if (DIGGER && !atLeast(diggerLicense.data?.tier ?? tier, 'ultra')) return <DiggerLocked />;
-  if (!DIGGER && (!s.general.onboardingComplete || forceOnboarding)) {
+  if (SIDE_APP && !atLeast(diggerLicense.data?.tier ?? tier, 'ultra')) return <DiggerLocked />;
+  if (!SIDE_APP && (!s.general.onboardingComplete || forceOnboarding)) {
     return <Onboarding status={status} onDone={() => setForceOnboarding(false)} />;
   }
   const agentName = s.ai.agentName;
@@ -513,6 +534,8 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     // Every edition sees its organization, or how to join one (Black Hole Edition only ever comes through FBRX Command).
     { id: 'fleet', label: 'Organization', icon: 'globe', section: 'System' },
     { id: 'settings', label: 'Settings', icon: 'settings', section: 'System' },
+    // FBRX View's own page (only View's sidebar lists it).
+    ...(VIEW ? [{ id: 'view', label: 'Connections', icon: 'monitor', section: 'View' } as NavItem] : []),
   ];
   // Endpoint Essentials: the everyday pages in one short list (no sections to open). Pro: the everyday tools and
   // the agent. Ultra adds the expert ones, Black Hole Edition the FBRX Server page. Student computers keep only LEARNER_PAGES.
@@ -523,13 +546,13 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
   // turned it on in Settings; never on a student's computer, nor when the organization turned the Terminal off.
   const labOn = !learner && labShown(s, simple);
   const byId = new Map(all.map((i) => [i.id, i]));
-  const nav: NavItem[] = DIGGER
-    ? DIGGER_PAGES.flatMap((id) => {
+  const nav: NavItem[] = SIDE_APP
+    ? SIDE.pages.flatMap((id) => {
         const item = byId.get(id);
         // The chat opens from the top bar's Ask button, while FBRX Endpoint's AI is there.
         if (!item || id === 'agent') return [];
         const { need: _n, ...rest } = item;
-        return [{ ...rest, section: 'Digger' }];
+        return [{ ...rest, section: SIDE.section }];
       })
     : simple
     ? [...ESSENTIALS_NAV, ...(labOn ? ESSENTIALS_LAB : [])].flatMap(([id, section, label]) => {
@@ -542,7 +565,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         .filter((i) => (learner ? LEARNER_PAGES.has(i.id) : !i.need || atLeast(tier, i.need)))
         .filter((i) => i.id !== 'terminal' || labOn)
         .map(({ need: _n, ...i }) => (learner && i.id === 'home' ? { ...i, label: 'Home' } : i));
-  const groups: NavGroup[] | undefined = simple || DIGGER
+  const groups: NavGroup[] | undefined = simple || SIDE_APP
     ? undefined
     : SECTIONS.map(({ basicHint, learnerHint, ...g }) => ({ ...g, hint: learner && learnerHint ? learnerHint : !ultra && basicHint ? basicHint : g.hint, items: nav.filter((i) => i.section === g.section) })).filter((g) => g.items.length > 0);
   const ultraOnly = (title: string, what: string) => <UltraOnly title={title} what={what} />;
@@ -594,7 +617,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       ),
     },
   ];
-  const showTour = !POPOUT && !DIGGER && essentials && !tourClosed && status.edition?.tourDone === false && tourReady && !learningScreen.visible;
+  const showTour = !POPOUT && !SIDE_APP && essentials && !tourClosed && status.edition?.tourDone === false && tourReady && !learningScreen.visible;
   // Terminal and chat in their own windows (Ultra has the Terminal; the chat is in every edition).
   ownWindows = POPOUT ? {} : { terminal: ultra && s.windows.terminal, agent: s.windows.agent };
 
@@ -605,6 +628,13 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       if (route === 'settings') return <SettingsPage onRerunSetup={() => setForceOnboarding(true)} />;
       if (route === 'agent' && diggerAi) return <AgentPage agentName={agentName} />;
       return <NetworkPage advanced everything={blackhole} />;
+    }
+    // FBRX View (with Endpoint Ultra): its connections and sessions, its settings, and the chat while FBRX Endpoint's
+    // AI is there to answer it.
+    if (VIEW) {
+      if (route === 'settings') return <SettingsPage onRerunSetup={() => setForceOnboarding(true)} />;
+      if (route === 'agent' && diggerAi) return <AgentPage agentName={agentName} />;
+      return <ViewPage />;
     }
     // Essentials Home: the split-flap board and a few notes from FBRX (no dashboard).
     if (simple && route === 'home') return <EssentialsHome status={status} agentName={agentName} who={addressAs(s)} />;
@@ -728,7 +758,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
       <LearnerContext.Provider value={learner}>
       <VerticalContext.Provider value={vertical}>
       <AgentNameContext.Provider value={agentName}>
-      <AiContext.Provider value={!DIGGER || diggerAi}>
+      <AiContext.Provider value={!SIDE_APP || diggerAi}>
         <PopoutFrame title={byId.get(route)?.label ?? (route === 'agent' ? agentName : 'FBRX')}>
           <Suspense
             fallback={
@@ -753,12 +783,12 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
     <LearnerContext.Provider value={learner}>
     <VerticalContext.Provider value={vertical}>
     <AgentNameContext.Provider value={agentName}>
-    <AiContext.Provider value={!DIGGER || diggerAi}>
+    <AiContext.Provider value={!SIDE_APP || diggerAi}>
       {showSplash && <Splash tier={tier} />}
       <Shell
         brandName={
-          DIGGER ? (
-            'FBRX Digger'
+          SIDE_APP ? (
+            SIDE.name
           ) : learner ? (
             <>
               FBRX OS <span className="tier-badge student">{vertical === 'home' ? 'Home' : 'Education'}</span>
@@ -770,7 +800,7 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
           )
         }
         brandSub={status.deviceName}
-        brandMark={DIGGER ? <DiggerMark /> : undefined}
+        brandMark={SIDE_APP ? <SideMark /> : undefined}
         onBrandClick={onBrandClick}
         brandClassName={weaving ? 'weaving' : undefined}
         nav={nav}
@@ -779,10 +809,10 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
         onCollapsedChange={setCollapsed}
         active={route}
         onNavigate={(id) => navigate(id)}
-        topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} providers={providers} defaultProvider={DIGGER ? DIGGER_AI_PROVIDER.id : s.ai.defaultProvider} defaultModel={DIGGER ? '' : s.ai.defaultModel} presenter={presenter} learner={learner} />}
+        topbar={<TopBar route={route} status={status} agentName={agentName} critical={alertCounts?.critical ?? 0} spotlightKey={s.spotlight.enabled ? s.spotlight.hotkey : null} providers={providers} defaultProvider={SIDE_APP ? DIGGER_AI_PROVIDER.id : s.ai.defaultProvider} defaultModel={SIDE_APP ? '' : s.ai.defaultModel} presenter={presenter} learner={learner} />}
         footer={
           <span>
-            <span title={DIGGER ? 'FBRX Digger' : TIER_NAMES[tier]}>{DIGGER ? `Version ${status.version}` : displayVersion(status.version)}</span>
+            <span title={SIDE_APP ? SIDE.name : TIER_NAMES[tier]}>{SIDE_APP ? `Version ${status.version}` : displayVersion(status.version)}</span>
             {status.devMode ? ' · dev' : ''}
             {fun && trophies && Object.keys(trophies.unlocked).length > 0 && (
               <>
@@ -805,11 +835,11 @@ function MainApp({ route, settings }: { route: Route; settings: ReturnType<typeo
           <ErrorBoundary resetKey={route}>{page}</ErrorBoundary>
         </Suspense>
       </Shell>
-      {fun && s.appearance.easterEggs && !presenter?.active && !DIGGER && <Bruce route={route} visits={s.appearance.gooseVisits} golden={!!trophies?.unlocked.golden} season={s.appearance.gooseSeason === 'auto' ? seasonNow() : s.appearance.gooseSeason} />}
+      {fun && s.appearance.easterEggs && !presenter?.active && !SIDE_APP && <Bruce route={route} visits={s.appearance.gooseVisits} golden={!!trophies?.unlocked.golden} season={s.appearance.gooseSeason === 'auto' ? seasonNow() : s.appearance.gooseSeason} />}
       <VaultStartPrompt />
-      {!POPOUT && !DIGGER && <ModelClosing />}
+      {!POPOUT && !SIDE_APP && <ModelClosing />}
       {hosts}
-      {!POPOUT && !DIGGER && learningScreen.visible && learningScreen.status && <LearningScreen status={learningScreen.status} onClose={learningScreen.close} />}
+      {!POPOUT && !SIDE_APP && learningScreen.visible && learningScreen.status && <LearningScreen status={learningScreen.status} onClose={learningScreen.close} />}
       {showTour && (
         <Tour
           steps={tourSteps}
@@ -916,11 +946,11 @@ function TopBar({
   const openConsoles = (consoles.data ?? []).filter((c) => c.state === 'open').length;
   const p = providers?.find((x) => x.id === defaultProvider);
   const model = defaultModel || p?.defaultModel || null;
-  // FBRX Digger has no Spotlight, and an AI only while FBRX Endpoint's is there.
-  const ai = !DIGGER || !!p?.available;
+  // FBRX Digger and FBRX View have no Spotlight, and an AI only while FBRX Endpoint's is there.
+  const ai = !SIDE_APP || !!p?.available;
   return (
     <>
-      {!DIGGER && (
+      {!SIDE_APP && (
         <button className="topbar-search" onClick={() => bridge.showSpotlight?.()} title="Spotlight: search apps, files, settings and more from anywhere">
           <Icons.search size={15} />
           <span>Search apps, files, settings, or ask {agentName}…</span>
@@ -952,7 +982,7 @@ function TopBar({
       {status.aiHalt && <EmergencyStop compact />}
       {/* Device consoles are FBRX Digger's (2.5.0); FBRX Endpoint's own SSH sessions are in the FBRX Server page. */}
       {openConsoles > 0 && !routeArg()?.startsWith('consoles') && !routeArg()?.startsWith('console') && (
-        <button className="model-pill console-pill" onClick={() => navigate(DIGGER ? 'network/consoles' : 'terminal/console')} title="Device consoles that are connected">
+        <button className="model-pill console-pill" onClick={() => navigate(DIGGER ? 'network/consoles' : VIEW ? 'view' : 'terminal/console')} title="Device consoles that are connected">
           <span className="dot ok" aria-hidden />
           {openConsoles} console{openConsoles > 1 ? 's' : ''}
         </button>
@@ -968,7 +998,7 @@ function TopBar({
           {status.pendingApprovals} approval{status.pendingApprovals > 1 ? 's' : ''} waiting
         </Button>
       )}
-      {DIGGER ? (
+      {SIDE_APP ? (
         ai && (
           <span className="model-pill" title={`${agentName} thinks with FBRX Endpoint's AI on this computer while FBRX Endpoint runs`}>
             <span className="dot ok" aria-hidden />

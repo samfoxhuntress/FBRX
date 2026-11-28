@@ -242,10 +242,27 @@ export class DeviceConsoles {
 
   // ------------------------------------------------------------------------------- saved connections
 
+  /**
+   * FBRX View: the password saved for a remote desktop (RDP, VNC) login, for the window that logs in with it. VNC often
+   * has a password and no user name: its login is kept under an empty user name.
+   */
+  remotePassword(protocol: 'rdp' | 'vnc', host: string, port: number, username: string): string | null {
+    if (!this.d.vault.isUnlocked) return null;
+    if (!this.logins().some((l) => l.protocol === protocol && l.host === host && l.port === port && l.username === username)) return null;
+    return this.d.vault.get(this.secretName(protocol, host, port, username), { allowInternal: true }) ?? null;
+  }
+
+  /** FBRX View: remembers a remote desktop login that worked. */
+  rememberRemoteLogin(protocol: 'rdp' | 'vnc', host: string, port: number, username: string, password: string): void {
+    if (!this.d.vault.isUnlocked) throw new CoreError('UNAVAILABLE', 'Unlock the vault to save the password');
+    this.saveLogin({ host, port, protocol, username, savedAt: new Date().toISOString() }, password);
+    this.d.audit('login.saved', 'info', { protocol, host, port, username });
+  }
+
   bookmarks(): ConsoleBookmark[] {
     const saved = this.logins();
     return (this.d.meta.get<Array<Omit<ConsoleBookmark, 'passwordSaved'>>>(BOOKMARKS) ?? [])
-      .map((b) => ({ ...b, passwordSaved: !!b.username && saved.some((l) => l.host === b.host && l.port === b.port && l.protocol === b.protocol && l.username === b.username) }))
+      .map((b) => ({ ...b, passwordSaved: (!!b.username || b.protocol === 'vnc') && saved.some((l) => l.host === b.host && l.port === b.port && l.protocol === b.protocol && l.username === (b.username ?? '')) }))
       .sort((a, b) => (b.lastConnectedAt ?? b.createdAt).localeCompare(a.lastConnectedAt ?? a.createdAt));
   }
 

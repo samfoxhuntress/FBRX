@@ -30,7 +30,7 @@ describe('the FBRX app family', () => {
     expect(FBRX_APPS.digger).toMatchObject({ edition: 'ultra', since: '2.5.0', built: true, tag: 'digger-v' });
     expect(FBRX_APPS.browser.edition).toBe('essentials');
     expect(FBRX_APPS.shield.edition).toBe('basic');
-    expect(FBRX_APPS.reach.edition).toBe('ultra');
+    expect(FBRX_APPS.view.edition).toBe('ultra');
     expect(appUnlocked('digger', 'basic')).toBe(false);
     expect(appUnlocked('digger', 'blackhole')).toBe(true);
   });
@@ -166,7 +166,7 @@ describe('the FBRX app family', () => {
     const { kernel, cleanup } = await makeKernel();
     try {
       const list = (await kernel.call('apps.list', undefined, USER)) as any[];
-      expect(list.map((a) => a.id)).toEqual(['os', 'digger', 'reach', 'browser', 'shield', 'sandbox']);
+      expect(list.map((a) => a.id)).toEqual(['os', 'digger', 'view', 'browser', 'shield', 'sandbox']);
       await expect(kernel.call('apps.open', { id: 'digger' }, { origin: 'api', actor: 'localapi:agent' })).rejects.toThrow(/person at this workstation/);
       await expect(kernel.call('apps.open', { id: 'digger' }, USER)).rejects.toThrow(/not installed/);
     } finally {
@@ -198,10 +198,10 @@ describe('the FBRX apps’ own data, out of the AI’s reach', () => {
   it('keeps file tools out of every FBRX app’s data folder, but not out of the workspace', async () => {
     const { checkPath } = await import('../src/governance/path-guard');
     const c = computer();
-    const opts = { roots: [c.apps], denyPatterns: [], readOnly: false, dataDir: c.os, appDataDirs: [c.os, c.digger, join(c.apps, 'FBRX Reach')] };
+    const opts = { roots: [c.apps], denyPatterns: [], readOnly: false, dataDir: c.os, appDataDirs: [c.os, c.digger, join(c.apps, 'FBRX View')] };
     expect(checkPath(join(c.digger, 'app.json'), 'write', opts).ok).toBe(false);
     expect(checkPath(join(c.os, 'apps-license.json'), 'write', opts).ok).toBe(false);
-    expect(checkPath(join(c.apps, 'FBRX Reach', 'app.json'), 'read', opts).ok).toBe(false);
+    expect(checkPath(join(c.apps, 'FBRX View', 'app.json'), 'read', opts).ok).toBe(false);
     expect(checkPath(join(c.os, 'workspace', 'notes.txt'), 'write', opts).ok).toBe(true);
     expect(checkPath(join(c.apps, 'Other app', 'file.txt'), 'write', opts).ok).toBe(true);
   });
@@ -342,7 +342,7 @@ describe('Get: an app’s installer from its GitHub release', () => {
     const calls: string[] = [];
     const os = new AppRegistry({ self: 'os', dataDir: c.os, appsDir: c.apps, version: '2.5.0', exec: null, tier: () => tier, releases: () => ({ digger: { version: '1.3.0', download: 'https://github.com/x' } }), dirs: { downloads: c.apps, home: c.apps }, install: async (_id, d) => (calls.push(d.tag), { file: 'f', name: 'n' }) });
     await expect(os.get('digger')).rejects.toThrow(/fuller edition/);
-    await expect(os.get('reach')).rejects.toThrow(/arrives in/);
+    await expect(os.get('browser')).rejects.toThrow(/arrives in/);
     tier = 'ultra';
     await expect(os.get('digger')).resolves.toEqual({ file: 'f', name: 'n' });
     expect(calls).toEqual(['digger-v1.3.0']);

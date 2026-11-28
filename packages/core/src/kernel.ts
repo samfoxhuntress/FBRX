@@ -119,7 +119,8 @@ import { generateKeyPair, type KeyPair } from './mesh/mesh-crypto';
 import { AssistLog } from './mesh/assist-log';
 import { MeshAssist, runsElevated } from './mesh/mesh-assist';
 import { ModelLender } from './mesh/model-lending';
-import { DIGGER_PEER, DiggerLinkServer, diggerLinkCall, diggerLinkPresent } from './mesh/digger-link';
+import { DIGGER_PEER, DiggerLinkServer, VIEW_PEER, diggerLinkCall, diggerLinkPresent } from './mesh/digger-link';
+import { RemoteProxy } from './view/remote-proxy';
 import { MeshNetwork } from './mesh/mesh-network';
 import { ServerResources } from './system/server-resources';
 import { SavedServers } from './system/saved-servers';
@@ -197,6 +198,8 @@ const AGENT_TOKEN_FILE = 'localapi-agent.json';
 
 /** The alerts FBRX Digger raises (see AlertEngineDeps.allow). */
 const DIGGER_ALERTS = new Set(['new_device', 'update_available', 'approval_waiting']);
+/** The alerts FBRX View raises. */
+const VIEW_ALERTS = new Set(['update_available', 'approval_waiting']);
 const NET_ALERTS = new Set(['net_down', 'net_restored']);
 
 /**
@@ -217,8 +220,14 @@ export class Kernel {
    * antivirus, organization, mesh or account); its AI is FBRX Endpoint's, while Endpoint runs on this computer.
    */
   readonly digger: boolean;
-  /** FBRX Endpoint on a desktop: the link FBRX Digger on this computer finds its AI by. */
+  /** FBRX View: the remote desktop app. Like Digger, none of FBRX Endpoint's background work, and Endpoint's AI. */
+  readonly view: boolean;
+  /** FBRX Digger or FBRX View: an app of the family beside FBRX Endpoint, which borrows its license and its AI. */
+  readonly sideApp: boolean;
+  /** FBRX Endpoint on a desktop: the link FBRX Digger and FBRX View on this computer find its AI by. */
   private readonly diggerLink: DiggerLinkServer | null;
+  /** FBRX View's proxy to the remote desktops drawn in its window (started when first used). */
+  private viewProxyInstance: RemoteProxy | null = null;
   readonly startedAt = new Date();
 
   readonly db: Db;
@@ -337,6 +346,8 @@ export class Kernel {
     this.platform = opts.platform;
     this.server = !!opts.server;
     this.digger = opts.platform.flavor === 'digger';
+    this.view = opts.platform.flavor === 'view';
+    this.sideApp = this.digger || this.view;
     this.paths = resolveDataPaths(opts.dataDir);
     ensureDataDirs(this.paths);
     this.logSink = new LogSink({ dir: this.paths.logs, console: opts.logToConsole, level: opts.logLevel ?? (opts.platform.devMode ? 'debug' : 'info') });
@@ -478,7 +489,7 @@ export class Kernel {
         usage: (signal) => this.account.cloudAi(signal),
         learner: () => this.license.status().ceilingReason === 'learner',
       },
-      ...(this.digger && this.platform.endpointDataDir ? { endpoint: { call: diggerLinkCall(this.platform.endpointDataDir), present: () => diggerLinkPresent(this.platform.endpointDataDir!) } } : {}),
+      ...(this.sideApp && this.platform.endpointDataDir ? { endpoint: { call: diggerLinkCall(this.platform.endpointDataDir, this.view ? 'view' : 'digger'), present: () => diggerLinkPresent(this.platform.endpointDataDir!) } } : {}),
     });
     this.agent = new AgentRuntime({
       store: this.conversations,
@@ -518,7 +529,7 @@ export class Kernel {
       meta: this.meta,
       agent: () => this.learningAgent(),
       // The desktop app once set up; FBRX Server and FBRX Digger have no persona or setup to learn after.
-      enabled: () => this.platform.shell === 'desktop' && !this.server && !this.digger && this.settings.get().general.onboardingComplete,
+      enabled: () => this.platform.shell === 'desktop' && !this.server && !this.sideApp && this.settings.get().general.onboardingComplete,
       read: {
         inventory: () => systemInventory(true),
         network: () => this.learnNetwork(),
@@ -863,7 +874,7 @@ export class Kernel {
       quiet: () => !this.presenterStatus().active && this.agent.activeCount === 0 && this.idleSeconds() >= 300,
     });
     this.apps = new AppRegistry({
-      self: this.platform.flavor === 'digger' ? 'digger' : 'os',
+      self: this.digger ? 'digger' : this.view ? 'view' : 'os',
       dataDir: this.paths.root,
       appsDir: this.platform.shell === 'desktop' ? (this.platform.appsDir ?? null) : null,
       version: this.platform.appVersion,
@@ -873,9 +884,9 @@ export class Kernel {
       dirs: this.platform.shell === 'desktop' ? { downloads: this.platform.specialDirs().downloads, home: this.platform.specialDirs().home } : undefined,
       log: (msg, meta) => L('apps').info(msg, meta),
     });
-    // One license: FBRX Digger runs at the edition FBRX Endpoint's license gives this computer (Digger comes with
-    // Ultra).
-    if (this.digger) this.license.borrowFrom(() => this.apps.endpointLicense());
+    // One license: FBRX Digger and FBRX View run at the edition FBRX Endpoint's license gives this computer (both come
+    // with Ultra).
+    if (this.sideApp) this.license.borrowFrom(() => this.apps.endpointLicense());
     // FBRX/1 runs every command through the same API as the app, as the person at the computer (cli.exec is user-only).
     this.cli = new Fbrx1Cli({
       call: (method, params) => this.call(method, params ?? {}, { origin: 'user', actor: 'fbrx1' }),
@@ -1088,8 +1099,9 @@ export class Kernel {
       log: L('mesh'),
     });
     this.lender = new ModelLender({
-      // FBRX Digger on this computer is the person's own app: it thinks with this computer's AI without asking.
-      accepts: (peer) => (peer.id === DIGGER_PEER.id ? { mode: 'auto', reason: null } : this.assist.acceptance(peer, false)),
+      // FBRX Digger and FBRX View on this computer are the person's own apps: they think with this computer's AI
+      // without asking.
+      accepts: (peer) => (peer.id === DIGGER_PEER.id || peer.id === VIEW_PEER.id ? { mode: 'auto', reason: null } : this.assist.acceptance(peer, false)),
       resolve: (model) => this.providers.resolve(undefined, model),
       models: (providerId) => this.providers.models(providerId),
       reasoning: () => this.settings.get().ai.localThinking,
@@ -1104,12 +1116,12 @@ export class Kernel {
       audit: (action, actor, outcome, details) => this.audit.append({ category: 'mesh', action, actor, outcome, details }),
     });
     this.diggerLink =
-      !this.digger && !this.server && this.platform.shell === 'desktop'
+      !this.sideApp && !this.server && this.platform.shell === 'desktop'
         ? new DiggerLinkServer({
             dir: this.paths.root,
-            handle: async (method, params) => {
+            handle: async (method, params, app) => {
               if (this.aiHalt()) throw new CoreError('FORBIDDEN', 'The AI is stopped on FBRX Endpoint (emergency stop)');
-              return this.lender.handle(DIGGER_PEER, method, params);
+              return this.lender.handle(app === 'view' ? VIEW_PEER : DIGGER_PEER, method, params);
             },
             log: L('digger-link'),
           })
@@ -1136,8 +1148,9 @@ export class Kernel {
       editionNotice: () => this.trialNotice(),
       // FBRX Digger tells about the network only; the internet connection too where FBRX OS is not on this computer
       // (so it is said once). Drives, processor, memory, battery and security are FBRX OS's to tell.
-      allow: this.digger ? (id) => DIGGER_ALERTS.has(id) || (NET_ALERTS.has(id) && !this.apps.installed().includes('os')) : undefined,
-      app: this.digger ? 'fbrx-digger' : 'fbrx-os',
+      // FBRX View tells only about itself (a new version, an approval waiting).
+      allow: this.digger ? (id) => DIGGER_ALERTS.has(id) || (NET_ALERTS.has(id) && !this.apps.installed().includes('os')) : this.view ? (id) => VIEW_ALERTS.has(id) : undefined,
+      app: this.digger ? 'fbrx-digger' : this.view ? 'fbrx-view' : 'fbrx-os',
     });
     this.aicoord = new AiCoordination({
       shim: () => {
@@ -1374,8 +1387,9 @@ export class Kernel {
           ...scriptureTools({ scripture: this.scripture }),
           ...fbrxTools({ status: () => this.status(), recentAudit: (n) => this.audit.query({ limit: n }) }),
           ...workspaceTools(this.workspace),
-          // Device consoles and network environments are FBRX Digger's (2.5.0): only its Fabrix has their tools.
-          ...(this.digger ? deviceConsoleTools(this.consoles) : []),
+          // Device consoles and network environments are FBRX Digger's (2.5.0): only its Fabrix has their tools; FBRX
+          // View's Fabrix has the consoles' too, for the sessions open in View.
+          ...(this.sideApp ? deviceConsoleTools(this.consoles) : []),
           ...(this.digger ? netEnvTools(this.netenv, () => this.blackHoleOnly('Network environments')) : []),
           ...calendarTools(this.calendar, () => this.workspace.listProjects()),
           ...shieldTools(this.protection, this.shield),
@@ -1429,7 +1443,7 @@ export class Kernel {
       title: 'Local AI runtime',
       description: 'Built-in llama.cpp model server (127.0.0.1 only)',
       dependsOn: ['storage'],
-      enabled: () => !this.digger && this.settings.get().runtime.enabled,
+      enabled: () => !this.sideApp && this.settings.get().runtime.enabled,
       start: async () => {
         const st = this.runtime.status();
         if (this.runtimeWanted() && st.state === 'stopped') {
@@ -1461,7 +1475,7 @@ export class Kernel {
       title: 'Backup',
       description: 'Encrypted snapshots, scheduled backups and restore',
       dependsOn: ['storage', 'vault'],
-      enabled: () => !this.digger,
+      enabled: () => !this.sideApp,
       start: () => this.backup.start(),
       stop: () => this.backup.stop(),
     });
@@ -1470,7 +1484,7 @@ export class Kernel {
       title: 'FBRX directory',
       description: 'The accounts an FBRX Server directory keeps on this computer',
       dependsOn: ['vault'],
-      enabled: () => !this.digger,
+      enabled: () => !this.sideApp,
       start: () => this.directory.start(),
       stop: () => this.directory.stop(),
       health: async () => {
@@ -1484,7 +1498,7 @@ export class Kernel {
       title: 'Fleet agent',
       description: 'Real-time link to the FBRX control plane',
       dependsOn: ['vault', 'governance'],
-      enabled: () => !this.digger,
+      enabled: () => !this.sideApp,
       start: () => this.fleet.start(),
       stop: () => this.fleet.stop(),
       health: async () => {
@@ -1513,7 +1527,7 @@ export class Kernel {
       title: 'Antivirus',
       description: 'FBRX Shield download checks, threat database updates, scheduled scans and the antivirus status',
       dependsOn: ['storage'],
-      enabled: () => !this.digger,
+      enabled: () => !this.sideApp,
       start: () => this.protection.start(),
       stop: () => this.protection.stop(),
     });
@@ -1522,7 +1536,7 @@ export class Kernel {
       title: 'Calendar',
       description: 'Outlook / Microsoft 365 and calendar links: syncing and meeting reminders',
       dependsOn: ['storage'],
-      enabled: () => !this.digger,
+      enabled: () => !this.sideApp,
       // An account that cannot be updated says so on the Calendar page; it is not a problem with this computer.
       start: () => this.calendar.start(),
       stop: () => this.calendar.stop(),
@@ -1532,7 +1546,7 @@ export class Kernel {
       title: 'Mesh',
       description: 'Encrypted link to your other FBRX computers and your phone',
       dependsOn: ['vault', 'tools'],
-      enabled: () => !this.digger && this.settings.get().mesh.enabled,
+      enabled: () => !this.sideApp && this.settings.get().mesh.enabled,
       start: async () => {
         if (!this.vault.isUnlocked) throw new CoreError('LOCKED', 'Vault is locked');
         await this.mesh.start();
@@ -1545,7 +1559,7 @@ export class Kernel {
       title: 'Local API',
       description: 'Authenticated automation API for scripts, apps and FBRX peers',
       dependsOn: ['vault'],
-      enabled: () => !this.digger && this.settings.get().localApi.enabled && this.license.has('localapi'),
+      enabled: () => !this.sideApp && this.settings.get().localApi.enabled && this.license.has('localapi'),
       start: async () => {
         if (!this.vault.isUnlocked) throw new CoreError('LOCKED', 'Vault is locked');
         this.ensureLocalApiTokens();
@@ -1581,7 +1595,7 @@ export class Kernel {
     if (this.platform.shell === 'desktop') {
       this.apps.announce();
       // FBRX Endpoint shares its license with them, now and whenever it changes.
-      if (!this.digger) {
+      if (!this.sideApp) {
         this.apps.shareLicense(this.license.shared());
         this.disposers.push(this.events.on('license.changed', () => this.apps.shareLicense(this.license.shared())));
         // Its saved connections and network environments go to FBRX Digger (2.5.0), without passwords or keys.
@@ -1595,8 +1609,9 @@ export class Kernel {
         }
       }
     }
-    // FBRX Digger leaves out what is FBRX Endpoint's (its AI, messages, organization, account, support, automations).
-    if (!this.digger) this.startEndpoint();
+    // FBRX Digger and FBRX View leave out what is FBRX Endpoint's (its AI, messages, organization, account, support,
+    // automations).
+    if (!this.sideApp) this.startEndpoint();
     this.audit.prune(365);
     void this.attachments.sweep().catch((err) => this.log.warn('Could not tidy old attachments', { error: errorMessage(err) }));
   }
@@ -1838,6 +1853,7 @@ export class Kernel {
     this.learning.stop();
     this.screen.stop();
     await this.diggerLink?.stop();
+    await this.viewProxyInstance?.close();
     this.release.stop();
     this.account.stop();
     this.support.stop();
@@ -2374,13 +2390,31 @@ export class Kernel {
       seen.add(k);
       return true;
     });
-    const environments = this.netenv.adopt(envs);
+    // Network environments are FBRX Digger's; FBRX View takes the saved connections only.
+    const environments = this.digger ? this.netenv.adopt(envs) : 0;
     this.meta.set('apps.adopted', [...seen].slice(-2000));
     if (connections || environments) {
       this.log.info('Brought over from FBRX Endpoint', { connections, environments });
-      this.audit.append({ category: 'network', action: 'apps.adopted', actor: 'digger', outcome: 'success', details: { connections, environments } });
+      this.audit.append({ category: 'network', action: 'apps.adopted', actor: this.view ? 'view' : 'digger', outcome: 'success', details: { connections, environments } });
     }
     return { connections, environments };
+  }
+
+  /** FBRX View's proxy: every connection, refusal and end goes in the audit log. */
+  viewProxy(): RemoteProxy {
+    this.viewProxyInstance ??= new RemoteProxy({
+      log: (level, msg) => this.log[level](msg),
+      onSession: (e) =>
+        this.audit.append({
+          category: 'network',
+          action: `view.session.${e.event}`,
+          actor: 'user',
+          target: `${e.kind}://${e.host}:${e.port}`,
+          outcome: e.event === 'refused' ? 'failure' : 'success',
+          details: { why: e.why ?? null, bytesIn: e.bytesIn ?? null, bytesOut: e.bytesOut ?? null },
+        }),
+    });
+    return this.viewProxyInstance;
   }
 
   /**
@@ -2401,7 +2435,7 @@ export class Kernel {
    * keeps the command line and FBRX/1 for troubleshooting); FBRX Digger always has them.
    */
   consolesOff(): string | null {
-    return this.terminalOff() ?? (this.digger || atLeast(this.license.status().tier, 'basic') ? null : `Device consoles come with ${TIER_NAMES.basic}`);
+    return this.terminalOff() ?? (this.sideApp || atLeast(this.license.status().tier, 'basic') ? null : `Device consoles come with ${TIER_NAMES.basic}`);
   }
 
   /** Why an Endpoint Ultra feature cannot be used on this computer (it runs Essentials or Pro), or null. */

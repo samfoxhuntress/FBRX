@@ -129,8 +129,9 @@ export function createElectronPlatform(o: {
   return {
     shell: 'desktop',
     flavor: o.flavor,
-    // FBRX Digger finds FBRX Endpoint's AI through Endpoint's data folder (FBRX_ENDPOINT_HOME in development).
-    endpointDataDir: o.flavor === 'digger' ? (process.env.FBRX_ENDPOINT_HOME ?? join(app.getPath('appData'), PRODUCT_NAME)) : null,
+    // FBRX Digger and FBRX View find FBRX Endpoint's AI through Endpoint's data folder (FBRX_ENDPOINT_HOME in
+    // development).
+    endpointDataDir: o.flavor !== 'os' ? (process.env.FBRX_ENDPOINT_HOME ?? join(app.getPath('appData'), PRODUCT_NAME)) : null,
     // The FBRX apps find each other through their data folders, side by side (FBRX_APPS_HOME in development).
     appsDir: process.env.FBRX_APPS_HOME ?? app.getPath('appData'),
     // An AppImage runs from a temporary mount: the file to start again is APPIMAGE.

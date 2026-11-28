@@ -72,6 +72,8 @@ export const ReleaseManifestSchema = z
     command: z.object({ summary: z.string().max(600).default(''), notes: z.array(z.string().max(400)).max(40).default([]) }).optional(),
     /** FBRX Digger, when it has a release. */
     digger: DiggerReleaseSchema.optional(),
+    /** FBRX View, when it has a release. */
+    view: DiggerReleaseSchema.optional(),
   })
   .transform((m) => ({ ...m, stage: m.stage ?? stageFor(m.version) }));
 

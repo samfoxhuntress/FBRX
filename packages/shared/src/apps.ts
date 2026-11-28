@@ -1,4 +1,5 @@
 import { DIGGER_NAME, DIGGER_PAGES, DIGGER_SETTINGS } from './digger';
+import { VIEW_NAME, VIEW_PAGES, VIEW_SETTINGS } from './view';
 import { atLeast, TIER_SHORT, type Tier } from './license';
 import { PRODUCT_NAME } from './constants';
 
@@ -10,7 +11,7 @@ import { PRODUCT_NAME } from './constants';
  * release it arrives in, the pages it shows, and the Endpoint pages that hand off to it ("Open" when it is installed,
  * "Get" when it is not).
  */
-export const APP_IDS = ['os', 'digger', 'reach', 'browser', 'shield', 'sandbox'] as const;
+export const APP_IDS = ['os', 'digger', 'view', 'browser', 'shield', 'sandbox'] as const;
 export type AppId = (typeof APP_IDS)[number];
 
 export interface FbrxAppInfo {
@@ -75,20 +76,20 @@ export const FBRX_APPS: Record<AppId, FbrxAppInfo> = {
     tag: 'digger-v',
     icon: 'digger-icon.png',
   },
-  reach: {
-    id: 'reach',
-    name: 'FBRX Reach',
-    folder: 'FBRX Reach',
-    short: 'Reach',
-    what: 'Remote desktop: terminals, SSH, RDP and VNC inside the app, saved connections, logins in the vault and FBRX Server.',
+  view: {
+    id: 'view',
+    name: VIEW_NAME,
+    folder: VIEW_NAME,
+    short: 'View',
+    what: 'Remote desktop: RDP and VNC drawn inside the app, SSH and Telnet, saved connections with their logins in the vault, and Ask Fabrix in a session.',
     edition: 'ultra',
     since: '2.6.0',
-    built: false,
-    pages: [],
-    settings: [],
+    built: true,
+    pages: VIEW_PAGES,
+    settings: VIEW_SETTINGS,
     takes: [],
-    tag: 'reach-v',
-    icon: 'reach-icon.png',
+    tag: 'view-v',
+    icon: 'view-icon.png',
   },
   browser: {
     id: 'browser',

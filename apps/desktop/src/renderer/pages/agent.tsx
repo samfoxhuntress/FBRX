@@ -4,7 +4,7 @@ import { NATURAL_PREFIX, addressAs, modelSeesImages } from '@fbrx/shared';
 import { Button, Callout, Card, FbrxMark, Icons, Markdown, Modal, Select, Status, TextArea, useAction, useConfirm, type IconName } from '@fbrx/ui';
 import { bridge, call, onEvent } from '../client';
 import { useCore, useStarterAi } from '../hooks';
-import { DIGGER, DiggerMark, POPOUT, navigate, routeArg } from '../app';
+import { DIGGER, DiggerMark, POPOUT, VIEW, ViewMark, navigate, routeArg } from '../app';
 import { DiggerSuggestion } from '../apps';
 import { EmergencyStop, ModelPicker } from '../widgets';
 import { useSlashMenu } from '../slash-menu';
@@ -30,6 +30,13 @@ const STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
 ];
 
 /** FBRX Digger's: the network, and nothing else. */
+/** FBRX View's starters: help in the session that is open. */
+const VIEW_STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
+  { icon: 'terminal', title: 'What is on this console?', prompt: 'Read my open console session and tell me what I am looking at and anything that looks wrong.' },
+  { icon: 'monitor', title: 'Cannot connect', prompt: 'A remote desktop connection will not open. Walk me through why, step by step.' },
+  { icon: 'shield', title: 'Is this safe to run?', prompt: 'I am about to run a command on a remote machine. Ask me for it, then tell me what it does and what could go wrong.' },
+];
+
 const DIGGER_STARTERS: Array<{ icon: IconName; title: string; prompt: string }> = [
   { icon: 'wifi', title: 'Why is my internet slow?', prompt: 'My internet feels slow. Check my connection step by step (router, DNS, latency to the internet) and explain what you find in plain language.' },
   { icon: 'network', title: 'What is on my network?', prompt: 'Scan my network and tell me what each device probably is. Flag anything unknown or with open ports that worry you.' },
@@ -606,7 +613,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
           {!!visible.length && <StarterAiCard st={starter} />}
           {!visible.length && !reply && (
             <div className="msg" style={{ marginTop: '8vh', alignItems: 'center', textAlign: 'center' }}>
-              {DIGGER ? <DiggerMark size={56} /> : <FbrxMark className="fx-brand-mark" size={48} />}
+              {DIGGER ? <DiggerMark size={56} /> : VIEW ? <ViewMark size={56} /> : <FbrxMark className="fx-brand-mark" size={48} />}
               <h2>
                 Hi{addressAs(settings.data?.settings) ? ` ${addressAs(settings.data?.settings)}` : ''}, I'm {agentName}. What should we do?
               </h2>
@@ -616,7 +623,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
                 {offline ? ' Chats start offline, I will ask before using the internet.' : ' This chat is online: I may use internet tools.'} Let’s start with something simple:
               </p>
               <div className="choice-grid" style={{ width: '100%', marginTop: 8 }}>
-                {(DIGGER ? DIGGER_STARTERS : STARTERS).map((st) => {
+                {(DIGGER ? DIGGER_STARTERS : VIEW ? VIEW_STARTERS : STARTERS).map((st) => {
                   const Ico = Icons[st.icon];
                   return (
                     <button
@@ -652,7 +659,7 @@ export function AgentPage({ agentName }: { agentName: string }) {
                 {showThinking && m.thinking && <ThinkingNote text={m.thinking} agentName={agentName} />}
                 {m.content && <Markdown text={m.content} />}
                 {/* FBRX Endpoint: a reply that recommends FBRX Digger gets its Open or Get button. */}
-                {!DIGGER && /\bFBRX Digger\b/.test(m.content ?? '') && <DiggerSuggestion />}
+                {!DIGGER && !VIEW && /\bFBRX Digger\b/.test(m.content ?? '') && <DiggerSuggestion />}
                 {(m.toolCalls ?? []).map((c) =>
                   c.name === 'plan.update' ? (
                     c.id === lastPlan && <PlanCard key={c.id} c={c} />

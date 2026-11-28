@@ -13,7 +13,7 @@ interface Bridge {
   kind: 'electron' | 'http';
   platform: string;
   /** FBRX OS, or FBRX Digger (the Network Center on its own). */
-  flavor?: 'os' | 'digger';
+  flavor?: 'os' | 'digger' | 'view';
   call(method: string, params?: unknown): Promise<unknown>;
   on(cb: (event: string, payload: unknown) => void): () => void;
   onNavigate?(cb: (route: string) => void): () => void;

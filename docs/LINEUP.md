@@ -28,7 +28,7 @@ saved connections are shared between them.
 | --- | --- | --- |
 | **FBRX Endpoint** | Every edition | Now |
 | **FBRX Digger**: every network tool | Ultra | 2.5.0 |
-| **FBRX Reach**: remote desktop and FBRX Server | Ultra | 2.6.0 |
+| **FBRX View**: remote desktop (see [VIEW.md](VIEW.md)) | Ultra | 2.6.0 |
 | **FBRX Browser** | Every edition | 2.7.0 |
 | **FBRX Shield**, as a background service | Pro | 2.7.0 |
 | **FBRX Sandbox**: the virtual and coding labs | Ultra | 2.8.0 |

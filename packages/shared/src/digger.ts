@@ -16,7 +16,8 @@ export const DIGGER_NAME = 'FBRX Digger';
 /** Digger's own version: its releases are tagged digger-v<version>. */
 export const DIGGER_VERSION = '1.3.1';
 
-export type AppFlavor = 'os' | 'digger';
+/** Which app a build of the desktop app is: FBRX OS (FBRX Endpoint), FBRX Digger or FBRX View. */
+export type AppFlavor = 'os' | 'digger' | 'view';
 
 /**
  * The pages Digger shows: the Network Center, the Terminal (the command line and device consoles), its settings, and

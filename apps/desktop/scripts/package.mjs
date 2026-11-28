@@ -1,6 +1,7 @@
 // Builds the app and packages it with electron-builder. Extra arguments are passed through
 // (e.g. `node scripts/package.mjs --mac`, `--win`, `--linux --dir`). `--digger` packages FBRX Digger instead (the
-// Network Center on its own, electron-builder.digger.yml) at its own version (DIGGER_VERSION in packages/shared).
+// Network Center on its own, electron-builder.digger.yml) at its own version (DIGGER_VERSION in packages/shared), and
+// `--view` FBRX View (the remote desktop app, electron-builder.view.yml) at VIEW_VERSION.
 //
 // macOS signing: with CSC_LINK/CSC_NAME set, or a "Developer ID Application" certificate in the keychain,
 // electron-builder signs normally. Otherwise the app is ad-hoc signed so it still launches on the Mac that built it
@@ -16,14 +17,15 @@ const app = join(dirname(fileURLToPath(import.meta.url)), '..');
 const require = createRequire(import.meta.url);
 let args = process.argv.slice(2);
 const digger = args.includes('--digger');
-args = args.filter((a) => a !== '--digger');
+const view = args.includes('--view');
+args = args.filter((a) => a !== '--digger' && a !== '--view');
 
 execFileSync(process.execPath, [join(app, 'scripts/build.mjs')], { stdio: 'inherit' });
 
-/** FBRX Digger's version, as packages/shared says it. */
-function diggerVersion() {
-  const src = readFileSync(join(app, '..', '..', 'packages', 'shared', 'src', 'digger.ts'), 'utf8');
-  return /DIGGER_VERSION = '([^']+)'/.exec(src)[1];
+/** FBRX Digger's or FBRX View's version, as packages/shared says it. */
+function sideVersion(file, name) {
+  const src = readFileSync(join(app, '..', '..', 'packages', 'shared', 'src', file), 'utf8');
+  return new RegExp(`${name} = '([^']+)'`).exec(src)[1];
 }
 
 function hasDeveloperIdCertificate() {
@@ -42,6 +44,10 @@ if (buildsMac && process.platform === 'darwin' && !signingConfigured && !hasDeve
 }
 
 const cli = require.resolve('electron-builder/cli.js');
-const config = digger ? ['--config', 'electron-builder.digger.yml', `-c.extraMetadata.version=${diggerVersion()}`] : ['--config', 'electron-builder.yml'];
+const config = digger
+  ? ['--config', 'electron-builder.digger.yml', `-c.extraMetadata.version=${sideVersion('digger.ts', 'DIGGER_VERSION')}`]
+  : view
+    ? ['--config', 'electron-builder.view.yml', `-c.extraMetadata.version=${sideVersion('view.ts', 'VIEW_VERSION')}`]
+    : ['--config', 'electron-builder.yml'];
 const r = spawnSync(process.execPath, [cli, ...config, '--publish', 'never', ...args], { cwd: app, stdio: 'inherit' });
 process.exit(r.status ?? 1);

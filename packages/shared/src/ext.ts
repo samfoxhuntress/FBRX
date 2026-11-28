@@ -760,11 +760,31 @@ export type ConsoleConnectResult =
 export interface ConsoleLogin {
   host: string;
   port: number;
-  protocol: ConsoleProtocol;
+  /** A device console's, or a remote desktop's (FBRX View). */
+  protocol: ConnectionProtocol;
   username: string;
   savedAt: string;
 }
 /** A device in Saved connections: one click to connect again, with its guide and (if saved) its password. */
+/** A remote desktop FBRX View is about to draw: where its window connects, and the login it uses. */
+export interface ViewOpen {
+  protocol: RemoteProtocol;
+  /** The app's proxy, on this computer only. */
+  url: string;
+  /** The one-time ticket for it. */
+  token: string;
+  /** host:port, as the RDP client gives it. */
+  destination: string;
+  username: string;
+  /** RDP: the domain, from DOMAIN\user. */
+  domain: string | null;
+  /** The password given, or the one saved; empty when there is none (the window asks). */
+  password: string;
+  /** Whether the password came from the vault. */
+  saved: boolean;
+  bookmark: ConsoleBookmark;
+}
+
 export interface ConsoleBookmark {
   id: string;
   label: string;
@@ -1490,6 +1510,13 @@ export interface ExtMethods {
   'remote.viewers': () => RemoteViewer[];
   /** Opens one in this computer's viewer (which asks for the password); it is saved with the connections. */
   'remote.open': (p: { protocol: RemoteProtocol; host: string; port?: number; username?: string; label?: string }) => { viewer: string; bookmark: ConsoleBookmark };
+  /**
+   * FBRX View: a remote desktop drawn in the window. A ticket for the app's proxy, and the login to use: the one given,
+   * or the one saved in the vault. The person at the computer only: never the AI.
+   */
+  'view.open': (p: { protocol: RemoteProtocol; host: string; port?: number; username?: string; password?: string; label?: string }) => ViewOpen;
+  /** FBRX View: remembers a remote desktop login that worked (encrypted in the vault). */
+  'view.saveLogin': (p: { protocol: RemoteProtocol; host: string; port: number; username?: string; password: string }) => Ok;
   'net.port': (p: { host: string; port: number }) => { open: boolean; ms: number | null };
   'net.adapters': () => NetAdapter[];
   'net.setIp': (p: { alias: string; mode: 'dhcp' | 'static' | 'secondary' | 'removeSecondary'; ip?: string; prefix?: number | string; gateway?: string; dns?: string[] }) => ElevatedResult;
@@ -1753,6 +1780,8 @@ export interface ExtEvents {
 
 /** Methods only a person at the workstation (never the Local API, a remote command or a mesh peer) may call. */
 export const EXT_USER_ONLY: readonly (keyof ExtMethods)[] = [
+  'view.open',
+  'view.saveLogin',
   'alerts.acknowledge',
   'pc.ejectDrive',
   'pc.driveSpeed',

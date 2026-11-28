@@ -3,7 +3,7 @@ import { createServer, type Server } from 'node:http';
 import type { AddressInfo } from 'node:net';
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { DIGGER_NAME, type MeshDevice } from '@fbrx/shared';
+import { DIGGER_NAME, VIEW_NAME, type MeshDevice } from '@fbrx/shared';
 import { CoreError, errorMessage } from '../errors';
 
 /**
@@ -11,7 +11,8 @@ import { CoreError, errorMessage } from '../errors';
  * while FBRX Endpoint runs, it answers on a link of its own: 127.0.0.1, a port of the moment and a secret, written to
  * DIGGER_LINK_FILE in Endpoint's data folder (only the person can read it). Digger reads that file to find it and sends
  * the requests a paired computer sends to think with another's AI (assist.model.*): Digger's agent, tools and chats
- * stay in Digger, and only the model's work happens in Endpoint. Nothing leaves the computer.
+ * stay in Digger, and only the model's work happens in Endpoint. Nothing leaves the computer. FBRX View uses the same
+ * link, naming itself in each request.
  */
 export const DIGGER_LINK_FILE = 'digger-link.json';
 
@@ -31,6 +32,12 @@ export const DIGGER_PEER: MeshDevice = {
   permissions: { status: false, chat: false, ask: false, approve: false, workspace: false, alerts: false, control: false, assist: true, command: false, network: false, sync: false, remote: false, unattended: false },
 };
 
+/** FBRX View as Endpoint's model lender sees it, as Digger is. */
+export const VIEW_PEER: MeshDevice = { ...DIGGER_PEER, id: 'fbrx-view', name: VIEW_NAME };
+
+/** The apps that use the link. */
+export type LinkApp = 'digger' | 'view';
+
 /** Requests are a conversation for the model at most (the lender keeps it under 1 MiB, with room). */
 const MAX_BODY = 2 * 1024 * 1024;
 
@@ -47,8 +54,8 @@ export class DiggerLinkServer {
     private readonly o: {
       /** Endpoint's data folder, where the link file goes. */
       dir: string;
-      /** One assist.model.* request from Digger (the model lender, with Digger as the asker). */
-      handle: (method: string, params: unknown) => Promise<unknown>;
+      /** One assist.model.* request from Digger or View (the model lender, with that app as the asker). */
+      handle: (method: string, params: unknown, app: LinkApp) => Promise<unknown>;
       log: { warn: (msg: string, data?: Record<string, unknown>) => void };
     },
   ) {}
@@ -78,9 +85,9 @@ export class DiggerLinkServer {
       req.on('end', () => {
         void (async () => {
           try {
-            const { method, params } = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { method?: unknown; params?: unknown };
+            const { method, params, app } = JSON.parse(Buffer.concat(chunks).toString('utf8')) as { method?: unknown; params?: unknown; app?: unknown };
             if (typeof method !== 'string' || !method.startsWith('assist.model.')) throw new CoreError('FORBIDDEN', 'FBRX Digger may only think with this computer’s AI');
-            send(200, { result: await this.o.handle(method, params) });
+            send(200, { result: await this.o.handle(method, params, app === 'view' ? 'view' : 'digger') });
           } catch (err) {
             send(err instanceof CoreError && err.code === 'NOT_FOUND' ? 404 : 400, { error: { code: err instanceof CoreError ? err.code : 'INVALID_ARGUMENT', message: errorMessage(err) } });
           }
@@ -115,7 +122,7 @@ export const diggerLinkPresent = (endpointDir: string) => existsSync(join(endpoi
  * Digger's side: a request to FBRX Endpoint on this computer, found through the link file in its data folder. Endpoint
  * not installed, or not running, answers UNAVAILABLE.
  */
-export function diggerLinkCall(endpointDir: string) {
+export function diggerLinkCall(endpointDir: string, app: LinkApp = 'digger') {
   return async <T>(method: string, params: unknown, timeoutMs = 30_000): Promise<T> => {
     let link: LinkFile;
     try {
@@ -128,7 +135,7 @@ export function diggerLinkCall(endpointDir: string) {
       res = await fetch(link.url, {
         method: 'POST',
         headers: { authorization: `Bearer ${link.token}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ method, params }),
+        body: JSON.stringify({ method, params, app }),
         signal: AbortSignal.timeout(timeoutMs),
       });
     } catch {
